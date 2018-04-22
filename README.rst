@@ -1,6 +1,11 @@
 pyblp
 =====
 
+.. image:: https://readthedocs.org/projects/pyblp/badge/?version=latest
+   :alt: Documentation Status
+   :scale: 100%
+   :target: https://pyblp.readthedocs.io/en/latest/?badge=latest
+
 An overview of the model, examples, and other documentation can be found at `Read the Docs <http://pyblp.readthedocs.io/en/latest/>`_.
 
 The pyblp package is a Python 3 implementation of the nested fixed point algorithm for BLP demand estimation. The author of this package is `Jeff Gortmaker <http://jeffgortmaker.com/>`_. At the moment, the only other contributer is `Chris Conlon <http://www.chrisconlon.org/>`_. Development of the package has been guided by the BLP code made publicly available by many researchers and practitioners.
