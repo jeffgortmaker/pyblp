@@ -14,6 +14,10 @@ setup(
     packages=find_packages(),
     python_requires='>=3.6',
     install_requires=['numpy', 'scipy'],
+    extras_require={
+        'tests': ['pytest', 'pytest-xdist'],
+        'docs': ['sphinx', 'pandas', 'ipython', 'matplotlib', 'readme_renderer', 'sphinx_rtd_theme'],
+    },
     include_package_data=True,
     description="BLP demand estimation with Python 3",
     long_description=read('README.rst'),
