@@ -1,0 +1,64 @@
+# editor files
+*~
+*$
+*\#*\#
+*.bak
+*.iml
+*.log
+*.swp
+*.pdb
+*.kdev4
+*flymake*
+*.sublime-project
+*.sublime-workspace
+.#*
+.idea
+.tags
+.cache
+.vscode
+.noseids
+.vagrant
+.project
+.settings
+.pydevproject
+.spyderproject
+.ipynb_checkpoints
+
+# compiled source files
+*.a
+*.o
+*.so
+*.dll
+*.py[ocd]
+.build_cache_dir
+MANIFEST
+
+# generated source files
+*.c
+*.cpp
+*.cmake
+
+# OS generated files
+.DS_Store
+.directory
+.gdb_history
+Icon?
+Thumbs.db
+ehthumbs.db
+
+# build files
+*.egg-info
+.eggs
+.pypirc
+dist
+build
+
+# testing generated files
+.tox
+.coverage
+.pytest_cache
+
+# documentation generated files
+docs/build
+docs/source/api
+docs/source/images

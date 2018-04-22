@@ -1,0 +1,51 @@
+/* move equation numbers to the right of equations and make their links visible upon hover */
+
+.eqno {
+    margin-left: 5px;
+    float: right;
+}
+.math .headerlink {
+    display: none;
+    visibility: hidden;
+}
+.math:hover .headerlink {
+    display: inline-block;
+    visibility: visible;
+    margin-right: -0.7em;
+}
+
+/* allow table to have multi-line rows */
+
+@media screen and (min-width: 767px) {
+    .wy-table-responsive table td {
+      white-space: normal;
+    }
+    .wy-table-responsive {
+      overflow: visible;
+    }
+}
+
+/* make inline code formatting less jarring */
+
+code {
+    padding: 1px 3px !important;
+}
+.literal {
+    color: black !important;
+    font-weight: normal !important;
+    background: #F8F8F8 !important;
+}
+.xref {
+    font-weight: bold !important;
+    background: white !important;
+}
+
+/* increase spacing between index and links */
+
+.genindex-jumpbox, .genindextable {
+    margin-bottom: 1.5em;
+}
+.genindextable li {
+    padding-right: 0.5em;
+    padding-bottom: 0.5em;
+}

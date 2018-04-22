@@ -1,0 +1,13 @@
+graft docs
+graft pyblp/data
+graft tests/data
+
+include README.rst
+include LICENSE.txt
+
+prune docs/build
+prune docs/source/api
+prune docs/source/images
+
+global-exclude *.py[co]
+global-exclude __pycache__
