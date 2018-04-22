@@ -18,8 +18,8 @@ In this section, we'll also import :mod:`matplotlib.pyplot`, which, although not
    import matplotlib.pyplot as plt
 
    @suppress
-   def savefig(name):
-       plt.savefig(f'source/{name}', transparent=True, bbox_inches='tight')
+   def savefig(path):
+       plt.savefig(path, transparent=True, bbox_inches='tight')
        plt.clf()
 
 
