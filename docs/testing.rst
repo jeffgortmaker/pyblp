@@ -7,7 +7,7 @@ Testing is done with the `tox <https://tox.readthedocs.io/en/latest/>`_ automati
 Running Tests
 -------------
 
-Defined in ``tox.ini`` are environments that test the package, as well as the integrity of the documentation. The following command can be run in the top-level pyblp directory to run all tests in both the ``py36`` and ``docs`` environments::
+Defined in ``tox.ini`` are environments that test the package, test the integrity of the documentation, and release the package. The following command can be run in the top-level pyblp directory to run all tests in the ``py36``, ``docs``, and ``docs-linkcheck`` environments::
 
     tox
 
