@@ -1,7 +1,7 @@
 pyblp
 =====
 
-.. include:: ../../README.rst
+.. include:: ../README.rst
    :start-line: 11
 
 .. toctree::

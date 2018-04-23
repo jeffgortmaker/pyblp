@@ -1,0 +1,4 @@
+Legal
+-----
+
+.. include:: ../LICENSE.txt

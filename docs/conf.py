@@ -13,10 +13,11 @@ copyright = f'2018, {author}'
 release = version = pyblp.__version__
 
 # configure build information
+nitpicky = True
 tls_verify = False
 master_doc = 'index'
 source_suffix = '.rst'
-htmlhelp_basename = 'blpdoc'
+htmlhelp_basename = 'pyblpdoc'
 
 # configure extensions
 extensions = [
@@ -28,7 +29,7 @@ extensions = [
     'sphinx.ext.mathjax',
     'sphinx.ext.napoleon'
 ]
-ipython_execlines = Path(Path(__file__).resolve().parent / '_static' / 'header.py').read_text().splitlines()
+ipython_execlines = Path(Path(__file__).resolve().parent / 'static' / 'header.py').read_text().splitlines()
 intersphinx_mapping = {
     'matplotlib': ('https://matplotlib.org/', None),
     'python': ('https://docs.python.org/3.6/', None),
@@ -43,8 +44,8 @@ ipython_savefig_dir = 'images'
 numpydoc_show_class_members = False
 
 # configure locations of other configuration files
-html_static_path = ['_static']
-templates_path = ['_templates']
+html_static_path = ['static']
+templates_path = ['templates']
 exclude_patterns = templates_path
 
 # configure theme information

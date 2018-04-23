@@ -59,6 +59,6 @@ build
 .pytest_cache
 
 # documentation generated files
-docs/build
-docs/source/api
-docs/source/images
+docs/api
+docs/images
+docs/_build
