@@ -57,6 +57,7 @@ def build_id_data(T, J, F, mergers=()):
        :suppress:
 
        np.set_printoptions(**old_options)
+       %reset -f
 
     """
 
@@ -114,6 +115,9 @@ def build_indicators(ids):
        indicators = pyblp.build_indicators(data['product_ids'])
        indicators
 
+       @suppress
+       %reset -f
+
     """
     ids = np.asarray(ids, dtype=np.object).flatten()
     return np.hstack([np.where(np.c_[ids] == i, 1, 0) for i in np.unique(ids)]).astype(options.dtype)
@@ -170,6 +174,9 @@ def build_blp_instruments(characteristic_data, average=False):
        }
        instruments = np.c_[linear, pyblp.build_blp_instruments(characteristic_data)]
        instruments.shape
+
+       @suppress
+       %reset -f
 
     """
 
