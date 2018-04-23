@@ -13,6 +13,7 @@ copyright = f'2018, {author}'
 release = version = pyblp.__version__
 
 # configure build information
+tls_verify = False
 master_doc = 'index'
 source_suffix = '.rst'
 htmlhelp_basename = 'blpdoc'

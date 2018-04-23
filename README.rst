@@ -16,7 +16,7 @@ Installation
 
 The pyblp package has been tested on `Python 3.6 <https://www.python.org/downloads/>`_. The `SciPy instructions <https://scipy.org/install.html>`_ for installing related packages is a good guide for how to install a scientific Python environment. A good choice is the `Anaconda Distribution <https://www.anaconda.com/download/>`_, since, along with many other packages that are useful for scientific computing, it comes packaged with pyblp's only required dependencies: `NumPy <http://www.numpy.org/>`_ and `SciPy <https://www.scipy.org/>`_.
 
-You can install the current release of pyblp with `pip <http://www.pip-installer.org/en/latest/>`_::
+You can install the current release of pyblp with `pip <https://pip.pypa.io/en/latest/>`_::
 
     pip install pyblp
 
@@ -28,7 +28,7 @@ If you lack permissions, you can install pyblp in your user directory with the `
 
     pip install --user pyblp
 
-Alternatively, you can download a wheel or source archive from `PyPI <https://pypi.python.org/pypi/pyblp>`_. You can find the latest development code on `GitHub <https://github.com/jeffgortmaker/pyblp>`_.
+Alternatively, you can download a wheel or source archive from `PyPI <https://pypi.org/project/pyblp/>`_. You can find the latest development code on `GitHub <https://github.com/jeffgortmaker/pyblp/>`_.
 
 
 Features

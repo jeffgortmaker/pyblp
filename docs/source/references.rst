@@ -23,7 +23,7 @@ Morrow, W. R., & Skerlos, S. J. (2011). `Fixed-point approaches to computing Ber
 
 .. _nm65:
 
-Nelder, J., & Mead, R. (1965). `A simplex method for function minimization <https://doi.org/10.1093/comjnl/7.4.308>`_. *Computer Journal, 7* (4), 308-313.
+Nelder, J., & Mead, R. (1965). `A simplex method for function minimization <https://academic.oup.com/comjnl/article-abstract/7/4/308/354237>`_. *Computer Journal, 7* (4), 308-313.
 
 .. _n97:
 
@@ -39,11 +39,11 @@ Reynaerts, J., Varadhan, R., & Nash, J. C. (2012). `Enhancing the convergence pr
 
 .. _s12:
 
-Skrainka, B. (2012). `A large scale study of the small sample performance of random coefficient models of demand <https://ssrn.com/abstract=1942627>`_.
+Skrainka, B. (2012). `A large scale study of the small sample performance of random coefficient models of demand <https://papers.ssrn.com/sol3/papers.cfm?abstract_id=1942627>`_.
 
 .. _sj11:
 
-Skrainka, B., & Judd, K. L. (2011). `High performance quadrature rules: How numerical integration affects a popular model of product differentiation <https://ssrn.com/abstract=1870703>`_.
+Skrainka, B., & Judd, K. L. (2011). `High performance quadrature rules: How numerical integration affects a popular model of product differentiation <https://papers.ssrn.com/sol3/papers.cfm?abstract_id=1870703>`_.
 
 .. _vr08:
 
