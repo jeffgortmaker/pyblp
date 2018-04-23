@@ -1,7 +1,7 @@
 Testing
 =======
 
-Testing is done with the `tox <https://tox.readthedocs.io/en/latest/>`_ automation tool, which runs a `pytest <https://docs.pytest.org/en/latest/>`_-backed test suite in the ``tests/`` directory.
+Testing is done with the `tox <https://tox.readthedocs.io/en/latest/>`_ automation tool, which runs a `pytest <https://docs.pytest.org/en/latest/>`_-backed test suite in the ``tests/`` directory. This `FAQ <https://tox.readthedocs.io/en/latest/developers.html>`_ contains some useful information about how to use tox on Windows.
 
 
 Running Tests
