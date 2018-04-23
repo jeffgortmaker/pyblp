@@ -5,6 +5,14 @@ from pathlib import Path
 import pyblp
 
 
+# get the location of the source directory
+source_path = Path(__file__).resolve().parent
+
+# configure locations of other configuration files
+html_static_path = ['static']
+templates_path = ['templates']
+exclude_patterns = templates_path
+
 # configure project information
 language = 'en'
 project = 'pyblp'
@@ -29,7 +37,6 @@ extensions = [
     'sphinx.ext.mathjax',
     'sphinx.ext.napoleon'
 ]
-ipython_execlines = Path(Path(__file__).resolve().parent / 'static' / 'header.py').read_text().splitlines()
 intersphinx_mapping = {
     'matplotlib': ('https://matplotlib.org/', None),
     'python': ('https://docs.python.org/3.6/', None),
@@ -42,11 +49,10 @@ autosummary_generate = True
 html_show_sourcelink = False
 ipython_savefig_dir = 'images'
 numpydoc_show_class_members = False
+ipython_execlines = Path(source_path / 'static' / 'header.py').read_text().splitlines()
 
-# configure locations of other configuration files
-html_static_path = ['static']
-templates_path = ['templates']
-exclude_patterns = templates_path
+# add a line to be executed by IPython that stores the location of the source directory so that files can be saved
+ipython_execlines.append(f'source_path = \'{source_path.as_posix()}\'')
 
 # configure theme information
 html_theme = 'sphinx_rtd_theme'

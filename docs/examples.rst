@@ -22,8 +22,11 @@ In this section, we'll also import :mod:`matplotlib.pyplot`, which, although not
 
    import matplotlib
    matplotlib.use('agg')
+
+   from pathlib import Path
    def savefig(path):
-       plt.savefig(path, transparent=True, bbox_inches='tight')
+       global source_path
+       plt.savefig(Path(source_path) / path, transparent=True, bbox_inches='tight')
        plt.clf()
 
 
