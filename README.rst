@@ -1,25 +1,27 @@
 pyblp
 =====
 
-.. image:: https://img.shields.io/readthedocs/pyblp/stable.svg
-   :target: https://pyblp.readthedocs.io/en/stable/
+|docs-badge|_ |pypi-badge|_ |python-badge|_ |license-badge|_
 
-.. image:: https://img.shields.io/pypi/v/pyblp.svg
-   :target: https://pypi.org/project/pyblp/
+.. |docs-badge| image:: https://img.shields.io/readthedocs/pyblp/stable.svg
+.. _docs-badge: https://pyblp.readthedocs.io/en/stable/
 
-.. image::  https://img.shields.io/pypi/pyversions/pyblp.svg
-   :target: https://pypi.org/project/pyblp/
+.. |pypi-badge| image:: https://img.shields.io/pypi/v/pyblp.svg
+.. _pypi-badge: https://pypi.org/project/pyblp/
 
-.. image:: https://img.shields.io/pypi/l/pyblp.svg
-   :target: https://pypi.org/project/pyblp/
+.. |python-badge| image::  https://img.shields.io/pypi/pyversions/pyblp.svg
+.. _python-badge: https://pypi.org/project/pyblp/
+
+.. |license-badge| image:: https://img.shields.io/pypi/l/pyblp.svg
+.. _license-badge: https://pypi.org/project/pyblp/
 
 .. description-start
 
-An overview of the model, examples, and other documentation can be found on `Read the Docs <http://pyblp.readthedocs.io/en/stable/>`_.
+An overview of the model, examples, and other documentation can be found on `Read the Docs <https://pyblp.readthedocs.io/en/stable/>`_.
 
 .. docs-start
 
-The pyblp package is a Python 3 implementation of the nested fixed point algorithm for BLP demand estimation. The author of this package is `Jeff Gortmaker <http://jeffgortmaker.com/>`_. At the moment, the only other contributer is `Chris Conlon <http://www.chrisconlon.org/>`_. Development of the package has been guided by the BLP code made publicly available by many researchers and practitioners.
+The pyblp package is a Python 3 implementation of the nested fixed point algorithm for BLP demand estimation. The author of this package is `Jeff Gortmaker <http://jeffgortmaker.com/>`_. At the moment, the only other contributer is `Chris Conlon <https://chrisconlon.github.io/>`_. Development of the package has been guided by the BLP code made publicly available by many researchers and practitioners.
 
 
 Installation
