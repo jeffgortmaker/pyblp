@@ -4,6 +4,7 @@ graft tests/data
 
 include README.rst
 include LICENSE.txt
+include requirements.txt
 
 prune docs/api
 prune docs/images

@@ -13,7 +13,7 @@ setup(
     name='pyblp',
     packages=find_packages(),
     python_requires='>=3.6',
-    install_requires=['numpy', 'scipy'],
+    install_requires=read('requirements.txt').splitlines(),
     extras_require={
         'tests': ['pytest', 'pytest-xdist'],
         'docs': ['sphinx', 'pandas', 'ipython', 'matplotlib', 'sphinx_rtd_theme'],
