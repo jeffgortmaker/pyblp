@@ -15,7 +15,7 @@ pyblp
 
 .. description-start
 
-An overview of the model, examples, and other documentation can be found at `Read the Docs <http://pyblp.readthedocs.io/en/latest/>`_.
+An overview of the model, examples, and other documentation can be found on `Read the Docs <http://pyblp.readthedocs.io/en/stable/>`_.
 
 .. docs-start
 
@@ -39,7 +39,7 @@ If you lack permissions, you can install pyblp in your user directory with the `
 
     pip install --user pyblp
 
-Alternatively, you can download a wheel or source archive from `PyPI <https://pypi.org/project/pyblp/>`_. You can find the latest development code on `GitHub <https://github.com/jeffgortmaker/pyblp/>`_.
+Alternatively, you can download a wheel or source archive from `PyPI <https://pypi.org/project/pyblp/>`_. You can find the latest development code on `GitHub <https://github.com/jeffgortmaker/pyblp/>`_ and the latest development documentation on `Read the Docs <http://pyblp.readthedocs.io/en/latest/>`_.
 
 
 Features
