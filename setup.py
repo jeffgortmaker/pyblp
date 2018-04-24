@@ -20,7 +20,7 @@ setup(
     },
     include_package_data=True,
     description="BLP demand estimation with Python 3",
-    long_description=read('README.rst'),
+    long_description=read('README.rst').split('description-start')[1].strip(),
     version=re.search(r'^__version__ = \'([^\']*)\'', read('pyblp/version.py'), re.M).group(1),
     author="Jeff Gortmaker",
     author_email="jeff@jeffgortmaker.com",

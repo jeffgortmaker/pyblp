@@ -2,7 +2,7 @@ pyblp
 =====
 
 .. include:: ../README.rst
-   :start-line: 11
+   :start-after: docs-start
 
 .. toctree::
    :caption: User Documentation
