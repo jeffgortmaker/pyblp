@@ -184,12 +184,12 @@ Inspecting the attributes of the :class:`Problem` instance helps to confirm that
    blp_problem.products
    blp_problem.agents
 
-The initialized problem can be solved with :meth:`Problem.solve`. By passing an identity matrix as starting values for :math:`\Sigma`, we're choosing to optimize over only variance terms, and we're choosing to have all five nonlinear parameters start at one. Although we'll use the same log-linear marginal cost specification that was used in the original paper, we'll speed up optimization by using the default optimization routine, which computes an analytic gradient. You can pass ``pyblp.Optimization('nelder-mead', compute_gradient=False)`` to the `optimization` argument if you want to use the original :ref:`Nelder and Mead (1965) <nm65>` routine.
+The initialized problem can be solved with :meth:`Problem.solve`. By passing an identity matrix as starting values for :math:`\Sigma`, we're choosing to optimize over only variance terms, and we're choosing to have all five nonlinear parameters start at one. Although we'll use the same log-linear marginal cost specification that was used in the original paper, we'll speed up optimization by using the default optimization routine, which computes an analytic gradient. We'll also only perform one GMM step. You can pass ``pyblp.Optimization('nelder-mead', compute_gradient=False)`` to the `optimization` argument if you want to use the original :ref:`Nelder and Mead (1965) <nm65>` routine.
 
 .. ipython:: python
 
    blp_sigma = np.diag(np.ones(5))
-   blp_results = blp_problem.solve(blp_sigma, linear_costs=False)
+   blp_results = blp_problem.solve(blp_sigma, linear_costs=False, steps=1)
    blp_results
 
    @suppress
@@ -210,7 +210,7 @@ Unlike the automobile problem, we have included demographics in the agent data f
    @suppress
    %xdel nevo_product_data
 
-Since we initialized the problem without supply-side data, there's no need to choose a marginal cost specification. However, since we initialized the problem with demographics, we need to configure not only :math:`\Sigma`, but also :math:`\Pi`. We'll use the same starting values as :ref:`Nevo (2000) <n00>`. We'll also use a non-default :func:`scipy.optimize.minimize` quasi-Newton optimization routine with BFGS hessian approximation, which is similar to the default Matlab optimization routine.
+Since we initialized the problem without supply-side data, there's no need to choose a marginal cost specification. However, since we initialized the problem with demographics, we need to configure not only :math:`\Sigma`, but also :math:`\Pi`. We'll use the same starting values as :ref:`Nevo (2000) <n00>`. We'll also use a non-default :func:`scipy.optimize.minimize` quasi-Newton optimization routine with BFGS hessian approximation, which is similar to the default Matlab optimization routine, and, again, we'll only perform one GMM step for the sake of speed in this example.
 
 .. ipython:: python
 
@@ -224,6 +224,7 @@ Since we initialized the problem without supply-side data, there's no need to ch
    nevo_results = nevo_problem.solve(
        nevo_sigma,
        nevo_pi,
+       steps=1,
        optimization=pyblp.Optimization('bfgs')
    )
    nevo_results
