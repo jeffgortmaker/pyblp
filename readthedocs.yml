@@ -1,3 +1,6 @@
+formats:
+    - none
+
 build:
     image: latest
 
