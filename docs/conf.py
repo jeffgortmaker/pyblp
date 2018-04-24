@@ -46,7 +46,6 @@ intersphinx_mapping = {
 }
 math_number_all = True
 autosummary_generate = True
-html_show_sourcelink = False
 ipython_savefig_dir = 'images'
 numpydoc_show_class_members = False
 ipython_execlines = Path(source_path / 'static' / 'header.py').read_text().splitlines()
