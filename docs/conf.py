@@ -25,7 +25,6 @@ nitpicky = True
 tls_verify = False
 master_doc = 'index'
 source_suffix = '.rst'
-htmlhelp_basename = 'pyblpdoc'
 
 # configure extensions
 extensions = [
