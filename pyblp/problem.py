@@ -180,7 +180,7 @@ class Problem(object):
 
     def solve(self, sigma, pi=None, sigma_bounds=None, pi_bounds=None, delta=None, WD=None, WS=None, steps=2,
               optimization=None, custom_display=True, error_behavior='revert', error_punishment=1, iteration=None,
-              linear_costs=True, linear_fp=True, center_moments=True, se_type='robust', processes=1):
+              linear_fp=True, linear_costs=True, center_moments=True, se_type='robust', processes=1):
         r"""Solve the problem.
 
         Parameters
@@ -271,10 +271,6 @@ class Problem(object):
         iteration : `Iteration, optional`
             :class:`Iteration` configuration for how to solve the fixed point problem used to compute
             :math:`\delta(\hat{\theta})` in each market. By default, ``Iteration('squarem')`` is used.
-        linear_costs : `bool, optional`
-            Whether to compute :math:`\tilde{c}(\hat{\theta})` according to a linear or a log-linear marginal cost
-            specification. This is only relevant if the problem was initialized with supply-side data. By default, a
-            linear specification is assumed. That is, :math:`\tilde{c} = c` instead of :math:`\tilde{c} = \log c`.
         linear_fp : `bool, optional`
             Whether to compute :math:`\delta(\hat{\theta})` with the standard linear contraction mapping,
 
@@ -288,6 +284,10 @@ class Problem(object):
             fewer logarithms need to be calculated, which can also help mitigate problems stemming from negative
             integration weights.
 
+        linear_costs : `bool, optional`
+            Whether to compute :math:`\tilde{c}(\hat{\theta})` according to a linear or a log-linear marginal cost
+            specification. This is only relevant if the problem was initialized with supply-side data. By default, a
+            linear specification is assumed. That is, :math:`\tilde{c} = c` instead of :math:`\tilde{c} = \log c`.
         center_moments : `bool, optional`
             Whether to center the sample moments before using them to update weighting matrices. By default, sample
             moments are centered.
