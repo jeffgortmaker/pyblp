@@ -27,9 +27,6 @@ dtype : `dtype`
        np.finfo(np.float64)
        np.finfo(np.longdouble)
 
-       @suppress
-       %reset -f
-
     If extended precisions is supported, the data type used by all numeric calculations can be switched with
     ``pyblp.options.dtype = np.longdouble``. For more information, refer to
     `this discussion <https://docs.scipy.org/doc/numpy-1.13.0/user/basics.types.html#extended-precision>`_.

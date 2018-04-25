@@ -174,9 +174,6 @@ The :class:`Integration` configuration will be used by :class:`Problem` to build
        nonlinear_prices=False
    )
 
-   @suppress
-   %xdel blp_product_data
-
 Inspecting the attributes of the :class:`Problem` instance helps to confirm that the problem has been configured correctly. For example, inspecting :attr:`Problem.products` and :attr:`Problem.agents` confirms that product data was structured correctly and that agent data was built correctly.
 
 .. ipython:: python
@@ -192,9 +189,6 @@ The initialized problem can be solved with :meth:`Problem.solve`. By passing an 
    blp_results = blp_problem.solve(blp_sigma, linear_costs=False, steps=1)
    blp_results
 
-   @suppress
-   %xdel blp_problem
-
 Estimates, which are in the same order as product characteristics configured during :class:`Problem` initialization, are similar to those in :ref:`Berry, Levinsohn, and Pakes (1995) <blp95>`. Of course, divergences from the original configuration create differences. For example, this configuration does not incorporate an interaction between prices and income. To do so, you could include income as a demographic when initializing :class:`Problem`, and, in :meth:`Problem.solve`, allow one or more parameters in :math:`\Pi` to vary.
 
 
@@ -206,9 +200,6 @@ Unlike the automobile problem, we have included demographics in the agent data f
 .. ipython:: python
 
    nevo_problem = pyblp.Problem(nevo_product_data, nevo_agent_data)
-
-   @suppress
-   %xdel nevo_product_data
 
 Since we initialized the problem without supply-side data, there's no need to choose a marginal cost specification. However, since we initialized the problem with demographics, we need to configure not only :math:`\Sigma`, but also :math:`\Pi`. We'll use the same starting values as :ref:`Nevo (2000) <n00>`. We'll also use a non-default :func:`scipy.optimize.minimize` quasi-Newton optimization routine with BFGS hessian approximation, which is similar to the default Matlab optimization routine, and, again, we'll only perform one GMM step for the sake of speed in this example.
 
@@ -228,9 +219,6 @@ Since we initialized the problem without supply-side data, there's no need to ch
        optimization=pyblp.Optimization('bfgs')
    )
    nevo_results
-
-   @suppress
-   %xdel nevo_problem
 
 Often, the above starting values give rise to some warnings during the first few GMM objective evaluations about floating point problems. This is because some optimization routines attempt to evaluate the objective at parameter values that lead to overflow while, for example, computing :math:`\hat{\delta}`. For example, using ``pyblp.Optimization('slsqp')`` displays some warnings if :attr:`options.verbose` is ``True``. The default behavior of :meth:`Problem.solve` is to revert problematic elements in :math:`\hat{\delta}` and its Jacobian before computing the objective value, which allows the optimization routine to continue searching the parameter space. For more information, refer to :meth:`Problem.solve`. In particular, the `sigma_bounds` and `pi_bounds` arguments can be used to bound the parameter space over which the optimization problem searches.
 
@@ -464,11 +452,6 @@ On the other hand, consumer surpluses, :math:`\text{CS}`, generally decrease.
 
 .. image:: images/cs_changes.png
 
-.. ipython:: python
-   :suppress:
-
-   %reset -f
-
 
 Simulating Problems
 -------------------
@@ -547,15 +530,16 @@ Now, we can try to recover the true parameters by creating and solving a :class:
        simulation.agent_data,
        nonlinear_prices=False
    )
-   simulated_results = simulated_problem.solve(0.5 * simulation.sigma, 0.5 * simulation.pi)
+   simulated_results = simulated_problem.solve(
+       0.5 * simulation.sigma, 
+       0.5 * simulation.pi, 
+       steps=1
+   )
    simulated_results
    simulation.beta
    simulation.gamma
    simulation.sigma
    simulation.pi
-
-   @suppress
-   %reset -f
 
 The parameters seem to have been estimated reasonably well, except for the first elements in :math:`\Sigma` and :math:`\Pi`, which are still within an estimated standard error of their true values.
 

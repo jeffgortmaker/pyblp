@@ -153,9 +153,6 @@ class Problem(object):
        results = problem.solve(initial_sigma, steps=1)
        results
 
-       @suppress
-       %reset -f
-
     """
 
     def __init__(self, product_data, agent_data=None, integration=None, nonlinear_prices=True):

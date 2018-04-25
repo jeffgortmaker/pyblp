@@ -200,9 +200,6 @@ class Simulation(object):
        product_data = simulation.solve()
        product_data
 
-       @suppress
-       %reset -f
-
     """
 
     def __init__(self, id_data, integration, gamma, beta, sigma, pi=None, xi_variance=1, omega_variance=1,
