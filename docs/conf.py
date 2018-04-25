@@ -47,7 +47,7 @@ math_number_all = True
 autosummary_generate = True
 ipython_savefig_dir = 'images'
 numpydoc_show_class_members = False
-ipython_execlines = Path(source_path / 'static' / 'header.py').read_text().splitlines()
+ipython_execlines = Path(source_path / 'include.py').read_text().splitlines()
 
 # add a line to be executed by IPython that stores the location of the source directory so that files can be saved
 ipython_execlines.append(f'source_path = \'{source_path.as_posix()}\'')

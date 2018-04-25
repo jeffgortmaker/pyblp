@@ -8,7 +8,7 @@ This section explains how pyblp can be used to solve standard BLP example proble
 
 To start, we'll import the package, as well as :mod:`numpy`, since we'll be using it to manipulate data. The following lines of code, which are executed before each section of examle code in the documentation, import both packages and limit verbosity. Status updates can be informative, so you'll probably want to keep your own verbosity turned on.
 
-.. literalinclude:: static/header.py
+.. literalinclude:: include.py
   :language: ipython
 
 In this section, we'll also import :mod:`matplotlib.pyplot`, which, although not a pyblp dependency, can be used to plot results.

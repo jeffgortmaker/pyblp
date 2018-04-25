@@ -8,7 +8,7 @@ The majority of the package consists of classes, which compartmentalize differen
 
 Many of the pages that the below summaries link to contain example code. For the sake of brevity, the following lines of code, which import the package, import :mod:`numpy`, and limit verbosity, are executed before each example.
 
-.. literalinclude:: static/header.py
+.. literalinclude:: include.py
   :language: ipython
 
 
