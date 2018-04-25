@@ -1,20 +1,22 @@
-/* move equation numbers to the right of equations and make their links visible upon hover */
+/* move equation numbers to the right of equations and make their links visible upon hover on desktops */
 
-.eqno {
-    margin-left: 5px;
-    float: right;
-}
-.math .headerlink {
-    display: none;
-    visibility: hidden;
-}
-.math:hover .headerlink {
-    display: inline-block;
-    visibility: visible;
-    margin-right: -0.7em;
+@media screen and (min-width: 767px) {
+    .eqno {
+        margin-left: 5px;
+        float: right;
+    }
+    .math .headerlink {
+        display: none;
+        visibility: hidden;
+    }
+    .math:hover .headerlink {
+        display: inline-block;
+        visibility: visible;
+        margin-right: -0.7em;
+    }
 }
 
-/* allow table to have multi-line rows */
+/* allow table to have multi-line rows on desktops */
 
 @media screen and (min-width: 767px) {
     .wy-table-responsive table td {
