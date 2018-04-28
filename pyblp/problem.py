@@ -404,7 +404,7 @@ class Problem(object):
                 objective_function.iterations += 1
                 objective_function.smallest = min(objective_function.smallest, info.objective)
                 objective_function.last_info = info
-                return (info.objective, info.gradient.flatten()) if optimization._compute_gradient else info.objective
+                return (info.objective, info.gradient) if optimization._compute_gradient else info.objective
 
             # initialize optimization progress
             objective_function.iterations = 1

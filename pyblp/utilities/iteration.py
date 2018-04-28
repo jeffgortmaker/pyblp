@@ -26,7 +26,7 @@ class Iteration(object):
         specified below, `final` is an array of final values, and `converged` is a flag for whether the routine
         converged.
 
-    options : `dict, optional`
+    method_options : `dict, optional`
         Options for the fixed point iteration routine. Both non-custom routines support the following options:
 
             - **tol** : (`float`) - Tolerance for convergence of the configured norm. The default value is ``1e-12``.
@@ -83,7 +83,7 @@ class Iteration(object):
 
     """
 
-    def __init__(self, method, options=None):
+    def __init__(self, method, method_options=None):
         """Validate the method and configure default options."""
         methods = {
             'squarem': (squarem, "the SQUAREM acceleration method"),
@@ -93,25 +93,25 @@ class Iteration(object):
         # validate the configuration
         if method not in methods and not callable(method):
             raise ValueError(f"method must be one of {list(methods.keys())} or a callable object.")
-        if options is not None and not isinstance(options, dict):
-            raise ValueError("options must be None or a dict.")
+        if method_options is not None and not isinstance(method_options, dict):
+            raise ValueError("method_options must be None or a dict.")
 
         # options are simply passed along to custom methods
         if callable(method):
             self._iterator = method
-            self._options = options
+            self._method_options = method_options
             self._description = "a custom method"
             return
 
         # identify the non-custom iterator and set default options
         self._iterator, self._description = methods[method]
-        self._options = {
+        self._method_options = {
             'tol': 1e-12,
             'max_iterations': 10000,
             'norm': np.linalg.norm
         }
         if self._iterator == squarem:
-            self._options.update({
+            self._method_options.update({
                 'scheme': 3,
                 'step_min': 1.0,
                 'step_max': 1.0,
@@ -119,37 +119,50 @@ class Iteration(object):
             })
 
         # validate options for non-custom methods
-        if options:
-            invalid = [k for k in options if k not in self._options]
-            if invalid:
-                raise KeyError(f"The following are not valid iteration options: {invalid}.")
-            self._options.update(options)
-            if not isinstance(self._options['tol'], float) or self._options['tol'] <= 0:
-                raise ValueError("The iteration option tol must be a positive float.")
-            if not isinstance(self._options['max_iterations'], int) or self._options['max_iterations'] < 1:
-                raise ValueError("The iteration option max_iterations must be a positive integer.")
-            if not callable(self._options['norm']):
-                raise ValueError("The iteration option norm must be callable.")
-            if self._iterator == squarem:
-                if self._options['scheme'] not in {1, 2, 3}:
-                    raise ValueError("The iteration option scheme must be 1, 2, or 3.")
-                if not isinstance(self._options['step_min'], float):
-                    raise ValueError("The iteration option step_min must be a float.")
-                if not isinstance(self._options['step_max'], float) or self._options['step_max'] <= 0:
-                    raise ValueError("The iteration option step_max must be a positive float.")
-                if self._options['step_min'] > self._options['step_max']:
-                    raise ValueError("The iteration option step_min must be smaller than step_max.")
-                if not isinstance(self._options['step_factor'], float) or self._options['step_factor'] <= 0:
-                    raise ValueError("The iteration option step_factor must be a positive float.")
+        if not method_options:
+            return
+        invalid = [k for k in method_options if k not in self._method_options]
+        if invalid:
+            raise KeyError(f"The following are not valid iteration options: {invalid}.")
+        self._method_options.update(method_options)
+        if not isinstance(self._method_options['tol'], float) or self._method_options['tol'] <= 0:
+            raise ValueError("The iteration option tol must be a positive float.")
+        if not isinstance(self._method_options['max_iterations'], int) or self._method_options['max_iterations'] < 1:
+            raise ValueError("The iteration option max_iterations must be a positive integer.")
+        if not callable(self._method_options['norm']):
+            raise ValueError("The iteration option norm must be callable.")
+        if self._iterator == squarem:
+            if self._method_options['scheme'] not in {1, 2, 3}:
+                raise ValueError("The iteration option scheme must be 1, 2, or 3.")
+            if not isinstance(self._method_options['step_min'], float):
+                raise ValueError("The iteration option step_min must be a float.")
+            if not isinstance(self._method_options['step_max'], float) or self._method_options['step_max'] <= 0:
+                raise ValueError("The iteration option step_max must be a positive float.")
+            if self._method_options['step_min'] > self._method_options['step_max']:
+                raise ValueError("The iteration option step_min must be smaller than step_max.")
+            if not isinstance(self._method_options['step_factor'], float) or self._method_options['step_factor'] <= 0:
+                raise ValueError("The iteration option step_factor must be a positive float.")
 
     def __str__(self):
         """Format the configuration as a string."""
-        options = {k: f'{v.__module__}.{v.__qualname__}' if callable(v) else v for k, v in self._options.items()}
-        return f"Configured to iterate using {self._description} with options {options}."
+        strings = {k: f'{v.__module__}.{v.__qualname__}' if callable(v) else v for k, v in self._method_options.items()}
+        return f"Configured to iterate using {self._description} with options {strings}."
 
     def _iterate(self, contraction, start_values):
         """Solve a fixed point iteration problem."""
-        return self._iterator(contraction, start_values, **self._options)
+
+        # define a wrapper for the contraction that normalizes arrays so they work with all types of routines
+        def contraction_wrapper(raw_values):
+            raw_values = np.asarray(raw_values)
+            values = raw_values.reshape(start_values.shape).astype(start_values.dtype)
+            return np.asarray(contraction(values)).astype(np.float64).reshape(raw_values.shape)
+
+        # normalize the starting values
+        raw_start_values = start_values.astype(np.float64).flatten()
+
+        # solve the problem and convert the raw final values to the same data type and shape as the initial values
+        raw_final_values, converged = self._iterator(contraction_wrapper, raw_start_values, **self._method_options)
+        return np.asarray(raw_final_values).reshape(start_values.shape).astype(start_values.dtype), converged
 
 
 def squarem(contraction, x, norm, tol, max_iterations, scheme, step_min, step_max, step_factor):
