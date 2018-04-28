@@ -63,15 +63,19 @@ def test_trivial_changes(simulated_problems, solve_options1, solve_options2):
     # get both results
     results = []
     for solve_options in [solve_options1, solve_options2]:
-        sigma = 0.5 * simulation.sigma
-        pi = 0.5 * simulation.pi if simulation.pi is not None else None
-        results.append(problem.solve(sigma, pi, linear_costs=simulation.linear_costs, **solve_options))
+        results.append(problem.solve(
+            simulation.sigma,
+            simulation.pi,
+            linear_costs=simulation.linear_costs,
+            steps=1,
+            **solve_options
+        ))
 
     # test that all arrays in the results are essentially identical
     for key, result1 in results[0].__dict__.items():
         if isinstance(result1, np.ndarray) and result1.dtype != np.object:
             result2 = getattr(results[1], key)
-            np.testing.assert_allclose(result1, result2, atol=1e-14, rtol=0, err_msg=key)
+            np.testing.assert_allclose(result1, result2, atol=1e-10, rtol=0, err_msg=key)
 
 
 @pytest.mark.usefixtures('simulated_problems')
@@ -92,9 +96,13 @@ def test_merger(simulated_problems, solve_options):
     changed_product_data = simulation.solve(firm_ids_index=1)
 
     # solve the problem
-    sigma = 0.5 * simulation.sigma
-    pi = 0.5 * simulation.pi if simulation.pi is not None else None
-    results = problem.solve(sigma, pi, linear_costs=simulation.linear_costs, **solve_options)
+    results = problem.solve(
+        simulation.sigma,
+        simulation.pi,
+        linear_costs=simulation.linear_costs,
+        steps=1,
+        **solve_options
+    )
 
     # solve for approximate and actual changed prices and shares
     costs = results.compute_costs()
@@ -129,9 +137,7 @@ def test_merger(simulated_problems, solve_options):
 def test_markup_positivity(simulated_problems):
     """Tests that simulated markups are positive."""
     simulation, problem = next(zip(*simulated_problems))
-
-    # solve the problem
-    results = problem.solve(simulation.sigma, simulation.pi, linear_costs=simulation.linear_costs)
+    results = problem.solve(simulation.sigma, simulation.pi, linear_costs=simulation.linear_costs, steps=1)
 
     # compute markups and test their positivity
     markups = results.compute_markups(results.compute_costs())
@@ -145,7 +151,7 @@ def test_elasticity_aggregates_and_means(simulated_problems, factor):
     prices and for other characteristics.
     """
     simulation, problem = next(zip(*simulated_problems))
-    results = problem.solve(simulation.sigma, simulation.pi, linear_costs=simulation.linear_costs)
+    results = problem.solve(simulation.sigma, simulation.pi, linear_costs=simulation.linear_costs, steps=1)
 
     # test that demand for an entire product category is less elastic for prices than for individual products
     np.testing.assert_array_less(
@@ -170,7 +176,7 @@ def test_elasticity_aggregates_and_means(simulated_problems, factor):
 def test_diversion_ratios(simulated_problems):
     """Tests diversion ratio magnitudes and row sums."""
     simulation, problem = next(zip(*simulated_problems))
-    results = problem.solve(simulation.sigma, simulation.pi, linear_costs=simulation.linear_costs)
+    results = problem.solve(simulation.sigma, simulation.pi, linear_costs=simulation.linear_costs, steps=1)
 
     # test that price-based ratios are between zero and one and that ratio matrix rows sum to one
     for compute in [results.compute_price_diversion_ratios, results.compute_long_run_diversion_ratios]:
@@ -214,7 +220,7 @@ def test_second_step(simulated_problems):
     for key, result in results.__dict__.items():
         if isinstance(result, np.ndarray) and result.dtype != np.object:
             result2 = getattr(results2, key)
-            np.testing.assert_allclose(result, result2, atol=1e-14, rtol=0, err_msg=key)
+            np.testing.assert_allclose(result, result2, atol=1e-10, rtol=0, err_msg=key)
 
 
 @pytest.mark.usefixtures('simulated_problems')
@@ -240,7 +246,7 @@ def test_gradient_optionality(simulated_problems, scipy_method):
     for key, result1 in results1.__dict__.items():
         if isinstance(result1, np.ndarray) and result1.dtype != np.object:
             result2 = getattr(results2, key)
-            np.testing.assert_allclose(result1, result2, atol=1e-14, rtol=0, err_msg=key)
+            np.testing.assert_allclose(result1, result2, atol=1e-10, rtol=0, err_msg=key)
 
 
 @pytest.mark.usefixtures('simulated_problems')
@@ -304,7 +310,7 @@ def test_bounds(simulated_problems, method):
 
         # solve the problem with binding bounds and test that they are essentially respected
         binding_results = solve(binding_sigma_bounds, binding_pi_bounds)
-        assert_array_less = lambda a, b: np.testing.assert_array_less(a, b + 1e-14, verbose=True)
+        assert_array_less = lambda a, b: np.testing.assert_array_less(a, b + 1e-10, verbose=True)
         assert_array_less(binding_sigma_bounds[0], binding_results.sigma)
         assert_array_less(binding_results.sigma, binding_sigma_bounds[1])
         if simulation.pi is not None:
@@ -329,7 +335,7 @@ def test_extra_nodes(simulated_problems):
         if np.issubdtype(problem1.agents.dtype[key], options.dtype):
             values1 = problem1.agents[key]
             values2 = problem2.agents[key]
-            np.testing.assert_allclose(values1, values2, atol=1e-14, rtol=0, err_msg=key)
+            np.testing.assert_allclose(values1, values2, atol=1e-10, rtol=0, err_msg=key)
 
 
 @pytest.mark.usefixtures('simulated_problems')
@@ -356,7 +362,7 @@ def test_extra_demographics(simulated_problems):
         if np.issubdtype(problem1.agents.dtype[key], options.dtype):
             values1 = problem1.agents[key]
             values2 = problem2.agents[key]
-            np.testing.assert_allclose(values1, values2, atol=1e-14, rtol=0, err_msg=key)
+            np.testing.assert_allclose(values1, values2, atol=1e-10, rtol=0, err_msg=key)
 
 
 @pytest.mark.usefixtures('simulated_problems')
