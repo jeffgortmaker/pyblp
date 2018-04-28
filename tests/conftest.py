@@ -1,5 +1,6 @@
 """Fixtures used by tests."""
 
+import os
 import re
 from pathlib import Path
 
@@ -10,8 +11,17 @@ import numpy.lib.recfunctions
 
 from .data import TEST_DATA_PATH
 from pyblp.utilities import extract_matrix
-from pyblp import Problem, Simulation, Integration, build_id_data, build_indicators, build_blp_instruments
 from pyblp.data import BLP_PRODUCTS_LOCATION, BLP_AGENTS_LOCATION, NEVO_PRODUCTS_LOCATION, NEVO_AGENTS_LOCATION
+from pyblp import Problem, Simulation, Integration, options, build_id_data, build_indicators, build_blp_instruments
+
+
+@pytest.fixture(autouse=True)
+def configure():
+    """Configure NumPy so that it raises all warnings as exceptions, and, if a DTYPE environment variable is set in this
+    testing environment, use the specified data type for all numeric calculations.
+    """
+    np.seterr(all='raise')
+    options.dtype = np.dtype(os.environ.get('DTYPE') or options.dtype)
 
 
 @pytest.fixture
