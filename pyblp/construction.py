@@ -111,6 +111,41 @@ def build_indicators(ids):
     return np.hstack([np.where(np.c_[ids] == i, 1, 0) for i in np.unique(ids)]).astype(options.dtype)
 
 
+def build_ownership(id_data, kappa=None):
+    # extract and validate IDs
+    market_ids = extract_matrix(id_data, 'market_ids')
+    firm_ids = extract_matrix(id_data, 'firm_ids')
+    if market_ids is None:
+        raise KeyError("id_data must have a market_ids field.")
+    if firm_ids is None:
+        raise KeyError("id_data must have a firm_ids field.")
+    if market_ids.shape[1] > 1:
+        raise ValueError("The market_ids field of id_data must be one-dimensional.")
+
+    # validate or use the default kappa function
+    if kappa is None:
+        kappa = lambda a, b: int(a == b)
+    elif not callable(kappa):
+        raise ValueError("kappa must be None or callable.")
+    kappa = np.vectorize(kappa, [options.dtype])
+
+    # determine the maximum number of products in a market
+    J = np.unique(market_ids, return_counts=True)[1].max()
+
+    # stack ownership matrices vertically for each market and horizontally for each set of firm IDs
+    stacks = []
+    for ids in firm_ids.T:
+        matrices = []
+        for t in np.unique(market_ids):
+            ids_t = ids[market_ids.flat == t]
+            tiled_ids_t = np.tile(np.c_[ids_t], ids_t.size)
+            ownership_t = np.full((ids_t.size, J), np.nan, options.dtype)
+            ownership_t[:, :ids_t.size] = kappa(tiled_ids_t, tiled_ids_t.T)
+            matrices.append(ownership_t)
+        stacks.append(np.vstack(matrices))
+    return np.hstack(stacks)
+
+
 def build_blp_instruments(characteristic_data, average=False):
     r"""Construct traditional BLP instruments.
 
