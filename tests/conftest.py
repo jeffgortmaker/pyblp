@@ -20,13 +20,16 @@ def configure():
     """Configure NumPy so that it raises all warnings as exceptions, and, if a DTYPE environment variable is set in this
     testing environment that is different from the default data type, use it for all numeric calculations.
     """
-    np.seterr(all='raise')
+    old_error = np.seterr(all='raise')
+    old_dtype = options.dtype
     dtype_string = os.environ.get('DTYPE')
     if dtype_string:
-        dtype = np.dtype(dtype_string)
-        if np.finfo(dtype).dtype == options.dtype:
+        options.dtype = np.dtype(dtype_string)
+        if np.finfo(options.dtype).dtype == old_dtype:
             pytest.skip(f"The {dtype_string} data type is the same as the default one in this environment.")
-        options.dtype = dtype
+    yield
+    options.dtype = old_dtype
+    np.seterr(**old_error)
 
 
 @pytest.fixture
