@@ -31,7 +31,7 @@ class Iteration(object):
 
             - **tol** : (`float`) - Tolerance for convergence of the configured norm. The default value is ``1e-12``.
 
-            - **max_iterations** : (`int`) - Maximum number of contraction mapping evaluations. The default value is
+            - **iterations** : (`int`) - Maximum number of contraction mapping evaluations. The default value is
               ``10000``.
 
             - **norm** : (`callable`) - The norm to be used. By default, the :math:`\ell^2`-norm is used. If specified,
@@ -107,7 +107,7 @@ class Iteration(object):
         self._iterator, self._description = methods[method]
         self._method_options = {
             'tol': 1e-12,
-            'max_iterations': 10000,
+            'iterations': 10000,
             'norm': np.linalg.norm
         }
         if self._iterator == squarem:
@@ -127,8 +127,8 @@ class Iteration(object):
         self._method_options.update(method_options)
         if not isinstance(self._method_options['tol'], float) or self._method_options['tol'] <= 0:
             raise ValueError("The iteration option tol must be a positive float.")
-        if not isinstance(self._method_options['max_iterations'], int) or self._method_options['max_iterations'] < 1:
-            raise ValueError("The iteration option max_iterations must be a positive integer.")
+        if not isinstance(self._method_options['iterations'], int) or self._method_options['iterations'] < 1:
+            raise ValueError("The iteration option iterations must be a positive integer.")
         if not callable(self._method_options['norm']):
             raise ValueError("The iteration option norm must be callable.")
         if self._iterator == squarem:
@@ -165,24 +165,24 @@ class Iteration(object):
         return np.asarray(raw_final_values).reshape(start_values.shape).astype(start_values.dtype), converged
 
 
-def squarem(contraction, x, norm, tol, max_iterations, scheme, step_min, step_max, step_factor):
+def squarem(contraction, x, norm, tol, iterations, scheme, step_min, step_max, step_factor):
     """Apply the SQUAREM acceleration method for fixed point iteration. The fixed point array and a flag for whether the
     routine converged are both returned.
     """
-    iterations = 0
+    iteration = 0
     while True:
         # first step
         x0, x = x, contraction(x)
         g0 = x - x0
-        iterations += 1
-        if iterations >= max_iterations or not np.isfinite(x).all() or norm(g0) < tol:
+        iteration += 1
+        if iteration >= iterations or not np.isfinite(x).all() or norm(g0) < tol:
             break
 
         # second step
         x1, x = x, contraction(x)
         g1 = x - x1
-        iterations += 1
-        if iterations >= max_iterations or not np.isfinite(x).all() or norm(g1) < tol:
+        iteration += 1
+        if iteration >= iterations or not np.isfinite(x).all() or norm(g1) < tol:
             break
 
         # compute the step length
@@ -213,26 +213,26 @@ def squarem(contraction, x, norm, tol, max_iterations, scheme, step_min, step_ma
             continue
 
         # check for convergence
-        iterations += 1
-        if iterations >= max_iterations or not np.isfinite(x).all() or norm(x - x3) < tol:
+        iteration += 1
+        if iteration >= iterations or not np.isfinite(x).all() or norm(x - x3) < tol:
             break
 
     # determine whether there was convergence
-    converged = iterations < max_iterations
+    converged = iteration < iterations
     return x, converged
 
 
-def simple(contraction, x, norm, tol, max_iterations):
+def simple(contraction, x, norm, tol, iterations):
     """Perform simple fixed point iteration with no acceleration. The fixed point array and a flag for whether the
     routine converged are both returned.
     """
-    iterations = 0
+    iteration = 0
     while True:
         x0, x = x, contraction(x)
-        iterations += 1
-        if iterations >= max_iterations or not np.isfinite(x).all() or norm(x - x0) < tol:
+        iteration += 1
+        if iteration >= iterations or not np.isfinite(x).all() or norm(x - x0) < tol:
             break
 
     # determine whether there was convergence
-    converged = iterations < max_iterations
+    converged = iteration < iterations
     return x, converged

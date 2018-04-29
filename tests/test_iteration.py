@@ -40,7 +40,7 @@ def test_hasselblad(scheme):
     """
     options = {
         'tol': 1e-8,
-        'max_iterations': 100,
+        'iterations': 100,
         'scheme': scheme
     }
 
@@ -66,6 +66,6 @@ def test_hasselblad(scheme):
 
     # verify that many more iterations would be needed to solve the problem with simple iteration
     del options['scheme']
-    options['max_iterations'] *= 10
+    options['iterations'] *= 10
     converged = Iteration('simple', options)._iterate(contraction, start_values)[1]
     assert not converged
