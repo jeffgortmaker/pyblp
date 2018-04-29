@@ -479,28 +479,28 @@ We'll then pass these along with parameter matrix configurations to :class:`Simu
    simulation = pyblp.Simulation(
        simulation_id_data,
        simulation_integration,
-       gamma=[5, 2, 3, 0],
-       beta=[-10, 1, 0, 0, 2],
+       gamma=[1, 2, 2, 0],
+       beta=[-5, 1, 1, 0, 0],
        sigma=[
            [0, 0, 0, 0, 0],
-           [0, 2, 0, 0, 0],
-           [0, 0, 1, 0, 0],
            [0, 0, 0, 0, 0],
-           [0, 0, 0, 0, 0]
+           [0, 0, 0, 0, 0],
+           [0, 0, 0, 0, 0],
+           [0, 0, 0, 0, 1]
        ],
        pi=[
            [0],
-           [1],
            [0],
            [0],
-           [0]
+           [0],
+           [2]
        ],
        seed=0
    )
 
 For a detailed explanation of how to use parameter matrices to configure all sorts of simulations, refer to :class:`Simulation`. Generally, the first element in `beta` and the first row in `sigma` and `pi` all correspond to prices. The following element in `beta`, the following row in `sigma` and `pi`, and the first element in `gamma` all correspond to a constant column. All following elements and rows correspond to other product characteristics.
 
-The first three elements of `gamma` are nonzero, so :math:`X_3` is a constant column followed by two simulated product characteristics. The first two and the last element of `beta` are nonzero, so :math:`X_1` is prices followed by a constant column and a third simulated product characteristic that isn't in :math:`X_1` becuse the last element of `gamma` is zero. The second and third elements on the diagonal of `sigma` are nonzero, so :math:`X_2` is a constant column followed by the first non-constant product characteristic in :math:`X_2`. There is one column in `pi`, so :math:`d` is a single simulated demographic.
+The first three elements of `gamma` are nonzero, so :math:`X_3` is a constant column followed by two simulated product characteristics. The first three elements of `beta` are also nonzero, so :math:`X_1` is prices followed by a constant column and the first simulated product characteristic in :math:`X_3`. Only the last element on the diagonal of `sigma` is nonzero, so :math:`X_2` is simply a third simulated product characteristic. There is one column in :math:`pi`, so :math:`d` is a single simulated demographic.
 
 When :class:`Simulation` is initialized, it constructs agent data and simulates all product data except for prices and shares.
 
@@ -523,7 +523,6 @@ Since at this stage, prices and shares are all ``numpy.nan``, we still need to s
 Now, we can try to recover the true parameters by creating and solving a :class:`Problem`. To make estimation easy, we'll use the same agent data and the same parameter sparsity structure. However, we'll choose starting values that are half the true parameters so that the optimization routine has to do some work.
 
 .. ipython:: python
-   :okwarning:
 
    simulated_problem = pyblp.Problem(
        simulated_product_data,
@@ -541,6 +540,6 @@ Now, we can try to recover the true parameters by creating and solving a :class:
    simulation.sigma
    simulation.pi
 
-The parameters seem to have been estimated reasonably well, except for the first elements in :math:`\Sigma` and :math:`\Pi`, which are still within an estimated standard error of their true values.
+The parameters seem to have been estimated reasonably well.
 
 In addition to checking that the configuration for a model based on actual data makes sense, the :class:`Simulation` class can also be a helpful tool for better understanding under what general conditions BLP models can be accurately estimated. Additionally, it is used extensively in pyblp's test suite.
