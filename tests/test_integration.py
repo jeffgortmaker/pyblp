@@ -19,7 +19,7 @@ from pyblp.utilities import Integration
     pytest.param(4, 'nested_grid', 9, 'monte_carlo', id="4D nested sparse grid and Monte Carlo")
 ])
 def test_hermite_integral(dimensions, specification, size, naive_specification):
-    """Tests if approximations of a simple Gauss-Hermite integral (product of squared variables of integration with
+    """Test if approximations of a simple Gauss-Hermite integral (product of squared variables of integration with
     respect to the standard normal density) are reasonably correct. Then, if a naive specification is given, tests that
     it performs worse, even with an order of magnitude more nodes.
     """
@@ -46,14 +46,14 @@ def test_hermite_integral(dimensions, specification, size, naive_specification):
     pytest.param('nested_grid', 6, id="large nested sparse grid")
 ])
 def test_weight_sums(dimensions, specification, size):
-    """Tests if weights sum to one."""
+    """Test that weights sum to one."""
     weights = Integration(specification, size)._build(dimensions)[1]
     np.testing.assert_allclose(weights.sum(), 1, rtol=0, atol=1e-12)
 
 
 @pytest.mark.usefixtures('nwspgr')
 def test_nwspgr(nwspgr):
-    """Replicates output from the Matlab function nwspgr by Florian Heiss and Viktor Winschel."""
+    """Replicate output from the Matlab function nwspgr by Florian Heiss and Viktor Winschel."""
     dimensions, level, nested, expected_nodes, expected_weights = nwspgr
     nodes, weights = Integration('nested_grid' if nested else 'grid', level)._build(dimensions)
     np.testing.assert_allclose(nodes, expected_nodes, rtol=0, atol=1e-9)

@@ -37,7 +37,7 @@ from pyblp.utilities import Optimization
     pytest.param(False, id="no analytic gradient")
 ])
 def test_entropy(lb, ub, method, optimize_options, compute_gradient):
-    """Tests that solutions to the entropy maximization problem from Berger, Pietra, and Pietra (1996) are reasonably
+    """Test that solutions to the entropy maximization problem from Berger, Pietra, and Pietra (1996) are reasonably
     close to the exact solution. Based on a subset of testing methods from scipy.optimize.tests.test_optimize.
     """
 

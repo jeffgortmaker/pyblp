@@ -21,7 +21,7 @@ from pyblp.utilities import Iteration
     pytest.param(1e-8, id="small")
 ])
 def test_scipy(method, options, tol):
-    """Tests that the solution to the example fixed point problem from scipy.optimize.fixed_point is reasonably close to
+    """Test that the solution to the example fixed point problem from scipy.optimize.fixed_point is reasonably close to
     the exact solution.
     """
     options['tol'] = tol
@@ -33,7 +33,7 @@ def test_scipy(method, options, tol):
 
 @pytest.mark.parametrize('scheme', [pytest.param(1, id="S1"), pytest.param(2, id="S2"), pytest.param(3, id="S3")])
 def test_hasselblad(scheme):
-    """Tests that the solution to the fixed point problem from Hasselblad (1969) is reasonably close to the exact
+    """Test that the solution to the fixed point problem from Hasselblad (1969) is reasonably close to the exact
     solution and that SQUAREM takes at least an order of magnitude fewer fixed point evaluations than does simple
     iteration. This same problem is used in an original SQUAREM unit test and is the first one discussed in Varadhan and
     Roland (2008).

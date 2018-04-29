@@ -18,114 +18,109 @@ from pyblp import Problem, Simulation, Integration, options, build_id_data, buil
 @pytest.fixture(autouse=True)
 def configure():
     """Configure NumPy so that it raises all warnings as exceptions, and, if a DTYPE environment variable is set in this
-    testing environment, use the specified data type for all numeric calculations.
+    testing environment that is different from the default data type, use it for all numeric calculations.
     """
     np.seterr(all='raise')
-    options.dtype = np.dtype(os.environ.get('DTYPE') or options.dtype)
+    dtype_string = os.environ.get('DTYPE')
+    if dtype_string:
+        dtype = np.dtype(dtype_string)
+        if np.finfo(dtype).dtype == options.dtype:
+            pytest.skip(f"The {dtype_string} data type is the same as the default one in this environment.")
+        options.dtype = dtype
 
 
 @pytest.fixture
-def small_simulations():
-    """Simulations with one market, a cost/nonlinear characteristic, and a single acquisition."""
-    simulations = []
-    simulation_solutions = []
-    for seed in range(3):
-        simulation = Simulation(
-            build_id_data(T=1, J=20, F=10, mergers=[{1: 0}]),
-            Integration('product', 3),
-            gamma=[0, 1],
-            beta=[-5, 0, 0],
-            sigma=[
-                [0, 0, 0],
-                [0, 0, 0],
-                [0, 0, 1]
-            ],
-            xi_variance=0.001,
-            omega_variance=0.001,
-            correlation=0.7,
-            seed=seed
-        )
-        simulations.append(simulation)
-        simulation_solutions.append(simulation.solve())
-    return simulations, simulation_solutions
+def small_simulation():
+    """Solve a simulation with two markets, a cost characteristic, a nonlinear characteristic, and an acquisition."""
+    simulation = Simulation(
+        build_id_data(T=2, J=18, F=3, mergers=[{1: 0}]),
+        Integration('product', 3),
+        gamma=[0, 2, 0],
+        beta=[-5, 0, 0, 0],
+        sigma=[
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 1]
+        ],
+        xi_variance=0.001,
+        omega_variance=0.001,
+        correlation=0.7,
+        seed=0
+    )
+    return simulation, simulation.solve()
 
 
 @pytest.fixture
-def medium_simulations():
-    """Simulations with two markets, nonlinear prices, a nonlinear constant, a cost/linear characteristic, another cost
-    characteristic, a demographic, sparse parameter matrices, and an acquisition of four firms.
+def medium_simulation():
+    """Solve a simulation with four markets, nonlinear prices, a cost/nonlinear constant, two cost characteristics, two
+    linear characteristics, a demographic, and a double acquisition.
     """
-    simulations = []
-    simulation_solutions = []
-    for seed in range(5):
-        simulation = Simulation(
-            build_id_data(T=2, J=25, F=11, mergers=[{f: 4 for f in range(4)}]),
-            Integration('nested_product', 4),
-            gamma=[0, 1, 2],
-            beta=[-10, 0, 1, 0],
-            sigma=[
-                [1, 0, 0, 0],
-                [0, 2, 0, 0],
-                [0, 0, 0, 0],
-                [0, 0, 0, 0]
-            ],
-            pi=[
-                [0],
-                [1],
-                [0],
-                [0]
-            ],
-            xi_variance=0.0001,
-            omega_variance=0.0001,
-            correlation=0.8,
-            seed=seed
-        )
-        simulations.append(simulation)
-        simulation_solutions.append(simulation.solve())
-    return simulations, simulation_solutions
+    simulation = Simulation(
+        build_id_data(T=4, J=25, F=6, mergers=[{f: 2 for f in range(2)}]),
+        Integration('product', 4),
+        gamma=[1, 1, 2, 0, 0],
+        beta=[-5, 0, 0, 0, 2, 1],
+        sigma=[
+            [1, 0,   0, 0, 0, 0],
+            [0, 0.5, 0, 0, 0, 0],
+            [0, 0,   0, 0, 0, 0],
+            [0, 0,   0, 0, 0, 0],
+            [0, 0,   0, 0, 0, 0],
+            [0, 0,   0, 0, 0, 0]
+        ],
+        pi=[
+            [1],
+            [0],
+            [0],
+            [0],
+            [0],
+            [0]
+        ],
+        xi_variance=0.0001,
+        omega_variance=0.0001,
+        correlation=0.8,
+        seed=1
+    )
+    return simulation, simulation.solve()
 
 
 @pytest.fixture
-def large_simulations():
-    """Simulations with three markets, nonlinear prices, a cost constant, two linear/cost characteristics, another
-    nonlinear/cost characteristic, two other cost characteristics, two demographics, dense parameter matrices, an
-    acquisition of two firms, another acquisition of five firms, and a log-linear cost specification.
+def large_simulation():
+    """Solve a simulation with ten markets, nonlinear prices, a cost/linear constant, a cost/linear/nonlinear
+    characteristic, a cost characteristic, a linear characteristic, two demographics, dense parameter matrices, an
+    acquisition, a triple acquisition, and a log-linear cost specification.
     """
-    simulations = []
-    simulation_solutions = []
-    for seed in range(15):
-        simulation = Simulation(
-            build_id_data(T=3, J=30, F=15, mergers=[{f: 7 + int(f > 1) for f in range(7)}]),
-            Integration('product', 4),
-            gamma=[0.1, 0.1, 0.2, 0.3, 0.1, 0.2],
-            beta=[-4, 0, 0, 10, 6, 0, 0],
-            sigma=[
-                [0.1, 0, -0.1, 0, 0, 0, 0],
-                [0,   0,  0,   0, 0, 0, 0],
-                [0,   0,  1,   0, 0, 0, 0],
-                [0,   0,  0,   0, 0, 0, 0],
-                [0,   0,  0,   0, 0, 0, 0],
-                [0,   0,  0,   0, 0, 0, 0],
-                [0,   0,  0,   0, 0, 0, 0]
-            ],
-            pi=[
-                [0, 0.1],
-                [0, 0  ],
-                [1, 0  ],
-                [0, 0  ],
-                [0, 0  ],
-                [0, 0  ],
-                [0, 0  ]
-            ],
-            xi_variance=0.000001,
-            omega_variance=0.000001,
-            correlation=0.9,
-            linear_costs=False,
-            seed=seed
-        )
-        simulations.append(simulation)
-        simulation_solutions.append(simulation.solve())
-    return simulations, simulation_solutions
+    simulation = Simulation(
+        build_id_data(T=10, J=20, F=9, mergers=[{f: 4 + int(f > 0) for f in range(4)}]),
+        Integration('product', 4),
+        gamma=[0, 0.1, 0.2, 0.3, 0.5, 0],
+        beta=[-6, 1, 1, 0, 0, 0, 2],
+        sigma=[
+            [1, 0, -0.1, 0, 0, 0, 0],
+            [0, 0,  0,   0, 0, 0, 0],
+            [0, 0,  2,   0, 0, 0, 0],
+            [0, 0,  0,   0, 0, 0, 0],
+            [0, 0,  0,   0, 0, 0, 0],
+            [0, 0,  0,   0, 0, 0, 0],
+            [0, 0,  0,   0, 0, 0, 0]
+        ],
+        pi=[
+            [1, 0],
+            [0, 0],
+            [0, 2],
+            [0, 0],
+            [0, 0],
+            [0, 0],
+            [0, 0]
+        ],
+        xi_variance=0.00001,
+        omega_variance=0.00001,
+        correlation=0.9,
+        linear_costs=False,
+        seed=2
+    )
+    return simulation, simulation.solve()
 
 
 @pytest.fixture(params=[
@@ -136,33 +131,30 @@ def large_simulations():
     pytest.param(['large', False], id="large without supply"),
     pytest.param(['large', True], id="large with supply")
 ])
-def simulated_problems(request):
-    """Problems configured with product and agent data from solved simulations. Parametrized to either include or not
-    include supply-side data.
-    """
-    problems = []
+def simulated_problem(request):
+    """Configure and solve a simulated problem, either with or without supply-side data."""
     name, supply = request.param
-    simulations, simulation_solutions = request.getfixturevalue(f'{name}_simulations')
-    for simulation, product_data in zip(simulations, simulation_solutions):
-        if not supply:
-            product_data = np.lib.recfunctions.drop_fields(product_data, ['cost_characteristics', 'supply_instruments'])
-        problems.append(Problem(product_data, simulation.agent_data, nonlinear_prices=simulation.nonlinear_prices))
-    return simulations, problems
+    simulation, product_data = request.getfixturevalue(f'{name}_simulation')
+    if not supply:
+        product_data = np.lib.recfunctions.drop_fields(product_data, ['cost_characteristics', 'supply_instruments'])
+    problem = Problem(product_data, simulation.agent_data, nonlinear_prices=simulation.nonlinear_prices)
+    results = problem.solve(simulation.sigma, simulation.pi, steps=1, linear_costs=simulation.linear_costs)
+    return simulation, problem, results
 
 
 @pytest.fixture
 def blp_problem():
-    """Example problem using the BLP automobile data."""
-    raw = np.recfromcsv(BLP_PRODUCTS_LOCATION)
-    linear_characteristics = np.c_[np.ones(raw.size), raw['hpwt'], raw['air'], raw['mpg'], raw['space']]
-    product_data = {k: raw[k] for k in raw.dtype.names}
+    """Configure the example automobile problem."""
+    data = np.recfromcsv(BLP_PRODUCTS_LOCATION)
+    linear_characteristics = np.c_[np.ones(data.size), data['hpwt'], data['air'], data['mpg'], data['space']]
+    product_data = {k: data[k] for k in data.dtype.names}
     product_data.update({
-        'firm_ids': np.c_[raw['firm_ids'], raw['changed_firm_ids']],
+        'firm_ids': np.c_[data['firm_ids'], data['changed_firm_ids']],
         'linear_characteristics': linear_characteristics,
         'nonlinear_characteristics': linear_characteristics[:, :-1],
         'demand_instruments': np.c_[linear_characteristics, build_blp_instruments({
-            'market_ids': raw['market_ids'],
-            'firm_ids': raw['firm_ids'],
+            'market_ids': data['market_ids'],
+            'firm_ids': data['firm_ids'],
             'characteristics': linear_characteristics
         })]
     })
@@ -171,22 +163,22 @@ def blp_problem():
 
 @pytest.fixture
 def nevo_problem():
-    """Example problem using the Nevo fake cereal data."""
-    raw = np.recfromcsv(NEVO_PRODUCTS_LOCATION)
-    indicators = build_indicators(raw['product_ids'])
-    product_data = {k: raw[k] for k in raw.dtype.names}
+    """Configure the example fake cereal problem."""
+    data = np.recfromcsv(NEVO_PRODUCTS_LOCATION)
+    indicators = build_indicators(data['product_ids'])
+    product_data = {k: data[k] for k in data.dtype.names}
     product_data.update({
-        'firm_ids': np.c_[raw['firm_ids'], raw['changed_firm_ids']],
+        'firm_ids': np.c_[data['firm_ids'], data['changed_firm_ids']],
         'linear_characteristics': indicators,
-        'nonlinear_characteristics': np.c_[np.ones(raw.size), raw['sugar'], raw['mushy']],
-        'demand_instruments': np.c_[indicators, extract_matrix(raw, 'instruments')]
+        'nonlinear_characteristics': np.c_[np.ones(data.size), data['sugar'], data['mushy']],
+        'demand_instruments': np.c_[indicators, extract_matrix(data, 'instruments')]
     })
     return Problem(product_data, np.recfromcsv(NEVO_AGENTS_LOCATION))
 
 
 @pytest.fixture(params=[pytest.param('blp_problem', id="BLP"), pytest.param('nevo_problem', id="Nevo")])
 def knittel_metaxoglou_2014(request):
-    """Initial parameter values for and estimates created by replication code for Knittel and Metaxoglou (2014).
+    """Load initial parameter values and estimates from replication code for Knittel and Metaxoglou (2014).
 
     The replication code was modified to output one Matlab data file for each dataset (BLP automobile data and Nevo's
     cereal data), each containing the results of one round of Knitro optimization and post-estimation calculations. The
@@ -211,8 +203,8 @@ def knittel_metaxoglou_2014(request):
 
 @pytest.fixture(params=[pytest.param(p, id=p.name) for p in Path(TEST_DATA_PATH / 'nwspgr').iterdir()])
 def nwspgr(request):
-    """Sample of pre-computed sparse grids of nodes and weights computed according to the Gauss-Hermite quadrature rule
-    and its nested analog, which were computed by the Matlab function nwspgr by Florian Heiss and Viktor Winschel.
+    """Load a sample of sparse grids of nodes and weights constructed according to the Gauss-Hermite quadrature rule and
+    its nested analog, which were computed by the Matlab function nwspgr by Florian Heiss and Viktor Winschel.
     """
     rule, dimensions, level = re.search(r'(GQN|KPN)_d(\d+)_l(\d+)', request.param.name).groups()
     matrix = np.atleast_2d(np.genfromtxt(request.param, delimiter=','))

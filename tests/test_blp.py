@@ -7,67 +7,46 @@ import scipy.optimize
 from pyblp import options, Problem, Iteration, Optimization
 
 
-@pytest.mark.usefixtures('simulated_problems')
+@pytest.mark.usefixtures('simulated_problem')
 @pytest.mark.parametrize('solve_options', [
     pytest.param({'steps': 1}, id="one step"),
     pytest.param({'linear_fp': False}, id="nonlinear fixed point"),
     pytest.param({'error_behavior': 'punish', 'error_punishment': 1e10}, id="error punishment"),
     pytest.param({'center_moments': False, 'se_type': 'unadjusted'}, id="simple covariance matrices")
 ])
-def test_accuracy(simulated_problems, solve_options):
-    """Tests that starting parameters either half or double their true values give rise to estimated parameter medians
-    within 10% of true values.
-    """
-    simulations, problems = simulated_problems
-    solve_options.update({
-        'linear_costs': simulations[0].linear_costs,
-        'optimization': Optimization('knitro', {'feastol': 0, 'xtol': 1e-14})
-    })
+def test_accuracy(simulated_problem, solve_options):
+    """Test that starting parameters that are half their true values give rise to errors of less than 10%."""
+    simulation, problem, _ = simulated_problem
 
-    # get the actual parameters
-    actual = {k: getattr(simulations[0], k) for k in ['gamma', 'beta', 'sigma', 'pi']}
-
-    # get lists of estimated parameters
-    estimated = {}
-    for seed, (simulation, problem) in enumerate(zip(simulations, problems)):
-        np.random.seed(seed)
-        sigma = simulation.sigma * np.random.choice([0.5, 2], simulation.sigma.shape)
-        sigma_bounds = (sigma - 4 * np.abs(sigma), sigma + 4 * np.abs(sigma))
-        pi = pi_bounds = None
-        if simulation.pi is not None:
-            pi = simulation.pi * np.random.choice([0.5, 2], simulation.pi.shape)
-            pi_bounds = (pi - 4 * np.abs(pi), pi + 4 * np.abs(pi))
-        results = problem.solve(sigma, pi, sigma_bounds, pi_bounds, **solve_options)
-        for key in actual:
-            estimate = getattr(results, key, None)
-            if estimate is not None:
-                estimated.setdefault(key, []).append(estimate)
+    # solve the problem
+    results = problem.solve(simulation.sigma, simulation.pi, linear_costs=simulation.linear_costs, **solve_options)
 
     # test the accuracy of the estimated parameters
-    for key, estimates in estimated.items():
-        medians = np.median(np.array(estimates), axis=0)
-        np.testing.assert_allclose(actual[key], medians, atol=0, rtol=0.1, err_msg=key)
+    for key in ['gamma', 'beta', 'sigma', 'pi']:
+        estimate = getattr(results, key, None)
+        if estimate is not None:
+            np.testing.assert_allclose(getattr(simulation, key), estimate, atol=0, rtol=0.1, err_msg=key)
 
 
-@pytest.mark.usefixtures('simulated_problems')
+@pytest.mark.usefixtures('simulated_problem')
 @pytest.mark.parametrize(['solve_options1', 'solve_options2'], [
     pytest.param({'custom_display': True}, {'custom_display': False}, id="custom and non-custom displays"),
     pytest.param({'processes': 1}, {'processes': 2}, id="single process and multiprocessing")
 ])
-def test_trivial_changes(simulated_problems, solve_options1, solve_options2):
-    """Tests that solving a problem with arguments that shouldn't give rise to meaningful differences doesn't give rise
-    to them.
+def test_trivial_changes(simulated_problem, solve_options1, solve_options2):
+    """Test that solving a problem with arguments that shouldn't give rise to meaningful differences doesn't give rise
+    to any differences.
     """
-    simulation, problem = next(zip(*simulated_problems))
+    simulation, problem, _ = simulated_problem
 
-    # get both results
+    # solve the problem with both sets of options
     results = []
     for solve_options in [solve_options1, solve_options2]:
         results.append(problem.solve(
             simulation.sigma,
             simulation.pi,
-            linear_costs=simulation.linear_costs,
             steps=1,
+            linear_costs=simulation.linear_costs,
             **solve_options
         ))
 
@@ -75,34 +54,26 @@ def test_trivial_changes(simulated_problems, solve_options1, solve_options2):
     for key, result1 in results[0].__dict__.items():
         if isinstance(result1, np.ndarray) and result1.dtype != np.object:
             result2 = getattr(results[1], key)
-            np.testing.assert_allclose(result1, result2, atol=1e-10, rtol=0, err_msg=key)
+            np.testing.assert_allclose(result1, result2, atol=1e-14, rtol=0, err_msg=key)
 
 
-@pytest.mark.usefixtures('simulated_problems')
+@pytest.mark.usefixtures('simulated_problem')
 @pytest.mark.parametrize('solve_options', [
     pytest.param({'iteration': Iteration('simple')}, id="configured iteration"),
     pytest.param({'processes': 2}, id="multiprocessing")
 ])
-def test_merger(simulated_problems, solve_options):
-    """Tests that prices and shares simulated under changed firm IDs are reasonably close to prices and shares computed
-    from the results of a solved problem. In particular, tests that unchanged prices and shares are farther from their
+def test_merger(simulated_problem, solve_options):
+    """Test that prices and shares simulated under changed firm IDs are reasonably close to prices and shares computed
+    from the results of a solved problem. In particular, test that unchanged prices and shares are farther from their
     simulated counterparts than those computed by approximating a merger, which in turn are farther from their simulated
-    counterparts than those computed by fully solving a merger. Also tests that simple acquisitions increase HHI.
+    counterparts than those computed by fully solving a merger. Also test that simple acquisitions increase HHI. These
+    inequalities are only guaranteed because of the way in which the simulations are configured.
     """
-    simulation, problem = next(zip(*simulated_problems))
+    simulation, _, results = simulated_problem
 
-    # get unchanged and changed product data by solving the simulation under unchanged and changed firm IDs
+    # get unchanged and changed prices and shares
     product_data = simulation.solve()
     changed_product_data = simulation.solve(firm_ids_index=1)
-
-    # solve the problem
-    results = problem.solve(
-        simulation.sigma,
-        simulation.pi,
-        linear_costs=simulation.linear_costs,
-        steps=1,
-        **solve_options
-    )
 
     # solve for approximate and actual changed prices and shares
     costs = results.compute_costs()
@@ -133,25 +104,21 @@ def test_merger(simulated_problems, solve_options):
     np.testing.assert_array_less(hhi, changed_hhi, verbose=True)
 
 
-@pytest.mark.usefixtures('simulated_problems')
-def test_markup_positivity(simulated_problems):
-    """Tests that simulated markups are positive."""
-    simulation, problem = next(zip(*simulated_problems))
-    results = problem.solve(simulation.sigma, simulation.pi, linear_costs=simulation.linear_costs, steps=1)
-
-    # compute markups and test their positivity
+@pytest.mark.usefixtures('simulated_problem')
+def test_markup_positivity(simulated_problem):
+    """Test that simulated markups are positive."""
+    _, _, results = simulated_problem
     markups = results.compute_markups(results.compute_costs())
     np.testing.assert_array_less(0, markups, verbose=True)
 
 
-@pytest.mark.usefixtures('simulated_problems')
+@pytest.mark.usefixtures('simulated_problem')
 @pytest.mark.parametrize('factor', [pytest.param(0.01, id="large"), pytest.param(0.0001, id="small")])
-def test_elasticity_aggregates_and_means(simulated_problems, factor):
-    """Tests that the magnitude of aggregate elasticities are less than the magnitude of mean elasticities, both for
-    prices and for other characteristics.
+def test_elasticity_aggregates_and_means(simulated_problem, factor):
+    """Test that the magnitude of simulated aggregate elasticities is less than the magnitude of mean elasticities, both
+    for prices and for other characteristics.
     """
-    simulation, problem = next(zip(*simulated_problems))
-    results = problem.solve(simulation.sigma, simulation.pi, linear_costs=simulation.linear_costs, steps=1)
+    simulation, _, results = simulated_problem
 
     # test that demand for an entire product category is less elastic for prices than for individual products
     np.testing.assert_array_less(
@@ -172,41 +139,38 @@ def test_elasticity_aggregates_and_means(simulated_problems, factor):
             )
 
 
-@pytest.mark.usefixtures('simulated_problems')
-def test_diversion_ratios(simulated_problems):
-    """Tests diversion ratio magnitudes and row sums."""
-    simulation, problem = next(zip(*simulated_problems))
-    results = problem.solve(simulation.sigma, simulation.pi, linear_costs=simulation.linear_costs, steps=1)
+@pytest.mark.usefixtures('simulated_problem')
+def test_diversion_ratios(simulated_problem):
+    """Test simulated diversion ratio magnitudes and row sums."""
+    simulation, _, results = simulated_problem
 
     # test that price-based ratios are between zero and one and that ratio matrix rows sum to one
     for compute in [results.compute_price_diversion_ratios, results.compute_long_run_diversion_ratios]:
         ratios = compute()
         np.testing.assert_array_less(0, ratios, err_msg=compute.__name__, verbose=True)
         np.testing.assert_array_less(ratios, 1, err_msg=compute.__name__, verbose=True)
-        np.testing.assert_allclose(ratios.sum(axis=1), 1, atol=1e-10, rtol=0, err_msg=compute.__name__)
+        np.testing.assert_allclose(ratios.sum(axis=1), 1, atol=1e-14, rtol=0, err_msg=compute.__name__)
 
     # test that rows sum to one even when computing ratios for non-price characteristics
     for linear_index, nonlinear_index, _ in simulation.characteristic_indices:
         if linear_index is not None or nonlinear_index is not None:
             indices = {'linear_index': linear_index, 'nonlinear_index': nonlinear_index}
             ratios = results.compute_diversion_ratios(**indices)
-            np.testing.assert_allclose(ratios.sum(axis=1), 1, atol=1e-10, rtol=0, err_msg=str(indices))
+            np.testing.assert_allclose(ratios.sum(axis=1), 1, atol=1e-14, rtol=0, err_msg=str(indices))
 
 
-@pytest.mark.usefixtures('simulated_problems')
-def test_second_step(simulated_problems):
-    """Tests that results from two-step GMM are identical to results from one-step GMM configured with results from a
-    first step.
+@pytest.mark.usefixtures('simulated_problem')
+def test_second_step(simulated_problem):
+    """Test that results from two-step GMM on simulated data are identical to results from one-step GMM configured with
+    results from a first step.
     """
-    simulation, problem = next(zip(*simulated_problems))
+    simulation, problem, _ = simulated_problem
 
     # get two-step GMM results
-    sigma = 0.5 * simulation.sigma
-    pi = 0.5 * simulation.pi if simulation.pi is not None else None
-    results = problem.solve(sigma, pi, steps=2)
+    results = problem.solve(simulation.sigma, simulation.pi, steps=2)
 
     # manually get the same results
-    results1 = problem.solve(sigma, pi, steps=1)
+    results1 = problem.solve(simulation.sigma, simulation.pi, steps=1)
     results2 = problem.solve(
         results1.sigma,
         results1.pi,
@@ -216,24 +180,26 @@ def test_second_step(simulated_problems):
         steps=1
     )
 
-    # test that all arrays are essentially identical
+    # test that results are essentially identical
     for key, result in results.__dict__.items():
         if isinstance(result, np.ndarray) and result.dtype != np.object:
             result2 = getattr(results2, key)
-            np.testing.assert_allclose(result, result2, atol=1e-10, rtol=0, err_msg=key)
+            np.testing.assert_allclose(result, result2, atol=1e-14, rtol=0, err_msg=key)
 
 
-@pytest.mark.usefixtures('simulated_problems')
+@pytest.mark.usefixtures('simulated_problem')
 @pytest.mark.parametrize('scipy_method', [
     pytest.param('l-bfgs-b', id="L-BFGS-B"),
     pytest.param('tnc', id="TNC"),
     pytest.param('slsqp', id="SLSQP")
 ])
-def test_gradient_optionality(simulated_problems, scipy_method):
-    """Tests that the option of not computing the gradient does not affect estimates when the gradient isn't used."""
-    simulation, problem = next(zip(*simulated_problems))
+def test_gradient_optionality(simulated_problem, scipy_method):
+    """Test that the option of not computing the gradient for simulated data does not affect estimates when the gradient
+    isn't used.
+    """
+    simulation, problem, _ = simulated_problem
 
-    # define a custom optimization method that doesn't use computed gradients
+    # define a custom optimization method that doesn't use gradients
     custom_method = lambda f, i, b: scipy.optimize.minimize(lambda x: f(x)[0], i, method=scipy_method, bounds=b).x
 
     # solve the problem when not using gradients and when not computing them
@@ -246,19 +212,21 @@ def test_gradient_optionality(simulated_problems, scipy_method):
     for key, result1 in results1.__dict__.items():
         if isinstance(result1, np.ndarray) and result1.dtype != np.object:
             result2 = getattr(results2, key)
-            np.testing.assert_allclose(result1, result2, atol=1e-10, rtol=0, err_msg=key)
+            np.testing.assert_allclose(result1, result2, atol=1e-14, rtol=0, err_msg=key)
 
 
-@pytest.mark.usefixtures('simulated_problems')
+@pytest.mark.usefixtures('simulated_problem')
 @pytest.mark.parametrize('method', [
     pytest.param('l-bfgs-b', id="L-BFGS-B"),
     pytest.param('tnc', id="TNC"),
     pytest.param('slsqp', id="SLSQP"),
     pytest.param('knitro', id="Knitro")
 ])
-def test_bounds(simulated_problems, method):
-    """Tests that non-binding bounds on parameters in do not affect estimates and that binding bounds are respected."""
-    simulation, problem = next(zip(*simulated_problems))
+def test_bounds(simulated_problem, method):
+    """Test that non-binding bounds on parameters in simulated problems do not affect estimates and that binding bounds
+    are respected.
+    """
+    simulation, problem, _ = simulated_problem
 
     # all problems will be solved with the same optimization method starting as close to the true parameters as possible
     solve = lambda s, p: problem.solve(
@@ -310,7 +278,7 @@ def test_bounds(simulated_problems, method):
 
         # solve the problem with binding bounds and test that they are essentially respected
         binding_results = solve(binding_sigma_bounds, binding_pi_bounds)
-        assert_array_less = lambda a, b: np.testing.assert_array_less(a, b + 1e-10, verbose=True)
+        assert_array_less = lambda a, b: np.testing.assert_array_less(a, b + 1e-14, verbose=True)
         assert_array_less(binding_sigma_bounds[0], binding_results.sigma)
         assert_array_less(binding_results.sigma, binding_sigma_bounds[1])
         if simulation.pi is not None:
@@ -318,12 +286,12 @@ def test_bounds(simulated_problems, method):
             assert_array_less(binding_results.pi, binding_pi_bounds[1])
 
 
-@pytest.mark.usefixtures('simulated_problems')
-def test_extra_nodes(simulated_problems):
-    """Tests that agents in a simulated problem are identical to agents in a problem created with agent data built
+@pytest.mark.usefixtures('simulated_problem')
+def test_extra_nodes(simulated_problem):
+    """Test that agents in a simulated problem are identical to agents in a problem created with agent data built
     according to the same integration specification but containing unnecessary columns of nodes.
     """
-    simulation, problem1 = next(zip(*simulated_problems))
+    simulation, problem1, _ = simulated_problem
 
     # reconstruct the problem with unnecessary columns of nodes
     agent_data2 = {k: simulation.agent_data[k] for k in simulation.agent_data.dtype.names}
@@ -335,15 +303,15 @@ def test_extra_nodes(simulated_problems):
         if np.issubdtype(problem1.agents.dtype[key], options.dtype):
             values1 = problem1.agents[key]
             values2 = problem2.agents[key]
-            np.testing.assert_allclose(values1, values2, atol=1e-10, rtol=0, err_msg=key)
+            np.testing.assert_allclose(values1, values2, atol=1e-14, rtol=0, err_msg=key)
 
 
-@pytest.mark.usefixtures('simulated_problems')
-def test_extra_demographics(simulated_problems):
-    """Tests that agents in a simulated problem are identical to agents in a problem created with agent data built
+@pytest.mark.usefixtures('simulated_problem')
+def test_extra_demographics(simulated_problem):
+    """Test that agents in a simulated problem are identical to agents in a problem created with agent data built
     according to the same integration specification and but containing unnecessary rows of demographics.
     """
-    simulation, problem1 = next(zip(*simulated_problems))
+    simulation, problem1, _ = simulated_problem
     if simulation.D == 0:
         return
 
@@ -362,43 +330,48 @@ def test_extra_demographics(simulated_problems):
         if np.issubdtype(problem1.agents.dtype[key], options.dtype):
             values1 = problem1.agents[key]
             values2 = problem2.agents[key]
-            np.testing.assert_allclose(values1, values2, atol=1e-10, rtol=0, err_msg=key)
+            np.testing.assert_allclose(values1, values2, atol=1e-14, rtol=0, err_msg=key)
 
 
-@pytest.mark.usefixtures('simulated_problems')
+@pytest.mark.usefixtures('simulated_problem')
 @pytest.mark.parametrize('solve_options', [
     pytest.param({}, id="default"),
     pytest.param({'linear_fp': False}, id="nonlinear fixed point")
 ])
-def test_objective_gradient(simulated_problems, solve_options):
-    """Implements central finite differences in a custom optimization routine to test that analytic gradient values
-    associated with a 0.1% change in the objective are within 1% of estimated gradient values.
+def test_objective_gradient(simulated_problem, solve_options):
+    """Implement central finite differences in a custom optimization routine to test that analytic gradient values
+    associated with a 0.5% change in the objective are within 5% of estimated gradient values.
     """
-    simulation, problem = next(zip(*simulated_problems))
+    simulation, problem, _ = simulated_problem
 
     # define a custom optimization routine that tests central finite differences around starting parameter values
     def test_finite_differences(objective_function, theta, *_):
         objective, exact = objective_function(theta)
         estimated = np.zeros_like(exact)
-        change = 0.001 * objective
+        change = 0.005 * objective
         for index in range(theta.size):
             theta1 = theta.copy()
             theta2 = theta.copy()
             theta1[index] += change / 2
             theta2[index] -= change / 2
             estimated[index] = (objective_function(theta1)[0] - objective_function(theta2)[0]) / change
-        np.testing.assert_allclose(exact, estimated, atol=0, rtol=0.01)
+        np.testing.assert_allclose(exact, estimated, atol=0, rtol=0.05)
         return theta
 
     # test the gradient at parameter values slightly different from the true ones so that the objective is sizable
-    sigma = 0.5 * simulation.sigma
-    pi = 0.5 * simulation.pi if simulation.pi is not None else None
-    problem.solve(sigma, pi, steps=1, optimization=Optimization(test_finite_differences), **solve_options)
+    problem.solve(
+        0.5 * simulation.sigma,
+        0.5 * simulation.pi if simulation.pi is not None else None,
+        steps=1,
+        linear_costs=simulation.linear_costs,
+        optimization=Optimization(test_finite_differences),
+        **solve_options
+    )
 
 
 @pytest.mark.usefixtures('knittel_metaxoglou_2014')
 def test_knittel_metaxoglou_2014(knittel_metaxoglou_2014):
-    """Replicates estimates created by replication code for Knittel and Metaxoglou (2014)."""
+    """Replicate estimates created by replication code for Knittel and Metaxoglou (2014)."""
     results = knittel_metaxoglou_2014['problem'].solve(
         knittel_metaxoglou_2014.get('initial_sigma'),
         knittel_metaxoglou_2014.get('initial_pi'),
