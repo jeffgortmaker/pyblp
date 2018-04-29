@@ -13,17 +13,19 @@ verbose : `bool`
 dtype : `dtype`
     The data type used for internal calculations, which is by default ``numpy.float64``. The other recommended option is
     ``numpy.longdouble``, which is the only extended precision floating point type currently supported by NumPy.
-    Although this data type will be used internally, it will be converted to ``numpy.float64`` when passing arrays to
-    optimization and fixed point routines, which may not support extended precision.
+    Although this data type will be used internally, ``numpy.float64`` will be used when passing arrays to optimization
+    and fixed point routines, which may not support extended precision. The library underlying :mod:`scipy.linalg`,
+    which is used for matrix inversion, may also use ``numpy.float64``.
 
     One instance in which extended precision can be helpful in the BLP problem is when there are a large number of near
     zero choice probabilities with small integration weights, which, under standard precision are called zeros when in
     aggregate they are nonzero. For example, :ref:`Skrainka (2012) <s12>` finds that using long doubles is sufficient
     to solve many utility floating point problems.
 
-    The precision of ``numpy.longdouble`` depends on the platform on which NumPy is installed. For example, on Windows,
-    NumPy is usually compiled such that ``numpy.longdouble`` is identical to ``numpy.float64``. Precisions can be
-    compared with :class:`numpy.finfo`.
+    The precision of ``numpy.longdouble`` depends on the platform on which NumPy is installed. If the platform in use
+    does not support extended precision, using ``numpy.longdouble`` may lead to unreliably results. For example, on
+    Windows, NumPy is usually compiled such that ``numpy.longdouble`` often behaves like ``numpy.float64``. Precisions
+    can be compared with :class:`numpy.finfo`.
 
     .. ipython:: python
 
