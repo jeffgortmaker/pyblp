@@ -209,6 +209,10 @@ class Simulation(object):
         # extract and validate IDs
         market_ids = extract_matrix(id_data, 'market_ids')
         firm_ids = extract_matrix(id_data, 'firm_ids')
+        if market_ids is None:
+            raise KeyError("id_data must have a market_ids field.")
+        if firm_ids is None:
+            raise KeyError("id_data must have a firm_ids field.")
         if market_ids.shape[1] > 1:
             raise ValueError("The market_ids field of id_data must be one-dimensional.")
 
