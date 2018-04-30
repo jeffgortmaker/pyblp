@@ -847,9 +847,9 @@ class ObjectiveInfo(object):
 class ProblemMarket(Market):
     """A single market in the BLP problem, which can be solved to compute delta-related information."""
 
-    def solve(self, initial_delta, parameter_info, iteration, linear_fp, compute_objective):
+    def solve(self, initial_delta, parameter_info, iteration, linear_fp, compute_gradient):
         """Compute the mean utility for this market that equates market shares to observed values by solving a fixed
-        point problem. Then, if compute_objective is True, compute its Jacobian with respect to theta. Finally, return a
+        point problem. Then, if compute_gradient is True, compute its Jacobian with respect to theta. Finally, return a
         set of any errors encountered during computation. If necessary, replace null elements in delta with their last
         values before computing its Jacobian.
         """
@@ -883,8 +883,8 @@ class ProblemMarket(Market):
             if not converged:
                 errors.add(exceptions.DeltaConvergenceError)
 
-            # return a null Jacobian if the objective isn't being computed
-            if not compute_objective:
+            # return a null Jacobian if the gradient isn't being computed
+            if not compute_gradient:
                 return delta, np.full((self.J, parameter_info.P), np.nan, dtype=options.dtype), errors
 
             # replace invalid values in delta with the last computed values before computing the Jacobian
