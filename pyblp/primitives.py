@@ -9,7 +9,7 @@ from .utilities import output, extract_matrix, Matrices, Integration
 
 
 class Products(Matrices):
-    """Structured product data.
+    r"""Structured product data.
 
     Attributes
     ----------
@@ -18,8 +18,9 @@ class Products(Matrices):
     firm_ids : `ndarray`
         IDs that associate products with firms. Any columns after the first represent changes such as mergers.
     ownership : `ndarray`
-        Stacked ownership matrices for all markets. Each stack is associated with a :attr:`Results.firm_ids` columns. If
-        a market has fewer products than others, extra columns will contain ``numpy.nan``.
+        Stacked :math:`J_t \times J_t` ownership matrices, :math:`O`, for each market :math:`t`. Each stack is
+        associated with a :attr:`Results.firm_ids` column. If a market has fewer products than others, extra columns
+        will contain ``numpy.nan``.
     shares : `ndarray`
         Shares, :math:`s`.
     prices : `ndarray`
@@ -113,7 +114,7 @@ class Products(Matrices):
         return super().__new__(cls, {
             'market_ids': (market_ids, np.object),
             'firm_ids': (firm_ids, np.object),
-            'ownership': (ownership, np.dtype),
+            'ownership': (ownership, options.dtype),
             'shares': (shares, options.dtype),
             'prices': (prices, options.dtype),
             'X1': (np.hstack(X1_list), options.dtype),
@@ -276,8 +277,8 @@ class Market(object):
 
     def get_ownership_matrix(self, firm_ids_index=0):
         """Get an ownership matrix. By default, unchanged firm IDs are used."""
-        J = self.products.ownership.shape[1] // self.products.firm_ids.shape[1]
-        return self.products.ownership[:, J * firm_ids_index:self.J * (firm_ids_index + 1)]
+        offset = firm_ids_index * self.products.ownership.shape[1] // self.products.firm_ids.shape[1]
+        return self.products.ownership[:, offset:offset + self.J]
 
     def compute_delta(self, X1=None):
         """Compute delta. By default, the X1 with which this market was initialized is used."""
