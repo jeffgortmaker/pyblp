@@ -36,6 +36,7 @@ There are also a number of convenience functions that can be used to construct c
 
    build_id_data
    build_indicators
+   build_ownership
    build_blp_instruments
 
 

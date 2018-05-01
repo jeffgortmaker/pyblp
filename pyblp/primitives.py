@@ -19,7 +19,7 @@ class Products(Matrices):
         IDs that associate products with firms. Any columns after the first represent changes such as mergers.
     ownership : `ndarray`
         Stacked :math:`J_t \times J_t` ownership matrices, :math:`O`, for each market :math:`t`. Each stack is
-        associated with a :attr:`Results.firm_ids` column. If a market has fewer products than others, extra columns
+        associated with a :attr:`Products.firm_ids` column. If a market has fewer products than others, extra columns
         will contain ``numpy.nan``.
     shares : `ndarray`
         Shares, :math:`s`.
