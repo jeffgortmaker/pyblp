@@ -530,7 +530,7 @@ class Results(object):
         output("Computing marginal costs ...")
         return self._combine_results(ResultsMarket.compute_costs)
 
-    def solve_approximate_merger(self, costs, firm_ids_index=1):
+    def solve_approximate_merger(self, costs, firms_index=1):
         r"""Estimate approximate post-merger prices, :math:`p^a`, under the assumption that shares and their price
         derivatives are unaffected by the merger.
 
@@ -549,9 +549,10 @@ class Results(object):
         ----------
         costs : `array-like`
             Marginal costs, :math:`c`, computed by :meth:`Results.compute_costs`.
-        firm_ids_index : `int, optional`
+        firms_index : `int, optional`
             Column index of the changed firm IDs in the `firm_ids` field of `product_data` in :class:`Problem`
-            initialization. Firm ID changes need not reflect an actual merger.
+            initialization. If an `ownership` field was specified, the corresponding stack of ownership matrices will be
+            used. Ownership changes need not reflect an actual merger.
 
         Returns
         -------
@@ -560,10 +561,10 @@ class Results(object):
 
         """
         output("Solving for approximate post-merger prices ...")
-        output(f"Firm IDs index: {firm_ids_index}.")
-        return self._combine_results(ResultsMarket.solve_approximate_merger, [firm_ids_index], [costs])
+        output(f"Firms index: {firms_index}.")
+        return self._combine_results(ResultsMarket.solve_approximate_merger, [firms_index], [costs])
 
-    def solve_merger(self, costs, firm_ids_index=1, prices=None, iteration=None, processes=1):
+    def solve_merger(self, costs, firms_index=1, prices=None, iteration=None, processes=1):
         r"""Estimate post-merger prices, :math:`p^*`.
 
         Prices are computed in each market by iterating over the post-merger version of the :math:`\zeta`-markup
@@ -582,9 +583,10 @@ class Results(object):
         ----------
         costs : `array-like`
             Marginal costs, :math:`c`, computed by :meth:`Results.compute_costs`.
-        firm_ids_index : `int, optional`
+        firms_index : `int, optional`
             Column index of the changed firm IDs in the `firm_ids` field of `product_data` in :class:`Problem`
-            initialization. Firm ID changes need not reflect an actual merger.
+            initialization. If an `ownership` field was specified, the corresponding stack of ownership matrices will be
+            used. Ownership changes need not reflect an actual merger.
         prices : `array-like, optional`
             Prices at which the fixed point iteration routine will start. By default, pre-merger prices, :math:`p`, are
             used as starting values. Other reasonable starting prices include :math:`p^a`, computed by
@@ -610,13 +612,11 @@ class Results(object):
             raise ValueError("iteration must an Iteration instance.")
 
         output("Solving for post-merger prices ...")
-        output(f"Firm IDs index: {firm_ids_index}.")
+        output(f"Firms index: {firms_index}.")
         output("Starting with unchanged prices." if prices is None else "Starting with the specified prices.")
         output(iteration)
         output(f"Processes: {processes}.")
-        return self._combine_results(
-            ResultsMarket.solve_merger, [firm_ids_index, iteration], [costs, prices], processes
-        )
+        return self._combine_results(ResultsMarket.solve_merger, [firms_index, iteration], [costs, prices], processes)
 
     def compute_shares(self, prices):
         r"""Estimate shares evaluated at specified prices.
@@ -637,21 +637,21 @@ class Results(object):
         output("Computing shares ...")
         return self._combine_results(ResultsMarket.compute_shares, market_args=[prices])
 
-    def compute_hhi(self, shares=None, firm_ids_index=0):
+    def compute_hhi(self, shares=None, firms_index=0):
         r"""Estimate Herfindahl-Hirschman Indices, :math:`\text{HHI}`.
 
         The index in market :math:`t` is
 
-        .. math:: \text{HHI} = 10,000 \times \sum_{f=1}^{F_t} \left(\sum_{j \in \mathscr{J}_f} s_j\right)^2,
+        .. math:: \text{HHI} = 10,000 \times \sum_{f=1}^{F_t} \left(\sum_{j \in \mathscr{J}_{ft}} s_j\right)^2,
 
-        in which :math:`\mathscr{J}_f \subset \{1, 2, \ldots, J_t\}` is the set of products produced by firm :math:`f`.
+        in which :math:`\mathscr{J}_{ft}` is the set of products produced by firm :math:`f` in market :math:`t`.
 
         Parameters
         ----------
         shares : `array-like, optional`
             Shares, :math:`s`, such as those computed by :meth:`Results.compute_shares`. By default, unchanged shares
             are used.
-        firm_ids_index : `int, optional`
+        firms_index : `int, optional`
             Column index of the firm IDs in the `firm_ids` field of `product_data` in :class:`Problem` initialization.
             By default, unchanged firm IDs are used.
 
@@ -664,8 +664,8 @@ class Results(object):
         """
         output("Computing HHI ...")
         output("Using unchanged shares" if shares is None else "Using the specified shares.")
-        output(f"Firm IDs index: {firm_ids_index}.")
-        return self._combine_results(ResultsMarket.compute_hhi, [firm_ids_index], [shares])
+        output(f"Firms index: {firms_index}.")
+        return self._combine_results(ResultsMarket.compute_hhi, [firms_index], [shares])
 
     def compute_markups(self, costs, prices=None):
         r"""Estimate markups, :math:`\mathscr{M}`.
@@ -838,14 +838,14 @@ class ResultsMarket(Market):
             costs = np.full((self.J, 1), np.nan)
         return costs, errors
 
-    def solve_approximate_merger(self, firm_ids_index, costs):
+    def solve_approximate_merger(self, firms_index, costs):
         """Market-specific computation for Results.solve_approximate_merger."""
         jacobian = self.compute_utilities_by_prices_jacobian()
-        ownership = self.get_ownership_matrix(firm_ids_index)
+        ownership = self.get_ownership_matrix(firms_index)
         prices = costs + self.compute_eta(ownership, jacobian)
         return prices, set()
 
-    def solve_merger(self, firm_ids_index, iteration, costs, prices=None):
+    def solve_merger(self, firms_index, iteration, costs, prices=None):
         """Market-specific computation for Results.solve_merger."""
 
         # configure numpy to identify floating point errors
@@ -854,7 +854,7 @@ class ResultsMarket(Market):
             np.seterrcall(lambda *_: errors.add(exceptions.ChangedPricesFloatingPointError))
 
             # solve the fixed point problem
-            ownership = self.get_ownership_matrix(firm_ids_index)
+            ownership = self.get_ownership_matrix(firms_index)
             jacobian = self.compute_utilities_by_prices_jacobian()
             contraction = lambda p: costs + self.compute_zeta(ownership, jacobian, costs, p)
             prices, converged = iteration._iterate(contraction, self.products.prices if prices is None else prices)
@@ -871,9 +871,9 @@ class ResultsMarket(Market):
         shares = self.compute_probabilities(delta, mu) @ self.agents.weights
         return shares, set()
 
-    def compute_hhi(self, firm_ids_index, shares=None):
+    def compute_hhi(self, firms_index, shares=None):
         """Market-specific computation for Results.compute_hhi."""
-        firm_ids = self.products.firm_ids[:, [firm_ids_index]]
+        firm_ids = self.products.firm_ids[:, [firms_index]]
         if shares is None:
             shares = self.products.shares
         hhi = 1e4 * sum((shares[firm_ids == f].sum() / shares.sum()) ** 2 for f in np.unique(firm_ids))

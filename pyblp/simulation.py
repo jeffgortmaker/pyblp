@@ -34,8 +34,8 @@ class Simulation(object):
 
     Parameters
     ----------
-    id_data : `structured array-like`
-        IDs that associate products with markets and firms. Each row corresponds to a product. The convenience function
+    basic_product_data : `structured array-like`
+        Each row corresponds to a product. Markets can have differing numbers of products. The convenience function
         :func:`build_id_data` can be used to construct ID data from market, product, and firm counts. Fields:
 
             - **market_ids** : (`object`) - IDs that associate products with markets.
@@ -45,6 +45,14 @@ class Simulation(object):
               mergers. If there are multiple columns, this field can either be a matrix or it can be broken up into
               multiple one-dimensional fields with column index suffixes that start at zero. For example, if there are
               two columns, this field can be replaced with two one-dimensional fields: `firm_ids0` and `firm_ids1`.
+
+            - **ownership** : (`numeric, optional') - Custom stacked :math:`J_t \times J_t` ownership matrices,
+              :math:`O`, for each market :math:`t`, which can be built with :func:`build_ownership`. Each stack is
+              associated with a `firm_ids` column and must have as many columns as there are products in the market with
+              the most products. If a market has fewer products than others, extra columns will be ignored and may be
+              filled with any value, such as ``numpy.nan``. If an ownership matrix stack is unspecified, its
+              corresponding column in `firm_ids` is used by :func:`build_ownership` to build a stack of standard
+              ownership matrices.
 
     integration : `Integration`
         :class:`Integration` configuration for how to build nodes and weights for integration over agent utilities.
@@ -172,8 +180,8 @@ class Simulation(object):
     .. ipython:: python
 
        simulation = pyblp.Simulation(
-           id_data=pyblp.build_id_data(T=2, J=20, F=5),
-           integration=pyblp.Integration('product', 4),
+           pyblp.build_id_data(T=2, J=20, F=5),
+           pyblp.Integration('product', 4),
            gamma=[0, 1, 2],
            beta=[-10, 0, 1, 0],
            sigma=[
@@ -202,15 +210,22 @@ class Simulation(object):
 
     """
 
-    def __init__(self, id_data, integration, gamma, beta, sigma, pi=None, xi_variance=1, omega_variance=1,
+    def __init__(self, basic_product_data, integration, gamma, beta, sigma, pi=None, xi_variance=1, omega_variance=1,
                  correlation=0.9, linear_costs=True, seed=None):
         """Validate the specification and simulate all data except for Bertrand-Nash prices and shares."""
 
         # extract and validate IDs
-        market_ids = extract_matrix(id_data, 'market_ids')
-        firm_ids = extract_matrix(id_data, 'firm_ids')
+        market_ids = extract_matrix(basic_product_data, 'market_ids')
+        firm_ids = extract_matrix(basic_product_data, 'firm_ids')
+        if market_ids is None:
+            raise KeyError("basic_product_data must have a market_ids field.")
+        if firm_ids is None:
+            raise KeyError("basic_product_data must have a firm_ids field.")
         if market_ids.shape[1] > 1:
-            raise ValueError("The market_ids field of id_data must be one-dimensional.")
+            raise ValueError("The market_ids field of basic_product_data must be one-dimensional.")
+
+        # extract ownership
+        ownership = extract_matrix(basic_product_data, 'ownership')
 
         # validate full parameter vectors and matrices
         gamma = np.c_[np.asarray(gamma, options.dtype)]
@@ -322,6 +337,7 @@ class Simulation(object):
         self.product_data = Matrices({
             'market_ids': (market_ids, np.object),
             'firm_ids': (firm_ids, np.object),
+            'ownership': (ownership, options.dtype),
             'shares': (np.full(self.N, np.nan), options.dtype),
             'prices': (np.full(self.N, np.nan), options.dtype),
             'linear_characteristics': (linear_characteristics, options.dtype),
@@ -347,7 +363,7 @@ class Simulation(object):
         })
         self.agents = Agents(self.products, self.agent_data)
 
-    def solve(self, firm_ids_index=0, prices=None, iteration=None, error_behavior='raise', processes=1):
+    def solve(self, firms_index=0, prices=None, iteration=None, error_behavior='raise', processes=1):
         r"""Compute Bertrand-Nash prices and shares.
 
         Prices and shares are computed by iterating in each market over the :math:`\zeta`-markup equation from
@@ -357,9 +373,10 @@ class Simulation(object):
 
         Parameters
         ----------
-        firm_ids_index : `int, optional`
-            Index of the column in the `firm_ids` field of `id_data` in :class:`Simulation` initialization that defines
-            which firms produce which products. By default, unchanged firm IDs are used.
+        firms_index : `int, optional`
+            Index of the column in the `firm_ids` field of `basic_product_data` in :class:`Simulation` initialization
+            that defines which firms produce which products. If an `ownership` field was specified, the corresponding
+            stack of ownership matrices will be used. By default, unchanged firm IDs are used.
         prices : `array-like, optional`
             Prices at which the fixed point iteration routine will start. By default, marginal costs, :math:`c`, are
             used as starting values.
@@ -413,7 +430,7 @@ class Simulation(object):
             raise ValueError("error_behavior must be 'raise' or 'warn'.")
 
         # output configuration information
-        output(f"Firm IDs column index: {firm_ids_index}.")
+        output(f"Firms index: {firms_index}.")
         output(iteration)
         output(f"Error behavior: {error_behavior}.")
         output(f"Processes: {processes}.")
@@ -427,7 +444,7 @@ class Simulation(object):
             )
             prices_t = prices[self.products.market_ids.flat == t]
             costs_t = self.costs[self.products.market_ids.flat == t]
-            mapping[t] = [market_t, prices_t, costs_t, firm_ids_index, iteration]
+            mapping[t] = [market_t, prices_t, costs_t, firms_index, iteration]
 
         # time how long it takes to solve for prices and shares
         output("Solving for prices and shares ...")
@@ -462,7 +479,7 @@ class Simulation(object):
 class SimulationMarket(Market):
     """A single market in the BLP simulation, which can be used to solve for a single market's prices and shares."""
 
-    def solve(self, initial_prices, costs, firm_ids_index, iteration):
+    def solve(self, initial_prices, costs, firms_index, iteration):
         """Solve the fixed point problem defined by the zeta-markup equation to compute prices and shares in this
         market. Also returned is a set of any exception classes encountered during computation.
         """
@@ -473,7 +490,7 @@ class SimulationMarket(Market):
             np.seterrcall(lambda *_: errors.add(exceptions.SyntheticPricesFloatingPointError))
 
             # solve the fixed point problem
-            ownership = self.get_ownership_matrix(firm_ids_index)
+            ownership = self.get_ownership_matrix(firms_index)
             jacobian = self.compute_utilities_by_prices_jacobian()
             contraction = lambda p: costs + self.compute_zeta(ownership, jacobian, costs, p)
             prices, converged = iteration._iterate(contraction, initial_prices)

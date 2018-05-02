@@ -4,25 +4,26 @@ Notation
 The notation in pyblp is a customized amalgamation of the notation employed by :ref:`Berry, Levinsohn, and Pakes (1995) <blp95>`, :ref:`Nevo (2000) <n00>`, and :ref:`Morrow and Skerlos (2011) <ms11>`.
 
 
-Dimensions
-----------
+Dimensions and Sets
+-------------------
 
-===========  ==================================
-Symbol       Description
-===========  ==================================
-:math:`N`    Products across all markets.
-:math:`T`    Markets.
-:math:`J_t`  Products in market :math:`t`.
-:math:`F_t`  Firms in market :math:`t`.
-:math:`I_t`  Agents in market :math:`t`.
-:math:`K_1`  Linear product characteristics.
-:math:`K_2`  Nonlinear product characteristics.
-:math:`K_3`  Cost product characteristics.
-:math:`D`    Demographic variables.
-:math:`M_D`  Demand-side instruments.
-:math:`M_S`  Supply-side instruments.
-:math:`P`    Unknown nonlinear parameters.
-===========  ==================================
+========================  =======================================================
+Symbol                    Description
+========================  =======================================================
+:math:`N`                 Products across all markets.
+:math:`T`                 Markets.
+:math:`J_t`               Products in market :math:`t`.
+:math:`F_t`               Firms in market :math:`t`.
+:math:`I_t`               Agents in market :math:`t`.
+:math:`K_1`               Linear product characteristics.
+:math:`K_2`               Nonlinear product characteristics.
+:math:`K_3`               Cost product characteristics.
+:math:`D`                 Demographic variables.
+:math:`M_D`               Demand-side instruments.
+:math:`M_S`               Supply-side instruments.
+:math:`P`                 Unknown nonlinear parameters.
+:math:`\mathscr{J}_{ft}`  Products produced by firm :math:`f` in market :math:`t`
+========================  =======================================================
 
 
 Matrices, Vectors, and Scalars
@@ -50,6 +51,8 @@ Symbol                     Dimensions                    Description
 :math:`\zeta^*`            :math:`N \times 1`            Post-merger markup term from the :math:`\zeta`-markup equation.
 :math:`O`                  :math:`J_t \times J_t`        Ownership matrix in market :math:`t`.
 :math:`O^*`                :math:`J_t \times J_t`        Post-merger ownership matrix in market :math:`t`.
+:math:`\kappa`             :math:`F_t \times F_t`        Cooperation matrix in market :math:`t`.
+:math:`\kappa^*`           :math:`F_t \times F_t`        Post-merger cooperation matrix in market :math:`t`.
 :math:`\Lambda`            :math:`J_t \times J_t`        Diagonal matrix used to decompose :math:`\eta` and :math:`\zeta` in market :math:`t`.
 :math:`\Gamma`             :math:`J_t \times J_t`        Another matrix used to decompose :math:`\eta` and :math:`\zeta` in market :math:`t`.
 :math:`d`                  :math:`I_t \times D`          Observed agent characteristics called demographics in market :math:`t`.

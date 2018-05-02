@@ -73,7 +73,7 @@ def test_merger(simulated_problem, solve_options):
 
     # get unchanged and changed prices and shares
     product_data = simulation.solve()
-    changed_product_data = simulation.solve(firm_ids_index=1)
+    changed_product_data = simulation.solve(firms_index=1)
 
     # solve for approximate and actual changed prices and shares
     costs = results.compute_costs()
@@ -100,7 +100,7 @@ def test_merger(simulated_problem, solve_options):
 
     # test that HHI increases
     hhi = results.compute_hhi()
-    changed_hhi = results.compute_hhi(estimated_shares, firm_ids_index=1)
+    changed_hhi = results.compute_hhi(estimated_shares, firms_index=1)
     np.testing.assert_array_less(hhi, changed_hhi, verbose=True)
 
 
