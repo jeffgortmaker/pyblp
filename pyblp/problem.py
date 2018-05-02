@@ -34,6 +34,14 @@ class Problem(object):
               supply side of the problem. These are also needed to compute some post-estimation outputs. Any columns
               after the first can be used to compute post-estimation outputs for changes, such as mergers.
 
+            - **ownership** : (`numeric, optional') - Custom stacked :math:`J_t \times J_t` ownership matrices,
+              :math:`O`, for each market :math:`t`, which can be built with :func:`build_ownership`. Each stack is
+              associated with a `firm_ids` column and must have as many columns as there are products in the market with
+              the most products. If a market has fewer products than others, extra columns will be ignored and may be
+              filled with any value, such as ``numpy.nan``. If an ownership matrix stack is unspecified, its
+              corresponding column in `firm_ids` is used by :func:`build_ownership` to build a stack of standard
+              ownership matrices.
+
             - **shares** : (`numeric`) - Shares, :math:`s`.
 
             - **prices** : (`numeric`) - Prices, :math:`p`, which will always be included in :math:`X_1`. If
