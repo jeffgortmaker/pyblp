@@ -12,7 +12,9 @@ import numpy.lib.recfunctions
 from .data import TEST_DATA_PATH
 from pyblp.utilities import extract_matrix
 from pyblp.data import BLP_PRODUCTS_LOCATION, BLP_AGENTS_LOCATION, NEVO_PRODUCTS_LOCATION, NEVO_AGENTS_LOCATION
-from pyblp import Problem, Simulation, Integration, options, build_id_data, build_indicators, build_blp_instruments
+from pyblp import (
+    Problem, Simulation, Integration, options, build_id_data, build_indicators, build_ownership, build_blp_instruments
+)
 
 
 @pytest.fixture(autouse=True)
@@ -57,10 +59,16 @@ def small_simulation():
 @pytest.fixture
 def medium_simulation():
     """Solve a simulation with four markets, nonlinear prices, a cost/nonlinear constant, two cost characteristics, two
-    linear characteristics, a demographic, and a double acquisition.
+    linear characteristics, a demographic, a double acquisition, and a non-standard ownership structure.
     """
+    id_data = build_id_data(T=4, J=25, F=6, mergers=[{f: 2 for f in range(2)}])
+    basic_product_data = {
+        'market_ids': id_data.market_ids,
+        'firm_ids': id_data.firm_ids,
+        'ownership': build_ownership(id_data, lambda f, g: 1 if f == g else (0.1 if f > 3 and g > 3 else 0))
+    }
     simulation = Simulation(
-        build_id_data(T=4, J=25, F=6, mergers=[{f: 2 for f in range(2)}]),
+        basic_product_data,
         Integration('product', 4),
         gamma=[1, 1, 2, 0, 0],
         beta=[-5, 0, 0, 0, 2, 1],

@@ -64,7 +64,7 @@ class Products(Matrices):
                 f"The ownership field of product_data must have a number of columns that is a multiple of {J} and that "
                 f"does not exceed {J * firm_ids.shape[1]}."
             )
-        else:
+        elif ownership.shape[1] < J * firm_ids.shape[1]:
             unmatched_firm_ids = firm_ids[:, ownership.shape[1] / J:]
             ownership = np.c_[ownership, build_ownership({'market_ids': market_ids, 'firm_ids': unmatched_firm_ids})]
 
