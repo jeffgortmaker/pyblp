@@ -56,6 +56,9 @@ class Optimization(object):
         pairs for each element in `initial`, `options` are specified below, and `final` is an array of optimized
         parameter values.
 
+        To simply evaluate a problem's objective at the initial parameter values, the trivial custom method
+        ``lambda f, i, b: i`` can be used.
+
     method_options : `dict, optional`
         Options for the optimization routine.
 
