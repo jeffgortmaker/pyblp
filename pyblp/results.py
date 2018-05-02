@@ -642,9 +642,9 @@ class Results(object):
 
         The index in market :math:`t` is
 
-        .. math:: \text{HHI} = 10,000 \times \sum_{f=1}^{F_t} \left(\sum_{j \in \mathscr{J}_f} s_j\right)^2,
+        .. math:: \text{HHI} = 10,000 \times \sum_{f=1}^{F_t} \left(\sum_{j \in \mathscr{J}_{ft}} s_j\right)^2,
 
-        in which :math:`\mathscr{J}_f \subset \{1, 2, \ldots, J_t\}` is the set of products produced by firm :math:`f`.
+        in which :math:`\mathscr{J}_{ft}` is the set of products produced by firm :math:`f` in market :math:`t`.
 
         Parameters
         ----------

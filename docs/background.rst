@@ -7,7 +7,7 @@ The following sections provide a brief overview of the BLP model and how it is e
 The Model
 ---------
 
-At a high level, there are :math:`t = 1, 2, \dotsc, T` markets, each with :math:`j = 1, 2, \dotsc, J_t` products produced by :math:`f = 1, 2, \dotsc, F_t` firms. There are :math:`i = 1, 2, \dotsc, I_t` agents who choose among the :math:`J_t` products and an outside good, denoted by :math:`j = 0`. 
+At a high level, there are :math:`t = 1, 2, \dotsc, T` markets, each with :math:`j = 1, 2, \dotsc, J_t` products produced by :math:`f = 1, 2, \dotsc, F_t` firms. There are :math:`i = 1, 2, \dotsc, I_t` agents who choose among the :math:`J_t` products and an outside good, denoted by :math:`j = 0`. The set :math:`\mathscr{J}_{ft} \subset \{1, 2, \ldots, J_t\}` denotes the products produced by firm :math:`f` in market :math:`t`.
 
 
 Demand-Side
@@ -65,7 +65,9 @@ Called the BLP-markup equation in :ref:`Morrow and Skerlos (2011) <ms11>`, the m
 
 .. math:: \eta = -\left(O \odot \frac{\partial s}{\partial p}\right)^{-1}s,
 
-in which :math:`O_{jk}` is :math:`1` if the same firm produces products :math:`j` and :math:`k`, and is :math:`0` otherwise. The Jacobian is
+in which the market's owenership matrix, :math:`O`, is definited in terms of its corresponding cooperation matrix, :math:`\kappa` by :math:`O_{jk} = \kappa_{fg}` where :math:`j \in \mathscr{J}_{ft}`, the set of products produced by firm :math:`f` in the market, and similarly, :math:`g \in \mathscr{J}_{gt}`. Usually, :math:`\kappa = I`, the identity matrix, so :math:`O_{jk}` is simply :math:`1` if the same firm produces products :math:`j` and :math:`k`, and is :math:`0` otherwise.
+
+The Jacobian in the BLP-markup equation is
 
 .. math:: \frac{\partial s}{\partial p} = \Lambda - \Gamma,
 

@@ -112,9 +112,9 @@ def build_indicators(ids):
 def build_ownership(id_data, kappa_specification=None):
     r"""Build ownership matrices, :math:`O`.
 
-    Ownership matrices are defined by their cooperation matrix counterparts, :math:`\kappa`. For each market,
-    :math:`O_{jk} = \kappa_{fg}` where :math:`j \in \mathscr{J}_f`, the set of products produced by firm :math:`f`, and
-    :math:`g \in \mathscr{J}_g`.
+    Ownership matrices are defined by their cooperation matrix counterparts, :math:`\kappa`. For each market :math:`t`,
+    :math:`O_{jk} = \kappa_{fg}` where :math:`j \in \mathscr{J}_{ft}`, the set of products produced by firm :math:`f` in
+    the market, and similarly, :math:`g \in \mathscr{J}_{gt}`.
 
     Parameters
     ----------
@@ -138,8 +138,8 @@ def build_ownership(id_data, kappa_specification=None):
         where `value` is :math:`O_{jk}` and both `f` and `g` are firm IDs from the `firm_ids` field of `id_data`.
 
         The default specification, ``lambda: f, g: int(f == g)``, constructs traditional ownership matrices. That is,
-        :math:`O_{jk}` is :math:`1` if the same firm produces products :math:`j` and :math:`k`, and is :math:`0`
-        otherwise.
+        :math:`\kappa = I`, the identify matrix, implies that :math:`O_{jk}` is :math:`1` if the same firm produces
+        products :math:`j` and :math:`k`, and is :math:`0` otherwise.
 
         If `firm_ids` happen to be indices for an actual :math:`\kappa` matrix, ``lambda f, g: kappa[f, g]`` will
         build ownership matrices according to the matrix ``kappa``.
