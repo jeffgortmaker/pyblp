@@ -179,29 +179,26 @@ def nevo_problem():
     return Problem(product_data, np.recfromcsv(NEVO_AGENTS_LOCATION))
 
 
-@pytest.fixture(params=[pytest.param('blp_problem', id="BLP"), pytest.param('nevo_problem', id="Nevo")])
+@pytest.fixture
 def knittel_metaxoglou_2014(request):
     """Load initial parameter values and estimates from replication code for Knittel and Metaxoglou (2014).
 
-    The replication code was modified to output one Matlab data file for each dataset (BLP automobile data and Nevo's
-    cereal data), each containing the results of one round of Knitro optimization and post-estimation calculations. The
-    replication code was kept mostly intact, but was modified slightly in the following ways:
+    The replication code was modified to output a Matlab data file for the automobile dataset, which contains the
+    results of one round of Knitro optimization and post-estimation calculations. The replication code was kept mostly
+    intact, but was modified slightly in the following ways:
 
         - Tolerance parameters, Knitro optimization parameters, and starting values for sigma were all configured.
         - A bug in the code's computation of the BLP instruments was fixed. When creating a vector of "other" and
           "rival" sums, the code did not specify a dimension over which to sum, which created problems with one-
           dimensional vectors. A dimension of 1 was added to both sum commands.
-        - For the Nevo data, the constant column and the column of prices were swapped in X2. Parameter matrices were
-          changed accordingly. For example, before elasticities were computed, the order of coefficients was changed to
-          reflect the new position of prices.
         - Delta was initialized as the solution to the Logit model.
         - After estimation, the objective was called again at the optimal parameters to re-load globals at the optimal
           parameter values.
         - Before being saved to a Matlab data file, matrices were renamed and reshaped.
 
     """
-    problem = request.getfixturevalue(request.param)
-    return scipy.io.loadmat(str(TEST_DATA_PATH / 'knittel_metaxoglou_2014' / request.param), {'problem': problem})
+    problem = request.getfixturevalue('blp_problem')
+    return scipy.io.loadmat(str(TEST_DATA_PATH / 'knittel_metaxoglou_2014.mat'), {'problem': problem})
 
 
 @pytest.fixture(params=[pytest.param(p, id=p.name) for p in Path(TEST_DATA_PATH / 'nwspgr').iterdir()])
