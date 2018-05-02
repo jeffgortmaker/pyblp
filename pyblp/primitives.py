@@ -270,9 +270,9 @@ class Market(object):
         """Get the values for a product characteristic in X1 or X2 (or both)."""
         return self.products.X1[:, [X1_index]] if X2_index is None else self.products.X2[:, [X2_index]]
 
-    def get_ownership_matrix(self, firm_ids_index=0):
+    def get_ownership_matrix(self, firms_index=0):
         """Get an ownership matrix. By default, unchanged firm IDs are used."""
-        offset = firm_ids_index * self.products.ownership.shape[1] // self.products.firm_ids.shape[1]
+        offset = firms_index * self.products.ownership.shape[1] // self.products.firm_ids.shape[1]
         return self.products.ownership[:, offset:offset + self.J]
 
     def compute_delta(self, X1=None):

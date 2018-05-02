@@ -377,7 +377,7 @@ Since we included two columns of firm IDs in both problems, we can use :meth:`Re
    blp_changed_prices = blp_results.solve_merger(blp_costs)
    nevo_changed_prices = nevo_results.solve_merger(nevo_costs)
 
-If the problems were configured with more than two columns of firm IDs, we could estimate post-merger prices for the other mergers with the `firm_ids_index` argument, which is by default ``1``.
+If the problems were configured with more than two columns of firm IDs, we could estimate post-merger prices for the other mergers with the `firms_index` argument, which is by default ``1``.
 
 We'll compute post-merger shares with :meth:`Results.compute_shares`.
 
@@ -390,8 +390,8 @@ Post-merger prices and shares are used to compute other post-merger outputs. For
 
 .. ipython:: python
 
-   blp_changed_hhi = blp_results.compute_hhi(blp_changed_shares, firm_ids_index=1)
-   nevo_changed_hhi = nevo_results.compute_hhi(nevo_changed_shares, firm_ids_index=1)
+   blp_changed_hhi = blp_results.compute_hhi(blp_changed_shares, firms_index=1)
+   nevo_changed_hhi = nevo_results.compute_hhi(nevo_changed_shares, firms_index=1)
    bins = np.linspace(0, 3000, 50)
    plt.hist(blp_changed_hhi - blp_hhi, bins, alpha=0.5, color='maroon');
    plt.hist(nevo_changed_hhi - nevo_hhi, bins, alpha=0.5, color='navy');
