@@ -58,20 +58,15 @@ class Products(Matrices):
         if firm_ids is None:
             ownership = None
         elif ownership is None:
-            ownership = build_ownership({
-                'market_ids': market_ids,
-                'firm_ids': firm_ids
-            })
-        elif ownership.shape[1] % J > 0 or ownership.shape[1] / J > firm_ids.shape[1]:
+            ownership = build_ownership({'market_ids': market_ids, 'firm_ids': firm_ids})
+        elif ownership.shape[1] % J > 0 or ownership.shape[1] > J * firm_ids.shape[1]:
             raise ValueError(
                 f"The ownership field of product_data must have a number of columns that is a multiple of {J} and that "
                 f"does not exceed {J * firm_ids.shape[1]}."
             )
         else:
-            ownership = np.c_[ownership, build_ownership({
-                'market_ids': market_ids,
-                'firm_ids': firm_ids[:, ownership.shape[1] / J:]
-            })]
+            unmatched_firm_ids = firm_ids[:, ownership.shape[1] / J:]
+            ownership = np.c_[ownership, build_ownership({'market_ids': market_ids, 'firm_ids': unmatched_firm_ids})]
 
         # load shares
         shares = extract_matrix(product_data, 'shares')

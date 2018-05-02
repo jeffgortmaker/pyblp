@@ -34,8 +34,8 @@ class Simulation(object):
 
     Parameters
     ----------
-    id_data : `structured array-like`
-        IDs that associate products with markets and firms. Each row corresponds to a product. The convenience function
+    basic_product_data : `structured array-like`
+        Each row corresponds to a product. Markets can have differing numbers of products. The convenience function
         :func:`build_id_data` can be used to construct ID data from market, product, and firm counts. Fields:
 
             - **market_ids** : (`object`) - IDs that associate products with markets.
@@ -45,6 +45,14 @@ class Simulation(object):
               mergers. If there are multiple columns, this field can either be a matrix or it can be broken up into
               multiple one-dimensional fields with column index suffixes that start at zero. For example, if there are
               two columns, this field can be replaced with two one-dimensional fields: `firm_ids0` and `firm_ids1`.
+
+            - **ownership** : (`numeric, optional') - Custom stacked :math:`J_t \times J_t` ownership matrices,
+              :math:`O`, for each market :math:`t`, which can be built with :func:`build_ownership`. Each stack is
+              associated with a `firm_ids` column and must have as many columns as there are products in the market with
+              the most products. If a market has fewer products than others, extra columns will be ignored and may be
+              filled with any value, such as ``numpy.nan``. If an ownership matrix stack is unspecified, its
+              corresponding column in `firm_ids` is used by :func:`build_ownership` to build a stack of standard
+              ownership matrices.
 
     integration : `Integration`
         :class:`Integration` configuration for how to build nodes and weights for integration over agent utilities.
@@ -202,19 +210,22 @@ class Simulation(object):
 
     """
 
-    def __init__(self, id_data, integration, gamma, beta, sigma, pi=None, xi_variance=1, omega_variance=1,
+    def __init__(self, basic_product_data, integration, gamma, beta, sigma, pi=None, xi_variance=1, omega_variance=1,
                  correlation=0.9, linear_costs=True, seed=None):
         """Validate the specification and simulate all data except for Bertrand-Nash prices and shares."""
 
         # extract and validate IDs
-        market_ids = extract_matrix(id_data, 'market_ids')
-        firm_ids = extract_matrix(id_data, 'firm_ids')
+        market_ids = extract_matrix(basic_product_data, 'market_ids')
+        firm_ids = extract_matrix(basic_product_data, 'firm_ids')
         if market_ids is None:
             raise KeyError("id_data must have a market_ids field.")
         if firm_ids is None:
             raise KeyError("id_data must have a firm_ids field.")
         if market_ids.shape[1] > 1:
             raise ValueError("The market_ids field of id_data must be one-dimensional.")
+
+        # extract ownership
+        ownership = extract_matrix(basic_product_data, 'ownership')
 
         # validate full parameter vectors and matrices
         gamma = np.c_[np.asarray(gamma, options.dtype)]
@@ -326,6 +337,7 @@ class Simulation(object):
         self.product_data = Matrices({
             'market_ids': (market_ids, np.object),
             'firm_ids': (firm_ids, np.object),
+            'ownership': (ownership, options.dtype),
             'shares': (np.full(self.N, np.nan), options.dtype),
             'prices': (np.full(self.N, np.nan), options.dtype),
             'linear_characteristics': (linear_characteristics, options.dtype),
