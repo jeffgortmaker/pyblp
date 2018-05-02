@@ -26,9 +26,9 @@ class Optimization(object):
               OS X). For more information, refer to the
               `Knitro installation guide <https://www.artelys.com/tools/knitro_doc/1_introduction/installation.html>`_.
 
-            - ``'slsqp'`` - Uses the :func:`scipy.optimize.minimize` SLSQP routine.
-
             - ``'l-bfgs-b'`` - Uses the :func:`scipy.optimize.minimize` L-BFGS-B routine.
+
+            - ``'slsqp'`` - Uses the :func:`scipy.optimize.minimize` SLSQP routine.
 
             - ``'tnc'`` - Uses the :func:`scipy.optimize.minimize` TNC routine.
 

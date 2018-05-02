@@ -240,7 +240,7 @@ class Problem(object):
             Number of GMM steps. By default, two-step GMM is used.
         optimization : `Optimization, optional`
             :class:`Optimization` configuration for how to solve the optimization problem in each GMM step. By default,
-            ``Optimization('slsqp')`` is used. Routines that do not support bounds will ignore `sigma_bounds` and
+            ``Optimization('l-bfgs-b')`` is used. Routines that do not support bounds will ignore `sigma_bounds` and
             `pi_bounds`. Choosing a routine that does not use analytic gradients will slow down estimation.
         custom_display : `bool, optional`
             Whether to output a custom display of optimization progress. If this is ``False``, the default display for
@@ -315,7 +315,7 @@ class Problem(object):
 
         # configure or validate optimization and integration
         if optimization is None:
-            optimization = Optimization('slsqp')
+            optimization = Optimization('l-bfgs-b')
         if iteration is None:
             iteration = Iteration('squarem')
         if not isinstance(optimization, Optimization):

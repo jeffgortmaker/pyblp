@@ -201,7 +201,7 @@ Unlike the automobile problem, we have included demographics in the agent data f
 
    nevo_problem = pyblp.Problem(nevo_product_data, nevo_agent_data)
 
-Since we initialized the problem without supply-side data, there's no need to choose a marginal cost specification. However, since we initialized the problem with demographics, we need to configure not only :math:`\Sigma`, but also :math:`\Pi`. We'll use the same starting values as :ref:`Nevo (2000) <n00>`. We'll also use a non-default :func:`scipy.optimize.minimize` quasi-Newton optimization routine with BFGS hessian approximation, which is similar to the default Matlab optimization routine, and, again, we'll only perform one GMM step for the sake of speed in this example.
+Since we initialized the problem without supply-side data, there's no need to choose a marginal cost specification. However, since we initialized the problem with demographics, we need to configure not only :math:`\Sigma`, but also :math:`\Pi`. We'll use the same starting values as :ref:`Nevo (2000) <n00>`. We'll also use a non-default unbounded optimization routine that is similar to the default for Matlab, and, again, we'll only perform one GMM step for the sake of speed in this example.
 
 .. ipython:: python
 
