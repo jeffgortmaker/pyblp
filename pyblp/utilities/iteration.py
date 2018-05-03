@@ -151,18 +151,22 @@ class Iteration(object):
     def _iterate(self, contraction, start_values):
         """Solve a fixed point iteration problem."""
 
-        # define a wrapper for the contraction that normalizes arrays so they work with all types of routines
+        # define a wrapper for the contraction, which normalizes arrays so they work with all types of routines, and
+        #   also counts the total number of contraction evaluations
         def contraction_wrapper(raw_values):
+            contraction_wrapper.evaluations += 1
             raw_values = np.asarray(raw_values)
             values = raw_values.reshape(start_values.shape).astype(start_values.dtype)
             return np.asarray(contraction(values)).astype(np.float64).reshape(raw_values.shape)
 
-        # normalize the starting values
+        # initialize the counter and normalize the starting values
+        contraction_wrapper.evaluations = 0
         raw_start_values = start_values.astype(np.float64).flatten()
 
         # solve the problem and convert the raw final values to the same data type and shape as the initial values
         raw_final_values, converged = self._iterator(contraction_wrapper, raw_start_values, **self._method_options)
-        return np.asarray(raw_final_values).reshape(start_values.shape).astype(start_values.dtype), converged
+        final_values = np.asarray(raw_final_values).reshape(start_values.shape).astype(start_values.dtype)
+        return final_values, converged, contraction_wrapper.evaluations
 
 
 def squarem(contraction, x, norm, tol, iterations, scheme, step_min, step_max, step_factor):

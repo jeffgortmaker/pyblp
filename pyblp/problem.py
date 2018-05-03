@@ -187,7 +187,7 @@ class Problem(object):
             self.MS = 0
 
     def solve(self, sigma, pi=None, sigma_bounds=None, pi_bounds=None, delta=None, WD=None, WS=None, steps=2,
-              optimization=None, custom_display=True, error_behavior='revert', error_punishment=1, iteration=None,
+              optimization=None, universal_display=True, error_behavior='revert', error_punishment=1, iteration=None,
               linear_fp=True, linear_costs=True, center_moments=True, se_type='robust', processes=1):
         r"""Solve the problem.
 
@@ -250,10 +250,11 @@ class Problem(object):
             :class:`Optimization` configuration for how to solve the optimization problem in each GMM step. By default,
             ``Optimization('l-bfgs-b')`` is used. Routines that do not support bounds will ignore `sigma_bounds` and
             `pi_bounds`. Choosing a routine that does not use analytic gradients will slow down estimation.
-        custom_display : `bool, optional`
-            Whether to output a custom display of optimization progress. If this is ``False``, the default display for
-            the routine configured by `optimization` will be used. Default displays may contain some extra information,
-            but compared to other output will look very different, so the default is ``True``.
+        universal_display : `bool, optional`
+            Whether to format optimization progress such that the display looks similar for all `optimization` routines.
+            Specifically, information will be displayed for each objective evaluation. If this is ``False``, the default
+            display for the routine configured by `optimization` will be used. Default displays may contain some extra
+            information, but compared to other output will look very different.
         error_behavior : `str, optional`
             How to handle errors when computing the objective. For example, it is common to encounter overflow when
             computing :math:`\delta(\hat{\theta})` at a large :math:`\hat{\theta}`. The following behaviors are
@@ -407,16 +408,22 @@ class Problem(object):
             # define the objective function for the optimization routine, which will also store optimization progress
             def objective_function(new_theta):
                 info = compute_step_info(new_theta, objective_function.last_info, optimization._compute_gradient)
-                if custom_display:
-                    output(info.format_progress(objective_function.iterations, objective_function.smallest))
-                objective_function.iterations += 1
-                objective_function.smallest = min(objective_function.smallest, info.objective)
+                objective_function.objective_evaluations += 1
+                objective_function.contraction_evaluations.append(info.contraction_evaluations)
+                if universal_display:
+                    output(info.format_progress(
+                        step,
+                        objective_function.objective_evaluations,
+                        objective_function.smallest_objective
+                    ))
+                objective_function.smallest_objective = min(objective_function.smallest_objective, info.objective)
                 objective_function.last_info = info
                 return (info.objective, info.gradient) if optimization._compute_gradient else info.objective
 
             # initialize optimization progress
-            objective_function.iterations = 1
-            objective_function.smallest = np.inf
+            objective_function.objective_evaluations = 0
+            objective_function.contraction_evaluations = []
+            objective_function.smallest_objective = np.inf
             objective_function.last_info = ObjectiveInfo(
                 self, parameter_info, WD, WS, theta, delta, jacobian, tilde_costs
             )
@@ -426,16 +433,24 @@ class Problem(object):
             output("")
             start_time = time.time()
             bounds = [p.bounds for p in parameter_info.unfixed]
-            verbose = options.verbose and not custom_display
+            verbose = options.verbose and not universal_display
             theta = optimization._optimize(objective_function, theta, bounds, verbose=verbose)
             end_time = time.time()
+            run_time = end_time - start_time
             output("")
-            output(f"Completed step {step} after {output.format_seconds(end_time - start_time)}.")
+            output(f"Completed step {step} after {output.format_seconds(run_time)}.")
 
             # use objective information computed at the optimal theta to compute results for the step
             output(f"Computing step {step} results ...")
             step_info = compute_step_info(theta, objective_function.last_info, compute_gradient=True)
-            results = step_info.to_results(step, center_moments, se_type)
+            results = step_info.to_results(
+                step,
+                run_time,
+                objective_function.objective_evaluations,
+                objective_function.contraction_evaluations,
+                center_moments,
+                se_type
+            )
             delta = step_info.delta
             jacobian = step_info.jacobian
             tilde_costs = step_info.tilde_costs
@@ -466,17 +481,19 @@ class Problem(object):
             last_delta_t = last_objective_info.delta[self.products.market_ids.flat == t]
             mapping[t] = [market_t, last_delta_t, parameter_info, iteration, linear_fp, compute_gradient]
 
-        # store any error classes
+        # store any error classes and the total number of contraction evaluations
         errors = set()
+        contraction_evaluations = 0
 
         # fill delta and its Jacobian market-by-market (the Jacobian will be null if the objective isn't being computed)
         delta = np.zeros((self.N, 1), dtype=options.dtype)
         jacobian = np.zeros((self.N, theta.size), dtype=options.dtype)
         with ParallelItems(ProblemMarket.solve, mapping, processes) as items:
-            for t, (delta_t, jacobian_t, errors_t) in items:
+            for t, (delta_t, jacobian_t, errors_t, contraction_evaluations_t) in items:
                 delta[self.products.market_ids.flat == t] = delta_t
                 jacobian[self.products.market_ids.flat == t] = jacobian_t
                 errors |= errors_t
+                contraction_evaluations += contraction_evaluations_t
 
         # replace invalid elements in delta and its Jacobian with their last values
         invalid_delta_indices = ~np.isfinite(delta)
@@ -557,8 +574,8 @@ class Problem(object):
 
         # structure the objective information
         return ObjectiveInfo(
-            self, parameter_info, WD, WS, theta, delta, jacobian, tilde_costs, beta, gamma, xi, omega, objective,
-            gradient
+            self, parameter_info, WD, WS, theta, delta, jacobian, tilde_costs, beta, gamma, xi,
+            omega, objective, gradient, contraction_evaluations
         )
 
 
@@ -802,8 +819,10 @@ class ObjectiveInfo(object):
     """Structured information about a completed iteration of the optimization routine."""
 
     def __init__(self, problem, parameter_info, WD, WS, theta, delta, jacobian, tilde_costs, beta=None, gamma=None,
-                 xi=None, omega=None, objective=None, gradient=None):
-        """Initialize objective information. Optional parameters will not be specified in the first iteration."""
+                 xi=None, omega=None, objective=None, gradient=None, contraction_evaluations=None):
+        """Initialize objective information. Optional parameters will not be specified when preparing for the first
+        objective evaluation.
+        """
         self.problem = problem
         self.parameter_info = parameter_info
         self.WD = WD
@@ -818,26 +837,29 @@ class ObjectiveInfo(object):
         self.omega = omega
         self.objective = objective
         self.gradient = gradient
+        self.contraction_evaluations = contraction_evaluations
 
-    def format_progress(self, iterations, smallest_objective):
+    def format_progress(self, step, objective_evaluations, smallest_objective):
         """Format optimization progress as a string. The first iteration will include the progress table header. The
         smallest_objective is the smallest objective value encountered so far during optimization.
         """
         lines = []
-        header1 = ["Objective", "Objective", "Objective", "Largest Gradient"]
-        header2 = ["Evaluations", "Value", "Improvement", "Magnitude"]
-        widths = [max(len(header1[0]), len(header2[0]))]
-        widths.extend([max(len(k1), len(k2), options.digits + 6) for k1, k2 in list(zip(header1, header2))[1:]])
+        header1 = ["GMM", "Objective", "Contraction", "Objective", "Objective", "Largest Gradient"]
+        header2 = ["Step", "Evaluations", "Evaluations", "Value", "Improvement", "Magnitude"]
+        widths = [max(len(k1), len(k2)) for k1, k2 in list(zip(header1, header2))[:3]]
+        widths.extend([max(len(k1), len(k2), options.digits + 6) for k1, k2 in list(zip(header1, header2))[3:]])
         formatter = output.table_formatter(widths)
 
         # if this is the first iteration, include the header
-        if iterations == 1:
+        if objective_evaluations == 1:
             lines.extend([formatter(header1), formatter(header2), formatter.lines()])
 
         # include the progress update
         improved = np.isfinite(smallest_objective) and self.objective < smallest_objective
         lines.append(formatter([
-            iterations,
+            step,
+            objective_evaluations,
+            self.contraction_evaluations,
             output.format_number(self.objective),
             output.format_number(smallest_objective - self.objective) if improved else "",
             output.format_number(None if self.gradient is None else np.abs(self.gradient).max())
@@ -846,10 +868,10 @@ class ObjectiveInfo(object):
         # combine the lines into one string
         return "\n".join(lines)
 
-    def to_results(self, step, center_moments, se_type):
+    def to_results(self, step, run_time, objective_evaluations, contraction_evaluations, center_moments, se_type):
         """Convert this information about an iteration of the optimization routine into full results."""
         from .results import Results
-        return Results(self, step, center_moments, se_type)
+        return Results(self, step, run_time, objective_evaluations, contraction_evaluations, center_moments, se_type)
 
 
 class ProblemMarket(Market):
@@ -858,8 +880,8 @@ class ProblemMarket(Market):
     def solve(self, initial_delta, parameter_info, iteration, linear_fp, compute_gradient):
         """Compute the mean utility for this market that equates market shares to observed values by solving a fixed
         point problem. Then, if compute_gradient is True, compute its Jacobian with respect to theta. Finally, return a
-        set of any errors encountered during computation. If necessary, replace null elements in delta with their last
-        values before computing its Jacobian.
+        set of any errors encountered during computation and the number of contraction evaluations. If necessary,
+        replace null elements in delta with their last values before computing its Jacobian.
         """
 
         # configure numpy to identify floating point errors
@@ -880,11 +902,11 @@ class ProblemMarket(Market):
             if linear_fp:
                 log_shares = log(self.products.shares)
                 contraction = lambda d: d + log_shares - log(self.compute_probabilities(d) @ self.agents.weights)
-                delta, converged = iteration._iterate(contraction, initial_delta)
+                delta, converged, contraction_evaluations = iteration._iterate(contraction, initial_delta)
             else:
                 compute_probabilities = functools.partial(self.compute_probabilities, mu=np.exp(self.mu), linear=False)
                 contraction = lambda d: d * self.products.shares / (compute_probabilities(d) @ self.agents.weights)
-                exp_delta, converged = iteration._iterate(contraction, np.exp(initial_delta))
+                exp_delta, converged, contraction_evaluations = iteration._iterate(contraction, np.exp(initial_delta))
                 delta = log(exp_delta)
 
             # identify whether the fixed point converged
@@ -893,7 +915,8 @@ class ProblemMarket(Market):
 
             # return a null Jacobian if the gradient isn't being computed
             if not compute_gradient:
-                return delta, np.full((self.J, parameter_info.P), np.nan, dtype=options.dtype), errors
+                jacobian = np.full((self.J, parameter_info.P), np.nan, dtype=options.dtype)
+                return delta, jacobian, errors, contraction_evaluations
 
             # replace invalid values in delta with the last computed values before computing the Jacobian
             valid_delta = delta.copy()
@@ -902,7 +925,7 @@ class ProblemMarket(Market):
 
             # compute the Jacobian of delta with respect to theta
             jacobian = self.compute_delta_by_theta_jacobian(valid_delta, parameter_info)
-            return delta, jacobian, errors
+            return delta, jacobian, errors, contraction_evaluations
 
     def compute_delta_by_theta_jacobian(self, delta, parameter_info):
         """Compute the Jacobian of delta with respect to theta."""

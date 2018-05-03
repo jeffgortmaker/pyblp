@@ -21,6 +21,13 @@ class Results(object):
         The BLP :class:`Problem` that created these results.
     step : `int`
         The GMM step that created these results.
+    run_time : `float`
+        The number of seconds it took the optimization routine to finish during the GMM step that created these results.
+    objective_evaluations : `int`
+        The number of times the GMM objective was evaluated during the GMM step that created these results.
+    contraction_evaluations : `ndarray`
+        For each objective evaluation during the GMM step that created these results, the total number of times across
+        all markets the contraction used to compute :math:`\delta(\hat{\theta})` was evaluated.
     theta : `ndarray`
         Estimated unknown nonlinear parameters, :math:`\hat{\theta}`.
     sigma : `ndarray`
@@ -82,7 +89,8 @@ class Results(object):
 
     """
 
-    def __init__(self, objective_info, step, center_moments, se_type):
+    def __init__(self, objective_info, step, run_time, objective_evaluations, contraction_evaluations, center_moments,
+                 se_type):
         """Compute estimated standard errors and update weighting matrices."""
         self.problem = objective_info.problem
         self.WD = objective_info.WD
@@ -97,6 +105,9 @@ class Results(object):
         self.objective = objective_info.objective
         self.gradient = objective_info.gradient
         self.step = step
+        self.run_time = run_time
+        self.objective_evaluations = objective_evaluations
+        self.contraction_evaluations = np.asarray(contraction_evaluations)
         self._parameter_info = objective_info.parameter_info
 
         # construct an array of unique and sorted market IDs
@@ -125,15 +136,22 @@ class Results(object):
         sections = []
 
         # construct a table of values
-        header1 = ["Objective", "Largest Gradient"]
-        header2 = ["Value", "Magnitude"]
-        widths = [max(len(k1), len(k2), options.digits + 6) for k1, k2 in zip(header1, header2)]
+        header1 = ["GMM", "Objective", "Total Contraction", "Objective", "Largest Gradient"]
+        header2 = ["Step", "Evaluations", "Evaluations", "Value", "Magnitude"]
+        widths = [max(len(k1), len(k2)) for k1, k2 in list(zip(header1, header2))[:3]]
+        widths.extend([max(len(k1), len(k2), options.digits + 6) for k1, k2 in list(zip(header1, header2))[3:]])
         formatter = output.table_formatter(widths)
         sections.append([
             formatter(header1),
             formatter(header2),
             formatter.lines(),
-            formatter([output.format_number(self.objective), output.format_number(np.abs(self.gradient).max())])
+            formatter([
+                self.step,
+                self.objective_evaluations,
+                self.contraction_evaluations.sum(),
+                output.format_number(self.objective),
+                output.format_number(np.abs(self.gradient).max())
+            ])
         ])
 
         # construct a table of linear estimates
@@ -857,12 +875,12 @@ class ResultsMarket(Market):
             ownership = self.get_ownership_matrix(firms_index)
             jacobian = self.compute_utilities_by_prices_jacobian()
             contraction = lambda p: costs + self.compute_zeta(ownership, jacobian, costs, p)
-            prices, converged = iteration._iterate(contraction, self.products.prices if prices is None else prices)
+            prices, converged = iteration._iterate(contraction, self.products.prices if prices is None else prices)[:2]
 
-            # store whether the fixed point converged
-            if not converged:
-                errors.add(exceptions.ChangedPricesConvergenceError)
-            return prices, errors
+        # store whether the fixed point converged
+        if not converged:
+            errors.add(exceptions.ChangedPricesConvergenceError)
+        return prices, errors
 
     def compute_shares(self, prices):
         """Market-specific computation for Results.compute_shares."""
