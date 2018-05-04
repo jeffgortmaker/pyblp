@@ -184,7 +184,7 @@ def test_second_step(simulated_problem):
 
     # test that results are essentially identical
     for key, result in results.__dict__.items():
-        if isinstance(result, np.ndarray) and result.dtype != np.object:
+        if 'cumulative' not in key and isinstance(result, np.ndarray) and result.dtype != np.object:
             result2 = getattr(results2, key)
             np.testing.assert_allclose(result, result2, atol=1e-14, rtol=0, err_msg=key)
 
