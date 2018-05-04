@@ -23,8 +23,11 @@ class Results(object):
         The :class:`Results` from the last GMM step if the GMM step that created these results was not the first.
     step : `int`
         The GMM step that created these results.
-    run_time : `float`
+    optimization_time : `float`
         The number of seconds it took the optimization routine to finish during the GMM step that created these results.
+    total_time : `float`
+        The sum of :attr:`Results.optimization_time` and the number of seconds it took to compute results after
+        optimization had finished during the GMM step that created these results.
     objective_evaluations : `int`
         The number of times the GMM objective was evaluated during the GMM step that created these results.
     contraction_evaluations : `ndarray`
@@ -91,7 +94,7 @@ class Results(object):
 
     """
 
-    def __init__(self, objective_info, last_results, step, run_time, objective_evaluations, contraction_evaluations,
+    def __init__(self, objective_info, last_results, start_time, end_time, objective_evaluations, contraction_evaluations,
                  center_moments, se_type):
         """Compute estimated standard errors and update weighting matrices."""
         self.problem = objective_info.problem
@@ -107,8 +110,8 @@ class Results(object):
         self.objective = objective_info.objective
         self.gradient = objective_info.gradient
         self.last_results = last_results
-        self.step = step
-        self.run_time = run_time
+        self.step = 1 if last_results is None else last_results.step + 1
+        self.optimization_time = end_time - start_time
         self.objective_evaluations = objective_evaluations
         self.contraction_evaluations = np.asarray(contraction_evaluations)
         self._parameter_info = objective_info.parameter_info
@@ -133,6 +136,9 @@ class Results(object):
             GS = self.problem.products.ZS.T @ self.problem.products.X3
             self.gamma_se = self._compute_se(self.omega, self.problem.products.ZS, self.WS, GS, se_type, "supply")
             self.updated_WS = self._compute_W(self.omega, self.problem.products.ZS, center_moments, "supply")
+
+        # store the total time it took to optimize and compute results
+        self.total_time = time.time() - start_time
 
     def __str__(self):
         """Format full results as a string."""

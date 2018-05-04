@@ -430,24 +430,23 @@ class Problem(object):
             )
 
             # optimize theta
-            output(f"Starting step {step} out of {steps} ...")
+            output(f"Starting optimization for step {step} out of {steps} ...")
             output("")
             start_time = time.time()
             bounds = [p.bounds for p in parameter_info.unfixed]
             verbose = options.verbose and not universal_display
             theta = optimization._optimize(objective_function, theta, bounds, verbose=verbose)
             end_time = time.time()
-            run_time = end_time - start_time
             output("")
-            output(f"Completed step {step} after {output.format_seconds(run_time)}.")
+            output(f"Completed optimization for step {step} after {output.format_seconds(end_time - start_time)}.")
 
             # use objective information computed at the optimal theta to compute results for the step
-            output(f"Computing step {step} results ...")
+            output(f"Computing results for step {step} ...")
             step_info = compute_step_info(theta, objective_function.last_info, compute_gradient=True)
             results = step_info.to_results(
                 last_results,
-                step,
-                run_time,
+                start_time,
+                end_time,
                 objective_function.objective_evaluations,
                 objective_function.contraction_evaluations,
                 center_moments,
@@ -871,12 +870,13 @@ class ObjectiveInfo(object):
         # combine the lines into one string
         return "\n".join(lines)
 
-    def to_results(self, last_results, step, run_time, objective_evaluations, contraction_evaluations, center_moments,
-                   se_type):
+    def to_results(self, last_results, start_time, end_time, objective_evaluations, contraction_evaluations,
+                   center_moments, se_type):
         """Convert this information about an iteration of the optimization routine into full results."""
         from .results import Results
         return Results(
-            self, last_results, step, run_time, objective_evaluations, contraction_evaluations, center_moments, se_type
+            self, last_results, start_time, end_time, objective_evaluations, contraction_evaluations, center_moments,
+            se_type
         )
 
 
