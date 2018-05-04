@@ -24,15 +24,16 @@ class Results(object):
     step : `int`
         The GMM step that created these results.
     optimization_time : `float`
-        The number of seconds it took the optimization routine to finish during the GMM step that created these results.
+        The number of seconds it took the optimization routine to finish.
     total_time : `float`
         Sum of :attr:`Results.optimization_time` and the number of seconds it took to compute results after
-        optimization had finished during the GMM step that created these results.
+        optimization had finished.
     objective_evaluations : `int`
-        The number of times the GMM objective was evaluated during the GMM step that created these results.
+        The number of times the GMM objective was evaluated.
     contraction_evaluations : `ndarray`
-        For each objective evaluation during the GMM step that created these results, the total number of times across
-        all markets the contraction used to compute :math:`\delta(\hat{\theta})` was evaluated.
+        The number of times the contraction used to compute :math:`\delta(\hat{\theta})` was evaluated in each market
+        during each objective evaluation. Rows are in the same order as :attr:`Results.unique_market_ids` and column
+        indices correspond to objective evaluations.
     cumulative_optimization_time : `float`
         Sum of :attr:`Results.optimization_time` for this step and all prior steps.
     cumulative_total_time : `float`
@@ -102,8 +103,8 @@ class Results(object):
 
     """
 
-    def __init__(self, objective_info, last_results, start_time, end_time, objective_evaluations, contraction_evaluations,
-                 center_moments, se_type):
+    def __init__(self, objective_info, last_results, start_time, end_time, objective_evaluations,
+                 contraction_evaluation_mappings, center_moments, se_type):
         """Compute estimated standard errors and update weighting matrices."""
 
         # initialize values from the objective information
@@ -120,28 +121,6 @@ class Results(object):
         self.omega = objective_info.omega
         self.objective = objective_info.objective
         self.gradient = objective_info.gradient
-
-        # initialize counts and times (the total time will be added to at the end of initialization)
-        self.step = 1
-        self.total_time = self.cumulative_total_time = 0
-        self.optimization_time = self.cumulative_optimization_time = end_time - start_time
-        self.objective_evaluations = self.cumulative_objective_evaluations = objective_evaluations
-        self.contraction_evaluations = self.cumulative_contraction_evaluations = np.asarray(contraction_evaluations)
-
-        # initialize last results and add to cumulative values
-        self.last_results = last_results
-        if last_results is not None:
-            self.step += 1
-            self.cumulative_total_time += last_results.cumulative_total_time
-            self.cumulative_optimization_time += last_results.cumulative_optimization_time
-            self.cumulative_objective_evaluations += last_results.cumulative_objective_evaluations
-            self.cumulative_contraction_evaluations = np.r_[
-                last_results.cumulative_contraction_evaluations,
-                self.cumulative_contraction_evaluations
-            ]
-
-        # construct an array of unique and sorted market IDs
-        self.unique_market_ids = np.unique(self.problem.products.market_ids).flatten()
 
         # expand the nonlinear parameters and their gradient
         self.sigma, self.pi = self._parameter_info.expand(self.theta, fill_fixed=True)
@@ -161,9 +140,30 @@ class Results(object):
             self.gamma_se = self._compute_se(self.omega, self.problem.products.ZS, self.WS, GS, se_type, "supply")
             self.updated_WS = self._compute_W(self.omega, self.problem.products.ZS, center_moments, "supply")
 
-        # add the time it took to compute results for this step to total times
-        self.total_time = time.time() - start_time
-        self.cumulative_total_time += self.total_time
+        # construct an array of unique and sorted market IDs
+        self.unique_market_ids = np.unique(self.problem.products.market_ids).flatten()
+
+        # initialize counts and times
+        self.step = 1
+        self.total_time = self.cumulative_total_time = time.time() - start_time
+        self.optimization_time = self.cumulative_optimization_time = end_time - start_time
+        self.objective_evaluations = self.cumulative_objective_evaluations = objective_evaluations
+
+        # convert contraction evaluation mappings to a properly-ordered matrix
+        contraction_evaluation_lists = [[m[t] for m in contraction_evaluation_mappings] for t in self.unique_market_ids]
+        self.contraction_evaluations = self.cumulative_contraction_evaluations = np.array(contraction_evaluation_lists)
+
+        # initialize last results and add to cumulative values
+        self.last_results = last_results
+        if last_results is not None:
+            self.step += last_results.step
+            self.cumulative_total_time += last_results.cumulative_total_time
+            self.cumulative_optimization_time += last_results.cumulative_optimization_time
+            self.cumulative_objective_evaluations += last_results.cumulative_objective_evaluations
+            self.cumulative_contraction_evaluations = np.c_[
+                last_results.cumulative_contraction_evaluations,
+                self.cumulative_contraction_evaluations
+            ]
 
     def __str__(self):
         """Format full results as a string."""
@@ -171,7 +171,7 @@ class Results(object):
 
         # construct a table of values
         header1 = ["GMM", "Objective", "Total Contraction", "Objective", "Largest Gradient"]
-        header2 = ["Step", "Evaluations", "Evaluations", "Value", "Magnitude"]
+        header2 = ["Steps", "Evaluations", "Evaluations", "Value", "Magnitude"]
         widths = [max(len(k1), len(k2)) for k1, k2 in list(zip(header1, header2))[:3]]
         widths.extend([max(len(k1), len(k2), options.digits + 6) for k1, k2 in list(zip(header1, header2))[3:]])
         formatter = output.table_formatter(widths)
