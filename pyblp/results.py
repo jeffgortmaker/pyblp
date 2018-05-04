@@ -19,6 +19,8 @@ class Results(object):
     ----------
     problem : `Problem`
         The BLP :class:`Problem` that created these results.
+    last_results : `Results`
+        The :class:`Results` from the last GMM step if the GMM step that created these results was not the first.
     step : `int`
         The GMM step that created these results.
     run_time : `float`
@@ -89,8 +91,8 @@ class Results(object):
 
     """
 
-    def __init__(self, objective_info, step, run_time, objective_evaluations, contraction_evaluations, center_moments,
-                 se_type):
+    def __init__(self, objective_info, last_results, step, run_time, objective_evaluations, contraction_evaluations,
+                 center_moments, se_type):
         """Compute estimated standard errors and update weighting matrices."""
         self.problem = objective_info.problem
         self.WD = objective_info.WD
@@ -104,6 +106,7 @@ class Results(object):
         self.omega = objective_info.omega
         self.objective = objective_info.objective
         self.gradient = objective_info.gradient
+        self.last_results = last_results
         self.step = step
         self.run_time = run_time
         self.objective_evaluations = objective_evaluations

@@ -398,6 +398,7 @@ class Problem(object):
         tilde_costs = self.products.prices if linear_costs else np.log(self.products.prices)
 
         # iterate through each step
+        last_results = None
         for step in range(1, steps + 1):
             # wrap computation of objective information with step-specific information
             compute_step_info = functools.partial(
@@ -444,6 +445,7 @@ class Problem(object):
             output(f"Computing step {step} results ...")
             step_info = compute_step_info(theta, objective_function.last_info, compute_gradient=True)
             results = step_info.to_results(
+                last_results,
                 step,
                 run_time,
                 objective_function.objective_evaluations,
@@ -459,7 +461,8 @@ class Problem(object):
             output("")
             output(results)
 
-            # return results from the last step
+            # store the last results and return results from the last step
+            last_results = results
             if step == steps:
                 return results
 
@@ -868,10 +871,13 @@ class ObjectiveInfo(object):
         # combine the lines into one string
         return "\n".join(lines)
 
-    def to_results(self, step, run_time, objective_evaluations, contraction_evaluations, center_moments, se_type):
+    def to_results(self, last_results, step, run_time, objective_evaluations, contraction_evaluations, center_moments,
+                   se_type):
         """Convert this information about an iteration of the optimization routine into full results."""
         from .results import Results
-        return Results(self, step, run_time, objective_evaluations, contraction_evaluations, center_moments, se_type)
+        return Results(
+            self, last_results, step, run_time, objective_evaluations, contraction_evaluations, center_moments, se_type
+        )
 
 
 class ProblemMarket(Market):

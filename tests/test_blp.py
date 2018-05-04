@@ -168,6 +168,7 @@ def test_second_step(simulated_problem):
 
     # get two-step GMM results
     results = problem.solve(simulation.sigma, simulation.pi, steps=2)
+    assert results.step == 2 and results.last_results.step == 1 and results.last_results.last_results is None
 
     # manually get the same results
     results1 = problem.solve(simulation.sigma, simulation.pi, steps=1)
@@ -179,6 +180,7 @@ def test_second_step(simulated_problem):
         WS=results1.updated_WS,
         steps=1
     )
+    assert results1.step == results2.step == 1 and results1.last_results is None and results2.last_results is None
 
     # test that results are essentially identical
     for key, result in results.__dict__.items():
