@@ -13,7 +13,7 @@ from pyblp.utilities import Iteration
     pytest.param('squarem', {'scheme': 1, 'step_min': 0.9, 'step_max': 1.1, 'step_factor': 3.0}, id="SQUAREM S1"),
     pytest.param('squarem', {'scheme': 2, 'step_min': 0.8, 'step_max': 1.2, 'step_factor': 4.0}, id="SQUAREM S2"),
     pytest.param('squarem', {'scheme': 3, 'step_min': 0.7, 'step_max': 1.3, 'step_factor': 5.0}, id="SQUAREM S3"),
-    pytest.param(lambda c, x, tol: (scipy.optimize.fixed_point(c, x, xtol=tol), True), {}, id="custom")
+    pytest.param(lambda c, x, tol: (scipy.optimize.fixed_point(c, x, xtol=tol), True, 1), {}, id="custom")
 ])
 @pytest.mark.parametrize('tol', [
     pytest.param(1e-2, id="large"),
@@ -40,7 +40,7 @@ def test_hasselblad(scheme):
     """
     options = {
         'tol': 1e-8,
-        'iterations': 100,
+        'max_evaluations': 100,
         'scheme': scheme
     }
 
@@ -66,6 +66,6 @@ def test_hasselblad(scheme):
 
     # verify that many more iterations would be needed to solve the problem with simple iteration
     del options['scheme']
-    options['iterations'] *= 10
+    options['max_evaluations'] *= 10
     converged = Iteration('simple', options)._iterate(contraction, start_values)[1]
     assert not converged

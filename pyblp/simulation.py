@@ -452,14 +452,15 @@ class Simulation(object):
 
         # update prices and shares market-by-market
         errors = set()
-        contraction_evaluations = 0
+        iterations = evaluations = 0
         updated_product_data = self.product_data.copy()
         with ParallelItems(SimulationMarket.solve, mapping, processes) as items:
-            for t, (prices_t, shares_t, errors_t, contraction_evaluations_t) in items:
+            for t, (prices_t, shares_t, errors_t, iterations_t, evaluations_t) in items:
                 updated_product_data.prices[self.products.market_ids.flat == t] = prices_t
                 updated_product_data.shares[self.products.market_ids.flat == t] = shares_t
                 errors |= errors_t
-                contraction_evaluations += contraction_evaluations_t
+                iterations += iterations_t
+                evaluations += evaluations_t
 
         # handle any errors
         if errors:
@@ -476,8 +477,8 @@ class Simulation(object):
         end_time = time.time()
         run_time = end_time - start_time
         output(
-            f"Finished computing prices and shares after {output.format_seconds(run_time)} and a total of "
-            f"{contraction_evaluations} contraction evaluations."
+            f"Finished computing prices and shares after {output.format_seconds(run_time)}, a total of {iterations} "
+            f"major iterations, and a total of {evaluations} contraction evaluations."
         )
         return updated_product_data
 
@@ -500,7 +501,7 @@ class SimulationMarket(Market):
             ownership = self.get_ownership_matrix(firms_index)
             jacobian = self.compute_utilities_by_prices_jacobian()
             contraction = lambda p: costs + self.compute_zeta(ownership, jacobian, costs, p)
-            prices, converged, contraction_evaluations = iteration._iterate(contraction, initial_prices)
+            prices, converged, iterations, evaluations = iteration._iterate(contraction, initial_prices)
 
             # store whether the fixed point converged
             if not converged:
@@ -510,4 +511,4 @@ class SimulationMarket(Market):
             delta = self.update_delta_with_prices(prices)
             mu = self.update_mu_with_prices(prices)
             shares = self.compute_probabilities(delta, mu) @ self.agents.weights
-            return prices, shares, errors, contraction_evaluations
+            return prices, shares, errors, iterations, evaluations

@@ -410,6 +410,7 @@ class Problem(object):
             def objective_function(new_theta):
                 info = compute_step_info(new_theta, objective_function.last_info, optimization._compute_gradient)
                 objective_function.objective_evaluations += 1
+                objective_function.contraction_iteration_mappings.append(info.contraction_iteration_mapping)
                 objective_function.contraction_evaluation_mappings.append(info.contraction_evaluation_mapping)
                 if universal_display:
                     output(info.format_progress(
@@ -423,6 +424,7 @@ class Problem(object):
 
             # initialize optimization progress
             objective_function.objective_evaluations = 0
+            objective_function.contraction_iteration_mappings = []
             objective_function.contraction_evaluation_mappings = []
             objective_function.smallest_objective = np.inf
             objective_function.last_info = ObjectiveInfo(
@@ -448,6 +450,7 @@ class Problem(object):
                 start_time,
                 end_time,
                 objective_function.objective_evaluations,
+                objective_function.contraction_iteration_mappings,
                 objective_function.contraction_evaluation_mappings,
                 center_moments,
                 se_type
@@ -483,15 +486,16 @@ class Problem(object):
             last_delta_t = last_objective_info.delta[self.products.market_ids.flat == t]
             mapping[t] = [market_t, last_delta_t, parameter_info, iteration, linear_fp, compute_gradient]
 
-        # store any error classes and the number of contraction evaluations for each market
+        # store any error classes and the number of contraction iterations and evaluations for each market
         errors = set()
-        contraction_evaluation_mapping = {}
+        iteration_mapping = {}
+        evaluation_mapping = {}
 
         # fill delta and its Jacobian market-by-market (the Jacobian will be null if the objective isn't being computed)
         delta = np.zeros((self.N, 1), dtype=options.dtype)
         jacobian = np.zeros((self.N, theta.size), dtype=options.dtype)
         with ParallelItems(ProblemMarket.solve, mapping, processes) as items:
-            for t, (delta_t, jacobian_t, errors_t, contraction_evaluation_mapping[t]) in items:
+            for t, (delta_t, jacobian_t, errors_t, iteration_mapping[t], evaluation_mapping[t]) in items:
                 delta[self.products.market_ids.flat == t] = delta_t
                 jacobian[self.products.market_ids.flat == t] = jacobian_t
                 errors |= errors_t
@@ -576,7 +580,7 @@ class Problem(object):
         # structure the objective information
         return ObjectiveInfo(
             self, parameter_info, WD, WS, theta, delta, jacobian, tilde_costs, beta, gamma, xi,
-            omega, objective, gradient, contraction_evaluation_mapping
+            omega, objective, gradient, iteration_mapping, evaluation_mapping
         )
 
 
@@ -820,7 +824,8 @@ class ObjectiveInfo(object):
     """Structured information about a completed iteration of the optimization routine."""
 
     def __init__(self, problem, parameter_info, WD, WS, theta, delta, jacobian, tilde_costs, beta=None, gamma=None,
-                 xi=None, omega=None, objective=None, gradient=None, contraction_evaluation_mapping=None):
+                 xi=None, omega=None, objective=None, gradient=None, contraction_iteration_mapping=None,
+                 contraction_evaluation_mapping=None):
         """Initialize objective information. Optional parameters will not be specified when preparing for the first
         objective evaluation.
         """
@@ -838,6 +843,7 @@ class ObjectiveInfo(object):
         self.omega = omega
         self.objective = objective
         self.gradient = gradient
+        self.contraction_iteration_mapping = contraction_iteration_mapping
         self.contraction_evaluation_mapping = contraction_evaluation_mapping
 
     def format_progress(self, step, objective_evaluations, smallest_objective):
@@ -845,10 +851,10 @@ class ObjectiveInfo(object):
         smallest_objective is the smallest objective value encountered so far during optimization.
         """
         lines = []
-        header1 = ["GMM", "Objective", "Contraction", "Objective", "Objective", "Largest Gradient"]
-        header2 = ["Step", "Evaluations", "Evaluations", "Value", "Improvement", "Magnitude"]
-        widths = [max(len(k1), len(k2)) for k1, k2 in list(zip(header1, header2))[:3]]
-        widths.extend([max(len(k1), len(k2), options.digits + 6) for k1, k2 in list(zip(header1, header2))[3:]])
+        header1 = ["GMM", "Objective", "Contraction", "Contraction", "Objective", "Objective", "Largest Gradient"]
+        header2 = ["Step", "Evaluations", "Iterations", "Evaluations", "Value", "Improvement", "Magnitude"]
+        widths = [max(len(k1), len(k2)) for k1, k2 in list(zip(header1, header2))[:4]]
+        widths.extend([max(len(k1), len(k2), options.digits + 6) for k1, k2 in list(zip(header1, header2))[4:]])
         formatter = output.table_formatter(widths)
 
         # if this is the first iteration, include the header
@@ -860,6 +866,7 @@ class ObjectiveInfo(object):
         lines.append(formatter([
             step,
             objective_evaluations,
+            sum(self.contraction_iteration_mapping.values()),
             sum(self.contraction_evaluation_mapping.values()),
             output.format_number(self.objective),
             output.format_number(smallest_objective - self.objective) if improved else "",
@@ -869,13 +876,13 @@ class ObjectiveInfo(object):
         # combine the lines into one string
         return "\n".join(lines)
 
-    def to_results(self, last_results, start_time, end_time, objective_evaluations, contraction_evaluation_mappings,
-                   center_moments, se_type):
+    def to_results(self, last_results, start_time, end_time, objective_evaluations, contraction_iteration_mappings,
+                   contraction_evaluation_mappings, center_moments, se_type):
         """Convert this information about an iteration of the optimization routine into full results."""
         from .results import Results
         return Results(
-            self, last_results, start_time, end_time, objective_evaluations, contraction_evaluation_mappings,
-            center_moments, se_type
+            self, last_results, start_time, end_time, objective_evaluations, contraction_iteration_mappings,
+            contraction_evaluation_mappings, center_moments, se_type
         )
 
 
@@ -907,30 +914,26 @@ class ProblemMarket(Market):
             if linear_fp:
                 log_shares = log(self.products.shares)
                 contraction = lambda d: d + log_shares - log(self.compute_probabilities(d) @ self.agents.weights)
-                delta, converged, contraction_evaluations = iteration._iterate(contraction, initial_delta)
+                delta, converged, iterations, evaluations = iteration._iterate(contraction, initial_delta)
             else:
                 compute_probabilities = functools.partial(self.compute_probabilities, mu=np.exp(self.mu), linear=False)
                 contraction = lambda d: d * self.products.shares / (compute_probabilities(d) @ self.agents.weights)
-                exp_delta, converged, contraction_evaluations = iteration._iterate(contraction, np.exp(initial_delta))
+                exp_delta, converged, iterations, evaluations = iteration._iterate(contraction, np.exp(initial_delta))
                 delta = log(exp_delta)
 
             # identify whether the fixed point converged
             if not converged:
                 errors.add(exceptions.DeltaConvergenceError)
 
-            # return a null Jacobian if the gradient isn't being computed
-            if not compute_gradient:
-                jacobian = np.full((self.J, parameter_info.P), np.nan, dtype=options.dtype)
-                return delta, jacobian, errors, contraction_evaluations
-
-            # replace invalid values in delta with the last computed values before computing the Jacobian
-            valid_delta = delta.copy()
-            delta_indices = ~np.isfinite(delta)
-            valid_delta[delta_indices] = initial_delta[delta_indices]
-
-            # compute the Jacobian of delta with respect to theta
-            jacobian = self.compute_delta_by_theta_jacobian(valid_delta, parameter_info)
-            return delta, jacobian, errors, contraction_evaluations
+            # if the gradient is to be computed, replace invalid values in delta with the last computed values before
+            #   computing the Jacobian of delta with respect to theta
+            jacobian = np.full((self.J, parameter_info.P), np.nan, dtype=options.dtype)
+            if compute_gradient:
+                valid_delta = delta.copy()
+                delta_indices = ~np.isfinite(delta)
+                valid_delta[delta_indices] = initial_delta[delta_indices]
+                jacobian = self.compute_delta_by_theta_jacobian(valid_delta, parameter_info)
+            return delta, jacobian, errors, iterations, evaluations
 
     def compute_delta_by_theta_jacobian(self, delta, parameter_info):
         """Compute the Jacobian of delta with respect to theta."""

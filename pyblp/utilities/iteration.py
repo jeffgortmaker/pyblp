@@ -20,19 +20,20 @@ class Iteration(object):
 
         Also accepted is a custom callable method with the following form::
 
-            method(contraction, initial, **options) -> (final, converged)
+            method(contraction, initial, **options) -> (final, converged, iterations)
 
         where `contraction` is a callable contraction mapping, `initial` is an array of initial values, `options` are
-        specified below, `final` is an array of final values, and `converged` is a flag for whether the routine
-        converged.
+        specified below, `final` is an array of final values, `converged` is a flag for whether the routine converged,
+        and `iterations` is the number of completed iterations. The number of contraction evaluations will be
+        automatically stored.
 
     method_options : `dict, optional`
         Options for the fixed point iteration routine. Both non-custom routines support the following options:
 
-            - **tol** : (`float`) - Tolerance for convergence of the configured norm. The default value is ``1e-12``.
-
-            - **iterations** : (`int`) - Maximum number of contraction mapping evaluations. The default value is
+            - **max_evaluations** : (`int`) - Maximum number of contraction mapping evaluations. The default value is
               ``10000``.
+
+            - **tol** : (`float`) - Tolerance for convergence of the configured norm. The default value is ``1e-12``.
 
             - **norm** : (`callable`) - The norm to be used. By default, the :math:`\ell^2`-norm is used. If specified,
               this should be a function that accepts an array of differences and that returns a scalar norm.
@@ -63,17 +64,18 @@ class Iteration(object):
 
        iteration = pyblp.Iteration('squarem', {'norm': lambda x: np.abs(x).max(), 'scheme': 1})
 
-    Instead of using a non-custom routine, the following code builds a custom method that wraps
-    :func:`scipy.optimize.fixed_point` and returns the initial values when the routine does not converge:
+    Instead of using a non-custom routine, the following code builds a custom method that re-implements an inflexible
+    version of the ``'simple'`` method:
 
     .. ipython:: python
 
-       from scipy.optimize import fixed_point
-       def custom_method(contraction, initial):
-           try:
-               return fixed_point(contraction, initial), True
-           except RuntimeError:
-               return initial, False
+       def custom_method(contraction, initial, max_evaluations, tol, norm):
+           x = contraction(initial)
+           evaluations = 1
+           while evaluations <= max_evaluations and norm(x) < tol:
+               x = contraction(x)
+               evaluations += 1
+           return x, evaluations < max_evaluations, evaluations
 
     You can then use this custom method to build an iteration configuration:
 
@@ -107,7 +109,7 @@ class Iteration(object):
         self._iterator, self._description = methods[method]
         self._method_options = {
             'tol': 1e-12,
-            'iterations': 10000,
+            'max_evaluations': 10000,
             'norm': np.linalg.norm
         }
         if self._iterator == squarem:
@@ -127,8 +129,8 @@ class Iteration(object):
         self._method_options.update(method_options)
         if not isinstance(self._method_options['tol'], float) or self._method_options['tol'] <= 0:
             raise ValueError("The iteration option tol must be a positive float.")
-        if not isinstance(self._method_options['iterations'], int) or self._method_options['iterations'] < 1:
-            raise ValueError("The iteration option iterations must be a positive integer.")
+        if not isinstance(self._method_options['max_evaluations'], int) or self._method_options['max_evaluations'] < 1:
+            raise ValueError("The iteration option max_evaluations must be a positive integer.")
         if not callable(self._method_options['norm']):
             raise ValueError("The iteration option norm must be callable.")
         if self._iterator == squarem:
@@ -153,40 +155,42 @@ class Iteration(object):
 
         # define a wrapper for the contraction, which normalizes arrays so they work with all types of routines, and
         #   also counts the total number of contraction evaluations
-        def contraction_wrapper(raw_values):
-            contraction_wrapper.evaluations += 1
+        def wrapper(raw_values):
+            wrapper.evaluations += 1
             raw_values = np.asarray(raw_values)
             values = raw_values.reshape(start_values.shape).astype(start_values.dtype)
             return np.asarray(contraction(values)).astype(np.float64).reshape(raw_values.shape)
 
         # initialize the counter and normalize the starting values
-        contraction_wrapper.evaluations = 0
+        wrapper.evaluations = 0
         raw_start_values = start_values.astype(np.float64).flatten()
 
         # solve the problem and convert the raw final values to the same data type and shape as the initial values
-        raw_final_values, converged = self._iterator(contraction_wrapper, raw_start_values, **self._method_options)
+        raw_final_values, converged, iterations = self._iterator(wrapper, raw_start_values, **self._method_options)
         final_values = np.asarray(raw_final_values).reshape(start_values.shape).astype(start_values.dtype)
-        return final_values, converged, contraction_wrapper.evaluations
+        return final_values, converged, iterations, wrapper.evaluations
 
 
-def squarem(contraction, x, norm, tol, iterations, scheme, step_min, step_max, step_factor):
+def squarem(contraction, x, max_evaluations, tol, norm, scheme, step_min, step_max, step_factor):
     """Apply the SQUAREM acceleration method for fixed point iteration. The fixed point array and a flag for whether the
     routine converged are both returned.
     """
-    iteration = 0
+    iterations = evaluations = 0
     while True:
+        iterations += 1
+
         # first step
         x0, x = x, contraction(x)
         g0 = x - x0
-        iteration += 1
-        if iteration >= iterations or not np.isfinite(x).all() or norm(g0) < tol:
+        evaluations += 1
+        if evaluations >= max_evaluations or not np.isfinite(x).all() or norm(g0) < tol:
             break
 
         # second step
         x1, x = x, contraction(x)
         g1 = x - x1
-        iteration += 1
-        if iteration >= iterations or not np.isfinite(x).all() or norm(g1) < tol:
+        evaluations += 1
+        if evaluations >= max_evaluations or not np.isfinite(x).all() or norm(g1) < tol:
             break
 
         # compute the step length
@@ -217,26 +221,26 @@ def squarem(contraction, x, norm, tol, iterations, scheme, step_min, step_max, s
             continue
 
         # check for convergence
-        iteration += 1
-        if iteration >= iterations or not np.isfinite(x).all() or norm(x - x3) < tol:
+        evaluations += 1
+        if evaluations >= max_evaluations or not np.isfinite(x).all() or norm(x - x3) < tol:
             break
 
     # determine whether there was convergence
-    converged = iteration < iterations
-    return x, converged
+    converged = evaluations < max_evaluations
+    return x, converged, iterations
 
 
-def simple(contraction, x, norm, tol, iterations):
+def simple(contraction, x, max_evaluations, tol, norm):
     """Perform simple fixed point iteration with no acceleration. The fixed point array and a flag for whether the
     routine converged are both returned.
     """
-    iteration = 0
+    iterations = 0
     while True:
         x0, x = x, contraction(x)
-        iteration += 1
-        if iteration >= iterations or not np.isfinite(x).all() or norm(x - x0) < tol:
+        iterations += 1
+        if iterations >= max_evaluations or not np.isfinite(x).all() or norm(x - x0) < tol:
             break
 
     # determine whether there was convergence
-    converged = iteration < iterations
-    return x, converged
+    converged = iterations < max_evaluations
+    return x, converged, iterations

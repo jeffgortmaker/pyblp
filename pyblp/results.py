@@ -30,6 +30,10 @@ class Results(object):
         optimization had finished.
     objective_evaluations : `int`
         The number of times the GMM objective was evaluated.
+    contraction_iterations : `ndarray`
+        The number of major iterations in the iteration routine used to compute :math:`\delta(\hat{\theta})` in each
+        market during each objective evaluation. Rows are in the same order as :attr:`Results.unique_market_ids` and
+        column indices correspond to objective evaluations.
     contraction_evaluations : `ndarray`
         The number of times the contraction used to compute :math:`\delta(\hat{\theta})` was evaluated in each market
         during each objective evaluation. Rows are in the same order as :attr:`Results.unique_market_ids` and column
@@ -40,7 +44,9 @@ class Results(object):
         Sum of :attr:`Results.total_time` for this step and all prior steps.
     cumulative_objective_evaluations : `float`
         Sum of :attr:`Results.objective_evaluations` for this step and all prior steps.
-    cumulative_contraction_evaluations : `float`
+    cumulative_contraction_iterations : `ndarray`
+        Concatenation of :attr:`Results.contraction_iterations` for this step and all prior steps.
+    cumulative_contraction_evaluations : `ndarray`
         Concatenation of :attr:`Results.contraction_evaluations` for this step and all prior steps.
     theta : `ndarray`
         Estimated unknown nonlinear parameters, :math:`\hat{\theta}`.
@@ -104,7 +110,7 @@ class Results(object):
     """
 
     def __init__(self, objective_info, last_results, start_time, end_time, objective_evaluations,
-                 contraction_evaluation_mappings, center_moments, se_type):
+                 contraction_iteration_mappings, contraction_evaluation_mappings, center_moments, se_type):
         """Compute estimated standard errors and update weighting matrices."""
 
         # initialize values from the objective information
@@ -149,8 +155,10 @@ class Results(object):
         self.optimization_time = self.cumulative_optimization_time = end_time - start_time
         self.objective_evaluations = self.cumulative_objective_evaluations = objective_evaluations
 
-        # convert contraction evaluation mappings to a properly-ordered matrix
+        # convert contraction mappings to a matrices with rows ordered by market
+        contraction_iteration_lists = [[m[t] for m in contraction_iteration_mappings] for t in self.unique_market_ids]
         contraction_evaluation_lists = [[m[t] for m in contraction_evaluation_mappings] for t in self.unique_market_ids]
+        self.contraction_iterations = self.cumulative_contraction_iterations = np.array(contraction_iteration_lists)
         self.contraction_evaluations = self.cumulative_contraction_evaluations = np.array(contraction_evaluation_lists)
 
         # initialize last results and add to cumulative values
@@ -160,6 +168,10 @@ class Results(object):
             self.cumulative_total_time += last_results.cumulative_total_time
             self.cumulative_optimization_time += last_results.cumulative_optimization_time
             self.cumulative_objective_evaluations += last_results.cumulative_objective_evaluations
+            self.cumulative_contraction_iterations = np.c_[
+                last_results.cumulative_contraction_iterations,
+                self.cumulative_contraction_iterations
+            ]
             self.cumulative_contraction_evaluations = np.c_[
                 last_results.cumulative_contraction_evaluations,
                 self.cumulative_contraction_evaluations
@@ -170,8 +182,8 @@ class Results(object):
         sections = []
 
         # construct a table of values
-        header1 = ["GMM", "Objective", "Total Contraction", "Objective", "Largest Gradient"]
-        header2 = ["Steps", "Evaluations", "Evaluations", "Value", "Magnitude"]
+        header1 = ["GMM", "Objective", "Total Contraction", "Total Contraction", "Objective", "Largest Gradient"]
+        header2 = ["Steps", "Evaluations", "Iterations", "Evaluations", "Value", "Magnitude"]
         widths = [max(len(k1), len(k2)) for k1, k2 in list(zip(header1, header2))[:3]]
         widths.extend([max(len(k1), len(k2), options.digits + 6) for k1, k2 in list(zip(header1, header2))[3:]])
         formatter = output.table_formatter(widths)
@@ -182,6 +194,7 @@ class Results(object):
             formatter([
                 self.step,
                 self.objective_evaluations,
+                self.contraction_iterations.sum(),
                 self.contraction_evaluations.sum(),
                 output.format_number(self.objective),
                 output.format_number(np.abs(self.gradient).max())
