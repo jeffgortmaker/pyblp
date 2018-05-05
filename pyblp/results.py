@@ -25,27 +25,27 @@ class Results(object):
         The GMM step that created these results.
     optimization_time : `float`
         The number of seconds it took the optimization routine to finish.
+    cumulative_optimization_time : `float`
+        Sum of :attr:`Results.optimization_time` for this step and all prior steps.
     total_time : `float`
         Sum of :attr:`Results.optimization_time` and the number of seconds it took to compute results after
         optimization had finished.
+    cumulative_total_time : `float`
+        Sum of :attr:`Results.total_time` for this step and all prior steps.
     objective_evaluations : `int`
         The number of times the GMM objective was evaluated.
+    cumulative_objective_evaluations : `int`
+        Sum of :attr:`Results.objective_evaluations` for this step and all prior steps.
     contraction_iterations : `ndarray`
         The number of major iterations in the iteration routine used to compute :math:`\delta(\hat{\theta})` in each
         market during each objective evaluation. Rows are in the same order as :attr:`Results.unique_market_ids` and
         column indices correspond to objective evaluations.
+    cumulative_contraction_iterations : `ndarray`
+        Concatenation of :attr:`Results.contraction_iterations` for this step and all prior steps.
     contraction_evaluations : `ndarray`
         The number of times the contraction used to compute :math:`\delta(\hat{\theta})` was evaluated in each market
         during each objective evaluation. Rows are in the same order as :attr:`Results.unique_market_ids` and column
         indices correspond to objective evaluations.
-    cumulative_optimization_time : `float`
-        Sum of :attr:`Results.optimization_time` for this step and all prior steps.
-    cumulative_total_time : `float`
-        Sum of :attr:`Results.total_time` for this step and all prior steps.
-    cumulative_objective_evaluations : `float`
-        Sum of :attr:`Results.objective_evaluations` for this step and all prior steps.
-    cumulative_contraction_iterations : `ndarray`
-        Concatenation of :attr:`Results.contraction_iterations` for this step and all prior steps.
     cumulative_contraction_evaluations : `ndarray`
         Concatenation of :attr:`Results.contraction_evaluations` for this step and all prior steps.
     theta : `ndarray`
