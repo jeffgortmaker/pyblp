@@ -13,7 +13,7 @@ from pyblp.utilities import Iteration
     pytest.param('squarem', {'scheme': 1, 'step_min': 0.9, 'step_max': 1.1, 'step_factor': 3.0}, id="SQUAREM S1"),
     pytest.param('squarem', {'scheme': 2, 'step_min': 0.8, 'step_max': 1.2, 'step_factor': 4.0}, id="SQUAREM S2"),
     pytest.param('squarem', {'scheme': 3, 'step_min': 0.7, 'step_max': 1.3, 'step_factor': 5.0}, id="SQUAREM S3"),
-    pytest.param(lambda c, x, tol: (scipy.optimize.fixed_point(c, x, xtol=tol), True, 1), {}, id="custom")
+    pytest.param(lambda c, x, _, tol: (scipy.optimize.fixed_point(c, x, xtol=tol), True), {}, id="custom")
 ])
 @pytest.mark.parametrize('tol', [
     pytest.param(1e-2, id="large"),

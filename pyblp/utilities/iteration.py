@@ -20,12 +20,12 @@ class Iteration(object):
 
         Also accepted is a custom callable method with the following form::
 
-            method(contraction, initial, **options) -> (final, converged, iterations)
+            method(contraction, initial, callback, **options) -> (final, converged)
 
-        where `contraction` is a callable contraction mapping, `initial` is an array of initial values, `options` are
-        specified below, `final` is an array of final values, `converged` is a flag for whether the routine converged,
-        and `iterations` is the number of completed iterations. The number of contraction evaluations will be
-        automatically stored.
+        where `contraction` is a callable contraction mapping, `initial` is an array of initial values, `callback` is
+        a function that should be called without any arguments after each major iteration (it is used to record the
+        number of major iterations), `options` are specified below, `final` is an array of final values, and `converged`
+        is a flag for whether the routine converged.
 
     method_options : `dict, optional`
         Options for the fixed point iteration routine. Both non-custom routines support the following options:
@@ -64,18 +64,21 @@ class Iteration(object):
 
        iteration = pyblp.Iteration('squarem', {'norm': lambda x: np.abs(x).max(), 'scheme': 1})
 
-    Instead of using a non-custom routine, the following code builds a custom method that re-implements an inflexible
-    version of the ``'simple'`` method:
+    Instead of using a non-custom routine, the following code builds a custom method that implements a version of simple
+    iteration, which, for the sake of having a nontrivial example, arbitrarily identifies a major iteration with three
+    objective evaluations:
 
     .. ipython:: python
 
-       def custom_method(contraction, initial, max_evaluations, tol, norm):
-           x = contraction(initial)
+       def custom_method(contraction, initial, callback, max_evaluations, tol, norm):
            evaluations = 1
-           while evaluations <= max_evaluations and norm(x) < tol:
-               x = contraction(x)
+           x = contraction(initial)
+           while evaluations < max_evaluations and norm(x) < tol:
                evaluations += 1
-           return x, evaluations < max_evaluations, evaluations
+               x = contraction(x)
+               if evaluations % 3 == 0:
+                   callback()
+           return x, evaluations < max_evaluations
 
     You can then use this custom method to build an iteration configuration:
 
@@ -155,30 +158,37 @@ class Iteration(object):
 
         # define a wrapper for the contraction, which normalizes arrays so they work with all types of routines, and
         #   also counts the total number of contraction evaluations
-        def wrapper(raw_values):
-            wrapper.evaluations += 1
+        def contraction_wrapper(raw_values):
+            contraction_wrapper.evaluations += 1
             raw_values = np.asarray(raw_values)
             values = raw_values.reshape(start_values.shape).astype(start_values.dtype)
             return np.asarray(contraction(values)).astype(np.float64).reshape(raw_values.shape)
 
-        # initialize the counter and normalize the starting values
-        wrapper.evaluations = 0
+        # define a callback, which counts the number of major iterations
+        def callback():
+            callback.iterations += 1
+
+        # initialize the counters and normalize the starting values
+        callback.iterations = contraction_wrapper.evaluations = 0
         raw_start_values = start_values.astype(np.float64).flatten()
 
         # solve the problem and convert the raw final values to the same data type and shape as the initial values
-        raw_final_values, converged, iterations = self._iterator(wrapper, raw_start_values, **self._method_options)
+        raw_final_values, converged = self._iterator(
+            contraction_wrapper,
+            raw_start_values,
+            callback,
+            **self._method_options
+        )
         final_values = np.asarray(raw_final_values).reshape(start_values.shape).astype(start_values.dtype)
-        return final_values, converged, iterations, wrapper.evaluations
+        return final_values, converged, callback.iterations, contraction_wrapper.evaluations
 
 
-def squarem(contraction, x, max_evaluations, tol, norm, scheme, step_min, step_max, step_factor):
+def squarem(contraction, x, callback, max_evaluations, tol, norm, scheme, step_min, step_max, step_factor):
     """Apply the SQUAREM acceleration method for fixed point iteration. The fixed point array and a flag for whether the
     routine converged are both returned.
     """
-    iterations = evaluations = 0
+    evaluations = 0
     while True:
-        iterations += 1
-
         # first step
         x0, x = x, contraction(x)
         g0 = x - x0
@@ -215,6 +225,9 @@ def squarem(contraction, x, max_evaluations, tol, norm, scheme, step_min, step_m
             x2, x = x, x0 - 2 * alpha * r + (alpha ** 2) * v
             x3, x = x, contraction(x)
 
+        # record the completion of a major iteration
+        callback()
+
         # revert to the last evaluation if there were errors
         if not np.isfinite(x).all():
             x = x2
@@ -226,21 +239,21 @@ def squarem(contraction, x, max_evaluations, tol, norm, scheme, step_min, step_m
             break
 
     # determine whether there was convergence
-    converged = evaluations < max_evaluations
-    return x, converged, iterations
+    return x, evaluations < max_evaluations
 
 
-def simple(contraction, x, max_evaluations, tol, norm):
+def simple(contraction, x, callback, max_evaluations, tol, norm):
     """Perform simple fixed point iteration with no acceleration. The fixed point array and a flag for whether the
     routine converged are both returned.
     """
-    iterations = 0
+    evaluations = 0
     while True:
+        # for simple iteration, a contraction evaluation is the same as a major iteration
         x0, x = x, contraction(x)
-        iterations += 1
-        if iterations >= max_evaluations or not np.isfinite(x).all() or norm(x - x0) < tol:
+        callback()
+        evaluations += 1
+        if evaluations >= max_evaluations or not np.isfinite(x).all() or norm(x - x0) < tol:
             break
 
     # determine whether there was convergence
-    converged = iterations < max_evaluations
-    return x, converged, iterations
+    return x, evaluations < max_evaluations
