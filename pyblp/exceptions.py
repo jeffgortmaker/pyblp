@@ -45,6 +45,17 @@ class ChangedPricesFloatingPointError(Exception):
         )
 
 
+class ThetaConvergenceError(Exception):
+    """Convergence issues when optimizing over theta."""
+
+    def __str__(self):
+        return (
+            "The optimization routine failed to converge. This problem can sometimes be mitigated by choosing more "
+            "reasonable initial parameter values, by setting more conservative bounds, by configuring other "
+            "optimization settings, by or choosing a different optimization routine."
+        )
+
+
 class DeltaConvergenceError(Exception):
     """Convergence issues with the fixed point computation of delta."""
 

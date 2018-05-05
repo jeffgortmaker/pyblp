@@ -24,7 +24,7 @@ class Results(object):
     step : `int`
         The GMM step that created these results.
     optimization_time : `float`
-        The number of seconds it took the optimization routine to finish.
+        Number of seconds it took the optimization routine to finish.
     cumulative_optimization_time : `float`
         Sum of :attr:`Results.optimization_time` for this step and all prior steps.
     total_time : `float`
@@ -32,20 +32,24 @@ class Results(object):
         optimization had finished.
     cumulative_total_time : `float`
         Sum of :attr:`Results.total_time` for this step and all prior steps.
+    optimization_iterations : `int`
+        Number of major iterations completed by the optimization routine.
+    cumulative_optimization_iterations : `int`
+        Sum of :attr:`Results.optimization_iterations` for this step and all prior steps.
     objective_evaluations : `int`
-        The number of times the GMM objective was evaluated.
+        Number of times the GMM objective was evaluated.
     cumulative_objective_evaluations : `int`
         Sum of :attr:`Results.objective_evaluations` for this step and all prior steps.
-    contraction_iterations : `ndarray`
-        The number of major iterations in the iteration routine used to compute :math:`\delta(\hat{\theta})` in each
-        market during each objective evaluation. Rows are in the same order as :attr:`Results.unique_market_ids` and
-        column indices correspond to objective evaluations.
-    cumulative_contraction_iterations : `ndarray`
-        Concatenation of :attr:`Results.contraction_iterations` for this step and all prior steps.
+    fp_iterations : `ndarray`
+        Number of major iterations completed by the iteration routine used to compute :math:`\delta(\hat{\theta})` in
+        each market during each objective evaluation. Rows are in the same order as :attr:`Results.unique_market_ids`
+        and column indices correspond to objective evaluations.
+    cumulative_fp_iterations : `ndarray`
+        Concatenation of :attr:`Results.fp_iterations` for this step and all prior steps.
     contraction_evaluations : `ndarray`
-        The number of times the contraction used to compute :math:`\delta(\hat{\theta})` was evaluated in each market
-        during each objective evaluation. Rows are in the same order as :attr:`Results.unique_market_ids` and column
-        indices correspond to objective evaluations.
+        Number of times the contraction used to compute :math:`\delta(\hat{\theta})` was evaluated in each market during
+        each objective evaluation. Rows are in the same order as :attr:`Results.unique_market_ids` and column indices
+        correspond to objective evaluations.
     cumulative_contraction_evaluations : `ndarray`
         Concatenation of :attr:`Results.contraction_evaluations` for this step and all prior steps.
     theta : `ndarray`
@@ -82,6 +86,8 @@ class Results(object):
         Estimated :math:`\partial\delta / \partial\theta`.
     gradient : `ndarray`
         Estimated gradient of the GMM objective with respect to :math:`\theta`.
+    gradient : `ndarray`
+        Infinity norm of :attr:`Results.gradient`.
     sigma_gradient : `ndarray`
         Estimated gradient of the GMM objective with respect to unknown :math:`\Sigma` elements in :math:`\theta`.
     pi_gradient : `ndarray`
@@ -109,8 +115,8 @@ class Results(object):
 
     """
 
-    def __init__(self, objective_info, last_results, start_time, end_time, objective_evaluations,
-                 contraction_iteration_mappings, contraction_evaluation_mappings, center_moments, se_type):
+    def __init__(self, objective_info, last_results, start_time, end_time, iterations, evaluations, iteration_mappings,
+                 evaluation_mappings, center_moments, se_type):
         """Compute estimated standard errors and update weighting matrices."""
 
         # initialize values from the objective information
@@ -127,6 +133,7 @@ class Results(object):
         self.omega = objective_info.omega
         self.objective = objective_info.objective
         self.gradient = objective_info.gradient
+        self.gradient_norm = objective_info.gradient_norm
 
         # expand the nonlinear parameters and their gradient
         self.sigma, self.pi = self._parameter_info.expand(self.theta, fill_fixed=True)
@@ -153,12 +160,13 @@ class Results(object):
         self.step = 1
         self.total_time = self.cumulative_total_time = time.time() - start_time
         self.optimization_time = self.cumulative_optimization_time = end_time - start_time
-        self.objective_evaluations = self.cumulative_objective_evaluations = objective_evaluations
+        self.optimization_iterations = self.cumulative_optimization_iterations = iterations
+        self.objective_evaluations = self.cumulative_objective_evaluations = evaluations
 
         # convert contraction mappings to a matrices with rows ordered by market
-        contraction_iteration_lists = [[m[t] for m in contraction_iteration_mappings] for t in self.unique_market_ids]
-        contraction_evaluation_lists = [[m[t] for m in contraction_evaluation_mappings] for t in self.unique_market_ids]
-        self.contraction_iterations = self.cumulative_contraction_iterations = np.array(contraction_iteration_lists)
+        contraction_iteration_lists = [[m[t] for m in iteration_mappings] for t in self.unique_market_ids]
+        contraction_evaluation_lists = [[m[t] for m in evaluation_mappings] for t in self.unique_market_ids]
+        self.fp_iterations = self.cumulative_fp_iterations = np.array(contraction_iteration_lists)
         self.contraction_evaluations = self.cumulative_contraction_evaluations = np.array(contraction_evaluation_lists)
 
         # initialize last results and add to cumulative values
@@ -167,10 +175,11 @@ class Results(object):
             self.step += last_results.step
             self.cumulative_total_time += last_results.cumulative_total_time
             self.cumulative_optimization_time += last_results.cumulative_optimization_time
+            self.cumulative_optimization_iterations += last_results.cumulative_optimization_iterations
             self.cumulative_objective_evaluations += last_results.cumulative_objective_evaluations
-            self.cumulative_contraction_iterations = np.c_[
-                last_results.cumulative_contraction_iterations,
-                self.cumulative_contraction_iterations
+            self.cumulative_fp_iterations = np.c_[
+                last_results.cumulative_fp_iterations,
+                self.cumulative_fp_iterations
             ]
             self.cumulative_contraction_evaluations = np.c_[
                 last_results.cumulative_contraction_evaluations,
@@ -182,22 +191,25 @@ class Results(object):
         sections = []
 
         # construct a table of values
-        header1 = ["GMM", "Objective", "Total Contraction", "Total Contraction", "Objective", "Largest Gradient"]
-        header2 = ["Steps", "Evaluations", "Iterations", "Evaluations", "Value", "Magnitude"]
-        widths = [max(len(k1), len(k2)) for k1, k2 in list(zip(header1, header2))[:3]]
-        widths.extend([max(len(k1), len(k2), options.digits + 6) for k1, k2 in list(zip(header1, header2))[3:]])
+        header = [
+            ("GMM", "Step"), ("Optimization", "Iterations"), ("Objective", "Evaluations"),
+            ("Total Fixed Point", "Iterations"), ("Total Contraction", "Evaluations"), ("Objective", "Value"),
+            ("Gradient", "Infinity Norm")
+        ]
+        widths = [max(len(k1), len(k2), options.digits + 6 if i > 4 else 0) for i, (k1, k2) in enumerate(header)]
         formatter = output.table_formatter(widths)
         sections.append([
-            formatter(header1),
-            formatter(header2),
+            formatter([k[0] for k in header]),
+            formatter([k[1] for k in header]),
             formatter.lines(),
             formatter([
                 self.step,
+                self.optimization_iterations,
                 self.objective_evaluations,
-                self.contraction_iterations.sum(),
+                self.fp_iterations.sum(),
                 self.contraction_evaluations.sum(),
                 output.format_number(self.objective),
-                output.format_number(np.abs(self.gradient).max())
+                output.format_number(self.gradient_norm)
             ])
         ])
 
@@ -660,7 +672,7 @@ class Results(object):
             :class:`Iteration` configuration for how to solve the fixed point problem in each market. By default,
             ``Iteration('simple')`` is used.
         processes : `int, optional`
-            The number of Python processes that will be used during computation. By default, multiprocessing will not be
+            Number of Python processes that will be used during computation. By default, multiprocessing will not be
             used. For values greater than one, a pool of that many Python processes will be created. Market-by-market
             computation of post-merger prices will be distributed among these processes. Using multiprocessing will only
             improve computation speed if gains from parallelization outweigh overhead from creating the process pool.
@@ -922,7 +934,7 @@ class ResultsMarket(Market):
             ownership = self.get_ownership_matrix(firms_index)
             jacobian = self.compute_utilities_by_prices_jacobian()
             contraction = lambda p: costs + self.compute_zeta(ownership, jacobian, costs, p)
-            prices, converged = iteration._iterate(contraction, self.products.prices if prices is None else prices)[:2]
+            prices, converged = iteration._iterate(self.products.prices if prices is None else prices, contraction)[:2]
 
         # store whether the fixed point converged
         if not converged:

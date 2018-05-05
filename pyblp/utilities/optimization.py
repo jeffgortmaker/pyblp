@@ -3,11 +3,12 @@
 import os
 import sys
 import warnings
-import itertools
+import functools
 from pathlib import Path
 
 import numpy as np
-import scipy.optimize
+
+from .. import options
 
 
 class Optimization(object):
@@ -48,29 +49,29 @@ class Optimization(object):
 
         Also accepted is a custom callable method with the following form::
 
-            method(objective_function, initial, bounds, **options) -> final
+            method(initial, bounds, objective_function, iteration_callback, **options) -> (final, converged)
 
-        where `objective_function` is a callable objective function that accepts an array of parameter values and
-        returns either the objective value if `compute_gradient` is ``False`` or a tuple of the objective value and its
-        gradient if ``True``, `initial` is an array of initial parameter values, `bounds` is a list of ``(min, max)``
-        pairs for each element in `initial`, `options` are specified below, and `final` is an array of optimized
-        parameter values.
+        where `initial` is an array of initial parameter values, `bounds` is a list of ``(min, max)`` pairs for each
+        element in `initial`, `objective_function` is a callable objective function that accepts an array of parameter
+        values and returns either the objective value if `compute_gradient` is ``False`` or a tuple of the objective
+        value and its gradient if ``True``, `iteration_callback` is a function that should be called without any
+        arguments after each major iteration (it is used to record the number of major iterations), `options` are
+        specified below, `final` is an array of optimized parameter values, and `converged` is a flag for whether the
+        routine converged.
 
         To simply evaluate a problem's objective at the initial parameter values, the trivial custom method
-        ``lambda f, i, b: i`` can be used.
+        ``lambda i, *_: i`` can be used.
 
     method_options : `dict, optional`
         Options for the optimization routine.
 
         For any non-custom `method` other than ``'knitro'``, these options will be passed to `options` in
-        :func:`scipy.optimize.minimize`. Depending on the configured level of verbosity, the `display` and `iprint`
-        options may be overridden. Refer to the SciPy documentation for information about which options are available
-        for each optimization routine.
+        :func:`scipy.optimize.minimize`. Refer to the SciPy documentation for information about which options are
+        available for each optimization routine.
 
         If `method` is ``'knitro'``, these options should be
-        `Knitro user options <https://www.artelys.com/tools/knitro_doc/3_referenceManual/userOptions.html>`_. The the
-        non-standard `knitro_dir` option can also be specified. Depending on the configured level of verbosity, the
-        `outlev` option may be overridden. The following options have non-standard default values:
+        `Knitro user options <https://www.artelys.com/tools/knitro_doc/3_referenceManual/userOptions.html>`_. The
+        non-standard `knitro_dir` option can also be specified. The following options have non-standard default values:
 
             - **knitro_dir** : (`str`) - By default, the KNITRODIR environment variable is used. Otherwise, this
               option should point to the installation directory of Knitro, which contains direct subdirectories such as
@@ -96,6 +97,9 @@ class Optimization(object):
         not use analytic gradients, and must be ``True`` if `method` is ``'newton-cg'``, which requires an analytic
         gradient. By default, analytic gradients are computed. If ``False``, an analytic gradient may still be computed
         once at the end of optimization to compute optimization results.
+    universal_display : `bool, optional`
+        Whether to format optimization progress such that the display looks the same for all routines. By default, the
+        universal display is used and some `method_options` are used to prevent default displays from showing up.
 
     Examples
     --------
@@ -111,7 +115,7 @@ class Optimization(object):
     .. ipython:: python
 
        from itertools import product
-       def custom_method(objective_function, initial, bounds):
+       def custom_method(initial, bounds, objective_function, iteration_callback):
            best_values = initial
            best_objective = np.inf
            for values in product(*(np.linspace(l, u, 10) for l, u in bounds)):
@@ -119,7 +123,8 @@ class Optimization(object):
                if objective < best_objective:
                    best_values = values
                    best_objective = objective
-           return best_values
+               iteration_callback()
+           return best_values, True
 
     You can then use this custom method to build an optimization configuration:
 
@@ -129,28 +134,28 @@ class Optimization(object):
 
     """
 
-    def __init__(self, method, method_options=None, compute_gradient=True):
+    def __init__(self, method, method_options=None, compute_gradient=True, universal_display=True):
         """Validate the method and set default options."""
         simple_methods = {
-            'nelder-mead': "the Nelder-Mead algorithm",
-            'powell': "the modified Powell algorithm",
+            'nelder-mead': (scipy_optimizer, "the Nelder-Mead algorithm implemented in SciPy"),
+            'powell': (scipy_optimizer, "the modified Powell algorithm implemented in SciPy")
         }
         unbounded_methods = {
-            'cg': "the conjugate gradient algorithm",
-            'bfgs': "the BFGS algorithm",
-            'newton-cg': "the Newton-CG algorithm"
+            'cg': (scipy_optimizer, "the conjugate gradient algorithm implemented in SciPy"),
+            'bfgs': (scipy_optimizer, "the BFGS algorithm implemented in SciPy"),
+            'newton-cg': (scipy_optimizer, "the Newton-CG algorithm implemented in SciPy")
         }
         bounded_methods = {
-            'l-bfgs-b': "the L-BFGS-B algorithm",
-            'tnc': "the truncated Newton (TNC) algorithm",
-            'slsqp': "Sequential Least SQuares Programming (SLSQP)",
-            'knitro': "an installed version of Artleys Knitro"
+            'l-bfgs-b': (scipy_optimizer, "the L-BFGS-B algorithm implemented in SciPy"),
+            'tnc': (scipy_optimizer, "the truncated Newton algorithm implemented in SciPy"),
+            'slsqp': (scipy_optimizer, "Sequential Least SQuares Programming implemented in SciPy"),
+            'knitro': (knitro_optimizer, "an installed version of Artleys Knitro")
         }
+        methods = {**simple_methods, **unbounded_methods, **bounded_methods}
 
         # validate the configuration
-        methods = dict(itertools.chain(simple_methods.items(), unbounded_methods.items(), bounded_methods.items()))
         if method not in methods and not callable(method):
-            raise ValueError(f"method must be one of {list(methods.keys())} or a callable object.")
+            raise ValueError(f"method must be one of {list(methods)} or a callable object.")
         if method_options is not None and not isinstance(method_options, dict):
             raise ValueError("method_options must be None or a dict.")
         if method in simple_methods and compute_gradient:
@@ -159,188 +164,205 @@ class Optimization(object):
             raise ValueError(f"compute_gradient must be True when method is '{method}'.")
 
         # initialize class attributes
-        self._method = method
-        self._method_options = {} if method_options is None else method_options.copy()
         self._compute_gradient = compute_gradient
-        self._gradient_description = "with analytic gradients" if compute_gradient else "without analytic gradients"
+        self._universal_display = universal_display
+        self._supports_bounds = callable(method) or method in bounded_methods
+
+        # options are simply passed along to custom methods
         if callable(method):
-            self._method_description = "a custom method"
-            self._supports_bounds = True
-        else:
-            self._method_description = methods[method]
-            self._supports_bounds = method in bounded_methods
+            self._optimizer = method
+            self._method_options = method_options
+            self._description = "a custom method"
+            return
 
-    def __str__(self):
-        """Format the configuration as a string."""
-        return (
-            f"Configured to optimize with {self._method_description}, non-default options {self._method_options}, and "
-            f"{self._gradient_description}."
-        )
-
-    def _optimize(self, objective_function, start_values, bounds, verbose):
-        """Optimize parameters to minimize a scalar objective, either with a custom method, SciPy, or Knitro. Bounds
-        are a list of (lb, ub) tuples and the verbose flag indicates whether default optimization output should be
-        displayed.
-        """
-
-        # ignore bounds for methods that don't support them
-        if not self._supports_bounds:
-            bounds = None
-
-        # define a wrapper for the objective function that normalizes arrays so they work with all types of routines
-        def objective_wrapper(raw_values):
-            raw_values = np.asarray(raw_values)
-            values = raw_values.reshape(start_values.shape).astype(start_values.dtype)
-            if self._compute_gradient:
-                objective, gradient = objective_function(values)
-                return float(objective), gradient.astype(np.float64).flatten()
-            return float(objective_function(values))
-
-        # normalize the starting values and bounds
-        raw_start_values = start_values.astype(np.float64).flatten()
-        raw_bounds = None if bounds is None else [(float(l), float(u)) for l, u in bounds]
-
-        # optimize using a custom method
-        if callable(self._method):
-            raw_optimized_values = self._method(objective_wrapper, raw_start_values, raw_bounds, **self._method_options)
-        elif self._method != 'knitro':
-            # set default SciPy options
-            scipy_options = {'disp': verbose}
-            if verbose and self._method in {'l-bfgs-b', 'slsqp'}:
-                scipy_options['iprint'] = 2
-            scipy_options.update(self._method_options)
-
-            # optimize the wrapper
-            minimize_kwargs = {
-                'method': self._method,
-                'jac': self._compute_gradient,
-                'options': scipy_options
-            }
-            if self._supports_bounds:
-                minimize_kwargs['bounds'] = raw_bounds
-            raw_optimized_values = scipy.optimize.minimize(objective_wrapper, raw_start_values, **minimize_kwargs).x
-        else:
-            # set default Knitro options
-            knitro_options = {
-                'outlev': 4 if verbose else 0,
-                'algorithm': 1,
-                'gradopt': 1 if self._compute_gradient else 2,
+        # identify the non-custom optimizer, configure arguments, and set default options
+        self._method_options = {}
+        unwrapped_optimizer, self._description = methods[method]
+        self._optimizer = functools.partial(unwrapped_optimizer, compute_gradient=compute_gradient)
+        if unwrapped_optimizer == knitro_optimizer:
+            self._method_options.update({
                 'hessopt': 2,
-                'honorbnds': 1
-            }
-            knitro_options.update(self._method_options)
+                'algorithm': 1,
+                'honorbnds': 1,
+                'gradopt': 1 if compute_gradient else 2,
+                'knitro_dir': os.environ.get('KNITRODIR'),
+                'outlev': 4 if not universal_display and options.verbose else 0
+            })
+        else:
+            self._optimizer = functools.partial(self._optimizer, method=method)
+            if not universal_display and options.verbose:
+                self._method_options['disp'] = True
+                if method in {'l-bfgs-b', 'slsqp'}:
+                    self._method_options['iprint'] = 2
 
-            # make sure that the Knitro installation is accessible
-            try:
-                knitro_path = Path(knitro_options.pop('knitro_dir', os.environ.get('KNITRODIR')))
-            except TypeError:
-                raise EnvironmentError(
-                    "Failed to find the KNITRODIR environment variable. Make sure that a supported version of Knitro "
-                    "is properly installed or try specifying the knitro_dir optimization option."
+        # validate options for non-custom methods
+        if not method_options:
+            return
+        self._method_options.update(method_options)
+        if unwrapped_optimizer == knitro_optimizer:
+            knitro_dir = self._method_options.pop('knitro_dir')
+            if not isinstance(knitro_dir, (Path, str)):
+                raise ValueError(
+                    "If specified, the knitro_dir optimization option must point to the Knitro installation directory."
+                    "Otherwise, the KNITRODIR environment variable must be configured."
                 )
             for subdir in ['lib', 'examples/Python']:
-                full_path = knitro_path / subdir
+                full_path = Path(knitro_dir) / subdir
                 if not full_path.is_dir():
                     raise OSError(
                         f"Failed to find the directory '{full_path}'. Make sure a supported version of Knitro is "
-                        f"properly installed and that the KNITRODIR environment variable exists or that knitro_dir "
-                        f"optimization option points to the correct Knitro installation directory."
+                        f"properly installed and that the KNITRODIR environment variable exists. Alternatively, the "
+                        f"knitro_dir optimization option should point to the Knitro installation directory."
                     )
                 sys.path.append(str(full_path))
 
-            # optimize with Knitro
-            knitro = Knitro(objective_wrapper, raw_start_values, raw_bounds, knitro_options, self._compute_gradient)
-            with knitro:
-                raw_optimized_values = knitro.solve()
+    def __str__(self):
+        """Format the configuration as a string."""
+        gradients = "with analytic gradients" if self._compute_gradient else "without analytic gradients"
+        return f"Configured to optimize using {self._description} with options {self._method_options} and {gradients}."
 
-        # convert the raw optimized values to the same data type and shape as the starting values
-        return np.asarray(raw_optimized_values).astype(start_values.dtype).reshape(start_values.shape)
+    def _optimize(self, initial_values, bounds, verbose_objective_function):
+        """Optimize parameters to minimize a scalar objective."""
+
+        # define a callback that counts the number of major iterations
+        def iteration_callback():
+            iteration_callback.iterations += 1
+
+        # define a wrapper for the objective function that normalizes arrays so they work with all types of routines,
+        #   and also counts the number of evaluations
+        def objective_wrapper(raw_values):
+            objective_wrapper.evaluations += 1
+            raw_values = np.asarray(raw_values)
+            values = raw_values.reshape(initial_values.shape).astype(initial_values.dtype)
+            returned = verbose_objective_function(values, iteration_callback.iterations, objective_wrapper.evaluations)
+            if self._compute_gradient:
+                objective, gradient = returned
+                return float(objective), gradient.astype(raw_values.dtype).flatten()
+            return float(returned)
+
+        # initialize the counters and normalize values
+        iteration_callback.iterations = objective_wrapper.evaluations = 0
+        raw_initial_values = initial_values.astype(np.float64).flatten()
+        raw_bounds = [None] * initial_values.size
+        if self._supports_bounds and bounds is not None:
+            raw_bounds = [(float(l), float(u)) for l, u in bounds]
+
+        # solve the problem and convert the raw final values to the same data type and shape as the initial values
+        raw_final_values, converged = self._optimizer(
+            raw_initial_values,
+            raw_bounds,
+            objective_wrapper,
+            iteration_callback,
+            **self._method_options
+        )
+        final_values = np.asarray(raw_final_values).astype(initial_values.dtype).reshape(initial_values.shape)
+        return final_values, converged, iteration_callback.iterations, objective_wrapper.evaluations
 
 
-class Knitro(object):
-    """A wrapper for Artleys Knitro bindings, which minimize a scalar objective. Used in a with statement.
+def scipy_optimizer(initial_values, bounds, objective_function, iteration_callback, method, compute_gradient,
+                    **scipy_options):
+    """Optimize with a SciPy method."""
+    import scipy.optimize
+    results = scipy.optimize.minimize(
+        objective_function,
+        initial_values,
+        method=method,
+        jac=compute_gradient,
+        bounds=bounds,
+        callback=lambda *_: iteration_callback(),
+        options=scipy_options
+    )
+    return results.x, results.success
 
-    Interaction with Knitro is through the knitro module, which has been modified by an import of the knitroNumPy module
-    (both modules are located in the Knitro installation directory) as well as through knitro_context, an instance of
-    knitro.KTR_context.
-    """
 
-    def __init__(self, objective_function, start_values, bounds, knitro_options, compute_gradient):
-        """Import the knitro module, modify it to work with numpy, and initialize optimization settings."""
-        try:
-            import knitro
-        except OSError as exception:
-            if 'Win32' in repr(exception):
-                raise EnvironmentError("Make sure both Knitro and Python are 32- or 64-bit.") from exception
-            raise
+def knitro_optimizer(initial_values, bounds, objective_function, iteration_callback, compute_gradient,
+                     **knitro_options):
+    """Optimize with Knitro."""
+    try:
+        import knitro
+    except OSError as exception:
+        if 'Win32' in repr(exception):
+            raise EnvironmentError("Make sure both Knitro and Python are 32- or 64-bit.") from exception
+        raise
 
-        # modify Knitro to work with numpy
-        import knitroNumPy
-        self.knitro = knitro
-        self.knitro.KTR_array_handler._cIntArray = knitroNumPy._cIntArray
-        self.knitro.KTR_array_handler._cDoubleArray = knitroNumPy._cDoubleArray
-        self.knitro.KTR_array_handler._userArray = knitroNumPy._userArray
-        self.knitro.KTR_array_handler._userToCArray = knitroNumPy._userToCArray
-        self.knitro.KTR_array_handler._cToUserArray = knitroNumPy._cToUserArray
+    # modify Knitro to work with numpy
+    import knitroNumPy
+    knitro.KTR_array_handler._cIntArray = knitroNumPy._cIntArray
+    knitro.KTR_array_handler._cDoubleArray = knitroNumPy._cDoubleArray
+    knitro.KTR_array_handler._userArray = knitroNumPy._userArray
+    knitro.KTR_array_handler._userToCArray = knitroNumPy._userToCArray
+    knitro.KTR_array_handler._cToUserArray = knitroNumPy._cToUserArray
 
-        # wrap the objective with a function that caches its output
-        self.last_values = self.last_objective = self.last_gradient = None
-        def cache_objective(values):
-            self.last_values = values
-            if compute_gradient:
-                self.last_objective, self.last_gradient = objective_function(values)
-            else:
-                self.last_objective = objective_function(values)
-                self.last_gradient = None
-
-        # initialize other class attributes
-        self.cache_objective = cache_objective
-        self.start_values = start_values
-        self.lower_bounds = np.array([b[0] if np.isfinite(b[0]) else -self.knitro.KTR_INFBOUND for b in bounds])
-        self.upper_bounds = np.array([b[1] if np.isfinite(b[1]) else +self.knitro.KTR_INFBOUND for b in bounds])
-        self.knitro_options = knitro_options
-        self.compute_gradient = compute_gradient
-        self.knitro_context = None
-        self.last_call = None
-
-    def __enter__(self):
-        """Initialize the Knitro context and configure Knitro settings."""
-        self.knitro_context = self.knitro.KTR_new()
-        if not self.knitro_context:
+    # create the Knitro context and attempt to free it if anything goes wrong
+    knitro_context = None
+    try:
+        knitro_context = knitro.KTR_new()
+        if not knitro_context:
             raise RuntimeError(
                 "Failed to find a Knitro license. Make sure that Knitro is properly installed. You may have to create "
-                "the environment variable ARTELYS_LICENSE and set it to the directory holding you license file."
+                "the environment variable ARTELYS_LICENSE and set it to the location of the directory with the license "
+                "file."
             )
 
-        # set Knitro parameters
-        for key, value in self.knitro_options.items():
-            set_parameter = self.knitro.KTR_set_param_by_name
-            if isinstance(value, str):
-                set_parameter = self.knitro.KTR_set_char_param_by_name
-            code = set_parameter(self.knitro_context, key, value)
+        # define a function that handles requests to compute either the objective or its gradient, which are cached
+        def combined_callback(*args):
+            request_code, values, objective_store, gradient_store = (args[i] for i in [0, 5, 7, 9])
+
+            # compute the objective or used cached values
+            if combined_callback.cache is not None and np.array_equal(values, combined_callback.cache[0]):
+                combined = combined_callback.cache[1]
+            else:
+                combined = objective_function(values)
+                combined_callback.cache = (values.copy(), combined)
+
+            # extract the objective and its gradient
+            objective, gradient = combined if compute_gradient else (combined, None)
+
+            # handle request codes
+            if request_code == knitro.KTR_RC_EVALFC:
+                objective_store[:] = objective
+                return knitro.KTR_RC_BEGINEND
+            if request_code == knitro.KTR_RC_EVALGA:
+                gradient_store[:] = gradient
+                return knitro.KTR_RC_BEGINEND
+            return knitro.KTR_RC_CALLBACK_ERR
+
+        # initialize an empty cache
+        combined_callback.cache = None
+
+        # configure Knitro callbacks
+        callback_mapping = {
+            knitro.KTR_set_newpt_callback: lambda *_: iteration_callback(),
+            knitro.KTR_set_func_callback: combined_callback,
+            knitro.KTR_set_grad_callback: combined_callback
+        }
+        for set_callback, callback in callback_mapping.items():
+            code = set_callback(knitro_context, callback)
             if code != 0:
-                raise RuntimeError(f"Encountered error code {code} setting the Knitro parameter '{key}'.")
+                raise RuntimeError(f"Encountered error code {code} when registering {set_callback.__name__}.")
 
-        # set Knitro callbacks
-        code = self.knitro.KTR_set_func_callback(self.knitro_context, self.objective_callback)
-        if code != 0:
-            raise RuntimeError(f"Encountered error code {code} registering the Knitro objective callback.")
-        code = self.knitro.KTR_set_grad_callback(self.knitro_context, self.gradient_callback)
-        if code != 0:
-            raise RuntimeError(f"Encountered error code {code} registering the Knitro gradient callback.")
+        # configure Knitro parameters
+        for key, value in knitro_options.items():
+            set_parameter = knitro.KTR_set_param_by_name
+            if isinstance(value, str):
+                set_parameter = knitro.KTR_set_char_param_by_name
+            code = set_parameter(knitro_context, key, value)
+            if code != 0:
+                raise RuntimeError(f"Encountered error code {code} when configuring '{key}'.")
 
-        # initialize the problem while ignoring noisy warnings
+        # initialize the problem
+        bounds = bounds or [None] * initial_values.size
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
-            code = self.knitro.KTR_init_problem(
-                kc=self.knitro_context,
-                n=self.start_values.size,
-                xInitial=self.start_values,
+            code = knitro.KTR_init_problem(
+                kc=knitro_context,
+                n=initial_values.size,
+                xInitial=initial_values,
                 lambdaInitial=None,
-                objGoal=self.knitro.KTR_OBJGOAL_MINIMIZE,
-                objType=self.knitro.KTR_OBJTYPE_GENERAL,
-                xLoBnds=self.lower_bounds,
-                xUpBnds=self.upper_bounds,
+                objGoal=knitro.KTR_OBJGOAL_MINIMIZE,
+                objType=knitro.KTR_OBJTYPE_GENERAL,
+                xLoBnds=np.array([b[0] if np.isfinite(b[0]) else -knitro.KTR_INFBOUND for b in bounds]),
+                xUpBnds=np.array([b[1] if np.isfinite(b[1]) else +knitro.KTR_INFBOUND for b in bounds]),
                 cType=None,
                 cLoBnds=None,
                 cUpBnds=None,
@@ -350,25 +372,16 @@ class Knitro(object):
                 hessIndexCols=None
             )
         if code != 0:
-            raise RuntimeError(f"Encountered error code {code} initializing the Knitro problem solver.")
-        return self
+            raise RuntimeError(f"Encountered error code {code} when initializing the Knitro problem solver.")
 
-    def __exit__(self, *_):
-        """Attempt to free the Knitro process."""
-        try:
-            self.knitro.KTR_free(self.knitro_context)
-        except:
-            pass
-
-    def solve(self):
-        """Use the initialized and configured Knitro context to solve the optimization problem."""
-        values = np.zeros_like(self.start_values)
+        # solve the problem
+        values_store = np.zeros_like(initial_values)
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
-            return_code = self.knitro.KTR_solve(
-                kc=self.knitro_context,
-                x=values,
-                lambda_=np.zeros_like(self.start_values),
+            return_code = knitro.KTR_solve(
+                kc=knitro_context,
+                x=values_store,
+                lambda_=np.zeros_like(initial_values),
                 evalStatus=0,
                 obj=np.array([0]),
                 c=None,
@@ -381,28 +394,9 @@ class Knitro(object):
 
         # Knitro was only successful if its return code was 0 (final solution satisfies the termination conditions for
         #   verifying optimality) or between -100 and -199 (a feasible approximate solution was found)
-        if return_code < -199:
-            raise RuntimeError(f"Knitro failed to solve the problem. Knitro return code: {return_code}.")
-        return values
-
-    def objective_callback(self, *args):
-        """Cache a call to the objective function and updates the objective value. A Knitro status code is returned."""
-        request_code, values, objective = args[0], args[5], args[7]
-        if request_code != self.knitro.KTR_RC_EVALFC:
-            return self.knitro.KTR_RC_CALLBACK_ERR
-        self.cache_objective(values)
-        objective[:] = self.last_objective
-        return self.knitro.KTR_RC_BEGINEND
-
-    def gradient_callback(self, *args):
-        """Update the gradient. If parameter values are different from the ones last passed to the objective function,
-        cache a call to the objective function with the new parameter values. A Knitro status code is returned.
-        """
-        request_code, values, gradient = args[0], args[5], args[9]
-        if request_code != self.knitro.KTR_RC_EVALGA:
-            return self.knitro.KTR_RC_CALLBACK_ERR
-        if self.compute_gradient:
-            if self.last_gradient is None or not np.array_equal(values, self.last_values):
-                self.cache_objective(values)
-            gradient[:] = self.last_gradient
-        return self.knitro.KTR_RC_BEGINEND
+        return values_store, return_code > -200
+    finally:
+        try:
+            knitro.KTR_free(knitro_context)
+        except:
+            pass

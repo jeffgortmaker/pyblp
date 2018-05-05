@@ -187,8 +187,8 @@ class Problem(object):
             self.MS = 0
 
     def solve(self, sigma, pi=None, sigma_bounds=None, pi_bounds=None, delta=None, WD=None, WS=None, steps=2,
-              optimization=None, universal_display=True, error_behavior='revert', error_punishment=1, iteration=None,
-              linear_fp=True, linear_costs=True, center_moments=True, se_type='robust', processes=1):
+              optimization=None, error_behavior='revert', error_punishment=1, iteration=None, linear_fp=True,
+              linear_costs=True, center_moments=True, se_type='robust', processes=1):
         r"""Solve the problem.
 
         Parameters
@@ -250,11 +250,6 @@ class Problem(object):
             :class:`Optimization` configuration for how to solve the optimization problem in each GMM step. By default,
             ``Optimization('l-bfgs-b')`` is used. Routines that do not support bounds will ignore `sigma_bounds` and
             `pi_bounds`. Choosing a routine that does not use analytic gradients will slow down estimation.
-        universal_display : `bool, optional`
-            Whether to format optimization progress such that the display looks similar for all `optimization` routines.
-            Specifically, information will be displayed for each objective evaluation. If this is ``False``, the default
-            display for the routine configured by `optimization` will be used. Default displays may contain some extra
-            information, but compared to other output will look very different.
         error_behavior : `str, optional`
             How to handle errors when computing the objective. For example, it is common to encounter overflow when
             computing :math:`\delta(\hat{\theta})` at a large :math:`\hat{\theta}`. The following behaviors are
@@ -309,7 +304,7 @@ class Problem(object):
                   are optimal.
 
         processes : `int, optional`
-            The number of Python processes that will be used during estimation. By default, multiprocessing will not be
+            Number of Python processes that will be used during estimation. By default, multiprocessing will not be
             used. For values greater than one, a pool of that many Python processes will be created during each
             iteration of the optimization routine. Market-by-market computation of :math:`\delta(\hat{\theta})` and
             its Jacobian will be distributed among these processes. Using multiprocessing will only improve estimation
@@ -406,52 +401,59 @@ class Problem(object):
                 linear_costs, linear_fp, processes
             )
 
-            # define the objective function for the optimization routine, which will also store optimization progress
-            def objective_function(new_theta):
-                info = compute_step_info(new_theta, objective_function.last_info, optimization._compute_gradient)
-                objective_function.objective_evaluations += 1
-                objective_function.contraction_iteration_mappings.append(info.contraction_iteration_mapping)
-                objective_function.contraction_evaluation_mappings.append(info.contraction_evaluation_mapping)
-                if universal_display:
+            # define the objective function for the optimization routine, which also outputs progress updates
+            def wrapper(new_theta, current_iterations, current_evaluations):
+                info = wrapper.cache = compute_step_info(new_theta, wrapper.cache, optimization._compute_gradient)
+                wrapper.iteration_mappings.append(info.iteration_mapping)
+                wrapper.evaluation_mappings.append(info.evaluation_mapping)
+                if optimization._universal_display:
                     output(info.format_progress(
                         step,
-                        objective_function.objective_evaluations,
-                        objective_function.smallest_objective
+                        current_iterations,
+                        current_evaluations,
+                        wrapper.smallest_objective,
+                        wrapper.smallest_gradient_norm
                     ))
-                objective_function.smallest_objective = min(objective_function.smallest_objective, info.objective)
-                objective_function.last_info = info
+                wrapper.smallest_objective = min(wrapper.smallest_objective, info.objective)
+                wrapper.smallest_gradient_norm = min(wrapper.smallest_gradient_norm, info.gradient_norm)
                 return (info.objective, info.gradient) if optimization._compute_gradient else info.objective
 
             # initialize optimization progress
-            objective_function.objective_evaluations = 0
-            objective_function.contraction_iteration_mappings = []
-            objective_function.contraction_evaluation_mappings = []
-            objective_function.smallest_objective = np.inf
-            objective_function.last_info = ObjectiveInfo(
-                self, parameter_info, WD, WS, theta, delta, jacobian, tilde_costs
-            )
+            wrapper.iteration_mappings = []
+            wrapper.evaluation_mappings = []
+            wrapper.smallest_objective = wrapper.smallest_gradient_norm = np.inf
+            wrapper.cache = ObjectiveInfo(self, parameter_info, WD, WS, theta, delta, jacobian, tilde_costs)
 
             # optimize theta
             output(f"Starting optimization for step {step} out of {steps} ...")
             output("")
             start_time = time.time()
             bounds = [p.bounds for p in parameter_info.unfixed]
-            verbose = options.verbose and not universal_display
-            theta = optimization._optimize(objective_function, theta, bounds, verbose=verbose)
+            theta, converged, iterations, evaluations = optimization._optimize(theta, bounds, wrapper)
+            status = "completed" if converged else "failed"
             end_time = time.time()
             output("")
-            output(f"Completed optimization for step {step} after {output.format_seconds(end_time - start_time)}.")
+            output(f"Optimization for step {step} {status} after {output.format_seconds(end_time - start_time)}.")
+
+            # handle convergence problems
+            if not converged:
+                if error_behavior == 'raise':
+                    raise exceptions.ThetaConvergenceError()
+                output("")
+                output(exceptions.ThetaConvergenceError)
+                output("")
 
             # use objective information computed at the optimal theta to compute results for the step
             output(f"Computing results for step {step} ...")
-            step_info = compute_step_info(theta, objective_function.last_info, compute_gradient=True)
+            step_info = compute_step_info(theta, wrapper.cache, compute_gradient=True)
             results = step_info.to_results(
                 last_results,
                 start_time,
                 end_time,
-                objective_function.objective_evaluations,
-                objective_function.contraction_iteration_mappings,
-                objective_function.contraction_evaluation_mappings,
+                iterations,
+                evaluations,
+                wrapper.iteration_mappings,
+                wrapper.evaluation_mappings,
                 center_moments,
                 se_type
             )
@@ -579,8 +581,8 @@ class Problem(object):
 
         # structure the objective information
         return ObjectiveInfo(
-            self, parameter_info, WD, WS, theta, delta, jacobian, tilde_costs, beta, gamma, xi,
-            omega, objective, gradient, iteration_mapping, evaluation_mapping
+            self, parameter_info, WD, WS, theta, delta, jacobian, tilde_costs, beta, gamma, xi, omega, objective,
+            gradient, iteration_mapping, evaluation_mapping
         )
 
 
@@ -824,8 +826,7 @@ class ObjectiveInfo(object):
     """Structured information about a completed iteration of the optimization routine."""
 
     def __init__(self, problem, parameter_info, WD, WS, theta, delta, jacobian, tilde_costs, beta=None, gamma=None,
-                 xi=None, omega=None, objective=None, gradient=None, contraction_iteration_mapping=None,
-                 contraction_evaluation_mapping=None):
+                 xi=None, omega=None, objective=None, gradient=None, iteration_mapping=None, evaluation_mapping=None):
         """Initialize objective information. Optional parameters will not be specified when preparing for the first
         objective evaluation.
         """
@@ -843,47 +844,54 @@ class ObjectiveInfo(object):
         self.omega = omega
         self.objective = objective
         self.gradient = gradient
-        self.contraction_iteration_mapping = contraction_iteration_mapping
-        self.contraction_evaluation_mapping = contraction_evaluation_mapping
+        self.iteration_mapping = iteration_mapping
+        self.evaluation_mapping = evaluation_mapping
+        self.gradient_norm = np.nan if gradient is None else np.abs(gradient).max()
 
-    def format_progress(self, step, objective_evaluations, smallest_objective):
+    def format_progress(self, step, current_iterations, current_evaluations, smallest_objective,
+                        smallest_gradient_norm):
         """Format optimization progress as a string. The first iteration will include the progress table header. The
         smallest_objective is the smallest objective value encountered so far during optimization.
         """
         lines = []
-        header1 = ["GMM", "Objective", "Contraction", "Contraction", "Objective", "Objective", "Largest Gradient"]
-        header2 = ["Step", "Evaluations", "Iterations", "Evaluations", "Value", "Improvement", "Magnitude"]
-        widths = [max(len(k1), len(k2)) for k1, k2 in list(zip(header1, header2))[:4]]
-        widths.extend([max(len(k1), len(k2), options.digits + 6) for k1, k2 in list(zip(header1, header2))[4:]])
+        header = [
+            ("GMM", "Step"), ("Optimization", "Iterations"), ("Objective", "Evaluations"),
+            ("Fixed Point", "Iterations"), ("Contraction", "Evaluations"), ("Objective", "Value"),
+            ("Objective", "Improvement"), ("Gradient", "Infinity Norm"), ("Gradient", "Improvement")
+        ]
+        widths = [max(len(k1), len(k2), options.digits + 6 if i > 4 else 0) for i, (k1, k2) in enumerate(header)]
         formatter = output.table_formatter(widths)
 
         # if this is the first iteration, include the header
-        if objective_evaluations == 1:
-            lines.extend([formatter(header1), formatter(header2), formatter.lines()])
+        if current_evaluations == 1:
+            lines.extend([
+                formatter([k[0] for k in header]),
+                formatter([k[1] for k in header]),
+                formatter.lines()
+            ])
 
         # include the progress update
-        improved = np.isfinite(smallest_objective) and self.objective < smallest_objective
+        objective_improved = np.isfinite(smallest_objective) and self.objective < smallest_objective
+        gradient_improved = np.isfinite(smallest_gradient_norm) and self.gradient_norm < smallest_gradient_norm
         lines.append(formatter([
             step,
-            objective_evaluations,
-            sum(self.contraction_iteration_mapping.values()),
-            sum(self.contraction_evaluation_mapping.values()),
+            current_iterations,
+            current_evaluations,
+            sum(self.iteration_mapping.values()),
+            sum(self.evaluation_mapping.values()),
             output.format_number(self.objective),
-            output.format_number(smallest_objective - self.objective) if improved else "",
-            output.format_number(None if self.gradient is None else np.abs(self.gradient).max())
+            output.format_number(smallest_objective - self.objective) if objective_improved else "",
+            output.format_number(self.gradient_norm),
+            output.format_number(smallest_gradient_norm - self.gradient_norm) if gradient_improved else "",
         ]))
 
         # combine the lines into one string
         return "\n".join(lines)
 
-    def to_results(self, last_results, start_time, end_time, objective_evaluations, contraction_iteration_mappings,
-                   contraction_evaluation_mappings, center_moments, se_type):
+    def to_results(self, *args):
         """Convert this information about an iteration of the optimization routine into full results."""
         from .results import Results
-        return Results(
-            self, last_results, start_time, end_time, objective_evaluations, contraction_iteration_mappings,
-            contraction_evaluation_mappings, center_moments, se_type
-        )
+        return Results(self, *args)
 
 
 class ProblemMarket(Market):
@@ -914,11 +922,11 @@ class ProblemMarket(Market):
             if linear_fp:
                 log_shares = log(self.products.shares)
                 contraction = lambda d: d + log_shares - log(self.compute_probabilities(d) @ self.agents.weights)
-                delta, converged, iterations, evaluations = iteration._iterate(contraction, initial_delta)
+                delta, converged, iterations, evaluations = iteration._iterate(initial_delta, contraction)
             else:
                 compute_probabilities = functools.partial(self.compute_probabilities, mu=np.exp(self.mu), linear=False)
                 contraction = lambda d: d * self.products.shares / (compute_probabilities(d) @ self.agents.weights)
-                exp_delta, converged, iterations, evaluations = iteration._iterate(contraction, np.exp(initial_delta))
+                exp_delta, converged, iterations, evaluations = iteration._iterate(np.exp(initial_delta), contraction)
                 delta = log(exp_delta)
 
             # identify whether the fixed point converged

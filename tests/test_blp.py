@@ -30,7 +30,6 @@ def test_accuracy(simulated_problem, solve_options):
 
 @pytest.mark.usefixtures('simulated_problem')
 @pytest.mark.parametrize(['solve_options1', 'solve_options2'], [
-    pytest.param({'universal_display': True}, {'universal_display': False}, id="universal and non-universal displays"),
     pytest.param({'processes': 1}, {'processes': 2}, id="single process and multiprocessing")
 ])
 def test_trivial_changes(simulated_problem, solve_options1, solve_options2):

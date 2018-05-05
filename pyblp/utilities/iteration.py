@@ -20,12 +20,12 @@ class Iteration(object):
 
         Also accepted is a custom callable method with the following form::
 
-            method(contraction, initial, callback, **options) -> (final, converged)
+            method(initial, contraction, callback, **options) -> (final, converged)
 
-        where `contraction` is a callable contraction mapping, `initial` is an array of initial values, `callback` is
-        a function that should be called without any arguments after each major iteration (it is used to record the
-        number of major iterations), `options` are specified below, `final` is an array of final values, and `converged`
-        is a flag for whether the routine converged.
+        where `initial` is an array of initial values, `contraction` is a callable contraction mapping, `callback` is a
+        function that should be called without any arguments after each major iteration (it is used to record the number
+        of major iterations), `options` are specified below, `final` is an array of final values, and `converged` is a
+        flag for whether the routine converged.
 
     method_options : `dict, optional`
         Options for the fixed point iteration routine. Both non-custom routines support the following options:
@@ -70,7 +70,7 @@ class Iteration(object):
 
     .. ipython:: python
 
-       def custom_method(contraction, initial, callback, max_evaluations, tol, norm):
+       def custom_method(initial, contraction, callback, max_evaluations, tol, norm):
            evaluations = 1
            x = contraction(initial)
            while evaluations < max_evaluations and norm(x) < tol:
@@ -91,8 +91,8 @@ class Iteration(object):
     def __init__(self, method, method_options=None):
         """Validate the method and configure default options."""
         methods = {
-            'squarem': (squarem, "the SQUAREM acceleration method"),
-            'simple': (simple, "no acceleration")
+            'squarem': (squarem_iterator, "the SQUAREM acceleration method"),
+            'simple': (simple_iterator, "no acceleration")
         }
 
         # validate the configuration
@@ -115,7 +115,7 @@ class Iteration(object):
             'max_evaluations': 10000,
             'norm': np.linalg.norm
         }
-        if self._iterator == squarem:
+        if self._iterator == squarem_iterator:
             self._method_options.update({
                 'scheme': 3,
                 'step_min': 1.0,
@@ -136,7 +136,7 @@ class Iteration(object):
             raise ValueError("The iteration option max_evaluations must be a positive integer.")
         if not callable(self._method_options['norm']):
             raise ValueError("The iteration option norm must be callable.")
-        if self._iterator == squarem:
+        if self._iterator == squarem_iterator:
             if self._method_options['scheme'] not in {1, 2, 3}:
                 raise ValueError("The iteration option scheme must be 1, 2, or 3.")
             if not isinstance(self._method_options['step_min'], float):
@@ -153,37 +153,37 @@ class Iteration(object):
         strings = {k: f'{v.__module__}.{v.__qualname__}' if callable(v) else v for k, v in self._method_options.items()}
         return f"Configured to iterate using {self._description} with options {strings}."
 
-    def _iterate(self, contraction, start_values):
+    def _iterate(self, initial_values, contraction):
         """Solve a fixed point iteration problem."""
+
+        # define a callback, which counts the number of major iterations
+        def iteration_callback():
+            iteration_callback.iterations += 1
 
         # define a wrapper for the contraction, which normalizes arrays so they work with all types of routines, and
         #   also counts the total number of contraction evaluations
         def contraction_wrapper(raw_values):
             contraction_wrapper.evaluations += 1
             raw_values = np.asarray(raw_values)
-            values = raw_values.reshape(start_values.shape).astype(start_values.dtype)
+            values = raw_values.reshape(initial_values.shape).astype(initial_values.dtype)
             return np.asarray(contraction(values)).astype(np.float64).reshape(raw_values.shape)
 
-        # define a callback, which counts the number of major iterations
-        def callback():
-            callback.iterations += 1
-
         # initialize the counters and normalize the starting values
-        callback.iterations = contraction_wrapper.evaluations = 0
-        raw_start_values = start_values.astype(np.float64).flatten()
+        iteration_callback.iterations = contraction_wrapper.evaluations = 0
+        raw_initial_values = initial_values.astype(np.float64).flatten()
 
         # solve the problem and convert the raw final values to the same data type and shape as the initial values
         raw_final_values, converged = self._iterator(
+            raw_initial_values,
             contraction_wrapper,
-            raw_start_values,
-            callback,
+            iteration_callback,
             **self._method_options
         )
-        final_values = np.asarray(raw_final_values).reshape(start_values.shape).astype(start_values.dtype)
-        return final_values, converged, callback.iterations, contraction_wrapper.evaluations
+        final_values = np.asarray(raw_final_values).reshape(initial_values.shape).astype(initial_values.dtype)
+        return final_values, converged, iteration_callback.iterations, contraction_wrapper.evaluations
 
 
-def squarem(contraction, x, callback, max_evaluations, tol, norm, scheme, step_min, step_max, step_factor):
+def squarem_iterator(x, contraction, iteration_callback, max_evaluations, tol, norm, scheme, step_min, step_max, step_factor):
     """Apply the SQUAREM acceleration method for fixed point iteration. The fixed point array and a flag for whether the
     routine converged are both returned.
     """
@@ -226,7 +226,7 @@ def squarem(contraction, x, callback, max_evaluations, tol, norm, scheme, step_m
             x3, x = x, contraction(x)
 
         # record the completion of a major iteration
-        callback()
+        iteration_callback()
 
         # revert to the last evaluation if there were errors
         if not np.isfinite(x).all():
@@ -242,7 +242,7 @@ def squarem(contraction, x, callback, max_evaluations, tol, norm, scheme, step_m
     return x, evaluations < max_evaluations
 
 
-def simple(contraction, x, callback, max_evaluations, tol, norm):
+def simple_iterator(x, contraction, iteration_callback, max_evaluations, tol, norm):
     """Perform simple fixed point iteration with no acceleration. The fixed point array and a flag for whether the
     routine converged are both returned.
     """
@@ -250,7 +250,7 @@ def simple(contraction, x, callback, max_evaluations, tol, norm):
     while True:
         # for simple iteration, a contraction evaluation is the same as a major iteration
         x0, x = x, contraction(x)
-        callback()
+        iteration_callback()
         evaluations += 1
         if evaluations >= max_evaluations or not np.isfinite(x).all() or norm(x - x0) < tol:
             break

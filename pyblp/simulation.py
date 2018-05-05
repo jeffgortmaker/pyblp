@@ -395,7 +395,7 @@ class Simulation(object):
                   starting prices and their associated shares.
 
         processes : `int, optional`
-            The number of Python processes that will be used during computation. By default, multiprocessing will not be
+            Number of Python processes that will be used during computation. By default, multiprocessing will not be
             used. For values greater than one, a pool of that many Python processes will be created. Market-by-market
             computation of prices and shares and its Jacobian will be distributed among these processes. Using
             multiprocessing will only improve computation speed if gains from parallelization outweigh overhead from
@@ -501,7 +501,7 @@ class SimulationMarket(Market):
             ownership = self.get_ownership_matrix(firms_index)
             jacobian = self.compute_utilities_by_prices_jacobian()
             contraction = lambda p: costs + self.compute_zeta(ownership, jacobian, costs, p)
-            prices, converged, iterations, evaluations = iteration._iterate(contraction, initial_prices)
+            prices, converged, iterations, evaluations = iteration._iterate(initial_prices, contraction)
 
             # store whether the fixed point converged
             if not converged:
