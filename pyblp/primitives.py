@@ -399,7 +399,7 @@ class Market(object):
             shares = probabilities @ self.agents.weights
         shares_jacobian = self.compute_shares_by_characteristic_jacobian(utilities_jacobian, probabilities)
         try:
-            return -scipy.linalg.inv(ownership * shares_jacobian) @ shares
+            return -scipy.linalg.solve(ownership * shares_jacobian, shares)
         except ValueError:
             return np.full_like(shares, np.nan)
 
