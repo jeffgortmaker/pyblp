@@ -101,6 +101,9 @@ class Iteration(object):
         if method_options is not None and not isinstance(method_options, dict):
             raise ValueError("method_options must be None or a dict.")
 
+        # replace missing options with a dict
+        method_options = method_options or {}
+
         # options are simply passed along to custom methods
         if callable(method):
             self._iterator = method
@@ -124,8 +127,6 @@ class Iteration(object):
             })
 
         # validate options for non-custom methods
-        if not method_options:
-            return
         invalid = [k for k in method_options if k not in self._method_options]
         if invalid:
             raise KeyError(f"The following are not valid iteration options: {invalid}.")

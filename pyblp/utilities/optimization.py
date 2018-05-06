@@ -60,7 +60,7 @@ class Optimization(object):
         routine converged.
 
         To simply evaluate a problem's objective at the initial parameter values, the trivial custom method
-        ``lambda i, *_: i`` can be used.
+        ``lambda x, *_: (x, True)`` can be used.
 
     method_options : `dict, optional`
         Options for the optimization routine.
@@ -168,6 +168,9 @@ class Optimization(object):
         self._universal_display = universal_display
         self._supports_bounds = callable(method) or method in bounded_methods
 
+        # replace missing options with a dict
+        method_options = method_options or {}
+
         # options are simply passed along to custom methods
         if callable(method):
             self._optimizer = method
@@ -196,8 +199,6 @@ class Optimization(object):
                     self._method_options['iprint'] = 2
 
         # validate options for non-custom methods
-        if not method_options:
-            return
         self._method_options.update(method_options)
         if unwrapped_optimizer == knitro_optimizer:
             knitro_dir = self._method_options.pop('knitro_dir')
@@ -243,9 +244,7 @@ class Optimization(object):
         # initialize the counters and normalize values
         iteration_callback.iterations = objective_wrapper.evaluations = 0
         raw_initial_values = initial_values.astype(np.float64).flatten()
-        raw_bounds = [None] * initial_values.size
-        if self._supports_bounds and bounds is not None:
-            raw_bounds = [(float(l), float(u)) for l, u in bounds]
+        raw_bounds = None if bounds is None or not self._supports_bounds else [(float(l), float(u)) for l, u in bounds]
 
         # solve the problem and convert the raw final values to the same data type and shape as the initial values
         raw_final_values, converged = self._optimizer(

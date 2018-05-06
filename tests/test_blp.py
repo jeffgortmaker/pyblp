@@ -191,7 +191,6 @@ def test_second_step(simulated_problem):
 @pytest.mark.usefixtures('simulated_problem')
 @pytest.mark.parametrize('scipy_method', [
     pytest.param('l-bfgs-b', id="L-BFGS-B"),
-    pytest.param('tnc', id="TNC"),
     pytest.param('slsqp', id="SLSQP")
 ])
 def test_gradient_optionality(simulated_problem, scipy_method):
@@ -201,7 +200,10 @@ def test_gradient_optionality(simulated_problem, scipy_method):
     simulation, problem, _ = simulated_problem
 
     # define a custom optimization method that doesn't use gradients
-    custom_method = lambda f, i, b: scipy.optimize.minimize(lambda x: f(x)[0], i, method=scipy_method, bounds=b).x
+    def custom_method(initial, bounds, objective_function, _):
+        wrapper = lambda x: objective_function(x)[0]
+        results = scipy.optimize.minimize(wrapper, initial, method=scipy_method, bounds=bounds)
+        return results.x, results.success
 
     # solve the problem when not using gradients and when not computing them
     optimization1 = Optimization(custom_method)
@@ -346,7 +348,8 @@ def test_objective_gradient(simulated_problem, solve_options):
     simulation, problem, _ = simulated_problem
 
     # define a custom optimization routine that tests central finite differences around starting parameter values
-    def test_finite_differences(objective_function, theta, *_):
+    def test_finite_differences(*args):
+        theta, _, objective_function, _ = args
         objective, exact = objective_function(theta)
         estimated = np.zeros_like(exact)
         change = 0.005 * objective
@@ -357,7 +360,7 @@ def test_objective_gradient(simulated_problem, solve_options):
             theta2[index] -= change / 2
             estimated[index] = (objective_function(theta1)[0] - objective_function(theta2)[0]) / change
         np.testing.assert_allclose(exact, estimated, atol=0, rtol=0.05)
-        return theta
+        return theta, True
 
     # test the gradient at parameter values slightly different from the true ones so that the objective is sizable
     problem.solve(
@@ -377,7 +380,7 @@ def test_knittel_metaxoglou_2014(knittel_metaxoglou_2014):
         knittel_metaxoglou_2014.get('initial_sigma'),
         knittel_metaxoglou_2014.get('initial_pi'),
         optimization=Optimization('knitro', {'opttol': 1e-8, 'xtol': 1e-8}),
-        iteration=Iteration('simple', {'tol': 1e-12, 'iterations': 100000, 'norm': lambda x: np.abs(x).max()}),
+        iteration=Iteration('simple', {'max_evaluations': 100000, 'tol': 1e-12, 'norm': lambda x: np.abs(x).max()}),
         steps=1
     )
 
