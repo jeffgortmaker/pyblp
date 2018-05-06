@@ -303,9 +303,16 @@ def knitro_optimizer(initial_values, bounds, objective_function, iteration_callb
                 "file."
             )
 
-        # define a function that handles requests to compute either the objective or its gradient, which are cached
+        # define a function that handles requests to compute either the objective or its gradient (which are cached for
+        #   when the next request is for the same values) and calls the iteration callback when there's a new iteration
         def combined_callback(*args):
             request_code, values, objective_store, gradient_store = (args[i] for i in [0, 5, 7, 9])
+
+            # call the iteration callback if this is a new iteration
+            iterations = knitro.KTR_get_number_iters(knitro_context)
+            while combined_callback.iterations < iterations:
+                iteration_callback()
+                combined_callback.iterations += 1
 
             # compute the objective or used cached values
             if combined_callback.cache is not None and np.array_equal(values, combined_callback.cache[0]):
@@ -326,12 +333,12 @@ def knitro_optimizer(initial_values, bounds, objective_function, iteration_callb
                 return knitro.KTR_RC_BEGINEND
             return knitro.KTR_RC_CALLBACK_ERR
 
-        # initialize an empty cache
+        # initialize an empty cache and the counter
         combined_callback.cache = None
+        combined_callback.iterations = 0
 
         # configure Knitro callbacks
         callback_mapping = {
-            knitro.KTR_set_newpt_callback: lambda *_: iteration_callback(),
             knitro.KTR_set_func_callback: combined_callback,
             knitro.KTR_set_grad_callback: combined_callback
         }
