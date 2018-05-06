@@ -188,6 +188,7 @@ def squarem_iterator(x, contraction, iteration_callback, max_evaluations, tol, n
     """Apply the SQUAREM acceleration method for fixed point iteration. The fixed point array and a flag for whether the
     routine converged are both returned.
     """
+
     evaluations = 0
     while True:
         # first step
@@ -240,7 +241,7 @@ def squarem_iterator(x, contraction, iteration_callback, max_evaluations, tol, n
             break
 
     # determine whether there was convergence
-    return x, evaluations < max_evaluations
+    return x, evaluations < max_evaluations and np.isfinite(x).all()
 
 
 def simple_iterator(x, contraction, iteration_callback, max_evaluations, tol, norm):
@@ -257,4 +258,4 @@ def simple_iterator(x, contraction, iteration_callback, max_evaluations, tol, no
             break
 
     # determine whether there was convergence
-    return x, evaluations < max_evaluations
+    return x, evaluations < max_evaluations and np.isfinite(x).all()
