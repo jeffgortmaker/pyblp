@@ -120,7 +120,7 @@ class Results(object):
         """Compute estimated standard errors and update weighting matrices."""
 
         # initialize values from the objective information
-        self._parameter_info = objective_info.parameter_info
+        self._theta_info = objective_info.theta_info
         self.problem = objective_info.problem
         self.WD = objective_info.WD
         self.WS = objective_info.WS
@@ -136,14 +136,14 @@ class Results(object):
         self.gradient_norm = objective_info.gradient_norm
 
         # expand the nonlinear parameters and their gradient
-        self.sigma, self.pi = self._parameter_info.expand(self.theta, fill_fixed=True)
-        self.sigma_gradient, self.pi_gradient = self._parameter_info.expand(self.gradient)
+        self.sigma, self.pi = self._theta_info.expand(self.theta, fill_fixed=True)
+        self.sigma_gradient, self.pi_gradient = self._theta_info.expand(self.gradient)
 
         # compute demand-side standard errors and update the demand-side weighting matrix
         GD = self.problem.products.ZD.T @ np.c_[self.problem.products.X1, self.jacobian]
         demand_se = self._compute_se(self.xi, self.problem.products.ZD, self.WD, GD, se_type, "demand")
         self.beta_se = demand_se[:self.beta.size]
-        self.sigma_se, self.pi_se = self._parameter_info.expand(demand_se[self.beta.size:])
+        self.sigma_se, self.pi_se = self._theta_info.expand(demand_se[self.beta.size:])
         self.updated_WD = self._compute_W(self.xi, self.problem.products.ZD, center_moments, "demand")
 
         # compute supply-side standard errors and update the supply-side weighting matrix
@@ -243,7 +243,7 @@ class Results(object):
         # construct a section containing nonlinear estimates
         sections.append([
             "Nonlinear Parameter Estimates (SEs in Parentheses)",
-            self._parameter_info.format_matrices(self.sigma, self.pi, self.sigma_se, self.pi_se)
+            self._theta_info.format_matrices(self.sigma, self.pi, self.sigma_se, self.pi_se)
         ])
 
         # combine the sections into one string

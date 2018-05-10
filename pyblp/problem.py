@@ -346,11 +346,11 @@ class Problem(object):
         output(f"Processes: {processes}.")
 
         # compress sigma and pi into theta but retain information about the original matrices
-        parameter_info = ParameterInfo(self, sigma, pi, sigma_bounds, pi_bounds, optimization._supports_bounds)
-        theta = parameter_info.compress(parameter_info.sigma, parameter_info.pi)
+        theta_info = ThetaInfo(self, sigma, pi, sigma_bounds, pi_bounds, optimization._supports_bounds)
+        theta = theta_info.compress(theta_info.sigma, theta_info.pi)
         output(f"Unfixed nonlinear parameters: {theta.size}.")
         output("")
-        output(parameter_info)
+        output(theta_info)
         output("")
 
         # construct or validate the demand-side weighting matrix
@@ -397,7 +397,7 @@ class Problem(object):
         for step in range(1, steps + 1):
             # wrap computation of objective information with step-specific information
             compute_step_info = functools.partial(
-                self._compute_objective_info, parameter_info, WD, WS, error_behavior, error_punishment, iteration,
+                self._compute_objective_info, theta_info, WD, WS, error_behavior, error_punishment, iteration,
                 linear_costs, linear_fp, processes
             )
 
@@ -422,13 +422,13 @@ class Problem(object):
             wrapper.iteration_mappings = []
             wrapper.evaluation_mappings = []
             wrapper.smallest_objective = wrapper.smallest_gradient_norm = np.inf
-            wrapper.cache = ObjectiveInfo(self, parameter_info, WD, WS, theta, delta, jacobian, tilde_costs)
+            wrapper.cache = ObjectiveInfo(self, theta_info, WD, WS, theta, delta, jacobian, tilde_costs)
 
             # optimize theta
             output(f"Starting optimization for step {step} out of {steps} ...")
             output("")
             start_time = time.time()
-            bounds = [p.bounds for p in parameter_info.unfixed]
+            bounds = [(p.lb, p.ub) for p in theta_info.unfixed]
             theta, converged, iterations, evaluations = optimization._optimize(theta, bounds, wrapper)
             status = "completed" if converged else "failed"
             end_time = time.time()
@@ -470,7 +470,7 @@ class Problem(object):
             if step == steps:
                 return results
 
-    def _compute_objective_info(self, parameter_info, WD, WS, error_behavior, error_punishment, iteration, linear_costs,
+    def _compute_objective_info(self, theta_info, WD, WS, error_behavior, error_punishment, iteration, linear_costs,
                                 linear_fp, processes, theta, last_objective_info, compute_gradient):
         """Compute delta and its Jacobian market-by-market. Then, recover beta, compute xi, and use xi to compute the
         demand-side contribution to the GMM objective value. The Jacobian and xi are both used to compute the gradient.
@@ -479,14 +479,14 @@ class Problem(object):
         """
 
         # expand theta into sigma and pi
-        sigma, pi = parameter_info.expand(theta, fill_fixed=True)
+        sigma, pi = theta_info.expand(theta, fill_fixed=True)
 
         # construct a mapping from market IDs to market-specific arguments used to compute delta and its Jacobian
         mapping = {}
         for t in np.unique(self.products.market_ids):
             market_t = ProblemMarket(t, self.nonlinear_prices, self.products, self.agents, sigma=sigma, pi=pi)
             last_delta_t = last_objective_info.delta[self.products.market_ids.flat == t]
-            mapping[t] = [market_t, last_delta_t, parameter_info, iteration, linear_fp, compute_gradient]
+            mapping[t] = [market_t, last_delta_t, theta_info, iteration, linear_fp, compute_gradient]
 
         # store any error classes and the number of contraction iterations and evaluations for each market
         errors = set()
@@ -581,34 +581,43 @@ class Problem(object):
 
         # structure the objective information
         return ObjectiveInfo(
-            self, parameter_info, WD, WS, theta, delta, jacobian, tilde_costs, beta, gamma, xi, omega, objective,
-            gradient, iteration_mapping, evaluation_mapping
+            self, theta_info, WD, WS, theta, delta, jacobian, tilde_costs, beta, gamma, xi, omega, objective, gradient,
+            iteration_mapping, evaluation_mapping
         )
 
 
-class Parameter(object):
+class NonlinearParameter(object):
     """Information about a single nonlinear parameter."""
 
-    def __init__(self, location, bounds, in_sigma=False, in_pi=False):
-        """Initialize the information."""
+    def __init__(self, location, bounds):
+        """Store the information and determine whether the parameter is fixed or unfixed."""
         self.location = location
-        self.bounds = bounds
-        self.value = bounds[0] if bounds[0] == bounds[1] else None
-        self.in_sigma = in_sigma
-        self.in_pi = in_pi
+        self.lb = bounds[0][location]
+        self.ub = bounds[1][location]
+        self.value = self.lb if self.lb == self.ub else None
 
-    @classmethod
-    def from_sigma(cls, location, bounds):
-        """Initialize a parameter in sigma."""
-        return cls(location, bounds, in_sigma=True)
-
-    @classmethod
-    def from_pi(cls, location, bounds):
-        """Initialize a parameter in pi."""
-        return cls(location, bounds, in_pi=True)
+    def get_product_characteristic(self, products):
+        """Get the observed product characteristic associated with the parameter."""
+        return products.X2[:, [self.location[0]]]
 
 
-class ParameterInfo(object):
+class SigmaParameter(NonlinearParameter):
+    """Information about a single parameter in sigma."""
+
+    def get_agent_characteristic(self, agents):
+        """Get the unobserved agent characteristic associated with the parameter."""
+        return agents.nodes[:, [self.location[1]]]
+
+
+class PiParameter(NonlinearParameter):
+    """Information about a single parameter in pi."""
+
+    def get_agent_characteristic(self, agents):
+        """Get the observed agent characteristic associated with the parameter."""
+        return agents.demographics[:, [self.location[1]]]
+
+
+class ThetaInfo(object):
     """Information about nonlinear parameters, which relates sigma and pi to theta."""
 
     def __init__(self, problem, sigma, pi, sigma_bounds, pi_bounds, supports_bounds):
@@ -683,16 +692,20 @@ class ParameterInfo(object):
 
         # store information for the upper triangle of sigma
         for location in zip(*np.triu_indices_from(sigma)):
-            parameter = Parameter.from_sigma(location, (sigma_bounds[0][location], sigma_bounds[1][location]))
-            parameters = self.unfixed if parameter.value is None else self.fixed
-            parameters.append(parameter)
+            parameter = SigmaParameter(location, sigma_bounds)
+            if parameter.value is None:
+                self.unfixed.append(parameter)
+            else:
+                self.fixed.append(parameter)
 
         # store information for pi
         if pi_bounds is not None:
             for location in np.ndindex(pi.shape):
-                parameter = Parameter.from_pi(location, (pi_bounds[0][location], pi_bounds[1][location]))
-                parameters = self.unfixed if parameter.value is None else self.fixed
-                parameters.append(parameter)
+                parameter = PiParameter(location, pi_bounds)
+                if parameter.value is None:
+                    self.unfixed.append(parameter)
+                else:
+                    self.fixed.append(parameter)
 
         # store the number of unfixed parameters and make sure that there is at least one of them
         self.P = len(self.unfixed)
@@ -762,9 +775,9 @@ class ParameterInfo(object):
                 pi_indices = set()
                 for parameter in self.unfixed:
                     if parameter.location[0] == row_index:
-                        if parameter.in_sigma:
+                        if isinstance(parameter, SigmaParameter):
                             sigma_indices.add(parameter.location[1])
-                        elif parameter.in_pi:
+                        else:
                             pi_indices.add(parameter.location[1])
 
                 # construct a row similar to the values row without row labels and with standard error formatting
@@ -789,11 +802,12 @@ class ParameterInfo(object):
 
     def compress(self, sigma, pi):
         """Compress nonlinear parameter matrices into theta."""
-        sigma_locations = list(zip(*[p.location for p in self.unfixed if p.in_sigma]))
-        if pi is None:
-            return sigma[sigma_locations].ravel()
-        pi_locations = list(zip(*[p.location for p in self.unfixed if p.in_pi]))
-        return np.r_[sigma[sigma_locations].ravel(), pi[pi_locations].ravel()]
+        sigma_locations = list(zip(*[p.location for p in self.unfixed if isinstance(p, SigmaParameter)]))
+        theta = sigma[sigma_locations].ravel()
+        if pi is not None:
+            pi_locations = list(zip(*[p.location for p in self.unfixed if isinstance(p, PiParameter)]))
+            theta = np.r_[theta, pi[pi_locations].ravel()]
+        return theta
 
     def expand(self, theta_like, fill_fixed=False):
         """Recover nonlinear parameter-sized matrices from a vector of the same size as theta. If fill_fixed is True,
@@ -804,18 +818,18 @@ class ParameterInfo(object):
 
         # set values for elements that correspond to unfixed parameters
         for parameter, value in zip(self.unfixed, theta_like):
-            if parameter.in_sigma:
+            if isinstance(parameter, SigmaParameter):
                 sigma_like[parameter.location] = value
-            elif parameter.in_pi:
+            else:
                 pi_like[parameter.location] = value
 
         # set values for elements that correspond to fixed parameters
         if fill_fixed:
             sigma_like[np.tril_indices_from(sigma_like, -1)] = 0
             for parameter in self.fixed:
-                if parameter.in_sigma:
+                if isinstance(parameter, SigmaParameter):
                     sigma_like[parameter.location] = parameter.value
-                elif parameter.in_pi:
+                else:
                     pi_like[parameter.location] = parameter.value
 
         # return the expanded matrices
@@ -825,13 +839,13 @@ class ParameterInfo(object):
 class ObjectiveInfo(object):
     """Structured information about a completed iteration of the optimization routine."""
 
-    def __init__(self, problem, parameter_info, WD, WS, theta, delta, jacobian, tilde_costs, beta=None, gamma=None,
-                 xi=None, omega=None, objective=None, gradient=None, iteration_mapping=None, evaluation_mapping=None):
+    def __init__(self, problem, theta_info, WD, WS, theta, delta, jacobian, tilde_costs, beta=None, gamma=None, xi=None,
+                 omega=None, objective=None, gradient=None, iteration_mapping=None, evaluation_mapping=None):
         """Initialize objective information. Optional parameters will not be specified when preparing for the first
         objective evaluation.
         """
         self.problem = problem
-        self.parameter_info = parameter_info
+        self.theta_info = theta_info
         self.WD = WD
         self.WS = WS
         self.theta = theta
@@ -897,7 +911,7 @@ class ObjectiveInfo(object):
 class ProblemMarket(Market):
     """A single market in the BLP problem, which can be solved to compute delta-related information."""
 
-    def solve(self, initial_delta, parameter_info, iteration, linear_fp, compute_gradient):
+    def solve(self, initial_delta, theta_info, iteration, linear_fp, compute_gradient):
         """Compute the mean utility for this market that equates market shares to observed values by solving a fixed
         point problem. Then, if compute_gradient is True, compute its Jacobian with respect to theta. Finally, return a
         set of any errors encountered during computation and the number of contraction evaluations. If necessary,
@@ -935,15 +949,15 @@ class ProblemMarket(Market):
 
             # if the gradient is to be computed, replace invalid values in delta with the last computed values before
             #   computing the Jacobian of delta with respect to theta
-            jacobian = np.full((self.J, parameter_info.P), np.nan, dtype=options.dtype)
+            jacobian = np.full((self.J, theta_info.P), np.nan, dtype=options.dtype)
             if compute_gradient:
                 valid_delta = delta.copy()
                 delta_indices = ~np.isfinite(delta)
                 valid_delta[delta_indices] = initial_delta[delta_indices]
-                jacobian = self.compute_delta_by_theta_jacobian(valid_delta, parameter_info)
+                jacobian = self.compute_delta_by_theta_jacobian(valid_delta, theta_info)
             return delta, jacobian, errors, iterations, evaluations
 
-    def compute_delta_by_theta_jacobian(self, delta, parameter_info):
+    def compute_delta_by_theta_jacobian(self, delta, theta_info):
         """Compute the Jacobian of delta with respect to theta."""
 
         # compute the Jacobian of shares with respect to delta
@@ -954,12 +968,11 @@ class ProblemMarket(Market):
 
         # compute the Jacobian of shares with respect to theta by iterating over each parameter and checking to see
         #   which characteristic, nodes, and demographics contribute to each partial
-        by_theta = np.zeros((self.J, parameter_info.P), dtype=options.dtype)
-        for p, parameter in enumerate(parameter_info.unfixed):
-            row, column = parameter.location
-            x = self.products.X2[:, [row]]
-            n = self.agents.nodes[:, [column]] if parameter.in_sigma else self.agents.demographics[:, [column]]
-            by_theta[:, [p]] = probabilities * n.T * (x - x.T @ probabilities) @ self.agents.weights
+        by_theta = np.zeros((self.J, theta_info.P), dtype=options.dtype)
+        for p, parameter in enumerate(theta_info.unfixed):
+            x = parameter.get_product_characteristic(self.products)
+            v = parameter.get_agent_characteristic(self.agents)
+            by_theta[:, [p]] = probabilities * v.T * (x - x.T @ probabilities) @ self.agents.weights
 
         # use the Implicit Function Theorem to compute the Jacobian of delta with respect to theta
         try:
