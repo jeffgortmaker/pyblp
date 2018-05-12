@@ -146,29 +146,23 @@ class Agents(Matrices):
         if isinstance(agent_data, Integration):
             raise ValueError("Integration instances must be passed as an integration argument, not agent_data.")
 
-        # load pre-defined market IDs, weights, nodes, and demographics
-        market_ids = weights = nodes = demographics = None
+        # load market IDs and any demographics
+        market_ids = demographics = None
         if agent_data is not None:
             market_ids = extract_matrix(agent_data, 'market_ids')
-            weights = extract_matrix(agent_data, 'weights')
-            nodes = extract_matrix(agent_data, 'nodes')
             demographics = extract_matrix(agent_data, 'demographics')
 
-            # validate the data
+            # validate the market IDs
             if market_ids is None:
-                raise ValueError("agent_data must have a market_ids field.")
+                raise KeyError("agent_data must have a market_ids field.")
+            if market_ids.shape[1] > 1:
+                raise ValueError("The market_ids field of agent_data must be one-dimensional.")
             if set(np.unique(products.market_ids)) != set(np.unique(market_ids)):
                 raise ValueError("The market_ids field of agent_data must have the same set of IDs as product data.")
-            if nodes is not None and nodes.shape[1] < K2:
-                raise ValueError(f"The number of columns in the nodes field of agent_data must be at least {K2}.")
-
-            # delete columns of nodes if there are too many
-            if nodes is not None and nodes.shape[1] > K2:
-                nodes = nodes[:, :K2]
-                output(f"Ignored at least one column in the nodes field of agent_data. Remaining columns: {K2}.")
 
         # if configured, build nodes and weights
         deleted = False
+        nodes = weights = None
         if integration is not None:
             if not isinstance(integration, Integration):
                 raise ValueError("integration must be an Integration instance.")
@@ -201,9 +195,23 @@ class Agents(Matrices):
                     "in each market as there are rows of built node and weight rows in each market."
                 )
 
-        # make sure that draws are defined
-        if weights is None or nodes is None:
-            raise ValueError("Since integration is None, agent_data must have weights and nodes' fields.")
+        # if not already build, load nodes and weights
+        if integration is None:
+            nodes = extract_matrix(agent_data, 'nodes')
+            weights = extract_matrix(agent_data, 'weights')
+
+            # validate the data
+            if nodes is None or weights is None:
+                raise KeyError("Since integration is None, agent_data must have both weights and nodes fields.")
+            if nodes.shape[1] < K2:
+                raise ValueError(f"The number of columns in the nodes field of agent_data must be at least K2, {K2}.")
+            if weights.shape[1] != 1:
+                raise ValueError("The weights field of agent_data must be one-dimensional.")
+
+            # delete columns of nodes if there are too many
+            if nodes is not None and nodes.shape[1] > K2:
+                nodes = nodes[:, :K2]
+                output(f"Ignored at least one column in the nodes field of agent_data. Remaining columns: {K2}.")
 
         # structure the various components of agent data
         return super().__new__(cls, {
