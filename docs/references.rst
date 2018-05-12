@@ -1,6 +1,10 @@
 References
 ==========
 
+.. _ags17:
+
+Andrews, I., Gentzkow, M., & Shapiro, J. M. (2017). `Measuring the sensitivity of parameter estimates to estimation moments <https://ideas.repec.org/a/oup/qjecon/v132y2017i4p1553-1592..html>`_. *Quarterly Journal of Economics, 132* (4), 1553-1592.
+
 .. _a16:
 
 Armstrong, T. B. (2016). `Large market asymptotics for differentiated product demand estimators with economic models of supply <https://ideas.repec.org/a/wly/emetrp/v84y2016ip1961-1980.html>`_. *Econometrica, 84* (5), 1961-1980.
@@ -8,6 +12,10 @@ Armstrong, T. B. (2016). `Large market asymptotics for differentiated product de
 .. _blp95:
 
 Berry, S., Levinsohn, J., & Pakes, A. (1995). `Automobile prices in market equilibrium <https://ideas.repec.org/a/ecm/emetrp/v63y1995i4p841-90.html>`_. *Econometrica, 63* (4), 841-890.
+
+.. _blp99:
+
+Berry, S., Levinsohn, J., & Pakes, A. (1999). `Voluntary export restraints on automobiles: Evaluating a trade policy <https://ideas.repec.org/a/aea/aecrev/v89y1999i3p400-430.html>`_. *American Economic Review, 83* (9), 400-430.
 
 .. _hw08:
 

@@ -5,10 +5,14 @@ Attributes
 BLP_PRODUCTS_LOCATION : `str`
     Location of a CSV file containing the automobile product data extracted by
     :ref:`Knittel and Metaxoglou (2014) <km14>` from the original GAUSS code for
+    :ref:`Berry, Levinsohn, and Pakes (1999) <blp99>`, which is commonly assumed to be the same data used in
     :ref:`Berry, Levinsohn, and Pakes (1995) <blp95>`.
 BLP_AGENTS_LOCATION : `str`
     Location of a CSV file containing the random draws used by :ref:`Knittel and Metaxoglou (2014) <km14>` to accompany
-    the automobile product data.
+    the automobile product data. Also included is a single demographic column, which consists of income draws from
+    lognormal distributions. The standard deviation and market-varying means for these distributions were extracted by
+    :ref:`Andrews, Gentzkow, and Shapiro (2017) <ags17>` from the original GAUSS code for
+    :ref:`Berry, Levinsohn, and Pakes (1999) <blp99>`.
 NEVO_PRODUCTS_LOCATION : `str`
     Location of a CSV file containing the fake cereal product data from :ref:`Nevo (2000) <n00>`.
 NEVO_AGENTS_LOCATION : `str`
