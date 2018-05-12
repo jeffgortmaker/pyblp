@@ -388,7 +388,7 @@ def test_knittel_metaxoglou_2014(knittel_metaxoglou_2014):
     for key, expected in knittel_metaxoglou_2014.items():
         computed = getattr(results, key, None)
         if isinstance(computed, np.ndarray):
-            np.testing.assert_allclose(expected, computed, atol=1e-8, rtol=1e-4, err_msg=key)
+            np.testing.assert_allclose(expected, computed, atol=1e-8, rtol=1e-5, err_msg=key)
 
     # structure post-estimation outputs
     elasticities = results.compute_price_elasticities()
@@ -410,4 +410,4 @@ def test_knittel_metaxoglou_2014(knittel_metaxoglou_2014):
     # test closeness of post-estimation outputs
     for key, computed in post_estimation.items():
         expected = knittel_metaxoglou_2014[key]
-        np.testing.assert_allclose(expected, computed, atol=1e-8, rtol=1e-4, err_msg=key)
+        np.testing.assert_allclose(expected, computed, atol=1e-8, rtol=1e-5, err_msg=key)

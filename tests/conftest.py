@@ -10,11 +10,8 @@ import numpy as np
 import numpy.lib.recfunctions
 
 from .data import TEST_DATA_PATH
-from pyblp.utilities import extract_matrix
-from pyblp.data import BLP_PRODUCTS_LOCATION, BLP_AGENTS_LOCATION, NEVO_PRODUCTS_LOCATION, NEVO_AGENTS_LOCATION
-from pyblp import (
-    Problem, Simulation, Integration, options, build_id_data, build_indicators, build_ownership, build_blp_instruments
-)
+from pyblp.data import BLP_PRODUCTS_LOCATION, BLP_AGENTS_LOCATION
+from pyblp import Problem, Simulation, Integration, options, build_id_data, build_ownership, build_blp_instruments
 
 
 @pytest.fixture(autouse=True)
@@ -154,42 +151,9 @@ def simulated_problem(request):
 
 
 @pytest.fixture
-def blp_problem():
-    """Configure the example automobile problem."""
-    data = np.recfromcsv(BLP_PRODUCTS_LOCATION)
-    linear_characteristics = np.c_[np.ones(data.size), data['hpwt'], data['air'], data['mpg'], data['space']]
-    product_data = {k: data[k] for k in data.dtype.names}
-    product_data.update({
-        'firm_ids': np.c_[data['firm_ids'], data['changed_firm_ids']],
-        'linear_characteristics': linear_characteristics,
-        'nonlinear_characteristics': linear_characteristics[:, :-1],
-        'demand_instruments': np.c_[linear_characteristics, build_blp_instruments({
-            'market_ids': data['market_ids'],
-            'firm_ids': data['firm_ids'],
-            'characteristics': linear_characteristics
-        })]
-    })
-    return Problem(product_data, np.recfromcsv(BLP_AGENTS_LOCATION))
-
-
-@pytest.fixture
-def nevo_problem():
-    """Configure the example fake cereal problem."""
-    data = np.recfromcsv(NEVO_PRODUCTS_LOCATION)
-    indicators = build_indicators(data['product_ids'])
-    product_data = {k: data[k] for k in data.dtype.names}
-    product_data.update({
-        'firm_ids': np.c_[data['firm_ids'], data['changed_firm_ids']],
-        'linear_characteristics': indicators,
-        'nonlinear_characteristics': np.c_[np.ones(data.size), data['sugar'], data['mushy']],
-        'demand_instruments': np.c_[indicators, extract_matrix(data, 'instruments')]
-    })
-    return Problem(product_data, np.recfromcsv(NEVO_AGENTS_LOCATION))
-
-
-@pytest.fixture
-def knittel_metaxoglou_2014(request):
-    """Load initial parameter values and estimates from replication code for Knittel and Metaxoglou (2014).
+def knittel_metaxoglou_2014():
+    """Configure the example automobile problem from Knittel and Metaxoglou (2014) and load initial parameter values and
+    estimates created by replication code.
 
     The replication code was modified to output a Matlab data file for the automobile dataset, which contains the
     results of one round of Knitro optimization and post-estimation calculations. The replication code was kept mostly
@@ -205,7 +169,20 @@ def knittel_metaxoglou_2014(request):
         - Before being saved to a Matlab data file, matrices were renamed and reshaped.
 
     """
-    problem = request.getfixturevalue('blp_problem')
+    data = np.recfromcsv(BLP_PRODUCTS_LOCATION)
+    linear_characteristics = np.c_[np.ones(data.size), data['hpwt'], data['air'], data['mpg'], data['space']]
+    product_data = {k: data[k] for k in data.dtype.names}
+    product_data.update({
+        'firm_ids': np.c_[data['firm_ids'], data['changed_firm_ids']],
+        'linear_characteristics': linear_characteristics,
+        'nonlinear_characteristics': linear_characteristics[:, :-1],
+        'demand_instruments': np.c_[linear_characteristics, build_blp_instruments({
+            'market_ids': data['market_ids'],
+            'firm_ids': data['firm_ids'],
+            'characteristics': linear_characteristics
+        })]
+    })
+    problem = Problem(product_data, np.recfromcsv(BLP_AGENTS_LOCATION))
     return scipy.io.loadmat(str(TEST_DATA_PATH / 'knittel_metaxoglou_2014.mat'), {'problem': problem})
 
 
