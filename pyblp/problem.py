@@ -971,23 +971,25 @@ class ProblemMarket(Market):
             return delta, jacobian, errors, iterations, evaluations
 
     def compute_delta_by_theta_jacobian(self, delta, theta_info):
-        """Compute the Jacobian of delta with respect to theta."""
-
-        # compute the Jacobian of shares with respect to delta
+        """Use the Implicit Function Theorem to compute the Jacobian of delta with respect to theta."""
         probabilities = self.compute_probabilities(delta)
+        shares_by_delta_jacobian = self.compute_shares_by_delta_jacobian(probabilities)
+        shares_by_theta_jacobian = self.compute_shares_by_theta_jacobian(probabilities, theta_info)
+        try:
+            return scipy.linalg.solve(-shares_by_delta_jacobian, shares_by_theta_jacobian)
+        except (ValueError, scipy.linalg.LinAlgError):
+            return np.full_like(shares_by_theta_jacobian, np.nan)
+
+    def compute_shares_by_delta_jacobian(self, probabilities):
+        """Compute the Jacobian of shares with respect to delta."""
         diagonal_shares = np.diagflat(self.products.shares)
         diagonal_weights = np.diagflat(self.agents.weights)
-        by_delta = diagonal_shares - probabilities @ diagonal_weights @ probabilities.T
+        return diagonal_shares - probabilities @ diagonal_weights @ probabilities.T
 
-        # compute the Jacobian of shares with respect to theta by iterating over each parameter and identifying which
-        #   product and agent characteristics contribute to each partial
-        by_theta = np.zeros((self.J, theta_info.P), dtype=options.dtype)
+    def compute_shares_by_theta_jacobian(self, probabilities, theta_info):
+        """Compute the Jacobian of shares with respect to theta."""
+        jacobian = np.zeros((self.J, theta_info.P), dtype=options.dtype)
         for p, parameter in enumerate(theta_info.unfixed):
             x, v = parameter.get_characteristics(self.products, self.agents)
-            by_theta[:, [p]] = probabilities * v.T * (x - x.T @ probabilities) @ self.agents.weights
-
-        # use the Implicit Function Theorem to compute the Jacobian of delta with respect to theta
-        try:
-            return scipy.linalg.solve(-by_delta, by_theta)
-        except ValueError:
-            return np.full_like(by_theta, np.nan)
+            jacobian[:, [p]] = probabilities * v.T * (x - x.T @ probabilities) @ self.agents.weights
+        return jacobian
