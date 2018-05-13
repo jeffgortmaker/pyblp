@@ -7,19 +7,19 @@ import multiprocessing
 import numpy as np
 
 
-def extract_matrix(array, field):
+def extract_matrix(array, key):
     """Extract a field from an array or horizontally stacks field0, field1, an so on, into a full matrix. The extracted
     array will have at least two dimensions. None is returned if there is no matrix to extract. The array can be a numpy
     structured array, a pandas DataFrame, or anything else that maps strings to array-like objects.
     """
     try:
-        return np.c_[array[field]]
+        return np.c_[array[key]]
     except (KeyError, ValueError):
         index = 0
         parts = []
         while True:
             try:
-                parts.append(np.c_[array[f'{field}{index}']])
+                parts.append(np.c_[array[f'{key}{index}']])
             except (KeyError, ValueError):
                 break
             index += 1
@@ -30,12 +30,12 @@ class Matrices(np.recarray):
     """Record array, which guarantees that each sub-array is at least two-dimensional."""
 
     def __new__(cls, mapping):
-        """Construct the array from a mapping of field names to (array, type) tuples. None is ignored."""
-        names, arrays, types = zip(*((n, a, t) for n, (a, t) in mapping.items() if a is not None))
-        dtype = [(n, t, (np.c_[a].shape[1],)) for n, a, t in zip(names, arrays, types)]
+        """Construct the array from a mapping of field keys to (array, type) tuples. None is ignored."""
+        keys, arrays, types = zip(*((k, a, t) for k, (a, t) in mapping.items() if a is not None))
+        dtype = [(k, t, (np.c_[a].shape[1],)) for k, a, t in zip(keys, arrays, types)]
         self = np.ndarray.__new__(cls, arrays[0].shape[0], (np.record, dtype))
-        for n, a in zip(names, arrays):
-            self[n] = np.c_[a]
+        for key, array in zip(keys, arrays):
+            self[key] = np.c_[array]
         return self
 
 
@@ -137,12 +137,12 @@ class Output(object):
 
 
 class TableFormatter(object):
-    """Format tables with fixed-width columns."""
+    """Formatter of tables with fixed-width columns."""
 
     def __init__(self, widths, line_indices):
         """Build the table's template string, which has fixed widths and vertical lines after specified indices."""
-        parts = ['{{:^{}}}{}'.format(w, '  |' if i in line_indices else '') for i, w in enumerate(widths)]
-        self.template = '  '.join(parts)
+        parts = ["{{:^{}}}{}".format(w, "  |" if i in line_indices else "") for i, w in enumerate(widths)]
+        self.template = "  ".join(parts)
         self.widths = widths
 
     def __call__(self, values):
