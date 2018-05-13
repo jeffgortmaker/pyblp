@@ -188,7 +188,8 @@ def knittel_metaxoglou_2014():
             'characteristics': characteristics
         })]
     })
-    problem = Problem(product_data, np.recfromcsv(BLP_AGENTS_LOCATION))
+    agent_data = np.lib.recfunctions.drop_fields(np.recfromcsv(BLP_AGENTS_LOCATION), 'demographics0')
+    problem = Problem(product_data, agent_data)
     return scipy.io.loadmat(str(TEST_DATA_PATH / 'knittel_metaxoglou_2014.mat'), {'problem': problem})
 
 
