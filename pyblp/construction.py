@@ -199,10 +199,11 @@ def build_ownership(id_data, kappa_specification=None):
 
     # validate or use the default kappa specification
     if kappa_specification is None:
-        kappa_specification = lambda f, g: int(f == g)
-    elif not callable(kappa_specification):
+        kappa_specification = lambda f, g: np.where(f == g, 1, 0).astype(options.dtype)
+    elif callable(kappa_specification):
+        kappa_specification = np.vectorize(kappa_specification, [options.dtype])
+    else:
         raise ValueError("kappa_specification must be None or callable.")
-    kappa_specification = np.vectorize(kappa_specification, [options.dtype])
 
     # determine the maximum number of products in a market
     J = np.unique(market_ids, return_counts=True)[1].max()
