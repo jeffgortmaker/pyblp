@@ -59,15 +59,21 @@ class Products(Matrices):
         if firm_ids is None:
             ownership = None
         elif ownership is None:
+            output("Building ownership matrices for each market ...")
             ownership = build_ownership({'market_ids': market_ids, 'firm_ids': firm_ids})
+            output("Built ownership matrices.")
         elif ownership.shape[1] % J > 0 or ownership.shape[1] > J * firm_ids.shape[1]:
             raise ValueError(
                 f"The ownership field of product_data must have a number of columns that is a multiple of {J} and that "
                 f"does not exceed {J * firm_ids.shape[1]}."
             )
         elif ownership.shape[1] < J * firm_ids.shape[1]:
+            output("Using specified ownership matrices and building unspecified ones for each market ...")
             unmatched_firm_ids = firm_ids[:, ownership.shape[1] / J:]
             ownership = np.c_[ownership, build_ownership({'market_ids': market_ids, 'firm_ids': unmatched_firm_ids})]
+            output("Build unspecified ownership matrices.")
+        else:
+            output("Using specified ownership matrices.")
 
         # load shares
         shares = extract_matrix(product_data, 'shares')
@@ -173,10 +179,13 @@ class Agents(Matrices):
             # output a message about the integration configuration
             output(integration)
 
-            # build nodes and weights for each market, deleting demographic rows if necessary
+            # build nodes and weights for each market
             output(f"Building {K2}-dimensional nodes and weights for each market ...")
             loaded_market_ids = market_ids
             market_ids, nodes, weights = integration._build_many(K2, np.unique(products.market_ids))
+            output("Build nodes and weights.")
+
+            # delete demographic rows if necessary
             if demographics is not None:
                 demographics_list = []
                 for t in np.unique(products.market_ids):
@@ -190,15 +199,13 @@ class Agents(Matrices):
                         deleted = True
                     demographics_list.append(demographics_t)
                 demographics = np.concatenate(demographics_list)
-
-            # output a message about deleted demographic rows
             if deleted:
                 output(
                     "Ignored at least one row in the demographics field of agent_data so that there are as many rows "
                     "in each market as there are rows of built node and weight rows in each market."
                 )
 
-        # if not already build, load nodes and weights
+        # if not already built, load nodes and weights
         if integration is None:
             nodes = extract_matrix(agent_data, 'nodes')
             weights = extract_matrix(agent_data, 'weights')
@@ -210,6 +217,7 @@ class Agents(Matrices):
                 raise ValueError(f"The number of columns in the nodes field of agent_data must be at least K2, {K2}.")
             if weights.shape[1] != 1:
                 raise ValueError("The weights field of agent_data must be one-dimensional.")
+            output("Using specified nodes and weights.")
 
             # delete columns of nodes if there are too many
             if nodes is not None and nodes.shape[1] > K2:

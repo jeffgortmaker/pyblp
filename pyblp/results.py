@@ -187,7 +187,7 @@ class Results(object):
         """Format full results as a string."""
         sections = []
 
-        # construct a table of values
+        # construct section containing summary information
         header = [
             ("GMM", "Step"), ("Optimization", "Iterations"), ("Objective", "Evaluations"),
             ("Total Fixed Point", "Iterations"), ("Total Contraction", "Evaluations"), ("Objective", "Value"),
@@ -196,6 +196,8 @@ class Results(object):
         widths = [max(len(k1), len(k2), options.digits + 6 if i > 4 else 0) for i, (k1, k2) in enumerate(header)]
         formatter = output.table_formatter(widths)
         sections.append([
+            "Results Summary:",
+            formatter.border(),
             formatter([k[0] for k in header]),
             formatter([k[1] for k in header]),
             formatter.lines(),
@@ -207,43 +209,44 @@ class Results(object):
                 self.contraction_evaluations.sum(),
                 output.format_number(self.objective),
                 output.format_number(self.gradient_norm)
-            ])
+            ]),
+            formatter.border()
         ])
 
-        # construct a table of linear estimates
-        linear_header = ["Beta:"]
-        if self.problem.linear_prices:
-            linear_header.append("Price")
+        # construct a section containing beta estimates
+        linear_header = ["Price"] if self.problem.linear_prices else []
         for linear_index in range(self.beta.size - int(self.problem.linear_prices)):
             linear_header.append(f"Linear #{linear_index}")
-        linear_formatter = output.table_formatter([14] + [max(len(k), options.digits + 8) for k in linear_header[1:]])
+        linear_formatter = output.table_formatter([max(len(k), options.digits + 8) for k in linear_header])
         sections.append([
-            "Linear Parameter Estimates (SEs in Parentheses)",
+            "Beta Estimates (SEs in Parentheses):",
             linear_formatter.border(),
             linear_formatter(linear_header),
             linear_formatter.lines(),
-            linear_formatter([""] + [output.format_number(x) for x in self.beta]),
-            linear_formatter([""] + [output.format_se(x) for x in self.beta_se]),
+            linear_formatter([output.format_number(x) for x in self.beta]),
+            linear_formatter([output.format_se(x) for x in self.beta_se]),
             linear_formatter.border()
         ])
 
-        # construct a table of cost estimates
+        # construct a section containing gamma estimates
         if self.gamma is not None:
-            cost_header = ["Gamma:"] + [f"Cost #{i}" for i in range(self.gamma.size)]
-            cost_formatter = output.table_formatter([14] + [max(len(k), options.digits + 8) for k in cost_header[1:]])
+            cost_header = []
+            for cost_index in range(self.gamma.size):
+                cost_header.append(f"Cost #{cost_index}")
+            cost_formatter = output.table_formatter([max(len(k), options.digits + 8) for k in cost_header])
             sections.append([
-                "Cost Parameter Estimates (SEs in Parentheses)",
+                "Gamma Estimates (SEs in Parentheses):",
                 cost_formatter.border(),
                 cost_formatter(cost_header),
                 cost_formatter.lines(),
-                cost_formatter([""] + [output.format_number(x) for x in self.gamma]),
-                cost_formatter([""] + [output.format_se(x) for x in self.gamma_se]),
+                cost_formatter([output.format_number(x) for x in self.gamma]),
+                cost_formatter([output.format_se(x) for x in self.gamma_se]),
                 cost_formatter.border()
             ])
 
         # construct a section containing nonlinear estimates
         sections.append([
-            "Nonlinear Parameter Estimates (SEs in Parentheses)",
+            "Nonlinear Estimates (SEs in Parentheses):",
             self._theta_info.format_matrices(self.sigma, self.pi, self.sigma_se, self.pi_se)
         ])
 
@@ -251,7 +254,7 @@ class Results(object):
         return "\n\n".join("\n".join(s) for s in sections)
 
     def __repr__(self):
-        """Get the string representation."""
+        """Defer to the string representation."""
         return str(self)
 
     def _compute_W(self, u, Z, center_moments, side):
@@ -397,7 +400,7 @@ class Results(object):
             output("")
 
         # preserve the original product order or the sorted market order when stacking the matrices
-        combined = np.full((rows, columns), np.nan, dtype=options.dtype)
+        combined = np.full((rows, columns), np.nan, options.dtype)
         market_ids = self.problem.products.market_ids.flat if rows == self.problem.N else self.unique_market_ids
         for t, matrix_t in matrix_mapping.items():
             combined[market_ids == t, :matrix_t.shape[1]] = matrix_t
@@ -886,7 +889,7 @@ class ResultsMarket(Market):
         """Market-specific computation for Results.compute_long_run_diversion_ratios."""
 
         # compute share differences when products are excluded and store outside share differences on the diagonal
-        changes = np.zeros((self.J, self.J), dtype=options.dtype)
+        changes = np.zeros((self.J, self.J), options.dtype)
         for j in range(self.J):
             shares_without_j = self.compute_probabilities(eliminate_product=j) @ self.agents.weights
             changes[j] = (shares_without_j - self.products.shares).flat

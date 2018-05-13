@@ -147,7 +147,7 @@ class TableFormatter(object):
 
     def __call__(self, values):
         """Construct a row."""
-        return self.template.format(*values)
+        return self.template.format(*map(str, values))
 
     def blank(self):
         """Construct a blank row."""

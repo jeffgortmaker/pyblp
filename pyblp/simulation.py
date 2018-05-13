@@ -146,13 +146,6 @@ class Simulation(object):
     integration : `Integration`
         :class:`Integration` configuration for how nodes and weights for integration over agent utilities built during
         :class:`Simulation` initialization.
-    linear_prices : `bool`
-        Whether prices are included in :math:`X_1` as the first column.
-    nonlinear_prices : `bool`
-        Whether prices are included in :math:`X_2` as the first column.
-    linear_costs : `bool`
-        Whether :attr:`Simulation.costs` were simulated according to a linear or a log-linear marginal cost
-        specification during :class:`Simulation` initialization.
     N : `int`
         Number of products across all markets, :math:`N`.
     T : `int`
@@ -169,6 +162,13 @@ class Simulation(object):
         Number of demand-side instruments, :math:`M_D`.
     MS : `int`
         Number of supply-side instruments, :math:`M_S`.
+    linear_prices : `bool`
+        Whether prices are included in :math:`X_1` as the first column.
+    nonlinear_prices : `bool`
+        Whether prices are included in :math:`X_2` as the first column.
+    linear_costs : `bool`
+        Whether :attr:`Simulation.costs` were simulated according to a linear or a log-linear marginal cost
+        specification during :class:`Simulation` initialization.
 
     Example
     -------
@@ -280,14 +280,16 @@ class Simulation(object):
             np.random.seed(seed)
 
         # simulate product characteristics and construct matrices of non-constant exogenous product characteristics
+        output(f"Simulating non-constant exogenous product characteristics ...")
         self.characteristics = np.random.rand(self.N, beta.size - 2).astype(options.dtype)
+        output(f"Simulated columns of non-constant exogenous product characteristics: {beta.size - 2}.")
         cost_characteristics = self.characteristics[:, cost_indices]
         linear_characteristics = self.characteristics[:, linear_indices]
         nonlinear_characteristics = self.characteristics[:, nonlinear_indices]
 
         # validate that prices are in X1 or X2 (or both)
-        self.linear_prices = beta[0] != 0
-        self.nonlinear_prices = sigma[0, 0] != 0 or (pi is not None and np.abs(pi[0]).sum() != 0)
+        self.linear_prices = bool(beta[0] != 0)
+        self.nonlinear_prices = bool(sigma[0, 0] != 0 or (pi is not None and np.abs(pi[0]).sum() != 0))
         if not self.linear_prices and not self.nonlinear_prices:
             raise ValueError(
                 "Prices must be in X1 or X2 (or both), so one or more of the following must be nonzero: the first "
@@ -299,12 +301,15 @@ class Simulation(object):
         if gamma[0] != 0:
             cost_constant = True
             cost_characteristics = np.c_[np.ones(self.N), cost_characteristics]
+            output("Inserted a constant column into the matrix of cost product characteristics.")
         if beta[1] != 0:
             linear_constant = True
             linear_characteristics = np.c_[np.ones(self.N), linear_characteristics]
+            output("Inserted a constant column into the matrix of linear product characteristics.")
         if sigma[1, 1] != 0 or (pi is not None and np.abs(pi[1]).sum() != 0):
             nonlinear_constant = True
             nonlinear_characteristics = np.c_[np.ones(self.N), nonlinear_characteristics]
+            output("Inserted a constant column into the matrix of nonlinear product characteristics.")
 
         # associate characteristic column indices with column indices in each subset of characteristics
         self.characteristic_indices = []
@@ -316,6 +321,7 @@ class Simulation(object):
             ))
 
         # simulate xi and omega
+        output("Simulating xi and omega ...")
         covariance = correlation * np.sqrt(xi_variance * omega_variance)
         variances = [[xi_variance, covariance], [covariance, omega_variance]]
         try:
@@ -325,25 +331,37 @@ class Simulation(object):
         else:
             self.xi = shocks[:, [0]]
             self.omega = shocks[:, [1]]
+            output("Simulated xi and omega according to a mean-zero bivariate normal distribution.")
+            output(f"Variance of xi: {output.format_number(xi_variance)}.")
+            output(f"Variance of omega: {output.format_number(omega_variance)}.")
+            output(f"Correlation between xi and omega: {output.format_number(correlation)}.")
 
         # compute marginal costs
         self.linear_costs = linear_costs
         self.costs = cost_characteristics @ self.gamma + self.omega
         if not linear_costs:
             self.costs = np.exp(self.costs)
+        costs_description = "linear" if linear_costs else "log-linear"
+        output(f"Computed marginal costs according to a {costs_description} specification.")
 
         # construct instruments
         all_characteristics = self.characteristics[:, np.unique(np.r_[linear_indices, nonlinear_indices, cost_indices])]
+        output("Building demand-side BLP instruments ...")
         blp_demand_instruments = build_blp_instruments({
             'market_ids': market_ids,
             'firm_ids': firm_ids[:, 0],
             'characteristics': self.characteristics[:, np.unique(np.r_[linear_indices, nonlinear_indices])]
         })
+        output("Building supply-side BLP instruments ...")
         blp_supply_instruments = build_blp_instruments({
             'market_ids': market_ids,
             'firm_ids': firm_ids[:, 0],
             'characteristics': self.characteristics[:, cost_indices]
         })
+        output(
+            f"Built {blp_demand_instruments.shape[1]} columns of demand-side BLP instruments and "
+            f"{blp_supply_instruments.shape[1]} columns of supply-side BLP instruments."
+        )
         demand_instruments = np.c_[np.ones(self.N), all_characteristics, blp_demand_instruments]
         supply_instruments = np.c_[np.ones(self.N), all_characteristics, blp_supply_instruments]
         self.MD = demand_instruments.shape[1]
@@ -378,6 +396,31 @@ class Simulation(object):
             'demographics': (np.random.rand(weights.size, self.D) if self.D > 0 else None, options.dtype)
         })
         self.agents = Agents(self.products, self.agent_data)
+
+        # output configuration information
+        output("")
+        output(self)
+
+    def __str__(self):
+        """Format simulation information as a string."""
+        header = ["N", "T", "K1", "K2", "K3", "D", "MD", "MS", "Linear Prices", "Nonlinear Prices", "Linear Costs"]
+        widths = [max(len(k), 10) for k in header]
+        formatter = output.table_formatter(widths)
+        return "\n".join([
+            "Simulation Configuration:",
+            formatter.border(),
+            formatter(header),
+            formatter.lines(),
+            formatter([
+                self.N, self.T, self.K1, self.K2, self.K3, self.D, self.MD, self.MS, self.linear_prices,
+                self.nonlinear_prices, self.linear_costs
+            ]),
+            formatter.border()
+        ])
+
+    def __repr__(self):
+        """Defer to the string representation."""
+        return str(self)
 
     def solve(self, firms_index=0, prices=None, iteration=None, error_behavior='raise', processes=1):
         r"""Compute Bertrand-Nash prices and shares.
@@ -424,6 +467,7 @@ class Simulation(object):
             be passed to the `product_data` argument of :class:`Problem` initialization.
 
         """
+        output("")
 
         # choose or validate initial prices
         if prices is None:
@@ -431,7 +475,7 @@ class Simulation(object):
             prices = self.costs
         else:
             output("Starting with the specified prices.")
-            prices = np.c_[np.asarray(prices, dtype=options.dtype)]
+            prices = np.c_[np.asarray(prices, options.dtype)]
             if prices.shape != (self.N, 1):
                 raise ValueError(f"prices must be a vector with {self.N} elements.")
 

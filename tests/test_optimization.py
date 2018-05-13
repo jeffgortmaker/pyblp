@@ -69,13 +69,13 @@ def test_entropy(lb, ub, method, method_options, compute_gradient, universal_dis
 
     # estimate the solution
     optimization = Optimization(method, method_options, compute_gradient, universal_display)
-    start_values = np.array([0, 0, 0], dtype=options.dtype)
+    start_values = np.array([0, 0, 0], options.dtype)
     bounds = 3 * [(lb, ub)]
     estimated_values, converged = optimization._optimize(start_values, bounds, lambda x, *_: objective_function(x))[:2]
     assert converged
 
     # test that the estimated objective is reasonably close to the exact objective
-    exact_values = np.array([0, -0.524869316, 0.487525860], dtype=options.dtype)
+    exact_values = np.array([0, -0.524869316, 0.487525860], options.dtype)
     exact_results = objective_function(exact_values)
     estimated_results = objective_function(estimated_values)
     exact_objective = exact_results[0] if compute_gradient else exact_results

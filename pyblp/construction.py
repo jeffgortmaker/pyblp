@@ -292,8 +292,8 @@ def build_blp_instruments(characteristic_data, average=False):
 
     # build the instruments
     indices = np.arange(market_ids.size)
-    rival = np.zeros_like(characteristics, dtype=options.dtype)
-    other = np.zeros_like(characteristics, dtype=options.dtype)
+    rival = np.zeros_like(characteristics, options.dtype)
+    other = np.zeros_like(characteristics, options.dtype)
     for n, (t, f) in enumerate(zip(market_ids, firm_ids)):
         rival[n] = aggregate(characteristics[(market_ids.flat == t) & (firm_ids.flat != f)], axis=0)
         other[n] = aggregate(characteristics[(market_ids.flat == t) & (firm_ids.flat == f) & (indices != n)], axis=0)

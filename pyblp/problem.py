@@ -108,10 +108,6 @@ class Problem(object):
     agents : `Agents`
         Restructured `agent_data` from :class:`Problem` initialization with nodes and weights built according to
         `integration` if it is specified, which is an instance of :class:`primitives.Agents`.
-    linear_prices : `bool`
-        Whether prices are included in :math:`X_1` as the first column.
-    nonlinear_prices : `bool`
-        Whether prices are included in :math:`X_2` as the first column.
     N : `int`
         Number of products across all markets, :math:`N`.
     T : `int`
@@ -128,6 +124,10 @@ class Problem(object):
         Number of demand-side instruments, :math:`M_D`.
     MS : `int`
         Number of supply-side instruments, :math:`M_S`.
+    linear_prices : `bool`
+        Whether prices are included in :math:`X_1` as the first column.
+    nonlinear_prices : `bool`
+        Whether prices are included in :math:`X_2` as the first column.
 
     Example
     -------
@@ -171,8 +171,13 @@ class Problem(object):
 
     def __init__(self, product_data, agent_data=None, integration=None, linear_prices=True, nonlinear_prices=True):
         """Structure and validate data before computing matrix dimensions."""
+        output("Structuring product data ...")
         self.products = Products(product_data, linear_prices, nonlinear_prices)
+
+        output("Structuring agent data ...")
         self.agents = Agents(self.products, agent_data, integration)
+
+        # store problem configuration information
         self.linear_prices = linear_prices
         self.nonlinear_prices = nonlinear_prices
         self.N = self.products.shape[0]
@@ -192,6 +197,31 @@ class Problem(object):
             self.MS = self.products.ZS.shape[1]
         except AttributeError:
             self.MS = 0
+
+        # output configuration information
+        output("")
+        output(self)
+
+    def __str__(self):
+        """Format problem information as a string."""
+        header = ["N", "T", "K1", "K2", "K3", "D", "MD", "MS", "Linear Prices", "Nonlinear Prices"]
+        widths = [max(len(k), 10) for k in header]
+        formatter = output.table_formatter(widths)
+        return "\n".join([
+            "Problem Configuration:",
+            formatter.border(),
+            formatter(header),
+            formatter.lines(),
+            formatter([
+                self.N, self.T, self.K1, self.K2, self.K3, self.D, self.MD, self.MS, self.linear_prices,
+                self.nonlinear_prices
+            ]),
+            formatter.border()
+        ])
+
+    def __repr__(self):
+        """Defer to the string representation."""
+        return str(self)
 
     def solve(self, sigma, pi=None, sigma_bounds=None, pi_bounds=None, delta=None, WD=None, WS=None, steps=2,
               optimization=None, error_behavior='revert', error_punishment=1, iteration=None, linear_fp=True,
@@ -324,6 +354,7 @@ class Problem(object):
             :class:`Results` of the solved problem.
 
         """
+        output("")
 
         # configure or validate optimization and integration
         if optimization is None:
@@ -342,24 +373,25 @@ class Problem(object):
             raise ValueError("se_type must be 'robust' or 'unadjusted'.")
 
         # output configuration information
+        output(f"GMM steps: {steps}.")
         output(optimization)
         output(f"Error behavior: {error_behavior}.")
         output(f"Error punishment: {output.format_number(error_punishment)}.")
         output(iteration)
+        output(f"Linear fixed point formulation: {linear_fp}.")
         if self.K3 > 0:
             output(f"Linear marginal cost specification: {linear_costs}.")
-        output(f"Linear fixed point formulation: {linear_fp}.")
         output(f"Centering sample moments before updating weighting matrices: {center_moments}.")
         output(f"Standard error type: {se_type}.")
         output(f"Processes: {processes}.")
 
         # compress sigma and pi into theta but retain information about the original matrices
         theta_info = ThetaInfo(self, sigma, pi, sigma_bounds, pi_bounds, optimization._supports_bounds)
-        theta = theta_info.compress(theta_info.sigma, theta_info.pi)
-        output(f"Unfixed nonlinear parameters: {theta.size}.")
+        output(f"Number of unfixed nonlinear parameters in theta: {theta_info.P}.")
         output("")
         output(theta_info)
         output("")
+        theta = theta_info.compress(theta_info.sigma, theta_info.pi)
 
         # construct or validate the demand-side weighting matrix
         if WD is None:
@@ -367,7 +399,7 @@ class Problem(object):
             WD = scipy.linalg.inv(self.products.ZD.T @ self.products.ZD)
         else:
             output("Starting with the specified demand-side weighting matrix.")
-            WD = np.asarray(WD, dtype=options.dtype)
+            WD = np.asarray(WD, options.dtype)
             if WD.shape != (self.MD, self.MD):
                 raise ValueError(f"WD must have {self.MD} rows and columns.")
 
@@ -379,7 +411,7 @@ class Problem(object):
             WS = scipy.linalg.inv(self.products.ZS.T @ self.products.ZS)
         else:
             output("Starting with the specified supply-side weighting matrix.")
-            WS = np.asarray(WS, dtype=options.dtype)
+            WS = np.asarray(WS, options.dtype)
             if WS.shape != (self.MS, self.MS):
                 raise ValueError(f"WS must have {self.MS} rows and columns.")
 
@@ -392,12 +424,12 @@ class Problem(object):
                 delta[self.products.market_ids.flat == t] -= np.log(shares_t.sum())
         else:
             output("Starting with the specified delta.")
-            delta = np.c_[np.asarray(delta, dtype=options.dtype)]
+            delta = np.c_[np.asarray(delta, options.dtype)]
             if delta.shape != (self.N, 1):
                 raise ValueError(f"delta must be a vector with {self.N} elements.")
 
         # initialize the Jacobian of delta as all zeros and initialize marginal costs as prices
-        jacobian = np.zeros((self.N, theta.size), dtype=options.dtype)
+        jacobian = np.zeros((self.N, theta.size), options.dtype)
         tilde_costs = self.products.prices if linear_costs else np.log(self.products.prices)
 
         # iterate through each step
@@ -494,8 +526,8 @@ class Problem(object):
         evaluation_mapping = {}
 
         # fill delta and its Jacobian market-by-market (the Jacobian will be null if the objective isn't being computed)
-        delta = np.zeros((self.N, 1), dtype=options.dtype)
-        jacobian = np.zeros((self.N, theta.size), dtype=options.dtype)
+        delta = np.zeros((self.N, 1), options.dtype)
+        jacobian = np.zeros((self.N, theta.size), options.dtype)
         with ParallelItems(ProblemMarket.solve, mapping, processes) as items:
             for t, (delta_t, jacobian_t, errors_t, iteration_mapping[t], evaluation_mapping[t]) in items:
                 delta[self.products.market_ids.flat == t] = delta_t
@@ -524,7 +556,7 @@ class Problem(object):
         tilde_costs = invalid_tilde_cost_indices = gamma = omega = None
         if WS is not None:
             # fill marginal costs market-by-market
-            costs = np.zeros((self.N, 1), dtype=options.dtype)
+            costs = np.zeros((self.N, 1), options.dtype)
             for t in np.unique(self.products.market_ids):
                 market_t = Market(
                     t, self.linear_prices, self.nonlinear_prices, self.products, self.agents, delta, beta=beta,
@@ -628,7 +660,7 @@ class ThetaInfo(object):
         self.problem = problem
 
         # validate and clean up sigma
-        sigma = np.asarray(sigma, dtype=options.dtype)
+        sigma = np.asarray(sigma, options.dtype)
         if sigma.shape != (problem.K2, problem.K2):
             raise ValueError(f"sigma must have {problem.K2} rows and columns.")
         sigma[np.tril_indices(problem.K2, -1)] = 0
@@ -637,22 +669,22 @@ class ThetaInfo(object):
         if (pi is None) != (problem.D == 0):
             raise ValueError("pi should be None only when there are no demographics.")
         if pi is not None:
-            pi = np.asarray(pi, dtype=options.dtype)
+            pi = np.asarray(pi, options.dtype)
             if pi.shape != (problem.K2, problem.D):
                 raise ValueError(f"pi must have {problem.K2} rows and {problem.D} columns.")
 
         # construct default sigma bounds or validate specified bounds
         if sigma_bounds is None or not supports_bounds:
             sigma_bounds = (
-                np.full_like(sigma, -np.inf, dtype=options.dtype),
-                np.full_like(sigma, +np.inf, dtype=options.dtype)
+                np.full_like(sigma, -np.inf, options.dtype),
+                np.full_like(sigma, +np.inf, options.dtype)
             )
             if supports_bounds:
                 np.fill_diagonal(sigma_bounds[0], 0)
         else:
             if len(sigma_bounds) != 2:
                 raise ValueError("sigma_bounds must be a tuple of the form (lb, ub).")
-            sigma_bounds = [np.asarray(b, dtype=options.dtype).copy() for b in sigma_bounds]
+            sigma_bounds = [np.asarray(b, options.dtype).copy() for b in sigma_bounds]
             for bounds_index, bounds in enumerate(sigma_bounds):
                 bounds[np.isnan(bounds)] = -np.inf if bounds_index == 0 else +np.inf
                 if bounds.shape != sigma.shape:
@@ -664,11 +696,11 @@ class ThetaInfo(object):
         if pi is None:
             pi_bounds = None
         elif pi_bounds is None or not supports_bounds:
-            pi_bounds = (np.full_like(pi, -np.inf, dtype=options.dtype), np.full_like(pi, +np.inf, dtype=options.dtype))
+            pi_bounds = (np.full_like(pi, -np.inf, options.dtype), np.full_like(pi, +np.inf, options.dtype))
         else:
             if len(pi_bounds) != 2:
                 raise ValueError("pi_bounds must be a tuple of the form (lb, ub).")
-            pi_bounds = [np.asarray(b, dtype=options.dtype).copy() for b in pi_bounds]
+            pi_bounds = [np.asarray(b, options.dtype).copy() for b in pi_bounds]
             for bounds_index, bounds in enumerate(pi_bounds):
                 bounds[np.isnan(bounds)] = -np.inf if bounds_index == 0 else +np.inf
                 if bounds.shape != pi.shape:
@@ -716,13 +748,13 @@ class ThetaInfo(object):
     def __str__(self):
         """Format the initial nonlinear parameters and their bounds as a string."""
         return "\n".join([
-            "Initial nonlinear parameters:",
+            "Initial Nonlinear Parameters:",
             self.format_matrices(self.sigma, self.pi),
             "",
-            "Lower bounds on nonlinear parameters:",
+            "Lower Bounds on Nonlinear Parameters:",
             self.format_matrices(self.sigma_bounds[0], None if self.pi_bounds is None else self.pi_bounds[0]),
             "",
-            "Upper bounds on nonlinear parameters:",
+            "Upper Bounds on Nonlinear Parameters:",
             self.format_matrices(self.sigma_bounds[1], None if self.pi_bounds is None else self.pi_bounds[1])
         ])
 
@@ -948,7 +980,7 @@ class ProblemMarket(Market):
 
             # if the gradient is to be computed, replace invalid values in delta with the last computed values before
             #   computing the Jacobian of delta with respect to theta
-            jacobian = np.full((self.J, theta_info.P), np.nan, dtype=options.dtype)
+            jacobian = np.full((self.J, theta_info.P), np.nan, options.dtype)
             if compute_gradient:
                 valid_delta = delta.copy()
                 delta_indices = ~np.isfinite(delta)
@@ -974,7 +1006,7 @@ class ProblemMarket(Market):
 
     def compute_shares_by_theta_jacobian(self, probabilities, theta_info):
         """Compute the Jacobian of shares with respect to theta."""
-        jacobian = np.zeros((self.J, theta_info.P), dtype=options.dtype)
+        jacobian = np.zeros((self.J, theta_info.P), options.dtype)
         for p, parameter in enumerate(theta_info.unfixed):
             x, v = parameter.get_characteristics(self.products, self.agents)
             jacobian[:, [p]] = probabilities * v.T * (x - x.T @ probabilities) @ self.agents.weights

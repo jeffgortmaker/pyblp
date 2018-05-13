@@ -163,7 +163,7 @@ def same_size_sequences(size, summation):
     the beginning and then increment the sequences by one at the end.
     """
     summation -= size
-    sequence = np.zeros(size, dtype=np.int64)
+    sequence = np.zeros(size, np.int64)
     sequence[0] = summation
     sequences = [sequence.copy()]
     forward = 0
