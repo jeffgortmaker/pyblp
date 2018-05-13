@@ -44,56 +44,61 @@ class Problem(object):
 
             - **shares** : (`numeric`) - Shares, :math:`s`.
 
-            - **prices** : (`numeric`) - Prices, :math:`p`, which will always be included in :math:`X_1`. If
-              `nonlinear_prices` is `True`, they will be included in :math:`X_2` as well.
+            - **prices** : (`numeric`) - Prices, :math:`p`, which will be included as the first column in :math:`X_1`
+              and :math:`X_2` if `linear_prices` and `nonlinear_prices` are ``True``, respectively.
 
             - **linear_characteristics** : (`numeric, optional`) - Non-price product characteristics that constitute the
-              remaining columns in :math:`X_1`.
+              remaining columns in :math:`X_1` if `linear_prices` is ``True``, and the entirety of the matrix if prices
+              are not included in :math:`X_1`.
 
             - **nonlinear_characteristics** : (`numeric, optional`) - Non-price product characteristics that constitute
-              the remaining columns in :math:`X_2` if `nonlinear_prices` is `True`, and the entirety of the matrix if it
-              is `False`.
+              the remaining columns in :math:`X_2` if `nonlinear_prices` is ``True``, and the entirety of the matrix if
+              prices are not included in :math:`X_2`.
 
-            - **cost_characteristics** : (`numeric, optional`) - Cost product characteristics, :math:`X_3`. This field is
-              required if `supply_instruments` is specified, since they will be used to estimate the supply side of the
-              problem. If unspecified, only the demand side will be estimated.
+            - **cost_characteristics** : (`numeric, optional`) - Cost product characteristics, :math:`X_3`. This field
+              is required if `supply_instruments` is specified, since they will be used to estimate the supply side of
+              the problem. If unspecified, only the demand side will be estimated.
 
             - **demand_instruments** : (`numeric`) - Demand-side instruments, :math:`Z_D`, which should contain the sets
               of columns in `linear_characteristics` and `nonlinear_characteristics`.
 
-            - **supply_instruments** : (`numeric, optional`) - Supply-side instruments, :math:`Z_S`, which should contain
-              `cost_characteristics`. This field is required if `cost_characteristics` is specified, since they will be
-              used to estimate the supply side of the problem. If unspecified, only the demand side will be estimated.
+            - **supply_instruments** : (`numeric, optional`) - Supply-side instruments, :math:`Z_S`, which should
+              contain `cost_characteristics`. This field is required if `cost_characteristics` is specified, since they
+              will be used to estimate the supply side of the problem. If unspecified, only the demand side will be
+              estimated.
 
     agent_data : `structured array-like, optional`
         Required if `integration` is unspecified. Each row corresponds to an agent. Markets can have differing numbers
         of agents. Fields:
 
-            - **market_ids** : (`object`) - IDs that associate agents with markets. The set of distinct IDs should be the
-              same as the set of distinct IDs in the `market_ids` field of `product_data`. If `integration` is
+            - **market_ids** : (`object`) - IDs that associate agents with markets. The set of distinct IDs should be
+              the same as the set of distinct IDs in the `market_ids` field of `product_data`. If `integration` is
               specified, there must be at least as many rows in each market as the number of nodes and weights that are
               built for each market.
 
             - **weights** : (`numeric, optional`) - Integration weights, :math:`w`. This field is required if
               `integration` is unspecified.
 
-            - **nodes** : (`numeric, optional`) - Unobserved agent characteristics called integration nodes, :math:`\nu`.
-              This field is required if `integration` is unspecified. If there are more than :math:`K_2` columns, only
-              the first :math:`K_2` will be used.
+            - **nodes** : (`numeric, optional`) - Unobserved agent characteristics called integration nodes,
+              :math:`\nu`. This field is required if `integration` is unspecified. If there are more than :math:`K_2`
+              columns, only the first :math:`K_2` will be used.
 
-            - **demographics** : (`numeric, optional`) - Observed agent characteristics called demographics, :math:`d`. If
-              `integration` is specified and there are more rows of demographics in a market :math:`t` than :math:`I_t`,
-              the number node and weight rows built for that market, only the first :math:`I_t` rows of demographics
-              will be used.
+            - **demographics** : (`numeric, optional`) - Observed agent characteristics called demographics, :math:`d`.
+              If `integration` is specified and there are more rows of demographics in a market :math:`t` than
+              :math:`I_t`, the number node and weight rows built for that market, only the first :math:`I_t` rows of
+              demographics will be used.
 
     integration : `Integration, optional`
         :class:`Integration` configuration for how to build nodes and weights for integration over agent utilities,
         which is required if the `nodes` and `weights` fields of `agent_data` are unspecified. If they are specified,
         the nodes and weights will be build according to this configuration for each market, and they will replace those
         in `agent_data`.
-    nonlinear_prices : `bool, optional`
-        Whether prices will be a nonlinear characteristic in :math:`X_2` in addition to being a linear characteristic in
+    linear_prices : `bool, optional`
+        Whether prices will be included in :math:`X_1` as the first column. By default, prices are included in
         :math:`X_1`.
+    nonlinear_prices : `bool, optional`
+        Whether prices will be included in :math:`X_2` as the first column. By default, prices are included in
+        :math:`X_2`.
 
     Attributes
     ----------
@@ -103,9 +108,10 @@ class Problem(object):
     agents : `Agents`
         Restructured `agent_data` from :class:`Problem` initialization with nodes and weights built according to
         `integration` if it is specified, which is an instance of :class:`primitives.Agents`.
+    linear_prices : `bool`
+        Whether prices are included in :math:`X_1` as the first column.
     nonlinear_prices : `bool`
-        Whether prices are a nonlinear characteristic in :math:`X_2` in addition to being a linear characteristic in
-        :math:`X_1`.
+        Whether prices are included in :math:`X_2` as the first column.
     N : `int`
         Number of products across all markets, :math:`N`.
     T : `int`
@@ -163,10 +169,11 @@ class Problem(object):
 
     """
 
-    def __init__(self, product_data, agent_data=None, integration=None, nonlinear_prices=True):
+    def __init__(self, product_data, agent_data=None, integration=None, linear_prices=True, nonlinear_prices=True):
         """Structure and validate data before computing matrix dimensions."""
-        self.products = Products(product_data, nonlinear_prices)
+        self.products = Products(product_data, linear_prices, nonlinear_prices)
         self.agents = Agents(self.products, agent_data, integration)
+        self.linear_prices = linear_prices
         self.nonlinear_prices = nonlinear_prices
         self.N = self.products.shape[0]
         self.T = np.unique(self.products.market_ids).size
@@ -226,10 +233,10 @@ class Problem(object):
             ``numpy.nan`` are converted to ``-numpy.inf`` in ``lb`` and to ``numpy.inf`` in ``ub``.
 
         pi_bounds : `tuple, optional`
-            Configuration for :math:`\Pi` bounds of the form ``(lb, ub)``, in which both ``lb`` are `ub` are of the same
-            size as `pi`. Each element in ``lb`` and ``ub`` determines the lower and upper bound for its counterpart in
-            `pi`. If `optimization` does not support bounds, these will be ignored. By default, if bounds are supported,
-            all unfixed elements are unbounded.
+            Configuration for :math:`\Pi` bounds of the form ``(lb, ub)``, in which both ``lb`` are ``ub`` are of the
+            same size as `pi`. Each element in ``lb`` and ``ub`` determines the lower and upper bound for its
+            counterpart in `pi`. If `optimization` does not support bounds, these will be ignored. By default, if bounds
+            are supported, all unfixed elements are unbounded.
 
             Lower and upper bounds corresponding to zeros in `pi` are set to zero. Setting a lower bound equal to an
             upper bound fixes the corresponding element. Both ``None`` and ``numpy.nan`` are converted to ``-numpy.inf``
@@ -239,11 +246,12 @@ class Problem(object):
             Starting values for the mean utility, :math:`\delta`. By default,
             :math:`\delta_{jt} = \log s_{jt} - \log s_{0t}` is used.
         WD : `array-like, optional`
-            Starting values for the demand-side weighting matrix, :math:`W_D`. By default, the 2SLS weighting matrix
-            :math:`W_D = (Z_D'Z_D)^{-1}`.
+            Starting values for the demand-side weighting matrix, :math:`W_D`. By default, the 2SLS weighting matrix,
+            :math:`W_D = (Z_D'Z_D)^{-1}`, is used.
         WS : `array-like, optional`
-            Starting values for the supply-side weighting matrix, :math:`W_S`, which are only used if the problem was
-            initialized with supply-side data. By default, the 2SLS weighting matrix :math:`W_S = (Z_S'Z_S)^{-1}`.
+            Starting values for the supply-side weighting matrix, :math:`W_S`, which is only used if the problem was
+            initialized with supply-side data. By default, the 2SLS weighting matrix, :math:`W_S = (Z_S'Z_S)^{-1}`, is
+            used.
         steps : `int, optional`
             Number of GMM steps. By default, two-step GMM is used.
         optimization : `Optimization, optional`
@@ -484,7 +492,9 @@ class Problem(object):
         # construct a mapping from market IDs to market-specific arguments used to compute delta and its Jacobian
         mapping = {}
         for t in np.unique(self.products.market_ids):
-            market_t = ProblemMarket(t, self.nonlinear_prices, self.products, self.agents, sigma=sigma, pi=pi)
+            market_t = ProblemMarket(
+                t, self.linear_prices, self.nonlinear_prices, self.products, self.agents, sigma=sigma, pi=pi
+            )
             last_delta_t = last_objective_info.delta[self.products.market_ids.flat == t]
             mapping[t] = [market_t, last_delta_t, theta_info, iteration, linear_fp, compute_gradient]
 
@@ -527,7 +537,8 @@ class Problem(object):
             costs = np.zeros((self.N, 1), dtype=options.dtype)
             for t in np.unique(self.products.market_ids):
                 market_t = Market(
-                    t, self.nonlinear_prices, self.products, self.agents, delta, beta=beta, sigma=sigma, pi=pi
+                    t, self.linear_prices, self.nonlinear_prices, self.products, self.agents, delta, beta=beta,
+                    sigma=sigma, pi=pi
                 )
                 try:
                     with np.errstate(all='call'):
@@ -596,25 +607,25 @@ class NonlinearParameter(object):
         self.ub = bounds[1][location]
         self.value = self.lb if self.lb == self.ub else None
 
-    def get_product_characteristic(self, products):
-        """Get the observed product characteristic associated with the parameter."""
-        return products.X2[:, [self.location[0]]]
+    def get_characteristics(self, products, agents):
+        """Get the product and agents characteristics associated with the parameter."""
+        raise NotImplementedError
 
 
 class SigmaParameter(NonlinearParameter):
     """Information about a single parameter in sigma."""
 
-    def get_agent_characteristic(self, agents):
-        """Get the unobserved agent characteristic associated with the parameter."""
-        return agents.nodes[:, [self.location[1]]]
+    def get_characteristics(self, products, agents):
+        """Get the product and agents characteristics associated with the parameter."""
+        return products.X2[:, [self.location[0]]], agents.nodes[:, [self.location[1]]]
 
 
 class PiParameter(NonlinearParameter):
     """Information about a single parameter in pi."""
 
-    def get_agent_characteristic(self, agents):
-        """Get the observed agent characteristic associated with the parameter."""
-        return agents.demographics[:, [self.location[1]]]
+    def get_characteristics(self, products, agents):
+        """Get the product and agents characteristics associated with the parameter."""
+        return products.X2[:, [self.location[0]]], agents.demographics[:, [self.location[1]]]
 
 
 class ThetaInfo(object):
@@ -725,7 +736,7 @@ class ThetaInfo(object):
             self.format_matrices(self.sigma_bounds[1], None if self.pi_bounds is None else self.pi_bounds[1])
         ])
 
-    def format_matrices(self, sigma_like, pi_like, sigma_standard_errors=None, pi_standard_errors=None):
+    def format_matrices(self, sigma_like, pi_like, sigma_se=None, pi_se=None):
         """Format matrices that are of the same size as the matrices of nonlinear parameters as a string. If matrices
         of standard errors are given, they will be formatted as numbers surrounded by parentheses underneath the
         elements of sigma and pi.
@@ -739,7 +750,9 @@ class ThetaInfo(object):
         formatter = output.table_formatter(sigma_widths + pi_widths, line_indices)
 
         # construct the table header
-        header = ["Sigma:"] + (["Price"] if self.problem.nonlinear_prices else [])
+        header = ["Sigma:"]
+        if self.problem.nonlinear_prices:
+            header.append("Price")
         for nonlinear_index in range(self.problem.K2 - int(self.problem.nonlinear_prices)):
             header.append(f"Nonlinear #{nonlinear_index}")
         if self.pi is not None:
@@ -769,7 +782,7 @@ class ThetaInfo(object):
             lines.append(formatter(values_row))
 
             # construct a row of standard errors for unfixed parameters
-            if sigma_standard_errors is not None:
+            if sigma_se is not None:
                 # determine which columns in this row correspond to unfixed parameters
                 sigma_indices = set()
                 pi_indices = set()
@@ -781,18 +794,18 @@ class ThetaInfo(object):
                             pi_indices.add(parameter.location[1])
 
                 # construct a row similar to the values row without row labels and with standard error formatting
-                errors_row = [""] * (1 + row_index)
+                se_row = [""] * (1 + row_index)
                 for column_index in range(row_index, self.problem.K2):
-                    error = sigma_standard_errors[row_index, column_index]
-                    errors_row.append(output.format_se(error) if column_index in sigma_indices else "")
+                    se = sigma_se[row_index, column_index]
+                    se_row.append(output.format_se(se) if column_index in sigma_indices else "")
                 if self.pi is not None:
-                    errors_row.append("")
+                    se_row.append("")
                     for column_index in range(self.problem.D):
-                        error = pi_standard_errors[row_index, column_index]
-                        errors_row.append(output.format_se(error) if column_index in pi_indices else "")
+                        se = pi_se[row_index, column_index]
+                        se_row.append(output.format_se(se) if column_index in pi_indices else "")
 
                 # format the row of values and add an additional blank line if there is another row of values
-                lines.append(formatter(errors_row))
+                lines.append(formatter(se_row))
                 if row_index < self.problem.K2 - 1:
                     lines.append(formatter.blank())
 
@@ -966,12 +979,11 @@ class ProblemMarket(Market):
         diagonal_weights = np.diagflat(self.agents.weights)
         by_delta = diagonal_shares - probabilities @ diagonal_weights @ probabilities.T
 
-        # compute the Jacobian of shares with respect to theta by iterating over each parameter and checking to see
-        #   which characteristic, nodes, and demographics contribute to each partial
+        # compute the Jacobian of shares with respect to theta by iterating over each parameter and identifying which
+        #   product and agent characteristics contribute to each partial
         by_theta = np.zeros((self.J, theta_info.P), dtype=options.dtype)
         for p, parameter in enumerate(theta_info.unfixed):
-            x = parameter.get_product_characteristic(self.products)
-            v = parameter.get_agent_characteristic(self.agents)
+            x, v = parameter.get_characteristics(self.products, self.agents)
             by_theta[:, [p]] = probabilities * v.T * (x - x.T @ probabilities) @ self.agents.weights
 
         # use the Implicit Function Theorem to compute the Jacobian of delta with respect to theta

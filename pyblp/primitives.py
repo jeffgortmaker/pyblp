@@ -26,7 +26,8 @@ class Products(Matrices):
     prices : `ndarray`
         Prices, :math:`p`.
     X1 : `ndarray`
-        Linear product characteristics, :math:`X_1`. The first column contains prices.
+        Linear product characteristics, :math:`X_1`. The first column contains prices if they are configured to be a
+        linear characteristic.
     X2 : `ndarray`
         Nonlinear product characteristics, :math:`X_2`. The first column contains prices if they are configured to be a
         nonlinear characteristic.
@@ -39,7 +40,7 @@ class Products(Matrices):
 
     """
 
-    def __new__(cls, product_data, nonlinear_prices=True):
+    def __new__(cls, product_data, linear_prices, nonlinear_prices):
         """Validate and structure the data."""
 
         # load market, product, and firm IDs
@@ -84,26 +85,28 @@ class Products(Matrices):
         linear_characteristics = extract_matrix(product_data, 'linear_characteristics')
         nonlinear_characteristics = extract_matrix(product_data, 'nonlinear_characteristics')
         cost_characteristics = extract_matrix(product_data, 'cost_characteristics')
+        if not linear_prices and not nonlinear_prices:
+            raise ValueError("linear_prices and nonlinear_prices cannot both be False.")
+        if not linear_prices and linear_characteristics is None:
+            raise ValueError("linear_prices is False, so product_data must have a linear_characteristics field")
         if not nonlinear_prices and nonlinear_characteristics is None:
-            raise ValueError(
-                "Since nonlinear_prices is False, product_data must have a nonlinear_characteristics field."
-            )
+            raise ValueError("nonlinear_prices is False, so product_data must have a nonlinear_characteristics field.")
         if firm_ids is None and cost_characteristics is not None:
             raise ValueError("Since product_data has a cost_characteristics field, it must also have firm_ids.")
+
+        # determine the components of linear and nonlinear characteristics
+        X1_list = [prices] if linear_prices else []
+        X2_list = [prices] if nonlinear_prices else []
+        if linear_characteristics is not None:
+            X1_list.append(linear_characteristics)
+        if nonlinear_characteristics is not None:
+            X2_list.append(nonlinear_characteristics)
 
         # load instruments
         demand_instruments = extract_matrix(product_data, 'demand_instruments')
         supply_instruments = extract_matrix(product_data, 'supply_instruments')
         if (cost_characteristics is None) != (supply_instruments is None):
             raise KeyError("product_data must have a cost_characteristics field only if it has supply_instruments.")
-
-        # determine the components of linear and nonlinear characteristics
-        X1_list = [prices]
-        X2_list = [prices] if nonlinear_prices else []
-        if linear_characteristics is not None:
-            X1_list.append(linear_characteristics)
-        if nonlinear_characteristics is not None:
-            X2_list.append(nonlinear_characteristics)
 
         # structure the various components of product data
         return super().__new__(cls, {
@@ -227,11 +230,13 @@ class Market(object):
     utility components or parameters, class methods can compute a variety of market-specific outputs.
     """
 
-    def __init__(self, t, nonlinear_prices, products, agents, delta=None, xi=None, beta=None, sigma=None, pi=None):
-        """Restrict full data matrices and vectors to just this market. Leaving some arguments unspecified will generate
-        assertion errors if dependent methods are called.
+    def __init__(self, t, linear_prices, nonlinear_prices, products, agents, delta=None, xi=None, beta=None, sigma=None,
+                 pi=None):
+        """Restrict full data matrices and vectors to just this market. If arguments are left unspecified, dependent
+        methods will raise exceptions.
         """
         self.t = t
+        self.linear_prices = linear_prices
         self.nonlinear_prices = nonlinear_prices
 
         # restrict product and agent data to just this market
@@ -270,7 +275,8 @@ class Market(object):
 
     def get_price_indices(self):
         """Get the indices of prices in X1 and X2."""
-        X1_index = 0
+        # todo: make sure this works when prices only enter as an interaction w demographics
+        X1_index = 0 if self.linear_prices else None
         X2_index = 0 if self.nonlinear_prices else None
         return X1_index, X2_index
 
@@ -285,24 +291,21 @@ class Market(object):
 
     def compute_delta(self, X1=None):
         """Compute delta. By default, the X1 with which this market was initialized is used."""
-        assert self.beta is not None and self.xi is not None
         if X1 is None:
             X1 = self.products.X1
         return X1 @ self.beta + self.xi
 
     def compute_mu(self, X2=None):
         """Compute mu. By default, the X2 with which this market was initialized is used."""
-        assert self.sigma is not None
         if X2 is None:
             X2 = self.products.X2
         mu = X2 @ self.sigma @ self.agents.nodes.T
-        if self.pi is not None:
+        if self.D > 0:
             mu += X2 @ self.pi @ self.agents.demographics.T
         return mu
 
     def update_delta_with_characteristic(self, characteristic, X1_index=None):
         """Update delta to reflect a changed product characteristic if it is a column in X1."""
-        assert self.delta is not None
         if X1_index is None:
             return self.delta
         X1 = self.products.X1.copy()
@@ -311,11 +314,11 @@ class Market(object):
 
     def update_delta_with_prices(self, prices):
         """Update delta to reflect changed prices."""
-        return self.update_delta_with_characteristic(prices, self.get_price_indices()[0])
+        X1_index = self.get_price_indices()[0]
+        return self.update_delta_with_characteristic(prices, X1_index)
 
     def update_mu_with_characteristic(self, characteristic, X2_index=None):
         """Update mu to reflect a changed product characteristic if it is a column in X2."""
-        assert self.mu is not None
         if X2_index is None:
             return self.mu
         X2 = self.products.X2.copy()
@@ -324,7 +327,8 @@ class Market(object):
 
     def update_mu_with_prices(self, prices):
         """Update mu to reflect changed prices if they are a column in X2."""
-        return self.update_mu_with_characteristic(prices, self.get_price_indices()[1])
+        X2_index = self.get_price_indices()[1]
+        return self.update_mu_with_characteristic(prices, X2_index)
 
     def compute_probabilities(self, delta=None, mu=None, linear=True, eliminate_product=None):
         """Compute choice probabilities. By default, the delta with which this market was initialized and the mu that
@@ -332,12 +336,9 @@ class Market(object):
         already been exponentiated. If eliminate_product is specified, the product associated with the specified index
         is eliminated from the choice set.
         """
-        assert linear or (delta is not None and mu is not None)
         if delta is None:
-            assert self.delta is not None
             delta = self.delta
         if mu is None:
-            assert self.mu is not None
             mu = self.mu
         exp_utilities = np.exp(np.tile(delta, self.I) + mu) if linear else np.tile(delta, self.I) * mu
         if eliminate_product is not None:
@@ -346,13 +347,12 @@ class Market(object):
 
     def compute_utilities_by_characteristic_jacobian(self, X1_index=None, X2_index=None):
         """Compute the Jacobian of utilities with respect to a product characteristic in X1 or X2 (or both)."""
-        assert self.beta is not None and self.sigma is not None
         jacobian = np.zeros((self.J, self.I))
         if X1_index is not None:
             jacobian += self.beta[X1_index]
         if X2_index is not None:
             jacobian += self.sigma[X2_index] @ self.agents.nodes.T
-            if self.pi is not None:
+            if self.D > 0:
                 jacobian += self.pi[X2_index] @ self.agents.demographics.T
         return jacobian
 
@@ -373,7 +373,7 @@ class Market(object):
         capital_gamma = V @ np.diagflat(self.agents.weights) @ probabilities.T
         return capital_lambda - capital_gamma
 
-    def compute_zeta(self, ownership, utilities_jacobian, costs, prices=None):
+    def compute_zeta(self, ownership_matrix, utilities_jacobian, costs, prices=None):
         """Use an ownership matrix, the Jacobian of utilities with respect to prices, and marginal costs to compute the
         markup term in the zeta-markup equation. By default, unchanged choice probabilities are computed and the prices
         and shares with which this market was initialized are used.
@@ -389,10 +389,10 @@ class Market(object):
         V = probabilities * utilities_jacobian
         capital_lambda_inverse = np.diagflat(1 / (V @ self.agents.weights))
         capital_gamma = V @ np.diagflat(self.agents.weights) @ probabilities.T
-        tilde_capital_omega = capital_lambda_inverse @ (ownership * capital_gamma).T
+        tilde_capital_omega = capital_lambda_inverse @ (ownership_matrix * capital_gamma).T
         return tilde_capital_omega @ (prices - costs) - capital_lambda_inverse @ shares
 
-    def compute_eta(self, ownership, utilities_jacobian, prices=None):
+    def compute_eta(self, ownership_matrix, utilities_jacobian, prices=None):
         """Use an ownership matrix and the Jacobian of utilities with respect to prices to compute the markup term in
         the BLP-markup equation. By default, unchanged choice probabilities are computed and the prices and shares with
         which this market was initialized are used.
@@ -407,12 +407,12 @@ class Market(object):
             shares = probabilities @ self.agents.weights
         shares_jacobian = self.compute_shares_by_characteristic_jacobian(utilities_jacobian, probabilities)
         try:
-            return -scipy.linalg.solve(ownership * shares_jacobian, shares)
+            return -scipy.linalg.solve(ownership_matrix * shares_jacobian, shares)
         except ValueError:
             return np.full_like(shares, np.nan)
 
     def compute_costs(self):
         """Compute marginal costs with the BLP-markup equation."""
-        ownership = self.get_ownership_matrix()
+        ownership_matrix = self.get_ownership_matrix()
         jacobian = self.compute_utilities_by_prices_jacobian()
-        return self.products.prices - self.compute_eta(ownership, jacobian)
+        return self.products.prices - self.compute_eta(ownership_matrix, jacobian)

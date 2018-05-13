@@ -67,10 +67,9 @@ class Simulation(object):
 
     beta : `array-like`
         Configuration for values of demand-side linear parameters, :math:`\beta`, and for which product characteristics
-        are in :math:`X_1`. This vector must have one more element than `gamma` because the first element corresponds to
-        prices and hence cannot be zero and should probably be negative. Following elements correspond to the same
-        characteristics (a constant column and columns in :math:`X`) as do the elements of `gamma`, but shifted over by
-        one.
+        are in :math:`X_1`. This vector must have one more element than `gamma` because the first element, which if
+        specified is usually negative, corresponds to prices. Following elements correspond to the same characteristics
+        as do the elements of `gamma` (a constant column and columns in :math:`X`), but shifted over by one.
 
         If an element is zero, its corresponding characteristic will not be in :math:`X_1`. Nonzeros constitute
         :math:`\beta`.
@@ -79,20 +78,20 @@ class Simulation(object):
         Configuration for values of the Cholesky decomposition of the covariance matrix that measures agents' random
         taste distribution, :math:`\Sigma`, and for which product characteristics are in :math:`X_2`. This square matrix
         should have as many rows and columns as there are elements in `beta`, and the lower triangle must be all zeros.
-        Rows and columns correspond to the same characteristics (prices, a constant column, and columns in :math:`X`) as
-        do the elements of `beta`.
+        Rows and columns correspond to the same characteristics as do the elements of `beta` (prices, a constant column,
+        and columns in :math:`X`).
 
-        If a diagonal element is zero, its corresponding characteristic will not be in :math:`X_2`. Rows and columns
-        associated with nonzeros on the diagonal constitute :math:`\Sigma`.
+        If a diagonal element is zero, its corresponding characteristic will not be in :math:`X_2`, unless `pi` is
+        specified and has a nonzero on the row corresponding to the diagonal element. Rows and columns associated with
+        other elements constitute :math:`\Sigma`.
 
     pi : `array-like, optional`
         Configuration for values of parameters that measures how agent tastes vary with demographics, :math:`\Pi`, and
         for the number of demographics, :math:`d`. This matrix must have as many rows as `sigma`, since they correspond
-        to the same characteristics (prices, a constant column, and columns in :math:`X`) as do the rows of `sigma`.
+        to the same characteristics as do the rows of `sigma` (prices, a constant column, and columns in :math:`X`).
 
-        The number of columns with at least one nonzero element determines the number of demographic columns in
-        :math:`d`, and these columns along with rows associated with nonzeros on the diagonal of `sigma` constitute
-        :math:`\Pi`.
+        The number of columns with at least one nonzero determines the number of demographic columns in :math:`d`, and
+        these columns along with rows that constitute :math:`\Sigma` also constitute :math:`\Pi`.
 
     xi_variance : `float, optional`
         Variance of the unobserved demand-side product characteristics, :math:`\xi`. The default value is ``1.0``.
@@ -115,11 +114,10 @@ class Simulation(object):
     sigma : `ndarray`
         Cholesky decomposition of the covariance matrix that measures agents' random taste distribution, :math:`\Sigma`,
         which are the rows and columns from `sigma` in :class:`Simulation` initialization that are associated with
-        nonzeros on the diagonal.
+        nonzeros on the diagonal or, if specified, rows in `pi` with at least one nonzero.
     pi : `ndarray`
         Parameters that measures how agent tastes vary with demographics, :math:`\Pi`, which are columns from `pi` in
-        :class:`Simulation` with at least one nonzero, and rows from `pi` that are associated with nonzeros on the
-        diagonal of `sigma`.
+        :class:`Simulation` with at least one nonzero, and rows from `pi` that constitute :math:`\Sigma`.
     gamma : `ndarray`
         Supply-side linear parameters, :math:`\gamma`, which are the nonzeros from `gamma` in :class:`Simulation`
         initialization.
@@ -145,12 +143,13 @@ class Simulation(object):
         Unobserved supply-side product characteristics, :math:`\omega`, that were simulated during initialization.
     costs : `ndarray`
         Marginal costs, :math:`c`, that were simulated during initialization.
-    nonlinear_prices : `bool`
-        Whether prices are a nonlinear characteristic in :math:`X_2` in addition to being a linear characteristic in
-        :math:`X_1`.
     integration : `Integration`
         :class:`Integration` configuration for how nodes and weights for integration over agent utilities built during
         :class:`Simulation` initialization.
+    linear_prices : `bool`
+        Whether prices are included in :math:`X_1` as the first column.
+    nonlinear_prices : `bool`
+        Whether prices are included in :math:`X_2` as the first column.
     linear_costs : `bool`
         Whether :attr:`Simulation.costs` were simulated according to a linear or a log-linear marginal cost
         specification during :class:`Simulation` initialization.
@@ -173,8 +172,8 @@ class Simulation(object):
 
     Example
     -------
-    The following code simulates a small amount of data with two markets, nonlinear prices, a nonlinear constant,
-    a cost/linear characteristic, another cost characteristic, a demographic, and other agent data constructed
+    The following code simulates a small amount of data with two markets, both linear and nonlinear prices, a nonlinear
+    constant, a cost/linear characteristic, another cost characteristic, a demographic, and other agent data constructed
     according to a low level Gauss-Hermite product rule:
 
     .. ipython:: python
@@ -233,22 +232,28 @@ class Simulation(object):
         sigma = np.c_[np.asarray(sigma, options.dtype)]
         pi = None if pi is None else np.c_[np.asarray(pi, options.dtype)]
         if gamma.shape != (gamma.size, 1) or gamma.size < 1 or np.all(gamma == 0):
-            raise ValueError("gamma must be a vector with at least one nonzero element.")
-        if beta.shape != (gamma.size + 1, 1) or beta[0] == 0:
-            raise ValueError("beta must be a vector with a nonzero first element and with one more element than gamma.")
-        if sigma.shape != (beta.size, beta.size) or np.all(sigma.diagonal() == 0) or np.any(np.tril(sigma, -1) > 0):
+            raise ValueError("gamma must be a vector with at least one nonzero.")
+        if beta.shape != (gamma.size + 1, 1) or np.all(beta == 0):
+            raise ValueError("beta must be a vector with at least one nonzero and with one more element than gamma.")
+        if sigma.shape != (beta.size, beta.size) or np.all(sigma.diagonal() == 0) or np.any(np.tril(sigma, -1) != 0):
             raise ValueError(
                 "sigma must be a weakly upper triangular square matrix with as many rows and columns as there are "
                 "elements in beta."
             )
-        if pi is not None and pi.shape != (sigma.shape[0], pi.shape[1]):
-            raise ValueError(f"pi must be a matrix with as many rows as sigma.")
+        if pi is not None and (pi.shape != (sigma.shape[0], pi.shape[1]) or np.all(pi == 0)):
+            raise ValueError(f"pi must be a matrix with at least one nonzero and with as many rows as sigma.")
 
-        # identify nonzero parameter values
+        # determine which values will constitute parameter vectors and matrices
         gamma_indices = np.flatnonzero(gamma)
         beta_indices = np.flatnonzero(beta)
-        sigma_indices = np.flatnonzero(sigma.diagonal())
-        pi_indices = None if pi is None else np.flatnonzero(np.abs(pi).sum(axis=0))
+        if pi is None:
+            sigma_indices = np.flatnonzero(sigma.diagonal())
+            pi_indices = None
+        else:
+            sigma_indices = np.flatnonzero(np.abs(sigma.diagonal()) + np.abs(pi).sum(axis=1))
+            pi_indices = np.flatnonzero(np.abs(pi).sum(axis=0))
+
+        # select corresponding parameters
         self.gamma = gamma[gamma_indices]
         self.beta = beta[beta_indices]
         self.sigma = sigma[np.ix_(sigma_indices, sigma_indices)]
@@ -263,9 +268,12 @@ class Simulation(object):
         self.D = 0 if pi is None else self.pi.shape[1]
 
         # determine which product characteristics will go into which matrices
-        linear_indices = np.flatnonzero(beta[2:])
-        nonlinear_indices = np.flatnonzero(sigma.diagonal()[2:])
         cost_indices = np.flatnonzero(gamma[1:])
+        linear_indices = np.flatnonzero(beta[2:])
+        if pi is None:
+            nonlinear_indices = np.flatnonzero(np.abs(sigma.diagonal()[2:]))
+        else:
+            nonlinear_indices = np.flatnonzero(np.abs(sigma.diagonal()[2:]) + np.abs(pi[2:]).sum(axis=1))
 
         # set the seed before simulating data
         if seed is not None:
@@ -273,21 +281,30 @@ class Simulation(object):
 
         # simulate product characteristics and construct matrices of non-constant exogenous product characteristics
         self.characteristics = np.random.rand(self.N, beta.size - 2).astype(options.dtype)
+        cost_characteristics = self.characteristics[:, cost_indices]
         linear_characteristics = self.characteristics[:, linear_indices]
         nonlinear_characteristics = self.characteristics[:, nonlinear_indices]
-        cost_characteristics = self.characteristics[:, cost_indices]
+
+        # validate that prices are in X1 or X2 (or both)
+        self.linear_prices = beta[0] != 0
+        self.nonlinear_prices = sigma[0, 0] != 0 or (pi is not None and np.abs(pi[0]).sum() != 0)
+        if not self.linear_prices and not self.nonlinear_prices:
+            raise ValueError(
+                "Prices must be in X1 or X2 (or both), so one or more of the following must be nonzero: the first "
+                "element of beta, the first element on the diagonal of sigma, or an element in the first row of pi."
+            )
 
         # add constant columns to the matrices of product characteristics
-        linear_constant = nonlinear_constant = cost_constant = False
-        if beta[1] != 0:
-            linear_constant = True
-            linear_characteristics = np.c_[np.ones(self.N), linear_characteristics]
-        if sigma[1, 1] != 0:
-            nonlinear_constant = True
-            nonlinear_characteristics = np.c_[np.ones(self.N), nonlinear_characteristics]
+        cost_constant = linear_constant = nonlinear_constant = False
         if gamma[0] != 0:
             cost_constant = True
             cost_characteristics = np.c_[np.ones(self.N), cost_characteristics]
+        if beta[1] != 0:
+            linear_constant = True
+            linear_characteristics = np.c_[np.ones(self.N), linear_characteristics]
+        if sigma[1, 1] != 0 or (pi is not None and np.abs(pi[1]).sum() != 0):
+            nonlinear_constant = True
+            nonlinear_characteristics = np.c_[np.ones(self.N), nonlinear_characteristics]
 
         # associate characteristic column indices with column indices in each subset of characteristics
         self.characteristic_indices = []
@@ -333,7 +350,6 @@ class Simulation(object):
         self.MS = supply_instruments.shape[1]
 
         # structure all product data except for shares and prices, which for now are nullified
-        self.nonlinear_prices = sigma[0, 0] != 0
         self.product_data = Matrices({
             'market_ids': (market_ids, np.object),
             'firm_ids': (firm_ids, np.object),
@@ -346,7 +362,7 @@ class Simulation(object):
             'demand_instruments': (demand_instruments, options.dtype),
             'supply_instruments': (supply_instruments, options.dtype)
         })
-        self.products = Products(self.product_data, self.nonlinear_prices)
+        self.products = Products(self.product_data, self.linear_prices, self.nonlinear_prices)
 
         # validate integration
         if not isinstance(integration, Integration):
@@ -439,8 +455,8 @@ class Simulation(object):
         mapping = {}
         for t in np.unique(self.products.market_ids):
             market_t = SimulationMarket(
-                t, self.nonlinear_prices, self.products, self.agents, xi=self.xi, beta=self.beta, sigma=self.sigma,
-                pi=self.pi
+                t, self.linear_prices, self.nonlinear_prices, self.products, self.agents, xi=self.xi, beta=self.beta,
+                sigma=self.sigma, pi=self.pi
             )
             prices_t = prices[self.products.market_ids.flat == t]
             costs_t = self.costs[self.products.market_ids.flat == t]
@@ -498,9 +514,9 @@ class SimulationMarket(Market):
             np.seterrcall(lambda *_: errors.add(exceptions.SyntheticPricesFloatingPointError))
 
             # solve the fixed point problem
-            ownership = self.get_ownership_matrix(firms_index)
+            ownership_matrix = self.get_ownership_matrix(firms_index)
             jacobian = self.compute_utilities_by_prices_jacobian()
-            contraction = lambda p: costs + self.compute_zeta(ownership, jacobian, costs, p)
+            contraction = lambda p: costs + self.compute_zeta(ownership_matrix, jacobian, costs, p)
             prices, converged, iterations, evaluations = iteration._iterate(initial_prices, contraction)
 
             # store whether the fixed point converged

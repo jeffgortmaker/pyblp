@@ -64,9 +64,9 @@ class Results(object):
         to the same product characteristics as in `sigma`. Columns correspond to the columns of the `demographics` field
         of `agent_data` in :class:`Problem` initialization.
     beta : `ndarray`
-        Estimated demand-side linear parameters, :math:`\hat{\beta}`. The first element corresponds to prices and if
-        `product_data` in :class:`Problem` initialization contained a `nonlinear_characteristics` field, all other
-        elements correspond to its columns.
+        Estimated demand-side linear parameters, :math:`\hat{\beta}`. If `linear_prices` in :class:`Problem`
+        initialization was ``True``, the first element corresponds to prices, and if `product_data` contained a
+        `linear_characteristics` field, all other elements correspond to its columns.
     gamma : `ndarray`
         Estimated supply-side linear parameters, :math:`\hat{\gamma}`, which are ``None`` if the problem that created
         these results was not initialized with supply-side data. Elements correspond to columns in the
@@ -74,8 +74,7 @@ class Results(object):
     sigma_se : `ndarray`
         Estimated standard errors for unknown :math:`\hat{\Sigma}` elements in :math:`\hat{\theta}`.
     pi_se : `ndarray`
-        Estimated standard errors for unknown :math:`\hat{\Pi}` elements in :math:`\hat{\theta}`, which are ``None`` if
-        the problem that created these results was not initialized with demographics.
+        Estimated standard errors for unknown :math:`\hat{\Pi}` elements in :math:`\hat{\theta}`.
     beta_se : `ndarray`
         Estimated standard errors for :math:`\hat{\beta}`.
     gamma_se : `ndarray`
@@ -214,7 +213,11 @@ class Results(object):
         ])
 
         # construct a table of linear estimates
-        linear_header = ["Beta:", "Price"] + [f"Linear #{i}" for i in range(self.beta.size - 1)]
+        linear_header = ["Beta:"]
+        if self.problem.linear_prices:
+            linear_header.append("Price")
+        for linear_index in range(self.beta.size - int(self.problem.linear_prices)):
+            linear_header.append(f"Linear #{linear_index}")
         linear_formatter = output.table_formatter([14] + [max(len(k), options.digits + 8) for k in linear_header[1:]])
         sections.append([
             "Linear Parameter Estimates (SEs in Parentheses)",
@@ -250,7 +253,7 @@ class Results(object):
         return "\n\n".join("\n".join(s) for s in sections)
 
     def __repr__(self):
-        """The representation of a class instance is also its string representation."""
+        """Get the string representation."""
         return str(self)
 
     def _compute_W(self, u, Z, center_moments, side):
@@ -332,11 +335,11 @@ class Results(object):
             raise ValueError("linear_index and nonlinear_index cannot both be None.")
 
         # validate the indices
-        linear_indices = frozenset(range(self.problem.K1 - 1))
+        linear_indices = frozenset(range(self.problem.K1 - int(self.problem.linear_prices)))
         nonlinear_indices = frozenset(range(self.problem.K2 - int(self.problem.nonlinear_prices)))
         if linear_index is not None:
             if not linear_indices:
-                raise ValueError("Price is the only linear characteristic, so linear_index must be None.")
+                raise ValueError("There are no non-price linear characteristics, so linear_index must be None.")
             if linear_index not in linear_indices:
                 raise ValueError(f"linear_index must be None or one of {list(linear_indices)}.")
         if nonlinear_index is not None:
@@ -346,7 +349,7 @@ class Results(object):
                 raise ValueError(f"nonlinear_index must be None or one of {list(nonlinear_indices)}.")
 
         # determine the corresponding indices in X1 and X2
-        X1_index = None if linear_index is None else linear_index + 1
+        X1_index = None if linear_index is None else linear_index + int(self.problem.linear_prices)
         X2_index = None if nonlinear_index is None else nonlinear_index + int(self.problem.nonlinear_prices)
 
         # if the characteristic is in both X1 and X2, make sure that it is identical in both
@@ -372,8 +375,8 @@ class Results(object):
         args_mapping = {}
         for t in self.unique_market_ids:
             market_t = ResultsMarket(
-                t, self.problem.nonlinear_prices, self.problem.products, self.problem.agents, self.delta, self.xi,
-                self.beta, self.sigma, self.pi
+                t, self.problem.linear_prices, self.problem.nonlinear_prices, self.problem.products,
+                self.problem.agents, self.delta, self.xi, self.beta, self.sigma, self.pi
             )
             args_t = [None if a is None else a[self.problem.products.market_ids.flat == t] for a in market_args]
             args_mapping[t] = [market_t] + list(fixed_args) + args_t
@@ -912,18 +915,20 @@ class ResultsMarket(Market):
             costs = super().compute_costs()
         except scipy.linalg.LinAlgError:
             errors.add(exceptions.CostsSingularityError)
-            costs = np.full((self.J, 1), np.nan)
+            costs = np.full((self.J, 1), np.nan, options.dtype)
         return costs, errors
 
     def solve_approximate_merger(self, firms_index, costs):
         """Market-specific computation for Results.solve_approximate_merger."""
         jacobian = self.compute_utilities_by_prices_jacobian()
-        ownership = self.get_ownership_matrix(firms_index)
-        prices = costs + self.compute_eta(ownership, jacobian)
+        ownership_matrix = self.get_ownership_matrix(firms_index)
+        prices = costs + self.compute_eta(ownership_matrix, jacobian)
         return prices, set()
 
     def solve_merger(self, firms_index, iteration, costs, prices=None):
         """Market-specific computation for Results.solve_merger."""
+        if prices is None:
+            prices = self.products.prices
 
         # configure numpy to identify floating point errors
         errors = set()
@@ -931,10 +936,10 @@ class ResultsMarket(Market):
             np.seterrcall(lambda *_: errors.add(exceptions.ChangedPricesFloatingPointError))
 
             # solve the fixed point problem
-            ownership = self.get_ownership_matrix(firms_index)
+            ownership_matrix = self.get_ownership_matrix(firms_index)
             jacobian = self.compute_utilities_by_prices_jacobian()
-            contraction = lambda p: costs + self.compute_zeta(ownership, jacobian, costs, p)
-            prices, converged = iteration._iterate(self.products.prices if prices is None else prices, contraction)[:2]
+            contraction = lambda p: costs + self.compute_zeta(ownership_matrix, jacobian, costs, p)
+            prices, converged = iteration._iterate(prices, contraction)[:2]
 
         # store whether the fixed point converged
         if not converged:

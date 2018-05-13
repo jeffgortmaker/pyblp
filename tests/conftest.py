@@ -33,7 +33,9 @@ def configure():
 
 @pytest.fixture
 def small_simulation():
-    """Solve a simulation with two markets, a cost characteristic, a nonlinear characteristic, and an acquisition."""
+    """Solve a simulation with two markets, linear prices, a cost characteristic, a nonlinear characteristic, and an
+    acquisition.
+    """
     simulation = Simulation(
         build_id_data(T=2, J=18, F=3, mergers=[{1: 0}]),
         Integration('product', 3),
@@ -55,8 +57,8 @@ def small_simulation():
 
 @pytest.fixture
 def medium_simulation():
-    """Solve a simulation with four markets, nonlinear prices, a cost/nonlinear constant, two cost characteristics, two
-    linear characteristics, a demographic, a double acquisition, and a non-standard ownership structure.
+    """Solve a simulation with four markets, a cost/nonlinear constant, two cost characteristics, two linear
+    characteristics, a demographic interacted with prices, a double acquisition, and a non-standard ownership structure.
     """
     id_data = build_id_data(T=4, J=25, F=6, mergers=[{f: 2 for f in range(2)}])
     basic_product_data = {
@@ -68,9 +70,9 @@ def medium_simulation():
         basic_product_data,
         Integration('product', 4),
         gamma=[1, 1, 2, 0, 0],
-        beta=[-5, 0, 0, 0, 2, 1],
+        beta=[0, 0, 0, 0, 2, 1],
         sigma=[
-            [1, 0,   0, 0, 0, 0],
+            [0, 0,   0, 0, 0, 0],
             [0, 0.5, 0, 0, 0, 0],
             [0, 0,   0, 0, 0, 0],
             [0, 0,   0, 0, 0, 0],
@@ -78,7 +80,7 @@ def medium_simulation():
             [0, 0,   0, 0, 0, 0]
         ],
         pi=[
-            [1],
+            [-3],
             [0],
             [0],
             [0],
@@ -95,9 +97,10 @@ def medium_simulation():
 
 @pytest.fixture
 def large_simulation():
-    """Solve a simulation with ten markets, nonlinear prices, a cost/linear constant, a cost/linear/nonlinear
-    characteristic, a cost characteristic, a linear characteristic, two demographics, dense parameter matrices, an
-    acquisition, a triple acquisition, and a log-linear cost specification.
+    """Solve a simulation with ten markets, linear/nonlinear prices, a cost/linear constant, a cost/linear/nonlinear
+    characteristic, a cost characteristic, a linear characteristic, demographics interacted with prices and the
+    cost/linear/nonlinear characteristic, dense parameter matrices, an acquisition, a triple acquisition, and a
+    log-linear cost specification.
     """
     simulation = Simulation(
         build_id_data(T=10, J=20, F=9, mergers=[{f: 4 + int(f > 0) for f in range(4)}]),
@@ -145,7 +148,10 @@ def simulated_problem(request):
     simulation, product_data = request.getfixturevalue(f'{name}_simulation')
     if not supply:
         product_data = np.lib.recfunctions.drop_fields(product_data, ['cost_characteristics', 'supply_instruments'])
-    problem = Problem(product_data, simulation.agent_data, nonlinear_prices=simulation.nonlinear_prices)
+    problem = Problem(
+        product_data, simulation.agent_data, linear_prices=simulation.linear_prices,
+        nonlinear_prices=simulation.nonlinear_prices
+    )
     results = problem.solve(simulation.sigma, simulation.pi, steps=1, linear_costs=simulation.linear_costs)
     return simulation, problem, results
 
@@ -170,16 +176,16 @@ def knittel_metaxoglou_2014():
 
     """
     data = np.recfromcsv(BLP_PRODUCTS_LOCATION)
-    linear_characteristics = np.c_[np.ones(data.size), data['hpwt'], data['air'], data['mpg'], data['space']]
+    characteristics = np.c_[np.ones(data.size), data['hpwt'], data['air'], data['mpg'], data['space']]
     product_data = {k: data[k] for k in data.dtype.names}
     product_data.update({
         'firm_ids': np.c_[data['firm_ids'], data['changed_firm_ids']],
-        'linear_characteristics': linear_characteristics,
-        'nonlinear_characteristics': linear_characteristics[:, :-1],
-        'demand_instruments': np.c_[linear_characteristics, build_blp_instruments({
+        'linear_characteristics': characteristics,
+        'nonlinear_characteristics': characteristics[:, :-1],
+        'demand_instruments': np.c_[characteristics, build_blp_instruments({
             'market_ids': data['market_ids'],
             'firm_ids': data['firm_ids'],
-            'characteristics': linear_characteristics
+            'characteristics': characteristics
         })]
     })
     problem = Problem(product_data, np.recfromcsv(BLP_AGENTS_LOCATION))

@@ -30,8 +30,7 @@ class SyntheticPricesFloatingPointError(Exception):
         return (
             "Encountered floating point issues when computing synthetic prices. This problem is often due to overflow "
             "and can sometimes be mitigated by making sure that the specified parameters are reasonable. For example, "
-            "the linear parameter on price should be negative and should overwhelm the effects of nonlinear parameters "
-            "on prices."
+            "the parameters on prices should imply a generally downward sloping demand curve."
         )
 
 

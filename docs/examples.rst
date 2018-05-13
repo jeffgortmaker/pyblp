@@ -164,7 +164,7 @@ Problem data along with agent data or an integration configuration are used to i
 The Automobile Problem
 ~~~~~~~~~~~~~~~~~~~~~~
 
-The :class:`Integration` configuration will be used by :class:`Problem` to build agent data. By default, :class:`Problem` includes prices, :math:`p`, in :math:`X_2`. We'll use the `nonlinear_prices` argument to include prices only in :math:`X_1` as in :ref:`Berry, Levinsohn, and Pakes (1995) <blp95>`.
+The :class:`Integration` configuration will be used by :class:`Problem` to build agent data. By default, :class:`Problem` includes prices, :math:`p`, in :math:`X_1` and :math:`X_2` as the first column in both matrices. We'll use the `nonlinear_prices` argument to include prices only in :math:`X_1` as in :ref:`Berry, Levinsohn, and Pakes (1995) <blp95>`.
 
 .. ipython:: python
 
@@ -195,7 +195,7 @@ Estimates, which are in the same order as product characteristics configured dur
 The Fake Cereal Problem
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-Unlike the automobile problem, we have included demographics in the agent data for the fake cereal problem and we have not included supply-side information in its product data. Also, we will configure this problem to include prices in :math:`X_2`, which is the default for :class:`Problem`.
+Unlike the automobile problem, we have included demographics in the agent data for the fake cereal problem and we have not included supply-side information in its product data. Also, we will configure this problem to include prices in both :math:`X_1` and :math:`X_2`, which is the default behavior of :class:`Problem`.
 
 .. ipython:: python
 
@@ -498,9 +498,9 @@ We'll then pass these along with parameter matrix configurations to :class:`Simu
        seed=0
    )
 
-For a detailed explanation of how to use parameter matrices to configure all sorts of simulations, refer to :class:`Simulation`. Generally, the first element in `beta` and the first row in `sigma` and `pi` all correspond to prices. The following element in `beta`, the following row in `sigma` and `pi`, and the first element in `gamma` all correspond to a constant column. All following elements and rows correspond to other product characteristics.
+For a detailed explanation of how to use parameter matrices to configure many types of simulations, refer to the :class:`Simulation` documentation. Generally, the first element in `beta` and the first row in `sigma` and `pi` correspond to prices. The following element in `beta`, the following row in `sigma` and `pi`, and the first element in `gamma` correspond to a constant column. All following elements and rows correspond to other product characteristics.
 
-The first three elements of `gamma` are nonzero, so :math:`X_3` is a constant column followed by two simulated product characteristics. The first three elements of `beta` are also nonzero, so :math:`X_1` is prices followed by a constant column and the first simulated product characteristic in :math:`X_3`. Only the last element on the diagonal of `sigma` is nonzero, so :math:`X_2` is simply a third simulated product characteristic. There is one column in :math:`pi`, so :math:`d` is a single simulated demographic.
+The first three elements of `gamma` are nonzero, so :math:`X_3` consists of a constant column followed by two simulated product characteristics. The first three elements of `beta` are also nonzero, so :math:`X_1` consists of prices followed by a constant column and the first simulated product characteristic in :math:`X_3`. Only the last element on the diagonal of `sigma` is nonzero, so :math:`X_2` is simply a third simulated product characteristic. There is one column in :math:`pi`, so :math:`d` is a single simulated demographic.
 
 When :class:`Simulation` is initialized, it constructs agent data and simulates all product data except for prices and shares.
 
@@ -542,4 +542,4 @@ Now, we can try to recover the true parameters by creating and solving a :class:
 
 The parameters seem to have been estimated reasonably well.
 
-In addition to checking that the configuration for a model based on actual data makes sense, the :class:`Simulation` class can also be a helpful tool for better understanding under what general conditions BLP models can be accurately estimated. Additionally, it is used extensively in pyblp's test suite.
+In addition to checking that the configuration for a model based on actual data makes sense, the :class:`Simulation` class can also be a helpful tool for better understanding under what general conditions BLP models can be accurately estimated. Simulations are also used extensively in pyblp's test suite.

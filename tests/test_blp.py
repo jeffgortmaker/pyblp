@@ -19,7 +19,12 @@ def test_accuracy(simulated_problem, solve_options):
     simulation, problem, _ = simulated_problem
 
     # solve the problem
-    results = problem.solve(simulation.sigma, simulation.pi, linear_costs=simulation.linear_costs, **solve_options)
+    results = problem.solve(
+        0.5 * simulation.sigma,
+        0.5 * simulation.pi if simulation.pi is not None else None,
+        linear_costs=simulation.linear_costs,
+        **solve_options
+    )
 
     # test the accuracy of the estimated parameters
     for key in ['gamma', 'beta', 'sigma', 'pi']:
@@ -264,20 +269,21 @@ def test_bounds(simulated_problem, method):
         pi_index = (simulation.pi.nonzero()[0][0], simulation.pi.nonzero()[1][0])
         pi_value = unbounded_results.pi[pi_index]
 
-    # use different types of binding bounds
+    # use different types of binding bounds and skip types that fix all parameters
     for lb_scale, ub_scale in [(+np.inf, -0.1), (-0.1, +np.inf), (+1, -0.1), (-0.1, +1), (0, 0)]:
         binding_sigma_bounds = (np.full_like(simulation.sigma, -np.inf), np.full_like(simulation.sigma, +np.inf))
         binding_sigma_bounds[0][sigma_index] = sigma_value - lb_scale * np.abs(sigma_value)
         binding_sigma_bounds[1][sigma_index] = sigma_value + ub_scale * np.abs(sigma_value)
-        binding_pi_bounds = None
-        if simulation.pi is not None:
+        if simulation.pi is None:
+            binding_pi_bounds = None
+            if np.array_equal(*map(np.abs, binding_sigma_bounds)):
+                continue
+        else:
             binding_pi_bounds = (np.full_like(simulation.pi, -np.inf), np.full_like(simulation.pi, +np.inf))
             binding_pi_bounds[0][pi_index] = pi_value - lb_scale * np.abs(pi_value)
             binding_pi_bounds[1][pi_index] = pi_value + ub_scale * np.abs(pi_value)
-
-        # skip fixing parameters if there are no unfixed parameters
-        if np.array_equal(*binding_sigma_bounds):
-            continue
+            if np.array_equal(*map(np.abs, binding_sigma_bounds)) and np.array_equal(*map(np.abs, binding_pi_bounds)):
+                continue
 
         # solve the problem with binding bounds and test that they are essentially respected
         binding_results = solve(binding_sigma_bounds, binding_pi_bounds)
@@ -299,7 +305,10 @@ def test_extra_nodes(simulated_problem):
     # reconstruct the problem with unnecessary columns of nodes
     agent_data2 = {k: simulation.agent_data[k] for k in simulation.agent_data.dtype.names}
     agent_data2['nodes'] = np.c_[agent_data2['nodes'], agent_data2['nodes']]
-    problem2 = Problem(simulation.product_data, agent_data2, nonlinear_prices=simulation.nonlinear_prices)
+    problem2 = Problem(
+        simulation.product_data, agent_data2, linear_prices=simulation.linear_prices,
+        nonlinear_prices=simulation.nonlinear_prices
+    )
 
     # test that the agents are essentially identical
     for key in problem1.agents.dtype.names:
@@ -326,7 +335,10 @@ def test_extra_demographics(simulated_problem):
         market_ids_list.append(np.c_[np.repeat(t, 2 * demographics_t.shape[0])])
         demographics_list.append(np.r_[demographics_t, demographics_t])
     agent_data2 = {'market_ids': np.concatenate(market_ids_list), 'demographics': np.concatenate(demographics_list)}
-    problem2 = Problem(simulation.product_data, agent_data2, simulation.integration, simulation.nonlinear_prices)
+    problem2 = Problem(
+        simulation.product_data, agent_data2, simulation.integration, simulation.linear_prices,
+        simulation.nonlinear_prices
+    )
 
     # test that the agents are essentially identical
     for key in problem1.agents.dtype.names:
@@ -364,8 +376,8 @@ def test_objective_gradient(simulated_problem, solve_options):
 
     # test the gradient at parameter values slightly different from the true ones so that the objective is sizable
     problem.solve(
-        0.5 * simulation.sigma,
-        0.5 * simulation.pi if simulation.pi is not None else None,
+        0.99 * simulation.sigma,
+        0.99 * simulation.pi if simulation.pi is not None else None,
         steps=1,
         linear_costs=simulation.linear_costs,
         optimization=Optimization(test_finite_differences),
