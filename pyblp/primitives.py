@@ -275,7 +275,6 @@ class Market(object):
 
     def get_price_indices(self):
         """Get the indices of prices in X1 and X2."""
-        # todo: make sure this works when prices only enter as an interaction w demographics
         X1_index = 0 if self.linear_prices else None
         X2_index = 0 if self.nonlinear_prices else None
         return X1_index, X2_index

@@ -416,10 +416,7 @@ class Problem(object):
                 wrapper.evaluation_mappings.append(info.evaluation_mapping)
                 if optimization._universal_display:
                     output(info.format_progress(
-                        step,
-                        current_iterations,
-                        current_evaluations,
-                        wrapper.smallest_objective,
+                        step, current_iterations, current_evaluations, wrapper.smallest_objective,
                         wrapper.smallest_gradient_norm
                     ))
                 wrapper.smallest_objective = min(wrapper.smallest_objective, info.objective)
@@ -455,15 +452,8 @@ class Problem(object):
             output(f"Computing results for step {step} ...")
             step_info = compute_step_info(theta, wrapper.cache, compute_gradient=True)
             results = step_info.to_results(
-                last_results,
-                start_time,
-                end_time,
-                iterations,
-                evaluations,
-                wrapper.iteration_mappings,
-                wrapper.evaluation_mappings,
-                center_moments,
-                se_type
+                last_results, start_time, end_time, iterations, evaluations, wrapper.iteration_mappings,
+                wrapper.evaluation_mappings, center_moments, se_type
             )
             delta = step_info.delta
             jacobian = step_info.jacobian
@@ -891,11 +881,7 @@ class ObjectiveInfo(object):
 
         # if this is the first iteration, include the header
         if current_evaluations == 1:
-            lines.extend([
-                formatter([k[0] for k in header]),
-                formatter([k[1] for k in header]),
-                formatter.lines()
-            ])
+            lines.extend([formatter([k[0] for k in header]), formatter([k[1] for k in header]), formatter.lines()])
 
         # include the progress update
         objective_improved = np.isfinite(smallest_objective) and self.objective < smallest_objective

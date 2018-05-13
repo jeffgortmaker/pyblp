@@ -187,7 +187,6 @@ def quadrature_rule(level, nested):
     if not nested:
         raw_nodes, raw_weights = np.polynomial.hermite.hermgauss(level)
         return raw_nodes * np.sqrt(2), raw_weights / np.sqrt(np.pi)
-
     node_data, weight_data = nested_data(level)
     return np.r_[-node_data[::-1], 0, node_data], np.r_[weight_data[::-1], weight_data[1:]]
 
@@ -434,7 +433,7 @@ def nested_data(level):
     ]
     max_level = len(node_data_list) + 1
     if level > max_level:
-        raise ValueError("The nested rule is only available up to a level of {}.".format(max_level))
+        raise ValueError(f"The nested rule is only available up to a level of {max_level}.")
     node_data = np.array(node_data_list[level - 1])
     weight_data = np.array(weight_data_list[level - 1])
     return node_data, weight_data

@@ -177,12 +177,10 @@ class Results(object):
             self.cumulative_optimization_iterations += last_results.cumulative_optimization_iterations
             self.cumulative_objective_evaluations += last_results.cumulative_objective_evaluations
             self.cumulative_fp_iterations = np.c_[
-                last_results.cumulative_fp_iterations,
-                self.cumulative_fp_iterations
+                last_results.cumulative_fp_iterations, self.cumulative_fp_iterations
             ]
             self.cumulative_contraction_evaluations = np.c_[
-                last_results.cumulative_contraction_evaluations,
-                self.cumulative_contraction_evaluations
+                last_results.cumulative_contraction_evaluations, self.cumulative_contraction_evaluations
             ]
 
     def __str__(self):

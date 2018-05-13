@@ -175,20 +175,16 @@ class Iteration(object):
 
         # solve the problem and convert the raw final values to the same data type and shape as the initial values
         raw_final_values, converged = self._iterator(
-            raw_initial_values,
-            contraction_wrapper,
-            iteration_callback,
-            **self._method_options
+            raw_initial_values, contraction_wrapper, iteration_callback, **self._method_options
         )
         final_values = np.asarray(raw_final_values).reshape(initial_values.shape).astype(initial_values.dtype)
         return final_values, converged, iteration_callback.iterations, contraction_wrapper.evaluations
 
 
-def squarem_iterator(x, contraction, iteration_callback, max_evaluations, tol, norm, scheme, step_min, step_max, step_factor):
-    """Apply the SQUAREM acceleration method for fixed point iteration. The fixed point array and a flag for whether the
-    routine converged are both returned.
-    """
-
+def squarem_iterator(initial, contraction, iteration_callback, max_evaluations, tol, norm, scheme, step_min, step_max,
+                     step_factor):
+    """Apply the SQUAREM acceleration method for fixed point iteration."""
+    x = initial
     evaluations = 0
     while True:
         # first step
@@ -244,10 +240,9 @@ def squarem_iterator(x, contraction, iteration_callback, max_evaluations, tol, n
     return x, evaluations < max_evaluations and np.isfinite(x).all()
 
 
-def simple_iterator(x, contraction, iteration_callback, max_evaluations, tol, norm):
-    """Perform simple fixed point iteration with no acceleration. The fixed point array and a flag for whether the
-    routine converged are both returned.
-    """
+def simple_iterator(initial, contraction, iteration_callback, max_evaluations, tol, norm):
+    """Apply simple fixed point iteration with no acceleration."""
+    x = initial
     evaluations = 0
     while True:
         # for simple iteration, a contraction evaluation is the same as a major iteration

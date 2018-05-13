@@ -47,11 +47,7 @@ def test_trivial_changes(simulated_problem, solve_options1, solve_options2):
     results = []
     for solve_options in [solve_options1, solve_options2]:
         results.append(problem.solve(
-            simulation.sigma,
-            simulation.pi,
-            steps=1,
-            linear_costs=simulation.linear_costs,
-            **solve_options
+            simulation.sigma, simulation.pi, steps=1, linear_costs=simulation.linear_costs, **solve_options
         ))
 
     # test that all arrays in the results are essentially identical
@@ -177,12 +173,7 @@ def test_second_step(simulated_problem):
     # manually get the same results
     results1 = problem.solve(simulation.sigma, simulation.pi, steps=1)
     results2 = problem.solve(
-        results1.sigma,
-        results1.pi,
-        delta=results1.delta,
-        WD=results1.updated_WD,
-        WS=results1.updated_WS,
-        steps=1
+        results1.sigma, results1.pi, delta=results1.delta, WD=results1.updated_WD, WS=results1.updated_WS, steps=1
     )
     assert results1.step == results2.step == 1 and results1.last_results is None and results2.last_results is None
 

@@ -248,11 +248,7 @@ class Optimization(object):
 
         # solve the problem and convert the raw final values to the same data type and shape as the initial values
         raw_final_values, converged = self._optimizer(
-            raw_initial_values,
-            raw_bounds,
-            objective_wrapper,
-            iteration_callback,
-            **self._method_options
+            raw_initial_values, raw_bounds, objective_wrapper, iteration_callback, **self._method_options
         )
         final_values = np.asarray(raw_final_values).astype(initial_values.dtype).reshape(initial_values.shape)
         return final_values, converged, iteration_callback.iterations, objective_wrapper.evaluations
@@ -263,13 +259,8 @@ def scipy_optimizer(initial_values, bounds, objective_function, iteration_callba
     """Optimize with a SciPy method."""
     import scipy.optimize
     results = scipy.optimize.minimize(
-        objective_function,
-        initial_values,
-        method=method,
-        jac=compute_gradient,
-        bounds=bounds,
-        callback=lambda *_: iteration_callback(),
-        options=scipy_options
+        objective_function, initial_values, method=method, jac=compute_gradient, bounds=bounds,
+        callback=lambda *_: iteration_callback(), options=scipy_options
     )
     return results.x, results.success
 
@@ -385,17 +376,8 @@ def knitro_optimizer(initial_values, bounds, objective_function, iteration_callb
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
             return_code = knitro.KTR_solve(
-                kc=knitro_context,
-                x=values_store,
-                lambda_=np.zeros_like(initial_values),
-                evalStatus=0,
-                obj=np.array([0]),
-                c=None,
-                objGrad=None,
-                jac=None,
-                hess=None,
-                hessVector=None,
-                userParams=None
+                kc=knitro_context, x=values_store, lambda_=np.zeros_like(initial_values), evalStatus=0,
+                obj=np.array([0]), c=None, objGrad=None, jac=None, hess=None, hessVector=None, userParams=None
             )
 
         # Knitro was only successful if its return code was 0 (final solution satisfies the termination conditions for
