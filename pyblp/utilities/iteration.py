@@ -1,7 +1,5 @@
 """Fixed-point iteration routines."""
 
-import functools
-
 import numpy as np
 
 
@@ -33,7 +31,7 @@ class Iteration(object):
         Options for the fixed point iteration routine. Both non-custom routines support the following options:
 
             - **max_evaluations** : (`int`) - Maximum number of contraction mapping evaluations. The default value is
-              ``10000``.
+              ``5000``.
 
             - **tol** : (`float`) - Tolerance for convergence of the configured norm. The default value is ``1e-14``.
 
@@ -117,7 +115,7 @@ class Iteration(object):
         self._iterator, self._description = methods[method]
         self._method_options = {
             'tol': 1e-14,
-            'max_evaluations': 50000,
+            'max_evaluations': 5000,
             'norm': infinity_norm
         }
         if self._iterator == squarem_iterator:
