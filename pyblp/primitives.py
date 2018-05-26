@@ -4,7 +4,6 @@ import numpy as np
 import scipy.linalg
 
 from . import options
-from .construction import build_ownership
 from .utilities import output, extract_matrix, Matrices, Integration
 
 
@@ -55,25 +54,16 @@ class Products(Matrices):
         J = np.unique(market_ids, return_counts=True)[1].max()
 
         # load or build ownership matrices
-        ownership = extract_matrix(product_data, 'ownership')
         if firm_ids is None:
             ownership = None
-        elif ownership is None:
-            output("Building ownership matrices for each market ...")
-            ownership = build_ownership({'market_ids': market_ids, 'firm_ids': firm_ids})
-            output("Built ownership matrices.")
-        elif ownership.shape[1] % J > 0 or ownership.shape[1] > J * firm_ids.shape[1]:
-            raise ValueError(
-                f"The ownership field of product_data must have a number of columns that is a multiple of {J} and that "
-                f"does not exceed {J * firm_ids.shape[1]}."
-            )
-        elif ownership.shape[1] < J * firm_ids.shape[1]:
-            output("Using specified ownership matrices and building unspecified ones for each market ...")
-            unmatched_firm_ids = firm_ids[:, ownership.shape[1] / J:]
-            ownership = np.c_[ownership, build_ownership({'market_ids': market_ids, 'firm_ids': unmatched_firm_ids})]
-            output("Build unspecified ownership matrices.")
         else:
-            output("Using specified ownership matrices.")
+            ownership = extract_matrix(product_data, 'ownership')
+            if ownership is None:
+                output("Computing ownership matrices only when they are needed.")
+            elif ownership.shape[1] != J * firm_ids.shape[1]:
+                raise ValueError(f"The ownership field of product data must have {J * firm_ids.shape[1]} columns.")
+            else:
+                output("Using specified ownership matrices.")
 
         # load shares
         shares = extract_matrix(product_data, 'shares')
@@ -292,9 +282,13 @@ class Market(object):
         return self.products.X1[:, [X1_index]] if X2_index is None else self.products.X2[:, [X2_index]]
 
     def get_ownership_matrix(self, firms_index=0):
-        """Get an ownership matrix. By default, unchanged firm IDs are used."""
-        offset = firms_index * self.products.ownership.shape[1] // self.products.firm_ids.shape[1]
-        return self.products.ownership[:, offset:offset + self.J]
+        """Get a pre-computed ownership matrix or builds one. By default, unchanged firm IDs are used."""
+        try:
+            offset = firms_index * self.products.ownership.shape[1] // self.products.firm_ids.shape[1]
+            return self.products.ownership[:, offset:offset + self.J]
+        except AttributeError:
+            tiled_ids = np.tile(self.products.firm_ids[:, [firms_index]], self.J)
+            return np.where(tiled_ids == tiled_ids.T, 1, 0)
 
     def compute_delta(self, X1=None):
         """Compute delta. By default, the X1 with which this market was initialized is used."""
