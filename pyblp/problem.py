@@ -131,10 +131,8 @@ class Problem(object):
 
     Example
     -------
-    The following code initializes a problem with the automobile product data from
-    :ref:`Berry, Levinsohn, and Pakes (1995) <blp95>` and agent data consisting of random draws used by
-    :ref:`Knittel and Metaxoglou (2014) <km14>`. The configuration is the same as in
-    :ref:`Knittel and Metaxoglou (2014) <km14>`:
+    The following code initializes a very simple problem with some of the automobile product data from
+    :ref:`Berry, Levinsohn, and Pakes (1995) <blp95>`:
 
     .. ipython:: python
 
@@ -148,15 +146,13 @@ class Problem(object):
        instruments = np.c_[linear, pyblp.build_blp_instruments(characteristic_data)]
        product_data = {
            'market_ids': data['market_ids'],
-           'firm_ids': data['firm_ids'],
            'shares': data['shares'],
            'prices': data['prices'],
            'linear_characteristics': linear,
            'nonlinear_characteristics': linear[:, :-1],
            'demand_instruments': instruments
        }
-       agent_data = np.recfromcsv(pyblp.data.BLP_AGENTS_LOCATION)
-       problem = pyblp.Problem(product_data, agent_data)
+       problem = pyblp.Problem(product_data, integration=pyblp.Integration('monte_carlo', 50, seed=0))
 
     After choosing to optimize over the diagonal variance elements in :math:`\Sigma` and choosing starting values, the
     initialized problem can be solved. For simplicity, the following code halts estimation after one GMM step:
