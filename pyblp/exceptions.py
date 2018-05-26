@@ -92,9 +92,9 @@ class CostsSingularityError(Exception):
 
     def __str__(self):
         return (
-            "Encountered a singular intra-firm Jacobian matrix of choice probabilities with respect to prices when "
-            "computing marginal costs. This problem can sometimes by mitigated by changing initial parameter values or "
-            "by setting more conservative bounds."
+            "Encountered a singular intra-firm Jacobian of shares with respect to prices when computing marginal "
+            "costs. This problem can sometimes by mitigated by changing initial parameter values or by setting more "
+            "conservative bounds."
         )
 
 

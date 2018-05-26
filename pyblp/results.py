@@ -79,35 +79,45 @@ class Results(object):
         Estimated standard errors for :math:`\hat{\beta}`.
     gamma_se : `ndarray`
         Estimated standard errors for :math:`\hat{\gamma}`.
+    delta : `ndarray`
+        Estimated mean utility, :math:`\delta(\hat{\theta})`.
+    tilde_costs : `ndarray`
+        Estimated transformed marginal costs, :math:`\tilde{c}(\hat{\theta})`, which are ``None`` if the problem that
+        created these results was not initialized with supply-side data. Transformed marginal costs are simply
+        :math:`\tilde{c} = c`, marginal costs, under a linear cost specification, and are :math:`\tilde{c} = \log c`
+        under a log-linear specification.
+    xi : `ndarray`
+        Estimated unobserved demand-side product characteristics, :math:`\xi(\hat{\theta})`, or equivalently, the
+        demand-side structural error term.
+    omega : `ndarray`
+        Estimated unobserved supply-side product characteristics, :math:`\omega(\hat{\theta})`, or equivalently, the
+        supply-side structural error term, which is ``None`` if the problem that created these results was not
+        initialized with supply-side data.
     objective : `float`
         GMM objective value.
-    jacobian : `ndarray`
-        Estimated :math:`\partial\delta / \partial\theta`.
+    xi_jacobian : `ndarray`
+        Estimated :math:`\partial\xi / \partial\theta = \partial\delta / \partial\theta`.
+    omega_jacobian : `ndarray`
+        Estimated :math:`\partial\omega / \partial\theta = \partial\tilde{c} / \partial\theta`, which is ``None`` if the
+        problem that created these results was not initialized with supply-side data.
     gradient : `ndarray`
         Estimated gradient of the GMM objective with respect to :math:`\theta`.
-    gradient : `ndarray`
+    gradient_norm : `ndarray`
         Infinity norm of :attr:`Results.gradient`.
     sigma_gradient : `ndarray`
         Estimated gradient of the GMM objective with respect to unknown :math:`\Sigma` elements in :math:`\theta`.
     pi_gradient : `ndarray`
         Estimated gradient of the GMM objective with respect to unknown :math:`\Pi` elements in :math:`\theta`.
-    delta : `ndarray`
-        Estimated mean utility, :math:`\delta(\hat{\theta})`.
-    xi : `ndarray`
-        Estimated unobserved demand-side product characteristics, :math:`\xi(\hat{\theta})`.
-    omega : `ndarray`
-        Estimated unobserved supply-side product characteristics, :math:`\omega(\hat{\theta})`, which are ``None`` if
-        the problem that created these results was not initialized with supply-side data.
     WD : `ndarray`
         Demand-side weighting matrix, :math:`W_D`, used to compute these results.
     WS : `ndarray`
         Supply-side weighting matrix, :math:`W_S`, used to compute these results, which is ``None`` if the problem that
         created these results was not initialized with supply-side data.
     updated_WD : `ndarray`
-        Updated demand-side weighting matrix, :math:`(Z_D'\xi(\hat{\theta})\xi(\hat{\theta})'Z_D)^{-1}`.
+        Updated demand-side weighting matrix.
     updated_WS : `ndarray`
-        Updated supply-side weighting matrix, :math:`(Z_S'\omega(\hat{\theta})\omega(\hat{\theta})'Z_S)^{-1}`, which
-        is ``None`` if the problem that created these results was not initialized with supply-side data.
+        Updated supply-side weighting matrix, which is ``None`` if the problem that created these results was not
+        initialized with supply-side data.
     unique_market_ids : `ndarray`
         Unique market IDs, which are in the same order as post-estimation outputs returned by methods that compute a
         single value for each market.
@@ -125,7 +135,9 @@ class Results(object):
         self.WS = objective_info.WS
         self.theta = objective_info.theta
         self.delta = objective_info.delta
-        self.jacobian = objective_info.jacobian
+        self.tilde_costs = objective_info.tilde_costs
+        self.xi_jacobian = objective_info.xi_jacobian
+        self.omega_jacobian = objective_info.omega_jacobian
         self.beta = objective_info.beta
         self.gamma = objective_info.gamma
         self.xi = objective_info.xi
@@ -138,19 +150,33 @@ class Results(object):
         self.sigma, self.pi = self._theta_info.expand(self.theta, fill_fixed=True)
         self.sigma_gradient, self.pi_gradient = self._theta_info.expand(self.gradient)
 
-        # compute demand-side standard errors and update the demand-side weighting matrix
-        GD = self.problem.products.ZD.T @ np.c_[self.problem.products.X1, self.jacobian]
-        demand_se = self._compute_se(self.xi, self.problem.products.ZD, self.WD, GD, se_type, "demand")
-        self.beta_se = demand_se[:self.beta.size]
-        self.sigma_se, self.pi_se = self._theta_info.expand(demand_se[self.beta.size:])
-        self.updated_WD = self._compute_W(self.xi, self.problem.products.ZD, center_moments, "demand")
+        # stack the error terms, weighting matrices, instruments, and Jacobian of the error terms with respect to all
+        #   parameters
+        if self.problem.K3 == 0:
+            u = self.xi
+            W = self.WD
+            Z = self.problem.products.ZD
+            jacobian = np.c_[self.xi_jacobian, self.problem.products.X1]
+        else:
+            u = np.r_[self.xi, self.omega]
+            W = scipy.linalg.block_diag(self.WD, self.WS)
+            Z = scipy.linalg.block_diag(self.problem.products.ZD, self.problem.products.ZS)
+            jacobian = np.c_[
+                np.r_[self.xi_jacobian, self.omega_jacobian],
+                scipy.linalg.block_diag(self.problem.products.X1, self.problem.products.X2)
+            ]
 
-        # compute supply-side standard errors and update the supply-side weighting matrix
-        self.gamma_se = self.updated_WS = None
-        if self.omega is not None:
-            GS = self.problem.products.ZS.T @ self.problem.products.X3
-            self.gamma_se = self._compute_se(self.omega, self.problem.products.ZS, self.WS, GS, se_type, "supply")
-            self.updated_WS = self._compute_W(self.omega, self.problem.products.ZS, center_moments, "supply")
+        # compute standard errors
+        se = self._compute_se(u, Z, W, jacobian, se_type)
+        self.sigma_se, self.pi_se = self._theta_info.expand(se[:self._theta_info.P])
+        self.beta_se = se[self._theta_info.P:self._theta_info.P + self.problem.K1]
+        self.gamma_se = se[-self.problem.K3:] if self.problem.K3 > 0 else None
+
+        # update weighting matrices
+        self.updated_WD = self._update_W(self.xi, self.problem.products.ZD, center_moments, "demand")
+        self.updated_WS = None
+        if self.problem.K3 > 0:
+            self.updated_WS = self._update_W(self.omega, self.problem.products.ZS, center_moments, "supply")
 
         # construct an array of unique and sorted market IDs
         self.unique_market_ids = np.unique(self.problem.products.market_ids).flatten()
@@ -257,46 +283,24 @@ class Results(object):
         """Defer to the string representation."""
         return str(self)
 
-    def _compute_W(self, u, Z, center_moments, side):
-        """Update a GMM weighting matrix."""
-        g = u * Z
+    def _compute_se(self, u, Z, W, jacobian, se_type):
+        """Use an error term, instruments, a weighting matrix, and the Jacobian of the error term with respect to
+        parameters to estimate standard errors.
+        """
 
-        # center the moments
-        if center_moments:
-            g -= g.mean(axis=0)
-
-        # attempt to compute the weighting matrix and output information about the method used to compute it
-        attempt, W = self._invert(g.T @ g)
-        if attempt > 1:
-            output("")
-            output(f"The estimated covariance matrix of {side}-side GMM moments is singular.")
-            if attempt == 2:
-                output(f"Used the Moore-Penrose pseudo inverse to compute the {side}-side GMM weighting matrix.")
-            else:
-                output("Failed to compute the Moore-Penrose pseudo-inverse.")
-                output(f"Inverted only the variance terms to compute the {side}-side GMM weighting matrix.")
-            output("")
-
-        # output any information about computation failure
-        if np.isnan(W).any():
-            output("")
-            output(f"Failed to compute the {side}-side GMM weighting matrix because of null values.")
-            output("")
-        return W
-
-    def _compute_se(self, u, Z, W, G, se_type, side):
-        """Compute estimated standard errors."""
+        # compute the Jacobian of the sample moments with respect to all parameters
+        G = Z.T @ jacobian
 
         # attempt to compute the unadjusted covariance matrix and output information about the method used to compute it
         attempt, covariances = self._invert(G.T @ W @ G)
         if attempt > 1:
             output("")
-            output(f"The estimated covariance matrix of {side}-side GMM moments is singular.")
+            output(f"The estimated covariance matrix of parameters is singular.")
             if attempt == 2:
-                output(f"Used the Moore-Penrose pseudo inverse to compute the {side}-side GMM weighting matrix.")
+                output(f"Used the Moore-Penrose pseudo inverse to estimate the covariance matrix of parameters.")
             else:
                 output("Failed to compute the Moore-Penrose pseudo-inverse.")
-                output(f"Inverted only the variance terms to compute the {side}-side GMM weighting matrix.")
+                output(f"Inverted only the variance terms to estimate the covariance matrix of parameters.")
             output("")
 
         # compute the robust covariance matrix
@@ -308,9 +312,36 @@ class Results(object):
         # output any information about computation failure
         if np.isnan(se).any():
             output("")
-            output(f"Failed to compute {side}-side standard errors because of null values.")
+            output(f"Failed to compute standard errors because of null values.")
             output("")
         return se
+
+    def _update_W(self, u, Z, center_moments, side):
+        """Use an error term and instruments to update a GMM weighting matrix."""
+
+        # compute and center the sample moments
+        g = u * Z
+        if center_moments:
+            g -= g.mean(axis=0)
+
+        # attempt to compute the weighting matrix and output information about the method used to compute it
+        attempt, W = self._invert(g.T @ g)
+        if attempt > 1:
+            output("")
+            output(f"The estimated covariance matrix of {side}-side GMM moments is singular.")
+            if attempt == 2:
+                output(f"Used the Moore-Penrose pseudo inverse to update the {side}-side GMM weighting matrix.")
+            else:
+                output("Failed to compute the Moore-Penrose pseudo-inverse.")
+                output(f"Inverted only the variance terms to update the {side}-side GMM weighting matrix.")
+            output("")
+
+        # output any information about computation failure
+        if np.isnan(W).any():
+            output("")
+            output(f"Failed to compute the {side}-side GMM weighting matrix because of null values.")
+            output("")
+        return W
 
     @staticmethod
     def _invert(matrix):
@@ -856,10 +887,10 @@ class ResultsMarket(Market):
 
     def compute_elasticities(self, X1_index, X2_index):
         """Market-specific computation for Results.compute_elasticities."""
-        utilities_jacobian = self.compute_utilities_by_characteristic_jacobian(X1_index, X2_index)
-        shares_jacobian = self.compute_shares_by_characteristic_jacobian(utilities_jacobian)
+        derivatives = self.compute_utility_by_characteristic_derivatives(X1_index, X2_index)
+        jacobian = self.compute_shares_by_characteristic_jacobian(derivatives)
         characteristic = self.get_characteristic(X1_index, X2_index)
-        elasticities = shares_jacobian * np.tile(characteristic, self.J).T / np.tile(self.products.shares, self.J)
+        elasticities = jacobian * np.tile(characteristic, self.J).T / np.tile(self.products.shares, self.J)
         return elasticities, set()
 
     def compute_price_elasticities(self):
@@ -869,15 +900,15 @@ class ResultsMarket(Market):
 
     def compute_diversion_ratios(self, X1_index, X2_index):
         """Market-specific computation for Results.compute_diversion_ratios."""
-        utilities_jacobian = self.compute_utilities_by_characteristic_jacobian(X1_index, X2_index)
-        shares_jacobian = self.compute_shares_by_characteristic_jacobian(utilities_jacobian)
+        derivatives = self.compute_utility_by_characteristic_derivatives(X1_index, X2_index)
+        jacobian = self.compute_shares_by_characteristic_jacobian(derivatives)
 
         # replace the diagonal with derivatives with respect to the outside option
-        shares_jacobian_diagonal = np.c_[shares_jacobian.diagonal()]
-        shares_jacobian[np.diag_indices_from(shares_jacobian)] = -shares_jacobian.sum(axis=1)
+        jacobian_diagonal = np.c_[jacobian.diagonal()]
+        jacobian[np.diag_indices_from(jacobian)] = -jacobian.sum(axis=1)
 
         # compute the ratios
-        ratios = -shares_jacobian / np.tile(shares_jacobian_diagonal, self.J)
+        ratios = -jacobian / np.tile(jacobian_diagonal, self.J)
         return ratios, set()
 
     def compute_price_diversion_ratios(self):
@@ -921,9 +952,9 @@ class ResultsMarket(Market):
 
     def solve_approximate_merger(self, firms_index, costs):
         """Market-specific computation for Results.solve_approximate_merger."""
-        jacobian = self.compute_utilities_by_prices_jacobian()
+        derivatives = self.compute_utility_by_prices_derivatives()
         ownership_matrix = self.get_ownership_matrix(firms_index)
-        prices = costs + self.compute_eta(ownership_matrix, jacobian)
+        prices = costs + self.compute_eta(ownership_matrix, derivatives)
         return prices, set()
 
     def solve_merger(self, firms_index, iteration, costs, prices=None):
@@ -938,8 +969,8 @@ class ResultsMarket(Market):
 
             # solve the fixed point problem
             ownership_matrix = self.get_ownership_matrix(firms_index)
-            jacobian = self.compute_utilities_by_prices_jacobian()
-            contraction = lambda p: costs + self.compute_zeta(ownership_matrix, jacobian, costs, p)
+            derivatives = self.compute_utility_by_prices_derivatives()
+            contraction = lambda p: costs + self.compute_zeta(ownership_matrix, derivatives, costs, p)
             prices, converged = iteration._iterate(prices, contraction)[:2]
 
         # store whether the fixed point converged
@@ -983,6 +1014,6 @@ class ResultsMarket(Market):
         if prices is None:
             prices = self.products.prices
         utilities = np.tile(self.update_delta_with_prices(prices), self.I) + self.update_mu_with_prices(prices)
-        alpha = -self.compute_utilities_by_prices_jacobian()[0]
+        alpha = -self.compute_utility_by_prices_derivatives()[0]
         consumer_surplus = (np.log1p(np.exp(utilities).sum(axis=0)) / alpha) @ self.agents.weights
         return consumer_surplus, set()

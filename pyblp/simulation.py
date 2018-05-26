@@ -559,8 +559,8 @@ class SimulationMarket(Market):
 
             # solve the fixed point problem
             ownership_matrix = self.get_ownership_matrix(firms_index)
-            jacobian = self.compute_utilities_by_prices_jacobian()
-            contraction = lambda p: costs + self.compute_zeta(ownership_matrix, jacobian, costs, p)
+            derivatives = self.compute_utility_by_prices_derivatives()
+            contraction = lambda p: costs + self.compute_zeta(ownership_matrix, derivatives, costs, p)
             prices, converged, iterations, evaluations = iteration._iterate(initial_prices, contraction)
 
             # store whether the fixed point converged

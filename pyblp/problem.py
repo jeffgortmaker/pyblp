@@ -428,9 +428,14 @@ class Problem(object):
             if delta.shape != (self.N, 1):
                 raise ValueError(f"delta must be a vector with {self.N} elements.")
 
-        # initialize the Jacobian of delta as all zeros and initialize marginal costs as prices
-        jacobian = np.zeros((self.N, theta.size), options.dtype)
-        tilde_costs = self.products.prices if linear_costs else np.log(self.products.prices)
+        # initialize the Jacobian of xi with respect to theta as all zeros
+        xi_jacobian = np.zeros((self.N, theta.size), options.dtype)
+
+        # initialize marginal costs as prices and the Jacobian of omega with respect to theta as all zeros
+        tilde_costs = omega_jacobian = None
+        if self.K3 > 0:
+            tilde_costs = self.products.prices if linear_costs else np.log(self.products.prices)
+            omega_jacobian = xi_jacobian.copy()
 
         # iterate through each step
         last_results = None
@@ -459,7 +464,9 @@ class Problem(object):
             wrapper.iteration_mappings = []
             wrapper.evaluation_mappings = []
             wrapper.smallest_objective = wrapper.smallest_gradient_norm = np.inf
-            wrapper.cache = ObjectiveInfo(self, theta_info, WD, WS, theta, delta, jacobian, tilde_costs)
+            wrapper.cache = ObjectiveInfo(
+                self, theta_info, WD, WS, theta, delta, tilde_costs, xi_jacobian, omega_jacobian
+            )
 
             # optimize theta
             output(f"Starting optimization for step {step} out of {steps} ...")
@@ -488,8 +495,9 @@ class Problem(object):
                 wrapper.evaluation_mappings, center_moments, se_type
             )
             delta = step_info.delta
-            jacobian = step_info.jacobian
             tilde_costs = step_info.tilde_costs
+            xi_jacobian = step_info.xi_jacobian
+            omega_jacobian = step_info.omega_jacobian
             WD = results.updated_WD
             WS = results.updated_WS
             output("")
@@ -502,121 +510,174 @@ class Problem(object):
 
     def _compute_objective_info(self, theta_info, WD, WS, error_behavior, error_punishment, iteration, linear_costs,
                                 linear_fp, processes, theta, last_objective_info, compute_gradient):
-        """Compute delta and its Jacobian market-by-market. Then, recover beta, compute xi, and use xi to compute the
-        demand-side contribution to the GMM objective value. The Jacobian and xi are both used to compute the gradient.
-        If the problem was configured with supply-side data, marginal costs are then computed, these are used to recover
-        gamma, omega is computed, and omega is used to compute the supply-side contribution to the GMM objective value.
+        """Compute demand- and supply-side contributions. Then, form the GMM objective value and its gradient. Finally,
+        handle any errors that were encountered before structuring relevant objective information.
         """
-
-        # expand theta into sigma and pi
         sigma, pi = theta_info.expand(theta, fill_fixed=True)
+
+        # compute demand-side contributions
+        demand_contributions = self._compute_demand_contributions(
+            theta_info, WD, iteration, linear_fp, processes, sigma, pi, last_objective_info, compute_gradient
+        )
+        delta, xi_jacobian, PD, beta, xi, demand_errors, iteration_mapping, evaluation_mapping = demand_contributions
+
+        # compute supply-side contributions
+        supply_errors = set()
+        tilde_costs = omega_jacobian = PS = gamma = omega = None
+        if self.K3 > 0:
+            supply_contributions = self._compute_supply_contributions(
+                theta_info, WD, WS, linear_costs, processes, delta, xi_jacobian, beta, sigma, pi, last_objective_info,
+                compute_gradient
+            )
+            tilde_costs, omega_jacobian, PS, gamma, omega, supply_errors = supply_contributions
+
+        # stack the error terms, projection matrices, and Jacobian of the error terms with respect to theta
+        if self.K3 == 0:
+            u = xi
+            P = PD
+            jacobian = xi_jacobian
+        else:
+            u = np.r_[xi, omega]
+            P = scipy.linalg.block_diag(PD, PS)
+            jacobian = np.r_[xi_jacobian, omega_jacobian]
+
+        # compute the objective value and its gradient
+        objective = u.T @ P @ u
+        gradient = 2 * (jacobian.T @ P @ u) if compute_gradient else None
+
+        # handle any errors
+        errors = demand_errors | supply_errors
+        if errors:
+            exception = exceptions.MultipleErrors(errors)
+            if error_behavior == 'raise':
+                raise exception
+            output(exception)
+            if error_behavior == 'revert':
+                if error_punishment != 1:
+                    objective *= error_punishment
+                    output(f"Multiplied the objective by {output.format_number(error_punishment)}.")
+            elif error_behavior == 'punish':
+                objective = np.array(error_punishment)
+                gradient = np.zeros_like(theta)
+                output(f"Set the objective to {output.format_number(error_punishment)} and its gradient to all zeros.")
+
+        # structure objective information
+        return ObjectiveInfo(
+            self, theta_info, WD, WS, theta, delta, tilde_costs, xi_jacobian, omega_jacobian, beta, gamma, xi, omega,
+            objective, gradient, iteration_mapping, evaluation_mapping
+        )
+
+    def _compute_demand_contributions(self, theta_info, WD, iteration, linear_fp, processes, sigma, pi,
+                                      last_objective_info,  compute_gradient):
+        """Compute delta and the Jacobian of xi (equivalently, of delta) with respect to theta market-by-market. If
+        necessary, revert problematic elements to their last values. Lastly, recover beta and compute xi.
+        """
+        errors = set()
 
         # construct a mapping from market IDs to market-specific arguments used to compute delta and its Jacobian
         mapping = {}
         for t in np.unique(self.products.market_ids):
-            market_t = ProblemMarket(
+            market_t = DemandProblemMarket(
                 t, self.linear_prices, self.nonlinear_prices, self.products, self.agents, sigma=sigma, pi=pi
             )
             last_delta_t = last_objective_info.delta[self.products.market_ids.flat == t]
             mapping[t] = [market_t, last_delta_t, theta_info, iteration, linear_fp, compute_gradient]
 
-        # store any error classes and the number of contraction iterations and evaluations for each market
-        errors = set()
+        # fill delta and its Jacobian market-by-market (the Jacobian will be null if the gradient isn't being computed)
         iteration_mapping = {}
         evaluation_mapping = {}
-
-        # fill delta and its Jacobian market-by-market (the Jacobian will be null if the objective isn't being computed)
         delta = np.zeros((self.N, 1), options.dtype)
-        jacobian = np.zeros((self.N, theta.size), options.dtype)
-        with ParallelItems(ProblemMarket.solve, mapping, processes) as items:
-            for t, (delta_t, jacobian_t, errors_t, iteration_mapping[t], evaluation_mapping[t]) in items:
+        xi_jacobian = np.zeros((self.N, theta_info.P), options.dtype)
+        with ParallelItems(DemandProblemMarket.solve, mapping, processes) as items:
+            for t, (delta_t, xi_jacobian_t, errors_t, iteration_mapping[t], evaluation_mapping[t]) in items:
                 delta[self.products.market_ids.flat == t] = delta_t
-                jacobian[self.products.market_ids.flat == t] = jacobian_t
+                xi_jacobian[self.products.market_ids.flat == t] = xi_jacobian_t
                 errors |= errors_t
 
-        # replace invalid elements in delta and its Jacobian with their last values
-        invalid_delta_indices = ~np.isfinite(delta)
-        delta[invalid_delta_indices] = last_objective_info.delta[invalid_delta_indices]
-        invalid_jacobian_indices = None
+        # replace invalid elements in delta with their last values
+        bad_delta_indices = ~np.isfinite(delta)
+        if np.any(bad_delta_indices):
+            delta[bad_delta_indices] = last_objective_info.delta[bad_delta_indices]
+            output(f"Number of problematic elements in delta that were reverted: {bad_delta_indices.sum()}.")
+
+        # replace invalid elements in its Jacobian with their last values
         if compute_gradient:
-            invalid_jacobian_indices = ~np.isfinite(jacobian)
-            jacobian[invalid_jacobian_indices] = last_objective_info.jacobian[invalid_jacobian_indices]
+            bad_jacobian_indices = ~np.isfinite(xi_jacobian)
+            if np.any(bad_jacobian_indices):
+                xi_jacobian[bad_jacobian_indices] = last_objective_info.xi_jacobian[bad_jacobian_indices]
+                output(
+                    f"Number of problematic elements in the Jacobian of xi (equivalently, of delta) with respect to "
+                    f"theta that were reverted: {bad_jacobian_indices.sum()}."
+                )
 
         # recover beta and compute xi
         PD = self.products.ZD @ WD @ self.products.ZD.T
         X1PD = self.products.X1.T @ PD
         beta = scipy.linalg.solve(X1PD @ self.products.X1, X1PD @ delta)
         xi = delta - self.products.X1 @ beta
+        return delta, xi_jacobian, PD, beta, xi, errors, iteration_mapping, evaluation_mapping
 
-        # compute the demand-side contribution to the GMM objective value and its gradient
-        objective = xi.T @ PD @ xi
-        gradient = 2 * (jacobian.T @ PD @ xi) if compute_gradient else None
+    def _compute_supply_contributions(self, theta_info, WD, WS, linear_costs, processes, delta, xi_jacobian, beta,
+                                      sigma, pi, last_objective_info, compute_gradient):
+        """Compute transformed marginal costs and the Jacobian of omega (equivalently, of transformed marginal costs)
+        with respect to theta market-by-market. If necessary, revert problematic elements to their last values. Lastly,
+        recover gamma and compute omega.
+        """
+        errors = set()
 
-        # move on to the supply side
-        tilde_costs = invalid_tilde_cost_indices = gamma = omega = None
-        if WS is not None:
-            # fill marginal costs market-by-market
-            costs = np.zeros((self.N, 1), options.dtype)
-            for t in np.unique(self.products.market_ids):
-                market_t = Market(
-                    t, self.linear_prices, self.nonlinear_prices, self.products, self.agents, delta, beta=beta,
-                    sigma=sigma, pi=pi
+        # compute the Jacobian of beta with respect to theta, which is needed to compute other Jacobians
+        beta_jacobian = None
+        if compute_gradient:
+            PD = self.products.ZD @ WD @ self.products.ZD.T
+            X1PD = self.products.X1.T @ PD
+            beta_jacobian = scipy.linalg.solve(X1PD @ self.products.X1, X1PD @ xi_jacobian)
+
+        # construct a mapping from market IDs to market-specific arguments used to compute transformed marginal costs
+        #   and their Jacobian
+        mapping = {}
+        for t in np.unique(self.products.market_ids):
+            market_t = SupplyProblemMarket(
+                t, self.linear_prices, self.nonlinear_prices, self.products, self.agents, delta, beta=beta, sigma=sigma,
+                pi=pi
+            )
+            last_tilde_costs_t = last_objective_info.tilde_costs[self.products.market_ids.flat == t]
+            xi_jacobian_t = xi_jacobian[self.products.market_ids.flat == t]
+            mapping[t] = [
+                market_t, last_tilde_costs_t, xi_jacobian_t, beta_jacobian, theta_info, linear_costs, compute_gradient
+            ]
+
+        # fill transformed marginal costs and their Jacobian market-by-market (the Jacobian will be null if the gradient
+        #   isn't being computed)
+        tilde_costs = np.zeros((self.N, 1), options.dtype)
+        omega_jacobian = np.zeros((self.N, theta_info.P), options.dtype)
+        with ParallelItems(SupplyProblemMarket.solve, mapping, processes) as items:
+            for t, (tilde_costs_t, omega_jacobian_t, errors_t) in items:
+                tilde_costs[self.products.market_ids.flat == t] = tilde_costs_t
+                omega_jacobian[self.products.market_ids.flat == t] = omega_jacobian_t
+                errors |= errors_t
+
+        # replace invalid transformed marginal costs with their last values
+        bad_tilde_costs_indices = ~np.isfinite(tilde_costs)
+        if np.any(bad_tilde_costs_indices):
+            tilde_costs[bad_tilde_costs_indices] = last_objective_info.tilde_costs[bad_tilde_costs_indices]
+            output(f"Number of problematic marginal costs that were reverted: {bad_tilde_costs_indices.sum()}.")
+
+        # replace invalid elements in their Jacobian with their last values
+        if compute_gradient:
+            bad_jacobian_indices = ~np.isfinite(omega_jacobian)
+            if np.any(bad_jacobian_indices):
+                omega_jacobian[bad_jacobian_indices] = last_objective_info.omega_jacobian[bad_jacobian_indices]
+                output(
+                    f"Number of problematic elements in the Jacobian of omega (equivalently, of transformed marginal "
+                    f"costs) with respect to theta that were reverted: {bad_jacobian_indices.sum()}."
                 )
-                try:
-                    with np.errstate(all='call'):
-                        np.seterrcall(lambda *_: errors.add(exceptions.CostsFloatingPointError))
-                        costs_t = market_t.compute_costs()
-                except scipy.linalg.LinAlgError:
-                    errors.add(exceptions.CostsSingularityError)
-                    costs_t = np.full((market_t.J, 1), np.nan)
-                costs[self.products.market_ids.flat == t] = costs_t
 
-            # take the log of costs under a log-linear specification
-            tilde_costs = costs
-            if not linear_costs:
-                with np.errstate(invalid='call', divide='call'):
-                    np.seterrcall(lambda *_: errors.add(exceptions.NonpositiveCostsError))
-                    tilde_costs = np.log(costs)
-
-            # replace invalid elements in marginal costs with their last values
-            invalid_tilde_cost_indices = ~np.isfinite(tilde_costs)
-            tilde_costs[invalid_tilde_cost_indices] = last_objective_info.tilde_costs[invalid_tilde_cost_indices]
-
-            # recover gamma and compute omega
-            PS = self.products.ZS @ WS @ self.products.ZS.T
-            X3PS = self.products.X3.T @ PS
-            gamma = scipy.linalg.solve(X3PS @ self.products.X3, X3PS @ tilde_costs)
-            omega = tilde_costs - self.products.X3 @ gamma
-
-            # add the supply-side contribution to the GMM objective value
-            objective += omega.T @ PS @ omega
-
-        # handle any errors that were encountered
-        if errors:
-            exception = exceptions.MultipleErrors(errors)
-            if error_behavior == 'raise':
-                raise exception
-            output("")
-            output(exception)
-            if error_behavior == 'revert':
-                objective *= error_punishment
-                if invalid_delta_indices.any():
-                    output(f"Problematic delta elements that were reverted: {invalid_delta_indices.sum()}.")
-                if invalid_jacobian_indices is not None and invalid_jacobian_indices.any():
-                    output(f"Problematic Jacobian elements that were reverted: {invalid_jacobian_indices.sum()}.")
-                if invalid_tilde_cost_indices is not None and invalid_tilde_cost_indices.any():
-                    output(f"Problematic marginal costs that were reverted: {invalid_tilde_cost_indices.sum()}.")
-            elif error_behavior == 'punish':
-                objective = np.array(error_punishment)
-                gradient = np.zeros_like(theta)
-                output(f"Set the objective to {output.format_number(error_punishment)} and its gradient to all zeros.")
-            output("")
-
-        # structure the objective information
-        return ObjectiveInfo(
-            self, theta_info, WD, WS, theta, delta, jacobian, tilde_costs, beta, gamma, xi, omega, objective, gradient,
-            iteration_mapping, evaluation_mapping
-        )
+        # recover gamma and compute omega
+        PS = self.products.ZS @ WS @ self.products.ZS.T
+        X3PS = self.products.X3.T @ PS
+        gamma = scipy.linalg.solve(X3PS @ self.products.X3, X3PS @ tilde_costs)
+        omega = tilde_costs - self.products.X3 @ gamma
+        return tilde_costs, omega_jacobian, PS, gamma, omega, errors
 
 
 class NonlinearParameter(object):
@@ -874,8 +935,9 @@ class ThetaInfo(object):
 class ObjectiveInfo(object):
     """Structured information about a completed iteration of the optimization routine."""
 
-    def __init__(self, problem, theta_info, WD, WS, theta, delta, jacobian, tilde_costs, beta=None, gamma=None, xi=None,
-                 omega=None, objective=None, gradient=None, iteration_mapping=None, evaluation_mapping=None):
+    def __init__(self, problem, theta_info, WD, WS, theta, delta, tilde_costs, xi_jacobian, omega_jacobian, beta=None,
+                 gamma=None, xi=None, omega=None, objective=None, gradient=None, iteration_mapping=None,
+                 evaluation_mapping=None):
         """Initialize objective information. Optional parameters will not be specified when preparing for the first
         objective evaluation.
         """
@@ -885,8 +947,9 @@ class ObjectiveInfo(object):
         self.WS = WS
         self.theta = theta
         self.delta = delta
-        self.jacobian = jacobian
         self.tilde_costs = tilde_costs
+        self.xi_jacobian = xi_jacobian
+        self.omega_jacobian = omega_jacobian
         self.beta = beta
         self.gamma = gamma
         self.xi = xi
@@ -939,14 +1002,14 @@ class ObjectiveInfo(object):
         return Results(self, *args)
 
 
-class ProblemMarket(Market):
-    """A single market in the BLP problem, which can be solved to compute delta-related information."""
+class DemandProblemMarket(Market):
+    """A single market in the BLP problem, which can be solved to compute delta--related information."""
 
     def solve(self, initial_delta, theta_info, iteration, linear_fp, compute_gradient):
         """Compute the mean utility for this market that equates market shares to observed values by solving a fixed
-        point problem. Then, if compute_gradient is True, compute its Jacobian with respect to theta. Finally, return a
-        set of any errors encountered during computation and the number of contraction evaluations. If necessary,
-        replace null elements in delta with their last values before computing its Jacobian.
+        point problem. Then, if compute_gradient is True, compute the Jacobian of xi (equivalently, of delta) with
+        respect to theta. If necessary, replace null elements in delta with their last values before computing its
+        Jacobian.
         """
 
         # configure numpy to identify floating point errors
@@ -979,30 +1042,32 @@ class ProblemMarket(Market):
                 errors.add(exceptions.DeltaConvergenceError)
 
             # if the gradient is to be computed, replace invalid values in delta with the last computed values before
-            #   computing the Jacobian of delta with respect to theta
-            jacobian = np.full((self.J, theta_info.P), np.nan, options.dtype)
+            #   computing its Jacobian
+            xi_jacobian = np.full((self.J, theta_info.P), np.nan, options.dtype)
             if compute_gradient:
                 valid_delta = delta.copy()
-                delta_indices = ~np.isfinite(delta)
-                valid_delta[delta_indices] = initial_delta[delta_indices]
-                jacobian = self.compute_delta_by_theta_jacobian(valid_delta, theta_info)
-            return delta, jacobian, errors, iterations, evaluations
+                bad_delta_indices = ~np.isfinite(delta)
+                valid_delta[bad_delta_indices] = initial_delta[bad_delta_indices]
+                xi_jacobian = self.compute_xi_by_theta_jacobian(valid_delta, theta_info)
+            return delta, xi_jacobian, errors, iterations, evaluations
 
-    def compute_delta_by_theta_jacobian(self, delta, theta_info):
-        """Use the Implicit Function Theorem to compute the Jacobian of delta with respect to theta."""
+    def compute_xi_by_theta_jacobian(self, delta, theta_info):
+        """Use the Implicit Function Theorem to compute the Jacobian of xi (equivalently, of delta) with respect to
+        theta.
+        """
         probabilities = self.compute_probabilities(delta)
-        shares_by_delta_jacobian = self.compute_shares_by_delta_jacobian(probabilities)
+        shares_by_xi_jacobian = self.compute_shares_by_xi_jacobian(probabilities)
         shares_by_theta_jacobian = self.compute_shares_by_theta_jacobian(probabilities, theta_info)
         try:
-            return scipy.linalg.solve(-shares_by_delta_jacobian, shares_by_theta_jacobian)
+            return scipy.linalg.solve(-shares_by_xi_jacobian, shares_by_theta_jacobian)
         except (ValueError, scipy.linalg.LinAlgError):
             return np.full_like(shares_by_theta_jacobian, np.nan)
 
-    def compute_shares_by_delta_jacobian(self, probabilities):
-        """Compute the Jacobian of shares with respect to delta."""
-        diagonal_shares = np.diagflat(self.products.shares)
-        diagonal_weights = np.diagflat(self.agents.weights)
-        return diagonal_shares - probabilities @ diagonal_weights @ probabilities.T
+    def compute_shares_by_xi_jacobian(self, probabilities):
+        """Compute the Jacobian of shares with respect to xi (equivalently, to delta)."""
+        square_shares = np.diagflat(self.products.shares)
+        square_weights = np.diagflat(self.agents.weights)
+        return square_shares - probabilities @ square_weights @ probabilities.T
 
     def compute_shares_by_theta_jacobian(self, probabilities, theta_info):
         """Compute the Jacobian of shares with respect to theta."""
@@ -1011,3 +1076,119 @@ class ProblemMarket(Market):
             x, v = parameter.get_characteristics(self.products, self.agents)
             jacobian[:, [p]] = probabilities * v.T * (x - x.T @ probabilities) @ self.agents.weights
         return jacobian
+
+
+class SupplyProblemMarket(Market):
+    """A single market in the BLP problem, which can be solved to compute costs-related information."""
+
+    def solve(self, initial_tilde_costs, xi_jacobian, beta_jacobian, theta_info, linear_costs, compute_gradient):
+        """Compute transformed marginal costs for this market. Then, if compute_gradient is True, compute the Jacobian
+        of omega (equivalently, of transformed marginal costs) with respect to theta. If necessary, replace null
+        elements in transformed marginal costs with their last values before computing their Jacobian.
+        """
+
+        # configure numpy to identify floating point errors
+        errors = set()
+        with np.errstate(all='call'):
+            np.seterrcall(lambda *_: errors.add(exceptions.CostsFloatingPointError))
+
+            # compute marginal costs
+            try:
+                costs = self.compute_costs()
+            except scipy.linalg.LinAlgError:
+                errors.add(exceptions.CostsSingularityError)
+                costs = np.full((self.J, 1), np.nan, options.dtype)
+
+            # take the log of marginal costs under a log-linear specification
+            tilde_costs = costs
+            if not linear_costs:
+                with np.errstate(invalid='call', divide='call'):
+                    np.seterrcall(lambda *_: errors.add(exceptions.NonpositiveCostsError))
+                    tilde_costs = np.log(costs)
+
+            # if the gradient is to be computed, replace invalid transformed marginal costs with their last computed
+            #   values before computing their Jacobian
+            omega_jacobian = np.full((self.J, theta_info.P), np.nan, options.dtype)
+            if compute_gradient:
+                valid_tilde_costs = tilde_costs.copy()
+                bad_costs_indices = ~np.isfinite(tilde_costs)
+                valid_tilde_costs[bad_costs_indices] = initial_tilde_costs[bad_costs_indices]
+                omega_jacobian = self.compute_omega_by_theta_jacobian(
+                    valid_tilde_costs, xi_jacobian, beta_jacobian, theta_info, linear_costs
+                )
+            return tilde_costs, omega_jacobian, errors
+
+    def compute_omega_by_theta_jacobian(self, tilde_costs, xi_jacobian, beta_jacobian, theta_info, linear_costs):
+        """Compute the Jacobian of omega (equivalently, of transformed marginal costs) with respect to theta."""
+        costs_jacobian = -self.compute_eta_by_theta_jacobian(xi_jacobian, beta_jacobian, theta_info)
+        if linear_costs:
+            return costs_jacobian
+        return costs_jacobian / np.exp(tilde_costs)
+
+    def compute_eta_by_theta_jacobian(self, xi_jacobian, beta_jacobian, theta_info):
+        """Compute the Jacobian of the markup term in the BLP-markup equation with respect to theta."""
+
+        # compute the intermediate matrix V that shows up in the decomposition of eta
+        probabilities = self.compute_probabilities()
+        derivatives = self.compute_utility_by_prices_derivatives()
+        V = probabilities * derivatives
+
+        # compute the matrix A, which, when inverted and multiplied by shares, gives eta (negative the intra-firm
+        #   Jacobian of shares with respect to prices)
+        ownership_matrix = self.get_ownership_matrix()
+        square_weights = np.diagflat(self.agents.weights)
+        capital_gamma = V @ square_weights @ probabilities.T
+        capital_lambda = np.diagflat(V @ self.agents.weights)
+        A = ownership_matrix * (capital_gamma - capital_lambda)
+
+        # compute the inverse of A and use it to compute eta
+        try:
+            A_inverse = scipy.linalg.inv(A)
+        except (ValueError, scipy.linalg.LinAlgError):
+            A_inverse = np.full_like(A, np.nan)
+        eta = A_inverse @ self.products.shares
+
+        # compute the tensor derivative of V with respect to xi (equivalently, to delta), indexed with the first axis
+        probabilities_by_xi_tensor = -probabilities[np.newaxis] * probabilities[np.newaxis].swapaxes(0, 1)
+        probabilities_by_xi_tensor[np.diag_indices(self.J)] += probabilities
+        V_by_xi_tensor = probabilities_by_xi_tensor * derivatives
+
+        # compute the tensor derivative of A with respect to xi
+        capital_gamma_by_xi_tensor = (
+            V @ square_weights @ probabilities_by_xi_tensor.swapaxes(1, 2) +
+            V_by_xi_tensor @ square_weights @ probabilities.T
+        )
+        capital_lambda_by_xi_tensor = np.zeros_like(capital_gamma_by_xi_tensor)
+        V_by_xi_tensor_times_weights = np.squeeze(V_by_xi_tensor @ self.agents.weights)
+        capital_lambda_by_xi_tensor[:, np.arange(self.J), np.arange(self.J)] = V_by_xi_tensor_times_weights
+        A_by_xi_tensor = ownership_matrix[np.newaxis] * (capital_gamma_by_xi_tensor - capital_lambda_by_xi_tensor)
+
+        # compute the product of the tensor and eta
+        A_by_xi_tensor_times_eta = np.squeeze(A_by_xi_tensor @ eta)
+
+        # fill the Jacobian of eta with respect to theta parameter-by-parameter
+        eta_jacobian = np.zeros((self.J, theta_info.P), options.dtype)
+        for p, parameter in enumerate(theta_info.unfixed):
+            # compute the tangent of V with respect to the parameter
+            X1_index, X2_index = self.get_price_indices()
+            x, v = parameter.get_characteristics(self.products, self.agents)
+            probabilities_tangent = probabilities * v.T * (x - x.T @ probabilities)
+            V_tangent = probabilities_tangent * derivatives
+            if X1_index is not None:
+                V_tangent += probabilities * beta_jacobian[X1_index, p]
+            if X2_index == parameter.location[0]:
+                V_tangent += probabilities * v.T
+
+            # compute the tangent of A with respect to the parameter
+            capital_gamma_tangent = (
+                V @ square_weights @ probabilities_tangent.T +
+                V_tangent @ square_weights @ probabilities.T
+            )
+            capital_lambda_tangent = np.diagflat(V_tangent @ self.agents.weights)
+            A_tangent = ownership_matrix * (capital_gamma_tangent - capital_lambda_tangent)
+
+            # extract the tangent of xi with respect to the parameter and compute the associated tangent of eta
+            eta_jacobian[:, [p]] = -A_inverse @ (A_tangent @ eta + A_by_xi_tensor_times_eta.T @ xi_jacobian[:, [p]])
+
+        # return the filled Jacobian
+        return eta_jacobian

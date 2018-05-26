@@ -166,14 +166,18 @@ def test_second_step(simulated_problem):
     """
     simulation, problem, _ = simulated_problem
 
+    # remove sigma bounds so that it can't get stuck at zero
+    unbounded_sigma_bounds = (np.full_like(simulation.sigma, -np.inf), np.full_like(simulation.sigma, +np.inf))
+
     # get two-step GMM results
-    results = problem.solve(simulation.sigma, simulation.pi, steps=2)
+    results = problem.solve(simulation.sigma, simulation.pi, unbounded_sigma_bounds, steps=2)
     assert results.step == 2 and results.last_results.step == 1 and results.last_results.last_results is None
 
     # manually get the same results
-    results1 = problem.solve(simulation.sigma, simulation.pi, steps=1)
+    results1 = problem.solve(simulation.sigma, simulation.pi, unbounded_sigma_bounds, steps=1)
     results2 = problem.solve(
-        results1.sigma, results1.pi, delta=results1.delta, WD=results1.updated_WD, WS=results1.updated_WS, steps=1
+        results1.sigma, results1.pi, unbounded_sigma_bounds, delta=results1.delta, WD=results1.updated_WD,
+        WS=results1.updated_WS, steps=1
     )
     assert results1.step == results2.step == 1 and results1.last_results is None and results2.last_results is None
 
@@ -237,20 +241,12 @@ def test_bounds(simulated_problem, method):
         optimization=Optimization(method)
     )
 
-    # construct unbounded and unbinding bound configurations
+    # solve the problem when unbounded
     unbounded_sigma_bounds = (np.full_like(simulation.sigma, -np.inf), np.full_like(simulation.sigma, +np.inf))
-    unbinding_sigma_bounds = (simulation.sigma - np.abs(simulation.sigma), simulation.sigma + np.abs(simulation.sigma))
-    unbounded_pi_bounds = unbinding_pi_bounds = None
+    unbounded_pi_bounds = None
     if simulation.pi is not None:
         unbounded_pi_bounds = (np.full_like(simulation.pi, -np.inf), np.full_like(simulation.pi, +np.inf))
-        unbinding_pi_bounds = (simulation.pi - np.abs(simulation.pi), simulation.pi + np.abs(simulation.pi))
-
-    # solve the problem when unbounded and when bounds aren't binding, and then test that results are close
     unbounded_results = solve(unbounded_sigma_bounds, unbounded_pi_bounds)
-    unbinding_results = solve(unbinding_sigma_bounds, unbinding_pi_bounds)
-    np.testing.assert_allclose(unbounded_results.sigma, unbinding_results.sigma, atol=0, rtol=0.1)
-    if simulation.pi is not None:
-        np.testing.assert_allclose(unbounded_results.pi, unbinding_results.pi, atol=0, rtol=0.1)
 
     # choose an element in each parameter matrix and identify its estimated value
     sigma_index = (simulation.sigma.nonzero()[0][0], simulation.sigma.nonzero()[1][0])
@@ -284,6 +280,24 @@ def test_bounds(simulated_problem, method):
         if simulation.pi is not None:
             assert_array_less(binding_pi_bounds[0], binding_results.pi)
             assert_array_less(binding_results.pi, binding_pi_bounds[1])
+
+    # for methods other than TNC, which works differently with bounds, test that non-binding bounds furnish results that
+    #   are similar to their unbounded counterparts
+    if method != 'tnc':
+        unbinding_sigma_bounds = (
+            simulation.sigma - 1e10 * np.abs(simulation.sigma),
+            simulation.sigma + 1e10 * np.abs(simulation.sigma)
+        )
+        unbinding_pi_bounds = None
+        if simulation.pi is not None:
+            unbinding_pi_bounds = (
+                simulation.pi - 1e10 * np.abs(simulation.pi),
+                simulation.pi + 1e10 * np.abs(simulation.pi)
+            )
+        unbinding_results = solve(unbinding_sigma_bounds, unbinding_pi_bounds)
+        np.testing.assert_allclose(unbounded_results.sigma, unbinding_results.sigma, atol=0, rtol=0.1)
+        if simulation.pi is not None:
+            np.testing.assert_allclose(unbounded_results.pi, unbinding_results.pi, atol=0, rtol=0.1)
 
 
 @pytest.mark.usefixtures('simulated_problem')
@@ -346,32 +360,33 @@ def test_extra_demographics(simulated_problem):
 ])
 def test_objective_gradient(simulated_problem, solve_options):
     """Implement central finite differences in a custom optimization routine to test that analytic gradient values
-    associated with a 0.5% change in the objective are within 5% of estimated gradient values.
+    are within 0.1% of estimated values.
     """
     simulation, problem, _ = simulated_problem
 
     # define a custom optimization routine that tests central finite differences around starting parameter values
     def test_finite_differences(*args):
         theta, _, objective_function, _ = args
-        objective, exact = objective_function(theta)
+        exact = objective_function(theta)[1]
         estimated = np.zeros_like(exact)
-        change = 0.005 * objective
+        change = np.sqrt(np.finfo(options.dtype).eps)
         for index in range(theta.size):
             theta1 = theta.copy()
             theta2 = theta.copy()
             theta1[index] += change / 2
             theta2[index] -= change / 2
             estimated[index] = (objective_function(theta1)[0] - objective_function(theta2)[0]) / change
-        np.testing.assert_allclose(exact, estimated, atol=0, rtol=0.05)
+        np.testing.assert_allclose(exact, estimated, atol=0, rtol=0.001)
         return theta, True
 
     # test the gradient at parameter values slightly different from the true ones so that the objective is sizable
     problem.solve(
-        0.99 * simulation.sigma,
-        0.99 * simulation.pi if simulation.pi is not None else None,
+        0.9 * simulation.sigma,
+        0.9 * simulation.pi if simulation.pi is not None else None,
         steps=1,
         linear_costs=simulation.linear_costs,
         optimization=Optimization(test_finite_differences),
+        iteration=Iteration('squarem', {'tol': 1e-14}),
         **solve_options
     )
 

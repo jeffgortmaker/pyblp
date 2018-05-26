@@ -352,36 +352,36 @@ class Market(object):
             exp_utilities[eliminate_product] = 0
         return exp_utilities / (1 + exp_utilities.sum(axis=0))
 
-    def compute_utilities_by_characteristic_jacobian(self, X1_index=None, X2_index=None):
-        """Compute the Jacobian of utilities with respect to a product characteristic in X1 or X2 (or both)."""
-        jacobian = np.zeros((self.J, self.I))
+    def compute_utility_by_characteristic_derivatives(self, X1_index=None, X2_index=None):
+        """Compute derivatives of utility with respect to a product characteristic in X1 or X2 (or both)."""
+        jacobian = np.zeros((self.J, self.I), options.dtype)
         if X1_index is not None:
             jacobian += self.beta[X1_index]
         if X2_index is not None:
-            jacobian += self.sigma[X2_index] @ self.agents.nodes.T
+            jacobian += self.sigma[[X2_index]] @ self.agents.nodes.T
             if self.D > 0:
-                jacobian += self.pi[X2_index] @ self.agents.demographics.T
+                jacobian += self.pi[[X2_index]] @ self.agents.demographics.T
         return jacobian
 
-    def compute_utilities_by_prices_jacobian(self):
-        """Compute the Jacobian of utilities with respect to prices."""
+    def compute_utility_by_prices_derivatives(self):
+        """Compute the derivatives of utilities with respect to prices."""
         X1_index, X2_index = self.get_price_indices()
-        return self.compute_utilities_by_characteristic_jacobian(X1_index, X2_index)
+        return self.compute_utility_by_characteristic_derivatives(X1_index, X2_index)
 
-    def compute_shares_by_characteristic_jacobian(self, utilities_jacobian, probabilities=None):
-        """Use the Jacobian of utilities with respect to a product characteristic in X1 or X2 (or both) to compute the
+    def compute_shares_by_characteristic_jacobian(self, derivatives, probabilities=None):
+        """Use a matrix of utilities with respect to a product characteristic in X1 or X2 (or both) to compute the
         Jacobian of market shares with respect to the same characteristic. By default, unchanged choice probabilities
         are computed.
         """
         if probabilities is None:
             probabilities = self.compute_probabilities()
-        V = probabilities * utilities_jacobian
+        V = probabilities * derivatives
         capital_lambda = np.diagflat(V @ self.agents.weights)
         capital_gamma = V @ np.diagflat(self.agents.weights) @ probabilities.T
         return capital_lambda - capital_gamma
 
-    def compute_zeta(self, ownership_matrix, utilities_jacobian, costs, prices=None):
-        """Use an ownership matrix, the Jacobian of utilities with respect to prices, and marginal costs to compute the
+    def compute_zeta(self, ownership_matrix, derivatives, costs, prices=None):
+        """Use an ownership matrix, a matrix of utilities with respect to prices, and marginal costs to compute the
         markup term in the zeta-markup equation. By default, unchanged choice probabilities are computed and the prices
         and shares with which this market was initialized are used.
         """
@@ -393,16 +393,16 @@ class Market(object):
             mu = self.update_mu_with_prices(prices)
             probabilities = self.compute_probabilities(delta, mu)
             shares = probabilities @ self.agents.weights
-        V = probabilities * utilities_jacobian
+        V = probabilities * derivatives
         capital_lambda_inverse = np.diagflat(1 / (V @ self.agents.weights))
         capital_gamma = V @ np.diagflat(self.agents.weights) @ probabilities.T
         tilde_capital_omega = capital_lambda_inverse @ (ownership_matrix * capital_gamma).T
         return tilde_capital_omega @ (prices - costs) - capital_lambda_inverse @ shares
 
-    def compute_eta(self, ownership_matrix, utilities_jacobian, prices=None):
-        """Use an ownership matrix and the Jacobian of utilities with respect to prices to compute the markup term in
-        the BLP-markup equation. By default, unchanged choice probabilities are computed and the prices and shares with
-        which this market was initialized are used.
+    def compute_eta(self, ownership_matrix, derivatives, prices=None):
+        """Use an ownership matrix and a matrix of derivatives of utilities with respect to prices to compute the markup
+        term in the BLP-markup equation. By default, unchanged choice probabilities are computed and the prices and
+        shares with which this market was initialized are used.
         """
         if prices is None:
             probabilities = self.compute_probabilities()
@@ -412,7 +412,7 @@ class Market(object):
             mu = self.update_mu_with_prices(prices)
             probabilities = self.compute_probabilities(delta, mu)
             shares = probabilities @ self.agents.weights
-        shares_jacobian = self.compute_shares_by_characteristic_jacobian(utilities_jacobian, probabilities)
+        shares_jacobian = self.compute_shares_by_characteristic_jacobian(derivatives, probabilities)
         try:
             return -scipy.linalg.solve(ownership_matrix * shares_jacobian, shares)
         except ValueError:
@@ -421,5 +421,5 @@ class Market(object):
     def compute_costs(self):
         """Compute marginal costs with the BLP-markup equation."""
         ownership_matrix = self.get_ownership_matrix()
-        jacobian = self.compute_utilities_by_prices_jacobian()
-        return self.products.prices - self.compute_eta(ownership_matrix, jacobian)
+        derivatives = self.compute_utility_by_prices_derivatives()
+        return self.products.prices - self.compute_eta(ownership_matrix, derivatives)
