@@ -102,7 +102,7 @@ The unobserved product characteristics can be stacked to form the combined error
 
 and similarly, :math:`Z_D` and :math:`Z_S`, which are :math:`N \times M_D` and :math:`N \times M_S` matrices of demand- and supply-side instruments, can be stacked to form the combined block-diagonal matrix of instruments,
 
-.. math:: Z = \begin{bmatrix} Z_D & \\ & Z_S \end{bmatrix}.
+.. math:: Z = \begin{bmatrix} Z_D & 0 \\ 0 & Z_S \end{bmatrix}.
 
 The GMM moment conditions are
 
@@ -124,7 +124,7 @@ The GMM problem is
 
 in which :math:`W` is a combined block-diagonal weighting matrix that consists of separate demand- and supply-side weighting matrices,
 
-.. math:: W = \begin{bmatrix} W_D & \\ & W_S \end{bmatrix},
+.. math:: W = \begin{bmatrix} W_D & 0 \\ 0 & W_S \end{bmatrix},
 
 which is assumed to have an inverse that is a consistant estimate of :math:`\mathrm{E}[Z'uu'Z]`.
 
@@ -204,7 +204,7 @@ Standard Errors
 
 Computing standard errors requires the Jacobian of the moments with respect to :math:`\theta`, :math:`\beta`, and :math:`\gamma`, which is
 
-.. math:: G = Z' \begin{bmatrix} \frac{\partial\xi}{\partial\theta} & X_1 & \\ \frac{\partial\omega}{\partial\theta} && X_3 \end{bmatrix}.
+.. math:: G = Z' \begin{bmatrix} \frac{\partial\xi}{\partial\theta} & X_1 & 0 \\ \frac{\partial\omega}{\partial\theta} & 0 & X_3 \end{bmatrix}.
 
 Before updating the weighting matrix, standard errors are extracted from an estimate of
 
@@ -212,7 +212,7 @@ Before updating the weighting matrix, standard errors are extracted from an esti
 
 in which
 
-.. math:: S = Z' \begin{bmatrix} u_1^2 && \\ & \ddots & \\ && u_N^2 \end{bmatrix} Z.
+.. math:: S = Z' \begin{bmatrix} u_1^2 && 0 \\ & \ddots & \\ 0 && u_N^2 \end{bmatrix} Z.
 
 These standard errors are called robust. If the weighting matrix was chosen such that :math:`W = S^{-1}`, then
 
