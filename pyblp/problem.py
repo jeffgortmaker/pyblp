@@ -308,7 +308,7 @@ class Problem(object):
             is not scaled.
         iteration : `Iteration, optional`
             :class:`Iteration` configuration for how to solve the fixed point problem used to compute
-            :math:`\delta(\hat{\theta})` in each market. By default, ``Iteration('squarem')`` is used.
+            :math:`\delta(\hat{\theta})` in each market. By default, ``Iteration('squarem', {'tol': 1e-14})`` is used.
         linear_fp : `bool, optional`
             Whether to compute :math:`\delta(\hat{\theta})` with the standard linear contraction mapping,
 
@@ -356,7 +356,7 @@ class Problem(object):
         if optimization is None:
             optimization = Optimization('l-bfgs-b')
         if iteration is None:
-            iteration = Iteration('squarem')
+            iteration = Iteration('squarem', {'tol': 1e-14})
         if not isinstance(optimization, Optimization):
             raise ValueError("optimization must be an Optimization instance.")
         if not isinstance(iteration, Iteration):

@@ -33,7 +33,7 @@ class Iteration(object):
             - **max_evaluations** : (`int`) - Maximum number of contraction mapping evaluations. The default value is
               ``10000``.
 
-            - **tol** : (`float`) - Tolerance for convergence of the configured norm. The default value is ``1e-12``.
+            - **tol** : (`float`) - Tolerance for convergence of the configured norm. The default value is ``1e-14``.
 
             - **norm** : (`callable`) - The norm to be used. By default, the :math:`\ell^2`-norm is used. If specified,
               this should be a function that accepts an array of differences and that returns a scalar norm.
@@ -114,8 +114,8 @@ class Iteration(object):
         # identify the non-custom iterator and set default options
         self._iterator, self._description = methods[method]
         self._method_options = {
-            'tol': 1e-12,
-            'max_evaluations': 10000,
+            'tol': 1e-14,
+            'max_evaluations': 50000,
             'norm': np.linalg.norm
         }
         if self._iterator == squarem_iterator:

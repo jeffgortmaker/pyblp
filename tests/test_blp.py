@@ -386,7 +386,6 @@ def test_objective_gradient(simulated_problem, solve_options):
         steps=1,
         linear_costs=simulation.linear_costs,
         optimization=Optimization(test_finite_differences),
-        iteration=Iteration('squarem', {'tol': 1e-14}),
         **solve_options
     )
 

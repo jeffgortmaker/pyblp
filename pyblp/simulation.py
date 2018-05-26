@@ -441,7 +441,7 @@ class Simulation(object):
             used as starting values.
         iteration : `Iteration, optional`
             :class:`Iteration` configuration for how to solve the fixed point problem. By default,
-            ``Iteration('simple')`` is used.
+            ``Iteration('simple', {'tol': 1e-12})`` is used.
         error_behavior : `str, optional`
             How to handle errors when computing prices and shares. For example, the fixed point routine may not converge
             if the effects of nonlinear parameters on price overwhelm the linear parameter on price, which should be
@@ -481,7 +481,7 @@ class Simulation(object):
 
         # configure or validate integration
         if iteration is None:
-            iteration = Iteration('simple')
+            iteration = Iteration('simple', {'tol': 1e-12})
         elif not isinstance(iteration, Iteration):
             raise ValueError("iteration must be an Iteration instance.")
 

@@ -705,7 +705,7 @@ class Results(object):
             :meth:`Results.solve_approximate_merger`.
         iteration : `Iteration, optional`
             :class:`Iteration` configuration for how to solve the fixed point problem in each market. By default,
-            ``Iteration('simple')`` is used.
+            ``Iteration('simple', {'tol': 1e-12})`` is used.
         processes : `int, optional`
             Number of Python processes that will be used during computation. By default, multiprocessing will not be
             used. For values greater than one, a pool of that many Python processes will be created. Market-by-market
@@ -719,7 +719,7 @@ class Results(object):
 
         """
         if iteration is None:
-            iteration = Iteration('simple')
+            iteration = Iteration('simple', {'tol': 1e-12})
         elif not isinstance(iteration, Iteration):
             raise ValueError("iteration must an Iteration instance.")
 
