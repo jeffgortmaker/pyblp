@@ -135,29 +135,30 @@ class Problem(object):
     .. ipython:: python
 
        data = np.recfromcsv(pyblp.data.BLP_PRODUCTS_LOCATION)
-       linear = np.c_[np.ones(data.size), data['hpwt'], data['air'], data['mpg'], data['space']]
+       characteristics = np.c_[np.ones(data.size), data['hpwt'], data['air'], data['mpd'], data['space']]
        characteristic_data = {
            'market_ids': data['market_ids'],
            'firm_ids': data['firm_ids'],
-           'characteristics': linear
+           'characteristics': characteristics
        }
-       instruments = np.c_[linear, pyblp.build_blp_instruments(characteristic_data)]
+       instruments = np.c_[characteristics, pyblp.build_blp_instruments(characteristic_data)]
        product_data = {
            'market_ids': data['market_ids'],
            'shares': data['shares'],
            'prices': data['prices'],
-           'linear_characteristics': linear,
-           'nonlinear_characteristics': linear[:, :-1],
+           'linear_characteristics': characteristics,
+           'nonlinear_characteristics': characteristics[:, :3],
            'demand_instruments': instruments
        }
-       problem = pyblp.Problem(product_data, integration=pyblp.Integration('monte_carlo', 50, seed=0))
+       integration = pyblp.Integration('monte_carlo', 50, seed=0)
+       problem = pyblp.Problem(product_data, integration=integration, nonlinear_prices=False)
 
     After choosing to optimize over the diagonal variance elements in :math:`\Sigma` and choosing starting values, the
     initialized problem can be solved. For simplicity, the following code halts estimation after one GMM step:
 
     .. ipython:: python
 
-       initial_sigma = np.diag(np.ones(5))
+       initial_sigma = np.eye(3)
        results = problem.solve(initial_sigma, steps=1)
        results
 
