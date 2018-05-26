@@ -478,9 +478,9 @@ class Problem(object):
             # handle convergence problems
             if not converged:
                 if error_behavior == 'raise':
-                    raise exceptions.ThetaConvergenceError()
+                    raise exceptions.ThetaConvergenceError
                 output("")
-                output(exceptions.ThetaConvergenceError)
+                output(exceptions.ThetaConvergenceError())
                 output("")
 
             # use objective information computed at the optimal theta to compute results for the step
@@ -1010,7 +1010,7 @@ class DemandProblemMarket(Market):
 
         # configure numpy to identify floating point errors
         errors = set()
-        with np.errstate(all='call'):
+        with np.errstate(divide='call', over='call', under='ignore', invalid='call'):
             np.seterrcall(lambda *_: errors.add(exceptions.DeltaFloatingPointError))
 
             # define a custom log wrapper that identifies issues with taking logs
@@ -1083,7 +1083,7 @@ class SupplyProblemMarket(Market):
 
         # configure numpy to identify floating point errors
         errors = set()
-        with np.errstate(all='call'):
+        with np.errstate(divide='call', over='call', under='ignore', invalid='call'):
             np.seterrcall(lambda *_: errors.add(exceptions.CostsFloatingPointError))
 
             # compute marginal costs
