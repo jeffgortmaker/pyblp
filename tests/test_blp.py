@@ -360,7 +360,7 @@ def test_extra_demographics(simulated_problem):
 ])
 def test_objective_gradient(simulated_problem, solve_options):
     """Implement central finite differences in a custom optimization routine to test that analytic gradient values
-    are within 0.1% of estimated values.
+    are within 1% of estimated values.
     """
     simulation, problem, _ = simulated_problem
 
@@ -369,7 +369,7 @@ def test_objective_gradient(simulated_problem, solve_options):
         theta, _, objective_function, _ = args
         exact = objective_function(theta)[1]
         estimated = np.zeros_like(exact)
-        change = np.sqrt(np.finfo(options.dtype).eps)
+        change = np.sqrt(np.finfo(np.float64).eps)
         for index in range(theta.size):
             theta1 = theta.copy()
             theta2 = theta.copy()
