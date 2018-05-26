@@ -1013,25 +1013,23 @@ class DemandProblemMarket(Market):
         with np.errstate(all='call'):
             np.seterrcall(lambda *_: errors.add(exceptions.DeltaFloatingPointError))
 
-            # define a custom log wrapper that identifies numerical issues with taking logs
-            def log(x):
-                with np.errstate(invalid='call', divide='call'):
-                    old = np.seterrcall(lambda *_: errors.add(exceptions.NonpositiveSharesError))
-                    try:
-                        return np.log(x)
-                    finally:
-                        np.seterrcall(old)
+            # define a custom log wrapper that identifies issues with taking logs
+            def custom_log(x):
+                with np.errstate(all='ignore'):
+                    if np.any(x <= 0):
+                        errors.add(exceptions.NonpositiveSharesError)
+                    return np.log(x)
 
             # solve the fixed point problem
             if linear_fp:
-                log_shares = log(self.products.shares)
-                contraction = lambda d: d + log_shares - log(self.compute_probabilities(d) @ self.agents.weights)
+                log_shares = np.log(self.products.shares)
+                contraction = lambda d: d + log_shares - custom_log(self.compute_probabilities(d) @ self.agents.weights)
                 delta, converged, iterations, evaluations = iteration._iterate(initial_delta, contraction)
             else:
                 compute_probabilities = functools.partial(self.compute_probabilities, mu=np.exp(self.mu), linear=False)
                 contraction = lambda d: d * self.products.shares / (compute_probabilities(d) @ self.agents.weights)
                 exp_delta, converged, iterations, evaluations = iteration._iterate(np.exp(initial_delta), contraction)
-                delta = log(exp_delta)
+                delta = custom_log(exp_delta)
 
             # identify whether the fixed point converged
             if not converged:
@@ -1098,8 +1096,9 @@ class SupplyProblemMarket(Market):
             # take the log of marginal costs under a log-linear specification
             tilde_costs = costs
             if not linear_costs:
-                with np.errstate(invalid='call', divide='call'):
-                    np.seterrcall(lambda *_: errors.add(exceptions.NonpositiveCostsError))
+                with np.errstate(all='ignore'):
+                    if np.any(costs <= 0):
+                        errors.add(exceptions.NonpositiveCostsError)
                     tilde_costs = np.log(costs)
 
             # if the gradient is to be computed, replace invalid transformed marginal costs with their last computed
