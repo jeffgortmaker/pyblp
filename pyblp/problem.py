@@ -221,7 +221,7 @@ class Problem(object):
 
     def solve(self, sigma, pi=None, sigma_bounds=None, pi_bounds=None, delta=None, WD=None, WS=None, steps=2,
               optimization=None, error_behavior='revert', error_punishment=1, iteration=None, linear_fp=True,
-              linear_costs=True, center_moments=True, se_type='robust', processes=1):
+              linear_costs=True, costs_bounds=None, center_moments=True, se_type='robust', processes=1):
         r"""Solve the problem.
 
         Parameters
@@ -326,6 +326,13 @@ class Problem(object):
             Whether to compute :math:`\tilde{c}(\hat{\theta})` according to a linear or a log-linear marginal cost
             specification. This is only relevant if the problem was initialized with supply-side data. By default, a
             linear specification is assumed. That is, :math:`\tilde{c} = c` instead of :math:`\tilde{c} = \log c`.
+        costs_bounds : `tuple, optional`
+            Configuration for :math:`c` bounds of the form ``(lb, ub)``, in which both ``lb`` and ``ub`` are floats.
+            This is only relevant if the problem was initialized with supply-side data. By default, marginal costs are
+            unbounded. When `linear_costs` is ``False``, nonpositive :math:`c(\hat{\theta})` values can pose problems
+            when computing :math:`\tilde{c}(\hat{\theta}) = \log c(\hat{\theta})`. One solution is to let ``lb`` equal
+            some small number; however, doing so introduces error into gradient computation. Both ``None`` and
+            ``numpy.nan`` are converted to ``-numpy.inf`` in ``lb`` and to ``numpy.inf`` in ``ub``.
         center_moments : `bool, optional`
             Whether to center the sample moments before using them to update weighting matrices. By default, sample
             moments are centered.
@@ -368,6 +375,18 @@ class Problem(object):
         if se_type not in {'robust', 'unadjusted'}:
             raise ValueError("se_type must be 'robust' or 'unadjusted'.")
 
+        # configure or validate costs bounds
+        if costs_bounds is None:
+            costs_bounds = (-np.inf, +np.inf)
+        else:
+            costs_bounds = list(np.asarray(costs_bounds, options.dtype).flatten())
+            if len(costs_bounds) != 2 or costs_bounds[0] > costs_bounds[1]:
+                raise ValueError("costs_bounds must be a tuple of the form (lb, ub).")
+            if not np.isfinite(costs_bounds[0]):
+                costs_bounds[0] = -np.inf
+            if not np.isfinite(costs_bounds[1]):
+                costs_bounds[1] = +np.inf
+
         # output configuration information
         output(f"GMM steps: {steps}.")
         output(optimization)
@@ -377,6 +396,7 @@ class Problem(object):
         output(f"Linear fixed point formulation: {linear_fp}.")
         if self.K3 > 0:
             output(f"Linear marginal cost specification: {linear_costs}.")
+            output(f"Costs bounds: [{output.format_number(costs_bounds[0])}, {output.format_number(costs_bounds[1])}].")
         output(f"Centering sample moments before updating weighting matrices: {center_moments}.")
         output(f"Standard error type: {se_type}.")
         output(f"Processes: {processes}.")
@@ -439,7 +459,7 @@ class Problem(object):
             # wrap computation of objective information with step-specific information
             compute_step_info = functools.partial(
                 self._compute_objective_info, theta_info, WD, WS, error_behavior, error_punishment, iteration,
-                linear_costs, linear_fp, processes
+                linear_fp, linear_costs, costs_bounds, processes
             )
 
             # define the objective function for the optimization routine, which also outputs progress updates
@@ -504,8 +524,8 @@ class Problem(object):
             if step == steps:
                 return results
 
-    def _compute_objective_info(self, theta_info, WD, WS, error_behavior, error_punishment, iteration, linear_costs,
-                                linear_fp, processes, theta, last_objective_info, compute_gradient):
+    def _compute_objective_info(self, theta_info, WD, WS, error_behavior, error_punishment, iteration, linear_fp,
+                                linear_costs, costs_bounds, processes, theta, last_objective_info, compute_gradient):
         """Compute demand- and supply-side contributions. Then, form the GMM objective value and its gradient. Finally,
         handle any errors that were encountered before structuring relevant objective information.
         """
@@ -522,8 +542,8 @@ class Problem(object):
         tilde_costs = omega_jacobian = PS = gamma = omega = None
         if self.K3 > 0:
             supply_contributions = self._compute_supply_contributions(
-                theta_info, WD, WS, linear_costs, processes, delta, xi_jacobian, beta, sigma, pi, last_objective_info,
-                compute_gradient
+                theta_info, WD, WS, linear_costs, costs_bounds, processes, delta, xi_jacobian, beta, sigma, pi,
+                last_objective_info, compute_gradient
             )
             tilde_costs, omega_jacobian, PS, gamma, omega, supply_errors = supply_contributions
 
@@ -613,8 +633,8 @@ class Problem(object):
         xi = delta - self.products.X1 @ beta
         return delta, xi_jacobian, PD, beta, xi, errors, iteration_mapping, evaluation_mapping
 
-    def _compute_supply_contributions(self, theta_info, WD, WS, linear_costs, processes, delta, xi_jacobian, beta,
-                                      sigma, pi, last_objective_info, compute_gradient):
+    def _compute_supply_contributions(self, theta_info, WD, WS, linear_costs, costs_bounds, processes, delta,
+                                      xi_jacobian, beta, sigma, pi, last_objective_info, compute_gradient):
         """Compute transformed marginal costs and the Jacobian of omega (equivalently, of transformed marginal costs)
         with respect to theta market-by-market. If necessary, revert problematic elements to their last values. Lastly,
         recover gamma and compute omega.
@@ -639,7 +659,8 @@ class Problem(object):
             last_tilde_costs_t = last_objective_info.tilde_costs[self.products.market_ids.flat == t]
             xi_jacobian_t = xi_jacobian[self.products.market_ids.flat == t]
             mapping[t] = [
-                market_t, last_tilde_costs_t, xi_jacobian_t, beta_jacobian, theta_info, linear_costs, compute_gradient
+                market_t, last_tilde_costs_t, xi_jacobian_t, beta_jacobian, theta_info, linear_costs, costs_bounds,
+                compute_gradient
             ]
 
         # fill transformed marginal costs and their Jacobian market-by-market (the Jacobian will be null if the gradient
@@ -1075,7 +1096,8 @@ class DemandProblemMarket(Market):
 class SupplyProblemMarket(Market):
     """A single market in the BLP problem, which can be solved to compute costs-related information."""
 
-    def solve(self, initial_tilde_costs, xi_jacobian, beta_jacobian, theta_info, linear_costs, compute_gradient):
+    def solve(self, initial_tilde_costs, xi_jacobian, beta_jacobian, theta_info, linear_costs, costs_bounds,
+              compute_gradient):
         """Compute transformed marginal costs for this market. Then, if compute_gradient is True, compute the Jacobian
         of omega (equivalently, of transformed marginal costs) with respect to theta. If necessary, replace null
         elements in transformed marginal costs with their last values before computing their Jacobian.
@@ -1092,6 +1114,9 @@ class SupplyProblemMarket(Market):
             except scipy.linalg.LinAlgError:
                 errors.add(exceptions.CostsSingularityError)
                 costs = np.full((self.J, 1), np.nan, options.dtype)
+
+            # clip marginal costs that are outside of acceptable bounds
+            costs = np.clip(costs, *costs_bounds)
 
             # take the log of marginal costs under a log-linear specification
             tilde_costs = costs
