@@ -29,10 +29,6 @@ Knittel, C. R., & Metaxoglou, K. (2014). `Estimation of random-coefficient deman
 
 Morrow, W. R., & Skerlos, S. J. (2011). `Fixed-point approaches to computing Bertrand-Nash equilibrium prices under mixed-logit demand <https://ideas.repec.org/a/inm/oropre/v59y2011i2p328-345.html>`_. *Operations Research, 59* (2), 328-345.
 
-.. _nm65:
-
-Nelder, J., & Mead, R. (1965). `A simplex method for function minimization <https://academic.oup.com/comjnl/article-abstract/7/4/308/354237>`_. *Computer Journal, 7* (4), 308-313.
-
 .. _n97:
 
 Nevo, A. (1997). `Mergers with differentiated products: The case of the ready-to-eat cereal industry <https://ideas.repec.org/p/cdl/compol/qt1d53t6ts.html>`_. Competition Policy Center, Working Paper Series qt1d53t6ts, Competition Policy Center, Institute for Business and Economic Research, UC Berkeley.

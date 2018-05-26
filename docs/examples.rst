@@ -73,7 +73,7 @@ For both sets of data, matrices of firm IDs consist of a column of baseline IDs,
    blp_product_data['firm_ids'] = np.c_[blp_data['firm_ids'], blp_data['changed_firm_ids']]
    nevo_product_data['firm_ids'] = np.c_[nevo_data['firm_ids'], nevo_data['changed_firm_ids']]
 
-Linear and nonlinear characteristics for the automobile problem are a constant column followed by four product characterstics. Cost characteristics are the same but with logged continuous variables, with miles per gallon instead of per dollar, and with a trend.
+Linear and nonlinear characteristics for the automobile problem are a constant column followed by four product characterstics. Cost characteristics are the same but with logarithms of continuous variables, with miles per gallon instead of per dollar, and with a trend.
 
 .. ipython:: python
 
@@ -106,7 +106,7 @@ Linear characteristics for the fake cereal problem are simply product indicators
        nevo_data['mushy']
    ]
 
-Demand-side instruments for the automobile problem are the linear and nonlinear characteristics along with their traditional BLP instrument counterparts constructed by :func:`build_blp_instruments`; as in in :ref:`Berry, Levinsohn, and Pakes (1995) <blp95>`, miles per gallon and the trend are not included due to collinearity. Supply-side instruments are the cost characteristics, their traditional BLP instrument counterparts, and the excluded demand variable, miles per dollar.
+Demand-side instruments for the automobile problem are the linear and nonlinear characteristics along with their traditional BLP instrument counterparts constructed by :func:`build_blp_instruments`. Supply-side instruments are the cost characteristics, their traditional BLP instrument counterparts, and the excluded demand variable, miles per dollar. As in :ref:`Berry, Levinsohn, and Pakes (1995) <blp95>`, miles per gallon and the trend are not included in the set of demand-side instruments because of collinearity.
 
 .. ipython:: python
 
@@ -139,11 +139,13 @@ Instruments for the fake cereal problem are product indicators along with the in
 Agent Data
 ~~~~~~~~~~
 
-The package also includes example agent data. Since the draws included for the automobile problem are the ones used by :ref:`Knittel and Metaxoglou (2014) <km14>` and not the draws from the original paper, we might as well configure the package to build our own set of Monte Carlo draws for each market. A small number of draws speeds up estimation for this example.
+The original specification for the automobile problem includes the term :math:`\log(y_i - p_j)`, in which :math:`y` is income and :math:`p` are prices. Instead of including this term, which gives rise to a host of numerical problems, we'll follow :ref:`Berry, Levinsohn, and Pakes (1999) <blp99>` and use its first-order linear approximation, :math:`p_j / y_i`. To do so, we'll need agent income, :math:`y`. The CSV file includes sample draws from the lognormal distributions that were used in the original paper. Since the draws included for the automobile problem are the ones used by :ref:`Knittel and Metaxoglou (2014) <km14>` and not the draws from the original paper, we might as well configure the package to build our own set of Monte Carlo draws for each market. A small number of draws speeds up estimation for this example.
 
 .. ipython:: python
 
-   blp_integration = pyblp.Integration('monte_carlo', 200, seed=0)
+   blp_agent_data = np.recfromcsv(pyblp.data.BLP_AGENTS_LOCATION)
+   blp_agent_data['demographics0'] = 1 / blp_agent_data['demographics0']
+   blp_integration = pyblp.Integration('monte_carlo', 50, seed=1)
 
 Agent data from the fake cereal CSV file can be used without modification.
 
@@ -152,7 +154,7 @@ Agent data from the fake cereal CSV file can be used without modification.
    nevo_agent_data = np.recfromcsv(pyblp.data.NEVO_AGENTS_LOCATION)
    nevo_agent_data
 
-Unlike the product data matrices constructed above, agent data from the CSV file represents multi-column fields with multiple fields, each with an index at the end. The pyblp package can handle both matrix representations.
+Unlike the product data matrices constructed above, agent data from the CSV file contains multi-column fields with multiple fields, each suffixed with an index. The pyblp package can handle both matrix representations.
 
 
 Solving Problems
@@ -164,44 +166,58 @@ Problem data along with agent data or an integration configuration are used to i
 The Automobile Problem
 ~~~~~~~~~~~~~~~~~~~~~~
 
-The :class:`Integration` configuration will be used by :class:`Problem` to build agent data. By default, :class:`Problem` includes prices, :math:`p`, in :math:`X_1` and :math:`X_2` as the first column in both matrices. We'll use the `nonlinear_prices` argument to include prices only in :math:`X_1` as in :ref:`Berry, Levinsohn, and Pakes (1995) <blp95>`.
+The :class:`Integration` configuration will be used by :class:`Problem` to build agent data. By default, :class:`Problem` includes prices, :math:`p`, in :math:`X_1` and :math:`X_2` as the first column in both matrices. We're only interested in the interaction of prices and income, so we'll use to `linear_prices` argument to include them only in :math:`X_2`.
 
 .. ipython:: python
 
    blp_problem = pyblp.Problem(
        blp_product_data,
+       blp_agent_data,
        integration=blp_integration,
-       nonlinear_prices=False
+       linear_prices=False
    )
 
-Inspecting the attributes of the :class:`Problem` instance helps to confirm that the problem has been configured correctly. For example, inspecting :attr:`Problem.products` and :attr:`Problem.agents` confirms that product data was structured correctly and that agent data was built correctly.
+Inspecting the attributes of the :class:`Problem` instance helps to confirm that the problem has been configured correctly. For example, inspecting :attr:`Problem.products` and :attr:`Problem.agents` confirms that product data were structured correctly and that agent data were built correctly.
 
 .. ipython:: python
 
    blp_problem.products
    blp_problem.agents
 
-The initialized problem can be solved with :meth:`Problem.solve`. By passing an identity matrix as starting values for :math:`\Sigma`, we're choosing to optimize over only variance terms, and we're choosing to have all five nonlinear parameters start at one. Although we'll use the same log-linear marginal cost specification that was used in the original paper, we'll speed up optimization by using the default optimization routine, which computes an analytic gradient. We'll also only perform one GMM step. You can pass ``pyblp.Optimization('nelder-mead', compute_gradient=False)`` to the `optimization` argument if you want to use the original :ref:`Nelder and Mead (1965) <nm65>` routine.
+The initialized problem can be solved with :meth:`Problem.solve`. By passing a diagonal matrix of ones as starting values for :math:`\Sigma`, we're choosing to optimize over only variance terms; we're setting the first element to zero because it corresponds to prices and we're interested only in the interaction term, :math:`p_j / y_i`. By passing a column vector of a negative value followed by zeros as starting values for :math:`\Pi`, we're choosing to interact the inverse of income only with prices.
 
 .. ipython:: python
 
-   blp_sigma = np.diag(np.ones(5))
-   blp_results = blp_problem.solve(blp_sigma, linear_costs=False, steps=1)
+   blp_sigma = np.diag([0, 1, 1, 1, 1, 1])
+   blp_pi = np.c_[[-10, 0, 0, 0, 0, 0]]
+
+A linear marginal cost specification is the default, so we'll need to use the `linear_costs` argument to employ the log-linear specification used by :ref:`Berry, Levinsohn, and Pakes (1995) <blp95>`. A downside of this specification is that nonpositive estimated marginal costs can create problems for the optimization routine when computing :math:`\tilde{c}(\hat{\theta}) = \log c(\hat{\theta})`. Since this specification of the automobile problem suffers from negative estimates of marginal costs, we'll use the `costs_bounds` argument to bound marginal costs from below by a small number. Unfortunately, doing so introduces error into analytic gradient computation, so we'll configure the optimization routine to compute gradients with finite differences. Supply-side gradient computation is computationally expensive anyways, so this is not that big of a problem. To further speed up this example, we'll use a high objective tolerance and stop after one GMM step.
+
+.. ipython:: python
+
+   blp_results = blp_problem.solve(
+       blp_sigma,
+       blp_pi,
+       steps=1,
+       linear_costs=False,
+       costs_bounds=(0.1, None),
+       optimization=pyblp.Optimization('l-bfgs-b', {'ftol': 1e-3}, compute_gradient=False)
+   )
    blp_results
 
-Estimates, which are in the same order as product characteristics configured during :class:`Problem` initialization, are similar to those in :ref:`Berry, Levinsohn, and Pakes (1995) <blp95>`. Of course, divergences from the original configuration create differences. For example, this configuration does not incorporate an interaction between prices and income. To do so, you could include income as a demographic when initializing :class:`Problem`, and, in :meth:`Problem.solve`, allow one or more parameters in :math:`\Pi` to vary.
+Estimates, which are in the same order as product characteristics configured during :class:`Problem` initialization, are somewhat similar to those in :ref:`Berry, Levinsohn, and Pakes (1995) <blp95>`. Of course, shortcuts used to speed up optimization and divergences from the original configuration give rise to differences.
 
 
 The Fake Cereal Problem
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-Unlike the automobile problem, we have included demographics in the agent data for the fake cereal problem and we have not included supply-side information in its product data. Also, we will configure this problem to include prices in both :math:`X_1` and :math:`X_2`, which is the default behavior of :class:`Problem`.
+Unlike the automobile problem, we have not included supply-side information in the product data for the fake cereal problem. Also, we will configure this problem to include prices in both :math:`X_1` and :math:`X_2`, which is the default behavior of :class:`Problem`.
 
 .. ipython:: python
 
    nevo_problem = pyblp.Problem(nevo_product_data, nevo_agent_data)
 
-Since we initialized the problem without supply-side data, there's no need to choose a marginal cost specification. However, since we initialized the problem with demographics, we need to configure not only :math:`\Sigma`, but also :math:`\Pi`. We'll use the same starting values as :ref:`Nevo (2000) <n00>`. We'll also use a non-default unbounded optimization routine that is similar to the default for Matlab, and, again, we'll only perform one GMM step for the sake of speed in this example.
+Since we initialized the problem without supply-side data, there's no need to choose a marginal cost specification. When configuring :math:`\Sigma` :math:`\Pi`, we'll use the same starting values as :ref:`Nevo (2000) <n00>`. We'll also use a non-default unbounded optimization routine that is similar to the default for Matlab, and, again, we'll only perform one GMM step to speed up this example.
 
 .. ipython:: python
 
@@ -222,7 +238,7 @@ Since we initialized the problem without supply-side data, there's no need to ch
 
 Often, the above starting values give rise to some warnings during the first few GMM objective evaluations about floating point problems. This is because some optimization routines attempt to evaluate the objective at parameter values that lead to overflow while, for example, computing :math:`\hat{\delta}`. For example, using ``pyblp.Optimization('slsqp')`` displays some warnings if :attr:`options.verbose` is ``True``. The default behavior of :meth:`Problem.solve` is to revert problematic elements in :math:`\hat{\delta}` and its Jacobian before computing the objective value, which allows the optimization routine to continue searching the parameter space. For more information, refer to :meth:`Problem.solve`. In particular, the `sigma_bounds` and `pi_bounds` arguments can be used to bound the parameter space over which the optimization problem searches.
 
-Again, results are similar to those in the original paper. Compared to the automobile problem, results are even closer to the original because we didn't simulate our own agent data.
+Again, results are similar to those in the original paper. Compared to the automobile problem, results are even closer to the original because our specification and agent data were essentially the same.
 
 
 Problem Results
@@ -344,7 +360,7 @@ Other methods that compute supply-side outputs require such estimates of :math:`
 
    blp_markups = blp_results.compute_markups(blp_costs)
    nevo_markups = nevo_results.compute_markups(nevo_costs)
-   bins = np.linspace(0, 2, 50)
+   bins = np.linspace(0, 1.5, 50)
    plt.hist(blp_markups, bins, alpha=0.5, color='maroon');
    plt.hist(nevo_markups, bins, alpha=0.5, color='navy');
 
@@ -407,7 +423,7 @@ Markups, :math:`\mathscr{M}`, and profits, :math:`\pi`, generally increase as we
 
    blp_changed_markups = blp_results.compute_markups(blp_costs, blp_changed_prices)
    nevo_changed_markups = nevo_results.compute_markups(nevo_costs, nevo_changed_prices)
-   bins = np.linspace(-0.05, 0.25, 50)
+   bins = np.linspace(-0.2, 0.5, 50)
    plt.hist(blp_changed_markups - blp_markups, bins, alpha=0.5, color='maroon');
    plt.hist(nevo_changed_markups - nevo_markups, bins, alpha=0.5, color='navy');
 
@@ -428,7 +444,7 @@ Markups, :math:`\mathscr{M}`, and profits, :math:`\pi`, generally increase as we
        nevo_changed_prices,
        nevo_changed_shares
    )
-   bins = np.linspace(-0.001, 0.001, 50)
+   bins = np.linspace(-0.001, 0.007, 50)
    plt.hist(blp_changed_profits - blp_profits, bins, alpha=0.5, color='maroon');
    plt.hist(nevo_changed_profits - nevo_profits, bins, alpha=0.5, color='navy');
 
@@ -443,7 +459,7 @@ On the other hand, consumer surpluses, :math:`\text{CS}`, generally decrease.
 
    blp_changed_cs = blp_results.compute_consumer_surpluses(blp_changed_prices)
    nevo_changed_cs = nevo_results.compute_consumer_surpluses(nevo_changed_prices)
-   bins = np.linspace(-0.06, 0.01, 50)
+   bins = np.linspace(-0.5, 0.01, 50)
    plt.hist(blp_changed_cs - blp_cs, bins, alpha=0.5, color='maroon');
    plt.hist(nevo_changed_cs - nevo_cs, bins, alpha=0.5, color='navy');
 
