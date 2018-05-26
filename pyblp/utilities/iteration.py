@@ -1,5 +1,7 @@
 """Fixed-point iteration routines."""
 
+import functools
+
 import numpy as np
 
 
@@ -35,8 +37,8 @@ class Iteration(object):
 
             - **tol** : (`float`) - Tolerance for convergence of the configured norm. The default value is ``1e-14``.
 
-            - **norm** : (`callable`) - The norm to be used. By default, the :math:`\ell^2`-norm is used. If specified,
-              this should be a function that accepts an array of differences and that returns a scalar norm.
+            - **norm** : (`callable`) - The norm to be used. By default, the :math:`\ell^\infty`-norm is used. If
+              specified, this should be a function that accepts an array of differences and that returns a scalar norm.
 
         The ``'squarem'`` routine accepts additional options that mirror those in the
         `SQUAREM <https://cran.r-project.org/web/packages/SQUAREM/index.html>`_ package, written in R by Ravi Varadhan,
@@ -116,7 +118,7 @@ class Iteration(object):
         self._method_options = {
             'tol': 1e-14,
             'max_evaluations': 50000,
-            'norm': np.linalg.norm
+            'norm': infinity_norm
         }
         if self._iterator == squarem_iterator:
             self._method_options.update({
@@ -179,6 +181,11 @@ class Iteration(object):
         )
         final_values = np.asarray(raw_final_values).reshape(initial_values.shape).astype(initial_values.dtype)
         return final_values, converged, iteration_callback.iterations, contraction_wrapper.evaluations
+
+
+def infinity_norm(x):
+    """Compute the infinity norm of a vector."""
+    return np.abs(x).max()
 
 
 def squarem_iterator(initial, contraction, iteration_callback, max_evaluations, tol, norm, scheme, step_min, step_max,

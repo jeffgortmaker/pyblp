@@ -397,7 +397,7 @@ def test_knittel_metaxoglou_2014(knittel_metaxoglou_2014):
         knittel_metaxoglou_2014.get('initial_sigma'),
         knittel_metaxoglou_2014.get('initial_pi'),
         optimization=Optimization('knitro', {'opttol': 1e-8, 'xtol': 1e-8}),
-        iteration=Iteration('simple', {'max_evaluations': 100000, 'tol': 1e-12, 'norm': lambda x: np.abs(x).max()}),
+        iteration=Iteration('simple', {'tol': 1e-12}),
         steps=1
     )
 
