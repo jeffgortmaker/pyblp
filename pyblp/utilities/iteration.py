@@ -154,6 +154,10 @@ class Iteration(object):
         strings = {k: f'{v.__module__}.{v.__qualname__}' if callable(v) else v for k, v in self._method_options.items()}
         return f"Configured to iterate using {self._description} with options {strings}."
 
+    def __repr__(self):
+        """Defer to the string representation."""
+        return str(self)
+
     def _iterate(self, initial_values, contraction):
         """Solve a fixed point iteration problem."""
 

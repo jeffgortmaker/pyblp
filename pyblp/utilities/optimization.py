@@ -222,6 +222,10 @@ class Optimization(object):
         gradients = "with analytic gradients" if self._compute_gradient else "without analytic gradients"
         return f"Configured to optimize using {self._description} with options {self._method_options} and {gradients}."
 
+    def __repr__(self):
+        """Defer to the string representation."""
+        return str(self)
+
     def _optimize(self, initial_values, bounds, verbose_objective_function):
         """Optimize parameters to minimize a scalar objective."""
 

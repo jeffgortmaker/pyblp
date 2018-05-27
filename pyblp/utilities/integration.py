@@ -80,6 +80,10 @@ class Integration(object):
         """Format the configuration as a string."""
         return f"Configured to construct nodes and weights {self._description}."
 
+    def __repr__(self):
+        """Defer to the string representation."""
+        return str(self)
+
     def _build_many(self, dimensions, ids):
         """Build concatenated IDs, nodes, and weights for each ID."""
         if self._seed is not None:
