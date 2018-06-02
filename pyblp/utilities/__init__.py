@@ -3,6 +3,7 @@
 from .. import options
 from .iteration import Iteration
 from .integration import Integration
+from .formulation import Formulation
 from .optimization import Optimization
 from .basics import extract_matrix, Matrices, ParallelItems, Output
 
