@@ -83,6 +83,8 @@ class Formulation(object):
         """Parse the formula into patsy terms and SymPy expressions. In the process, validate it as much as possible
         without any data.
         """
+        if not isinstance(formula, str):
+            raise TypeError("formula must be a string.")
         self._terms = parse_terms(formula)
         self._expressions = [parse_term_expression(t) for t in self._terms]
         if not self._terms:
@@ -329,12 +331,14 @@ def parse_expression(string, mark_categorical=False):
         return transformed
 
     # define a function that recursively validates that all categorical marker functions in an expression accept only a
-    #   single variable argument
-    def validate_categorical(candidate, categorical=False):
+    #   single variable argument, and that they are not arguments to other functions
+    def validate_categorical(candidate, depth=0, categorical=False):
+        if categorical and depth > 1:
+            raise ValueError("The C function must not be an argument to another function.")
         for arg in candidate.args:
             if categorical and not isinstance(arg, sympy.Symbol):
                 raise ValueError("The C function accepts only a single variable.")
-            validate_categorical(arg, candidate.func == mapping['C'])
+            validate_categorical(arg, depth + 1, candidate.func == mapping['C'])
 
     # parse the expression, validate it by attempting to represent it as a string, and validate categorical markers
     try:
