@@ -72,10 +72,10 @@ class Formulation(object):
     The following code designs a third matrix with an intercept and with a yearly trend interacted with the natural
     logarithm of income and categorical education:
 
-     .. ipython:: python
+    .. ipython:: python
 
-        formulation = pyblp.Formulation('year:(log(income) + C(education))')
-        formulation
+       formulation = pyblp.Formulation('year:(log(income) + C(education))')
+       formulation
 
     """
 

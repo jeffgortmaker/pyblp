@@ -34,8 +34,9 @@ Most BLP-specific tests in ``tests.test_blp`` verify properties about results ob
 - Gradients computed with finite differences should approach analytic gradients.
 - Results from example problems should line up with results reported in the literature.
 
-Tests of generic utilities in ``tests.test_integration``, ``tests.test_iteration``, and ``tests.test_optimization`` verify that integral approximation, fixed point iteration, and nonlinear optimization all work as expected. Example include:
+Tests of generic utilities in ``tests.test_formulation``, ``tests.test_integration``, ``tests.test_iteration``, and ``tests.test_optimization`` verify that matrix formulation, integral approximation, fixed point iteration, and nonlinear optimization all work as expected. Example include:
 
+- Nonlinear formulas give rise to expected matrices and derivatives.
 - Gauss-Hermite integrals are better approximated with quadrature based on Gauss-Hermite rules than with Monte Carlo integration.
 - To solve a fixed point iteration problem for which it was developed, SQUAREM requires fewer fixed point evaluations than does simple iteration.
 - All optimization routines manage to solve a well-known optimization problem under different parameterizations.

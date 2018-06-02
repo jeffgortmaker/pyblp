@@ -1,2 +1,4 @@
 numpy
+patsy
 scipy
+sympy

@@ -21,6 +21,7 @@ Various components of the package require configurations for how to approximate 
    :toctree: api
    :template: class_without_methods.rst
 
+   Formulation
    Integration
    Iteration
    Optimization
