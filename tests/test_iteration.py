@@ -4,7 +4,7 @@ import pytest
 import numpy as np
 import scipy.optimize
 
-from pyblp.utilities import Iteration
+from pyblp import Iteration
 
 
 @pytest.mark.parametrize(['method', 'method_options'], [

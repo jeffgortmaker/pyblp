@@ -3,7 +3,7 @@
 import pytest
 import numpy as np
 
-from pyblp.utilities import Formulation
+from pyblp import Formulation
 
 
 @pytest.mark.usefixtures('formula_data')

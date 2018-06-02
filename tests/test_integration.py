@@ -3,7 +3,7 @@
 import pytest
 import numpy as np
 
-from pyblp.utilities import Integration
+from pyblp import Integration
 
 
 @pytest.mark.parametrize(['dimensions', 'specification', 'size', 'naive_specification'], [

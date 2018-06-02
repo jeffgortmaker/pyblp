@@ -4,8 +4,7 @@ import pytest
 import numpy as np
 import scipy.optimize
 
-from pyblp import options
-from pyblp.utilities import Optimization
+from pyblp import options, Optimization
 
 
 @pytest.mark.parametrize(['lb', 'ub'], [
