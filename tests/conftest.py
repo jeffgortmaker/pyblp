@@ -4,6 +4,7 @@ import os
 import re
 from pathlib import Path
 
+import patsy
 import pytest
 import scipy.io
 import numpy as np
@@ -204,3 +205,10 @@ def nwspgr(request):
     nodes = matrix[:, :-1]
     weights = matrix[:, -1]
     return int(dimensions), int(level), nested, nodes, weights
+
+
+@pytest.fixture(params=[pytest.param(1, id="1 observation"), pytest.param(10, id="10 observations")])
+def formula_data(request):
+    """Simulate patsy demo data with two-level categorical variables and varying numbers of observations."""
+    raw_data = patsy.user_util.demo_data('a', 'b', 'c', 'x', 'y', 'z', nlevels=2, min_rows=request.param)
+    return {k: np.array(v) if isinstance(v[0], str) else np.abs(v) for k, v in raw_data.items()}
