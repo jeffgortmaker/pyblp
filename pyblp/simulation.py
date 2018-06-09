@@ -13,7 +13,7 @@ from .utilities import output, extract_matrix, Matrices, ParallelItems, Formulat
 class Simulation(Economy):
     r"""Simulation of synthetic BLP data.
 
-    All data either loaded or simulated during initialization, except for Bertrand-Nash prices and shares, which are
+    All data are either loaded or simulated during initialization, except for Bertrand-Nash prices and shares, which are
     computed by :meth:`Simulation.solve`.
 
     Unspecified exogenous variables that are used to formulate product characteristics, :math:`X_1`, :math:`X_2`, and
@@ -23,15 +23,19 @@ class Simulation(Economy):
     Unobserved demand- and supply-side product characteristics, :math:`\xi` and :math:`\omega`, are drawn from a
     mean-zero bivariate normal distribution.
 
-    After loading or simulating characteristics and constructing nodes and weights according to an integration
-    configuration, canonical instruments are computed. Specifically,
+    After variables are loaded or simulated, any unspecified nodes and weights will be constructed according to an
+    integration configuration. Next, canonical instruments are computed. Specifically,
 
-    .. math:: Z_D = [1, X, \mathrm{BLP}(X_D)] \quad\text{and}\quad Z_S = [1, X, \mathrm{BLP}(X_S)],
+    .. math:: Z_D = [1, X, \mathrm{Rival}(X_D), \mathrm{Other}(X_D)]
 
-    in which :math:`X` are all non-constant exogenous numerical product variables, :math:`\mathrm{BLP}(X_D)` are
-    traditional BLP instruments constructed by :func:`build_blp_instruments` from all variables in :math:`X` used to
-    formulate :math:`X_1` and :math:`X_2`, and :math:`\mathrm{BLP}(X_S)` are constructed from all variables in :math:`X`
-    used to formulate :math:`X_3`.
+    and
+
+    .. math:: Z_S = [1, X, \mathrm{Rival}(X_S), \mathrm{Other}(X_S)],
+
+    in which :math:`X` are all non-constant exogenous numerical product variables, :math:`X_D` are all variables in
+    :math:`X` used to formulate :math:`X_1` and :math:`X_2`, :math:`X_S` are all variables in :math:`X` used to
+    formulate :math:`X_3`, and both :math:`\mathrm{Rival}` and :math`\mathrm{Other}` are defined in
+    :func:`build_blp_instruments`, which is used to construct the traditional BLP instruments.
 
     Parameters
     ----------
@@ -259,20 +263,33 @@ class Simulation(Economy):
                 else:
                     categorical_mapping[name] = variable
 
-        # construct instruments
-        numerical_variables = np.column_stack(numerical_mapping.values())
-        demand_names = product_formulations[0]._names | product_formulations[1]._names
-        supply_names = product_formulations[2]._names
-        demand_instruments = np.c_[np.ones(numerical_variables.shape[0]), numerical_variables, build_blp_instruments({
+        # identify numerical variables that contribute to demand and supply
+        demand_names = set(numerical_mapping) & (product_formulations[0]._names | product_formulations[1]._names)
+        supply_names = set(numerical_mapping) & product_formulations[2]._names
+        only_demand_names = demand_names - supply_names
+        only_supply_names = supply_names - demand_names
+
+        # both sets of instruments include a constant column
+        demand_instruments = supply_instruments = np.ones((market_ids.size, 1))
+
+        # both sets of instruments include any variables that impact only the other side
+        if only_supply_names:
+            only_supply_variables = np.column_stack((numerical_mapping[k] for k in sorted(only_supply_names)))
+            demand_instruments = np.c_[demand_instruments, only_supply_variables]
+        if only_demand_names:
+            only_demand_variables = np.column_stack((numerical_mapping[k] for k in sorted(only_demand_names)))
+            supply_instruments = np.c_[supply_instruments, only_demand_variables]
+
+        # both sets of instruments include traditional BLP instruments
+        instrument_data = {
             'market_ids': market_ids,
-            'firm_ids': firm_ids[:, 0],
-            'characteristics': np.column_stack((v for k, v in numerical_mapping.items() if k in demand_names))
-        })]
-        supply_instruments = np.c_[np.ones(numerical_variables.shape[0]), numerical_variables, build_blp_instruments({
-            'market_ids': market_ids,
-            'firm_ids': firm_ids[:, 0],
-            'characteristics': np.column_stack((v for k, v in numerical_mapping.items() if k in supply_names))
-        })]
+            'firm_ids': firm_ids,
+            **numerical_mapping
+        }
+        demand_formulation = Formulation(' + '.join(['0'] + sorted(demand_names)))
+        supply_formulation = Formulation(' + '.join(['0'] + sorted(supply_names)))
+        demand_instruments = np.c_[demand_instruments, build_blp_instruments(demand_formulation, instrument_data)]
+        supply_instruments = np.c_[supply_instruments, build_blp_instruments(supply_formulation, instrument_data)]
 
         # structure product data fields as a mapping
         product_data_mapping = {

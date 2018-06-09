@@ -3,7 +3,7 @@
 import numpy as np
 
 from . import options
-from .utilities import extract_matrix, Matrices
+from .utilities import extract_matrix, Matrices, Formulation
 
 
 def build_id_data(T, J, F, mergers=()):
@@ -77,7 +77,7 @@ def build_id_data(T, J, F, mergers=()):
     })
 
 
-def build_ownership(id_data, kappa_specification=None):
+def build_ownership(product_data, kappa_specification=None):
     r"""Build ownership matrices, :math:`O`.
 
     Ownership matrices are defined by their cooperation matrix counterparts, :math:`\kappa`. For each market :math:`t`,
@@ -86,8 +86,9 @@ def build_ownership(id_data, kappa_specification=None):
 
     Parameters
     ----------
-    id_data : `structured array-like`
-        IDs that associate products with markets and firms. Each row corresponds to a product. Fields:
+    product_data : `structured array-like`
+        Each row corresponds to a product. Markets can have differing numbers of products. The following fields are
+        required:
 
             - **market_ids** : (`object`) - IDs that associate products with markets.
 
@@ -103,7 +104,7 @@ def build_ownership(id_data, kappa_specification=None):
 
             kappa(f, g) -> value
 
-        where `value` is :math:`O_{jk}` and both `f` and `g` are firm IDs from the `firm_ids` field of `id_data`.
+        where `value` is :math:`O_{jk}` and both `f` and `g` are firm IDs from the `firm_ids` field of `product_data`.
 
         The default specification, ``lambda: f, g: int(f == g)``, constructs traditional ownership matrices. That is,
         :math:`\kappa = I`, the identify matrix, implies that :math:`O_{jk}` is :math:`1` if the same firm produces
@@ -156,14 +157,14 @@ def build_ownership(id_data, kappa_specification=None):
     """
 
     # extract and validate IDs
-    market_ids = extract_matrix(id_data, 'market_ids')
-    firm_ids = extract_matrix(id_data, 'firm_ids')
+    market_ids = extract_matrix(product_data, 'market_ids')
+    firm_ids = extract_matrix(product_data, 'firm_ids')
     if market_ids is None:
-        raise KeyError("id_data must have a market_ids field.")
+        raise KeyError("product_data must have a market_ids field.")
     if firm_ids is None:
-        raise KeyError("id_data must have a firm_ids field.")
+        raise KeyError("product_data must have a firm_ids field.")
     if market_ids.shape[1] > 1:
-        raise ValueError("The market_ids field of id_data must be one-dimensional.")
+        raise ValueError("The market_ids field of product_data must be one-dimensional.")
 
     # validate or use the default kappa specification
     if kappa_specification is None:
@@ -190,30 +191,43 @@ def build_ownership(id_data, kappa_specification=None):
     return np.hstack(stacks)
 
 
-def build_blp_instruments(characteristic_data, average=False):
+def build_blp_instruments(formulation, product_data, average=False):
     r"""Construct traditional BLP instruments.
 
-    For each column of product characteristics, two columns of instruments are created, which are defined for each
-    market in terms of :math:`x_{jk}`, characteristic :math:`k` of product :math:`j` produced by firm :math:`f`:
+    Traditional BLP instruments are
 
-        1. :math:`\sum_r x_{rk}`, in which each :math:`r` is not produced by firm :math:`f`.
+    .. math:: \mathrm{BLP}(X) = [X, \mathrm{Rival}(X), \mathrm{Other}(X)],
 
-        2. :math:`\sum_{r \neq j} x_{rk}`, in which each :math:`r` is produced by firm :math:`f`.
+    in which :math:`X` is a matrix of product characteristics, :math:`\mathrm{Rival}(X)` consists of sums over
+    characteristics of rival goods, and :math:`\mathrm{Other}(X)` consists of sums over characteristics of other
+    non-rival goods. All three matrices have the same dimensions.
 
+    Let :math:`x_{jt}` be the vector of characteristics in :math:`X` for product :math:`j` in market :math:`t`, which is
+    produced by firm :math:`f`. That is, :math:`j \in \mathscr{J}_{ft}`. Its counterpart in :math:`\mathrm{Rival}(X)` is
+
+    .. math:: \sum_{r \notin \mathscr{J}_{ft}} x_{rt},
+
+    and its counterpart in :math:`\mathrm{Other}(X)` is
+
+    .. math:: \sum_{r \in \mathscr{J}_{ft} \setminus \{j\}} x_{rt}.
 
     Parameters
     ----------
-    characteristic_data : `structured array-like`
-        Each row corresponds to a product. Fields:
+    formulation : `Formulation`
+        :class:`Formulation` configuration for :math:`X`, the matrix of product characteristics used to build
+        instruments. Variable names should correspond to fields in `product_data`.
+    product_data : `structured array-like`
+        Each row corresponds to a product. Markets can have differing numbers of products. The following fields are
+        required:
 
             - **market_ids** : (`object`) - IDs that associate products with markets.
 
-            - **firm_ids** : (`object`) - IDs that associate products with firms.
+            - **firm_ids** : (`object`) - IDs that associate products with firms. If this field contains multiple
+              columns, only the first will be used. For example, if it contains two columns or if there are `firm_ids0`
+              and `firm_ids1` fields, only the first column or the `firm_ids0` field will be used.
 
-            - **characteristics** : (`numeric`) - One or more columns of product characteristics. If there are multiple
-              columns, this field can either be a matrix or it can be broken up into multiple one-dimensional fields
-              with column index suffixes that start at zero. For example, if there are two columns, this field can be
-              replaced with two one-dimensional fields: `characteristics0` and `characteristics1`.
+        Along with `market_ids` and `firm_ids`, the names of any additional fields can be used as variables in
+        `formulation`.
 
     average : `bool`
         Whether to sum or average over characteristics. By default, characteristics are summed.
@@ -221,46 +235,47 @@ def build_blp_instruments(characteristic_data, average=False):
     Returns
     -------
     `ndarray`
-        Traditional BLP instruments, which have two times the number of columns as the `characteristics` field of
-        `characteristics_data`.
+        Traditional BLP instruments :math:`\mathrm{BLP}(X)`.
 
     Example
     -------
-    The following code loads the automobile product data from :ref:`Berry, Levinsohn, and Pakes (1995) <blp95>`,
-    constructs an array of non-price linear characteristics, and from it, builds instruments for the problem:
+    The following code loads the automobile product data from :ref:`Berry, Levinsohn, and Pakes (1995) <blp95>` and
+    builds some simple demand-side instruments for the problem.
 
     .. ipython:: python
 
-       data = np.recfromcsv(pyblp.data.BLP_PRODUCTS_LOCATION)
-       characteristics = np.c_[np.ones(data.size), data['hpwt'], data['air'], data['mpg'], data['space']]
-       instruments = np.c_[characteristics, pyblp.build_blp_instruments({
-           'market_ids': data['market_ids'],
-           'firm_ids': data['firm_ids'],
-           'characteristics': characteristics
-       })]
+       product_data = np.recfromcsv(pyblp.data.BLP_PRODUCTS_LOCATION)
+       formulation = pyblp.Formulation('hpwt + air + mpg + space')
+       formulation
+       instruments = pyblp.build_blp_instruments(product_data, formulation)
        instruments.shape
 
     """
 
     # extract and validate IDs and characteristics
-    market_ids = extract_matrix(characteristic_data, 'market_ids')
-    firm_ids = extract_matrix(characteristic_data, 'firm_ids')
-    characteristics = extract_matrix(characteristic_data, 'characteristics')
-    if market_ids is None or firm_ids is None or characteristics is None:
-        raise KeyError("characteristic_data must have market_ids, firm_ids, and characteristics fields.")
+    market_ids = extract_matrix(product_data, 'market_ids')
+    firm_ids = extract_matrix(product_data, 'firm_ids')
+    if market_ids is None or firm_ids is None:
+        raise KeyError("product_data must have market_ids and firm_ids fields.")
     if market_ids.shape[1] > 1:
-        raise ValueError("The market_ids field of characteristic_data must be one-dimensional.")
-    if firm_ids.shape[1] > 1:
-        raise ValueError("The firm_ids field of characteristic_data must be one-dimensional.")
+        raise ValueError("The market_ids field of product_data must be one-dimensional.")
+
+    # use only the first column of firm IDs
+    firm_ids = firm_ids[:, [0]]
+
+    # build the matrix of product characteristics
+    if not isinstance(formulation, Formulation):
+        raise TypeError("formulation must be a Formulation instance.")
+    X = formulation._build(product_data)[0]
 
     # determine the aggregation function
     aggregate = np.mean if average else np.sum
 
     # build the instruments
     indices = np.arange(market_ids.size)
-    rival = np.zeros_like(characteristics, options.dtype)
-    other = np.zeros_like(characteristics, options.dtype)
+    rival = np.zeros_like(X, options.dtype)
+    other = np.zeros_like(X, options.dtype)
     for n, (t, f) in enumerate(zip(market_ids, firm_ids)):
-        rival[n] = aggregate(characteristics[(market_ids.flat == t) & (firm_ids.flat != f)], axis=0)
-        other[n] = aggregate(characteristics[(market_ids.flat == t) & (firm_ids.flat == f) & (indices != n)], axis=0)
-    return np.c_[rival, other]
+        rival[n] = aggregate(X[(market_ids.flat == t) & (firm_ids.flat != f)], axis=0)
+        other[n] = aggregate(X[(market_ids.flat == t) & (firm_ids.flat == f) & (indices != n)], axis=0)
+    return np.ascontiguousarray(np.c_[X, rival, other])

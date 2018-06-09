@@ -170,18 +170,17 @@ def knittel_metaxoglou_2014():
         - Before being saved to a Matlab data file, matrices were renamed and reshaped.
 
     """
-    data = np.recfromcsv(BLP_PRODUCTS_LOCATION)
-    product_data = {k: data[k] for k in data.dtype.names}
-    characteristics = np.c_[np.ones(data.size), data['hpwt'], data['air'], data['mpg'], data['space']]
-    product_data['demand_instruments'] = np.c_[characteristics, build_blp_instruments({
-        'market_ids': data['market_ids'],
-        'firm_ids': data['firm_ids0'],
-        'characteristics': characteristics
-    })]
-    formula = '0 + prices + I(1) + hpwt + air + mpg'
+    product_data = np.recfromcsv(BLP_PRODUCTS_LOCATION)
+    instruments = build_blp_instruments(Formulation('hpwt + air + mpg + space'), product_data)
     problem = Problem(
-        (Formulation(f'{formula} + space'), Formulation(formula)),
-        product_data,
+        product_formulations=(
+            Formulation('0 + prices + I(1) + hpwt + air + mpg + space'),
+            Formulation('0 + prices + I(1) + hpwt + air + mpg')
+        ),
+        product_data=np.lib.recfunctions.merge_arrays(flatten=True, seqarrays=[
+            product_data,
+            np.rec.fromarrays([instruments], dtype=[('demand_instruments', (instruments.dtype, instruments.shape[1]))])
+        ]),
         agent_data=np.recfromcsv(BLP_AGENTS_LOCATION)
     )
     return scipy.io.loadmat(str(TEST_DATA_PATH / 'knittel_metaxoglou_2014.mat'), {'problem': problem})
