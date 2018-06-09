@@ -37,7 +37,8 @@ class Integration(object):
     size : `int`
         The number of draws if `specification` is ``'monte_carlo'``, and the level of the quadrature rule otherwise.
     seed : `int, optional`
-        Used when `specification` is ``'monte_carlo'`` to seed the random number generator before building nodes.
+        Passed to :class:`numpy.random.RandomState` when `specification` is ``'monte_carlo'`` to seed the random number
+        generator before building nodes.
 
     Example
     -------
@@ -86,24 +87,24 @@ class Integration(object):
 
     def _build_many(self, dimensions, ids):
         """Build concatenated IDs, nodes, and weights for each ID."""
-        if self._seed is not None:
-            np.random.seed(self._seed)
+        state = np.random.RandomState(self._seed)
+        builder = functools.partial(self._builder, state) if self._builder == monte_carlo else self._builder
         built = []
         for i in ids:
-            nodes, weights = self._builder(dimensions, self._size)
+            nodes, weights = builder(dimensions, self._size)
             built.append((np.repeat(i, weights.size), nodes, weights))
         return tuple(map(np.concatenate, zip(*built)))
 
     def _build(self, dimensions):
         """Build nodes and weights."""
-        if self._seed is not None:
-            np.random.seed(self._seed)
-        return self._builder(dimensions, self._size)
+        state = np.random.RandomState(self._seed)
+        builder = functools.partial(self._builder, state) if self._builder == monte_carlo else self._builder
+        return builder(dimensions, self._size)
 
 
-def monte_carlo(dimensions, ns):
+def monte_carlo(state, dimensions, ns):
     """Draw from a pseudo-random standard multivariate normal distribution."""
-    nodes = np.random.normal(size=(ns, dimensions))
+    nodes = state.normal(size=(ns, dimensions))
     weights = np.repeat(1 / ns, ns)
     return nodes, weights
 

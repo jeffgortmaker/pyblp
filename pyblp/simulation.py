@@ -6,93 +6,108 @@ import numpy as np
 
 from . import options, exceptions
 from .construction import build_blp_instruments
-from .primitives import Products, Agents, Market
-from .utilities import output, extract_matrix, Matrices, ParallelItems, Iteration, Integration
+from .primitives import Products, Agents, Economy, Market, NonlinearParameters, LinearParameters
+from .utilities import output, extract_matrix, Matrices, ParallelItems, Formulation, Iteration, Integration
 
 
-class Simulation(object):
+class Simulation(Economy):
     r"""Simulation of synthetic BLP data.
 
-    All data are simulated during initialization, except for Bertrand-Nash prices and shares, which are computed by
-    :meth:`Simulation.solve`.
+    All data either loaded or simulated during initialization, except for Bertrand-Nash prices and shares, which are
+    computed by :meth:`Simulation.solve`.
 
-    Non-constant exogenous product characteristics in :math:`X_1`, :math:`X_2`, and :math:`X_3`, collectively denoted
-    :math:`X`, along with any demographics, :math:`d`, are all drawn from the standard uniform distribution.
+    Unspecified exogenous variables that are used to formulate product characteristics, :math:`X_1`, :math:`X_2`, and
+    :math:`X_3`, as well as agent demographics, :math:`d`, are all drawn from independent standard uniform
+    distributions.
 
     Unobserved demand- and supply-side product characteristics, :math:`\xi` and :math:`\omega`, are drawn from a
     mean-zero bivariate normal distribution.
 
-    After simulating exogenous product characteristics and constructing agent data according to an integration
+    After loading or simulating characteristics and constructing nodes and weights according to an integration
     configuration, canonical instruments are computed. Specifically,
 
     .. math:: Z_D = [1, X, \mathrm{BLP}(X_D)] \quad\text{and}\quad Z_S = [1, X, \mathrm{BLP}(X_S)],
 
-    in which :math:`X` are all non-constant exogenous product characteristics, :math:`\mathrm{BLP}(X_D)` are traditional
-    BLP instruments constructed by :func:`build_blp_instruments` from all non-constant exogenous characteristics in
-    :math:`X_1` and :math:`X_2`, and :math:`\mathrm{BLP}(X_S)` are constructed from all non-constant characteristics in
-    :math:`X_3`.
+    in which :math:`X` are all non-constant exogenous numerical product variables, :math:`\mathrm{BLP}(X_D)` are
+    traditional BLP instruments constructed by :func:`build_blp_instruments` from all variables in :math:`X` used to
+    formulate :math:`X_1` and :math:`X_2`, and :math:`\mathrm{BLP}(X_S)` are constructed from all variables in :math:`X`
+    used to formulate :math:`X_3`.
 
     Parameters
     ----------
-    basic_product_data : `structured array-like`
-        Each row corresponds to a product. Markets can have differing numbers of products. The convenience function
-        :func:`build_id_data` can be used to construct ID data from market, product, and firm counts. Fields:
+    product_formulations : `tuple`
+        Tuple of three :class:`Formulation` configurations for the matrix of linear product characteristics,
+        :math:`X_1`, for the matrix of nonlinear product characteristics, :math:`X_2`, and for the matrix of cost
+        characteristics, :math:`X_3`, respectively. The ``shares`` variable should be included in none of the
+        formulations and ``prices`` should be included in the formulation for :math:`X_1` or :math:`X_2` (or both). Any
+        additional variables that cannot be loaded from `product_data` will be drawn from independent standard uniform
+        distributions.
+    beta : `array-like`
+        Vector of demand-side linear parameters, :math:`\beta`. Elements correspond to columns in :math:`X_1` configured
+        by the first formulation in `product_formulations`.
+    sigma : `array-like`
+        Cholesky decomposition of the covariance matrix that measures agents' random taste distribution, :math:`\Sigma`,
+        which is a square matrix with a lower triangle of all zeros. Rows and columns correspond to columns in
+        :math:`X_2` configured by the second formulation in `product_formulations`.
+    gamma : `array-like`
+        Vector of supply-side linear parameters, :math:`\gamma`. Elements correspond to columns in :math:`X_3`
+        configured by the third formulation in `product_formulations`.
+    product_data : `structured array-like`
+        Each row corresponds to a product. Markets can have differing numbers of products.
+
+        Fields with multiple columns can be either matrices or can be broken up into multiple one-dimensional fields
+        with column index suffixes that start at zero. For example, if there are two columns of firm IDs, the `firm_ids`
+        field, which in this case should be a matrix with two columns, can be replaced by two one-dimensional fields:
+        `firm_ids0` and `firm_ids1`.
+
+        The convenience function :func:`build_id_data` can be used to construct the following required ID data from
+        market, product, and firm counts:
 
             - **market_ids** : (`object`) - IDs that associate products with markets.
 
             - **firm_ids** : (`object`) - IDs that associate products with firms. Any columns after the first can be
-              used in :meth:`Simulation.solve` to compute Bertrand-Nash prices and shares after changes, such as
-              mergers. If there are multiple columns, this field can either be a matrix or it can be broken up into
-              multiple one-dimensional fields with column index suffixes that start at zero. For example, if there are
-              two columns, this field can be replaced with two one-dimensional fields: `firm_ids0` and `firm_ids1`.
+              used in :meth:`Simulation.solve` to compute Bertrand-Nash prices and shares after firm changes, such as
+              mergers.
+
+        Custom ownership matrices can be specified as well:
 
             - **ownership** : (`numeric, optional') - Custom stacked :math:`J_t \times J_t` ownership matrices,
-              :math:`O`, for each market :math:`t`, which can be built with :func:`build_ownership`. Each stack is
-              associated with a `firm_ids` column and must have as many columns as there are products in the market with
-              the most products. If a market has fewer products than others, extra columns will be ignored and may be
-              filled with any value, such as ``numpy.nan``. If an ownership matrix stack is unspecified, its
-              corresponding column in `firm_ids` is used by :func:`build_ownership` to build a stack of standard
-              ownership matrices.
+              :math:`O`, for each market :math:`t`, which can be built with :func:`build_ownership`. By default,
+              standard ownership matrices are built only when they are needed. If specified, each stack is associated
+              with a `firm_ids` column and must have as many columns as there are products in the market with the most
+              products.
 
-    integration : `Integration`
-        :class:`Integration` configuration for how to build nodes and weights for integration over agent utilities.
-    gamma : `array-like`
-        Configuration for values of supply-side linear parameters, :math:`\gamma`, and for which product characteristics
-        are in :math:`X_3`. The first element of this vector corresponds to a constant column; if it is zero,
-        :math:`X_3` will not have a constant column. The number of following elements determines the number of columns
-        in the matrix of non-constant exogenous characteristics, :math:`X`.
+        Along with `market_ids` and `firm_ids`, the names of any additional fields can be used as variables
+        in `product_formulations`.
 
-        If an element is zero, its corresponding characteristic will not be in :math:`X_3`. Nonzeros constitute
-        :math:`\gamma`.
-
-    beta : `array-like`
-        Configuration for values of demand-side linear parameters, :math:`\beta`, and for which product characteristics
-        are in :math:`X_1`. This vector must have one more element than `gamma` because the first element, which if
-        specified is usually negative, corresponds to prices. Following elements correspond to the same characteristics
-        as do the elements of `gamma` (a constant column and columns in :math:`X`), but shifted over by one.
-
-        If an element is zero, its corresponding characteristic will not be in :math:`X_1`. Nonzeros constitute
-        :math:`\beta`.
-
-    sigma : `array-like`
-        Configuration for values of the Cholesky decomposition of the covariance matrix that measures agents' random
-        taste distribution, :math:`\Sigma`, and for which product characteristics are in :math:`X_2`. This square matrix
-        should have as many rows and columns as there are elements in `beta`, and the lower triangle must be all zeros.
-        Rows and columns correspond to the same characteristics as do the elements of `beta` (prices, a constant column,
-        and columns in :math:`X`).
-
-        If a diagonal element is zero, its corresponding characteristic will not be in :math:`X_2`, unless `pi` is
-        specified and has a nonzero on the row corresponding to the diagonal element. Rows and columns associated with
-        other elements constitute :math:`\Sigma`.
-
+    agent_formulation : `Formulation, optional`
+        :class:`Formulation` configuration for the matrix of observed agent characteristics, :math:`d`, called
+        demographics, which will only be included in the model if this formulation is specified. Any variables that
+        cannot be loaded from `agent_data` will be drawn from independent standard uniform distributions.
     pi : `array-like, optional`
-        Configuration for values of parameters that measures how agent tastes vary with demographics, :math:`\Pi`, and
-        for the number of demographics, :math:`d`. This matrix must have as many rows as `sigma`, since they correspond
-        to the same characteristics as do the rows of `sigma` (prices, a constant column, and columns in :math:`X`).
+        Parameters that measure how agent tastes vary with demographics, :math:`\Pi`. Rows correspond to the same
+        product characteristics as in `sigma`. Columns correspond to to columns in :math:`d` configured by
+        `agent_formulation`.
+    agent_data : `structured array-like, optional`
+        Each row corresponds to an agent. Markets can have differing numbers of agents. The following field is required:
 
-        The number of columns with at least one nonzero determines the number of demographic columns in :math:`d`, and
-        these columns along with rows that constitute :math:`\Sigma` also constitute :math:`\Pi`.
+            - **market_ids** : (`object, optional`) - IDs that associate agents with markets. The set of distinct IDs
+              should be the same as the set in `product_data`. If `integration` is specified, there must be at least as
+              many rows in each market as the number of nodes and weights that are built for each market.
 
+        If `integration` is not specified, the following fields are required:
+
+            - **weights** : (`numeric, optional`) - Integration weights, :math:`w`.
+
+            - **nodes** : (`numeric, optional`) - Unobserved agent characteristics called integration nodes,
+              :math:`\nu`. If there are more than :math:`K_2` columns, only the first :math:`K_2` will be used.
+
+        Along with `market_ids`, the names of any additional fields can be used as variables in `agent_formulation`.
+
+    integration : `Integration, optional`
+        :class:`Integration` configuration for how to build nodes and weights for integration over agent utilities,
+        which will replace any `nodes` and `weights` fields in `agent_data`. This is required if `nodes` and `weights`
+        in `agent_data` are not specified.
     xi_variance : `float, optional`
         Variance of the unobserved demand-side product characteristics, :math:`\xi`. The default value is ``1.0``.
     omega_variance : `float, optional`
@@ -104,39 +119,34 @@ class Simulation(object):
         By default, a linear specification is used. That is, :math:`\tilde{c} = c` instead of
         :math:`\tilde{c} = \log c`.
     seed : `int, optional`
-        Passed to :func:`numpy.random.seed` to seed the random number generator before data are simulated.
+        Passed to :class:`numpy.random.RandomState` to seed the random number generator before data are simulated.
 
     Attributes
     ----------
+    product_formulations : `tuple`
+        Tuple of three :class:`Formulation` configurations for :math:`X_1`, :math:`X_2`, and :math:`X_3`.
+    agent_formulation : `tuple`
+        :class:`Formulation` configuration for :math:`d`.
     beta : `ndarray`
-        Demand-side linear parameters, :math:`\beta`, which are the nonzeros from `beta` in :class:`Simulation`
-        initialization.
+        Demand-side linear parameters, :math:`\beta`.
     sigma : `ndarray`
-        Cholesky decomposition of the covariance matrix that measures agents' random taste distribution, :math:`\Sigma`,
-        which are the rows and columns from `sigma` in :class:`Simulation` initialization that are associated with
-        nonzeros on the diagonal or, if specified, rows in `pi` with at least one nonzero.
-    pi : `ndarray`
-        Parameters that measures how agent tastes vary with demographics, :math:`\Pi`, which are columns from `pi` in
-        :class:`Simulation` with at least one nonzero, and rows from `pi` that constitute :math:`\Sigma`.
+        Cholesky decomposition of the covariance matrix that measures agents' random taste distribution, :math:`\Sigma`.
     gamma : `ndarray`
-        Supply-side linear parameters, :math:`\gamma`, which are the nonzeros from `gamma` in :class:`Simulation`
-        initialization.
+        Supply-side linear parameters, :math:`\gamma`.
+    pi : `ndarray`
+        Parameters that measures how agent tastes vary with demographics, :math:`\Pi`.
     product_data : `recarray`
-        Synthetic product data that were simulated during initialization, except for Bertrand-Nash prices and shares,
-        which :meth:`Simulation.solve` computes.
+        Synthetic product data that were loaded or simulated during initialization, except for Bertrand-Nash prices and
+        shares, which are computed by :meth:`Simulation.solve`.
     agent_data : `recarray`
-        Synthetic agent data that were simulated during initialization.
+        Synthetic agent data that were loaded or simulated during initialization.
     products : `Products`
-        Restructured :attr:`Simulation.product_data`, which is an instance of :class:`primitives.Products`.
+        Structured :attr:`Simulation.product_data`, which is an instance of :class:`primitives.Products`. Matrices of
+        product characteristics were built according to :attr:`Simulation.demand_formulations`.
     agents : `Agents`
-        Restructured :attr:`Simulation.agent_data`, which is an instance of :class:`primitives.Agents`.
-    characteristics : `ndarray`
-        Matrix of distinct columns of all exogenous product characteristics in :attr:`Simulation.product_data`.
-    characteristic_indices : `list of tuple`
-        List of tuples of the form `(linear_index, nonlinear_index, cost_index)`, which associate indices of
-        :attr:`Simulation.characteristics` columns with their counterparts in the `linear_characteristics`,
-        `nonlinear_characteristics`, and `cost_characteristics` fields of :attr:`Simulation.product_data`.
-        Characteristics without counterparts will have indices that are `None`.
+        Structured :attr:`Simulation.agent_data`, which is an instance of :class:`primitives.Agents`. A matrix of
+        demographics was built according to :attr:`Simulation.agent_formulation` if it was specified. Nodes and weights
+        were build according to :attr:`Simulation.integration` if it was specified.
     xi : `ndarray`
         Unobserved demand-side product characteristics, :math:`\xi`, that were simulated during initialization.
     omega : `ndarray`
@@ -144,8 +154,11 @@ class Simulation(object):
     costs : `ndarray`
         Marginal costs, :math:`c`, that were simulated during initialization.
     integration : `Integration`
-        :class:`Integration` configuration for how nodes and weights for integration over agent utilities built during
-        :class:`Simulation` initialization.
+        :class:`Integration` configuration for how nodes and weights for integration over agent utilities were built
+        during :class:`Simulation` initialization.
+    linear_costs : `bool`
+        Whether :attr:`Simulation.costs` were simulated according to a linear or a log-linear marginal cost
+        specification during :class:`Simulation` initialization.
     N : `int`
         Number of products across all markets, :math:`N`.
     T : `int`
@@ -162,13 +175,6 @@ class Simulation(object):
         Number of demand-side instruments, :math:`M_D`.
     MS : `int`
         Number of supply-side instruments, :math:`M_S`.
-    linear_prices : `bool`
-        Whether prices are included in :math:`X_1` as the first column.
-    nonlinear_prices : `bool`
-        Whether prices are included in :math:`X_2` as the first column.
-    linear_costs : `bool`
-        Whether :attr:`Simulation.costs` were simulated according to a linear or a log-linear marginal cost
-        specification during :class:`Simulation` initialization.
 
     Example
     -------
@@ -209,218 +215,174 @@ class Simulation(object):
 
     """
 
-    def __init__(self, basic_product_data, integration, gamma, beta, sigma, pi=None, xi_variance=1, omega_variance=1,
-                 correlation=0.9, linear_costs=True, seed=None):
-        """Validate the specification and simulate all data except for Bertrand-Nash prices and shares."""
+    def __init__(self, product_formulations, beta, sigma, gamma, product_data, agent_formulation=None, pi=None,
+                 agent_data=None, integration=None, xi_variance=1, omega_variance=1, correlation=0.9, linear_costs=True,
+                 seed=None):
+        """Load or simulate all data except for Bertrand-Nash prices and shares."""
 
-        # extract and validate IDs
-        market_ids = extract_matrix(basic_product_data, 'market_ids')
-        firm_ids = extract_matrix(basic_product_data, 'firm_ids')
+        # validate the formulations
+        if not all(isinstance(f, Formulation) for f in product_formulations) or len(product_formulations) != 3:
+            raise TypeError("product_formulations must be a tuple of three Formulation instances.")
+        if agent_formulation is not None and not isinstance(agent_formulation, Formulation):
+            raise TypeError("agent_formulation must be a Formulation instance.")
+        self.product_formulations = product_formulations
+        self.agent_formulation = agent_formulation
+
+        # load IDs
+        market_ids = extract_matrix(product_data, 'market_ids')
+        firm_ids = extract_matrix(product_data, 'firm_ids')
         if market_ids is None:
-            raise KeyError("basic_product_data must have a market_ids field.")
+            raise KeyError("product_data must have a market_ids field.")
         if firm_ids is None:
-            raise KeyError("basic_product_data must have a firm_ids field.")
+            raise KeyError("product_data must have a firm_ids field.")
         if market_ids.shape[1] > 1:
-            raise ValueError("The market_ids field of basic_product_data must be one-dimensional.")
+            raise ValueError("The market_ids field of product_data must be one-dimensional.")
 
-        # extract ownership
-        ownership = extract_matrix(basic_product_data, 'ownership')
-
-        # validate full parameter vectors and matrices
-        gamma = np.c_[np.asarray(gamma, options.dtype)]
-        beta = np.c_[np.asarray(beta, options.dtype)]
-        sigma = np.c_[np.asarray(sigma, options.dtype)]
-        pi = None if pi is None else np.c_[np.asarray(pi, options.dtype)]
-        if gamma.shape != (gamma.size, 1) or gamma.size < 1 or np.all(gamma == 0):
-            raise ValueError("gamma must be a vector with at least one nonzero.")
-        if beta.shape != (gamma.size + 1, 1) or np.all(beta == 0):
-            raise ValueError("beta must be a vector with at least one nonzero and with one more element than gamma.")
-        if sigma.shape != (beta.size, beta.size) or np.all(sigma.diagonal() == 0) or np.any(np.tril(sigma, -1) != 0):
-            raise ValueError(
-                "sigma must be a weakly upper triangular square matrix with as many rows and columns as there are "
-                "elements in beta."
-            )
-        if pi is not None and (pi.shape != (sigma.shape[0], pi.shape[1]) or np.all(pi == 0)):
-            raise ValueError(f"pi must be a matrix with at least one nonzero and with as many rows as sigma.")
-
-        # determine which values will constitute parameter vectors and matrices
-        gamma_indices = np.flatnonzero(gamma)
-        beta_indices = np.flatnonzero(beta)
-        if pi is None:
-            sigma_indices = np.flatnonzero(sigma.diagonal())
-            pi_indices = None
-        else:
-            sigma_indices = np.flatnonzero(np.abs(sigma.diagonal()) + np.abs(pi).sum(axis=1))
-            pi_indices = np.flatnonzero(np.abs(pi).sum(axis=0))
-
-        # select corresponding parameters
-        self.gamma = gamma[gamma_indices]
-        self.beta = beta[beta_indices]
-        self.sigma = sigma[np.ix_(sigma_indices, sigma_indices)]
-        self.pi = None if pi is None else pi[np.ix_(sigma_indices, pi_indices)]
-
-        # count dimensions
-        self.N = market_ids.size
-        self.T = np.unique(market_ids).size
-        self.K1 = self.beta.size
-        self.K2 = self.sigma.shape[1]
-        self.K3 = self.gamma.size
-        self.D = 0 if pi is None else self.pi.shape[1]
-
-        # determine which product characteristics will go into which matrices
-        cost_indices = np.flatnonzero(gamma[1:])
-        linear_indices = np.flatnonzero(beta[2:])
-        if pi is None:
-            nonlinear_indices = np.flatnonzero(np.abs(sigma.diagonal()[2:]))
-        else:
-            nonlinear_indices = np.flatnonzero(np.abs(sigma.diagonal()[2:]) + np.abs(pi[2:]).sum(axis=1))
+        # load ownership matrices
+        ownership = extract_matrix(product_data, 'ownership')
 
         # set the seed before simulating data
-        if seed is not None:
-            np.random.seed(seed)
+        state = np.random.RandomState(seed)
 
-        # simulate product characteristics and construct matrices of non-constant exogenous product characteristics
-        output(f"Simulating non-constant exogenous product characteristics ...")
-        self.characteristics = np.random.rand(self.N, beta.size - 2).astype(options.dtype)
-        output(f"Simulated columns of non-constant exogenous product characteristics: {beta.size - 2}.")
-        cost_characteristics = self.characteristics[:, cost_indices]
-        linear_characteristics = self.characteristics[:, linear_indices]
-        nonlinear_characteristics = self.characteristics[:, nonlinear_indices]
-
-        # validate that prices are in X1 or X2 (or both)
-        self.linear_prices = bool(beta[0] != 0)
-        self.nonlinear_prices = bool(sigma[0, 0] != 0 or (pi is not None and np.abs(pi[0]).sum() != 0))
-        if not self.linear_prices and not self.nonlinear_prices:
-            raise ValueError(
-                "Prices must be in X1 or X2 (or both), so one or more of the following must be nonzero: the first "
-                "element of beta, the first element on the diagonal of sigma, or an element in the first row of pi."
-            )
-
-        # add constant columns to the matrices of product characteristics
-        cost_constant = linear_constant = nonlinear_constant = False
-        if gamma[0] != 0:
-            cost_constant = True
-            cost_characteristics = np.c_[np.ones(self.N), cost_characteristics]
-            output("Inserted a constant column into the matrix of cost product characteristics.")
-        if beta[1] != 0:
-            linear_constant = True
-            linear_characteristics = np.c_[np.ones(self.N), linear_characteristics]
-            output("Inserted a constant column into the matrix of linear product characteristics.")
-        if sigma[1, 1] != 0 or (pi is not None and np.abs(pi[1]).sum() != 0):
-            nonlinear_constant = True
-            nonlinear_characteristics = np.c_[np.ones(self.N), nonlinear_characteristics]
-            output("Inserted a constant column into the matrix of nonlinear product characteristics.")
-
-        # associate characteristic column indices with column indices in each subset of characteristics
-        self.characteristic_indices = []
-        for index in range(self.characteristics.shape[1]):
-            self.characteristic_indices.append((
-                list(linear_indices).index(index) + int(linear_constant) if index in linear_indices else None,
-                list(nonlinear_indices).index(index) + int(nonlinear_constant) if index in nonlinear_indices else None,
-                list(cost_indices).index(index) + int(cost_constant) if index in cost_indices else None
-            ))
-
-        # simulate xi and omega
-        output("Simulating xi and omega ...")
-        covariance = correlation * np.sqrt(xi_variance * omega_variance)
-        variances = [[xi_variance, covariance], [covariance, omega_variance]]
-        try:
-            shocks = np.random.multivariate_normal([0, 0], variances, self.N, check_valid='raise').astype(options.dtype)
-        except ValueError:
-            raise ValueError("xi_variance, omega_variance, and covariance must furnish a positive-semidefinite matrix.")
-        else:
-            self.xi = shocks[:, [0]]
-            self.omega = shocks[:, [1]]
-            output("Simulated xi and omega according to a mean-zero bivariate normal distribution.")
-            output(f"Variance of xi: {output.format_number(xi_variance)}.")
-            output(f"Variance of omega: {output.format_number(omega_variance)}.")
-            output(f"Correlation between xi and omega: {output.format_number(correlation)}.")
-
-        # compute marginal costs
-        self.linear_costs = linear_costs
-        self.costs = cost_characteristics @ self.gamma + self.omega
-        if not linear_costs:
-            self.costs = np.exp(self.costs)
-        costs_description = "linear" if linear_costs else "log-linear"
-        output(f"Computed marginal costs according to a {costs_description} specification.")
+        # load or simulate exogenous product variables (in sorted order so that seeds give rise to the same draws)
+        numerical_mapping = {}
+        categorical_mapping = {}
+        for formulation in product_formulations:
+            for name in sorted(formulation._names - set(numerical_mapping) - set(categorical_mapping) - {'prices'}):
+                variable = extract_matrix(product_data, name)
+                if variable is None:
+                    variable = state.uniform(size=market_ids.size).astype(options.dtype)
+                elif variable.shape[1] > 1:
+                    raise ValueError(f"The {name} variable has a field in product_data with more than one column.")
+                if np.issubdtype(variable.dtype, getattr(np, 'number')):
+                    numerical_mapping[name] = variable
+                else:
+                    categorical_mapping[name] = variable
 
         # construct instruments
-        all_characteristics = self.characteristics[:, np.unique(np.r_[linear_indices, nonlinear_indices, cost_indices])]
-        output("Building demand-side BLP instruments ...")
-        blp_demand_instruments = build_blp_instruments({
+        numerical_variables = np.column_stack(numerical_mapping.values())
+        demand_names = product_formulations[0]._names | product_formulations[1]._names
+        supply_names = product_formulations[2]._names
+        demand_instruments = np.c_[np.ones(numerical_variables.shape[0]), numerical_variables, build_blp_instruments({
             'market_ids': market_ids,
             'firm_ids': firm_ids[:, 0],
-            'characteristics': self.characteristics[:, np.unique(np.r_[linear_indices, nonlinear_indices])]
-        })
-        output("Building supply-side BLP instruments ...")
-        blp_supply_instruments = build_blp_instruments({
+            'characteristics': np.column_stack((v for k, v in numerical_mapping.items() if k in demand_names))
+        })]
+        supply_instruments = np.c_[np.ones(numerical_variables.shape[0]), numerical_variables, build_blp_instruments({
             'market_ids': market_ids,
             'firm_ids': firm_ids[:, 0],
-            'characteristics': self.characteristics[:, cost_indices]
-        })
-        output(
-            f"Built {blp_demand_instruments.shape[1]} columns of demand-side BLP instruments and "
-            f"{blp_supply_instruments.shape[1]} columns of supply-side BLP instruments."
-        )
-        demand_instruments = np.c_[np.ones(self.N), all_characteristics, blp_demand_instruments]
-        supply_instruments = np.c_[np.ones(self.N), all_characteristics, blp_supply_instruments]
-        self.MD = demand_instruments.shape[1]
-        self.MS = supply_instruments.shape[1]
+            'characteristics': np.column_stack((v for k, v in numerical_mapping.items() if k in supply_names))
+        })]
 
-        # structure all product data except for shares and prices, which for now are nullified
-        self.product_data = Matrices({
+        # structure product data fields as a mapping
+        product_data_mapping = {
             'market_ids': (market_ids, np.object),
             'firm_ids': (firm_ids, np.object),
             'ownership': (ownership, options.dtype),
-            'shares': (np.full(self.N, np.nan), options.dtype),
-            'prices': (np.full(self.N, np.nan), options.dtype),
-            'linear_characteristics': (linear_characteristics, options.dtype),
-            'nonlinear_characteristics': (nonlinear_characteristics, options.dtype),
-            'cost_characteristics': (cost_characteristics, options.dtype),
+            'shares': (np.zeros(market_ids.size), options.dtype),
+            'prices': (np.zeros(market_ids.size), options.dtype),
             'demand_instruments': (demand_instruments, options.dtype),
             'supply_instruments': (supply_instruments, options.dtype)
-        })
-        self.products = Products(self.product_data, self.linear_prices, self.nonlinear_prices)
+        }
 
-        # validate integration
-        if not isinstance(integration, Integration):
-            raise ValueError("integration must be an Integration instance.")
+        # supplement the mapping with exogenous product variables
+        variable_mapping = {**numerical_mapping, **categorical_mapping}
+        invalid_names = set(variable_mapping) & set(product_data_mapping)
+        if invalid_names:
+            raise NameError(f"These names in product_formulations are invalid: {list(invalid_names)}.")
+        product_data_mapping.update({k: (v, options.dtype) for k, v in variable_mapping.items()})
 
-        # build nodes and weights, simulate demographics, and structure agent data
-        agent_market_ids, nodes, weights = integration._build_many(self.K2, np.unique(market_ids))
-        self.integration = integration
-        self.agent_data = Matrices({
+        # structure product data
+        self.product_data = Matrices(product_data_mapping)
+        products = Products(product_formulations, self.product_data)
+
+        # nullify shares and prices
+        self.product_data.shares[:] = products.shares[:] = np.nan
+        self.product_data.prices[:] = products.prices[:] = np.nan
+
+        # determine the number of agents by loading market IDs or by building them along with nodes and weights
+        if integration is not None:
+            if not isinstance(integration, Integration):
+                raise ValueError("integration must be an Integration instance.")
+            agent_market_ids, nodes, weights = integration._build_many(products.X2.shape[1], np.unique(market_ids))
+        elif agent_data is not None:
+            agent_market_ids = extract_matrix(agent_data, 'market_ids')
+            nodes = weights = None
+        else:
+            raise ValueError("Either agent_data or integration (or both) must be specified.")
+
+        # load or simulate agent variables (in sorted order so that seeds give rise to the same draws)
+        agent_variable_mapping = {}
+        if agent_formulation is not None:
+            for name in sorted(agent_formulation._names - set(agent_variable_mapping)):
+                variable = extract_matrix(agent_data, name) if agent_data is not None else None
+                if variable is None:
+                    variable = state.uniform(size=agent_market_ids.size).astype(options.dtype)
+                agent_variable_mapping[name] = variable
+
+        # structure agent data fields as a mapping
+        agent_data_mapping = {
             'market_ids': (agent_market_ids, np.object),
             'nodes': (nodes, options.dtype),
-            'weights': (weights, options.dtype),
-            'demographics': (np.random.rand(weights.size, self.D) if self.D > 0 else None, options.dtype)
-        })
-        self.agents = Agents(self.products, self.agent_data)
+            'weights': (weights, options.dtype)
+        }
 
-        # output configuration information
-        output("")
-        output(self)
+        # supplement the mapping with agent variables
+        invalid_names = set(agent_variable_mapping) & set(agent_data_mapping)
+        if invalid_names:
+            raise NameError(f"These names in agent_formulation are invalid: {list(invalid_names)}.")
+        agent_data_mapping.update({k: (v, options.dtype) for k, v in agent_variable_mapping.items()})
+
+        # structure agent data
+        self.integration = integration
+        self.agent_data = Matrices(agent_data_mapping)
+        agents = Agents(products, agent_formulation, self.agent_data, integration)
+
+        # initialize the underlying economy
+        super().__init__(product_formulations, agent_formulation, products, agents)
+
+        # validate parameters
+        self._linear_parameters = LinearParameters(self, beta, gamma)
+        self._nonlinear_parameters = NonlinearParameters(self, sigma, pi)
+        self.beta = self._linear_parameters.beta
+        self.gamma = self._linear_parameters.gamma
+        self.sigma = self._nonlinear_parameters.sigma
+        self.pi = self._nonlinear_parameters.pi
+
+        # simulate xi and omega
+        covariance = correlation * np.sqrt(xi_variance * omega_variance)
+        variances = [[xi_variance, covariance], [covariance, omega_variance]]
+        try:
+            shocks = state.multivariate_normal([0, 0], variances, self.N, check_valid='raise').astype(options.dtype)
+        except ValueError:
+            raise ValueError("xi_variance, omega_variance, and covariance must furnish a positive-semidefinite matrix.")
+        self.xi = shocks[:, [0]]
+        self.omega = shocks[:, [1]]
+
+        # compute marginal costs
+        self.linear_costs = linear_costs
+        self.costs = self.products.X3 @ self.gamma + self.omega
+        if not linear_costs:
+            self.costs = np.exp(self.costs)
 
     def __str__(self):
-        """Format simulation information as a string."""
-        header = ["N", "T", "K1", "K2", "K3", "D", "MD", "MS", "Linear Prices", "Nonlinear Prices", "Linear Costs"]
-        widths = [max(len(k), 10) for k in header]
-        formatter = output.table_formatter(widths)
-        return "\n".join([
-            "Simulation Configuration:",
-            formatter.border(),
-            formatter(header),
-            formatter.lines(),
-            formatter([
-                self.N, self.T, self.K1, self.K2, self.K3, self.D, self.MD, self.MS, self.linear_prices,
-                self.nonlinear_prices, self.linear_costs
-            ]),
-            formatter.border()
+        """Supplement general formatted information with other information about parameters."""
+        sections = [[super().__str__()]]
+
+        # construct a section containing linear parameters
+        sections.append([
+            "Linear Parameters:",
+            self._linear_parameters.format(self.beta, self.gamma)
         ])
 
-    def __repr__(self):
-        """Defer to the string representation."""
-        return str(self)
+        # construct a section containing nonlinear estimates
+        sections.append([
+            "Nonlinear Parameters:",
+            self._nonlinear_parameters.format(self.sigma, self.pi)
+        ])
+
+        # combine the sections into one string
+        return "\n\n".join("\n".join(s) for s in sections)
 
     def solve(self, firms_index=0, prices=None, iteration=None, error_behavior='raise', processes=1):
         r"""Compute Bertrand-Nash prices and shares.
@@ -467,14 +429,11 @@ class Simulation(object):
             be passed to the `product_data` argument of :class:`Problem` initialization.
 
         """
-        output("")
 
         # choose or validate initial prices
         if prices is None:
-            output("Starting with marginal costs as prices.")
             prices = self.costs
         else:
-            output("Starting with the specified prices.")
             prices = np.c_[np.asarray(prices, options.dtype)]
             if prices.shape != (self.N, 1):
                 raise ValueError(f"prices must be a vector with {self.N} elements.")
@@ -489,22 +448,13 @@ class Simulation(object):
         if error_behavior not in {'raise', 'warn'}:
             raise ValueError("error_behavior must be 'raise' or 'warn'.")
 
-        # output configuration information
-        output(f"Firms index: {firms_index}.")
-        output(iteration)
-        output(f"Error behavior: {error_behavior}.")
-        output(f"Processes: {processes}.")
-
         # construct a mapping from market IDs to market-specific arguments used to compute prices and shares
         mapping = {}
         for t in np.unique(self.products.market_ids):
-            market_t = SimulationMarket(
-                t, self.linear_prices, self.nonlinear_prices, self.products, self.agents, xi=self.xi, beta=self.beta,
-                sigma=self.sigma, pi=self.pi
-            )
+            market_t = SimulationMarket(self, t, xi=self.xi, beta=self.beta, sigma=self.sigma, pi=self.pi)
             prices_t = prices[self.products.market_ids.flat == t]
             costs_t = self.costs[self.products.market_ids.flat == t]
-            mapping[t] = [market_t, prices_t, costs_t, firms_index, iteration]
+            mapping[t] = [market_t, iteration, firms_index, prices_t, costs_t]
 
         # time how long it takes to solve for prices and shares
         output("Solving for prices and shares ...")
@@ -546,29 +496,28 @@ class Simulation(object):
 class SimulationMarket(Market):
     """A single market in the BLP simulation, which can be used to solve for a single market's prices and shares."""
 
-    def solve(self, initial_prices, costs, firms_index, iteration):
+    def solve(self, iteration, firms_index, prices, costs):
         """Solve the fixed point problem defined by the zeta-markup equation to compute prices and shares in this
-        market. Also return a set of any exception classes encountered during computation and the total number of
-        contraction evaluations.
+        market. Also return a set of any exception classes encountered during computation along with contraction
+        statistics.
         """
 
-        # configure numpy to identify floating point errors
+        # configure NumPy to identify floating point errors
         errors = set()
-        with np.errstate(all='call'):
+        with np.errstate(divide='call', over='call', under='ignore', invalid='call'):
             np.seterrcall(lambda *_: errors.add(exceptions.SyntheticPricesFloatingPointError))
 
             # solve the fixed point problem
-            ownership_matrix = self.get_ownership_matrix(firms_index)
-            derivatives = self.compute_utility_by_prices_derivatives()
-            contraction = lambda p: costs + self.compute_zeta(ownership_matrix, derivatives, costs, p)
-            prices, converged, iterations, evaluations = iteration._iterate(initial_prices, contraction)
-
-            # store whether the fixed point converged
-            if not converged:
-                errors.add(exceptions.SyntheticPricesConvergenceError)
+            prices, converged, iterations, evaluations = self.compute_bertrand_nash_prices(
+                iteration, firms_index, prices, costs
+            )
 
             # compute the associated shares
-            delta = self.update_delta_with_prices(prices)
-            mu = self.update_mu_with_prices(prices)
+            delta = self.update_delta_with_variable('prices', prices)
+            mu = self.update_mu_with_variable('prices', prices)
             shares = self.compute_probabilities(delta, mu) @ self.agents.weights
-            return prices, shares, errors, iterations, evaluations
+
+        # determine whether the fixed point converged
+        if not converged:
+            errors.add(exceptions.SyntheticPricesConvergenceError)
+        return prices, shares, errors, iterations, evaluations

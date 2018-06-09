@@ -7,105 +7,99 @@ import numpy as np
 import scipy.linalg
 
 from . import options, exceptions
-from .primitives import Products, Agents, Market
 from .utilities import output, ParallelItems, Iteration, Optimization
+from .primitives import Products, Agents, Economy, Market, NonlinearParameters
 
 
-class Problem(object):
-    r"""A BLP problem
+class Problem(Economy):
+    r"""A BLP problem.
 
     This class is initialized with relevant data and solved with :meth:`Problem.solve`.
 
     In both `product_data` and `agent_data`, fields with multiple columns can be either matrices or can be broken up
-    into multiple one-dimensional fields with column index suffixes that start at zero. For example, if there are two
-    columns of non-price linear product characteristics, the `linear_characteristics` field in `product_data`, which in
-    this case should be a matrix with two columns, can be replaced with two one-dimensional fields:
-    `linear_characteristics0` and `linear_characteristics1`.
+    into multiple one-dimensional fields with column index suffixes that start at zero. For example, if there are three
+    columns of demand-side instruments, the `demand_instruments` field in `product_data`, which in this case should be a
+    matrix with three columns, can be replaced by three one-dimensional fields: `demand_instruments0`,
+    `demand_instruments1`, and `demand_instruments2`.
 
     Parameters
     ----------
+    product_formulations : `tuple`
+        Tuple of either two or three :class:`Formulation` configurations for the matrix of linear product
+        characteristics, :math:`X_1`, for the matrix of nonlinear product characteristics, :math:`X_2`, and, optionally,
+        for the matrix of cost characteristics, :math:`X_3`, respectively. Variable names should correspond to fields in
+        `product_data`. The ``shares`` variable should be included in none of the formulations and ``prices`` should
+        be included in the formulation for :math:`X_1` or :math:`X_2` (or both).
     product_data : `structured array-like`
-        Each row corresponds to a product. Markets can have differing numbers of products. Fields:
+        Each row corresponds to a product. Markets can have differing numbers of products. The following fields are
+        required:
 
             - **market_ids** : (`object`) - IDs that associate products with markets.
 
-            - **firm_ids** : (`object, optional`) - IDs that associate products with firms. This field is required if
-              `cost_characteristics` and `supply_instruments` are specified, since they will be used to estimate the
-              supply side of the problem. These are also needed to compute some post-estimation outputs. Any columns
-              after the first can be used to compute post-estimation outputs for changes, such as mergers.
+            - **shares** : (`numeric`) - Market shares, :math:`s`.
 
-            - **ownership** : (`numeric, optional') - Custom stacked :math:`J_t \times J_t` ownership matrices,
+            - **prices** : (`numeric`) - Product prices, :math:`p`.
+
+            - **demand_instruments** : (`numeric`) - Demand-side instruments, :math:`Z_D`.
+
+        If a `supply_formulation` is specified, the following fields are required as well, since they will be used to
+        estimate the supply side of the problem:
+
+            - **firm_ids** : (`object, optional`) - IDs that associate products with firms. Any columns after the first
+              can be used to compute post-estimation outputs for firm changes, such as mergers.
+
+            - **supply_instruments** : (`numeric, optional`) - Supply-side instruments, :math:`Z_S`.
+
+        In addition to supply-side estimation, the `firm_ids` field is also needed to compute some post-estimation
+        outputs. If `firm_ids` are specified, custom ownership matrices can be specified as well:
+
+            - **ownership** : (`numeric, optional`) - Custom stacked :math:`J_t \times J_t` ownership matrices,
               :math:`O`, for each market :math:`t`, which can be built with :func:`build_ownership`. By default,
               standard ownership matrices are built only when they are needed. If specified, each stack is associated
               with a `firm_ids` column and must have as many columns as there are products in the market with the most
               products.
 
-            - **shares** : (`numeric`) - Shares, :math:`s`.
+        Along with `market_ids`, `firm_ids`, and `prices`, the names of any additional fields can be used as variables
+        in `product_formulations`.
 
-            - **prices** : (`numeric`) - Prices, :math:`p`, which will be included as the first column in :math:`X_1`
-              and :math:`X_2` if `linear_prices` and `nonlinear_prices` are ``True``, respectively.
-
-            - **linear_characteristics** : (`numeric, optional`) - Non-price product characteristics that constitute the
-              remaining columns in :math:`X_1` if `linear_prices` is ``True``, and the entirety of the matrix if prices
-              are not included in :math:`X_1`.
-
-            - **nonlinear_characteristics** : (`numeric, optional`) - Non-price product characteristics that constitute
-              the remaining columns in :math:`X_2` if `nonlinear_prices` is ``True``, and the entirety of the matrix if
-              prices are not included in :math:`X_2`.
-
-            - **cost_characteristics** : (`numeric, optional`) - Cost product characteristics, :math:`X_3`. This field
-              is required if `supply_instruments` is specified, since they will be used to estimate the supply side of
-              the problem. If unspecified, only the demand side will be estimated.
-
-            - **demand_instruments** : (`numeric`) - Demand-side instruments, :math:`Z_D`, which should contain the sets
-              of columns in `linear_characteristics` and `nonlinear_characteristics`.
-
-            - **supply_instruments** : (`numeric, optional`) - Supply-side instruments, :math:`Z_S`, which should
-              contain `cost_characteristics`. This field is required if `cost_characteristics` is specified, since they
-              will be used to estimate the supply side of the problem. If unspecified, only the demand side will be
-              estimated.
-
+    agent_formulation : `Formulation, optional`
+        :class:`Formulation` configuration for the matrix of observed agent characteristics, :math:`d`, called
+        demographics, which will only be included in the model if this formulation is specified. Variable names should
+        correspond to fields in `agent_data`.
     agent_data : `structured array-like, optional`
-        Required if `integration` is unspecified. Each row corresponds to an agent. Markets can have differing numbers
-        of agents. Fields:
+        Each row corresponds to an agent. Markets can have differing numbers of agents. The following field is required:
 
-            - **market_ids** : (`object`) - IDs that associate agents with markets. The set of distinct IDs should be
-              the same as the set of distinct IDs in the `market_ids` field of `product_data`. If `integration` is
-              specified, there must be at least as many rows in each market as the number of nodes and weights that are
-              built for each market.
+            - **market_ids** : (`object, optional`) - IDs that associate agents with markets. The set of distinct IDs
+              should be the same as the set in `product_data`. If `integration` is specified, there must be at least as
+              many rows in each market as the number of nodes and weights that are built for each market.
 
-            - **weights** : (`numeric, optional`) - Integration weights, :math:`w`. This field is required if
-              `integration` is unspecified.
+        If `integration` is not specified, the following fields are required:
+
+            - **weights** : (`numeric, optional`) - Integration weights, :math:`w`.
 
             - **nodes** : (`numeric, optional`) - Unobserved agent characteristics called integration nodes,
-              :math:`\nu`. This field is required if `integration` is unspecified. If there are more than :math:`K_2`
-              columns, only the first :math:`K_2` will be used.
+              :math:`\nu`. If there are more than :math:`K_2` columns, only the first :math:`K_2` will be used.
 
-            - **demographics** : (`numeric, optional`) - Observed agent characteristics called demographics, :math:`d`.
-              If `integration` is specified and there are more rows of demographics in a market :math:`t` than
-              :math:`I_t`, the number node and weight rows built for that market, only the first :math:`I_t` rows of
-              demographics will be used.
+        Along with `market_ids`, the names of any additional fields can be used as variables in `agent_formulation`.
 
     integration : `Integration, optional`
         :class:`Integration` configuration for how to build nodes and weights for integration over agent utilities,
-        which is required if the `nodes` and `weights` fields of `agent_data` are unspecified. If they are specified,
-        the nodes and weights will be build according to this configuration for each market, and they will replace those
-        in `agent_data`.
-    linear_prices : `bool, optional`
-        Whether prices will be included in :math:`X_1` as the first column. By default, prices are included in
-        :math:`X_1`.
-    nonlinear_prices : `bool, optional`
-        Whether prices will be included in :math:`X_2` as the first column. By default, prices are included in
-        :math:`X_2`.
+        which will replace any `nodes` and `weights` fields in `agent_data`. This is required if `nodes` and `weights`
+        in `agent_data` are not specified.
 
     Attributes
     ----------
+    product_formulations : `tuple`
+        Tuple of three :class:`Formulation` configurations for :math:`X_1`, :math:`X_2`, and :math:`X_3`.
+    agent_formulation : `tuple`
+        :class:`Formulation` configuration for :math:`d`.
     products : `Products`
-        Restructured `product_data` from :class:`Problem` initialization, which is an instance of
-        :class:`primitives.Products`.
+        Structured `product_data` from :class:`Problem` initialization, which is an instance of
+        :class:`primitives.Products`. Matrices of product characteristics were built according to `demand_formulations`.
     agents : `Agents`
-        Restructured `agent_data` from :class:`Problem` initialization with nodes and weights built according to
-        `integration` if it is specified, which is an instance of :class:`primitives.Agents`.
+        Structured `agent_data` from :class:`Problem` initialization, which is an instance of
+        :class:`primitives.Agents`. A matrix of demographics was built according to `agent_formulation` if it was
+        specified. Nodes and weights were build according to `integration` if it was specified.
     N : `int`
         Number of products across all markets, :math:`N`.
     T : `int`
@@ -122,10 +116,6 @@ class Problem(object):
         Number of demand-side instruments, :math:`M_D`.
     MS : `int`
         Number of supply-side instruments, :math:`M_S`.
-    linear_prices : `bool`
-        Whether prices are included in :math:`X_1` as the first column.
-    nonlinear_prices : `bool`
-        Whether prices are included in :math:`X_2` as the first column.
 
     Example
     -------
@@ -135,23 +125,19 @@ class Problem(object):
     .. ipython:: python
 
        data = np.recfromcsv(pyblp.data.BLP_PRODUCTS_LOCATION)
+       product_data = {k: data[k] for k in data.dtype.names}
        characteristics = np.c_[np.ones(data.size), data['hpwt'], data['air'], data['mpd'], data['space']]
-       characteristic_data = {
+       product_data['demand_instruments'] = np.c_[characteristics, pyblp.build_blp_instruments({
            'market_ids': data['market_ids'],
            'firm_ids': data['firm_ids'],
            'characteristics': characteristics
-       }
-       instruments = np.c_[characteristics, pyblp.build_blp_instruments(characteristic_data)]
-       product_data = {
-           'market_ids': data['market_ids'],
-           'shares': data['shares'],
-           'prices': data['prices'],
-           'linear_characteristics': characteristics,
-           'nonlinear_characteristics': characteristics[:, :3],
-           'demand_instruments': instruments
-       }
-       integration = pyblp.Integration('monte_carlo', 50, seed=0)
-       problem = pyblp.Problem(product_data, integration=integration, nonlinear_prices=False)
+       })]
+       problem = pyblp.Problem(
+           product_data,
+           (pyblp.Formulation('hpwt + air + mpd + space'), pyblp.formulation('hpwt + air')),
+           integration=pyblp.Integration('monte_carlo', 50, seed=0)
+       )
+       problem
 
     After choosing to optimize over the diagonal variance elements in :math:`\Sigma` and choosing starting values, the
     initialized problem can be solved. For simplicity, the following code halts estimation after one GMM step:
@@ -164,59 +150,11 @@ class Problem(object):
 
     """
 
-    def __init__(self, product_data, agent_data=None, integration=None, linear_prices=True, nonlinear_prices=True):
-        """Structure and validate data before computing matrix dimensions."""
-        output("Structuring product data ...")
-        self.products = Products(product_data, linear_prices, nonlinear_prices)
-
-        output("Structuring agent data ...")
-        self.agents = Agents(self.products, agent_data, integration)
-
-        # store problem configuration information
-        self.linear_prices = linear_prices
-        self.nonlinear_prices = nonlinear_prices
-        self.N = self.products.shape[0]
-        self.T = np.unique(self.products.market_ids).size
-        self.K1 = self.products.X1.shape[1]
-        self.K2 = self.products.X2.shape[1]
-        try:
-            self.K3 = self.products.X3.shape[1]
-        except AttributeError:
-            self.K3 = 0
-        try:
-            self.D = self.agents.demographics.shape[1]
-        except AttributeError:
-            self.D = 0
-        self.MD = self.products.ZD.shape[1]
-        try:
-            self.MS = self.products.ZS.shape[1]
-        except AttributeError:
-            self.MS = 0
-
-        # output configuration information
-        output("")
-        output(self)
-
-    def __str__(self):
-        """Format problem information as a string."""
-        header = ["N", "T", "K1", "K2", "K3", "D", "MD", "MS", "Linear Prices", "Nonlinear Prices"]
-        widths = [max(len(k), 10) for k in header]
-        formatter = output.table_formatter(widths)
-        return "\n".join([
-            "Problem Configuration:",
-            formatter.border(),
-            formatter(header),
-            formatter.lines(),
-            formatter([
-                self.N, self.T, self.K1, self.K2, self.K3, self.D, self.MD, self.MS, self.linear_prices,
-                self.nonlinear_prices
-            ]),
-            formatter.border()
-        ])
-
-    def __repr__(self):
-        """Defer to the string representation."""
-        return str(self)
+    def __init__(self, product_formulations, product_data, agent_formulation=None, agent_data=None, integration=None):
+        """Structure product and agent data."""
+        products = Products(product_formulations, product_data)
+        agents = Agents(products, agent_formulation, agent_data, integration)
+        super().__init__(product_formulations, agent_formulation, products, agents)
 
     def solve(self, sigma, pi=None, sigma_bounds=None, pi_bounds=None, delta=None, WD=None, WS=None, steps=2,
               optimization=None, error_behavior='revert', error_punishment=1, iteration=None, linear_fp=True,
@@ -228,10 +166,9 @@ class Problem(object):
         sigma : `array-like`
             Configuration for which elements in the Cholesky decomposition of the covariance matrix that measures
             agents' random taste distribution, :math:`\Sigma`, are fixed at zero and starting values for the other
-            elements, which, if not fixed by `sigma_bounds`, are in the vector of unknown elements, :math:`\theta`. If
-            `nonlinear_prices` in :class:`Problem` initialization was `True`, the first row and column correspond to
-            prices, and if `product_data` contained a `nonlinear_characteristics` field, all other rows and columns
-            correspond to its columns.
+            elements, which, if not fixed by `sigma_bounds`, are in the vector of unknown elements, :math:`\theta`. Rows
+            and columns correspond to columns in :math:`X_2`, which is configured according to the second of
+            `demand_formulations` in :class:`Problem` initialization.
 
             Values below the diagonal are ignored. Zeros are assumed to be zero throughout estimation and nonzeros are,
             if not fixed by `sigma_bounds`, starting values for unknown elements in :math:`\theta`.
@@ -240,8 +177,8 @@ class Problem(object):
             Configuration for which elements in the matrix of parameters that measures how agent tastes vary with
             demographics, :math:`\Pi`, are fixed at zero and starting values for the other elements, which, if not fixed
             by `pi_bounds`, are in the vector of unknown elements, :math:`\theta`. Rows correspond to the same product
-            characteristics as in `sigma`. Columns correspond to the columns of the `demographics` field of `agent_data`
-            in :class:`Problem` initialization.
+            characteristics as in `sigma`. Columns correspond to the columns in :math:`d`, which is configured according
+            to `agent_formulation` in :class:`Problem` initialization.
 
             Zeros are assumed to be zero throughout estimation and nonzeros are, if not fixed by `pi_bounds`, starting
             values for unknown elements in :math:`\theta`.
@@ -288,18 +225,18 @@ class Problem(object):
             computing :math:`\delta(\hat{\theta})` at a large :math:`\hat{\theta}`. The following behaviors are
             supported:
 
-                - ``'raise'`` - Raises an exception.
+                - ``'raise'`` - Raise an exception.
 
-                - ``'revert'`` (default) - Reverts problematic :math:`\delta(\hat{\theta})` elements to their last
-                  computed values and uses reverted values to compute :math:`\partial\delta / \partial\theta` and, if
-                  the problem was configured with supply-side data, to compute :math:`\tilde{c}(\hat{\theta})` as well.
-                  If there are problematic elements in :math:`\partial\delta / \partial\theta` or
-                  :math:`\tilde{c}(\hat{\theta})`, these are also reverted to their last computed values. If there are
-                  problematic elements in the first iteration, values in :math:`\delta(\hat{\theta})` are reverted to
-                  their starting values; in :math:`\partial\delta / \partial\theta`, to zeros; and in
-                  :math:`\tilde{c}(\hat{\theta})`, to prices.
+                - ``'revert'`` (default) - Revert problematic :math:`\delta(\hat{\theta})` elements to their last
+                  computed values and use reverted values to compute :math:`\partial\xi / \partial\theta`. and, if
+                  the problem was configured with supply-side data, to compute :math:`\tilde{c}(\hat{\theta})` and
+                  :math:`\partial\omega / \partial\theta` as well. If there are problematic elements in
+                  :math:`\partial\xi / \partial\theta`, :math:`\tilde{c}(\hat{\theta})`, or
+                  :math:`\partial\omega / \partial\theta`, revert these to their last computed values as well. If there
+                  are problematic elements in the first iteration, revert values in :math:`\delta(\hat{\theta})` to
+                  their starting values; in :math:`\tilde{c}(\hat{\theta})`, to prices; and in Jacobians, to zeros.
 
-                - ``'punish'`` - Sets the objective to ``1`` and its gradient to all zeros. This option along with a
+                - ``'punish'`` - Set the objective to ``1`` and its gradient to all zeros. This option along with a
                   large `error_punishment` can be helpful for routines that do not use analytic gradients.
 
         error_punishment : `float, optional`
@@ -346,9 +283,10 @@ class Problem(object):
         processes : `int, optional`
             Number of Python processes that will be used during estimation. By default, multiprocessing will not be
             used. For values greater than one, a pool of that many Python processes will be created during each
-            iteration of the optimization routine. Market-by-market computation of :math:`\delta(\hat{\theta})` and
-            its Jacobian will be distributed among these processes. Using multiprocessing will only improve estimation
-            speed if gains from parallelization outweigh overhead from creating the process pool.
+            iteration of the optimization routine. Market-by-market computation of :math:`\delta(\hat{\theta})` and, if
+            the problem was initialized with supply-side data, of :math:`\tilde{c}(\hat{\theta})`, along with associated
+            Jacobians, will be distributed among these processes. Using multiprocessing will only improve estimation
+            speed if gains from parallelization outweigh overhead from creating  process pools.
 
         Returns
         -------
@@ -356,7 +294,6 @@ class Problem(object):
             :class:`Results` of the solved problem.
 
         """
-        output("")
 
         # configure or validate optimization and integration
         if optimization is None:
@@ -386,34 +323,27 @@ class Problem(object):
             if not np.isfinite(costs_bounds[1]):
                 costs_bounds[1] = +np.inf
 
-        # output configuration information
-        output(f"GMM steps: {steps}.")
-        output(optimization)
-        output(f"Error behavior: {error_behavior}.")
-        output(f"Error punishment: {output.format_number(error_punishment)}.")
-        output(iteration)
-        output(f"Linear fixed point formulation: {linear_fp}.")
-        if self.K3 > 0:
-            output(f"Linear marginal cost specification: {linear_costs}.")
-            output(f"Costs bounds: [{output.format_number(costs_bounds[0])}, {output.format_number(costs_bounds[1])}].")
-        output(f"Centering sample moments before updating weighting matrices: {center_moments}.")
-        output(f"Standard error type: {se_type}.")
-        output(f"Processes: {processes}.")
-
         # compress sigma and pi into theta but retain information about the original matrices
-        theta_info = ThetaInfo(self, sigma, pi, sigma_bounds, pi_bounds, optimization._supports_bounds)
-        output(f"Number of unfixed nonlinear parameters in theta: {theta_info.P}.")
+        nonlinear_parameters = NonlinearParameters(
+            self, sigma, pi, sigma_bounds, pi_bounds, optimization._supports_bounds
+        )
+        if nonlinear_parameters.P == 0:
+            raise ValueError("There must be at least one unfixed nonlinear parameter.")
+        theta = nonlinear_parameters.compress(nonlinear_parameters.sigma, nonlinear_parameters.pi)
         output("")
-        output(theta_info)
+        output("Initial Nonlinear Parameters:")
+        output(nonlinear_parameters.format(nonlinear_parameters.sigma, nonlinear_parameters.pi))
         output("")
-        theta = theta_info.compress(theta_info.sigma, theta_info.pi)
+        output("Lower Bounds on Nonlinear Parameters:")
+        output(nonlinear_parameters.format(nonlinear_parameters.sigma_bounds[0], nonlinear_parameters.pi_bounds[0]))
+        output("")
+        output("Upper Bounds on Nonlinear Parameters:")
+        output(nonlinear_parameters.format(nonlinear_parameters.sigma_bounds[1], nonlinear_parameters.pi_bounds[1]))
 
         # construct or validate the demand-side weighting matrix
         if WD is None:
-            output("Starting with the 2SLS demand-side weighting matrix.")
             WD = scipy.linalg.inv(self.products.ZD.T @ self.products.ZD)
         else:
-            output("Starting with the specified demand-side weighting matrix.")
             WD = np.asarray(WD, options.dtype)
             if WD.shape != (self.MD, self.MD):
                 raise ValueError(f"WD must have {self.MD} rows and columns.")
@@ -422,23 +352,19 @@ class Problem(object):
         if self.MS == 0:
             WS = None
         elif WS is None:
-            output("Starting with the 2SLS supply-side weighting matrix.")
             WS = scipy.linalg.inv(self.products.ZS.T @ self.products.ZS)
         else:
-            output("Starting with the specified supply-side weighting matrix.")
             WS = np.asarray(WS, options.dtype)
             if WS.shape != (self.MS, self.MS):
                 raise ValueError(f"WS must have {self.MS} rows and columns.")
 
         # construct or validate delta
         if delta is None:
-            output("Starting with the delta that solves the logit model.")
             delta = np.log(self.products.shares)
             for t in np.unique(self.products.market_ids):
                 shares_t = self.products.shares[self.products.market_ids.flat == t]
                 delta[self.products.market_ids.flat == t] -= np.log(shares_t.sum())
         else:
-            output("Starting with the specified delta.")
             delta = np.c_[np.asarray(delta, options.dtype)]
             if delta.shape != (self.N, 1):
                 raise ValueError(f"delta must be a vector with {self.N} elements.")
@@ -457,7 +383,7 @@ class Problem(object):
         for step in range(1, steps + 1):
             # wrap computation of objective information with step-specific information
             compute_step_info = functools.partial(
-                self._compute_objective_info, theta_info, WD, WS, error_behavior, error_punishment, iteration,
+                self._compute_objective_info, nonlinear_parameters, WD, WS, error_behavior, error_punishment, iteration,
                 linear_fp, linear_costs, costs_bounds, processes
             )
 
@@ -480,14 +406,15 @@ class Problem(object):
             wrapper.evaluation_mappings = []
             wrapper.smallest_objective = wrapper.smallest_gradient_norm = np.inf
             wrapper.cache = ObjectiveInfo(
-                self, theta_info, WD, WS, theta, delta, tilde_costs, xi_jacobian, omega_jacobian
+                self, nonlinear_parameters, WD, WS, theta, delta, tilde_costs, xi_jacobian, omega_jacobian
             )
 
             # optimize theta
+            output("")
             output(f"Starting optimization for step {step} out of {steps} ...")
             output("")
             start_time = time.time()
-            bounds = [(p.lb, p.ub) for p in theta_info.unfixed]
+            bounds = [(p.lb, p.ub) for p in nonlinear_parameters.unfixed]
             theta, converged, iterations, evaluations = optimization._optimize(theta, bounds, wrapper)
             status = "completed" if converged else "failed"
             end_time = time.time()
@@ -504,6 +431,7 @@ class Problem(object):
 
             # use objective information computed at the optimal theta to compute results for the step
             output(f"Computing results for step {step} ...")
+            output("")
             step_info = compute_step_info(theta, wrapper.cache, compute_gradient=True)
             results = step_info.to_results(
                 last_results, start_time, end_time, iterations, evaluations, wrapper.iteration_mappings,
@@ -515,7 +443,6 @@ class Problem(object):
             omega_jacobian = step_info.omega_jacobian
             WD = results.updated_WD
             WS = results.updated_WS
-            output("")
             output(results)
 
             # store the last results and return results from the last step
@@ -523,16 +450,17 @@ class Problem(object):
             if step == steps:
                 return results
 
-    def _compute_objective_info(self, theta_info, WD, WS, error_behavior, error_punishment, iteration, linear_fp,
-                                linear_costs, costs_bounds, processes, theta, last_objective_info, compute_gradient):
+    def _compute_objective_info(self, nonlinear_parameters, WD, WS, error_behavior, error_punishment, iteration,
+                                linear_fp, linear_costs, costs_bounds, processes, theta, last_objective_info,
+                                compute_gradient):
         """Compute demand- and supply-side contributions. Then, form the GMM objective value and its gradient. Finally,
         handle any errors that were encountered before structuring relevant objective information.
         """
-        sigma, pi = theta_info.expand(theta, fill_fixed=True)
+        sigma, pi = nonlinear_parameters.expand(theta, fill_fixed=True)
 
         # compute demand-side contributions
         demand_contributions = self._compute_demand_contributions(
-            theta_info, WD, iteration, linear_fp, processes, sigma, pi, last_objective_info, compute_gradient
+            nonlinear_parameters, WD, iteration, linear_fp, processes, sigma, pi, last_objective_info, compute_gradient
         )
         delta, xi_jacobian, PD, beta, xi, demand_errors, iteration_mapping, evaluation_mapping = demand_contributions
 
@@ -541,8 +469,8 @@ class Problem(object):
         tilde_costs = omega_jacobian = PS = gamma = omega = None
         if self.K3 > 0:
             supply_contributions = self._compute_supply_contributions(
-                theta_info, WD, WS, linear_costs, costs_bounds, processes, delta, xi_jacobian, beta, sigma, pi,
-                last_objective_info, compute_gradient
+                nonlinear_parameters, WD, WS, linear_costs, costs_bounds, processes, delta, xi_jacobian, beta, sigma,
+                pi, last_objective_info, compute_gradient
             )
             tilde_costs, omega_jacobian, PS, gamma, omega, supply_errors = supply_contributions
 
@@ -578,11 +506,11 @@ class Problem(object):
 
         # structure objective information
         return ObjectiveInfo(
-            self, theta_info, WD, WS, theta, delta, tilde_costs, xi_jacobian, omega_jacobian, beta, gamma, xi, omega,
-            objective, gradient, iteration_mapping, evaluation_mapping
+            self, nonlinear_parameters, WD, WS, theta, delta, tilde_costs, xi_jacobian, omega_jacobian, beta, gamma, xi,
+            omega, objective, gradient, iteration_mapping, evaluation_mapping
         )
 
-    def _compute_demand_contributions(self, theta_info, WD, iteration, linear_fp, processes, sigma, pi,
+    def _compute_demand_contributions(self, nonlinear_parameters, WD, iteration, linear_fp, processes, sigma, pi,
                                       last_objective_info,  compute_gradient):
         """Compute delta and the Jacobian of xi (equivalently, of delta) with respect to theta market-by-market. If
         necessary, revert problematic elements to their last values. Lastly, recover beta and compute xi.
@@ -592,17 +520,15 @@ class Problem(object):
         # construct a mapping from market IDs to market-specific arguments used to compute delta and its Jacobian
         mapping = {}
         for t in np.unique(self.products.market_ids):
-            market_t = DemandProblemMarket(
-                t, self.linear_prices, self.nonlinear_prices, self.products, self.agents, sigma=sigma, pi=pi
-            )
+            market_t = DemandProblemMarket(self, t, sigma=sigma, pi=pi)
             last_delta_t = last_objective_info.delta[self.products.market_ids.flat == t]
-            mapping[t] = [market_t, last_delta_t, theta_info, iteration, linear_fp, compute_gradient]
+            mapping[t] = [market_t, last_delta_t, nonlinear_parameters, iteration, linear_fp, compute_gradient]
 
         # fill delta and its Jacobian market-by-market (the Jacobian will be null if the gradient isn't being computed)
         iteration_mapping = {}
         evaluation_mapping = {}
         delta = np.zeros((self.N, 1), options.dtype)
-        xi_jacobian = np.zeros((self.N, theta_info.P), options.dtype)
+        xi_jacobian = np.zeros((self.N, nonlinear_parameters.P), options.dtype)
         with ParallelItems(DemandProblemMarket.solve, mapping, processes) as items:
             for t, (delta_t, xi_jacobian_t, errors_t, iteration_mapping[t], evaluation_mapping[t]) in items:
                 delta[self.products.market_ids.flat == t] = delta_t
@@ -632,7 +558,7 @@ class Problem(object):
         xi = delta - self.products.X1 @ beta
         return delta, xi_jacobian, PD, beta, xi, errors, iteration_mapping, evaluation_mapping
 
-    def _compute_supply_contributions(self, theta_info, WD, WS, linear_costs, costs_bounds, processes, delta,
+    def _compute_supply_contributions(self, nonlinear_parameters, WD, WS, linear_costs, costs_bounds, processes, delta,
                                       xi_jacobian, beta, sigma, pi, last_objective_info, compute_gradient):
         """Compute transformed marginal costs and the Jacobian of omega (equivalently, of transformed marginal costs)
         with respect to theta market-by-market. If necessary, revert problematic elements to their last values. Lastly,
@@ -651,21 +577,18 @@ class Problem(object):
         #   and their Jacobian
         mapping = {}
         for t in np.unique(self.products.market_ids):
-            market_t = SupplyProblemMarket(
-                t, self.linear_prices, self.nonlinear_prices, self.products, self.agents, delta, beta=beta, sigma=sigma,
-                pi=pi
-            )
+            market_t = SupplyProblemMarket(self, t, delta, beta=beta, sigma=sigma, pi=pi)
             last_tilde_costs_t = last_objective_info.tilde_costs[self.products.market_ids.flat == t]
             xi_jacobian_t = xi_jacobian[self.products.market_ids.flat == t]
             mapping[t] = [
-                market_t, last_tilde_costs_t, xi_jacobian_t, beta_jacobian, theta_info, linear_costs, costs_bounds,
-                compute_gradient
+                market_t, last_tilde_costs_t, xi_jacobian_t, beta_jacobian, nonlinear_parameters, linear_costs,
+                costs_bounds, compute_gradient
             ]
 
         # fill transformed marginal costs and their Jacobian market-by-market (the Jacobian will be null if the gradient
         #   isn't being computed)
         tilde_costs = np.zeros((self.N, 1), options.dtype)
-        omega_jacobian = np.zeros((self.N, theta_info.P), options.dtype)
+        omega_jacobian = np.zeros((self.N, nonlinear_parameters.P), options.dtype)
         with ParallelItems(SupplyProblemMarket.solve, mapping, processes) as items:
             for t, (tilde_costs_t, omega_jacobian_t, errors_t) in items:
                 tilde_costs[self.products.market_ids.flat == t] = tilde_costs_t
@@ -696,269 +619,17 @@ class Problem(object):
         return tilde_costs, omega_jacobian, PS, gamma, omega, errors
 
 
-class NonlinearParameter(object):
-    """Information about a single nonlinear parameter."""
-
-    def __init__(self, location, bounds):
-        """Store the information and determine whether the parameter is fixed or unfixed."""
-        self.location = location
-        self.lb = bounds[0][location]
-        self.ub = bounds[1][location]
-        self.value = self.lb if self.lb == self.ub else None
-
-    def get_characteristics(self, products, agents):
-        """Get the product and agents characteristics associated with the parameter."""
-        raise NotImplementedError
-
-
-class SigmaParameter(NonlinearParameter):
-    """Information about a single parameter in sigma."""
-
-    def get_characteristics(self, products, agents):
-        """Get the product and agents characteristics associated with the parameter."""
-        return products.X2[:, [self.location[0]]], agents.nodes[:, [self.location[1]]]
-
-
-class PiParameter(NonlinearParameter):
-    """Information about a single parameter in pi."""
-
-    def get_characteristics(self, products, agents):
-        """Get the product and agents characteristics associated with the parameter."""
-        return products.X2[:, [self.location[0]]], agents.demographics[:, [self.location[1]]]
-
-
-class ThetaInfo(object):
-    """Information about nonlinear parameters, which relates sigma and pi to theta."""
-
-    def __init__(self, problem, sigma, pi, sigma_bounds, pi_bounds, supports_bounds):
-        """Validate initial parameter matrices and their bounds. Then, construct lists of information about fixed (equal
-        bounds) and unfixed (unequal bounds) elements of sigma and pi.
-        """
-        self.problem = problem
-
-        # validate and clean up sigma
-        sigma = np.asarray(sigma, options.dtype)
-        if sigma.shape != (problem.K2, problem.K2):
-            raise ValueError(f"sigma must have {problem.K2} rows and columns.")
-        sigma[np.tril_indices(problem.K2, -1)] = 0
-
-        # validate and clean up pi
-        if (pi is None) != (problem.D == 0):
-            raise ValueError("pi should be None only when there are no demographics.")
-        if pi is not None:
-            pi = np.asarray(pi, options.dtype)
-            if pi.shape != (problem.K2, problem.D):
-                raise ValueError(f"pi must have {problem.K2} rows and {problem.D} columns.")
-
-        # construct default sigma bounds or validate specified bounds
-        if sigma_bounds is None or not supports_bounds:
-            sigma_bounds = (
-                np.full_like(sigma, -np.inf, options.dtype),
-                np.full_like(sigma, +np.inf, options.dtype)
-            )
-            if supports_bounds:
-                np.fill_diagonal(sigma_bounds[0], 0)
-        else:
-            if len(sigma_bounds) != 2:
-                raise ValueError("sigma_bounds must be a tuple of the form (lb, ub).")
-            sigma_bounds = [np.asarray(b, options.dtype).copy() for b in sigma_bounds]
-            for bounds_index, bounds in enumerate(sigma_bounds):
-                bounds[np.isnan(bounds)] = -np.inf if bounds_index == 0 else +np.inf
-                if bounds.shape != sigma.shape:
-                    raise ValueError(f"sigma_bounds[{bounds_index}] must have the same shape as sigma.")
-            if ((sigma < sigma_bounds[0]) | (sigma > sigma_bounds[1])).any():
-                raise ValueError("sigma must be within its bounds.")
-
-        # construct default pi bounds or validate specified bounds
-        if pi is None:
-            pi_bounds = None
-        elif pi_bounds is None or not supports_bounds:
-            pi_bounds = (np.full_like(pi, -np.inf, options.dtype), np.full_like(pi, +np.inf, options.dtype))
-        else:
-            if len(pi_bounds) != 2:
-                raise ValueError("pi_bounds must be a tuple of the form (lb, ub).")
-            pi_bounds = [np.asarray(b, options.dtype).copy() for b in pi_bounds]
-            for bounds_index, bounds in enumerate(pi_bounds):
-                bounds[np.isnan(bounds)] = -np.inf if bounds_index == 0 else +np.inf
-                if bounds.shape != pi.shape:
-                    raise ValueError(f"pi_bounds[{bounds_index}] must have the same shape as pi.")
-            if ((pi < pi_bounds[0]) | (pi > pi_bounds[1])).any():
-                raise ValueError("pi must be within its bounds.")
-
-        # set upper and lower bounds to zero for parameters that are fixed at zero
-        sigma_bounds[0][np.where(sigma == 0)] = sigma_bounds[1][np.where(sigma == 0)] = 0
-        if pi is not None:
-            pi_bounds[0][np.where(pi == 0)] = pi_bounds[1][np.where(pi == 0)] = 0
-
-        # store the initial parameter matrices and their bounds
-        self.sigma = sigma
-        self.pi = pi
-        self.sigma_bounds = sigma_bounds
-        self.pi_bounds = pi_bounds
-
-        # store information about individual sigma and pi elements in lists
-        self.fixed = []
-        self.unfixed = []
-
-        # store information for the upper triangle of sigma
-        for location in zip(*np.triu_indices_from(sigma)):
-            parameter = SigmaParameter(location, sigma_bounds)
-            if parameter.value is None:
-                self.unfixed.append(parameter)
-            else:
-                self.fixed.append(parameter)
-
-        # store information for pi
-        if pi_bounds is not None:
-            for location in np.ndindex(pi.shape):
-                parameter = PiParameter(location, pi_bounds)
-                if parameter.value is None:
-                    self.unfixed.append(parameter)
-                else:
-                    self.fixed.append(parameter)
-
-        # store the number of unfixed parameters and make sure that there is at least one of them
-        self.P = len(self.unfixed)
-        if self.P == 0:
-            raise ValueError("There must be at least one unfixed nonlinear parameter.")
-
-    def __str__(self):
-        """Format the initial nonlinear parameters and their bounds as a string."""
-        return "\n".join([
-            "Initial Nonlinear Parameters:",
-            self.format_matrices(self.sigma, self.pi),
-            "",
-            "Lower Bounds on Nonlinear Parameters:",
-            self.format_matrices(self.sigma_bounds[0], None if self.pi_bounds is None else self.pi_bounds[0]),
-            "",
-            "Upper Bounds on Nonlinear Parameters:",
-            self.format_matrices(self.sigma_bounds[1], None if self.pi_bounds is None else self.pi_bounds[1])
-        ])
-
-    def format_matrices(self, sigma_like, pi_like, sigma_se=None, pi_se=None):
-        """Format matrices that are of the same size as the matrices of nonlinear parameters as a string. If matrices
-        of standard errors are given, they will be formatted as numbers surrounded by parentheses underneath the
-        elements of sigma and pi.
-        """
-        lines = []
-
-        # construct the parameter table formatter
-        sigma_widths = [14] + [max(14, options.digits + 8)] * self.problem.K2
-        pi_widths = [] if self.pi is None else [14] + [max(14, options.digits + 8)] * self.problem.D
-        line_indices = {} if self.pi is None else {len(sigma_widths) - 1}
-        formatter = output.table_formatter(sigma_widths + pi_widths, line_indices)
-
-        # construct the table header
-        header = ["Sigma:"]
-        if self.problem.nonlinear_prices:
-            header.append("Price")
-        for nonlinear_index in range(self.problem.K2 - int(self.problem.nonlinear_prices)):
-            header.append(f"Nonlinear #{nonlinear_index}")
-        if self.pi is not None:
-            header.append("Pi:")
-            for demographic_index in range(self.problem.D):
-                header.append(f"Demographic #{demographic_index}")
-
-        # build the top of the table
-        lines.extend([formatter.border(), formatter(header), formatter.lines()])
-
-        # construct the rows containing parameter information
-        for row_index in range(self.problem.K2):
-            # determine the label of the row
-            row_label = f"Nonlinear #{row_index - int(self.problem.nonlinear_prices)}"
-            if row_index == 0 and self.problem.nonlinear_prices:
-                row_label = "Price"
-
-            # the row of values consists of the label, blanks for the lower triangle of sigma, sigma values, the label
-            #   again, and finally pi values
-            values_row = [row_label] + [""] * row_index
-            for column_index in range(row_index, self.problem.K2):
-                values_row.append(output.format_number(sigma_like[row_index, column_index]))
-            if self.pi is not None:
-                values_row.append(row_label)
-                for column_index in range(self.problem.D):
-                    values_row.append(output.format_number(pi_like[row_index, column_index]))
-            lines.append(formatter(values_row))
-
-            # construct a row of standard errors for unfixed parameters
-            if sigma_se is not None:
-                # determine which columns in this row correspond to unfixed parameters
-                sigma_indices = set()
-                pi_indices = set()
-                for parameter in self.unfixed:
-                    if parameter.location[0] == row_index:
-                        if isinstance(parameter, SigmaParameter):
-                            sigma_indices.add(parameter.location[1])
-                        else:
-                            pi_indices.add(parameter.location[1])
-
-                # construct a row similar to the values row without row labels and with standard error formatting
-                se_row = [""] * (1 + row_index)
-                for column_index in range(row_index, self.problem.K2):
-                    se = sigma_se[row_index, column_index]
-                    se_row.append(output.format_se(se) if column_index in sigma_indices else "")
-                if self.pi is not None:
-                    se_row.append("")
-                    for column_index in range(self.problem.D):
-                        se = pi_se[row_index, column_index]
-                        se_row.append(output.format_se(se) if column_index in pi_indices else "")
-
-                # format the row of values and add an additional blank line if there is another row of values
-                lines.append(formatter(se_row))
-                if row_index < self.problem.K2 - 1:
-                    lines.append(formatter.blank())
-
-        # construct the bottom border and combine the lines into one string
-        lines.append(formatter.border())
-        return "\n".join(lines)
-
-    def compress(self, sigma, pi):
-        """Compress nonlinear parameter matrices into theta."""
-        sigma_locations = list(zip(*[p.location for p in self.unfixed if isinstance(p, SigmaParameter)]))
-        theta = sigma[sigma_locations].ravel()
-        if pi is not None:
-            pi_locations = list(zip(*[p.location for p in self.unfixed if isinstance(p, PiParameter)]))
-            theta = np.r_[theta, pi[pi_locations].ravel()]
-        return theta
-
-    def expand(self, theta_like, fill_fixed=False):
-        """Recover nonlinear parameter-sized matrices from a vector of the same size as theta. If fill_fixed is True,
-        elements corresponding to fixed parameters will be set to their fixed values instead of to None.
-        """
-        sigma_like = np.full_like(self.sigma, np.nan)
-        pi_like = None if self.pi is None else np.full_like(self.pi, np.nan)
-
-        # set values for elements that correspond to unfixed parameters
-        for parameter, value in zip(self.unfixed, theta_like):
-            if isinstance(parameter, SigmaParameter):
-                sigma_like[parameter.location] = value
-            else:
-                pi_like[parameter.location] = value
-
-        # set values for elements that correspond to fixed parameters
-        if fill_fixed:
-            sigma_like[np.tril_indices_from(sigma_like, -1)] = 0
-            for parameter in self.fixed:
-                if isinstance(parameter, SigmaParameter):
-                    sigma_like[parameter.location] = parameter.value
-                else:
-                    pi_like[parameter.location] = parameter.value
-
-        # return the expanded matrices
-        return sigma_like, pi_like
-
-
 class ObjectiveInfo(object):
     """Structured information about a completed iteration of the optimization routine."""
 
-    def __init__(self, problem, theta_info, WD, WS, theta, delta, tilde_costs, xi_jacobian, omega_jacobian, beta=None,
-                 gamma=None, xi=None, omega=None, objective=None, gradient=None, iteration_mapping=None,
+    def __init__(self, problem, nonlinear_parameters, WD, WS, theta, delta, tilde_costs, xi_jacobian, omega_jacobian,
+                 beta=None, gamma=None, xi=None, omega=None, objective=None, gradient=None, iteration_mapping=None,
                  evaluation_mapping=None):
         """Initialize objective information. Optional parameters will not be specified when preparing for the first
         objective evaluation.
         """
         self.problem = problem
-        self.theta_info = theta_info
+        self.nonlinear_parameters = nonlinear_parameters
         self.WD = WD
         self.WS = WS
         self.theta = theta
@@ -1021,14 +692,14 @@ class ObjectiveInfo(object):
 class DemandProblemMarket(Market):
     """A single market in the BLP problem, which can be solved to compute delta--related information."""
 
-    def solve(self, initial_delta, theta_info, iteration, linear_fp, compute_gradient):
+    def solve(self, initial_delta, nonlinear_parameters, iteration, linear_fp, compute_gradient):
         """Compute the mean utility for this market that equates market shares to observed values by solving a fixed
         point problem. Then, if compute_gradient is True, compute the Jacobian of xi (equivalently, of delta) with
         respect to theta. If necessary, replace null elements in delta with their last values before computing its
         Jacobian.
         """
 
-        # configure numpy to identify floating point errors
+        # configure NumPy to identify floating point errors
         errors = set()
         with np.errstate(divide='call', over='call', under='ignore', invalid='call'):
             np.seterrcall(lambda *_: errors.add(exceptions.DeltaFloatingPointError))
@@ -1051,27 +722,27 @@ class DemandProblemMarket(Market):
                 exp_delta, converged, iterations, evaluations = iteration._iterate(np.exp(initial_delta), contraction)
                 delta = custom_log(exp_delta)
 
-            # identify whether the fixed point converged
-            if not converged:
-                errors.add(exceptions.DeltaConvergenceError)
-
             # if the gradient is to be computed, replace invalid values in delta with the last computed values before
             #   computing its Jacobian
-            xi_jacobian = np.full((self.J, theta_info.P), np.nan, options.dtype)
+            xi_jacobian = np.full((self.J, nonlinear_parameters.P), np.nan, options.dtype)
             if compute_gradient:
                 valid_delta = delta.copy()
                 bad_delta_indices = ~np.isfinite(delta)
                 valid_delta[bad_delta_indices] = initial_delta[bad_delta_indices]
-                xi_jacobian = self.compute_xi_by_theta_jacobian(valid_delta, theta_info)
-            return delta, xi_jacobian, errors, iterations, evaluations
+                xi_jacobian = self.compute_xi_by_theta_jacobian(valid_delta, nonlinear_parameters)
 
-    def compute_xi_by_theta_jacobian(self, delta, theta_info):
+        # determine whether the fixed point converged
+        if not converged:
+            errors.add(exceptions.DeltaConvergenceError)
+        return delta, xi_jacobian, errors, iterations, evaluations
+
+    def compute_xi_by_theta_jacobian(self, delta, nonlinear_parameters):
         """Use the Implicit Function Theorem to compute the Jacobian of xi (equivalently, of delta) with respect to
         theta.
         """
         probabilities = self.compute_probabilities(delta)
         shares_by_xi_jacobian = self.compute_shares_by_xi_jacobian(probabilities)
-        shares_by_theta_jacobian = self.compute_shares_by_theta_jacobian(probabilities, theta_info)
+        shares_by_theta_jacobian = self.compute_shares_by_theta_jacobian(probabilities, nonlinear_parameters)
         try:
             return scipy.linalg.solve(-shares_by_xi_jacobian, shares_by_theta_jacobian)
         except (ValueError, scipy.linalg.LinAlgError):
@@ -1083,10 +754,10 @@ class DemandProblemMarket(Market):
         square_weights = np.diagflat(self.agents.weights)
         return square_shares - probabilities @ square_weights @ probabilities.T
 
-    def compute_shares_by_theta_jacobian(self, probabilities, theta_info):
+    def compute_shares_by_theta_jacobian(self, probabilities, nonlinear_parameters):
         """Compute the Jacobian of shares with respect to theta."""
-        jacobian = np.zeros((self.J, theta_info.P), options.dtype)
-        for p, parameter in enumerate(theta_info.unfixed):
+        jacobian = np.zeros((self.J, nonlinear_parameters.P), options.dtype)
+        for p, parameter in enumerate(nonlinear_parameters.unfixed):
             x, v = parameter.get_characteristics(self.products, self.agents)
             jacobian[:, [p]] = probabilities * v.T * (x - x.T @ probabilities) @ self.agents.weights
         return jacobian
@@ -1095,7 +766,7 @@ class DemandProblemMarket(Market):
 class SupplyProblemMarket(Market):
     """A single market in the BLP problem, which can be solved to compute costs-related information."""
 
-    def solve(self, initial_tilde_costs, xi_jacobian, beta_jacobian, theta_info, linear_costs, costs_bounds,
+    def solve(self, initial_tilde_costs, xi_jacobian, beta_jacobian, nonlinear_parameters, linear_costs, costs_bounds,
               compute_gradient):
         """Compute transformed marginal costs for this market. Then, if compute_gradient is True, compute the Jacobian
         of omega (equivalently, of transformed marginal costs) with respect to theta. If necessary, replace null
@@ -1109,7 +780,7 @@ class SupplyProblemMarket(Market):
 
             # compute marginal costs
             try:
-                costs = self.compute_costs()
+                costs = self.products.prices - self.compute_eta()
             except scipy.linalg.LinAlgError:
                 errors.add(exceptions.CostsSingularityError)
                 costs = np.full((self.J, 1), np.nan, options.dtype)
@@ -1127,29 +798,30 @@ class SupplyProblemMarket(Market):
 
             # if the gradient is to be computed, replace invalid transformed marginal costs with their last computed
             #   values before computing their Jacobian
-            omega_jacobian = np.full((self.J, theta_info.P), np.nan, options.dtype)
+            omega_jacobian = np.full((self.J, nonlinear_parameters.P), np.nan, options.dtype)
             if compute_gradient:
                 valid_tilde_costs = tilde_costs.copy()
                 bad_costs_indices = ~np.isfinite(tilde_costs)
                 valid_tilde_costs[bad_costs_indices] = initial_tilde_costs[bad_costs_indices]
                 omega_jacobian = self.compute_omega_by_theta_jacobian(
-                    valid_tilde_costs, xi_jacobian, beta_jacobian, theta_info, linear_costs
+                    valid_tilde_costs, xi_jacobian, beta_jacobian, nonlinear_parameters, linear_costs
                 )
             return tilde_costs, omega_jacobian, errors
 
-    def compute_omega_by_theta_jacobian(self, tilde_costs, xi_jacobian, beta_jacobian, theta_info, linear_costs):
+    def compute_omega_by_theta_jacobian(self, tilde_costs, xi_jacobian, beta_jacobian, nonlinear_parameters,
+                                        linear_costs):
         """Compute the Jacobian of omega (equivalently, of transformed marginal costs) with respect to theta."""
-        costs_jacobian = -self.compute_eta_by_theta_jacobian(xi_jacobian, beta_jacobian, theta_info)
+        costs_jacobian = -self.compute_eta_by_theta_jacobian(xi_jacobian, beta_jacobian, nonlinear_parameters)
         if linear_costs:
             return costs_jacobian
         return costs_jacobian / np.exp(tilde_costs)
 
-    def compute_eta_by_theta_jacobian(self, xi_jacobian, beta_jacobian, theta_info):
+    def compute_eta_by_theta_jacobian(self, xi_jacobian, beta_jacobian, nonlinear_parameters):
         """Compute the Jacobian of the markup term in the BLP-markup equation with respect to theta."""
 
         # compute the intermediate matrix V that shows up in the decomposition of eta
         probabilities = self.compute_probabilities()
-        derivatives = self.compute_utility_by_prices_derivatives()
+        derivatives = self.compute_utility_by_variable_derivatives('prices')
         V = probabilities * derivatives
 
         # compute the matrix A, which, when inverted and multiplied by shares, gives eta (negative the intra-firm
@@ -1185,18 +857,21 @@ class SupplyProblemMarket(Market):
         # compute the product of the tensor and eta
         A_by_xi_tensor_times_eta = np.squeeze(A_by_xi_tensor @ eta)
 
+        # compute derivatives of X1 and X2 with respect to prices
+        X1_derivatives = self.compute_X1_by_variable_derivatives('prices')
+        X2_derivatives = self.compute_X2_by_variable_derivatives('prices')
+
         # fill the Jacobian of eta with respect to theta parameter-by-parameter
-        eta_jacobian = np.zeros((self.J, theta_info.P), options.dtype)
-        for p, parameter in enumerate(theta_info.unfixed):
+        eta_jacobian = np.zeros((self.J, nonlinear_parameters.P), options.dtype)
+        for p, parameter in enumerate(nonlinear_parameters.unfixed):
             # compute the tangent of V with respect to the parameter
-            X1_index, X2_index = self.get_price_indices()
             x, v = parameter.get_characteristics(self.products, self.agents)
             probabilities_tangent = probabilities * v.T * (x - x.T @ probabilities)
-            V_tangent = probabilities_tangent * derivatives
-            if X1_index is not None:
-                V_tangent += probabilities * beta_jacobian[X1_index, p]
-            if X2_index == parameter.location[0]:
-                V_tangent += probabilities * v.T
+            derivatives_tangent = (
+                X1_derivatives @ beta_jacobian[:, [p]] +
+                X2_derivatives[:, [parameter.location[0]]] @ v.T
+            )
+            V_tangent = probabilities_tangent * derivatives + probabilities * derivatives_tangent
 
             # compute the tangent of A with respect to the parameter
             capital_gamma_tangent = (

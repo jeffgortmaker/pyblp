@@ -21,6 +21,12 @@ from pyblp import Formulation
         id="continuous variable"
     ),
     pytest.param(
+        ['0 + x + I(1)', 'x + I(1) - 1'],
+        lambda d: [d['x'], d['1']],
+        lambda d: [d['1'], d['0']],
+        id="continuous variable before intercept"
+    ),
+    pytest.param(
         ['0 + x + C(x)'],
         lambda d: [d['x']] + [d[f'x[{v}]'] for v in np.unique(d['x'])],
         lambda d: [d['1']] + [d['0']] * d['x'].size,
@@ -76,6 +82,7 @@ def test_valid_formulas(formula_data, formulas, build_columns, build_derivatives
     # build columns and derivatives for each formula
     for formula in formulas:
         matrix, column_formulations, underlying_data = Formulation(formula)._build(formula_data)
+        evaluated_matrix = np.column_stack([ones * f.evaluate(underlying_data) for f in column_formulations])
         derivatives = np.column_stack([ones * f.evaluate_derivative('x', underlying_data) for f in column_formulations])
 
         # build expected columns and derivatives
@@ -85,6 +92,7 @@ def test_valid_formulas(formula_data, formulas, build_columns, build_derivatives
 
         # compare columns and derivatives
         np.testing.assert_allclose(matrix, expected_matrix, rtol=0, atol=1e-14, err_msg=formula)
+        np.testing.assert_allclose(matrix, evaluated_matrix, rtol=0, atol=1e-14, err_msg=formula)
         np.testing.assert_allclose(derivatives, expected_derivatives, rtol=0, atol=1e-14, err_msg=formula)
 
 

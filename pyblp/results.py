@@ -5,8 +5,8 @@ import time
 import numpy as np
 import scipy.linalg
 
-from .primitives import Market
 from . import options, exceptions
+from .primitives import Market, LinearParameters
 from .utilities import output, ParallelItems, Iteration
 
 
@@ -129,7 +129,6 @@ class Results(object):
         """Compute estimated standard errors and update weighting matrices."""
 
         # initialize values from the objective information
-        self._theta_info = objective_info.theta_info
         self.problem = objective_info.problem
         self.WD = objective_info.WD
         self.WS = objective_info.WS
@@ -146,9 +145,13 @@ class Results(object):
         self.gradient = objective_info.gradient
         self.gradient_norm = objective_info.gradient_norm
 
+        # store parameter information
+        self._nonlinear_parameters = objective_info.nonlinear_parameters
+        self._linear_parameters = LinearParameters(self.problem, self.beta, self.gamma)
+
         # expand the nonlinear parameters and their gradient
-        self.sigma, self.pi = self._theta_info.expand(self.theta, fill_fixed=True)
-        self.sigma_gradient, self.pi_gradient = self._theta_info.expand(self.gradient)
+        self.sigma, self.pi = self._nonlinear_parameters.expand(self.theta, fill_fixed=True)
+        self.sigma_gradient, self.pi_gradient = self._nonlinear_parameters.expand(self.gradient)
 
         # stack the error terms, weighting matrices, instruments, and Jacobian of the error terms with respect to all
         #   parameters
@@ -168,8 +171,8 @@ class Results(object):
 
         # compute standard errors
         se = self._compute_se(u, Z, W, jacobian, se_type)
-        self.sigma_se, self.pi_se = self._theta_info.expand(se[:self._theta_info.P])
-        self.beta_se = se[self._theta_info.P:self._theta_info.P + self.problem.K1]
+        self.sigma_se, self.pi_se = self._nonlinear_parameters.expand(se[:self._nonlinear_parameters.P])
+        self.beta_se = se[self._nonlinear_parameters.P:self._nonlinear_parameters.P + self.problem.K1]
         self.gamma_se = se[-self.problem.K3:] if self.problem.K3 > 0 else None
 
         # update weighting matrices
@@ -239,41 +242,16 @@ class Results(object):
             formatter.border()
         ])
 
-        # construct a section containing beta estimates
-        linear_header = ["Price"] if self.problem.linear_prices else []
-        for linear_index in range(self.beta.size - int(self.problem.linear_prices)):
-            linear_header.append(f"Linear #{linear_index}")
-        linear_formatter = output.table_formatter([max(len(k), options.digits + 8) for k in linear_header])
+        # construct a section containing linear estimates
         sections.append([
-            "Beta Estimates (SEs in Parentheses):",
-            linear_formatter.border(),
-            linear_formatter(linear_header),
-            linear_formatter.lines(),
-            linear_formatter([output.format_number(x) for x in self.beta]),
-            linear_formatter([output.format_se(x) for x in self.beta_se]),
-            linear_formatter.border()
+            "Linear Estimates (SEs in Parentheses):",
+            self._linear_parameters.format(self.beta, self.gamma, self.beta_se, self.gamma_se)
         ])
-
-        # construct a section containing gamma estimates
-        if self.gamma is not None:
-            cost_header = []
-            for cost_index in range(self.gamma.size):
-                cost_header.append(f"Cost #{cost_index}")
-            cost_formatter = output.table_formatter([max(len(k), options.digits + 8) for k in cost_header])
-            sections.append([
-                "Gamma Estimates (SEs in Parentheses):",
-                cost_formatter.border(),
-                cost_formatter(cost_header),
-                cost_formatter.lines(),
-                cost_formatter([output.format_number(x) for x in self.gamma]),
-                cost_formatter([output.format_se(x) for x in self.gamma_se]),
-                cost_formatter.border()
-            ])
 
         # construct a section containing nonlinear estimates
         sections.append([
             "Nonlinear Estimates (SEs in Parentheses):",
-            self._theta_info.format_matrices(self.sigma, self.pi, self.sigma_se, self.pi_se)
+            self._nonlinear_parameters.format(self.sigma, self.pi, self.sigma_se, self.pi_se)
         ])
 
         # combine the sections into one string
@@ -359,36 +337,11 @@ class Results(object):
             except scipy.linalg.LinAlgError:
                 return 3, np.diag(1 / np.diag(matrix))
 
-    def _convert_indices(self, linear_index=None, nonlinear_index=None):
-        """Identify the column indices in X1 and X2 that are associated with column indices in the matrices of non-price
-        characteristics used to construct X1 and X2.
-        """
-        if linear_index is None and nonlinear_index is None:
-            raise ValueError("linear_index and nonlinear_index cannot both be None.")
-
-        # validate the indices
-        linear_indices = frozenset(range(self.problem.K1 - int(self.problem.linear_prices)))
-        nonlinear_indices = frozenset(range(self.problem.K2 - int(self.problem.nonlinear_prices)))
-        if linear_index is not None:
-            if not linear_indices:
-                raise ValueError("There are no non-price linear characteristics, so linear_index must be None.")
-            if linear_index not in linear_indices:
-                raise ValueError(f"linear_index must be None or one of {list(linear_indices)}.")
-        if nonlinear_index is not None:
-            if not nonlinear_indices:
-                raise ValueError("There are no non-price nonlinear characteristics, so nonlinear_index must be None.")
-            if nonlinear_index not in nonlinear_indices:
-                raise ValueError(f"nonlinear_index must be None or one of {list(nonlinear_indices)}.")
-
-        # determine the corresponding indices in X1 and X2
-        X1_index = None if linear_index is None else linear_index + int(self.problem.linear_prices)
-        X2_index = None if nonlinear_index is None else nonlinear_index + int(self.problem.nonlinear_prices)
-
-        # if the characteristic is in both X1 and X2, make sure that it is identical in both
-        if X1_index is not None and X2_index is not None:
-            if not np.array_equal(self.problem.products.X1[:, X1_index], self.problem.products.X2[:, X2_index]):
-                raise ValueError("linear_index and nonlinear_index must correspond to the same characteristic.")
-        return X1_index, X2_index
+    def _validate_name(self, name):
+        """Validate that a name corresponds to a variable in X1 or X2 (or both)."""
+        names = {n for f in self.problem._X1_formulations + self.problem._X2_formulations for n in f.names}
+        if name not in names:
+            raise NameError(f"The name '{name}' is not one of the variables in X1 or X2, {list(sorted(names))}.")
 
     def _combine_results(self, compute_market_results, fixed_args=(), market_args=(), processes=1):
         """Compute post-estimation outputs for each market and stack them into a single matrix. Multiprocessing can be
@@ -406,10 +359,7 @@ class Results(object):
         # construct a mapping from market IDs to market-specific arguments used to compute results
         args_mapping = {}
         for t in self.unique_market_ids:
-            market_t = ResultsMarket(
-                t, self.problem.linear_prices, self.problem.nonlinear_prices, self.problem.products,
-                self.problem.agents, self.delta, self.xi, self.beta, self.sigma, self.pi
-            )
+            market_t = ResultsMarket(self.problem, t, self.delta, self.xi, self.beta, self.sigma, self.pi)
             args_t = [None if a is None else a[self.problem.products.market_ids.flat == t] for a in market_args]
             args_mapping[t] = [market_t] + list(fixed_args) + args_t
 
@@ -441,7 +391,7 @@ class Results(object):
         output(f"Finished after {output.format_seconds(end_time - start_time)}.")
         return combined
 
-    def compute_aggregate_elasticities(self, linear_index=None, nonlinear_index=None, factor=0.1):
+    def compute_aggregate_elasticities(self, factor=0.1, name='prices'):
         r"""Estimate aggregate elasticities of demand, :math:`E`, with respect to a product characteristic, :math:`x`.
 
         In market :math:`t`, the aggregate elasticity of demand is
@@ -453,13 +403,10 @@ class Results(object):
 
         Parameters
         ----------
-        linear_index : `int, optional`
-            Column index of :math:`x` in the `linear_characteristics` field of `product_data` in :class:`Problem`
-            initialization.
-        nonlinear_index : `int, optional`
-            Column index of :math:`x` in the `nonlinear_characteristics` field.
         factor : `float, optional`
             The scalar factor, :math:`\Delta`.
+        name : `str, optional`
+            Name of the product characteristic, :math:`x`. By default, :math:`x = p`, prices.
 
         Returns
         -------
@@ -468,21 +415,11 @@ class Results(object):
             :attr:`Results.unique_market_ids`.
 
         """
-        output("Computing aggregate elasticities ...")
-        output(f"Factor: {output.format_number(factor)}.")
-        X1_index, X2_index = self._convert_indices(linear_index, nonlinear_index)
-        return self._combine_results(ResultsMarket.compute_aggregate_elasticity, [X1_index, X2_index, factor])
+        self._validate_name(name)
+        output(f"Computing aggregate elasticities with respect to {name} ...")
+        return self._combine_results(ResultsMarket.compute_aggregate_elasticity, [factor, name])
 
-    def compute_aggregate_price_elasticities(self, factor=0.1):
-        """Estimate aggregate elasticities of demand, :math:`E`, with respect to prices, :math:`p`.
-
-        Identical to :meth:`Results.compute_aggregate_elasticities` for :math:`x = p`.
-
-        """
-        output("Computing aggregate price elasticities ....")
-        return self._combine_results(ResultsMarket.compute_aggregate_price_elasticity, [factor])
-
-    def compute_elasticities(self, linear_index=None, nonlinear_index=None):
+    def compute_elasticities(self, name='prices'):
         r"""Estimate matrices of elasticities of demand, :math:`\varepsilon`, with respect to a product characteristic,
         :math:`x`.
 
@@ -492,11 +429,8 @@ class Results(object):
 
         Parameters
         ----------
-        linear_index : `int, optional`
-            Column index of :math:`x` in the `linear_characteristics` field of `product_data` in :class:`Problem`
-            initialization.
-        nonlinear_index : `int, optional`
-            Column index of :math:`x` in the `nonlinear_characteristics` field.
+        name : `str, optional`
+            Name of the product characteristic, :math:`x`. By default, :math:`x = p`, prices.
 
         Returns
         -------
@@ -506,20 +440,11 @@ class Results(object):
             fewer products than others, extra columns will contain ``numpy.nan``.
 
         """
-        output("Computing elasticities ...")
-        X1_index, X2_index = self._convert_indices(linear_index, nonlinear_index)
-        return self._combine_results(ResultsMarket.compute_elasticities, [X1_index, X2_index])
+        self._validate_name(name)
+        output(f"Computing elasticities with respect to {name} ...")
+        return self._combine_results(ResultsMarket.compute_elasticities, [name])
 
-    def compute_price_elasticities(self):
-        r"""Estimate matrices of elasticities of demand, :math:`\varepsilon`, with respect to prices, :math:`p`.
-
-        Identical to :meth:`Results.compute_elasticities` for :math:`x = p`.
-
-        """
-        output("Computing price elasticities ....")
-        return self._combine_results(ResultsMarket.compute_price_elasticities)
-
-    def compute_diversion_ratios(self, linear_index=None, nonlinear_index=None):
+    def compute_diversion_ratios(self, name='prices'):
         r"""Estimate matrices of diversion ratios, :math:`\mathscr{D}`, with respect to a product characteristic,
         :math:`x`.
 
@@ -532,11 +457,8 @@ class Results(object):
 
         Parameters
         ----------
-        linear_index : `int, optional`
-            Column index of :math:`x` in the `linear_characteristics` field of `product_data` in :class:`Problem`
-            initialization.
-        nonlinear_index : `int, optional`
-            Column index of :math:`x` in the `nonlinear_characteristics` field.
+        name : `str, optional`
+            Name of the product characteristic, :math:`x`. By default, :math:`x = p`, prices.
 
         Returns
         -------
@@ -546,18 +468,9 @@ class Results(object):
             others, extra columns will contain ``numpy.nan``.
 
         """
-        output("Computing diversion ratios ...")
-        X1_index, X2_index = self._convert_indices(linear_index, nonlinear_index)
-        return self._combine_results(ResultsMarket.compute_diversion_ratios, [X1_index, X2_index])
-
-    def compute_price_diversion_ratios(self):
-        r"""Estimate matrices of diversion ratios, :math:`\mathscr{D}`, with respect to prices, :math:`p`.
-
-        Identical to :meth:`Results.compute_diversion_ratios` for :math:`x = p`.
-
-        """
-        output("Computing aggregate price elasticities ....")
-        return self._combine_results(ResultsMarket.compute_price_diversion_ratios)
+        self._validate_name(name)
+        output(f"Computing diversion ratios with respect to {name} ...")
+        return self._combine_results(ResultsMarket.compute_diversion_ratios, [name])
 
     def compute_long_run_diversion_ratios(self):
         r"""Estimate matrices of long-run diversion ratios, :math:`\bar{\mathscr{D}}`.
@@ -642,7 +555,7 @@ class Results(object):
         output("Computing marginal costs ...")
         return self._combine_results(ResultsMarket.compute_costs)
 
-    def solve_approximate_merger(self, costs, firms_index=1):
+    def solve_approximate_merger(self, firms_index=1, costs=None):
         r"""Estimate approximate post-merger prices, :math:`p^a`, under the assumption that shares and their price
         derivatives are unaffected by the merger.
 
@@ -659,12 +572,13 @@ class Results(object):
 
         Parameters
         ----------
-        costs : `array-like`
-            Marginal costs, :math:`c`, computed by :meth:`Results.compute_costs`.
         firms_index : `int, optional`
             Column index of the changed firm IDs in the `firm_ids` field of `product_data` in :class:`Problem`
             initialization. If an `ownership` field was specified, the corresponding stack of ownership matrices will be
             used. Ownership changes need not reflect an actual merger.
+        costs : `array-like, optional`
+            Marginal costs, :math:`c`, computed by :meth:`Results.compute_costs`. By default, marginal costs are
+            computed.
 
         Returns
         -------
@@ -673,10 +587,9 @@ class Results(object):
 
         """
         output("Solving for approximate post-merger prices ...")
-        output(f"Firms index: {firms_index}.")
         return self._combine_results(ResultsMarket.solve_approximate_merger, [firms_index], [costs])
 
-    def solve_merger(self, costs, firms_index=1, prices=None, iteration=None, processes=1):
+    def solve_merger(self, iteration=None, firms_index=1, prices=None, costs=None, processes=1):
         r"""Estimate post-merger prices, :math:`p^*`.
 
         Prices are computed in each market by iterating over the post-merger version of the :math:`\zeta`-markup
@@ -693,8 +606,9 @@ class Results(object):
 
         Parameters
         ----------
-        costs : `array-like`
-            Marginal costs, :math:`c`, computed by :meth:`Results.compute_costs`.
+        iteration : `Iteration, optional`
+            :class:`Iteration` configuration for how to solve the fixed point problem in each market. By default,
+            ``Iteration('simple', {'tol': 1e-12})`` is used.
         firms_index : `int, optional`
             Column index of the changed firm IDs in the `firm_ids` field of `product_data` in :class:`Problem`
             initialization. If an `ownership` field was specified, the corresponding stack of ownership matrices will be
@@ -703,9 +617,9 @@ class Results(object):
             Prices at which the fixed point iteration routine will start. By default, pre-merger prices, :math:`p`, are
             used as starting values. Other reasonable starting prices include :math:`p^a`, computed by
             :meth:`Results.solve_approximate_merger`.
-        iteration : `Iteration, optional`
-            :class:`Iteration` configuration for how to solve the fixed point problem in each market. By default,
-            ``Iteration('simple', {'tol': 1e-12})`` is used.
+        costs : `array-like`
+            Marginal costs, :math:`c`, computed by :meth:`Results.compute_costs`. By default, marginal costs are
+            computed.
         processes : `int, optional`
             Number of Python processes that will be used during computation. By default, multiprocessing will not be
             used. For values greater than one, a pool of that many Python processes will be created. Market-by-market
@@ -722,15 +636,10 @@ class Results(object):
             iteration = Iteration('simple', {'tol': 1e-12})
         elif not isinstance(iteration, Iteration):
             raise ValueError("iteration must an Iteration instance.")
-
         output("Solving for post-merger prices ...")
-        output(f"Firms index: {firms_index}.")
-        output("Starting with unchanged prices." if prices is None else "Starting with the specified prices.")
-        output(iteration)
-        output(f"Processes: {processes}.")
-        return self._combine_results(ResultsMarket.solve_merger, [firms_index, iteration], [costs, prices], processes)
+        return self._combine_results(ResultsMarket.solve_merger, [iteration, firms_index], [prices, costs], processes)
 
-    def compute_shares(self, prices):
+    def compute_shares(self, prices=None):
         r"""Estimate shares evaluated at specified prices.
 
         Parameters
@@ -738,7 +647,7 @@ class Results(object):
         prices : `array-like`
             Prices at which to evaluate shares, such as post-merger prices, :math:`p^*`, computed by
             :meth:`Results.solve_merger`, or approximate post-merger prices, :math:`p^a`, computed by
-            :meth:`Results.solve_approximate_merger`.
+            :meth:`Results.solve_approximate_merger`. By default, unchanged prices are used.
 
         Returns
         -------
@@ -749,7 +658,7 @@ class Results(object):
         output("Computing shares ...")
         return self._combine_results(ResultsMarket.compute_shares, market_args=[prices])
 
-    def compute_hhi(self, shares=None, firms_index=0):
+    def compute_hhi(self, firms_index=0, shares=None):
         r"""Estimate Herfindahl-Hirschman Indices, :math:`\text{HHI}`.
 
         The index in market :math:`t` is
@@ -760,12 +669,12 @@ class Results(object):
 
         Parameters
         ----------
-        shares : `array-like, optional`
-            Shares, :math:`s`, such as those computed by :meth:`Results.compute_shares`. By default, unchanged shares
-            are used.
         firms_index : `int, optional`
             Column index of the firm IDs in the `firm_ids` field of `product_data` in :class:`Problem` initialization.
             By default, unchanged firm IDs are used.
+        shares : `array-like, optional`
+            Shares, :math:`s`, such as those computed by :meth:`Results.compute_shares`. By default, unchanged shares
+            are used.
 
         Returns
         -------
@@ -775,11 +684,9 @@ class Results(object):
 
         """
         output("Computing HHI ...")
-        output("Using unchanged shares" if shares is None else "Using the specified shares.")
-        output(f"Firms index: {firms_index}.")
         return self._combine_results(ResultsMarket.compute_hhi, [firms_index], [shares])
 
-    def compute_markups(self, costs, prices=None):
+    def compute_markups(self, prices=None, costs=None):
         r"""Estimate markups, :math:`\mathscr{M}`.
 
         The markup of product :math:`j` in market :math:`t` is
@@ -788,12 +695,13 @@ class Results(object):
 
         Parameters
         ----------
-        costs : `array-like`
-            Marginal costs, :math:`c`, computed by :meth:`Results.compute_costs`.
         prices : `array-like, optional`
             Prices, :math:`p`, such as post-merger prices, :math:`p^*`, computed by :meth:`Results.solve_merger`, or
             approximate post-merger prices, :math:`p^a`, computed by :meth:`Results.solve_approximate_merger`. By
             default, unchanged prices are used.
+        costs : `array-like`
+            Marginal costs, :math:`c`, computed by :meth:`Results.compute_costs`. By default, marginal costs are
+            computed.
 
         Returns
         -------
@@ -802,10 +710,9 @@ class Results(object):
 
         """
         output("Computing markups ...")
-        output("Using unchanged prices." if prices is None else "Using the specified changed prices.")
-        return self._combine_results(ResultsMarket.compute_markups, market_args=[costs, prices])
+        return self._combine_results(ResultsMarket.compute_markups, market_args=[prices, costs])
 
-    def compute_profits(self, costs, prices=None, shares=None):
+    def compute_profits(self, prices=None, shares=None, costs=None):
         r"""Estimate population-normalized gross expected profits, :math:`\pi`.
 
         The profit of product :math:`j` in market :math:`t` is
@@ -814,8 +721,6 @@ class Results(object):
 
         Parameters
         ----------
-        costs : `array-like`
-            Marginal costs, :math:`c`, computed by `compute_costs`.
         prices : `array-like, optional`
             Prices, :math:`p`, such as post-merger prices, :math:`p^*`, computed by :meth:`Results.solve_merger`, or
             approximate post-merger prices, :math:`p^a`, computed by :meth:`Results.solve_approximate_merger`. By
@@ -823,6 +728,8 @@ class Results(object):
         shares : `array-like, optional`
             Shares, :math:`s`, such as those computed by :meth:`Results.compute_shares`. By default, unchanged shares
             are used.
+        costs : `array-like`
+            Marginal costs, :math:`c`, computed by `compute_costs`. By default, marginal costs are computed.
 
         Returns
         -------
@@ -831,14 +738,13 @@ class Results(object):
 
         """
         output("Computing profits ...")
-        output("Using unchanged prices." if prices is None else "Using the specified changed prices.")
-        output("Using unchanged shares." if shares is None else "Using the specified changed shares.")
-        return self._combine_results(ResultsMarket.compute_profits, market_args=[costs, prices, shares])
+        return self._combine_results(ResultsMarket.compute_profits, market_args=[prices, shares, costs])
 
     def compute_consumer_surpluses(self, prices=None):
         r"""Estimate population-normalized consumer surpluses, :math:`\text{CS}`.
 
-        The surplus in market :math:`t` is
+        Importantly, the equation used to compute consumer surplus here is only correct when prices enter utility
+        linearly. Under this assumption, the surplus in market :math:`t` is
 
         .. math:: \text{CS} = \sum_{i=1}^{I_t} w_i\text{CS}_i,
 
@@ -861,8 +767,7 @@ class Results(object):
             order as :attr:`Results.unique_market_ids`.
 
         """
-        output("Computing consumer surpluses ...")
-        output("Using unchanged prices." if prices is None else "Using the specified changed prices.")
+        output("Computing consumer surpluses with the equation that assumes away nonlinear income effects ...")
         return self._combine_results(ResultsMarket.compute_consumer_surplus, market_args=[prices])
 
 
@@ -871,37 +776,26 @@ class ResultsMarket(Market):
     method returns a matrix and a set of any errors that were encountered.
     """
 
-    def compute_aggregate_elasticity(self, X1_index, X2_index, factor):
+    def compute_aggregate_elasticity(self, factor, name):
         """Market-specific computation for Results.compute_aggregate_elasticities."""
-        characteristic = (1 + factor) * self.get_characteristic(X1_index, X2_index)
-        delta = self.update_delta_with_characteristic(characteristic, X1_index)
-        mu = self.update_mu_with_characteristic(characteristic, X2_index)
+        scaled_variable = (1 + factor) * self.products[name]
+        delta = self.update_delta_with_variable(name, scaled_variable)
+        mu = self.update_mu_with_variable(name, scaled_variable)
         shares = self.compute_probabilities(delta, mu) @ self.agents.weights
         aggregate_elasticities = (shares - self.products.shares).sum() / factor
         return aggregate_elasticities, set()
 
-    def compute_aggregate_price_elasticity(self, factor):
-        """Market-specific computation for Results.compute_aggregate_price_elasticities."""
-        X1_index, X2_index = self.get_price_indices()
-        return self.compute_aggregate_elasticity(X1_index, X2_index, factor)
-
-    def compute_elasticities(self, X1_index, X2_index):
+    def compute_elasticities(self, name):
         """Market-specific computation for Results.compute_elasticities."""
-        derivatives = self.compute_utility_by_characteristic_derivatives(X1_index, X2_index)
-        jacobian = self.compute_shares_by_characteristic_jacobian(derivatives)
-        characteristic = self.get_characteristic(X1_index, X2_index)
-        elasticities = jacobian * np.tile(characteristic, self.J).T / np.tile(self.products.shares, self.J)
+        derivatives = self.compute_utility_by_variable_derivatives(name)
+        jacobian = self.compute_shares_by_variable_jacobian(derivatives)
+        elasticities = jacobian * self.products[name].T / self.products.shares
         return elasticities, set()
 
-    def compute_price_elasticities(self):
-        """Market-specific computation for Results.compute_price_elasticities."""
-        X1_index, X2_index = self.get_price_indices()
-        return self.compute_elasticities(X1_index, X2_index)
-
-    def compute_diversion_ratios(self, X1_index, X2_index):
+    def compute_diversion_ratios(self, name):
         """Market-specific computation for Results.compute_diversion_ratios."""
-        derivatives = self.compute_utility_by_characteristic_derivatives(X1_index, X2_index)
-        jacobian = self.compute_shares_by_characteristic_jacobian(derivatives)
+        derivatives = self.compute_utility_by_variable_derivatives(name)
+        jacobian = self.compute_shares_by_variable_jacobian(derivatives)
 
         # replace the diagonal with derivatives with respect to the outside option
         jacobian_diagonal = np.c_[jacobian.diagonal()]
@@ -910,11 +804,6 @@ class ResultsMarket(Market):
         # compute the ratios
         ratios = -jacobian / np.tile(jacobian_diagonal, self.J)
         return ratios, set()
-
-    def compute_price_diversion_ratios(self):
-        """Market-specific computation for Results.compute_price_diversion_ratios."""
-        X1_index, X2_index = self.get_price_indices()
-        return self.compute_diversion_ratios(X1_index, X2_index)
 
     def compute_long_run_diversion_ratios(self):
         """Market-specific computation for Results.compute_long_run_diversion_ratios."""
@@ -944,7 +833,7 @@ class ResultsMarket(Market):
         """Market-specific computation for Results.compute_costs."""
         errors = set()
         try:
-            costs = super().compute_costs()
+            costs = self.products.prices - self.compute_eta()
         except scipy.linalg.LinAlgError:
             errors.add(exceptions.CostsSingularityError)
             costs = np.full((self.J, 1), np.nan, options.dtype)
@@ -952,68 +841,78 @@ class ResultsMarket(Market):
 
     def solve_approximate_merger(self, firms_index, costs):
         """Market-specific computation for Results.solve_approximate_merger."""
-        derivatives = self.compute_utility_by_prices_derivatives()
-        ownership_matrix = self.get_ownership_matrix(firms_index)
-        prices = costs + self.compute_eta(ownership_matrix, derivatives)
-        return prices, set()
-
-    def solve_merger(self, firms_index, iteration, costs, prices=None):
-        """Market-specific computation for Results.solve_merger."""
-        if prices is None:
-            prices = self.products.prices
-
-        # configure numpy to identify floating point errors
         errors = set()
-        with np.errstate(all='call'):
+        if costs is None:
+            costs, errors = self.compute_costs()
+        ownership_matrix = self.get_ownership_matrix(firms_index)
+        try:
+            prices = costs + self.compute_eta(ownership_matrix)
+        except scipy.linalg.LinAlgError:
+            errors.add(exceptions.CostsSingularityError)
+            prices = np.full((self.J, 1), np.nan, options.dtype)
+        return prices, errors
+
+    def solve_merger(self, iteration, firms_index, prices, costs):
+        """Market-specific computation for Results.solve_merger."""
+        errors = set()
+
+        # configure NumPy to identify floating point errors
+        with np.errstate(divide='call', over='call', under='ignore', invalid='call'):
             np.seterrcall(lambda *_: errors.add(exceptions.ChangedPricesFloatingPointError))
+            prices, converged = self.compute_bertrand_nash_prices(iteration, firms_index, prices, costs)[:2]
 
-            # solve the fixed point problem
-            ownership_matrix = self.get_ownership_matrix(firms_index)
-            derivatives = self.compute_utility_by_prices_derivatives()
-            contraction = lambda p: costs + self.compute_zeta(ownership_matrix, derivatives, costs, p)
-            prices, converged = iteration._iterate(prices, contraction)[:2]
-
-        # store whether the fixed point converged
+        # determine whether the fixed point converged
         if not converged:
             errors.add(exceptions.ChangedPricesConvergenceError)
         return prices, errors
 
     def compute_shares(self, prices):
         """Market-specific computation for Results.compute_shares."""
-        delta = self.update_delta_with_prices(prices)
-        mu = self.update_mu_with_prices(prices)
+        if prices is None:
+            prices = self.products.prices
+        delta = self.update_delta_with_variable('prices', prices)
+        mu = self.update_mu_with_variable('prices', prices)
         shares = self.compute_probabilities(delta, mu) @ self.agents.weights
         return shares, set()
 
-    def compute_hhi(self, firms_index, shares=None):
+    def compute_hhi(self, firms_index, shares):
         """Market-specific computation for Results.compute_hhi."""
-        firm_ids = self.products.firm_ids[:, [firms_index]]
         if shares is None:
             shares = self.products.shares
+        firm_ids = self.products.firm_ids[:, [firms_index]]
         hhi = 1e4 * sum((shares[firm_ids == f].sum() / shares.sum()) ** 2 for f in np.unique(firm_ids))
         return hhi, set()
 
-    def compute_markups(self, costs, prices=None):
+    def compute_markups(self, prices, costs):
         """Market-specific computation for Results.compute_markups."""
+        errors = set()
         if prices is None:
             prices = self.products.prices
+        if costs is None:
+            costs, errors = self.compute_costs()
         markups = (prices - costs) / prices
-        return markups, set()
+        return markups, errors
 
-    def compute_profits(self, costs, prices=None, shares=None):
+    def compute_profits(self, prices, shares, costs):
         """Market-specific computation for Results.compute_profits."""
+        errors = set()
         if prices is None:
             prices = self.products.prices
         if shares is None:
             shares = self.products.shares
+        if costs is None:
+            costs, errors = self.compute_costs()
         profits = (prices - costs) * shares
-        return profits, set()
+        return profits, errors
 
-    def compute_consumer_surplus(self, prices=None):
+    def compute_consumer_surplus(self, prices):
         """Market-specific computation for Results.compute_consumer_surpluses."""
         if prices is None:
-            prices = self.products.prices
-        utilities = np.tile(self.update_delta_with_prices(prices), self.I) + self.update_mu_with_prices(prices)
-        alpha = -self.compute_utility_by_prices_derivatives()[0]
-        consumer_surplus = (np.log1p(np.exp(utilities).sum(axis=0)) / alpha) @ self.agents.weights
+            delta = self.delta
+            mu = self.mu
+        else:
+            delta = self.update_delta_with_variable('prices', prices)
+            mu = self.update_mu_with_variable('prices', prices)
+        alpha = -self.compute_utility_by_variable_derivatives('prices')[0]
+        consumer_surplus = (np.log1p(np.exp(delta + mu).sum(axis=0)) / alpha) @ self.agents.weights
         return consumer_surplus, set()

@@ -31,11 +31,11 @@ class Matrices(np.recarray):
 
     def __new__(cls, mapping):
         """Construct the array from a mapping of field keys to (array, type) tuples. None is ignored."""
-        keys, arrays, types = zip(*((k, a, t) for k, (a, t) in mapping.items() if a is not None))
-        dtype = [(k, t, (np.c_[a].shape[1],)) for k, a, t in zip(keys, arrays, types)]
+        keys, arrays, types = zip(*((k, np.c_[a], t) for k, (a, t) in mapping.items() if a is not None))
+        dtype = [(k, t, (a.shape[1],)) for k, a, t in zip(keys, arrays, types)]
         self = np.ndarray.__new__(cls, arrays[0].shape[0], (np.record, dtype))
         for key, array in zip(keys, arrays):
-            self[key] = np.c_[array]
+            self[key if isinstance(key, str) else key[1]] = array
         return self
 
 

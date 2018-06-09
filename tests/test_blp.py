@@ -16,15 +16,12 @@ from pyblp import options, Problem, Iteration, Optimization
 ])
 def test_accuracy(simulated_problem, solve_options):
     """Test that starting parameters that are half their true values give rise to errors of less than 10%."""
-    simulation, problem, _ = simulated_problem
+    simulation, _, problem, _ = simulated_problem
 
     # solve the problem
-    results = problem.solve(
-        0.5 * simulation.sigma,
-        0.5 * simulation.pi if simulation.pi is not None else None,
-        linear_costs=simulation.linear_costs,
-        **solve_options
-    )
+    sigma = 0.5 * simulation.sigma
+    pi = 0.5 * simulation.pi if simulation.pi is not None else None
+    results = problem.solve(sigma, pi, linear_costs=simulation.linear_costs, **solve_options)
 
     # test the accuracy of the estimated parameters
     for key in ['gamma', 'beta', 'sigma', 'pi']:
@@ -41,7 +38,7 @@ def test_trivial_changes(simulated_problem, solve_options1, solve_options2):
     """Test that solving a problem with arguments that shouldn't give rise to meaningful differences doesn't give rise
     to any differences.
     """
-    simulation, problem, _ = simulated_problem
+    simulation, _, problem, _ = simulated_problem
 
     # solve the problem with both sets of options
     results = []
@@ -69,16 +66,15 @@ def test_merger(simulated_problem, solve_options):
     counterparts than those computed by fully solving a merger. Also test that simple acquisitions increase HHI. These
     inequalities are only guaranteed because of the way in which the simulations are configured.
     """
-    simulation, _, results = simulated_problem
+    simulation, _, _, results = simulated_problem
 
     # get unchanged and changed prices and shares
     product_data = simulation.solve()
     changed_product_data = simulation.solve(firms_index=1)
 
     # solve for approximate and actual changed prices and shares
-    costs = results.compute_costs()
-    approximated_prices = results.solve_approximate_merger(costs)
-    estimated_prices = results.solve_merger(costs, **solve_options)
+    approximated_prices = results.solve_approximate_merger()
+    estimated_prices = results.solve_merger(**solve_options)
     approximated_shares = results.compute_shares(approximated_prices)
     estimated_shares = results.compute_shares(estimated_prices)
 
@@ -100,15 +96,15 @@ def test_merger(simulated_problem, solve_options):
 
     # test that HHI increases
     hhi = results.compute_hhi()
-    changed_hhi = results.compute_hhi(estimated_shares, firms_index=1)
+    changed_hhi = results.compute_hhi(firms_index=1, shares=estimated_shares)
     np.testing.assert_array_less(hhi, changed_hhi, verbose=True)
 
 
 @pytest.mark.usefixtures('simulated_problem')
 def test_markup_positivity(simulated_problem):
     """Test that simulated markups are positive."""
-    _, _, results = simulated_problem
-    markups = results.compute_markups(results.compute_costs())
+    _, _, _, results = simulated_problem
+    markups = results.compute_markups()
     np.testing.assert_array_less(0, markups, verbose=True)
 
 
@@ -118,45 +114,41 @@ def test_elasticity_aggregates_and_means(simulated_problem, factor):
     """Test that the magnitude of simulated aggregate elasticities is less than the magnitude of mean elasticities, both
     for prices and for other characteristics.
     """
-    simulation, _, results = simulated_problem
+    simulation, _, _, results = simulated_problem
 
     # test that demand for an entire product category is less elastic for prices than for individual products
     np.testing.assert_array_less(
-        np.abs(results.compute_aggregate_price_elasticities(factor)),
-        np.abs(results.extract_diagonal_means(results.compute_price_elasticities())),
+        np.abs(results.compute_aggregate_elasticities(factor)),
+        np.abs(results.extract_diagonal_means(results.compute_elasticities())),
         verbose=True
     )
 
     # test the same inequality but for all non-price characteristics
-    for linear_index, nonlinear_index, _ in simulation.characteristic_indices:
-        if linear_index is not None or nonlinear_index is not None:
-            indices = {'linear_index': linear_index, 'nonlinear_index': nonlinear_index}
-            np.testing.assert_array_less(
-                np.abs(results.compute_aggregate_elasticities(factor=factor, **indices)),
-                np.abs(results.extract_diagonal_means(results.compute_elasticities(**indices))),
-                err_msg=str(indices),
-                verbose=True
-            )
+    for name in {n for f in simulation._X1_formulations + simulation._X2_formulations for n in f.names} - {'prices'}:
+        np.testing.assert_array_less(
+            np.abs(results.compute_aggregate_elasticities(factor, name)),
+            np.abs(results.extract_diagonal_means(results.compute_elasticities(name))),
+            err_msg=name,
+            verbose=True
+        )
 
 
 @pytest.mark.usefixtures('simulated_problem')
 def test_diversion_ratios(simulated_problem):
     """Test simulated diversion ratio magnitudes and row sums."""
-    simulation, _, results = simulated_problem
+    simulation, _, _, results = simulated_problem
 
     # test that price-based ratios are between zero and one and that ratio matrix rows sum to one
-    for compute in [results.compute_price_diversion_ratios, results.compute_long_run_diversion_ratios]:
+    for compute in [results.compute_diversion_ratios, results.compute_long_run_diversion_ratios]:
         ratios = compute()
         np.testing.assert_array_less(0, ratios, err_msg=compute.__name__, verbose=True)
         np.testing.assert_array_less(ratios, 1, err_msg=compute.__name__, verbose=True)
         np.testing.assert_allclose(ratios.sum(axis=1), 1, atol=1e-14, rtol=0, err_msg=compute.__name__)
 
     # test that rows sum to one even when computing ratios for non-price characteristics
-    for linear_index, nonlinear_index, _ in simulation.characteristic_indices:
-        if linear_index is not None or nonlinear_index is not None:
-            indices = {'linear_index': linear_index, 'nonlinear_index': nonlinear_index}
-            ratios = results.compute_diversion_ratios(**indices)
-            np.testing.assert_allclose(ratios.sum(axis=1), 1, atol=1e-14, rtol=0, err_msg=str(indices))
+    for name in {n for f in simulation._X1_formulations + simulation._X2_formulations for n in f.names} - {'prices'}:
+        ratios = results.compute_diversion_ratios(name)
+        np.testing.assert_allclose(ratios.sum(axis=1), 1, atol=1e-14, rtol=0, err_msg=name)
 
 
 @pytest.mark.usefixtures('simulated_problem')
@@ -164,7 +156,7 @@ def test_second_step(simulated_problem):
     """Test that results from two-step GMM on simulated data are identical to results from one-step GMM configured with
     results from a first step.
     """
-    simulation, problem, _ = simulated_problem
+    simulation, _, problem, _ = simulated_problem
 
     # remove sigma bounds so that it can't get stuck at zero
     unbounded_sigma_bounds = (np.full_like(simulation.sigma, -np.inf), np.full_like(simulation.sigma, +np.inf))
@@ -197,7 +189,7 @@ def test_gradient_optionality(simulated_problem, scipy_method):
     """Test that the option of not computing the gradient for simulated data does not affect estimates when the gradient
     isn't used.
     """
-    simulation, problem, _ = simulated_problem
+    simulation, _, problem, _ = simulated_problem
 
     # define a custom optimization method that doesn't use gradients
     def custom_method(initial, bounds, objective_function, _):
@@ -229,7 +221,7 @@ def test_bounds(simulated_problem, method):
     """Test that non-binding bounds on parameters in simulated problems do not affect estimates and that binding bounds
     are respected.
     """
-    simulation, problem, _ = simulated_problem
+    simulation, _, problem, _ = simulated_problem
 
     # all problems will be solved with the same optimization method starting as close to the true parameters as possible
     solve = lambda s, p: problem.solve(
@@ -305,15 +297,12 @@ def test_extra_nodes(simulated_problem):
     """Test that agents in a simulated problem are identical to agents in a problem created with agent data built
     according to the same integration specification but containing unnecessary columns of nodes.
     """
-    simulation, problem1, _ = simulated_problem
+    simulation, product_data, problem1, _ = simulated_problem
 
     # reconstruct the problem with unnecessary columns of nodes
     agent_data2 = {k: simulation.agent_data[k] for k in simulation.agent_data.dtype.names}
     agent_data2['nodes'] = np.c_[agent_data2['nodes'], agent_data2['nodes']]
-    problem2 = Problem(
-        simulation.product_data, agent_data2, linear_prices=simulation.linear_prices,
-        nonlinear_prices=simulation.nonlinear_prices
-    )
+    problem2 = Problem(problem1.product_formulations, product_data, problem1.agent_formulation, agent_data2)
 
     # test that the agents are essentially identical
     for key in problem1.agents.dtype.names:
@@ -328,21 +317,19 @@ def test_extra_demographics(simulated_problem):
     """Test that agents in a simulated problem are identical to agents in a problem created with agent data built
     according to the same integration specification and but containing unnecessary rows of demographics.
     """
-    simulation, problem1, _ = simulated_problem
+    simulation, product_data, problem1, _ = simulated_problem
+
+    # skip simulations without demographics
     if simulation.D == 0:
         return
 
     # reconstruct the problem with unnecessary rows of demographics
-    market_ids_list = []
-    demographics_list = []
-    for t in np.unique(simulation.agent_data.market_ids):
-        demographics_t = simulation.agent_data.demographics[simulation.agent_data.market_ids.flat == t]
-        market_ids_list.append(np.c_[np.repeat(t, 2 * demographics_t.shape[0])])
-        demographics_list.append(np.r_[demographics_t, demographics_t])
-    agent_data2 = {'market_ids': np.concatenate(market_ids_list), 'demographics': np.concatenate(demographics_list)}
     problem2 = Problem(
-        simulation.product_data, agent_data2, simulation.integration, simulation.linear_prices,
-        simulation.nonlinear_prices
+        problem1.product_formulations,
+        product_data,
+        problem1.agent_formulation,
+        {k: np.r_[simulation.agent_data[k], simulation.agent_data[k]] for k in simulation.agent_data.dtype.names},
+        simulation.integration
     )
 
     # test that the agents are essentially identical
@@ -362,7 +349,7 @@ def test_objective_gradient(simulated_problem, solve_options):
     """Implement central finite differences in a custom optimization routine to test that analytic gradient values
     are within 1% of estimated values.
     """
-    simulation, problem, _ = simulated_problem
+    simulation, _, problem, _ = simulated_problem
 
     # define a custom optimization routine that tests central finite differences around starting parameter values
     def test_finite_differences(*args):
@@ -409,18 +396,17 @@ def test_knittel_metaxoglou_2014(knittel_metaxoglou_2014):
             np.testing.assert_allclose(expected, computed, atol=1e-8, rtol=1e-5, err_msg=key)
 
     # structure post-estimation outputs
-    elasticities = results.compute_price_elasticities()
-    costs = results.compute_costs()
-    changed_prices = results.solve_approximate_merger(costs)
+    elasticities = results.compute_elasticities()
+    changed_prices = results.solve_approximate_merger()
     changed_shares = results.compute_shares(changed_prices)
     post_estimation = {
         'elasticities': elasticities,
-        'costs': costs,
+        'costs': results.compute_costs(),
         'changed_prices': changed_prices,
         'changed_shares': changed_shares,
         'own_elasticities': results.extract_diagonals(elasticities),
-        'profits': results.compute_profits(costs),
-        'changed_profits': results.compute_profits(costs, changed_prices, changed_shares),
+        'profits': results.compute_profits(),
+        'changed_profits': results.compute_profits(changed_prices, changed_shares),
         'consumer_surpluses': results.compute_consumer_surpluses(),
         'changed_consumer_surpluses': results.compute_consumer_surpluses(changed_prices)
     }

@@ -77,38 +77,6 @@ def build_id_data(T, J, F, mergers=()):
     })
 
 
-def build_indicators(ids):
-    """Build indicator variables.
-
-    Parameters
-    ----------
-    ids : `array-like`
-        IDs from which indicator variables will be build. For example, these may be product or firm IDs.
-
-    Returns
-    -------
-    `ndarray`
-        Matrix of indicator variables with as many rows as there are elements in `ids` and with as many columns as there
-        are unique elements in `ids`. Each column consists entirely of zeros except for rows for which `ids` takes on
-        the value associated with the column.
-
-    Example
-    -------
-    The following code loads the fake cereal product data from :ref:`Nevo (2000) <n00>` and builds indicator variables
-    from its product IDs:
-
-    .. ipython:: python
-
-       import numpy as np
-       data = np.recfromcsv(pyblp.data.NEVO_PRODUCTS_LOCATION)
-       indicators = pyblp.build_indicators(data['product_ids'])
-       indicators
-
-    """
-    ids = np.asarray(ids, dtype=np.object).flatten()
-    return np.hstack([np.where(np.c_[ids] == i, 1, 0) for i in np.unique(ids)]).astype(options.dtype)
-
-
 def build_ownership(id_data, kappa_specification=None):
     r"""Build ownership matrices, :math:`O`.
 
@@ -263,15 +231,13 @@ def build_blp_instruments(characteristic_data, average=False):
 
     .. ipython:: python
 
-       import numpy as np
        data = np.recfromcsv(pyblp.data.BLP_PRODUCTS_LOCATION)
-       linear = np.c_[np.ones(data.size), data['hpwt'], data['air'], data['mpg'], data['space']]
-       characteristic_data = {
+       characteristics = np.c_[np.ones(data.size), data['hpwt'], data['air'], data['mpg'], data['space']]
+       instruments = np.c_[characteristics, pyblp.build_blp_instruments({
            'market_ids': data['market_ids'],
            'firm_ids': data['firm_ids'],
-           'characteristics': linear
-       }
-       instruments = np.c_[linear, pyblp.build_blp_instruments(characteristic_data)]
+           'characteristics': characteristics
+       })]
        instruments.shape
 
     """

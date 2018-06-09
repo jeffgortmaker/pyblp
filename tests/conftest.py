@@ -12,7 +12,9 @@ import numpy.lib.recfunctions
 
 from .data import TEST_DATA_PATH
 from pyblp.data import BLP_PRODUCTS_LOCATION, BLP_AGENTS_LOCATION
-from pyblp import Problem, Simulation, Integration, options, build_id_data, build_ownership, build_blp_instruments
+from pyblp import (
+    Problem, Simulation, Formulation, Integration, options, build_id_data, build_ownership, build_blp_instruments
+)
 
 
 @pytest.fixture(autouse=True)
@@ -34,20 +36,20 @@ def configure():
 
 @pytest.fixture
 def small_simulation():
-    """Solve a simulation with two markets, linear prices, a cost characteristic, a nonlinear characteristic, and an
+    """Solve a simulation with two markets, linear prices, a nonlinear characteristic, a cost characteristic, and an
     acquisition.
     """
     simulation = Simulation(
-        build_id_data(T=2, J=18, F=3, mergers=[{1: 0}]),
-        Integration('product', 3),
-        gamma=[0, 2, 0],
-        beta=[-5, 0, 0, 0],
-        sigma=[
-            [0, 0, 0, 0],
-            [0, 0, 0, 0],
-            [0, 0, 0, 0],
-            [0, 0, 0, 1]
-        ],
+        product_formulations=(
+            Formulation('0 + prices'),
+            Formulation('0 + x'),
+            Formulation('0 + a')
+        ),
+        beta=-5,
+        sigma=1,
+        gamma=2,
+        product_data=build_id_data(T=2, J=18, F=3, mergers=[{1: 0}]),
+        integration=Integration('product', 3),
         xi_variance=0.001,
         omega_variance=0.001,
         correlation=0.7,
@@ -58,36 +60,33 @@ def small_simulation():
 
 @pytest.fixture
 def medium_simulation():
-    """Solve a simulation with four markets, a cost/nonlinear constant, two cost characteristics, two linear
+    """Solve a simulation with four markets, a nonlinear/cost constant, two linear characteristics, two cost
     characteristics, a demographic interacted with prices, a double acquisition, and a non-standard ownership structure.
     """
     id_data = build_id_data(T=4, J=25, F=6, mergers=[{f: 2 for f in range(2)}])
-    basic_product_data = {
-        'market_ids': id_data.market_ids,
-        'firm_ids': id_data.firm_ids,
-        'ownership': build_ownership(id_data, lambda f, g: 1 if f == g else (0.1 if f > 3 and g > 3 else 0))
-    }
     simulation = Simulation(
-        basic_product_data,
-        Integration('product', 4),
-        gamma=[1, 1, 2, 0, 0],
-        beta=[0, 0, 0, 0, 2, 1],
+        product_formulations=(
+            Formulation('0 + x + y'),
+            Formulation('1 + prices'),
+            Formulation('1 + a + b')
+        ),
+        beta=[2, 1],
         sigma=[
-            [0, 0,   0, 0, 0, 0],
-            [0, 0.5, 0, 0, 0, 0],
-            [0, 0,   0, 0, 0, 0],
-            [0, 0,   0, 0, 0, 0],
-            [0, 0,   0, 0, 0, 0],
-            [0, 0,   0, 0, 0, 0]
+            [0.5, 0],
+            [0,   0],
         ],
+        gamma=[1, 1, 2],
+        product_data={
+            'market_ids': id_data.market_ids,
+            'firm_ids': id_data.firm_ids,
+            'ownership': build_ownership(id_data, lambda f, g: 1 if f == g else (0.1 if f > 3 and g > 3 else 0))
+        },
+        agent_formulation=Formulation('0 + f'),
         pi=[
-            [-3],
-            [0],
-            [0],
-            [0],
-            [0],
-            [0]
+            [ 0],
+            [-3]
         ],
+        integration=Integration('product', 4),
         xi_variance=0.0001,
         omega_variance=0.0001,
         correlation=0.8,
@@ -98,34 +97,30 @@ def medium_simulation():
 
 @pytest.fixture
 def large_simulation():
-    """Solve a simulation with ten markets, linear/nonlinear prices, a cost/linear constant, a cost/linear/nonlinear
-    characteristic, a cost characteristic, a linear characteristic, demographics interacted with prices and the
-    cost/linear/nonlinear characteristic, dense parameter matrices, an acquisition, a triple acquisition, and a
-    log-linear cost specification.
+    """Solve a simulation with ten markets, linear/nonlinear prices, a linear constant, a cost/linear/nonlinear
+    characteristic, another three cost characteristics, another two linear characteristics, demographics interacted with
+    prices and the cost/linear/nonlinear characteristic, dense parameter matrices, an acquisition, a triple acquisition,
+    and a log-linear cost specification.
     """
     simulation = Simulation(
-        build_id_data(T=10, J=20, F=9, mergers=[{f: 4 + int(f > 0) for f in range(4)}]),
-        Integration('product', 4),
-        gamma=[0, 0.1, 0.2, 0.3, 0.5, 0],
-        beta=[-6, 1, 1, 0, 0, 0, 2],
+        product_formulations=(
+            Formulation('1 + prices + x + y + z'),
+            Formulation('0 + prices + x'),
+            Formulation('0 + x + a + b + c')
+        ),
+        beta=[1, -6, 1, 2, 3],
         sigma=[
-            [1, 0, -0.1, 0, 0, 0, 0],
-            [0, 0,  0,   0, 0, 0, 0],
-            [0, 0,  2,   0, 0, 0, 0],
-            [0, 0,  0,   0, 0, 0, 0],
-            [0, 0,  0,   0, 0, 0, 0],
-            [0, 0,  0,   0, 0, 0, 0],
-            [0, 0,  0,   0, 0, 0, 0]
+            [1, -0.1],
+            [0,  2  ]
         ],
+        gamma=[0.1, 0.2, 0.3, 0.5],
+        product_data=build_id_data(T=10, J=20, F=9, mergers=[{f: 4 + int(f > 0) for f in range(4)}]),
+        agent_formulation=Formulation('0 + f + g'),
         pi=[
             [1, 0],
-            [0, 0],
-            [0, 2],
-            [0, 0],
-            [0, 0],
-            [0, 0],
-            [0, 0]
+            [0, 2]
         ],
+        integration=Integration('product', 4),
         xi_variance=0.00001,
         omega_variance=0.00001,
         correlation=0.9,
@@ -147,14 +142,13 @@ def simulated_problem(request):
     """Configure and solve a simulated problem, either with or without supply-side data."""
     name, supply = request.param
     simulation, product_data = request.getfixturevalue(f'{name}_simulation')
+    product_formulations = simulation.product_formulations
     if not supply:
-        product_data = np.lib.recfunctions.drop_fields(product_data, ['cost_characteristics', 'supply_instruments'])
-    problem = Problem(
-        product_data, simulation.agent_data, linear_prices=simulation.linear_prices,
-        nonlinear_prices=simulation.nonlinear_prices
-    )
+        product_data = np.lib.recfunctions.drop_fields(product_data, 'supply_instruments')
+        product_formulations = product_formulations[:2]
+    problem = Problem(product_formulations, product_data, simulation.agent_formulation, simulation.agent_data)
     results = problem.solve(simulation.sigma, simulation.pi, steps=1, linear_costs=simulation.linear_costs)
-    return simulation, problem, results
+    return simulation, product_data, problem, results
 
 
 @pytest.fixture
@@ -177,20 +171,19 @@ def knittel_metaxoglou_2014():
 
     """
     data = np.recfromcsv(BLP_PRODUCTS_LOCATION)
-    characteristics = np.c_[np.ones(data.size), data['hpwt'], data['air'], data['mpg'], data['space']]
     product_data = {k: data[k] for k in data.dtype.names}
-    product_data.update({
-        'firm_ids': np.c_[data['firm_ids'], data['changed_firm_ids']],
-        'linear_characteristics': characteristics,
-        'nonlinear_characteristics': characteristics[:, :-1],
-        'demand_instruments': np.c_[characteristics, build_blp_instruments({
-            'market_ids': data['market_ids'],
-            'firm_ids': data['firm_ids'],
-            'characteristics': characteristics
-        })]
-    })
-    agent_data = np.lib.recfunctions.drop_fields(np.recfromcsv(BLP_AGENTS_LOCATION), 'demographics0')
-    problem = Problem(product_data, agent_data)
+    characteristics = np.c_[np.ones(data.size), data['hpwt'], data['air'], data['mpg'], data['space']]
+    product_data['demand_instruments'] = np.c_[characteristics, build_blp_instruments({
+        'market_ids': data['market_ids'],
+        'firm_ids': data['firm_ids0'],
+        'characteristics': characteristics
+    })]
+    formula = '0 + prices + I(1) + hpwt + air + mpg'
+    problem = Problem(
+        (Formulation(f'{formula} + space'), Formulation(formula)),
+        product_data,
+        agent_data=np.recfromcsv(BLP_AGENTS_LOCATION)
+    )
     return scipy.io.loadmat(str(TEST_DATA_PATH / 'knittel_metaxoglou_2014.mat'), {'problem': problem})
 
 

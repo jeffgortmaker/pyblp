@@ -87,9 +87,10 @@ class Formulation(object):
             raise TypeError("formula must be a string.")
         self._terms = parse_terms(formula)
         self._expressions = [parse_term_expression(t) for t in self._terms]
+        self._names = {str(s) for e in self._expressions for s in e.free_symbols}
         if not self._terms:
             raise ValueError(f"The formula '{formula}' has no terms.")
-        if len(self._terms) > 1 and not {s for e in self._expressions for s in e.free_symbols}:
+        if len(self._terms) > 1 and not any(e.free_symbols for e in self._expressions):
             raise ValueError(f"The formula '{formula}' has more than one term but no variables.")
 
     def __str__(self):
@@ -106,12 +107,6 @@ class Formulation(object):
         which include unchanged continuous variables and indicators constructed from categorical variables.
         """
 
-        # replace categorical data with string objects, which give rise to unique variable labels
-        data = data.copy()
-        for name, array in data.items():
-            if not np.issubdtype(array.dtype, getattr(np, 'number')):
-                data[name] = array.astype(np.unicode_).astype(np.object_)
-
         # design the matrix
         design = design_matrix(self._terms, data)
 
@@ -126,7 +121,13 @@ class Formulation(object):
                 column_formulations.append(ColumnFormulation(formula, expression))
 
         # construct a mapping from continuous variable names that appear in at least one column to their arrays
-        underlying_data = {s.name: data.get(s.name) for f in column_formulations for s in f.expression.free_symbols}
+        underlying_data = {}
+        for formulation in column_formulations:
+            for symbol in formulation.expression.free_symbols:
+                try:
+                    underlying_data[symbol.name] = data[symbol.name]
+                except KeyError:
+                    underlying_data[symbol.name] = None
 
         # supplement the mapping with indicators constructed from categorical variables
         for factor, info in design.factor_infos.items():
@@ -150,29 +151,37 @@ class ColumnFormulation(object):
         """Parse the column name into a patsy term and replace any categorical variables in its SymPy expression with
         the correct indicator variable symbols.
         """
-        self.term = parse_terms(formula)[-1]
         self.expression = expression
+        self.names = {str(s) for s in expression.free_symbols}
 
         # replace categorical variable symbols with their indicator counterparts
-        for factor in self.term.factors:
+        for factor in parse_terms(formula)[-1].factors:
             name = factor.name()
             base_symbol = CategoricalTreatment.parse_base_symbol(name)
             if base_symbol is not None:
                 self.expression = self.expression.replace(base_symbol, CategoricalTreatment.parse_full_symbol(name))
 
     def __str__(self):
-        """Format the term as a string."""
-        return '1' if self.term == patsy.desc.INTERCEPT else self.term.name()
+        """Format the expression as a string."""
+        return str(self.expression)
 
     def __repr__(self):
         """Defer to the string representation."""
         return str(self)
 
-    def evaluate_derivative(self, name, data):
+    def evaluate(self, data):
+        """Evaluate the SymPy column expression at the values supplied by the mapping from variable names to arrays."""
+        return evaluate_expression(self.expression, data)
+
+    def evaluate_derivative(self, name, data, order=1):
         """Differentiate the SymPy column expression with respect to a variable name and evaluate the derivative at
         values supplied by the mapping from variable names to arrays.
         """
-        return evaluate_expression(self.expression.diff(sympy.Symbol(name)), data)
+        return evaluate_expression(self.differentiate(name, order), data)
+
+    def differentiate(self, name, order=1):
+        """Differentiate the SymPy column expression with respect to a variable name."""
+        return self.expression.diff(sympy.Symbol(name), order)
 
 
 class EvaluationEnvironment(patsy.eval.EvalEnvironment):
@@ -190,20 +199,33 @@ class EvaluationEnvironment(patsy.eval.EvalEnvironment):
         """Parse a SymPy expression from a string and evaluate it at data represented as the environment's only
         namespace.
         """
+        data = self._namespaces[0].copy()
+
+        # identify the number of rows in the data
+        try:
+            size = data.shape[0]
+        except AttributeError:
+            size = next(iter(data.values())).shape[0]
 
         # parse the SymPy expression, preserving the function that marks variables as categorical
         expression = parse_expression(string, mark_categorical=True)
 
-        # explicitly mark categorical variables as categorical so that all categorical variables can be treated the same
+        # replace categorical variables with unicode objects and explicitly mark them as categorical so that labels are
+        #   unique and so that all categorical variables are treated the same
         C = sympy.Function('C')
-        for name, column in self._namespaces[0].items():
-            if column.dtype == np.object_:
-                symbol = sympy.Symbol(name)
+        for symbol in expression.free_symbols:
+            if not np.issubdtype(data[symbol.name].dtype, getattr(np, 'number')):
                 expression = expression.replace(symbol, C(symbol))
+                data[symbol.name] = data[symbol.name].astype(np.unicode_).astype(np.object_)
 
         # evaluate the expression and handle universally-marked categorical variables with a non-default coding class
         function_mapping = {'C': functools.partial(patsy.builtins.C, contrast=CategoricalTreatment)}
-        return evaluate_expression(expression, self._namespaces[0], function_mapping)
+        evaluated = evaluate_expression(expression, self._namespaces[0], function_mapping)
+
+        # if the evaluated expression is a float or integer, it is a constant that needs to be repeated
+        if isinstance(evaluated, (float, int)):
+            evaluated = np.ones(size) * evaluated
+        return evaluated
 
 
 class CategoricalTreatment(patsy.contrasts.Treatment):
@@ -275,7 +297,12 @@ def design_matrix(terms, data):
 
 def build_matrix(design, data):
     """Build a matrix according to its design and data mapping variable names to arrays."""
-    size = next(iter(data.values())).shape[0]
+
+    # identify the number of rows in the data
+    try:
+        size = data.shape[0]
+    except AttributeError:
+        size = next(iter(data.values())).shape[0]
 
     # if the design lacks factors, it must consist of only an intercept term
     if not design.factor_infos:
