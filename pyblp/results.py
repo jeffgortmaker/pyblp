@@ -743,14 +743,18 @@ class Results(object):
     def compute_consumer_surpluses(self, prices=None):
         r"""Estimate population-normalized consumer surpluses, :math:`\text{CS}`.
 
-        Importantly, the equation used to compute consumer surplus here is only correct when prices enter utility
-        linearly. Under this assumption, the surplus in market :math:`t` is
+        Assuming away nonlinear income effects, the surplus in market :math:`t` is
 
         .. math:: \text{CS} = \sum_{i=1}^{I_t} w_i\text{CS}_i,
 
         in which the consumer surplus for individual :math:`i` is
 
         .. math:: \text{CS}_i = \frac{\log(1 + \sum_{j=1}^{J_t} \exp u_{jti})}{\alpha + \alpha_i}.
+
+        .. warning::
+
+           The consumer surpluses computed by this method are only correct when there are not nonlinear income effects.
+           For example, computed consumer surpluses will be incorrect if a formulation contains ``log(prices)``.
 
         Parameters
         ----------

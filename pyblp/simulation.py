@@ -24,7 +24,7 @@ class Simulation(Economy):
     mean-zero bivariate normal distribution.
 
     After variables are loaded or simulated, any unspecified nodes and weights will be constructed according to an
-    integration configuration. Next, canonical instruments are computed. Specifically,
+    integration configuration. Next, some simple instruments are computed:
 
     .. math:: Z_D = [1, X, \mathrm{Rival}(X_D), \mathrm{Other}(X_D)]
 
@@ -36,6 +36,11 @@ class Simulation(Economy):
     :math:`X` used to formulate :math:`X_1` and :math:`X_2`, :math:`X_S` are all variables in :math:`X` used to
     formulate :math:`X_3`, and both :math:`\mathrm{Rival}` and :math`\mathrm{Other}` are defined in
     :func:`build_blp_instruments`, which is used to construct the traditional BLP instruments.
+
+    .. note::
+
+       These instruments are constructed only for convenience. Especially for more complicated formulations, instrument
+       fields in simulated product data should be replaced with better instruments.
 
     Parameters
     ----------
