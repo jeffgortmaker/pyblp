@@ -10,6 +10,8 @@ import numpy as np
 import patsy.builtins
 from sympy.parsing import sympy_parser
 
+from .basics import extract_size
+
 
 class Formulation(object):
     """Configuration for the design of a matrix.
@@ -107,6 +109,9 @@ class Formulation(object):
         which include unchanged continuous variables and indicators constructed from categorical variables.
         """
 
+        # convert the data into a dictionary for convenience (always have at least one column to represent its size)
+        data = {n: np.asarray(data[n]) for n in self._names} if self._names else {None: np.zeros(extract_size(data))}
+
         # design the matrix
         design = design_matrix(self._terms, data)
 
@@ -124,10 +129,7 @@ class Formulation(object):
         underlying_data = {}
         for formulation in column_formulations:
             for symbol in formulation.expression.free_symbols:
-                try:
-                    underlying_data[symbol.name] = data[symbol.name]
-                except KeyError:
-                    underlying_data[symbol.name] = None
+                underlying_data[symbol.name] = data.get(symbol.name)
 
         # supplement the mapping with indicators constructed from categorical variables
         for factor, info in design.factor_infos.items():
@@ -201,12 +203,6 @@ class EvaluationEnvironment(patsy.eval.EvalEnvironment):
         """
         data = self._namespaces[0].copy()
 
-        # identify the number of rows in the data
-        try:
-            size = data.shape[0]
-        except AttributeError:
-            size = next(iter(data.values())).shape[0]
-
         # parse the SymPy expression, preserving the function that marks variables as categorical
         expression = parse_expression(string, mark_categorical=True)
 
@@ -224,6 +220,7 @@ class EvaluationEnvironment(patsy.eval.EvalEnvironment):
 
         # if the evaluated expression is a float or integer, it is a constant that needs to be repeated
         if isinstance(evaluated, (float, int)):
+            size = next(iter(data.values())).shape[0]
             evaluated = np.ones(size) * evaluated
         return evaluated
 
@@ -299,10 +296,7 @@ def build_matrix(design, data):
     """Build a matrix according to its design and data mapping variable names to arrays."""
 
     # identify the number of rows in the data
-    try:
-        size = data.shape[0]
-    except AttributeError:
-        size = next(iter(data.values())).shape[0]
+    size = next(iter(data.values())).shape[0]
 
     # if the design lacks factors, it must consist of only an intercept term
     if not design.factor_infos:

@@ -7,23 +7,48 @@ import multiprocessing
 import numpy as np
 
 
-def extract_matrix(array, key):
-    """Extract a field from an array or horizontally stacks field0, field1, an so on, into a full matrix. The extracted
-    array will have at least two dimensions. None is returned if there is no matrix to extract. The array can be a numpy
-    structured array, a pandas DataFrame, or anything else that maps strings to array-like objects.
+def extract_matrix(mapping, key):
+    """Attempt to extract a field from a mapping or horizontally stack field0, field1, an so on, into a full matrix. The
+    extracted array will have at least two dimensions. Return None if there is no matrix to extract. The array can be a
+    NumPy structured array, a pandas DataFrame, or anything else that maps strings to array-like objects.
     """
     try:
-        return np.c_[array[key]]
-    except (KeyError, ValueError):
+        return np.c_[mapping[key]]
+    except:
         index = 0
         parts = []
         while True:
             try:
-                parts.append(np.c_[array[f'{key}{index}']])
-            except (KeyError, ValueError):
+                parts.append(np.c_[mapping[f'{key}{index}']])
+            except:
                 break
             index += 1
         return np.hstack(parts) if parts else None
+
+
+def extract_size(mapping):
+    """Attempt to extract the number of rows from a mapping. The array can be a NumPy structured array, a pandas
+    DataFrame, or anything else that maps strings to array-like objects.
+    """
+    size = 0
+    getters = [
+        lambda m: next(iter(mapping.values())).shape[0],
+        lambda m: len(next(iter(mapping.values()))),
+        lambda m: m.shape[0],
+        lambda m: len(m)
+    ]
+    for get in getters:
+        try:
+            size = get(mapping)
+            break
+        except:
+            pass
+    if size > 0:
+        return size
+    raise TypeError(
+        f"Failed to get the number of rows in the data mapping of type {type(mapping)}. Try using a dictionary, a "
+        f"NumPy structured array, a Pandas DataFrame, or any other standard type of data mapping."
+    )
 
 
 class Matrices(np.recarray):
