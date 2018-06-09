@@ -32,9 +32,9 @@ def extract_size(mapping):
     """
     size = 0
     getters = [
+        lambda m: m.shape[0],
         lambda m: next(iter(mapping.values())).shape[0],
         lambda m: len(next(iter(mapping.values()))),
-        lambda m: m.shape[0],
         lambda m: len(m)
     ]
     for get in getters:
