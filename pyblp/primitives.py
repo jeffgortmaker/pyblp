@@ -665,7 +665,7 @@ class NonlinearParameters(object):
             lines.append(formatter(values_row))
 
             # construct a row of standard errors for unfixed parameters
-            if sigma_se is not None and pi_se is not None:
+            if sigma_se is not None:
                 # determine which columns in this row correspond to unfixed parameters
                 sigma_indices = set()
                 pi_indices = set()
@@ -770,7 +770,7 @@ class LinearParameters(object):
             beta_formatter([""] + [output.format_number(x) for x in beta_like])
         ])
         if beta_se is not None:
-            lines.append(beta_formatter([""] + [output.format_number(x) for x in beta_se]))
+            lines.append(beta_formatter([""] + [output.format_se(x) for x in beta_se]))
 
         # build the part of the table for gamma, leaving an empty line in-between the two vectors
         gamma_formatter = None
@@ -785,7 +785,7 @@ class LinearParameters(object):
                 gamma_formatter([""] + [output.format_number(x) for x in gamma_like])
             ])
             if gamma_se is not None:
-                lines.append(gamma_formatter([""] + [output.format_number(x) for x in gamma_se]))
+                lines.append(gamma_formatter([""] + [output.format_se(x) for x in gamma_se]))
 
         # identify the longest border
         border = beta_formatter.border()
