@@ -176,7 +176,7 @@ class Agents(Matrices):
             if not isinstance(integration, Integration):
                 raise ValueError("integration must be an Integration instance.")
             loaded_market_ids = market_ids
-            market_ids, nodes, weights = integration._build_many(K2, np.unique(market_ids))
+            market_ids, nodes, weights = integration._build_many(K2, np.unique(products.market_ids))
 
             # delete demographic rows if there are too many
             if demographics is not None:
