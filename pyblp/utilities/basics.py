@@ -170,18 +170,23 @@ class TableFormatter(object):
         self.template = "  ".join(parts)
         self.widths = widths
 
-    def __call__(self, values):
-        """Construct a row."""
-        return self.template.format(*map(str, values))
+    def __call__(self, values, underline=False):
+        """Construct a row. If underline is True, construct a second row of underlines."""
+        formatted = self.template.format(*map(str, list(values) + [""] * (len(self.widths) - len(values))))
+        if underline:
+            return "\n".join([formatted, self(["-" * w for w in self.widths[:len(values)]])])
+        return formatted
 
     def blank(self):
         """Construct a blank row."""
         return self([""] * len(self.widths))
 
-    def lines(self):
-        """Construct a line with gaps between columns."""
-        return self(["-" * w for w in self.widths])
-
     def border(self):
-        """Construct a line without gaps."""
+        """Construct a border line."""
         return "=" * len(self.blank())
+
+    def line(self):
+        """Construct dividing line."""
+        return "-" * len(self.blank())
+
+

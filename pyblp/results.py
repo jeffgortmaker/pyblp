@@ -221,8 +221,7 @@ class Results(object):
             "Results Summary:",
             formatter.border(),
             formatter([k[0] for k in header]),
-            formatter([k[1] for k in header]),
-            formatter.lines(),
+            formatter([k[1] for k in header], underline=True),
             formatter([
                 self.step,
                 self.optimization_iterations,
@@ -382,6 +381,7 @@ class Results(object):
         # output how long it took to compute results
         end_time = time.time()
         output(f"Finished after {output.format_seconds(end_time - start_time)}.")
+        output("")
         return combined
 
     def compute_aggregate_elasticities(self, factor=0.1, name='prices'):
@@ -408,8 +408,8 @@ class Results(object):
             :attr:`Results.unique_market_ids`.
 
         """
-        self._validate_name(name)
         output(f"Computing aggregate elasticities with respect to {name} ...")
+        self._validate_name(name)
         return self._combine_results(ResultsMarket.compute_aggregate_elasticity, [factor, name])
 
     def compute_elasticities(self, name='prices'):
@@ -432,8 +432,8 @@ class Results(object):
             fewer products than others, extra columns will contain ``numpy.nan``.
 
         """
-        self._validate_name(name)
         output(f"Computing elasticities with respect to {name} ...")
+        self._validate_name(name)
         return self._combine_results(ResultsMarket.compute_elasticities, [name])
 
     def compute_diversion_ratios(self, name='prices'):
@@ -459,8 +459,8 @@ class Results(object):
             others, extra columns will contain ``numpy.nan``.
 
         """
-        self._validate_name(name)
         output(f"Computing diversion ratios with respect to {name} ...")
+        self._validate_name(name)
         return self._combine_results(ResultsMarket.compute_diversion_ratios, [name])
 
     def compute_long_run_diversion_ratios(self):
@@ -623,11 +623,11 @@ class Results(object):
             Estimates of post-merger prices, :math:`p^*`.
 
         """
+        output("Solving for post-merger prices ...")
         if iteration is None:
             iteration = Iteration('simple', {'tol': 1e-12})
         elif not isinstance(iteration, Iteration):
             raise ValueError("iteration must an Iteration instance.")
-        output("Solving for post-merger prices ...")
         return self._combine_results(ResultsMarket.solve_merger, [iteration, firms_index], [prices, costs], processes)
 
     def compute_shares(self, prices=None):

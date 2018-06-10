@@ -246,30 +246,49 @@ class Economy(object):
 
     def __str__(self):
         """Format economy information as a string."""
-        lines = []
+        sections = []
 
-        # construct the table header and formatter
-        header = ["Dimensions:"] + ["N", "T", "K1", "K2", "K3", "D", "MD", "MS"]
-        widths = [len(header[0])] + [max(len(k), 10) for k in header[1:]]
-        formatter = output.table_formatter(widths)
+        # collect all dimensions and matrix labels
+        dimension_items = [(k, str(getattr(self, k))) for k in ['N', 'T', 'K1', 'K3', 'K3', 'D', 'MD', 'MS']]
+        matrix_items = [
+            ('X1', [str(f) for f in self._X1_formulations]),
+            ('X2', [str(f) for f in self._X2_formulations]),
+            ('X3', [str(f) for f in self._X3_formulations]),
+            ('d', [str(f) for f in self._demographics_formulations])
+        ]
 
-        # build the table, which contains dimension information, a blank line, and then matrix configurations
-        lines.extend([
-            formatter(header),
-            formatter.lines(),
-            formatter([""] + [self.N, self.T, self.K1, self.K2, self.K3, self.D, self.MD, self.MS]),
-            "",
-            f"X1 Configuration: {self._X1_formulations}.",
-            f"X2 Configuration: {self._X2_formulations}."
+        # build the section for dimensions
+        dimension_header = [k for k, _ in dimension_items]
+        dimension_widths = [max(5, len(k), len(v)) for k, v in dimension_items]
+        dimension_formatter = output.table_formatter(dimension_widths)
+        sections.append([
+            "Dimensions:",
+            dimension_formatter.border(),
+            dimension_formatter(dimension_header, underline=True),
+            dimension_formatter([v for _, v in dimension_items]),
+            dimension_formatter.border()
         ])
-        if self.K3 > 0:
-            lines.append(f"X3 Configuration: {self._X3_formulations}.")
-        if self.D > 0:
-            lines.append(f"Demographics Configuration: {self._demographics_formulations}.")
 
-        # wrap the table in borders and combine the lines into one string
-        border = formatter.border()[0] * max(map(len, lines))
-        return "\n".join([border] + lines + [border])
+        # build the section for matrix labels
+        matrix_header = ["Indices:"]
+        matrix_widths = [len(matrix_header[0])]
+        for matrix_index in range(max(self.K1, self.K2, self.K3, self.D)):
+            matrix_header.append(f'#{matrix_index}')
+            matrix_widths.append(max([5] + [len(l[matrix_index]) for _, l in matrix_items if len(l) > matrix_index]))
+        matrix_formatter = output.table_formatter(matrix_widths)
+        matrix_section = [
+            "Matrices:",
+            matrix_formatter.border(),
+            matrix_formatter(matrix_header, underline=True)
+        ]
+        for name, labels in matrix_items:
+            if labels:
+                matrix_section.append(matrix_formatter([name] + labels))
+        matrix_section.append(matrix_formatter.border())
+        sections.append(matrix_section)
+
+        # combine the sections into one string
+        return "\n\n".join("\n".join(s) for s in sections)
 
     def __repr__(self):
         """Defer to the string representation."""
@@ -649,7 +668,7 @@ class NonlinearParameters(object):
         formatter = output.table_formatter(widths, line_indices)
 
         # build the top of the table
-        lines.extend([formatter(header), formatter.lines()])
+        lines.extend([formatter(header, underline=True)])
 
         # construct the rows containing parameter information
         for row_index, row_label in enumerate(self.X2_labels):
@@ -760,39 +779,38 @@ class LinearParameters(object):
         """
         lines = []
 
-        # build the part of the table for beta
+        # build the header for beta
         beta_header = ["Beta:"] + self.X1_labels
         beta_widths = [len(beta_header[0])] + [max(len(k), options.digits + 8) for k in beta_header[1:]]
-        beta_formatter = output.table_formatter(beta_widths)
-        lines.extend([
-            beta_formatter(beta_header),
-            beta_formatter.lines(),
-            beta_formatter([""] + [output.format_number(x) for x in beta_like])
-        ])
-        if beta_se is not None:
-            lines.append(beta_formatter([""] + [output.format_se(x) for x in beta_se]))
 
-        # build the part of the table for gamma, leaving an empty line in-between the two vectors
-        gamma_formatter = None
+        # build the header for gamma
+        gamma_header = None
+        gamma_widths = []
         if self.gamma is not None:
             gamma_header = ["Gamma:"] + self.X3_labels
             gamma_widths = [len(gamma_header[0])] + [max(len(k), options.digits + 8) for k in gamma_header[1:]]
-            gamma_formatter = output.table_formatter(gamma_widths)
+
+        # build the table formatter
+        widths = [max(w) for w in itertools.zip_longest(beta_widths, gamma_widths, fillvalue=0)]
+        formatter = output.table_formatter(widths)
+
+        # build the table
+        lines.extend([
+            formatter.border(),
+            formatter(beta_header, underline=True),
+            formatter([""] + [output.format_number(x) for x in beta_like])
+        ])
+        if beta_se is not None:
+            lines.append(formatter([""] + [output.format_se(x) for x in beta_se]))
+        if self.gamma is not None:
             lines.extend([
-                "",
-                gamma_formatter(gamma_header),
-                gamma_formatter.lines(),
-                gamma_formatter([""] + [output.format_number(x) for x in gamma_like])
+                formatter.line(),
+                formatter(gamma_header, underline=True),
+                formatter([""] + [output.format_number(x) for x in gamma_like])
             ])
             if gamma_se is not None:
-                lines.append(gamma_formatter([""] + [output.format_se(x) for x in gamma_se]))
+                lines.append(formatter([""] + [output.format_se(x) for x in gamma_se]))
+        lines.append(formatter.border())
 
-        # identify the longest border
-        border = beta_formatter.border()
-        if self.gamma is not None:
-            gamma_border = gamma_formatter.border()
-            if len(gamma_border) > len(border):
-                border = gamma_border
-
-        # wrap the table in borders and combine the lines into one string
-        return "\n".join([border] + lines + [border])
+        # combine the lines into one string
+        return "\n".join(lines)

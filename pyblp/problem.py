@@ -661,7 +661,7 @@ class ObjectiveInfo(object):
 
         # if this is the first iteration, include the header
         if current_evaluations == 1:
-            lines.extend([formatter([k[0] for k in header]), formatter([k[1] for k in header]), formatter.lines()])
+            lines.extend([formatter([k[0] for k in header]), formatter([k[1] for k in header], underline=True)])
 
         # include information about any errors
         if self.exception is not None:
