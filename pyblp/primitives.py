@@ -257,9 +257,9 @@ class Economy(object):
         lines.extend([
             formatter(header),
             formatter.lines(),
-            formatter([self.N, self.T, self.K1, self.K2, self.K3, self.D, self.MD, self.MS]),
+            formatter([""] + [self.N, self.T, self.K1, self.K2, self.K3, self.D, self.MD, self.MS]),
             "",
-            f"X1 Configuration: {self._X1_formulations}."
+            f"X1 Configuration: {self._X1_formulations}.",
             f"X2 Configuration: {self._X2_formulations}."
         ])
         if self.K3 > 0:
