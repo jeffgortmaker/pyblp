@@ -420,37 +420,38 @@ class Problem(Economy):
             theta, converged, iterations, evaluations = optimization._optimize(theta, bounds, wrapper)
             status = "completed" if converged else "failed"
             end_time = time.time()
-            output("")
-            output(f"Optimization {status} after {output.format_seconds(end_time - start_time)}.")
-
-            # handle convergence problems
             if not converged:
                 if error_behavior == 'raise':
                     raise exceptions.ThetaConvergenceError
                 output("")
                 output(exceptions.ThetaConvergenceError())
-                output("")
+            output("")
+            output(f"Optimization {status} after {output.format_seconds(end_time - start_time)}.")
 
             # use objective information computed at the optimal theta to compute results for the step
             output(f"Computing results for step {step} ...")
             step_info = compute_step_info(theta, wrapper.cache, compute_gradient=True)
-            if step_info.exception is not None:
-                output("")
-                output(step_info.exception)
-                output("")
             results = step_info.to_results(
                 last_results, start_time, end_time, iterations, evaluations, wrapper.iteration_mappings,
                 wrapper.evaluation_mappings, center_moments, se_type
             )
+            if results._errors:
+                if error_behavior == 'raise':
+                    raise exceptions.MultipleErrors(results._errors)
+                output("")
+                output(exceptions.MultipleErrors(results._errors))
+            output("")
             output(f"Computed results after {output.format_seconds(results.total_time - results.optimization_time)}.")
             output("")
+            output(results)
+
+            # update vectors and matrices
             delta = step_info.delta
             tilde_costs = step_info.tilde_costs
             xi_jacobian = step_info.xi_jacobian
             omega_jacobian = step_info.omega_jacobian
             WD = results.updated_WD
             WS = results.updated_WS
-            output(results)
 
             # store the last results and return results from the last step
             last_results = results
@@ -642,7 +643,7 @@ class ObjectiveInfo(object):
         self.gradient = gradient
         self.iteration_mapping = iteration_mapping
         self.evaluation_mapping = evaluation_mapping
-        self.exception = exceptions.MultipleErrors(errors) if errors else None
+        self.errors = errors
         self.gradient_norm = np.nan if gradient is None else np.abs(gradient).max()
 
     def format_progress(self, step, current_iterations, current_evaluations, smallest_objective,
@@ -665,8 +666,8 @@ class ObjectiveInfo(object):
             lines.extend([formatter([k[0] for k in header]), formatter([k[1] for k in header], underline=True)])
 
         # include information about any errors
-        if self.exception is not None:
-            lines.extend(["", str(self.exception), ""])
+        if self.errors:
+            lines.extend(["", str(exceptions.MultipleErrors(self.errors)), ""])
 
         # include the progress update
         objective_improved = np.isfinite(smallest_objective) and self.objective < smallest_objective

@@ -7,8 +7,8 @@ import scipy.linalg
 
 from . import options, exceptions
 from .configurations import Iteration
-from .utilities import output, ParallelItems
 from .primitives import Market, LinearParameters
+from .utilities import output, compute_gmm_se, compute_gmm_weights, ParallelItems
 
 
 class Results(object):
@@ -139,6 +139,9 @@ class Results(object):
         self.gradient = objective_info.gradient
         self.gradient_norm = objective_info.gradient_norm
 
+        # store a set of any errors encountered here or during objective computation
+        self._errors = objective_info.errors
+
         # store parameter information
         self._nonlinear_parameters = objective_info.nonlinear_parameters
         self._linear_parameters = LinearParameters(self.problem, self.beta, self.gamma)
@@ -164,16 +167,21 @@ class Results(object):
             ]
 
         # compute standard errors
-        se = self._compute_se(u, Z, W, jacobian, se_type)
+        se, se_errors = compute_gmm_se(u, Z, W, jacobian, se_type)
         self.sigma_se, self.pi_se = self._nonlinear_parameters.expand(se[:self._nonlinear_parameters.P])
         self.beta_se = se[self._nonlinear_parameters.P:self._nonlinear_parameters.P + self.problem.K1]
         self.gamma_se = se[-self.problem.K3:] if self.problem.K3 > 0 else None
+        self._errors |= se_errors
 
-        # update weighting matrices
-        self.updated_WD = self._update_W(self.xi, self.problem.products.ZD, center_moments, "demand")
+        # update the demand-side weighting matrix
+        self.updated_WD, WD_errors = compute_gmm_weights(self.xi, self.problem.products.ZD, center_moments)
+        self._errors |= WD_errors
+
+        # update the supply-side weighting matrix
         self.updated_WS = None
         if self.problem.K3 > 0:
-            self.updated_WS = self._update_W(self.omega, self.problem.products.ZS, center_moments, "supply")
+            self.updated_WS, WS_errors = compute_gmm_weights(self.omega, self.problem.products.ZS, center_moments)
+            self._errors |= WS_errors
 
         # construct an array of unique and sorted market IDs
         self.unique_market_ids = np.unique(self.problem.products.market_ids).flatten()
@@ -253,82 +261,6 @@ class Results(object):
     def __repr__(self):
         """Defer to the string representation."""
         return str(self)
-
-    def _compute_se(self, u, Z, W, jacobian, se_type):
-        """Use an error term, instruments, a weighting matrix, and the Jacobian of the error term with respect to
-        parameters to estimate standard errors.
-        """
-
-        # compute the Jacobian of the sample moments with respect to all parameters
-        G = Z.T @ jacobian
-
-        # attempt to compute the unadjusted covariance matrix and output information about the method used to compute it
-        attempt, covariances = self._invert(G.T @ W @ G)
-        if attempt > 1:
-            output("")
-            output(f"The estimated covariance matrix of parameters is singular.")
-            if attempt == 2:
-                output(f"Used the Moore-Penrose pseudo inverse to estimate the covariance matrix of parameters.")
-            else:
-                output("Failed to compute the Moore-Penrose pseudo-inverse.")
-                output(f"Inverted only the variance terms to estimate the covariance matrix of parameters.")
-            output("")
-
-        # compute the robust covariance matrix
-        with np.errstate(invalid='ignore'):
-            if se_type == 'robust':
-                covariances = covariances @ G.T @ W @ Z.T @ (np.diagflat(u) ** 2) @ Z @ W @ G @ covariances
-            se = np.sqrt(np.c_[covariances.diagonal()])
-
-        # output any information about computation failure
-        if np.isnan(se).any():
-            output("")
-            output(f"Failed to compute standard errors because of null values.")
-            output("")
-        return se
-
-    def _update_W(self, u, Z, center_moments, side):
-        """Use an error term and instruments to update a GMM weighting matrix."""
-
-        # compute and center the sample moments
-        g = u * Z
-        if center_moments:
-            g -= g.mean(axis=0)
-
-        # attempt to compute the weighting matrix and output information about the method used to compute it
-        attempt, W = self._invert(g.T @ g)
-        if attempt > 1:
-            output("")
-            output(f"The estimated covariance matrix of {side}-side GMM moments is singular.")
-            if attempt == 2:
-                output(f"Used the Moore-Penrose pseudo inverse to update the {side}-side GMM weighting matrix.")
-            else:
-                output("Failed to compute the Moore-Penrose pseudo-inverse.")
-                output(f"Inverted only the variance terms to update the {side}-side GMM weighting matrix.")
-            output("")
-
-        # output any information about computation failure
-        if np.isnan(W).any():
-            output("")
-            output(f"Failed to compute the {side}-side GMM weighting matrix because of null values.")
-            output("")
-        return W
-
-    @staticmethod
-    def _invert(matrix):
-        """Attempt to invert a matrix with decreasingly precise inversion functions. The first attempt is with a
-        standard inversion function; the second, with the Moore-Penrose pseudo inverse; the third, with simple diagonal
-        inversion.
-        """
-        try:
-            return 1, scipy.linalg.inv(matrix)
-        except ValueError:
-            return 1, np.full_like(matrix, np.nan)
-        except scipy.linalg.LinAlgError:
-            try:
-                return 2, scipy.linalg.pinv(matrix)
-            except scipy.linalg.LinAlgError:
-                return 3, np.diag(1 / np.diag(matrix))
 
     def _validate_name(self, name):
         """Validate that a name corresponds to a variable in X1 or X2 (or both)."""
