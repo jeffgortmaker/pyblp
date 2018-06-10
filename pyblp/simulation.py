@@ -380,21 +380,11 @@ class Simulation(Economy):
 
     def __str__(self):
         """Supplement general formatted information with other information about parameters."""
-        sections = [[super().__str__()]]
-
-        # construct a section containing linear parameters
-        sections.append([
-            "Linear Parameters:",
-            self._linear_parameters.format(self.beta, self.gamma)
-        ])
-
-        # construct a section containing nonlinear estimates
-        sections.append([
-            "Nonlinear Parameters:",
-            self._nonlinear_parameters.format(self.sigma, self.pi)
-        ])
-
-        # combine the sections into one string
+        sections = [
+            [super().__str__()],
+            ["Linear Parameters:", self._linear_parameters.format(self.beta, self.gamma)],
+            ["Nonlinear Parameters:", self._nonlinear_parameters.format(self.sigma, self.pi)]
+        ]
         return "\n\n".join("\n".join(s) for s in sections)
 
     def solve(self, firms_index=0, prices=None, iteration=None, error_behavior='raise', processes=1):
