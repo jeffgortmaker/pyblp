@@ -161,6 +161,47 @@ class NonpositiveCostsError(Exception):
         )
 
 
+class _CovariancesInversionError(Exception):
+    """Problems with inversion of a covariance matrix."""
+
+    def __init__(self, approximation):
+        self.approximation = approximation
+
+
+class ParameterCovariancesInversionError(_CovariancesInversionError):
+    """Problems with inversion of the covariance matrix of GMM parameters."""
+
+    def __str__(self):
+        return (
+            f"An estimated covariance matrix of GMM parameters is singular. Its inverse was approximated by "
+            f"{self.approximation}."
+        )
+
+
+class MomentCovariancesInversionError(_CovariancesInversionError):
+    """Problems with inversion of the covariance matrix of GMM moments."""
+
+    def __str__(self):
+        return (
+            f"An estimated covariance matrix of GMM moments is singular. Its inverse was approximated by "
+            f"{self.approximation}."
+        )
+
+
+class InvalidCovariancesError(Exception):
+    """Failure to compute standard errors because of invalid estimated covariances."""
+
+    def __str__(self):
+        return "Failed to compute standard errors because of invalid estimated covariances."
+
+
+class InvalidWeightsError(Exception):
+    """Failure to compute a GMM weighting matrix because of invalid weights."""
+
+    def __str__(self):
+        return "Failed to compute a weighting matrix because of invalid estimated moments."
+
+
 class MultipleErrors(Exception):
     """Multiple errors that occurred around the same time."""
 
