@@ -10,7 +10,7 @@ import numpy as np
 import patsy.builtins
 from sympy.parsing import sympy_parser
 
-from .basics import extract_size
+from ..utilities import extract_size
 
 
 class Formulation(object):

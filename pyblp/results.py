@@ -6,8 +6,9 @@ import numpy as np
 import scipy.linalg
 
 from . import options, exceptions
+from .configurations import Iteration
+from .utilities import output, ParallelItems
 from .primitives import Market, LinearParameters
-from .utilities import output, ParallelItems, Iteration
 
 
 class Results(object):

@@ -6,8 +6,9 @@ import numpy as np
 
 from . import options, exceptions
 from .construction import build_blp_instruments, build_matrix
+from .configurations import Formulation, Iteration, Integration
+from .utilities import output, extract_matrix, Matrices, ParallelItems
 from .primitives import Products, Agents, Economy, Market, NonlinearParameters, LinearParameters
-from .utilities import output, extract_matrix, Matrices, ParallelItems, Formulation, Iteration, Integration
 
 
 class Simulation(Economy):

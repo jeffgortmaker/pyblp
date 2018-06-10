@@ -3,7 +3,8 @@
 import numpy as np
 
 from . import options
-from .utilities import extract_matrix, Matrices, Formulation
+from .configurations import Formulation
+from .utilities import extract_matrix, Matrices
 
 
 def build_id_data(T, J, F, mergers=()):

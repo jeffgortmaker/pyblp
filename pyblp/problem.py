@@ -7,7 +7,8 @@ import numpy as np
 import scipy.linalg
 
 from . import options, exceptions
-from .utilities import output, ParallelItems, Iteration, Optimization
+from .utilities import output, ParallelItems
+from .configurations import Iteration, Optimization
 from .primitives import Products, Agents, Economy, Market, NonlinearParameters
 
 

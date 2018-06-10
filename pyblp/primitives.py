@@ -6,7 +6,8 @@ import numpy as np
 import scipy.linalg
 
 from . import options
-from .utilities import output, extract_matrix, Matrices, Formulation, Integration
+from .configurations import Formulation, Integration
+from .utilities import output, extract_matrix, Matrices
 
 
 class Products(Matrices):

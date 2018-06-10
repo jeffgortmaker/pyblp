@@ -1,11 +1,7 @@
 """Loads general functionality into the top-level utilities namespace and initializes output."""
 
 from .. import options
-from .iteration import Iteration
-from .integration import Integration
-from .formulation import Formulation
-from .optimization import Optimization
-from .basics import extract_matrix, Matrices, ParallelItems, Output
+from .basics import extract_matrix, extract_size, Matrices, ParallelItems, Output
 
 
 output = Output(options)
