@@ -420,7 +420,7 @@ class Problem(Economy):
             status = "completed" if converged else "failed"
             end_time = time.time()
             output("")
-            output(f"Optimization for step {step} {status} after {output.format_seconds(end_time - start_time)}.")
+            output(f"Optimization {status} after {output.format_seconds(end_time - start_time)}.")
 
             # handle convergence problems
             if not converged:
@@ -432,12 +432,13 @@ class Problem(Economy):
 
             # use objective information computed at the optimal theta to compute results for the step
             output(f"Computing results for step {step} ...")
-            output("")
             step_info = compute_step_info(theta, wrapper.cache, compute_gradient=True)
             results = step_info.to_results(
                 last_results, start_time, end_time, iterations, evaluations, wrapper.iteration_mappings,
                 wrapper.evaluation_mappings, center_moments, se_type
             )
+            output(f"Computed results after {output.format_seconds(results.total_time - results.optimization_time)}.")
+            output("")
             delta = step_info.delta
             tilde_costs = step_info.tilde_costs
             xi_jacobian = step_info.xi_jacobian
