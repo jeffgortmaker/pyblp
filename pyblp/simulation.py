@@ -5,7 +5,7 @@ import time
 import numpy as np
 
 from . import options, exceptions
-from .construction import build_blp_instruments
+from .construction import build_blp_instruments, build_matrix
 from .primitives import Products, Agents, Economy, Market, NonlinearParameters, LinearParameters
 from .utilities import output, extract_matrix, Matrices, ParallelItems, Formulation, Iteration, Integration
 
@@ -151,7 +151,7 @@ class Simulation(Economy):
         Synthetic agent data that were loaded or simulated during initialization.
     products : `Products`
         Structured :attr:`Simulation.product_data`, which is an instance of :class:`primitives.Products`. Matrices of
-        product characteristics were built according to :attr:`Simulation.demand_formulations`.
+        product characteristics were built according to :attr:`Simulation.product_formulations`.
     agents : `Agents`
         Structured :attr:`Simulation.agent_data`, which is an instance of :class:`primitives.Agents`. A matrix of
         demographics was built according to :attr:`Simulation.agent_formulation` if it was specified. Nodes and weights
@@ -187,31 +187,35 @@ class Simulation(Economy):
 
     Example
     -------
-    The following code simulates a small amount of data with two markets, both linear and nonlinear prices, a nonlinear
-    constant, a cost/linear characteristic, another cost characteristic, a demographic, and other agent data constructed
-    according to a low level Gauss-Hermite product rule:
+    The following code simulates a small amount of data for two markets. Exogenous product data, ``size`` and
+    ``weight``, along with a demographic, ``income``, are simulated; unobserved agent data are constructed according to
+    a low-level Gauss-Hermite product rule.
 
     .. ipython:: python
 
        simulation = pyblp.Simulation(
-           pyblp.build_id_data(T=2, J=20, F=5),
-           pyblp.Integration('product', 4),
-           gamma=[0, 1, 2],
-           beta=[-10, 0, 1, 0],
+           product_formulations=(
+               pyblp.Formulation('0 + prices + size'),
+               pyblp.Formulation('prices'),
+               pyblp.Formulation('0 + size + weight')
+           ),
+           beta=[-10, 1],
            sigma=[
-               [1, 0, 0, 0],
-               [0, 2, 0, 0],
-               [0, 0, 0, 0],
-               [0, 0, 0, 0]
+               [2, 0],
+               [0, 1]
            ],
+           gamma=[1, 2],
+           product_data=pyblp.build_id_data(T=2, J=20, F=5),
+           agent_formulation=pyblp.Formulation('0 + income'),
+           integration=pyblp.Integration('product', 4),
            pi=[
                [0],
-               [1],
-               [0],
-               [0]
+               [1]
            ],
            seed=0
        )
+       simulation
+       simulation.agent_data
        simulation.product_data
 
     Bertrand-Nash prices and shares, which are initialized as ``numpy.nan`` above, can be computed by solving the
@@ -268,33 +272,20 @@ class Simulation(Economy):
                 else:
                     categorical_mapping[name] = variable
 
-        # identify numerical variables that contribute to demand and supply
+        # construct instruments
+        instrument_data = {'market_ids': market_ids, 'firm_ids': firm_ids, **numerical_mapping}
         demand_names = set(numerical_mapping) & (product_formulations[0]._names | product_formulations[1]._names)
         supply_names = set(numerical_mapping) & product_formulations[2]._names
         only_demand_names = demand_names - supply_names
         only_supply_names = supply_names - demand_names
-
-        # both sets of instruments include a constant column
-        demand_instruments = supply_instruments = np.ones((market_ids.size, 1))
-
-        # both sets of instruments include any variables that impact only the other side
-        if only_supply_names:
-            only_supply_variables = np.column_stack((numerical_mapping[k] for k in sorted(only_supply_names)))
-            demand_instruments = np.c_[demand_instruments, only_supply_variables]
-        if only_demand_names:
-            only_demand_variables = np.column_stack((numerical_mapping[k] for k in sorted(only_demand_names)))
-            supply_instruments = np.c_[supply_instruments, only_demand_variables]
-
-        # both sets of instruments include traditional BLP instruments
-        instrument_data = {
-            'market_ids': market_ids,
-            'firm_ids': firm_ids,
-            **numerical_mapping
-        }
-        demand_formulation = Formulation(' + '.join(['0'] + sorted(demand_names)))
-        supply_formulation = Formulation(' + '.join(['0'] + sorted(supply_names)))
-        demand_instruments = np.c_[demand_instruments, build_blp_instruments(demand_formulation, instrument_data)]
-        supply_instruments = np.c_[supply_instruments, build_blp_instruments(supply_formulation, instrument_data)]
+        demand_instruments = np.c_[
+            build_matrix(Formulation(' + '.join(sorted(only_supply_names))), numerical_mapping),
+            build_blp_instruments(Formulation(' + '.join(['0'] + sorted(demand_names))), instrument_data)
+        ]
+        supply_instruments = np.c_[
+            build_matrix(Formulation(' + '.join(sorted(only_demand_names))), numerical_mapping),
+            build_blp_instruments(Formulation(' + '.join(['0'] + sorted(supply_names))), instrument_data)
+        ]
 
         # structure product data fields as a mapping
         product_data_mapping = {
