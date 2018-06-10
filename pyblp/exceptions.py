@@ -1,6 +1,47 @@
 """Exceptions that are specific to the BLP problem."""
 
 
+class _ReversionError(Exception):
+    """Reversion of problematic elements."""
+
+    def __init__(self, reverted):
+        self.reverted = reverted
+
+
+class DeltaReversionError(_ReversionError):
+    """Reversion of problematic elements in delta."""
+
+    def __str__(self):
+        return f"Number of problematic elements in delta that were reverted: {self.reverted}."
+
+
+class CostsReversionError(_ReversionError):
+    """Reversion of problematic marginal costs."""
+
+    def __str__(self):
+        return f"Number of problematic marginal costs that were reverted: {self.reverted}."
+
+
+class XiJacobianReversionError(_ReversionError):
+    """Reversion of problematic elements in the Jacobian of xi with respect to theta."""
+
+    def __str__(self):
+        return (
+            f"Number of problematic elements in the Jacobian of xi (equivalently, of delta) with respect to theta that "
+            f"were reverted: {self.reverted}."
+        )
+
+
+class OmegaJacobianReversionError(_ReversionError):
+    """Reversion of problematic elements in the Jacobian of omega with respect to theta."""
+
+    def __str__(self):
+        return (
+            f"Number of problematic elements in the Jacobian of omega (equivalently, of transformed marginal costs) "
+            f"with respect to theta that were reverted: {self.reverted}."
+        )
+
+
 class DeltaFloatingPointError(Exception):
     """Floating point issues when computing delta."""
 
@@ -131,8 +172,8 @@ class MultipleErrors(Exception):
         return super().__new__(cls)
 
     def __init__(self, errors):
-        """Initialize all exceptions."""
-        self.exceptions = [e() for e in errors]
+        """Initialize all exceptions in a deterministic order."""
+        self.exceptions = sorted([e() for e in errors], key=str)
 
     def __str__(self):
         """Join all the exception string representations."""

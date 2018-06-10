@@ -433,6 +433,10 @@ class Problem(Economy):
             # use objective information computed at the optimal theta to compute results for the step
             output(f"Computing results for step {step} ...")
             step_info = compute_step_info(theta, wrapper.cache, compute_gradient=True)
+            if step_info.exception is not None:
+                output("")
+                output(step_info.exception)
+                output("")
             results = step_info.to_results(
                 last_results, start_time, end_time, iterations, evaluations, wrapper.iteration_mappings,
                 wrapper.evaluation_mappings, center_moments, se_type
@@ -493,23 +497,19 @@ class Problem(Economy):
         # handle any errors
         errors = demand_errors | supply_errors
         if errors:
-            exception = exceptions.MultipleErrors(errors)
             if error_behavior == 'raise':
-                raise exception
-            output(exception)
+                raise exceptions.MultipleErrors(errors)
             if error_behavior == 'revert':
                 if error_punishment != 1:
                     objective *= error_punishment
-                    output(f"Multiplied the objective by {output.format_number(error_punishment)}.")
             elif error_behavior == 'punish':
                 objective = np.array(error_punishment)
-                gradient = np.zeros_like(theta)
-                output(f"Set the objective to {output.format_number(error_punishment)} and its gradient to all zeros.")
+                gradient = np.zeros_like(theta) if compute_gradient else None
 
         # structure objective information
         return ObjectiveInfo(
             self, nonlinear_parameters, WD, WS, theta, delta, tilde_costs, xi_jacobian, omega_jacobian, beta, gamma, xi,
-            omega, objective, gradient, iteration_mapping, evaluation_mapping
+            omega, objective, gradient, iteration_mapping, evaluation_mapping, errors
         )
 
     def _compute_demand_contributions(self, nonlinear_parameters, WD, iteration, linear_fp, processes, sigma, pi,
@@ -541,17 +541,14 @@ class Problem(Economy):
         bad_delta_indices = ~np.isfinite(delta)
         if np.any(bad_delta_indices):
             delta[bad_delta_indices] = last_objective_info.delta[bad_delta_indices]
-            output(f"Number of problematic elements in delta that were reverted: {bad_delta_indices.sum()}.")
+            errors.add(lambda: exceptions.DeltaReversionError(bad_delta_indices.sum()))
 
         # replace invalid elements in its Jacobian with their last values
         if compute_gradient:
             bad_jacobian_indices = ~np.isfinite(xi_jacobian)
             if np.any(bad_jacobian_indices):
                 xi_jacobian[bad_jacobian_indices] = last_objective_info.xi_jacobian[bad_jacobian_indices]
-                output(
-                    f"Number of problematic elements in the Jacobian of xi (equivalently, of delta) with respect to "
-                    f"theta that were reverted: {bad_jacobian_indices.sum()}."
-                )
+                errors.add(lambda: exceptions.XiJacobianReversionError(bad_jacobian_indices.sum()))
 
         # recover beta and compute xi
         PD = self.products.ZD @ WD @ self.products.ZD.T
@@ -601,17 +598,14 @@ class Problem(Economy):
         bad_tilde_costs_indices = ~np.isfinite(tilde_costs)
         if np.any(bad_tilde_costs_indices):
             tilde_costs[bad_tilde_costs_indices] = last_objective_info.tilde_costs[bad_tilde_costs_indices]
-            output(f"Number of problematic marginal costs that were reverted: {bad_tilde_costs_indices.sum()}.")
+            errors.add(lambda: exceptions.CostsReversionError(tilde_costs.sum()))
 
         # replace invalid elements in their Jacobian with their last values
         if compute_gradient:
             bad_jacobian_indices = ~np.isfinite(omega_jacobian)
             if np.any(bad_jacobian_indices):
                 omega_jacobian[bad_jacobian_indices] = last_objective_info.omega_jacobian[bad_jacobian_indices]
-                output(
-                    f"Number of problematic elements in the Jacobian of omega (equivalently, of transformed marginal "
-                    f"costs) with respect to theta that were reverted: {bad_jacobian_indices.sum()}."
-                )
+                errors.add(lambda: exceptions.OmegaJacobianReversionError(bad_jacobian_indices.sum()))
 
         # recover gamma and compute omega
         PS = self.products.ZS @ WS @ self.products.ZS.T
@@ -626,7 +620,7 @@ class ObjectiveInfo(object):
 
     def __init__(self, problem, nonlinear_parameters, WD, WS, theta, delta, tilde_costs, xi_jacobian, omega_jacobian,
                  beta=None, gamma=None, xi=None, omega=None, objective=None, gradient=None, iteration_mapping=None,
-                 evaluation_mapping=None):
+                 evaluation_mapping=None, errors=None):
         """Initialize objective information. Optional parameters will not be specified when preparing for the first
         objective evaluation.
         """
@@ -647,12 +641,14 @@ class ObjectiveInfo(object):
         self.gradient = gradient
         self.iteration_mapping = iteration_mapping
         self.evaluation_mapping = evaluation_mapping
+        self.exception = exceptions.MultipleErrors(errors) if errors else None
         self.gradient_norm = np.nan if gradient is None else np.abs(gradient).max()
 
     def format_progress(self, step, current_iterations, current_evaluations, smallest_objective,
                         smallest_gradient_norm):
-        """Format optimization progress as a string. The first iteration will include the progress table header. The
-        smallest_objective is the smallest objective value encountered so far during optimization.
+        """Format optimization progress as a string. The first iteration will include the progress table header. If
+        there are any errors, information about them will be formatted as well. The smallest_objective is the smallest
+        objective value encountered so far during optimization.
         """
         lines = []
         header = [
@@ -666,6 +662,10 @@ class ObjectiveInfo(object):
         # if this is the first iteration, include the header
         if current_evaluations == 1:
             lines.extend([formatter([k[0] for k in header]), formatter([k[1] for k in header]), formatter.lines()])
+
+        # include information about any errors
+        if self.exception is not None:
+            lines.extend(["", str(self.exception), ""])
 
         # include the progress update
         objective_improved = np.isfinite(smallest_objective) and self.objective < smallest_objective
