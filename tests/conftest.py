@@ -171,16 +171,14 @@ def knittel_metaxoglou_2014():
 
     """
     product_data = np.recfromcsv(BLP_PRODUCTS_LOCATION)
-    instruments = build_blp_instruments(Formulation('hpwt + air + mpg + space'), product_data)
+    product_data = {n: product_data[n] for n in product_data.dtype.names}
+    product_data['demand_instruments'] = build_blp_instruments(Formulation('hpwt + air + mpg + space'), product_data)
     problem = Problem(
         product_formulations=(
             Formulation('0 + prices + I(1) + hpwt + air + mpg + space'),
             Formulation('0 + prices + I(1) + hpwt + air + mpg')
         ),
-        product_data=np.lib.recfunctions.merge_arrays(flatten=True, seqarrays=[
-            product_data,
-            np.rec.fromarrays([instruments], dtype=[('demand_instruments', (instruments.dtype, instruments.shape[1]))])
-        ]),
+        product_data=product_data,
         agent_data=np.recfromcsv(BLP_AGENTS_LOCATION)
     )
     return scipy.io.loadmat(str(TEST_DATA_PATH / 'knittel_metaxoglou_2014.mat'), {'problem': problem})

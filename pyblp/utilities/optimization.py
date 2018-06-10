@@ -108,6 +108,7 @@ class Optimization(object):
     .. ipython:: python
 
        optimization = pyblp.Optimization('slsqp', {'tol': 1e-10})
+       optimization
 
     Instead of using a non-custom routine, the following code builds a custom method that implements a grid search over
     parameter values between specified bounds:
@@ -131,6 +132,7 @@ class Optimization(object):
     .. ipython:: python
 
        optimization = pyblp.Optimization(custom_method, compute_gradient=False)
+       optimization
 
     """
 

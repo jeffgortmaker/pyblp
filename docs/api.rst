@@ -9,7 +9,7 @@ The majority of the package consists of classes, which compartmentalize differen
 Many of the pages that the below summaries link to contain example code. For the sake of brevity, the following lines of code, which import the package, import :mod:`numpy`, and limit verbosity, are executed before each example.
 
 .. literalinclude:: include.py
-  :language: ipython
+   :language: ipython
 
 
 Configuration Classes
@@ -30,15 +30,15 @@ Various components of the package require configurations for how to approximate 
 Data Construction Functions
 ---------------------------
 
-There are also a number of convenience functions that can be used to construct common parts of product data.
+There are also a number of convenience functions that can be used to construct common components of product data.
 
 .. autosummary::
    :toctree: api
 
    build_id_data
-   build_indicators
    build_ownership
    build_blp_instruments
+   build_matrix
 
 
 Simulation Class
@@ -97,11 +97,8 @@ In addition to class attributes, other post-estimation outputs can be computed w
    :toctree: api
 
    Results.compute_aggregate_elasticities
-   Results.compute_aggregate_price_elasticities
    Results.compute_elasticities
-   Results.compute_price_elasticities
    Results.compute_diversion_ratios
-   Results.compute_price_diversion_ratios
    Results.compute_long_run_diversion_ratios
    Results.extract_diagonals
    Results.extract_diagonal_means

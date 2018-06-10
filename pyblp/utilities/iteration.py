@@ -63,6 +63,7 @@ class Iteration(object):
     .. ipython:: python
 
        iteration = pyblp.Iteration('squarem', {'norm': lambda x: np.abs(x).max(), 'scheme': 1})
+       iteration
 
     Instead of using a non-custom routine, the following code builds a custom method that implements a version of simple
     iteration, which, for the sake of having a nontrivial example, arbitrarily identifies a major iteration with three
@@ -85,6 +86,7 @@ class Iteration(object):
     .. ipython:: python
 
        iteration = pyblp.Iteration(custom_method)
+       iteration
 
     """
 

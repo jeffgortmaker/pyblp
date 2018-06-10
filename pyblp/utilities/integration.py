@@ -47,6 +47,7 @@ class Integration(object):
     .. ipython:: python
 
        integration = pyblp.Integration('monte_carlo', size=1000, seed=0)
+       integration
 
     """
 

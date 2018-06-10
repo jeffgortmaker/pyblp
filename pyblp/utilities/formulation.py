@@ -42,7 +42,7 @@ class Formulation(object):
             - ``log`` - Natural logarithm function.
             - ``exp`` - Natural exponential function.
 
-        All `binary operators <https://patsy.readthedocs.io/en/stable/formulas.html#operators>` are supported:
+        All `binary operators <https://patsy.readthedocs.io/en/stable/formulas.html#operators>`_ are supported:
 
             - ``+`` - Set union of terms.
             - ``-`` - Set difference of terms.

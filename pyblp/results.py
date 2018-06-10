@@ -56,21 +56,14 @@ class Results(object):
         Estimated unknown nonlinear parameters, :math:`\hat{\theta}`.
     sigma : `ndarray`
         Estimated Cholesky decomposition of the covariance matrix that measures agents' random taste distribution,
-        :math:`\hat{\Sigma}`. If `nonlinear_prices` in :class:`Problem` initialization was ``True``, the first row and
-        column correspond to prices, and if `product_data` contained a `nonlinear_characteristics` field, all other rows
-        and columns correspond to its columns.
+        :math:`\hat{\Sigma}`.
     pi : `ndarray`
-        Estimated parameters that measures how agent tastes vary with demographics, :math:`\hat{\Pi}`. Rows correspond
-        to the same product characteristics as in `sigma`. Columns correspond to the columns of the `demographics` field
-        of `agent_data` in :class:`Problem` initialization.
+        Estimated parameters that measures how agent tastes vary with demographics, :math:`\hat{\Pi}`.
     beta : `ndarray`
-        Estimated demand-side linear parameters, :math:`\hat{\beta}`. If `linear_prices` in :class:`Problem`
-        initialization was ``True``, the first element corresponds to prices, and if `product_data` contained a
-        `linear_characteristics` field, all other elements correspond to its columns.
+        Estimated demand-side linear parameters, :math:`\hat{\beta}`.
     gamma : `ndarray`
         Estimated supply-side linear parameters, :math:`\hat{\gamma}`, which are ``None`` if the problem that created
-        these results was not initialized with supply-side data. Elements correspond to columns in the
-        `cost_characteristics` field of `product_data` in :class:`Problem` initialization.
+        these results was not initialized with supply-side data.
     sigma_se : `ndarray`
         Estimated standard errors for unknown :math:`\hat{\Sigma}` elements in :math:`\hat{\theta}`.
     pi_se : `ndarray`
@@ -392,21 +385,21 @@ class Results(object):
         return combined
 
     def compute_aggregate_elasticities(self, factor=0.1, name='prices'):
-        r"""Estimate aggregate elasticities of demand, :math:`E`, with respect to a product characteristic, :math:`x`.
+        r"""Estimate aggregate elasticities of demand, :math:`E`, with respect to a variale, :math:`x`.
 
         In market :math:`t`, the aggregate elasticity of demand is
 
         .. math:: E = \sum_{j=1}^{J_t} \frac{s_{jt}(x + \Delta x) - s_{jt}}{\Delta},
 
         in which :math:`\Delta` is a scalar factor and :math:`s_{jt}(x + \Delta x)` is the share of product :math:`j` in
-        market :math:`t`, evaluated at the scaled values of the characteristic.
+        market :math:`t`, evaluated at the scaled values of the variable.
 
         Parameters
         ----------
         factor : `float, optional`
             The scalar factor, :math:`\Delta`.
         name : `str, optional`
-            Name of the product characteristic, :math:`x`. By default, :math:`x = p`, prices.
+            Name of the variable, :math:`x`. By default, :math:`x = p`, prices.
 
         Returns
         -------
@@ -420,8 +413,7 @@ class Results(object):
         return self._combine_results(ResultsMarket.compute_aggregate_elasticity, [factor, name])
 
     def compute_elasticities(self, name='prices'):
-        r"""Estimate matrices of elasticities of demand, :math:`\varepsilon`, with respect to a product characteristic,
-        :math:`x`.
+        r"""Estimate matrices of elasticities of demand, :math:`\varepsilon`, with respect to a variable, :math:`x`.
 
         For each market, the value in row :math:`j` and column :math:`k` of :math:`\varepsilon` is
 
@@ -430,7 +422,7 @@ class Results(object):
         Parameters
         ----------
         name : `str, optional`
-            Name of the product characteristic, :math:`x`. By default, :math:`x = p`, prices.
+            Name of the variable, :math:`x`. By default, :math:`x = p`, prices.
 
         Returns
         -------
@@ -445,8 +437,7 @@ class Results(object):
         return self._combine_results(ResultsMarket.compute_elasticities, [name])
 
     def compute_diversion_ratios(self, name='prices'):
-        r"""Estimate matrices of diversion ratios, :math:`\mathscr{D}`, with respect to a product characteristic,
-        :math:`x`.
+        r"""Estimate matrices of diversion ratios, :math:`\mathscr{D}`, with respect to a variable, :math:`x`.
 
         Diversion ratios to the outside good are reported on diagonals. For each market, the value in row :math:`j` and
         column :math:`k` is
@@ -458,7 +449,7 @@ class Results(object):
         Parameters
         ----------
         name : `str, optional`
-            Name of the product characteristic, :math:`x`. By default, :math:`x = p`, prices.
+            Name of the variable, :math:`x`. By default, :math:`x = p`, prices.
 
         Returns
         -------
@@ -500,10 +491,10 @@ class Results(object):
         Parameters
         ----------
         matrices : `array-like`
-            Stacked matrices, such as estimates of :math:`\varepsilon`, computed by :meth:`Results.compute_elasticities`
-            or :meth:`Results.compute_price_elasticities`; :math:`\mathscr{D}`, computed by
-            :meth:`Results.compute_diversion_ratios` or :meth:`Results.compute_price_diversion_ratios`; or
-            :math:`\bar{\mathscr{D}}`, computed by :meth:`Results.compute_long_run_diversion_ratios`.
+            Stacked matrices, such as estimates of :math:`\varepsilon`, computed by
+            :meth:`Results.compute_elasticities`; :math:`\mathscr{D}`, computed by
+            :meth:`Results.compute_diversion_ratios`; or :math:`\bar{\mathscr{D}}`, computed by
+            :meth:`Results.compute_long_run_diversion_ratios`.
 
         Returns
         -------
@@ -522,10 +513,10 @@ class Results(object):
         Parameters
         ----------
         matrices : `array-like`
-            Stacked matrices, such as estimates of :math:`\varepsilon`, computed by :meth:`Results.compute_elasticities`
-            or :meth:`Results.compute_price_elasticities`; :math:`\mathscr{D}`, computed by
-            :meth:`Results.compute_diversion_ratios` or :meth:`Results.compute_price_diversion_ratios`; or
-            :math:`\bar{\mathscr{D}}`, computed by :meth:`Results.compute_long_run_diversion_ratios`.
+            Stacked matrices, such as estimates of :math:`\varepsilon`, computed by
+            :meth:`Results.compute_elasticities`; :math:`\mathscr{D}`, computed by
+            :meth:`Results.compute_diversion_ratios`; or :math:`\bar{\mathscr{D}}`, computed by
+            :meth:`Results.compute_long_run_diversion_ratios`.
 
         Returns
         -------
@@ -566,7 +557,7 @@ class Results(object):
 
         in which the approximate markup term is
 
-        .. math:: \eta^a = -\left(O^* \odot \frac{\partial s}{\partial p}\right)^{-1}s
+        .. math:: \eta^a = -\left(O^* \circ \frac{\partial s}{\partial p}\right)^{-1}s
 
         where :math:`O^*` is the post-merger ownership matrix.
 
@@ -599,7 +590,7 @@ class Results(object):
 
         in which the markup term is
 
-        .. math:: \zeta^*(p^*) = \Lambda^{-1}(p^*)[O^* \odot \Gamma(p^*)]'(p^* - c) - \Lambda^{-1}(p^*)
+        .. math:: \zeta^*(p^*) = \Lambda^{-1}(p^*)[O^* \circ \Gamma(p^*)]'(p^* - c) - \Lambda^{-1}(p^*)
 
         where :math:`O^*` is the post-merger ownership matrix and the other terms are the same as in the pre-merger
         :math:`\zeta`-markup equation but are evaluated at post-merger prices and shares.
@@ -729,7 +720,8 @@ class Results(object):
             Shares, :math:`s`, such as those computed by :meth:`Results.compute_shares`. By default, unchanged shares
             are used.
         costs : `array-like`
-            Marginal costs, :math:`c`, computed by `compute_costs`. By default, marginal costs are computed.
+            Marginal costs, :math:`c`, computed by :meth:`Results.compute_costs`. By default, marginal costs are
+            computed.
 
         Returns
         -------

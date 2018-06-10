@@ -1,6 +1,6 @@
 """Loads public-facing objects into the top-level namespace."""
 
-from .construction import build_id_data, build_ownership, build_blp_instruments
+from .construction import build_id_data, build_ownership, build_blp_instruments, build_matrix
 from .utilities import Iteration, Integration, Formulation, Optimization
 from . import data, options, primitives
 from .simulation import Simulation

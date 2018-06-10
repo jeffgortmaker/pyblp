@@ -244,15 +244,16 @@ def build_blp_instruments(formulation, product_data, average=False):
 
     .. ipython:: python
 
-       product_data = np.recfromcsv(pyblp.data.BLP_PRODUCTS_LOCATION)
        formulation = pyblp.Formulation('hpwt + air + mpg + space')
        formulation
-       instruments = pyblp.build_blp_instruments(product_data, formulation)
+       product_data = np.recfromcsv(pyblp.data.BLP_PRODUCTS_LOCATION)
+       product_data.dtype.names
+       instruments = pyblp.build_blp_instruments(formulation, product_data)
        instruments.shape
 
     """
 
-    # extract and validate IDs and characteristics
+    # load IDs
     market_ids = extract_matrix(product_data, 'market_ids')
     firm_ids = extract_matrix(product_data, 'firm_ids')
     if market_ids is None or firm_ids is None:
@@ -264,9 +265,7 @@ def build_blp_instruments(formulation, product_data, average=False):
     firm_ids = firm_ids[:, [0]]
 
     # build the matrix of product characteristics
-    if not isinstance(formulation, Formulation):
-        raise TypeError("formulation must be a Formulation instance.")
-    X = formulation._build(product_data)[0]
+    X = build_matrix(formulation, product_data)
 
     # determine the aggregation function
     aggregate = np.mean if average else np.sum
@@ -279,3 +278,39 @@ def build_blp_instruments(formulation, product_data, average=False):
         rival[n] = aggregate(X[(market_ids.flat == t) & (firm_ids.flat != f)], axis=0)
         other[n] = aggregate(X[(market_ids.flat == t) & (firm_ids.flat == f) & (indices != n)], axis=0)
     return np.ascontiguousarray(np.c_[X, rival, other])
+
+
+def build_matrix(formulation, data):
+    """Construct a matrix according to a formulation.
+
+    Parameters
+    ----------
+    formulation : `Formulation`
+        :class:`Formulation` configuration for the matrix. Variable names should correspond to fields in `data`.
+    data : `structured array-like`
+        Fields can be used as variables in `formulation`.
+
+    Returns
+    -------
+    `ndarray`
+        The built matrix.
+
+    Example
+    -------
+    The following code loads the fake cereal data from :ref:`Nevo (2000) <n00>` and builds instruments for the problem,
+    which are product ID indicators followed by the instrument variables in the data:
+
+    .. ipython:: python
+
+       instruments_string = ' + '.join(f'z{i}' for i in range(20))
+       formulation = pyblp.Formulation(f'0 + C(product_ids) + {instruments_string}')
+       formulation
+       data = np.recfromcsv(pyblp.data.NEVO_PRODUCTS_LOCATION)
+       data.dtype.names
+       instruments = pyblp.build_matrix(formulation, data)
+       instruments.shape
+
+    """
+    if not isinstance(formulation, Formulation):
+        raise TypeError("formulation must be a Formulation instance.")
+    return formulation._build(data)[0]

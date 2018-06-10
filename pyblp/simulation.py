@@ -34,7 +34,7 @@ class Simulation(Economy):
 
     in which :math:`X` are all non-constant exogenous numerical product variables, :math:`X_D` are all variables in
     :math:`X` used to formulate :math:`X_1` and :math:`X_2`, :math:`X_S` are all variables in :math:`X` used to
-    formulate :math:`X_3`, and both :math:`\mathrm{Rival}` and :math`\mathrm{Other}` are defined in
+    formulate :math:`X_3`, and both :math:`\mathrm{Rival}` and :math:`\mathrm{Other}` are defined in
     :func:`build_blp_instruments`, which is used to construct the traditional BLP instruments.
 
     .. note::

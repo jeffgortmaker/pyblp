@@ -124,17 +124,18 @@ class Problem(Economy):
 
     .. ipython:: python
 
-       data = np.recfromcsv(pyblp.data.BLP_PRODUCTS_LOCATION)
-       product_data = {k: data[k] for k in data.dtype.names}
-       characteristics = np.c_[np.ones(data.size), data['hpwt'], data['air'], data['mpd'], data['space']]
-       product_data['demand_instruments'] = np.c_[characteristics, pyblp.build_blp_instruments({
-           'market_ids': data['market_ids'],
-           'firm_ids': data['firm_ids'],
-           'characteristics': characteristics
-       })]
+       products = np.recfromcsv(pyblp.data.BLP_PRODUCTS_LOCATION)
+       products = {n: products[n] for n in products.dtype.names}
+       products['demand_instruments'] = pyblp.build_blp_instruments(
+           pyblp.Formulation('hpwt + air + mpg + space'),
+            products
+       )
        problem = pyblp.Problem(
-           product_data,
-           (pyblp.Formulation('hpwt + air + mpd + space'), pyblp.formulation('hpwt + air')),
+           product_formulations=(
+               pyblp.Formulation('prices + hpwt + air + mpg + space'),
+               pyblp.Formulation('hpwt + air')
+           ),
+           product_data=products,
            integration=pyblp.Integration('monte_carlo', 50, seed=0)
        )
        problem
