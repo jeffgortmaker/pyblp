@@ -96,6 +96,8 @@ class Products(Matrices):
         # load instruments
         demand_instruments = extract_matrix(product_data, 'demand_instruments')
         supply_instruments = extract_matrix(product_data, 'supply_instruments')
+        if demand_instruments is None:
+            raise KeyError("product_data must have a demand_instruments field.")
         if (supply_instruments is None) != (X3 is None):
             raise KeyError("product_data must have a supply_instruments field only when X3 is formulated.")
 
