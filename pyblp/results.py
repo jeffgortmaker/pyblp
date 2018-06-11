@@ -118,14 +118,12 @@ class Results(object):
 
     """
 
-    def __init__(self, objective_info, last_results, start_time, end_time, iterations, evaluations, iteration_mappings,
-                 evaluation_mappings, center_moments, se_type):
-        """Compute estimated standard errors and update weighting matrices."""
+    def __init__(self, objective_info, last_results, WD, WS, start_time, end_time, iterations, evaluations,
+                 iteration_mappings, evaluation_mappings, center_moments, se_type):
+        """Update weighting matrices, estimate standard errors, and compute cumulative progress statistics."""
 
         # initialize values from the objective information
         self.problem = objective_info.problem
-        self.WD = objective_info.WD
-        self.WS = objective_info.WS
         self.theta = objective_info.theta
         self.delta = objective_info.delta
         self.tilde_costs = objective_info.tilde_costs
@@ -150,8 +148,19 @@ class Results(object):
         self.sigma, self.pi = self._nonlinear_parameters.expand(self.theta, fill_fixed=True)
         self.sigma_gradient, self.pi_gradient = self._nonlinear_parameters.expand(self.gradient)
 
-        # stack the error terms, weighting matrices, instruments, and Jacobian of the error terms with respect to all
-        #   parameters
+        # store the demand-side weighting matrix along with its updated counterpart
+        self.WD = WD
+        self.updated_WD, WD_errors = compute_gmm_weights(self.xi, self.problem.products.ZD, center_moments)
+        self._errors |= WD_errors
+
+        # store the supply-side weighting matrix along with its updated counterpart
+        self.WS = WS
+        self.updated_WS = None
+        if self.problem.K3 > 0:
+            self.updated_WS, WS_errors = compute_gmm_weights(self.omega, self.problem.products.ZS, center_moments)
+            self._errors |= WS_errors
+
+        # stack the error terms, weighting matrices, instruments, and Jacobian of the errors with respect to parameters
         if self.problem.K3 == 0:
             u = self.xi
             W = self.WD
@@ -172,16 +181,6 @@ class Results(object):
         self.beta_se = se[self._nonlinear_parameters.P:self._nonlinear_parameters.P + self.problem.K1]
         self.gamma_se = se[-self.problem.K3:] if self.problem.K3 > 0 else None
         self._errors |= se_errors
-
-        # update the demand-side weighting matrix
-        self.updated_WD, WD_errors = compute_gmm_weights(self.xi, self.problem.products.ZD, center_moments)
-        self._errors |= WD_errors
-
-        # update the supply-side weighting matrix
-        self.updated_WS = None
-        if self.problem.K3 > 0:
-            self.updated_WS, WS_errors = compute_gmm_weights(self.omega, self.problem.products.ZS, center_moments)
-            self._errors |= WS_errors
 
         # construct an array of unique and sorted market IDs
         self.unique_market_ids = np.unique(self.problem.products.market_ids).flatten()

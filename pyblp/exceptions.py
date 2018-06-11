@@ -168,23 +168,33 @@ class _CovariancesInversionError(Exception):
         self.approximation = approximation
 
 
-class ParameterCovariancesInversionError(_CovariancesInversionError):
+class LinearParameterCovariancesInversionError(_CovariancesInversionError):
+    """Problems with inversion of the covariance matrix of linear IV parameters."""
+
+    def __str__(self):
+        return (
+            f"An estimated covariance matrix of linear IV parameters is singular. Its inverse was approximated by "
+            f"{self.approximation}. One or more data matrices may be highly collinear."
+        )
+
+
+class GMMParameterCovariancesInversionError(_CovariancesInversionError):
     """Problems with inversion of the covariance matrix of GMM parameters."""
 
     def __str__(self):
         return (
             f"An estimated covariance matrix of GMM parameters is singular. Its inverse was approximated by "
-            f"{self.approximation}."
+            f"{self.approximation}. One or more data matrices may be highly collinear."
         )
 
 
-class MomentCovariancesInversionError(_CovariancesInversionError):
+class GMMMomentCovariancesInversionError(_CovariancesInversionError):
     """Problems with inversion of the covariance matrix of GMM moments."""
 
     def __str__(self):
         return (
             f"An estimated covariance matrix of GMM moments is singular. Its inverse was approximated by "
-            f"{self.approximation}."
+            f"{self.approximation}. One or more data matrices may be highly collinear."
         )
 
 

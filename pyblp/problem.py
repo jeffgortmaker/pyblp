@@ -7,7 +7,7 @@ import numpy as np
 import scipy.linalg
 
 from . import options, exceptions
-from .utilities import output, ParallelItems
+from .utilities import output, ParallelItems, IV
 from .configurations import Iteration, Optimization
 from .primitives import Products, Agents, Economy, Market, NonlinearParameters
 
@@ -383,10 +383,28 @@ class Problem(Economy):
         # iterate through each step
         last_results = None
         for step in range(1, steps + 1):
+            # initialize an IV model for demand-side linear parameter estimation
+            demand_iv = IV(self.products.X1, self.products.ZD, WD)
+            if demand_iv.errors:
+                if error_behavior == 'raise':
+                    raise exceptions.MultipleErrors(demand_iv.errors)
+                output("")
+                output(exceptions.MultipleErrors(demand_iv.errors))
+
+            # initialize an IV models for supply-side linear parameter estimation
+            supply_iv = None
+            if self.K3 > 0:
+                supply_iv = IV(self.products.X3, self.products.ZS, WS)
+                if supply_iv.errors:
+                    if error_behavior == 'raise':
+                        raise exceptions.MultipleErrors(supply_iv.errors)
+                    output("")
+                    output(exceptions.MultipleErrors(supply_iv.errors))
+
             # wrap computation of objective information with step-specific information
             compute_step_info = functools.partial(
-                self._compute_objective_info, nonlinear_parameters, WD, WS, error_behavior, error_punishment, iteration,
-                linear_fp, linear_costs, costs_bounds, processes
+                self._compute_objective_info, nonlinear_parameters, demand_iv, supply_iv, error_behavior,
+                error_punishment, iteration, linear_fp, linear_costs, costs_bounds, processes
             )
 
             # define the objective function for the optimization routine, which also outputs progress updates
@@ -408,7 +426,7 @@ class Problem(Economy):
             wrapper.evaluation_mappings = []
             wrapper.smallest_objective = wrapper.smallest_gradient_norm = np.inf
             wrapper.cache = ObjectiveInfo(
-                self, nonlinear_parameters, WD, WS, theta, delta, tilde_costs, xi_jacobian, omega_jacobian
+                self, nonlinear_parameters, theta, delta, tilde_costs, xi_jacobian, omega_jacobian
             )
 
             # optimize theta
@@ -432,7 +450,7 @@ class Problem(Economy):
             output(f"Computing results for step {step} ...")
             step_info = compute_step_info(theta, wrapper.cache, compute_gradient=True)
             results = step_info.to_results(
-                last_results, start_time, end_time, iterations, evaluations, wrapper.iteration_mappings,
+                last_results, WD, WS, start_time, end_time, iterations, evaluations, wrapper.iteration_mappings,
                 wrapper.evaluation_mappings, center_moments, se_type
             )
             if results._errors:
@@ -458,8 +476,8 @@ class Problem(Economy):
             if step == steps:
                 return results
 
-    def _compute_objective_info(self, nonlinear_parameters, WD, WS, error_behavior, error_punishment, iteration,
-                                linear_fp, linear_costs, costs_bounds, processes, theta, last_objective_info,
+    def _compute_objective_info(self, nonlinear_parameters, demand_iv, supply_iv, error_behavior, error_punishment,
+                                iteration, linear_fp, linear_costs, costs_bounds, processes, theta, last_objective_info,
                                 compute_gradient):
         """Compute demand- and supply-side contributions. Then, form the GMM objective value and its gradient. Finally,
         handle any errors that were encountered before structuring relevant objective information.
@@ -468,33 +486,34 @@ class Problem(Economy):
 
         # compute demand-side contributions
         demand_contributions = self._compute_demand_contributions(
-            nonlinear_parameters, WD, iteration, linear_fp, processes, sigma, pi, last_objective_info, compute_gradient
+            nonlinear_parameters, demand_iv, iteration, linear_fp, processes, sigma, pi, last_objective_info,
+            compute_gradient
         )
-        delta, xi_jacobian, PD, beta, xi, demand_errors, iteration_mapping, evaluation_mapping = demand_contributions
+        delta, xi_jacobian, beta, xi, demand_errors, iteration_mapping, evaluation_mapping = demand_contributions
 
         # compute supply-side contributions
         supply_errors = set()
-        tilde_costs = omega_jacobian = PS = gamma = omega = None
+        tilde_costs = omega_jacobian = gamma = omega = None
         if self.K3 > 0:
             supply_contributions = self._compute_supply_contributions(
-                nonlinear_parameters, WD, WS, linear_costs, costs_bounds, processes, delta, xi_jacobian, beta, sigma,
-                pi, last_objective_info, compute_gradient
+                nonlinear_parameters, demand_iv, supply_iv, linear_costs, costs_bounds, processes, delta, xi_jacobian,
+                beta, sigma, pi, last_objective_info, compute_gradient
             )
-            tilde_costs, omega_jacobian, PS, gamma, omega, supply_errors = supply_contributions
+            tilde_costs, omega_jacobian, gamma, omega, supply_errors = supply_contributions
 
-        # stack the error terms, projection matrices, and Jacobian of the error terms with respect to theta
+        # stack the error terms, the Jacobian of the error terms with respect to theta, and IV projection matrices
         if self.K3 == 0:
             u = xi
-            P = PD
             jacobian = xi_jacobian
+            projection = demand_iv.projection
         else:
             u = np.r_[xi, omega]
-            P = scipy.linalg.block_diag(PD, PS)
             jacobian = np.r_[xi_jacobian, omega_jacobian]
+            projection = scipy.linalg.block_diag(demand_iv.projection, supply_iv.projection)
 
         # compute the objective value and its gradient
-        objective = u.T @ P @ u
-        gradient = 2 * (jacobian.T @ P @ u) if compute_gradient else None
+        objective = u.T @ projection @ u
+        gradient = 2 * (jacobian.T @ projection @ u) if compute_gradient else None
 
         # handle any errors
         errors = demand_errors | supply_errors
@@ -510,12 +529,12 @@ class Problem(Economy):
 
         # structure objective information
         return ObjectiveInfo(
-            self, nonlinear_parameters, WD, WS, theta, delta, tilde_costs, xi_jacobian, omega_jacobian, beta, gamma, xi,
-            omega, objective, gradient, iteration_mapping, evaluation_mapping, errors
+            self, nonlinear_parameters, theta, delta, tilde_costs, xi_jacobian, omega_jacobian, beta, gamma, xi, omega,
+            objective, gradient, iteration_mapping, evaluation_mapping, errors
         )
 
-    def _compute_demand_contributions(self, nonlinear_parameters, WD, iteration, linear_fp, processes, sigma, pi,
-                                      last_objective_info,  compute_gradient):
+    def _compute_demand_contributions(self, nonlinear_parameters, demand_iv, iteration, linear_fp, processes, sigma,
+                                      pi, last_objective_info, compute_gradient):
         """Compute delta and the Jacobian of xi (equivalently, of delta) with respect to theta market-by-market. If
         necessary, revert problematic elements to their last values. Lastly, recover beta and compute xi.
         """
@@ -553,14 +572,13 @@ class Problem(Economy):
                 errors.add(lambda: exceptions.XiJacobianReversionError(bad_jacobian_indices.sum()))
 
         # recover beta and compute xi
-        PD = self.products.ZD @ WD @ self.products.ZD.T
-        X1PD = self.products.X1.T @ PD
-        beta = scipy.linalg.solve(X1PD @ self.products.X1, X1PD @ delta)
-        xi = delta - self.products.X1 @ beta
-        return delta, xi_jacobian, PD, beta, xi, errors, iteration_mapping, evaluation_mapping
+        beta = demand_iv.compute_parameters(delta)
+        xi = demand_iv.compute_residuals(delta, beta)
+        return delta, xi_jacobian, beta, xi, errors, iteration_mapping, evaluation_mapping
 
-    def _compute_supply_contributions(self, nonlinear_parameters, WD, WS, linear_costs, costs_bounds, processes, delta,
-                                      xi_jacobian, beta, sigma, pi, last_objective_info, compute_gradient):
+    def _compute_supply_contributions(self, nonlinear_parameters, demand_iv, supply_iv, linear_costs, costs_bounds,
+                                      processes, delta, xi_jacobian, beta, sigma, pi, last_objective_info,
+                                      compute_gradient):
         """Compute transformed marginal costs and the Jacobian of omega (equivalently, of transformed marginal costs)
         with respect to theta market-by-market. If necessary, revert problematic elements to their last values. Lastly,
         recover gamma and compute omega.
@@ -568,11 +586,7 @@ class Problem(Economy):
         errors = set()
 
         # compute the Jacobian of beta with respect to theta, which is needed to compute other Jacobians
-        beta_jacobian = None
-        if compute_gradient:
-            PD = self.products.ZD @ WD @ self.products.ZD.T
-            X1PD = self.products.X1.T @ PD
-            beta_jacobian = scipy.linalg.solve(X1PD @ self.products.X1, X1PD @ xi_jacobian)
+        beta_jacobian = demand_iv.compute_parameters(xi_jacobian) if compute_gradient else None
 
         # construct a mapping from market IDs to market-specific arguments used to compute transformed marginal costs
         #   and their Jacobian
@@ -610,26 +624,22 @@ class Problem(Economy):
                 errors.add(lambda: exceptions.OmegaJacobianReversionError(bad_jacobian_indices.sum()))
 
         # recover gamma and compute omega
-        PS = self.products.ZS @ WS @ self.products.ZS.T
-        X3PS = self.products.X3.T @ PS
-        gamma = scipy.linalg.solve(X3PS @ self.products.X3, X3PS @ tilde_costs)
-        omega = tilde_costs - self.products.X3 @ gamma
-        return tilde_costs, omega_jacobian, PS, gamma, omega, errors
+        gamma = supply_iv.compute_parameters(tilde_costs)
+        omega = supply_iv.compute_residuals(tilde_costs, gamma)
+        return tilde_costs, omega_jacobian, gamma, omega, errors
 
 
 class ObjectiveInfo(object):
     """Structured information about a completed iteration of the optimization routine."""
 
-    def __init__(self, problem, nonlinear_parameters, WD, WS, theta, delta, tilde_costs, xi_jacobian, omega_jacobian,
-                 beta=None, gamma=None, xi=None, omega=None, objective=None, gradient=None, iteration_mapping=None,
+    def __init__(self, problem, nonlinear_parameters, theta, delta, tilde_costs, xi_jacobian, omega_jacobian, beta=None,
+                 gamma=None, xi=None, omega=None, objective=None, gradient=None, iteration_mapping=None,
                  evaluation_mapping=None, errors=None):
         """Initialize objective information. Optional parameters will not be specified when preparing for the first
         objective evaluation.
         """
         self.problem = problem
         self.nonlinear_parameters = nonlinear_parameters
-        self.WD = WD
-        self.WS = WS
         self.theta = theta
         self.delta = delta
         self.tilde_costs = tilde_costs

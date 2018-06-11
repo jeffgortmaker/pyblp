@@ -6,6 +6,27 @@ import scipy.linalg
 from .. import exceptions
 
 
+class IV(object):
+    """Simple model for generalized instrumental variables estimation."""
+
+    def __init__(self, X, Z, W):
+        """Pre-compute projection and covariance matrices, which will be used during estimation. Store any errors."""
+        self.errors = set()
+        self.X = X
+        self.projection = Z @ W @ Z.T
+        self.covariances, approximation = invert(X.T @ self.projection @ X)
+        if approximation:
+            self.errors.add(lambda: exceptions.LinearParameterCovariancesInversionError(approximation))
+
+    def compute_parameters(self, Y):
+        """Estimate parameters."""
+        return self.covariances @ self.X.T @ self.projection @ Y
+
+    def compute_residuals(self, Y, parameters):
+        """Estimate residuals."""
+        return Y - self.X @ parameters
+
+
 def compute_gmm_se(u, Z, W, jacobian, se_type):
     """Use an error term, instruments, a weighting matrix, and the Jacobian of the error term with respect to parameters
     to estimate GMM standard errors. Return a set of any errors.
@@ -18,7 +39,7 @@ def compute_gmm_se(u, Z, W, jacobian, se_type):
     # attempt to compute the covariance matrix
     covariances, approximation = invert(G.T @ W @ G)
     if approximation:
-        errors.add(lambda: exceptions.ParameterCovariancesInversionError(approximation))
+        errors.add(lambda: exceptions.GMMParameterCovariancesInversionError(approximation))
 
     # compute the robust covariance matrix and extract standard errors
     covariances, approximation = invert(G.T @ W @ G)
@@ -45,7 +66,7 @@ def compute_gmm_weights(u, Z, center_moments):
     # attempt to compute the weighting matrix
     W, approximation = invert(g.T @ g)
     if approximation:
-        errors.add(lambda: exceptions.MomentCovariancesInversionError(approximation))
+        errors.add(lambda: exceptions.GMMMomentCovariancesInversionError(approximation))
 
     # handle null values
     if np.isnan(W).any():
