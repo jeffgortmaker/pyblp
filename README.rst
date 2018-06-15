@@ -47,8 +47,10 @@ Alternatively, you can download a wheel or source archive from `PyPI <https://py
 Features
 --------
 
-- Straightforward interface for configuring and solving BLP problems.
+- Straightforward interface for configuring and solving BLP problems with R-style formulas.
+- Support for absorption of arbitrary fixed effects with iterative demeaning.
 - Support for demographics and supply-side moments.
+- Support for nonlinear functions and interactions of product characteristics.
 - Customizable parameter matrices and bounds.
 - Post-estimation functions for computing elasticities, diversion ratios, marginal costs, markups, profits, HHI, and consumer surplus.
 - Post-estimation merger simulation.
@@ -59,7 +61,8 @@ Features
 - One-step, two-step, or iterated GMM.  
 - Control over weighting matrix and standard error computation.
 - Linear or log-linear marginal cost specifications.
-- Functions for building indicators and BLP instruments.
+- Support for non-standard ownership matrices.
+- Functions for building ownership matrices and BLP instruments.
 - Support for market-by-market parallelization.
 - Support for extended floating point precision.
 - Robust handling of computational errors.
@@ -74,7 +77,6 @@ In no particular order, listed below are major features that will hopefully be a
 - Solving with logit and nested logit.
 - Tests for identification and overidentifying restrictions.
 - Clustered standard errors.
-- Fixed effect absorption.
 - Parametric bootstrap computation of post-estimation standard errors.
 - Built-in IPOPT support.
 - Built-in support for more fixed point routines.
