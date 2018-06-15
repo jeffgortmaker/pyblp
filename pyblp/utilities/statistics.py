@@ -10,21 +10,50 @@ class IV(object):
     """Simple model for generalized instrumental variables estimation."""
 
     def __init__(self, X, Z, W):
-        """Pre-compute projection and covariance matrices, which will be used during estimation. Store any errors."""
         self.errors = set()
         self.X = X
-        self.projection = Z @ W @ Z.T
-        self.covariances, approximation = invert(X.T @ self.projection @ X)
+        self.Z = Z
+        self.W = W
+        self.covariances, approximation = invert(self.X.T @ self.Z @ self.W @ self.Z.T @ self.X)
         if approximation:
             self.errors.add(lambda: exceptions.LinearParameterCovariancesInversionError(approximation))
 
-    def compute_parameters(self, Y):
-        """Estimate parameters."""
-        return self.covariances @ self.X.T @ self.projection @ Y
+    def estimate(self, y, compute_residuals=True):
+        """Estimate parameters and compute residuals."""
+        parameters =  self.covariances @ self.X.T @ self.Z @ self.W @ self.Z.T @ y
+        return (parameters, y - self.X @ parameters) if compute_residuals else parameters
 
-    def compute_residuals(self, Y, parameters):
-        """Estimate residuals."""
-        return Y - self.X @ parameters
+
+def iteratively_demean(matrix, ids, iteration):
+    """Iteratively demean matrix columns to absorb fixed effects defined by columns of IDs. Return any errors."""
+    errors = set()
+
+    # pre-compute indices that sort and de-sort each column of IDs, and then pre-compute information about unique values
+    #   in each sorted column
+    demeaning_info = []
+    for unsorted in ids.T:
+        sort_indices = unsorted.argsort()
+        undo_indices = sort_indices.argsort()
+        unique_info = np.unique(unsorted[sort_indices], return_index=True, return_inverse=True, return_counts=True)[1:]
+        demeaning_info.append((sort_indices, undo_indices, unique_info))
+
+    # define the contraction mapping, which uses the pre-computed information to quickly demean the matrix
+    def demean(unaltered):
+        demeaned = unaltered.copy()
+        for sort_indices, undo_indices, (unique_indices, unique_inverse, unique_counts) in demeaning_info:
+            means = np.add.reduceat(demeaned[sort_indices], unique_indices) / unique_counts[:, np.newaxis]
+            demeaned -= means[unique_inverse][undo_indices]
+        return demeaned
+
+    # demean the matrix once if there is only one column of IDs
+    if ids.shape[1] == 1:
+        return demean(matrix), errors
+
+    # otherwise, iteratively demean
+    matrix, converged = iteration._iterate(matrix, demean)[:2]
+    if not converged:
+        errors.add(exceptions.AbsorptionConvergenceError)
+    return matrix, errors
 
 
 def compute_gmm_se(u, Z, W, jacobian, se_type):

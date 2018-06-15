@@ -85,6 +85,17 @@ class ChangedPricesFloatingPointError(Exception):
         )
 
 
+class AbsorptionConvergenceError(Exception):
+    """Convergence issues when iteratively demeaning a matrix to absorb fixed effects."""
+
+    def __str__(self):
+        return (
+            "An iterative demeaning procedure failed to converge when absorbing fixed effects. This problem can "
+            "sometimes be mitigated by choosing less complicated sets of fixed effects or by configuring demeaning "
+            "iteration options."
+        )
+
+
 class ThetaConvergenceError(Exception):
     """Convergence issues when optimizing over theta."""
 

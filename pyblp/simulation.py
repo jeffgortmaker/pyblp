@@ -185,6 +185,12 @@ class Simulation(Economy):
         Number of demand-side instruments, :math:`M_D`.
     MS : `int`
         Number of supply-side instruments, :math:`M_S`.
+    ED : `int`
+        Number of demand-side fixed effects, :math:`E_D`, which is always zero because simulations do not support fixed
+        effects.
+    ES : `int`
+        Number of supply-side fixed effects, :math:`E_S`, which is always zero because simulations do not support fixed
+        effects.
 
     Example
     -------
@@ -219,8 +225,7 @@ class Simulation(Economy):
        simulation.agent_data
        simulation.product_data
 
-    Bertrand-Nash prices and shares, which are initialized as ``numpy.nan`` above, can be computed by solving the
-    simulation:
+    Bertrand-Nash prices and shares, which are initialized as zero above, can be computed by solving the simulation:
 
     .. ipython:: python
 
@@ -242,15 +247,21 @@ class Simulation(Economy):
         self.product_formulations = product_formulations
         self.agent_formulation = agent_formulation
 
-        # load IDs
+        # load IDs (and make sure that fixed effect IDs aren't configured)
         market_ids = extract_matrix(product_data, 'market_ids')
         firm_ids = extract_matrix(product_data, 'firm_ids')
+        demand_ids = extract_matrix(product_data, 'demand_ids')
+        supply_ids = extract_matrix(product_data, 'supply_ids')
         if market_ids is None:
             raise KeyError("product_data must have a market_ids field.")
         if firm_ids is None:
             raise KeyError("product_data must have a firm_ids field.")
         if market_ids.shape[1] > 1:
             raise ValueError("The market_ids field of product_data must be one-dimensional.")
+        if demand_ids is not None:
+            raise KeyError("demand_ids are not supported in simulations, so product_data should not have their field.")
+        if supply_ids is not None:
+            raise KeyError("supply_ids are not supported in simulations, so product_data should not have their field.")
 
         # load ownership matrices
         ownership = extract_matrix(product_data, 'ownership')
@@ -309,10 +320,6 @@ class Simulation(Economy):
         # structure product data
         self.product_data = Matrices(product_data_mapping)
         products = Products(product_formulations, self.product_data)
-
-        # nullify shares and prices
-        self.product_data.shares[:] = products.shares[:] = np.nan
-        self.product_data.prices[:] = products.prices[:] = np.nan
 
         # determine the number of agents by loading market IDs or by building them along with nodes and weights
         if integration is not None:
@@ -452,10 +459,13 @@ class Simulation(Economy):
         if error_behavior not in {'raise', 'warn'}:
             raise ValueError("error_behavior must be 'raise' or 'warn'.")
 
+        # compute a baseline delta that will be updated when shares and prices are changed
+        delta = self.products.X1 @ self.beta + self.xi
+
         # construct a mapping from market IDs to market-specific arguments used to compute prices and shares
         mapping = {}
         for t in np.unique(self.products.market_ids):
-            market_t = SimulationMarket(self, t, xi=self.xi, beta=self.beta, sigma=self.sigma, pi=self.pi)
+            market_t = SimulationMarket(self, t, delta, self.beta, self.sigma, self.pi)
             prices_t = prices[self.products.market_ids.flat == t]
             costs_t = self.costs[self.products.market_ids.flat == t]
             mapping[t] = [market_t, iteration, firms_index, prices_t, costs_t]

@@ -512,7 +512,7 @@ The instruments in :attr:`Simulation.product_data` are basic ones computed with 
 
 The :class:`Simulation` can be further configured with other arguments that determine how unobserved product characteristics are simulated and how marginal costs are specified.
 
-Since at this stage, prices and shares are all ``numpy.nan``, we still need to solve the simulation with :meth:`Simulation.solve`. This method computes Bertrand-Nash prices and shares. Just like :meth:`Results.solve_merger`, it iterates over the :math:`\zeta`-markup equation from :ref:`Morrow and Skerlos (2011) <ms11>` to do so.
+Since at this stage, prices and shares are all zeros, we still need to solve the simulation with :meth:`Simulation.solve`. This method computes Bertrand-Nash prices and shares. Just like :meth:`Results.solve_merger`, it iterates over the :math:`\zeta`-markup equation from :ref:`Morrow and Skerlos (2011) <ms11>` to do so.
 
 .. ipython:: python
 

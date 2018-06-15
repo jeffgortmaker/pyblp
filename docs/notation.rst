@@ -21,6 +21,8 @@ Symbol                    Description
 :math:`D`                 Demographic variables.
 :math:`M_D`               Demand-side instruments.
 :math:`M_S`               Supply-side instruments.
+:math:`E_D`               Demand-side fixed effects.
+:math:`E_S`               Supply-side fixed effects.
 :math:`P`                 Unknown nonlinear parameters.
 :math:`\mathscr{J}_{ft}`  Products produced by firm :math:`f` in market :math:`t`
 ========================  =======================================================

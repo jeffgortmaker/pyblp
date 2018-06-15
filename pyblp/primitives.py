@@ -5,9 +5,9 @@ import itertools
 import numpy as np
 import scipy.linalg
 
-from . import options
-from .configurations import Formulation, Integration
-from .utilities import output, extract_matrix, Matrices
+from . import options, exceptions
+from .configurations import Formulation, Integration, Iteration
+from .utilities import output, extract_matrix, iteratively_demean, Matrices
 
 
 class Products(Matrices):
@@ -19,11 +19,13 @@ class Products(Matrices):
 
         - **prices** : (`numeric`) - Product prices, :math:`p`.
 
-        - **X1** : (`numeric`) - Linear product characteristics, :math:`X_1`.
+        - **X1** : (`numeric`) - Linear product characteristics, :math:`X_1`, which may have been iteratively demeaned
+          to absorb any demand-side fixed effects.
 
         - **X2** : (`numeric`) - Nonlinear product characteristics, :math:`X_2`.
 
-        - **ZD** : (`numeric`) - Demand-side instruments, :math:`Z_D`.
+        - **ZD** : (`numeric`) - Demand-side instruments, :math:`Z_D`, which may have been iteratively demeaned to
+          absorb any demand-side fixed effects.
 
     Depending on the configuration, the following fields may also be present:
 
@@ -33,16 +35,22 @@ class Products(Matrices):
         - **ownership** : (`object`) - Stacked :math:`J_t \times J_t` ownership matrices, :math:`O`, for each market
           :math:`t`. Each stack is associated with a `firm_ids` column.
 
-        - **X3** : (`numeric`) - Cost product characteristics, :math:`X_3`.
+        - **X3** : (`numeric`) - Cost product characteristics, :math:`X_3`, which may have been iteratively demeaned to
+          absorb any supply-side fixed effects.
 
-        - **ZS** : (`numeric`) - Supply-side instruments, :math:`Z_S`.
+        - **ZS** : (`numeric`) - Supply-side instruments, :math:`Z_S`, which may have been iteratively demeaned to
+          absorb any supply-side fixed effects.
 
-    Any additional fields are the variables underlying `X1` and `X2`.
+        - **demand_ids** : (`object`) - Categorical variables used to create demand-side fixed effects.
+
+        - **supply_ids** : (`object`) - Categorical variables used to create supply-side fixed effects.
+
+    Any additional fields are the variables underlying `X1`, `X2`, and `X3`.
 
     """
 
-    def __new__(cls, product_formulations, product_data):
-        """Validate and structure product data."""
+    def __new__(cls, product_formulations, product_data, demeaning_iteration=None):
+        """Validate and structure product data while absorbing any fixed effects."""
 
         # validate the formulations
         if not all(isinstance(f, Formulation) for f in product_formulations) or len(product_formulations) not in {2, 3}:
@@ -60,6 +68,7 @@ class Products(Matrices):
 
         # build X3
         X3 = None
+        X3_data = {}
         X3_formulations = []
         if len(product_formulations) == 3:
             X3, X3_formulations, X3_data = product_formulations[2]._build(product_data)
@@ -68,15 +77,27 @@ class Products(Matrices):
             if 'prices' in X3_data:
                 raise NameError("prices cannot be included in the formulation for X3.")
 
+        # load instruments
+        ZD = extract_matrix(product_data, 'demand_instruments')
+        ZS = extract_matrix(product_data, 'supply_instruments')
+        if ZD is None:
+            raise KeyError("product_data must have a demand_instruments field.")
+        if (ZS is None) != (X3 is None):
+            raise KeyError("product_data must have a supply_instruments field only when X3 is formulated.")
+
         # load IDs
         market_ids = extract_matrix(product_data, 'market_ids')
         firm_ids = extract_matrix(product_data, 'firm_ids')
+        demand_ids = extract_matrix(product_data, 'demand_ids')
+        supply_ids = extract_matrix(product_data, 'supply_ids')
         if market_ids is None:
             raise KeyError("product_data must have a market_ids field.")
         if market_ids.shape[1] > 1:
             raise ValueError("The market_ids field of product_data must be one-dimensional.")
         if firm_ids is None and X3 is not None:
             raise KeyError("product_data must have firm_ids field when X3 is formulated.")
+        if supply_ids is not None and X3 is None:
+            raise KeyError("product_data must not have a supply_ids field when X3 is formulated.")
 
         # load ownership matrices
         ownership = None
@@ -94,32 +115,47 @@ class Products(Matrices):
         if shares.shape[1] > 1:
             raise ValueError("The shares field of product_data must be one-dimensional.")
 
-        # load instruments
-        demand_instruments = extract_matrix(product_data, 'demand_instruments')
-        supply_instruments = extract_matrix(product_data, 'supply_instruments')
-        if demand_instruments is None:
-            raise KeyError("product_data must have a demand_instruments field.")
-        if (supply_instruments is None) != (X3 is None):
-            raise KeyError("product_data must have a supply_instruments field only when X3 is formulated.")
+        # validate the demeaning configuration
+        if demeaning_iteration is None:
+            demeaning_iteration = Iteration('simple', {'tol': 1e-14})
+        if not isinstance(demeaning_iteration, Iteration):
+            raise TypeError("demeaning_iteration must be None or an Iteration instance.")
+
+        # absorb any demand-side fixed effects with iterative demeaning
+        if demand_ids is not None:
+            X1, X1_errors = iteratively_demean(X1, demand_ids, demeaning_iteration)
+            ZD, ZD_errors = iteratively_demean(ZD, demand_ids, demeaning_iteration)
+            if X1_errors | ZD_errors:
+                raise exceptions.MultipleErrors(X1_errors | ZD_errors)
+
+        # absorb any supply-side fixed effects with iterative demeaning
+        if supply_ids is not None:
+            X3, X3_errors = iteratively_demean(X3, supply_ids, demeaning_iteration)
+            ZS, ZS_errors = iteratively_demean(ZS, supply_ids, demeaning_iteration)
+            if X3_errors | ZS_errors:
+                raise exceptions.MultipleErrors(X3_errors | ZS_errors)
 
         # structure product fields as a mapping
         product_mapping = {
             'market_ids': (market_ids, np.object),
             'firm_ids': (firm_ids, np.object),
+            'demand_ids': (demand_ids, np.object),
+            'supply_ids': (supply_ids, np.object),
             'ownership': (ownership, options.dtype),
             'shares': (shares, options.dtype),
-            'ZD': (demand_instruments, options.dtype),
-            'ZS': (supply_instruments, options.dtype),
+            'ZD': (ZD, options.dtype),
+            'ZS': (ZS, options.dtype),
             (tuple(X1_formulations), 'X1'): (X1, options.dtype),
             (tuple(X2_formulations), 'X2'): (X2, options.dtype),
             (tuple(X3_formulations), 'X3'): (X3, options.dtype)
         }
 
-        # supplement the mapping with variables underlying X1 and X2
-        invalid_names = (set(X1_data) | set(X2_data)) & {k if isinstance(k, str) else k[1] for k in product_mapping}
+        # supplement the mapping with variables underlying X1, X2, and X3
+        underlying_data = {**X1_data, **X2_data, **X3_data}
+        invalid_names = set(underlying_data) & {k if isinstance(k, str) else k[1] for k in product_mapping}
         if invalid_names:
             raise NameError(f"These names in product_formulations are invalid: {list(invalid_names)}.")
-        product_mapping.update({k: (v, options.dtype) for k, v in itertools.chain(X1_data.items(), X2_data.items())})
+        product_mapping.update({k: (v, options.dtype) for k, v in underlying_data.items()})
 
         # structure products
         return super().__new__(cls, product_mapping)
@@ -238,19 +274,21 @@ class Economy(object):
         self.D = self.agents.demographics.shape[1] if 'demographics' in self.agents.dtype.fields else 0
         self.MD = self.products.ZD.shape[1]
         self.MS = self.products.ZS.shape[1] if 'ZS' in self.products.dtype.fields else 0
+        self.ED = self.products.demand_ids.shape[1] if 'demand_ids' in self.products.dtype.fields else 0
+        self.ES = self.products.supply_ids.shape[1] if 'supply_ids' in self.products.dtype.fields else 0
 
         # identify column formulations
         self._X1_formulations = self.products.dtype.fields['X1'][2]
         self._X2_formulations = self.products.dtype.fields['X2'][2]
-        self._X3_formulations = self.products.dtype.fields['X3'][2] if self.K3 > 0 else []
-        self._demographics_formulations = self.agents.dtype.fields['demographics'][2] if self.D > 0 else []
+        self._X3_formulations = self.products.dtype.fields['X3'][2] if self.K3 > 0 else tuple()
+        self._demographics_formulations = self.agents.dtype.fields['demographics'][2] if self.D > 0 else tuple()
 
     def __str__(self):
         """Format economy information as a string."""
         sections = []
 
         # collect all dimensions and matrix labels
-        dimension_items = [(k, str(getattr(self, k))) for k in ['N', 'T', 'K1', 'K3', 'K3', 'D', 'MD', 'MS']]
+        dimension_items = [(k, str(getattr(self, k))) for k in 'N T K1 K3 K3 D MD MS ED ES'.split()]
         matrix_items = [
             ('X1', [str(f) for f in self._X1_formulations]),
             ('X2', [str(f) for f in self._X2_formulations]),
@@ -302,7 +340,7 @@ class Market(object):
     outputs.
     """
 
-    def __init__(self, economy, t, delta=None, xi=None, beta=None, sigma=None, pi=None):
+    def __init__(self, economy, t, delta=None, beta=None, sigma=None, pi=None):
         """Restrict full data matrices and vectors to just this market, count dimensions, identify column formulations,
         store parameter matrices, and either store or pre-compute utility components. If arguments are left unspecified,
         dependent methods will raise exceptions.
@@ -321,6 +359,8 @@ class Market(object):
         self.D = economy.D
         self.MD = economy.MD
         self.MS = economy.MS
+        self.ED = economy.ED
+        self.ES = economy.ES
 
         # identify column formulations
         self._X1_formulations = economy._X1_formulations
@@ -333,16 +373,12 @@ class Market(object):
         self.sigma = sigma
         self.pi = pi
 
-        # store utilities or compute them if possible
-        self.mu = self.xi = self.delta = None
+        # compute or store utility components
+        self.mu = self.delta = None
         if sigma is not None:
             self.mu = self.compute_mu()
-        if xi is not None:
-            self.xi = xi[economy.products.market_ids.flat == t]
         if delta is not None:
             self.delta = delta[economy.products.market_ids.flat == t]
-        elif xi is not None and beta is not None:
-            self.delta = self.compute_delta()
 
     def get_ownership_matrix(self, firms_index=0):
         """Get a pre-computed ownership matrix or builds one. By default, use unchanged firm IDs."""
@@ -353,12 +389,6 @@ class Market(object):
             tiled_ids = np.tile(self.products.firm_ids[:, [firms_index]], self.J)
             return np.where(tiled_ids == tiled_ids.T, 1, 0)
 
-    def compute_delta(self, X1=None):
-        """Compute delta. By default, use the X1 with which this market was initialized."""
-        if X1 is None:
-            X1 = self.products.X1
-        return X1 @ self.beta + self.xi
-
     def compute_mu(self, X2=None):
         """Compute mu. By default, use the X2 with which this market was initialized."""
         if X2 is None:
@@ -366,23 +396,26 @@ class Market(object):
         return X2 @ (self.sigma @ self.agents.nodes.T + (self.pi @ self.agents.demographics.T if self.D > 0 else 0))
 
     def update_delta_with_variable(self, name, variable):
-        """Update delta to reflect a changed variable if it contributes to X1."""
+        """Update delta to reflect a changed variable if it contributes to X1. To do so, add the parameter-weighted
+        change in the characteristic (delta cannot simply be recomputed because doing so would not account for any
+        fixed effects).
+        """
 
         # if the variable does not contribute to X1, delta remains unchanged
         if not any(name in f.names for f in self._X1_formulations):
             return self.delta
 
         # if the variable does contribute to X1, delta may change
-        X1 = self.products.X1.copy()
+        delta = self.delta.copy()
         products = self.products.copy()
         products[name] = variable
         for index, formulation in enumerate(self._X1_formulations):
             if name in formulation.names:
-                X1[:, [index]] = formulation.evaluate(products)
-        return self.compute_delta(X1)
+                delta += self.beta[index] * (formulation.evaluate(products) - self.products[name])
+        return delta
 
     def update_mu_with_variable(self, name, variable):
-        """Update mu to reflect a changed variable if it contributes to X2."""
+        """Update mu to reflect a changed variable if it contributes to X2. To do so, recompute mu with the new X2."""
 
         # if the variable does not contribute to X2, mu remains unchanged
         if not any(name in f.names for f in self._X2_formulations):

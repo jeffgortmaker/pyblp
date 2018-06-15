@@ -74,24 +74,38 @@ class Results(object):
     gamma_se : `ndarray`
         Estimated standard errors for :math:`\hat{\gamma}`.
     delta : `ndarray`
+        Estimated mean utility, :math:`\delta(\hat{\theta})`, which may have been iteratively demeaned to absorb any
+        demand-side fixed effects.
+    true_delta : `ndarray`
         Estimated mean utility, :math:`\delta(\hat{\theta})`.
     tilde_costs : `ndarray`
         Estimated transformed marginal costs, :math:`\tilde{c}(\hat{\theta})`, which are ``None`` if the problem that
-        created these results was not initialized with supply-side data. Transformed marginal costs are simply
-        :math:`\tilde{c} = c`, marginal costs, under a linear cost specification, and are :math:`\tilde{c} = \log c`
-        under a log-linear specification.
+        created these results was not initialized with supply-side data, and which may have been iteratively demeaned to
+        absorb any demand-side fixed effects. Transformed marginal costs are simply :math:`\tilde{c} = c`,
+        marginal costs, under a linear cost specification, and are :math:`\tilde{c} = \log c` under a log-linear
+        specification.
+    true_tilde_costs : `ndarray`
+        Estimated transformed marginal costs, :math:`\tilde{c}(\hat{\theta})`, which are ``None`` if the problem that
+        created these results was not initialized with supply-side data.
     xi : `ndarray`
         Estimated unobserved demand-side product characteristics, :math:`\xi(\hat{\theta})`, or equivalently, the
-        demand-side structural error term.
+        demand-side structural error term, which may contain any absorbed demand-side fixed effects.
     omega : `ndarray`
         Estimated unobserved supply-side product characteristics, :math:`\omega(\hat{\theta})`, or equivalently, the
         supply-side structural error term, which is ``None`` if the problem that created these results was not
-        initialized with supply-side data.
+        initialized with supply-side data, and which may contain any absorbed supply-side fixed effects.
     objective : `float`
         GMM objective value.
     xi_jacobian : `ndarray`
+        Estimated :math:`\partial\xi / \partial\theta = \partial\delta / \partial\theta`, which may have been
+        iteratively demeaned to absorb any demand-side fixed effects.
+    true_xi_jacobian : `ndarray`
         Estimated :math:`\partial\xi / \partial\theta = \partial\delta / \partial\theta`.
     omega_jacobian : `ndarray`
+        Estimated :math:`\partial\omega / \partial\theta = \partial\tilde{c} / \partial\theta`, which is ``None`` if the
+        problem that created these results was not initialized with supply-side data, and which may have been
+        iteratively demeaned to absorb any supply-side fixed effects.
+    true_omega_jacobian : `ndarray`
         Estimated :math:`\partial\omega / \partial\theta = \partial\tilde{c} / \partial\theta`, which is ``None`` if the
         problem that created these results was not initialized with supply-side data.
     gradient : `ndarray`
@@ -118,27 +132,31 @@ class Results(object):
 
     """
 
-    def __init__(self, objective_info, last_results, WD, WS, start_time, end_time, iterations, evaluations,
-                 iteration_mappings, evaluation_mappings, center_moments, se_type):
+    def __init__(self, objective_info, last_results, start_time, end_time, iterations, evaluations, iteration_mappings,
+                 evaluation_mappings, center_moments, se_type):
         """Update weighting matrices, estimate standard errors, and compute cumulative progress statistics."""
 
         # initialize values from the objective information
+        self._errors = objective_info.errors
         self.problem = objective_info.problem
+        self.WD = objective_info.WD
+        self.WS = objective_info.WS
         self.theta = objective_info.theta
+        self.true_delta = objective_info.true_delta
+        self.true_tilde_costs = objective_info.true_tilde_costs
+        self.true_xi_jacobian = objective_info.true_xi_jacobian
+        self.true_omega_jacobian = objective_info.true_omega_jacobian
         self.delta = objective_info.delta
         self.tilde_costs = objective_info.tilde_costs
         self.xi_jacobian = objective_info.xi_jacobian
         self.omega_jacobian = objective_info.omega_jacobian
-        self.beta = objective_info.beta
-        self.gamma = objective_info.gamma
         self.xi = objective_info.xi
         self.omega = objective_info.omega
+        self.beta = objective_info.beta
+        self.gamma = objective_info.gamma
         self.objective = objective_info.objective
         self.gradient = objective_info.gradient
         self.gradient_norm = objective_info.gradient_norm
-
-        # store a set of any errors encountered here or during objective computation
-        self._errors = objective_info.errors
 
         # store parameter information
         self._nonlinear_parameters = objective_info.nonlinear_parameters
@@ -148,13 +166,23 @@ class Results(object):
         self.sigma, self.pi = self._nonlinear_parameters.expand(self.theta, fill_fixed=True)
         self.sigma_gradient, self.pi_gradient = self._nonlinear_parameters.expand(self.gradient)
 
-        # store the demand-side weighting matrix along with its updated counterpart
-        self.WD = WD
+        # compute the true xi, which only differs from the above xi if there are demand-side fixed effects
+        self.true_xi = self.xi
+        if self.problem.ED > 0:
+            true_X1 = np.column_stack((f.evaluate(self.problem.products) for f in self.problem._X1_formulations))
+            self.true_xi = self.true_delta - true_X1 @ self.beta
+
+        # compute the true omega, which only differs from the above omega if there are supply-side fixed effects
+        self.true_omega = self.omega
+        if self.problem.ES > 0:
+            true_X3 = np.column_stack((f.evaluate(self.problem.products) for f in self.problem._X3_formulations))
+            self.true_omega = self.true_delta - true_X3 @ self.beta
+
+        # update the demand-side weighting matrix
         self.updated_WD, WD_errors = compute_gmm_weights(self.xi, self.problem.products.ZD, center_moments)
         self._errors |= WD_errors
 
-        # store the supply-side weighting matrix along with its updated counterpart
-        self.WS = WS
+        # update the supply-side weighting matrix
         self.updated_WS = None
         if self.problem.K3 > 0:
             self.updated_WS, WS_errors = compute_gmm_weights(self.omega, self.problem.products.ZS, center_moments)
@@ -172,7 +200,7 @@ class Results(object):
             Z = scipy.linalg.block_diag(self.problem.products.ZD, self.problem.products.ZS)
             jacobian = np.c_[
                 np.r_[self.xi_jacobian, self.omega_jacobian],
-                scipy.linalg.block_diag(self.problem.products.X1, self.problem.products.X2)
+                scipy.linalg.block_diag(self.problem.products.X1, self.problem.products.X3)
             ]
 
         # compute standard errors
@@ -262,10 +290,11 @@ class Results(object):
         return str(self)
 
     def _validate_name(self, name):
-        """Validate that a name corresponds to a variable in X1 or X2 (or both)."""
-        names = {n for f in self.problem._X1_formulations + self.problem._X2_formulations for n in f.names}
+        """Validate that a name corresponds to a variable in X1, X2, or X3."""
+        formulations = self.problem._X1_formulations + self.problem._X2_formulations + self.problem._X3_formulations
+        names = {n for f in formulations for n in f.names}
         if name not in names:
-            raise NameError(f"The name '{name}' is not one of the variables in X1 or X2, {list(sorted(names))}.")
+            raise NameError(f"The name '{name}' is not one of the underlying variables, {list(sorted(names))}.")
 
     def _combine_results(self, compute_market_results, fixed_args=(), market_args=(), processes=1):
         """Compute post-estimation outputs for each market and stack them into a single matrix. Multiprocessing can be
@@ -283,7 +312,7 @@ class Results(object):
         # construct a mapping from market IDs to market-specific arguments used to compute results
         args_mapping = {}
         for t in self.unique_market_ids:
-            market_t = ResultsMarket(self.problem, t, self.delta, self.xi, self.beta, self.sigma, self.pi)
+            market_t = ResultsMarket(self.problem, t, self.delta, self.beta, self.sigma, self.pi)
             args_t = [None if a is None else a[self.problem.products.market_ids.flat == t] for a in market_args]
             args_mapping[t] = [market_t] + list(fixed_args) + args_t
 
