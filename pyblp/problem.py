@@ -60,7 +60,7 @@ class Problem(Economy):
               with a `firm_ids` column and must have as many columns as there are products in the market with the most
               products.
 
-        Any fixed effects are absorbed with the simple iterative demeaning algorithm of :ref:`Rios-Avila (2013) <r13>`:
+        Any fixed effects are absorbed with the simple iterative demeaning algorithm of :ref:`Rios-Avila (2015) <r15>`:
 
             - **demand_ids** : (`object, optional`) - Categorical variables used to create demand-side fixed effects.
               Each column is one such effect.
@@ -97,7 +97,7 @@ class Problem(Economy):
         in `agent_data` are not specified.
     demeaning_iteration : `Iteration, optional`
         :class:`Iteration` configuration for how to absorb fixed effects with the iterative demeaning algorithm of
-        :ref:`Rios-Avila (2013) <r13>`. By default, ``Iteration('simple', {'tol': 1e-14})`` is used. This configuration
+        :ref:`Rios-Avila (2015) <r15>`. By default, ``Iteration('simple', {'tol': 1e-14})`` is used. This configuration
         is only used if `product_data` has `demand_ids` or `supply_ids` fields. More specifically, on either the demand
         or supply  side, it will only be used if there is more than one fixed effect, since a single fixed effect will
         be completely absorbed after only one iteration of the algorithm.

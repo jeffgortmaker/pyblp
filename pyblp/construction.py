@@ -298,13 +298,14 @@ def build_matrix(formulation, data):
 
     Example
     -------
-    The following code loads the fake cereal data from :ref:`Nevo (2000) <n00>` and builds instruments for the problem,
-    which are product ID indicators followed by the instrument variables in the data:
+    The following code loads the fake cereal data from :ref:`Nevo (2000) <n00>` and builds instruments for the problem
+    when instead of absorbing product fixed effects, :math:`X_1` is configured to include product indicator variables.
+    Specifically, :math:`Z_D` is then product ID indicators followed by the instrument variables in the data:
 
     .. ipython:: python
 
-       instruments_string = ' + '.join(f'z{i}' for i in range(20))
-       formulation = pyblp.Formulation(f'0 + C(product_ids) + {instruments_string}')
+       instruments_string = ' + '.join(f'demand_instruments{i}' for i in range(20))
+       formulation = pyblp.Formulation(f'0 + C(demand_ids) + {instruments_string}')
        formulation
        data = np.recfromcsv(pyblp.data.NEVO_PRODUCTS_LOCATION)
        data.dtype.names
