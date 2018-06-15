@@ -382,23 +382,23 @@ class Problem(Economy):
 
         # construct or validate delta
         if delta is None:
-            delta = np.log(self.products.shares)
+            true_delta = np.log(self.products.shares)
             for t in np.unique(self.products.market_ids):
                 shares_t = self.products.shares[self.products.market_ids.flat == t]
-                delta[self.products.market_ids.flat == t] -= np.log(shares_t.sum())
+                true_delta[self.products.market_ids.flat == t] -= np.log(shares_t.sum())
         else:
-            delta = np.c_[np.asarray(delta, options.dtype)]
-            if delta.shape != (self.N, 1):
+            true_delta = np.c_[np.asarray(delta, options.dtype)]
+            if true_delta.shape != (self.N, 1):
                 raise ValueError(f"delta must be a vector with {self.N} elements.")
 
         # initialize the Jacobian of xi with respect to theta as all zeros
-        xi_jacobian = np.zeros((self.N, theta.size), options.dtype)
+        true_xi_jacobian = np.zeros((self.N, theta.size), options.dtype)
 
         # initialize marginal costs as prices and the Jacobian of omega with respect to theta as all zeros
-        tilde_costs = omega_jacobian = None
+        true_tilde_costs = true_omega_jacobian = None
         if self.K3 > 0:
-            tilde_costs = self.products.prices if linear_costs else np.log(self.products.prices)
-            omega_jacobian = xi_jacobian.copy()
+            true_tilde_costs = self.products.prices if linear_costs else np.log(self.products.prices)
+            true_omega_jacobian = true_xi_jacobian.copy()
 
         # iterate through each step
         last_results = None
@@ -438,7 +438,8 @@ class Problem(Economy):
             wrapper.evaluation_mappings = []
             wrapper.smallest_objective = wrapper.smallest_gradient_norm = np.inf
             wrapper.cache = ObjectiveInfo(
-                self, nonlinear_parameters, WD, WS, theta, delta, tilde_costs, xi_jacobian, omega_jacobian
+                self, nonlinear_parameters, WD, WS, theta, true_delta, true_tilde_costs, true_xi_jacobian,
+                true_omega_jacobian
             )
 
             # optimize theta
@@ -469,10 +470,10 @@ class Problem(Economy):
             output(results)
 
             # update vectors and matrices
-            delta = step_info.delta
-            tilde_costs = step_info.tilde_costs
-            xi_jacobian = step_info.xi_jacobian
-            omega_jacobian = step_info.omega_jacobian
+            true_delta = step_info.true_delta
+            true_tilde_costs = step_info.true_tilde_costs
+            true_xi_jacobian = step_info.true_xi_jacobian
+            true_omega_jacobian = step_info.true_omega_jacobian
             WD = results.updated_WD
             WS = results.updated_WS
 
@@ -626,7 +627,7 @@ class Problem(Economy):
         # replace invalid transformed marginal costs with their last values
         bad_indices = ~np.isfinite(true_tilde_costs)
         if np.any(bad_indices):
-            true_tilde_costs[bad_indices] = last_objective_info.tilde_costs[bad_indices]
+            true_tilde_costs[bad_indices] = last_objective_info.true_tilde_costs[bad_indices]
             errors.add(lambda: exceptions.CostsReversionError(tilde_costs.sum()))
 
         # replace invalid elements in their Jacobian with their last values
