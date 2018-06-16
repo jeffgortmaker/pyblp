@@ -173,10 +173,18 @@ class Problem(Economy):
     def __init__(self, product_formulations, product_data, agent_formulation=None, agent_data=None, integration=None,
                  demeaning_iteration=None):
         """Structure product and agent data and configure iterative demeaning."""
+
+        # configure iterative demeaning
+        if demeaning_iteration is None:
+            demeaning_iteration = Iteration('simple', {'tol': 1e-14})
+        if not isinstance(demeaning_iteration, Iteration):
+            raise TypeError("demeaning_iteration must be None or an Iteration instance.")
+        self._iteratively_demean = functools.partial(iteratively_demean, iteration=demeaning_iteration)
+
+        # structure product and agent data
         products = Products(product_formulations, product_data, demeaning_iteration)
         agents = Agents(products, agent_formulation, agent_data, integration)
         super().__init__(product_formulations, agent_formulation, products, agents)
-        self._iteratively_demean = functools.partial(iteratively_demean, iteration=demeaning_iteration)
 
     def solve(self, sigma, pi=None, sigma_bounds=None, pi_bounds=None, delta=None, WD=None, WS=None, steps=2,
               optimization=None, error_behavior='revert', error_punishment=1, iteration=None, linear_fp=True,
@@ -491,33 +499,35 @@ class Problem(Economy):
         sigma, pi = nonlinear_parameters.expand(theta, fill_fixed=True)
 
         # compute demand-side contributions
-        demand = self._compute_demand_contributions(
-            nonlinear_parameters, demand_iv, iteration, linear_fp, processes, sigma, pi, last_objective_info,
-            compute_gradient
+        true_delta, true_xi_jacobian, delta, xi_jacobian, beta, true_xi, iterations, evaluations, demand_errors = (
+            self._compute_demand_contributions(
+                nonlinear_parameters, demand_iv, iteration, linear_fp, processes, sigma, pi, last_objective_info,
+                compute_gradient
+            )
         )
-        true_delta, true_xi_jacobian, delta, xi_jacobian, beta, xi, iterations, evaluations, demand_errors = demand
 
         # compute supply-side contributions
         supply_errors = set()
-        true_tilde_costs = true_omega_jacobian = tilde_costs = omega_jacobian = gamma = omega = None
+        true_tilde_costs = true_omega_jacobian = tilde_costs = omega_jacobian = gamma = true_omega = None
         if self.K3 > 0:
-            supply = self._compute_supply_contributions(
-                nonlinear_parameters, demand_iv, supply_iv, linear_costs, costs_bounds, processes, beta, sigma, pi,
-                true_delta, true_xi_jacobian, xi_jacobian, last_objective_info, compute_gradient
+            true_tilde_costs, true_omega_jacobian, tilde_costs, omega_jacobian, gamma, true_omega, supply_errors = (
+                self._compute_supply_contributions(
+                    nonlinear_parameters, demand_iv, supply_iv, linear_costs, costs_bounds, processes, beta, sigma, pi,
+                    true_delta, true_xi_jacobian, xi_jacobian, last_objective_info, compute_gradient
+                )
             )
-            true_tilde_costs, true_omega_jacobian, tilde_costs, omega_jacobian, gamma, omega, supply_errors = supply
 
         # compute the objective value
-        objective = xi.T @ self.products.ZD @ WD @ self.products.ZD.T @ xi
+        objective = true_xi.T @ self.products.ZD @ WD @ self.products.ZD.T @ true_xi
         if self.K3 > 0:
-            objective += omega.T @ self.products.ZS @ WS @ self.products.ZS.T @ omega
+            objective += true_omega.T @ self.products.ZS @ WS @ self.products.ZS.T @ true_omega
 
         # compute its gradient
         gradient = None
         if compute_gradient:
-            gradient = 2 * (xi_jacobian.T @ self.products.ZD @ WD @ self.products.ZD.T @ xi)
+            gradient = 2 * (xi_jacobian.T @ self.products.ZD @ WD @ self.products.ZD.T @ true_xi)
             if self.K3 > 0:
-                gradient += 2 * (omega_jacobian.T @ self.products.ZS @ WS @ self.products.ZS.T @ omega)
+                gradient += 2 * (omega_jacobian.T @ self.products.ZS @ WS @ self.products.ZS.T @ true_omega)
 
         # handle any errors
         errors = demand_errors | supply_errors
@@ -534,8 +544,8 @@ class Problem(Economy):
         # structure objective information
         return ObjectiveInfo(
             self, nonlinear_parameters, WD, WS, theta, true_delta, true_tilde_costs, true_xi_jacobian,
-            true_omega_jacobian, delta, tilde_costs, xi_jacobian, omega_jacobian, xi, omega, beta, gamma, objective,
-            gradient, iterations, evaluations, errors
+            true_omega_jacobian, delta, tilde_costs, xi_jacobian, omega_jacobian, true_xi, true_omega, beta, gamma,
+            objective, gradient, iterations, evaluations, errors
         )
 
     def _compute_demand_contributions(self, nonlinear_parameters, demand_iv, iteration, linear_fp, processes, sigma,
@@ -587,8 +597,8 @@ class Problem(Economy):
                 errors |= jacobian_errors
 
         # recover beta and compute xi
-        beta, xi = demand_iv.estimate(delta)
-        return true_delta, true_xi_jacobian, delta, xi_jacobian, beta, xi, iterations, evaluations, errors
+        beta, true_xi = demand_iv.estimate(delta)
+        return true_delta, true_xi_jacobian, delta, xi_jacobian, beta, true_xi, iterations, evaluations, errors
 
     def _compute_supply_contributions(self, nonlinear_parameters, demand_iv, supply_iv, linear_costs, costs_bounds,
                                       processes, beta, sigma, pi, true_delta, true_xi_jacobian, xi_jacobian,
@@ -640,16 +650,16 @@ class Problem(Economy):
         # demean transformed marginal costs and their Jacobian
         tilde_costs = true_tilde_costs
         omega_jacobian = true_omega_jacobian
-        if self.ED > 0:
-            tilde_costs, tilde_costs_errors = self._iteratively_demean(tilde_costs, self.demand_ids)
+        if self.ES > 0:
+            tilde_costs, tilde_costs_errors = self._iteratively_demean(tilde_costs, self.products.supply_ids)
             errors |= tilde_costs_errors
             if compute_gradient:
-                omega_jacobian, jacobian_errors = self._iteratively_demean(omega_jacobian, self.demand_ids)
+                omega_jacobian, jacobian_errors = self._iteratively_demean(omega_jacobian, self.products.supply_ids)
                 errors |= jacobian_errors
 
         # recover gamma and compute omega
-        gamma, omega = supply_iv.estimate(tilde_costs)
-        return true_tilde_costs, true_omega_jacobian, tilde_costs, omega_jacobian, gamma, omega, errors
+        gamma, true_omega = supply_iv.estimate(tilde_costs)
+        return true_tilde_costs, true_omega_jacobian, tilde_costs, omega_jacobian, gamma, true_omega, errors
 
     @staticmethod
     def _handle_errors(error_behavior, errors):
@@ -666,8 +676,8 @@ class ObjectiveInfo(object):
     """Structured information about a completed iteration of the optimization routine."""
 
     def __init__(self, problem, nonlinear_parameters, WD, WS, theta, true_delta, true_tilde_costs, true_xi_jacobian,
-                 true_omega_jacobian, delta=None, tilde_costs=None, xi_jacobian=None, omega_jacobian=None, xi=None,
-                 omega=None, beta=None, gamma=None, objective=None, gradient=None, iteration_mapping=None,
+                 true_omega_jacobian, delta=None, tilde_costs=None, xi_jacobian=None, omega_jacobian=None, true_xi=None,
+                 true_omega=None, beta=None, gamma=None, objective=None, gradient=None, iteration_mapping=None,
                  evaluation_mapping=None, errors=None):
         """Initialize objective information. Optional parameters will not be specified when preparing for the first
         objective evaluation.
@@ -685,8 +695,8 @@ class ObjectiveInfo(object):
         self.tilde_costs = tilde_costs
         self.xi_jacobian = xi_jacobian
         self.omega_jacobian = omega_jacobian
-        self.xi = xi
-        self.omega = omega
+        self.true_xi = true_xi
+        self.true_omega = true_omega
         self.beta = beta
         self.gamma = gamma
         self.objective = objective

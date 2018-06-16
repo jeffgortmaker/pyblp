@@ -97,7 +97,7 @@ class Products(Matrices):
         if firm_ids is None and X3 is not None:
             raise KeyError("product_data must have firm_ids field when X3 is formulated.")
         if supply_ids is not None and X3 is None:
-            raise KeyError("product_data must not have a supply_ids field when X3 is formulated.")
+            raise KeyError("product_data must not have a supply_ids field when X3 not is formulated.")
 
         # load ownership matrices
         ownership = None
@@ -114,12 +114,6 @@ class Products(Matrices):
             raise KeyError("product_data must have a shares field.")
         if shares.shape[1] > 1:
             raise ValueError("The shares field of product_data must be one-dimensional.")
-
-        # validate the demeaning configuration
-        if demeaning_iteration is None:
-            demeaning_iteration = Iteration('simple', {'tol': 1e-14})
-        if not isinstance(demeaning_iteration, Iteration):
-            raise TypeError("demeaning_iteration must be None or an Iteration instance.")
 
         # absorb any demand-side fixed effects with iterative demeaning
         if demand_ids is not None:

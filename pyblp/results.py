@@ -89,11 +89,18 @@ class Results(object):
         created these results was not initialized with supply-side data.
     xi : `ndarray`
         Estimated unobserved demand-side product characteristics, :math:`\xi(\hat{\theta})`, or equivalently, the
-        demand-side structural error term, which may contain any absorbed demand-side fixed effects.
+        demand-side structural error term, which includes the contribution of any absorbed demand-side fixed effects.
+    true_xi : `ndarray
+        Estimated unobserved demand-side product characteristics, :math:`\xi(\hat{\theta})`.
     omega : `ndarray`
         Estimated unobserved supply-side product characteristics, :math:`\omega(\hat{\theta})`, or equivalently, the
         supply-side structural error term, which is ``None`` if the problem that created these results was not
-        initialized with supply-side data, and which may contain any absorbed supply-side fixed effects.
+        initialized with supply-side data, and which includes the contribution of any absorbed supply-side fixed
+        effects.
+    omega : `ndarray`
+        Estimated unobserved supply-side product characteristics, :math:`\omega(\hat{\theta})`, or equivalently, the
+        supply-side structural error term, which is ``None`` if the problem that created these results was not
+        initialized with supply-side data.
     objective : `float`
         GMM objective value.
     xi_jacobian : `ndarray`
@@ -150,8 +157,8 @@ class Results(object):
         self.tilde_costs = objective_info.tilde_costs
         self.xi_jacobian = objective_info.xi_jacobian
         self.omega_jacobian = objective_info.omega_jacobian
-        self.xi = objective_info.xi
-        self.omega = objective_info.omega
+        self.true_xi = objective_info.true_xi
+        self.true_omega = objective_info.true_omega
         self.beta = objective_info.beta
         self.gamma = objective_info.gamma
         self.objective = objective_info.objective
@@ -166,36 +173,38 @@ class Results(object):
         self.sigma, self.pi = self._nonlinear_parameters.expand(self.theta, fill_fixed=True)
         self.sigma_gradient, self.pi_gradient = self._nonlinear_parameters.expand(self.gradient)
 
-        # compute the true xi, which only differs from the above xi if there are demand-side fixed effects
-        self.true_xi = self.xi
+        # compute a version of xi that includes the contribution of any demand-side fixed effects
+        self.xi = self.true_xi
         if self.problem.ED > 0:
-            true_X1 = np.column_stack((f.evaluate(self.problem.products) for f in self.problem._X1_formulations))
-            self.true_xi = self.true_delta - true_X1 @ self.beta
+            ones = np.ones_like(self.xi)
+            true_X1 = np.column_stack((ones * f.evaluate(self.problem.products) for f in self.problem._X1_formulations))
+            self.xi = self.true_delta - true_X1 @ self.beta
 
-        # compute the true omega, which only differs from the above omega if there are supply-side fixed effects
-        self.true_omega = self.omega
+        # compute a version of omega that includes the contribution of any supply-side fixed effects
+        self.omega = self.true_omega
         if self.problem.ES > 0:
-            true_X3 = np.column_stack((f.evaluate(self.problem.products) for f in self.problem._X3_formulations))
-            self.true_omega = self.true_delta - true_X3 @ self.beta
+            ones = np.ones_like(self.xi)
+            true_X3 = np.column_stack((ones * f.evaluate(self.problem.products) for f in self.problem._X3_formulations))
+            self.omega = self.true_tilde_costs - true_X3 @ self.gamma
 
         # update the demand-side weighting matrix
-        self.updated_WD, WD_errors = compute_gmm_weights(self.xi, self.problem.products.ZD, center_moments)
+        self.updated_WD, WD_errors = compute_gmm_weights(self.true_xi, self.problem.products.ZD, center_moments)
         self._errors |= WD_errors
 
         # update the supply-side weighting matrix
         self.updated_WS = None
         if self.problem.K3 > 0:
-            self.updated_WS, WS_errors = compute_gmm_weights(self.omega, self.problem.products.ZS, center_moments)
+            self.updated_WS, WS_errors = compute_gmm_weights(self.true_omega, self.problem.products.ZS, center_moments)
             self._errors |= WS_errors
 
         # stack the error terms, weighting matrices, instruments, and Jacobian of the errors with respect to parameters
         if self.problem.K3 == 0:
-            u = self.xi
+            u = self.true_xi
             W = self.WD
             Z = self.problem.products.ZD
             jacobian = np.c_[self.xi_jacobian, self.problem.products.X1]
         else:
-            u = np.r_[self.xi, self.omega]
+            u = np.r_[self.true_xi, self.true_omega]
             W = scipy.linalg.block_diag(self.WD, self.WS)
             Z = scipy.linalg.block_diag(self.problem.products.ZD, self.problem.products.ZS)
             jacobian = np.c_[
