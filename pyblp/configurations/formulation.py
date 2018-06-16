@@ -87,6 +87,7 @@ class Formulation(object):
         """
         if not isinstance(formula, str):
             raise TypeError("formula must be a string.")
+        self._formula = formula
         self._terms = parse_terms(formula)
         self._expressions = [parse_term_expression(t) for t in self._terms]
         self._names = {str(s) for e in self._expressions for s in e.free_symbols}

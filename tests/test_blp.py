@@ -4,7 +4,7 @@ import pytest
 import numpy as np
 import scipy.optimize
 
-from pyblp import options, Problem, Iteration, Optimization
+from pyblp import options, build_matrix, Problem, Iteration, Optimization, Formulation
 
 
 @pytest.mark.usefixtures('simulated_problem')
@@ -52,6 +52,100 @@ def test_trivial_changes(simulated_problem, solve_options1, solve_options2):
         if isinstance(result1, np.ndarray) and result1.dtype != np.object:
             result2 = getattr(results[1], key)
             np.testing.assert_allclose(result1, result2, atol=1e-14, rtol=0, err_msg=key)
+
+
+@pytest.mark.usefixtures('simulated_problem')
+@pytest.mark.parametrize(['ED', 'ES'], [
+    pytest.param(1, 0, id="1 demand-side FE"),
+    pytest.param(0, 1, id="1 supply-side FE"),
+    pytest.param(1, 1, id="1 demand- and 1 supply-side FE"),
+    pytest.param(2, 0, id="2 demand-side FEs"),
+    pytest.param(0, 2, id="2 supply-side FEs"),
+    pytest.param(2, 2, id="2 demand- and 2 supply-side FEs"),
+    pytest.param(3, 0, id="3 demand-side FEs"),
+    pytest.param(0, 3, id="3 supply-side FEs"),
+    pytest.param(3, 3, id="3 demand- and 3 supply-side FEs"),
+    pytest.param(2, 1, id="2 demand- and 1 supply-side FEs"),
+    pytest.param(1, 2, id="1 demand- and 2 supply-side FEs"),
+])
+def test_fixed_effects(simulated_problem, ED, ES):
+    """Test that absorbing different numbers of demand- and supply-side fixed effects gives rise to essentially
+    identical first-stage results as including indicator variables. Also test that results that should be equal when
+    there aren't any fixed effects are indeed equal.
+    """
+    simulation, product_data, problem, results = simulated_problem
+
+    # test that results that should be equal when there aren't any fixed effects are indeed equal
+    for key in ['delta', 'tilde_costs', 'xi', 'omega', 'xi_jacobian', 'omega_jacobian']:
+        result = getattr(results, key)
+        true_result = getattr(results, f'true_{key}')
+        assert (result is not None) == (true_result is not None)
+        if result is not None:
+            np.testing.assert_allclose(result, true_result, atol=1e-14, rtol=0, err_msg=key)
+
+    # there cannot be supply-side fixed effects if there isn't a supply side
+    if problem.K3 == 0:
+        ES = 0
+    if ED == ES == 0:
+        return
+
+    # create two sets of changeable product data
+    product_data1 = {k: product_data[k] for k in product_data.dtype.names}
+    product_data2 = product_data1.copy()
+
+    # add IDs for creating fixed effects to the two sets of data
+    np.random.seed(0)
+    demand_names = []
+    supply_names = []
+    for side, count, names in [('demand', ED, demand_names), ('supply', ES, supply_names)]:
+        for index in range(count):
+            ids = np.random.choice(['a', 'b', 'c'], product_data.shape[0], [0.7, 0.2, 0.1])
+            product_data1[f'{side}_ids{index}'] = product_data2[f'renamed_{side}_ids{index}'] = ids
+            names.append(f'renamed_{side}_ids{index}')
+
+    # solve the first stage of a problem in which the fixed effects are absorbed
+    product_formulations1 = list(problem.product_formulations)
+    if ED > 0:
+        product_formulations1[0] = Formulation(f'{product_formulations1[0]._formula} - 1')
+        product_data1['demand_instruments'] = product_data1['demand_instruments'][:, 1:]
+    if ES > 0:
+        product_formulations1[2] = Formulation(f'{product_formulations1[2]._formula} - 1')
+        product_data1['supply_instruments'] = product_data1['supply_instruments'][:, 1:]
+    problem1 = Problem(product_formulations1, product_data1, problem.agent_formulation, simulation.agent_data)
+    results1 = problem1.solve(simulation.sigma, simulation.pi, steps=1)
+
+    # solve the first stage of a problem in which fixed effects are included as indicator variables
+    product_formulations2 = list(problem.product_formulations)
+    if ED > 0:
+        demand_formula = ' + '.join(demand_names)
+        product_formulations2[0] = Formulation(f'{product_formulations2[0]._formula} - 1 + {demand_formula}')
+        product_data2['demand_instruments'] = np.c_[
+            product_data2['demand_instruments'][:, 1:],
+            build_matrix(Formulation(demand_formula), product_data2)
+        ]
+    if ES > 0:
+        supply_formula = ' + '.join(supply_names)
+        product_formulations2[2] = Formulation(f'{product_formulations2[2]._formula} - 1 + {supply_formula}')
+        product_data2['supply_instruments'] = np.c_[
+            product_data2['supply_instruments'][:, 1:],
+            build_matrix(Formulation(supply_formula), product_data2)
+        ]
+    problem2 = Problem(product_formulations2, product_data2, problem.agent_formulation, simulation.agent_data)
+    results2 = problem2.solve(simulation.sigma, simulation.pi, steps=1)
+
+    # test that all arrays expected to be identical are identical
+    keys = [
+        'theta', 'sigma', 'pi', 'beta', 'gamma', 'sigma_se', 'pi_se', 'beta_se', 'gamma_se', 'true_delta',
+        'true_tilde_costs', 'true_xi', 'true_omega', 'true_xi_jacobian', 'true_omega_jacobian', 'objective', 'gradient',
+        'sigma_gradient', 'pi_gradient'
+    ]
+    for key in keys:
+        result1 = getattr(results1, key)
+        if result1 is not None:
+            result2 = getattr(results2, key)
+            if 'beta' in key or 'gamma' in key:
+                result2 = result2[:result1.size]
+            np.testing.assert_allclose(result1, result2, atol=1e-8, rtol=1e-5, err_msg=key)
 
 
 @pytest.mark.usefixtures('simulated_problem')
