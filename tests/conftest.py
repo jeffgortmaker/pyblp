@@ -61,13 +61,14 @@ def small_simulation():
 @pytest.fixture
 def medium_simulation():
     """Solve a simulation with four markets, a nonlinear/cost constant, two linear characteristics, two cost
-    characteristics, a demographic interacted with prices, a double acquisition, and a non-standard ownership structure.
+    characteristics, a demographic interacted with second-degree prices, a double acquisition, and a non-standard
+    ownership structure.
     """
     id_data = build_id_data(T=4, J=25, F=6, mergers=[{f: 2 for f in range(2)}])
     simulation = Simulation(
         product_formulations=(
             Formulation('0 + x + y'),
-            Formulation('1 + prices'),
+            Formulation('1 + I(prices ** 2)'),
             Formulation('1 + a + b')
         ),
         beta=[2, 1],
@@ -106,7 +107,7 @@ def large_simulation():
         product_formulations=(
             Formulation('1 + prices + x + y + z'),
             Formulation('0 + prices + x'),
-            Formulation('0 + x + a + b + c')
+            Formulation('0 + log(x) + a + b + c')
         ),
         beta=[1, -6, 1, 2, 3],
         sigma=[

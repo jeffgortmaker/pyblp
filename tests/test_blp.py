@@ -32,7 +32,8 @@ def test_accuracy(simulated_problem, solve_options):
 
 @pytest.mark.usefixtures('simulated_problem')
 @pytest.mark.parametrize(['solve_options1', 'solve_options2'], [
-    pytest.param({'processes': 1}, {'processes': 2}, id="single process and multiprocessing")
+    pytest.param({'processes': 1}, {'processes': 2}, id="single process and multiprocessing"),
+    pytest.param({}, {'costs_bounds': (-1e10, 1e10)}, id="unaltered and non-binding costs bounds")
 ])
 def test_trivial_changes(simulated_problem, solve_options1, solve_options2):
     """Test that solving a problem with arguments that shouldn't give rise to meaningful differences doesn't give rise
@@ -162,8 +163,7 @@ def test_merger(simulated_problem, solve_options):
     """
     simulation, _, _, results = simulated_problem
 
-    # get unchanged and changed prices and shares
-    product_data = simulation.solve()
+    # get changed prices and shares
     changed_product_data = simulation.solve(firms_index=1)
 
     # solve for approximate and actual changed prices and shares
@@ -172,21 +172,15 @@ def test_merger(simulated_problem, solve_options):
     approximated_shares = results.compute_shares(approximated_prices)
     estimated_shares = results.compute_shares(estimated_prices)
 
-    # test that estimated prices are closer to changed prices than approximate prices, which in turn are closer than
-    #   unchanged prices
-    baseline_prices_error = np.linalg.norm(changed_product_data.prices - product_data.prices)
+    # test that estimated prices are closer to changed prices than approximate prices
     approximated_prices_error = np.linalg.norm(changed_product_data.prices - approximated_prices)
     estimated_prices_error = np.linalg.norm(changed_product_data.prices - estimated_prices)
     np.testing.assert_array_less(estimated_prices_error, approximated_prices_error, verbose=True)
-    np.testing.assert_array_less(approximated_prices_error, baseline_prices_error, verbose=True)
 
-    # test that estimated shares are closer to changed shares than approximate shares, which in turn are closer than
-    #   unchanged shares
-    baseline_shares_error = np.linalg.norm(changed_product_data.shares - product_data.shares)
+    # test that estimated shares are closer to changed shares than approximate shares
     approximated_shares_error = np.linalg.norm(changed_product_data.shares - approximated_shares)
     estimated_shares_error = np.linalg.norm(changed_product_data.shares - estimated_shares)
     np.testing.assert_array_less(estimated_shares_error, approximated_shares_error, verbose=True)
-    np.testing.assert_array_less(approximated_shares_error, baseline_shares_error, verbose=True)
 
     # test that HHI increases
     hhi = results.compute_hhi()
