@@ -260,9 +260,12 @@ class Economy(object):
         self.products = products
         self.agents = agents
 
+        # identify unique markets
+        self.unique_market_ids = np.unique(self.products.market_ids).flatten()
+
         # count dimensions
         self.N = self.products.shape[0]
-        self.T = np.unique(self.products.market_ids).size
+        self.T = self.unique_market_ids.size
         self.K1 = self.products.X1.shape[1]
         self.K2 = self.products.X2.shape[1]
         self.K3 = self.products.X3.shape[1] if 'X3' in self.products.dtype.fields else 0

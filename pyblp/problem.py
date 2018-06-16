@@ -115,6 +115,8 @@ class Problem(Economy):
         Structured `agent_data` from :class:`Problem` initialization, which is an instance of
         :class:`primitives.Agents`. A matrix of demographics was built according to `agent_formulation` if it was
         specified. Nodes and weights were build according to `integration` if it was specified.
+    unique_market_ids : `ndarray`
+        Unique market IDs in product and agent data.
     N : `int`
         Number of products across all markets, :math:`N`.
     T : `int`
@@ -391,7 +393,7 @@ class Problem(Economy):
         # construct or validate delta
         if delta is None:
             true_delta = np.log(self.products.shares)
-            for t in np.unique(self.products.market_ids):
+            for t in self.unique_market_ids:
                 shares_t = self.products.shares[self.products.market_ids.flat == t]
                 true_delta[self.products.market_ids.flat == t] -= np.log(shares_t.sum())
         else:
@@ -555,19 +557,18 @@ class Problem(Economy):
         """
         errors = set()
 
-        # construct a mapping from market IDs to market-specific arguments used to compute delta and its Jacobian
-        mapping = {}
-        for t in np.unique(self.products.market_ids):
-            market_t = DemandProblemMarket(self, t, sigma=sigma, pi=pi)
-            last_true_delta_t = last_objective_info.true_delta[self.products.market_ids.flat == t]
-            mapping[t] = [market_t, last_true_delta_t, nonlinear_parameters, iteration, linear_fp, compute_gradient]
+        # define a function builds a market along with market-specific arguments used to compute delta and its Jacobian
+        def market_factory(s):
+            market_s = DemandProblemMarket(self, s, sigma=sigma, pi=pi)
+            last_true_delta_s = last_objective_info.true_delta[self.products.market_ids.flat == s]
+            return market_s, last_true_delta_s, nonlinear_parameters, iteration, linear_fp, compute_gradient
 
         # fill delta and its Jacobian market-by-market (the Jacobian will be null if the gradient isn't being computed)
         iterations = {}
         evaluations = {}
         true_delta = np.zeros((self.N, 1), options.dtype)
         true_xi_jacobian = np.zeros((self.N, nonlinear_parameters.P), options.dtype)
-        with ParallelItems(DemandProblemMarket.solve, mapping, processes) as items:
+        with ParallelItems(self.unique_market_ids, market_factory, DemandProblemMarket.solve, processes) as items:
             for t, (true_delta_t, true_xi_jacobian_t, errors_t, iterations[t], evaluations[t]) in items:
                 true_delta[self.products.market_ids.flat == t] = true_delta_t
                 true_xi_jacobian[self.products.market_ids.flat == t] = true_xi_jacobian_t
@@ -612,23 +613,22 @@ class Problem(Economy):
         # compute the Jacobian of beta with respect to theta, which is needed to compute other Jacobians
         beta_jacobian = demand_iv.estimate(xi_jacobian, compute_residuals=False) if compute_gradient else None
 
-        # construct a mapping from market IDs to market-specific arguments used to compute transformed marginal costs
-        #   and their Jacobian
-        mapping = {}
-        for t in np.unique(self.products.market_ids):
-            market_t = SupplyProblemMarket(self, t, true_delta, beta, sigma, pi)
-            last_true_tilde_costs_t = last_objective_info.true_tilde_costs[self.products.market_ids.flat == t]
-            true_xi_jacobian_t = true_xi_jacobian[self.products.market_ids.flat == t]
-            mapping[t] = [
-                market_t, last_true_tilde_costs_t, true_xi_jacobian_t, beta_jacobian, nonlinear_parameters,
+        # define a function builds a market along with market-specific arguments used to compute transformed marginal
+        #   costs and their Jacobian
+        def market_factory(s):
+            market_s = SupplyProblemMarket(self, s, true_delta, beta, sigma, pi)
+            last_true_tilde_costs_s = last_objective_info.true_tilde_costs[self.products.market_ids.flat == s]
+            true_xi_jacobian_s = true_xi_jacobian[self.products.market_ids.flat == s]
+            return (
+                market_s, last_true_tilde_costs_s, true_xi_jacobian_s, beta_jacobian, nonlinear_parameters,
                 linear_costs, costs_bounds, compute_gradient
-            ]
+            )
 
         # fill transformed marginal costs and their Jacobian market-by-market (the Jacobian will be null if the gradient
         #   isn't being computed)
         true_tilde_costs = np.zeros((self.N, 1), options.dtype)
         true_omega_jacobian = np.zeros((self.N, nonlinear_parameters.P), options.dtype)
-        with ParallelItems(SupplyProblemMarket.solve, mapping, processes) as items:
+        with ParallelItems(self.unique_market_ids, market_factory, SupplyProblemMarket.solve, processes) as items:
             for t, (true_tilde_costs_t, true_omega_jacobian_t, errors_t) in items:
                 true_tilde_costs[self.products.market_ids.flat == t] = true_tilde_costs_t
                 true_omega_jacobian[self.products.market_ids.flat == t] = true_omega_jacobian_t

@@ -219,8 +219,8 @@ class Results(object):
         self.gamma_se = se[-self.problem.K3:] if self.problem.K3 > 0 else None
         self._errors |= se_errors
 
-        # construct an array of unique and sorted market IDs
-        self.unique_market_ids = np.unique(self.problem.products.market_ids).flatten()
+        # load an array of unique and sorted market IDs
+        self.unique_market_ids = self.problem.unique_market_ids
 
         # initialize counts and times
         self.step = 1
@@ -318,18 +318,17 @@ class Results(object):
         # keep track of how long it takes to compute results
         start_time = time.time()
 
-        # construct a mapping from market IDs to market-specific arguments used to compute results
-        args_mapping = {}
-        for t in self.unique_market_ids:
-            market_t = ResultsMarket(self.problem, t, self.delta, self.beta, self.sigma, self.pi)
-            args_t = [None if a is None else a[self.problem.products.market_ids.flat == t] for a in market_args]
-            args_mapping[t] = [market_t] + list(fixed_args) + args_t
+        # define a function builds a market along with market-specific arguments used to compute results
+        def market_factory(s):
+            market_s = ResultsMarket(self.problem, s, self.delta, self.beta, self.sigma, self.pi)
+            args_s = [None if a is None else a[self.problem.products.market_ids.flat == s] for a in market_args]
+            return [market_s] + list(fixed_args) + args_s
 
         # construct a mapping from market IDs to market-specific results and compute the full results matrix size
         errors = set()
         rows = columns = 0
         matrix_mapping = {}
-        with ParallelItems(compute_market_results, args_mapping, processes) as items:
+        with ParallelItems(self.unique_market_ids, market_factory, compute_market_results, processes) as items:
             for t, (array_t, errors_t) in items:
                 errors |= errors_t
                 matrix_mapping[t] = np.c_[array_t]

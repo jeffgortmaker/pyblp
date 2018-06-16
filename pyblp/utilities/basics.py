@@ -65,35 +65,39 @@ class Matrices(np.recarray):
 
 
 class ParallelItems(object):
-    """Generator that passes to a worker function in parallel the values of a mapping from keys to lists of arguments.
-    Yields items from a mapping of keys to the objects returned by the worker function. Used in a with clause.
+    """Generator that passes keys to a factory function, which returns a corresponding (instance, *arguments) tuple;
+    yields items from a mapping of the keys to objects returned in parallel from a method of the instance, which is
+    passed the arguments returned by the factory. Used in a with clause.
     """
 
-    def __init__(self, worker, mapping, processes):
+    def __init__(self, keys, factory, method, processes):
         """Initialize class attributes."""
-        self.worker = worker
-        self.mapping = mapping
+        self.keys = keys
+        self.factory = factory
+        self.method = method
         self.processes = processes
         self.process_objects = []
         self.in_queue = self.out_queue = self.remaining = None
 
     def __enter__(self):
-        """If there is only one process, return a generator that directly calls the worker function. Otherwise, fill an
-        "in" queue with items from the mapping, start processes that fill an "out" queue, and return a generator that
-        gets items from the "out" queue.
+        """If there is only one process, return a generator that iteratively creates and passes arguments to the method.
+        Otherwise, fill an "in" queue with factory-created items, start processes that fill an "out" queue, and return a
+        generator that gets method-processed items from the "out" queue.
         """
         if self.processes == 1:
-            return ((k, self.worker(*a)) for k, a in self.mapping.items())
+            return ((k, self.method(*self.factory(k))) for k in self.keys)
 
-        # start with an empty "out" queue and an "in" queue filled with the mapping's items
+        # start with an empty "out" queue and fill an "in" queue with keys corresponding to factory-created arguments
         self.in_queue = multiprocessing.Queue()
         self.out_queue = multiprocessing.Queue()
-        for key, args in self.mapping.items():
-            self.in_queue.put((key, args))
+        for key in self.keys:
+            self.in_queue.put((key, self.factory(key)))
+
+        # destroy the factory, which does not need to be pickled
+        self.factory = None
 
         # share the number of remaining items between processes
-        total = len(self.mapping)
-        self.remaining = multiprocessing.Value('i', total)
+        self.remaining = multiprocessing.Value('i', len(self.keys))
 
         # define a function to generate processes that fill the "out" queue by calling this same class (__call__ is used
         #   because the multiprocessing module can only pickle methods in the module-level namespace)
@@ -104,11 +108,9 @@ class ParallelItems(object):
                 process.start()
                 yield process
 
-        # start the processes and return a generator that gets items from the "out" queue (delete all items from the
-        #   mapping so that only the data in the "in" queue are passed to all processes)
-        self.mapping = {}
+        # start the processes and return a generator that gets items from the "out" queue
         self.process_objects = list(itertools.islice(generate(), self.processes))
-        return (self.out_queue.get() for _ in range(total))
+        return (self.out_queue.get() for _ in self.keys)
 
     def __exit__(self, *_):
         """Terminate any remaining processes."""
@@ -119,10 +121,10 @@ class ParallelItems(object):
                 pass
 
     def __call__(self):
-        """Get items from the "in" queue and put items returned by the worker function into the "out" queue."""
+        """Get items from the "in" queue and put items processed by the method into the "out" queue."""
         while self.remaining.value > 0:
             key, args = self.in_queue.get()
-            self.out_queue.put((key, self.worker(*args)))
+            self.out_queue.put((key, self.method(*args)))
             with self.remaining.get_lock():
                 self.remaining.value -= 1
 

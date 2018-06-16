@@ -157,6 +157,8 @@ class Simulation(Economy):
         Structured :attr:`Simulation.agent_data`, which is an instance of :class:`primitives.Agents`. A matrix of
         demographics was built according to :attr:`Simulation.agent_formulation` if it was specified. Nodes and weights
         were build according to :attr:`Simulation.integration` if it was specified.
+    unique_market_ids : `ndarray`
+        Unique market IDs in product and agent data.
     xi : `ndarray`
         Unobserved demand-side product characteristics, :math:`\xi`, that were simulated during initialization.
     omega : `ndarray`
@@ -459,26 +461,25 @@ class Simulation(Economy):
         if error_behavior not in {'raise', 'warn'}:
             raise ValueError("error_behavior must be 'raise' or 'warn'.")
 
-        # compute a baseline delta that will be updated when shares and prices are changed
-        delta = self.products.X1 @ self.beta + self.xi
-
-        # construct a mapping from market IDs to market-specific arguments used to compute prices and shares
-        mapping = {}
-        for t in np.unique(self.products.market_ids):
-            market_t = SimulationMarket(self, t, delta, self.beta, self.sigma, self.pi)
-            prices_t = prices[self.products.market_ids.flat == t]
-            costs_t = self.costs[self.products.market_ids.flat == t]
-            mapping[t] = [market_t, iteration, firms_index, prices_t, costs_t]
-
         # time how long it takes to solve for prices and shares
         output("Solving for prices and shares ...")
         start_time = time.time()
+
+        # compute a baseline delta that will be updated when shares and prices are changed
+        delta = self.products.X1 @ self.beta + self.xi
+
+        # define a function builds a market along with market-specific arguments used to compute prices and shares
+        def market_factory(s):
+            market_s = SimulationMarket(self, s, delta, self.beta, self.sigma, self.pi)
+            prices_s = prices[self.products.market_ids.flat == s]
+            costs_s = self.costs[self.products.market_ids.flat == s]
+            return market_s, iteration, firms_index, prices_s, costs_s
 
         # update prices and shares market-by-market
         errors = set()
         iterations = evaluations = 0
         updated_product_data = self.product_data.copy()
-        with ParallelItems(SimulationMarket.solve, mapping, processes) as items:
+        with ParallelItems(self.unique_market_ids, market_factory, SimulationMarket.solve, processes) as items:
             for t, (prices_t, shares_t, errors_t, iterations_t, evaluations_t) in items:
                 updated_product_data.prices[self.products.market_ids.flat == t] = prices_t
                 updated_product_data.shares[self.products.market_ids.flat == t] = shares_t
