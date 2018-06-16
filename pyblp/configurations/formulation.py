@@ -1,12 +1,12 @@
 """Formulation of data matrices."""
 
 import token
-import operator
 import functools
 
 import patsy
 import sympy
 import numpy as np
+import patsy.origin
 import patsy.builtins
 from sympy.parsing import sympy_parser
 
@@ -92,9 +92,12 @@ class Formulation(object):
         self._expressions = [parse_term_expression(t) for t in self._terms]
         self._names = {str(s) for e in self._expressions for s in e.free_symbols}
         if not self._terms:
-            raise ValueError(f"The formula '{formula}' has no terms.")
+            raise patsy.PatsyError("The formula has no terms.", patsy.origin.Origin(formula, 0, len(formula)))
         if len(self._terms) > 1 and not any(e.free_symbols for e in self._expressions):
-            raise ValueError(f"The formula '{formula}' has more than one term but no variables.")
+            raise patsy.PatsyError(
+                "The formula has more than one term but no variables.",
+                patsy.origin.Origin(formula, 0, len(formula))
+            )
 
     def __str__(self):
         """Format the terms as a string."""
@@ -110,11 +113,21 @@ class Formulation(object):
         which include unchanged continuous variables and indicators constructed from categorical variables.
         """
 
-        # convert the data into a dictionary for convenience (always have at least one column to represent its size)
-        data = {n: np.asarray(data[n]) for n in self._names} if self._names else {None: np.zeros(extract_size(data))}
+        # convert the data into a dictionary for convenience
+        data_mapping = {}
+        for name in self._names:
+            try:
+                data_mapping[name] = np.asarray(data[name])
+            except Exception as exception:
+                origin = patsy.origin.Origin(self._formula, 0, len(self._formula))
+                raise patsy.PatsyError(f"Failed to load data for '{name}'.", origin) from exception
+
+        # always have at least one column to represent the size of the data
+        if not data_mapping:
+            data_mapping = {None: np.zeros(extract_size(data))}
 
         # design the matrix
-        design = design_matrix(self._terms, data)
+        design = design_matrix(self._terms, data_mapping)
 
         # store matrix column indices and build column formulations for each designed column
         column_indices = []
@@ -130,20 +143,20 @@ class Formulation(object):
         underlying_data = {}
         for formulation in column_formulations:
             for symbol in formulation.expression.free_symbols:
-                underlying_data[symbol.name] = data.get(symbol.name)
+                underlying_data[symbol.name] = data_mapping.get(symbol.name)
 
         # supplement the mapping with indicators constructed from categorical variables
         for factor, info in design.factor_infos.items():
             if info.type == 'categorical':
-                indicator_design = design_matrix([patsy.desc.Term([factor])], data)
-                indicator_matrix = build_matrix(indicator_design, data)
+                indicator_design = design_matrix([patsy.desc.Term([factor])], data_mapping)
+                indicator_matrix = build_matrix(indicator_design, data_mapping)
                 for name, indicator in zip(indicator_design.column_names, indicator_matrix.T):
                     symbol = CategoricalTreatment.parse_full_symbol(name)
                     if symbol.name in underlying_data:
                         underlying_data[symbol.name] = indicator
 
         # build the matrix
-        matrix = build_matrix(design, data)
+        matrix = build_matrix(design, data_mapping)
         return matrix[:, column_indices], column_formulations, underlying_data
 
 
@@ -284,7 +297,10 @@ def parse_terms(formula):
     """Parse patsy terms from a string. Validate that the string contains only right-hand side terms."""
     description = patsy.highlevel.ModelDesc.from_formula(formula)
     if description.lhs_termlist:
-        raise ValueError(f"The formula '{formula}' should not have a left-hand side.")
+        raise patsy.PatsyError(
+            "Formulas should not have left-hand sides.",
+            patsy.origin.Origin(formula, 0, formula.index('~') + 1 if '~' in formula else len(formula))
+        )
     return description.rhs_termlist
 
 
@@ -312,7 +328,13 @@ def build_matrix(design, data):
 
 def parse_term_expression(term):
     """Multiply the SymPy expressions parsed from each factor in a patsy term."""
-    return functools.reduce(operator.mul, (parse_expression(f.name()) for f in term.factors), sympy.Integer(1))
+    expression = sympy.Integer(1)
+    for factor in term.factors:
+        try:
+            expression *= parse_expression(factor.name())
+        except Exception as exception:
+            raise patsy.PatsyError("Failed to parse a term.", factor.origin) from exception
+    return expression
 
 
 def parse_expression(string, mark_categorical=False):

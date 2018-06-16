@@ -1,5 +1,7 @@
 """Tests of formulation of data matrices."""
 
+import traceback
+
 import pytest
 import numpy as np
 
@@ -120,5 +122,6 @@ def test_invalid_formula(formula_data, formula):
         formulation = Formulation(formula)
         formulation._build(formula_data)
     except:
+        print(traceback.format_exc())
         return
     raise RuntimeError(f"The formula '{formula}' was successfully formulated as '{formulation}'.")
