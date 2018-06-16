@@ -4,9 +4,10 @@ import itertools
 
 import numpy as np
 import scipy.linalg
+import numpy.lib.recfunctions
 
 from . import options, exceptions
-from .configurations import Formulation, Integration, Iteration
+from .configurations import Formulation, Integration
 from .utilities import output, extract_matrix, iteratively_demean, Matrices
 
 
@@ -329,10 +330,12 @@ class Economy(object):
 
 
 class Market(object):
-    """A single market in an economy, which is initialized with market-level product and agent data. Given additional
-    information such as components of utility or parameters, class methods can compute a variety of market-specific
-    outputs.
+    """A single market in an economy, which is initialized with market-level product and agent data, excluding any
+    unneeded product data fields. Given additional information such as components of utility or parameters, class
+    methods can compute a variety of market-specific outputs.
     """
+
+    field_whitelist = field_blacklist = None
 
     def __init__(self, economy, t, delta=None, beta=None, sigma=None, pi=None):
         """Restrict full data matrices and vectors to just this market, count dimensions, identify column formulations,
@@ -340,9 +343,18 @@ class Market(object):
         dependent methods will raise exceptions.
         """
 
-        # restrict product and agent data to just this market
+        # restrict relevant product data to just this market
+        unneeded_product_fields = {'market_ids'}
+        if self.field_whitelist is not None:
+            unneeded_product_fields |= set(economy.products.dtype.names) - self.field_whitelist
+        if self.field_blacklist is not None:
+            unneeded_product_fields |= set(economy.products.dtype.names) & self.field_blacklist
         self.products = economy.products[economy.products.market_ids.flat == t]
+        self.products = np.lib.recfunctions.rec_drop_fields(self.products, unneeded_product_fields)
+
+        # restrict relevant agent data to just this market
         self.agents = economy.agents[economy.agents.market_ids.flat == t]
+        self.agents = np.lib.recfunctions.rec_drop_fields(self.agents, 'market_ids')
 
         # count data dimensions
         self.J = self.products.shape[0]

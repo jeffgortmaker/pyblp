@@ -756,6 +756,8 @@ class ObjectiveInfo(object):
 class DemandProblemMarket(Market):
     """A single market in the BLP problem, which can be solved to compute delta--related information."""
 
+    field_whitelist = {'shares', 'X2'}
+
     def solve(self, initial_delta, nonlinear_parameters, iteration, linear_fp, compute_gradient):
         """Compute the mean utility for this market that equates market shares to observed values by solving a fixed
         point problem. Then, if compute_gradient is True, compute the Jacobian of xi (equivalently, of delta) with
@@ -829,6 +831,8 @@ class DemandProblemMarket(Market):
 
 class SupplyProblemMarket(Market):
     """A single market in the BLP problem, which can be solved to compute costs-related information."""
+
+    field_blacklist = {'X1', 'X3', 'ZD', 'ZS', 'demand_ids', 'supply_ids'}
 
     def solve(self, initial_tilde_costs, xi_jacobian, beta_jacobian, nonlinear_parameters, linear_costs, costs_bounds,
               compute_gradient):

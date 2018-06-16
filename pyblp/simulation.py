@@ -510,6 +510,8 @@ class Simulation(Economy):
 class SimulationMarket(Market):
     """A single market in the BLP simulation, which can be used to solve for a single market's prices and shares."""
 
+    field_blacklist = {'X1', 'X3', 'ZD', 'ZS', 'demand_ids', 'supply_ids'}
+
     def solve(self, iteration, firms_index, prices, costs):
         """Solve the fixed point problem defined by the zeta-markup equation to compute prices and shares in this
         market. Also return a set of any exception classes encountered during computation along with contraction

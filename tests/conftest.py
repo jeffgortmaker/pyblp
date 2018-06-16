@@ -144,7 +144,7 @@ def simulated_problem(request):
     simulation, product_data = request.getfixturevalue(f'{name}_simulation')
     product_formulations = simulation.product_formulations
     if not supply:
-        product_data = np.lib.recfunctions.drop_fields(product_data, 'supply_instruments')
+        product_data = np.lib.recfunctions.rec_drop_fields(product_data, 'supply_instruments')
         product_formulations = product_formulations[:2]
     problem = Problem(product_formulations, product_data, simulation.agent_formulation, simulation.agent_data)
     results = problem.solve(simulation.sigma, simulation.pi, steps=1, linear_costs=simulation.linear_costs)

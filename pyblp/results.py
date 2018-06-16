@@ -742,6 +742,8 @@ class ResultsMarket(Market):
     method returns a matrix and a set of any errors that were encountered.
     """
 
+    field_blacklist = {'X1', 'X3', 'ZD', 'ZS', 'demand_ids', 'supply_ids'}
+
     def compute_aggregate_elasticity(self, factor, name):
         """Market-specific computation for Results.compute_aggregate_elasticities."""
         scaled_variable = (1 + factor) * self.products[name]
