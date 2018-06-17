@@ -19,7 +19,7 @@ Berry, S., Levinsohn, J., & Pakes, A. (1999). `Voluntary export restraints on au
 
 .. _fw33:
 
-Frisch, R., & Waugh, F. V. (1933). `Partial time regressions as compared with individual trends <http://www.jstor.org/stable/1907330>`_. *Econometrica, 1* (4), 387-401.
+Frisch, R., & Waugh, F. V. (1933). `Partial time regressions as compared with individual trends <https://www.econometricsociety.org/publications/econometrica/1933/10/01/partial-time-regressions-compared-individual-trends>`_. *Econometrica, 1* (4), 387-401.
 
 .. _hw08:
 
