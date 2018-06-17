@@ -16,6 +16,12 @@ class Results(object):
 
     Many results are class attributes. Other post-estimation outputs be computed by calling class methods.
 
+    Most class method have a `processes` argument, which determines the number of Python processes that will be used
+    when computing a post-estimation output. By default, multiprocessing will not be used. For values greater than one,
+    a pool of that many Python processes will be created. Market-by-market computation of the post-estimation output
+    will be distributed among these processes. Using multiprocessing will only improve computation speed if gains from
+    parallelization outweigh overhead from creating the process pool.
+
     Attributes
     ----------
     problem : `Problem`
@@ -305,7 +311,7 @@ class Results(object):
         if name not in names:
             raise NameError(f"The name '{name}' is not one of the underlying variables, {list(sorted(names))}.")
 
-    def _combine_results(self, compute_market_results, fixed_args=(), market_args=(), processes=1):
+    def _combine_results(self, compute_market_results, fixed_args, market_args, processes=1):
         """Compute post-estimation outputs for each market and stack them into a single matrix. Multiprocessing can be
         used to compute outputs in parallel.
 
@@ -353,7 +359,7 @@ class Results(object):
         output("")
         return combined
 
-    def compute_aggregate_elasticities(self, factor=0.1, name='prices'):
+    def compute_aggregate_elasticities(self, factor=0.1, name='prices', processes=1):
         r"""Estimate aggregate elasticities of demand, :math:`E`, with respect to a variale, :math:`x`.
 
         In market :math:`t`, the aggregate elasticity of demand is
@@ -369,6 +375,8 @@ class Results(object):
             The scalar factor, :math:`\Delta`.
         name : `str, optional`
             Name of the variable, :math:`x`. By default, :math:`x = p`, prices.
+        processes : `int, optional`
+            Number of Python processes that will be used during computation.
 
         Returns
         -------
@@ -379,9 +387,9 @@ class Results(object):
         """
         output(f"Computing aggregate elasticities with respect to {name} ...")
         self._validate_name(name)
-        return self._combine_results(ResultsMarket.compute_aggregate_elasticity, [factor, name])
+        return self._combine_results(ResultsMarket.compute_aggregate_elasticity, [factor, name], [], processes)
 
-    def compute_elasticities(self, name='prices'):
+    def compute_elasticities(self, name='prices', processes=1):
         r"""Estimate matrices of elasticities of demand, :math:`\varepsilon`, with respect to a variable, :math:`x`.
 
         For each market, the value in row :math:`j` and column :math:`k` of :math:`\varepsilon` is
@@ -392,6 +400,8 @@ class Results(object):
         ----------
         name : `str, optional`
             Name of the variable, :math:`x`. By default, :math:`x = p`, prices.
+        processes : `int, optional`
+            Number of Python processes that will be used during computation.
 
         Returns
         -------
@@ -403,9 +413,9 @@ class Results(object):
         """
         output(f"Computing elasticities with respect to {name} ...")
         self._validate_name(name)
-        return self._combine_results(ResultsMarket.compute_elasticities, [name])
+        return self._combine_results(ResultsMarket.compute_elasticities, [name], [], processes)
 
-    def compute_diversion_ratios(self, name='prices'):
+    def compute_diversion_ratios(self, name='prices', processes=1):
         r"""Estimate matrices of diversion ratios, :math:`\mathscr{D}`, with respect to a variable, :math:`x`.
 
         Diversion ratios to the outside good are reported on diagonals. For each market, the value in row :math:`j` and
@@ -419,6 +429,8 @@ class Results(object):
         ----------
         name : `str, optional`
             Name of the variable, :math:`x`. By default, :math:`x = p`, prices.
+        processes : `int, optional`
+            Number of Python processes that will be used during computation.
 
         Returns
         -------
@@ -430,9 +442,9 @@ class Results(object):
         """
         output(f"Computing diversion ratios with respect to {name} ...")
         self._validate_name(name)
-        return self._combine_results(ResultsMarket.compute_diversion_ratios, [name])
+        return self._combine_results(ResultsMarket.compute_diversion_ratios, [name], [], processes)
 
-    def compute_long_run_diversion_ratios(self):
+    def compute_long_run_diversion_ratios(self, processes=1):
         r"""Estimate matrices of long-run diversion ratios, :math:`\bar{\mathscr{D}}`.
 
         Long-run diversion ratios to the outside good are reported on diagonals. For each market, the value in row
@@ -443,6 +455,11 @@ class Results(object):
         in which :math:`s_{k(-j)}` is the share of product :math:`k` computed with the outside option removed from the
         choice set if :math:`j = k`, and with product :math:`j` removed otherwise.
 
+        Parameters
+        ----------
+        processes : `int, optional`
+            Number of Python processes that will be used during computation.
+
         Returns
         -------
         `ndarray`
@@ -452,7 +469,7 @@ class Results(object):
 
         """
         output("Computing long run mean diversion ratios ...")
-        return self._combine_results(ResultsMarket.compute_long_run_diversion_ratios)
+        return self._combine_results(ResultsMarket.compute_long_run_diversion_ratios, [], [], processes)
 
     def extract_diagonals(self, matrices):
         r"""Extract diagonals from stacked :math:`J_t \times J_t` matrices for each market :math:`t`.
@@ -474,7 +491,7 @@ class Results(object):
 
         """
         output("Computing own elasticities ...")
-        return self._combine_results(ResultsMarket.extract_diagonal, market_args=[matrices])
+        return self._combine_results(ResultsMarket.extract_diagonal, [], [matrices])
 
     def extract_diagonal_means(self, matrices):
         r"""Extract means of diagonals from stacked :math:`J_t \times J_t` matrices for each market :math:`t`.
@@ -497,14 +514,19 @@ class Results(object):
 
         """
         output("Computing mean own elasticities ...")
-        return self._combine_results(ResultsMarket.extract_diagonal_mean, market_args=[matrices])
+        return self._combine_results(ResultsMarket.extract_diagonal_mean, [], [matrices])
 
-    def compute_costs(self):
+    def compute_costs(self, processes=1):
         r"""Estimate marginal costs, :math:`c`.
 
         Marginal costs are computed with the BLP-markup equation,
 
         .. math:: c = p - \eta.
+
+        Parameters
+        ----------
+        processes : `int, optional`
+            Number of Python processes that will be used during computation.
 
         Returns
         -------
@@ -513,9 +535,9 @@ class Results(object):
 
         """
         output("Computing marginal costs ...")
-        return self._combine_results(ResultsMarket.compute_costs)
+        return self._combine_results(ResultsMarket.compute_costs, [], [], processes)
 
-    def solve_approximate_merger(self, firms_index=1, costs=None):
+    def solve_approximate_merger(self, firms_index=1, costs=None, processes=1):
         r"""Estimate approximate post-merger prices, :math:`p^a`, under the assumption that shares and their price
         derivatives are unaffected by the merger.
 
@@ -539,6 +561,8 @@ class Results(object):
         costs : `array-like, optional`
             Marginal costs, :math:`c`, computed by :meth:`Results.compute_costs`. By default, marginal costs are
             computed.
+        processes : `int, optional`
+            Number of Python processes that will be used during computation.
 
         Returns
         -------
@@ -547,7 +571,7 @@ class Results(object):
 
         """
         output("Solving for approximate post-merger prices ...")
-        return self._combine_results(ResultsMarket.solve_approximate_merger, [firms_index], [costs])
+        return self._combine_results(ResultsMarket.solve_approximate_merger, [firms_index], [costs], processes)
 
     def solve_merger(self, iteration=None, firms_index=1, prices=None, costs=None, processes=1):
         r"""Estimate post-merger prices, :math:`p^*`.
@@ -581,10 +605,7 @@ class Results(object):
             Marginal costs, :math:`c`, computed by :meth:`Results.compute_costs`. By default, marginal costs are
             computed.
         processes : `int, optional`
-            Number of Python processes that will be used during computation. By default, multiprocessing will not be
-            used. For values greater than one, a pool of that many Python processes will be created. Market-by-market
-            computation of post-merger prices will be distributed among these processes. Using multiprocessing will only
-            improve computation speed if gains from parallelization outweigh overhead from creating the process pool.
+            Number of Python processes that will be used during computation.
 
         Returns
         -------
@@ -599,7 +620,7 @@ class Results(object):
             raise ValueError("iteration must an Iteration instance.")
         return self._combine_results(ResultsMarket.solve_merger, [iteration, firms_index], [prices, costs], processes)
 
-    def compute_shares(self, prices=None):
+    def compute_shares(self, prices=None, processes=1):
         r"""Estimate shares evaluated at specified prices.
 
         Parameters
@@ -608,6 +629,8 @@ class Results(object):
             Prices at which to evaluate shares, such as post-merger prices, :math:`p^*`, computed by
             :meth:`Results.solve_merger`, or approximate post-merger prices, :math:`p^a`, computed by
             :meth:`Results.solve_approximate_merger`. By default, unchanged prices are used.
+        processes : `int, optional`
+            Number of Python processes that will be used during computation.
 
         Returns
         -------
@@ -616,9 +639,9 @@ class Results(object):
 
         """
         output("Computing shares ...")
-        return self._combine_results(ResultsMarket.compute_shares, market_args=[prices])
+        return self._combine_results(ResultsMarket.compute_shares, [], [prices], processes)
 
-    def compute_hhi(self, firms_index=0, shares=None):
+    def compute_hhi(self, firms_index=0, shares=None, processes=1):
         r"""Estimate Herfindahl-Hirschman Indices, :math:`\text{HHI}`.
 
         The index in market :math:`t` is
@@ -635,6 +658,8 @@ class Results(object):
         shares : `array-like, optional`
             Shares, :math:`s`, such as those computed by :meth:`Results.compute_shares`. By default, unchanged shares
             are used.
+        processes : `int, optional`
+            Number of Python processes that will be used during computation.
 
         Returns
         -------
@@ -644,9 +669,9 @@ class Results(object):
 
         """
         output("Computing HHI ...")
-        return self._combine_results(ResultsMarket.compute_hhi, [firms_index], [shares])
+        return self._combine_results(ResultsMarket.compute_hhi, [firms_index], [shares], processes)
 
-    def compute_markups(self, prices=None, costs=None):
+    def compute_markups(self, prices=None, costs=None, processes=1):
         r"""Estimate markups, :math:`\mathscr{M}`.
 
         The markup of product :math:`j` in market :math:`t` is
@@ -662,6 +687,8 @@ class Results(object):
         costs : `array-like`
             Marginal costs, :math:`c`, computed by :meth:`Results.compute_costs`. By default, marginal costs are
             computed.
+        processes : `int, optional`
+            Number of Python processes that will be used during computation.
 
         Returns
         -------
@@ -670,9 +697,9 @@ class Results(object):
 
         """
         output("Computing markups ...")
-        return self._combine_results(ResultsMarket.compute_markups, market_args=[prices, costs])
+        return self._combine_results(ResultsMarket.compute_markups, [], [prices, costs], processes)
 
-    def compute_profits(self, prices=None, shares=None, costs=None):
+    def compute_profits(self, prices=None, shares=None, costs=None, processes=1):
         r"""Estimate population-normalized gross expected profits, :math:`\pi`.
 
         The profit of product :math:`j` in market :math:`t` is
@@ -691,6 +718,8 @@ class Results(object):
         costs : `array-like`
             Marginal costs, :math:`c`, computed by :meth:`Results.compute_costs`. By default, marginal costs are
             computed.
+        processes : `int, optional`
+            Number of Python processes that will be used during computation.
 
         Returns
         -------
@@ -699,9 +728,9 @@ class Results(object):
 
         """
         output("Computing profits ...")
-        return self._combine_results(ResultsMarket.compute_profits, market_args=[prices, shares, costs])
+        return self._combine_results(ResultsMarket.compute_profits, [], [prices, shares, costs], processes)
 
-    def compute_consumer_surpluses(self, prices=None):
+    def compute_consumer_surpluses(self, prices=None, processes=1):
         r"""Estimate population-normalized consumer surpluses, :math:`\text{CS}`.
 
         Assuming away nonlinear income effects, the surplus in market :math:`t` is
@@ -724,6 +753,8 @@ class Results(object):
             evaluated, such as post-merger prices, :math:`p^*`, computed by :meth:`Results.solve_merger`, or
             approximate post-merger prices, :math:`p^a`, computed by :meth:`Results.solve_approximate_merger`. By
             default, unchanged prices are used.
+        processes : `int, optional`
+            Number of Python processes that will be used during computation.
 
         Returns
         -------
@@ -733,7 +764,7 @@ class Results(object):
 
         """
         output("Computing consumer surpluses with the equation that assumes away nonlinear income effects ...")
-        return self._combine_results(ResultsMarket.compute_consumer_surplus, market_args=[prices])
+        return self._combine_results(ResultsMarket.compute_consumer_surplus, [], [prices], processes)
 
 
 class ResultsMarket(Market):

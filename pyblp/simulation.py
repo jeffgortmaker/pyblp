@@ -427,9 +427,8 @@ class Simulation(Economy):
         processes : `int, optional`
             Number of Python processes that will be used during computation. By default, multiprocessing will not be
             used. For values greater than one, a pool of that many Python processes will be created. Market-by-market
-            computation of prices and shares and its Jacobian will be distributed among these processes. Using
-            multiprocessing will only improve computation speed if gains from parallelization outweigh overhead from
-            creating the process pool.
+            computation of prices and shares will be distributed among these processes. Using multiprocessing will only
+            improve computation speed if gains from parallelization outweigh overhead from creating the process pool.
 
         Returns
         -------

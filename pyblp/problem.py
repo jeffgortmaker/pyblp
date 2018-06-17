@@ -305,10 +305,10 @@ class Problem(Economy):
         processes : `int, optional`
             Number of Python processes that will be used during estimation. By default, multiprocessing will not be
             used. For values greater than one, a pool of that many Python processes will be created during each
-            iteration of the optimization routine. Market-by-market computation of :math:`\delta(\hat{\theta})` and, if
-            the problem was initialized with supply-side data, of :math:`\tilde{c}(\hat{\theta})`, along with associated
-            Jacobians, will be distributed among these processes. Using multiprocessing will only improve estimation
-            speed if gains from parallelization outweigh overhead from creating  process pools.
+            GMM objective evaluation. Market-by-market computation of :math:`\delta(\hat{\theta})` and, if the problem
+            was initialized with supply-side data, of :math:`\tilde{c}(\hat{\theta})`, along with associated Jacobians,
+            will be distributed among these processes. Using multiprocessing will only improve estimation speed if gains
+            from parallelization outweigh overhead from creating process pools.
 
         Returns
         -------
