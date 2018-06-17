@@ -11,6 +11,7 @@ from pyblp import options, build_matrix, Problem, Iteration, Optimization, Formu
 @pytest.mark.parametrize('solve_options', [
     pytest.param({'steps': 1}, id="one step"),
     pytest.param({'linear_fp': False}, id="nonlinear fixed point"),
+    pytest.param({'delta_behavior': 'first'}, id="conservative starting delta values"),
     pytest.param({'error_behavior': 'punish', 'error_punishment': 1e10}, id="error punishment"),
     pytest.param({'center_moments': False, 'se_type': 'unadjusted'}, id="simple covariance matrices")
 ])
@@ -33,7 +34,7 @@ def test_accuracy(simulated_problem, solve_options):
 @pytest.mark.usefixtures('simulated_problem')
 @pytest.mark.parametrize(['solve_options1', 'solve_options2'], [
     pytest.param({'processes': 1}, {'processes': 2}, id="single process and multiprocessing"),
-    pytest.param({}, {'costs_bounds': (-1e10, 1e10)}, id="unaltered and non-binding costs bounds")
+    pytest.param({'costs_bounds': (-np.inf, np.inf)}, {'costs_bounds': (-1e10, 1e10)}, id="non-binding costs bounds")
 ])
 def test_trivial_changes(simulated_problem, solve_options1, solve_options2):
     """Test that solving a problem with arguments that shouldn't give rise to meaningful differences doesn't give rise

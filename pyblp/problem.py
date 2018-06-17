@@ -166,8 +166,8 @@ class Problem(Economy):
         super().__init__(product_formulations, agent_formulation, products, agents)
 
     def solve(self, sigma, pi=None, sigma_bounds=None, pi_bounds=None, delta=None, WD=None, WS=None, steps=2,
-              optimization=None, error_behavior='revert', error_punishment=1, iteration=None, linear_fp=True,
-              linear_costs=True, costs_bounds=None,  center_moments=True, se_type='robust', processes=1):
+              optimization=None, error_behavior='revert', error_punishment=1, delta_behavior='last', iteration=None,
+              linear_fp=True, linear_costs=True, costs_bounds=None,  center_moments=True, se_type='robust', processes=1):
         r"""Solve the problem.
 
         Parameters
@@ -214,7 +214,7 @@ class Problem(Economy):
             in ``lb`` and to ``numpy.inf`` in ``ub``.
 
         delta : `array-like, optional`
-            Starting values for the mean utility, :math:`\delta`. By default,
+            Values for the mean utility, :math:`\delta`, at which the optimization routine will start. By default,
             :math:`\delta_{jt} = \log s_{jt} - \log s_{0t}` is used.
         WD : `array-like, optional`
             Starting values for the demand-side weighting matrix, :math:`W_D`. By default, the 2SLS weighting matrix,
@@ -251,6 +251,19 @@ class Problem(Economy):
         error_punishment : `float, optional`
             How much to scale the GMM objective value when computing it gives rise to an error. By default, the value
             is not scaled.
+        delta_behavior : `str, optional`
+            Configuration for the values at which the fixed point computation of :math:`\delta(\hat{\theta})` in each
+            market will start. The following behaviors are supported:
+
+                - ``'last'`` (default) - Start at the values of :math:`\delta(\hat{\theta})` computed during the last
+                  objective evaluation, or, if this is the first evaluation, at the values configured by `delta`. This
+                  behavior tends to speed up computation but may introduce noise into gradient computation, especially
+                  when the fixed point iteration tolerance is low.
+
+                - ``'first'`` - Start at the values configured by `delta` during the first GMM step, and at the values
+                  computed by the last GMM step for each subsequent step. This behavior is more conservative and will
+                  often be slower.
+
         iteration : `Iteration, optional`
             :class:`Iteration` configuration for how to solve the fixed point problem used to compute
             :math:`\delta(\hat{\theta})` in each market. By default, ``Iteration('squarem', {'tol': 1e-14})`` is used.
@@ -314,9 +327,11 @@ class Problem(Economy):
         if not isinstance(iteration, Iteration):
             raise TypeError("iteration must be None or an Iteration instance.")
 
-        # validate error behavior and the standard error type
+        # validate behaviors and the standard error type
         if error_behavior not in {'raise', 'revert', 'punish'}:
             raise ValueError("error_behavior must be 'raise', 'revert', or 'punish'.")
+        if delta_behavior not in {'last', 'first'}:
+            raise ValueError("delta_behavior must be 'last' or 'first'.")
         if se_type not in {'robust', 'unadjusted'}:
             raise ValueError("se_type must be 'robust' or 'unadjusted'.")
 
@@ -403,7 +418,7 @@ class Problem(Economy):
             # wrap computation of objective information with step-specific information
             compute_step_info = functools.partial(
                 self._compute_objective_info, nonlinear_parameters, demand_iv, supply_iv, WD, WS, error_behavior,
-                error_punishment, iteration, linear_fp, linear_costs, costs_bounds, processes
+                error_punishment, delta_behavior, iteration, linear_fp, linear_costs, costs_bounds, processes
             )
 
             # define the objective function for the optimization routine, which also outputs progress updates
@@ -425,7 +440,7 @@ class Problem(Economy):
             wrapper.evaluation_mappings = []
             wrapper.smallest_objective = wrapper.smallest_gradient_norm = np.inf
             wrapper.cache = ObjectiveInfo(
-                self, nonlinear_parameters, WD, WS, theta, true_delta, true_tilde_costs, true_xi_jacobian,
+                self, nonlinear_parameters, WD, WS, theta, true_delta, true_delta, true_tilde_costs, true_xi_jacobian,
                 true_omega_jacobian
             )
 
@@ -470,8 +485,8 @@ class Problem(Economy):
                 return results
 
     def _compute_objective_info(self, nonlinear_parameters, demand_iv, supply_iv, WD, WS, error_behavior,
-                                error_punishment, iteration, linear_fp, linear_costs, costs_bounds, processes, theta,
-                                last_objective_info, compute_gradient):
+                                error_punishment, delta_behavior, iteration, linear_fp, linear_costs, costs_bounds,
+                                processes, theta, last_objective_info, compute_gradient):
         """Compute demand- and supply-side contributions. Then, form the GMM objective value and its gradient. Finally,
         handle any errors that were encountered before structuring relevant objective information.
         """
@@ -521,14 +536,15 @@ class Problem(Economy):
                 gradient = np.zeros_like(theta) if compute_gradient else None
 
         # structure objective information
+        next_delta = true_delta if delta_behavior == 'last' else last_objective_info.next_delta
         return ObjectiveInfo(
-            self, nonlinear_parameters, WD, WS, theta, true_delta, true_tilde_costs, true_xi_jacobian,
+            self, nonlinear_parameters, WD, WS, theta, next_delta, true_delta, true_tilde_costs, true_xi_jacobian,
             true_omega_jacobian, delta, tilde_costs, xi_jacobian, omega_jacobian, true_xi, true_omega, beta, gamma,
             objective, gradient, iterations, evaluations, errors
         )
 
-    def _compute_demand_contributions(self, nonlinear_parameters, demand_iv, iteration, linear_fp, processes, sigma,
-                                      pi, last_objective_info, compute_gradient):
+    def _compute_demand_contributions(self, nonlinear_parameters, demand_iv, iteration, linear_fp, processes, sigma, pi,
+                                      last_objective_info, compute_gradient):
         """Compute delta and the Jacobian of xi (equivalently, of delta) with respect to theta market-by-market. If
         necessary, revert problematic elements to their last values. Lastly, recover beta and compute xi.
         """
@@ -537,8 +553,8 @@ class Problem(Economy):
         # define a function builds a market along with market-specific arguments used to compute delta and its Jacobian
         def market_factory(s):
             market_s = DemandProblemMarket(self, s, sigma=sigma, pi=pi)
-            last_true_delta_s = last_objective_info.true_delta[self.products.market_ids.flat == s]
-            return market_s, last_true_delta_s, nonlinear_parameters, iteration, linear_fp, compute_gradient
+            initial_delta_s = last_objective_info.next_delta[self.products.market_ids.flat == s]
+            return market_s, initial_delta_s, nonlinear_parameters, iteration, linear_fp, compute_gradient
 
         # fill delta and its Jacobian market-by-market (the Jacobian will be null if the gradient isn't being computed)
         iterations = {}
@@ -654,10 +670,10 @@ class Problem(Economy):
 class ObjectiveInfo(object):
     """Structured information about a completed iteration of the optimization routine."""
 
-    def __init__(self, problem, nonlinear_parameters, WD, WS, theta, true_delta, true_tilde_costs, true_xi_jacobian,
-                 true_omega_jacobian, delta=None, tilde_costs=None, xi_jacobian=None, omega_jacobian=None, true_xi=None,
-                 true_omega=None, beta=None, gamma=None, objective=None, gradient=None, iteration_mapping=None,
-                 evaluation_mapping=None, errors=None):
+    def __init__(self, problem, nonlinear_parameters, WD, WS, theta, next_delta, true_delta, true_tilde_costs,
+                 true_xi_jacobian, true_omega_jacobian, delta=None, tilde_costs=None, xi_jacobian=None,
+                 omega_jacobian=None, true_xi=None, true_omega=None, beta=None, gamma=None, objective=None,
+                 gradient=None, iteration_mapping=None, evaluation_mapping=None, errors=None):
         """Initialize objective information. Optional parameters will not be specified when preparing for the first
         objective evaluation.
         """
@@ -666,6 +682,7 @@ class ObjectiveInfo(object):
         self.WD = WD
         self.WS = WS
         self.theta = theta
+        self.next_delta = next_delta
         self.true_delta = true_delta
         self.true_tilde_costs = true_tilde_costs
         self.true_xi_jacobian = true_xi_jacobian
