@@ -4,6 +4,15 @@ Version Notes
 These notes will only include major changes.
 
 
+0.3
+---
+
+- Patsy- and SymPy-backed R-style formula API.
+- More informative errors and displays of information.
+- Absorption of arbitrary fixed effects.
+- Reduction of memory footprint.
+
+
 0.2
 ---
 
