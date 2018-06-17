@@ -279,7 +279,7 @@ Post-estimation outputs are computed for each market and stacked. We'll use :fun
 
 Diagonals in the first two images consist of own elasticities, and diagonals in the last two are diversion ratios to the outside good. The first and third images have empty columns because market ``1`` in the automobile problem has fewer products than other markets, and the extra columns are filled with ``numpy.nan``.
 
-Elasticities and diversion ratios can be computed with respect to variables other than ``pricess`` with the `name` argument of :meth:`Results.compute_elasticities` and :meth:`Results.compute_diversion_ratios`. Additionally, the :meth:`Results.compute_long_run_diversion_ratios` can be used to used to understand substitution when products are eliminated from the choice set.
+Elasticities and diversion ratios can be computed with respect to variables other than ``prices`` with the `name` argument of :meth:`Results.compute_elasticities` and :meth:`Results.compute_diversion_ratios`. Additionally, the :meth:`Results.compute_long_run_diversion_ratios` can be used to used to understand substitution when products are eliminated from the choice set.
 
 Other methods that compute similar matrices are :meth:`Results.compute_elasticities` and :meth:`Results.compute_diversion_ratios`, which estimate :math:`\varepsilon` and :math:`\mathscr{D}` with respect to non-price characteristics. A similar method is :meth:`Results.compute_long_run_diversion_ratios`, which can be used to understand substitution when products are eliminated from the choice set. The convenience methods :meth:`Results.extract_diagonals` and :meth:`Results.extract_diagonal_means` can be used to extract information about own elasticities of demand from elasticity matrices.
 

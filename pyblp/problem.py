@@ -121,9 +121,9 @@ class Problem(Economy):
     MS : `int`
         Number of supply-side instruments, :math:`M_S`.
     ED : `int`
-        Number of demand-side fixed effects, :math:`E_D`.
+        Number of absorbed demand-side fixed effects, :math:`E_D`.
     ES : `int`
-        Number of supply-side fixed effects, :math:`E_S`.
+        Number of absorbed supply-side fixed effects, :math:`E_S`.
 
     Example
     -------

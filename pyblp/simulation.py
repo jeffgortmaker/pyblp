@@ -188,11 +188,11 @@ class Simulation(Economy):
     MS : `int`
         Number of supply-side instruments, :math:`M_S`.
     ED : `int`
-        Number of demand-side fixed effects, :math:`E_D`, which is always zero because simulations do not support fixed
-        effects.
+        Number of absorbed demand-side fixed effects, :math:`E_D`, which is always zero because simulations do not
+        support fixed effect absorption.
     ES : `int`
-        Number of supply-side fixed effects, :math:`E_S`, which is always zero because simulations do not support fixed
-        effects.
+        Number of absorbed supply-side fixed effects, :math:`E_S`, which is always zero because simulations do not
+        support fixed effect absorption.
 
     Example
     -------

@@ -7,9 +7,9 @@ The notation in pyblp is a customized amalgamation of the notation employed by :
 Dimensions and Sets
 -------------------
 
-========================  =======================================================
+========================  ========================================================
 Symbol                    Description
-========================  =======================================================
+========================  ========================================================
 :math:`N`                 Products across all markets.
 :math:`T`                 Markets.
 :math:`J_t`               Products in market :math:`t`.
@@ -21,11 +21,11 @@ Symbol                    Description
 :math:`D`                 Demographic variables.
 :math:`M_D`               Demand-side instruments.
 :math:`M_S`               Supply-side instruments.
-:math:`E_D`               Demand-side fixed effects.
-:math:`E_S`               Supply-side fixed effects.
+:math:`E_D`               Absorbed demand-side fixed effects.
+:math:`E_S`               Absorbed supply-side fixed effects.
 :math:`P`                 Unknown nonlinear parameters.
-:math:`\mathscr{J}_{ft}`  Products produced by firm :math:`f` in market :math:`t`
-========================  =======================================================
+:math:`\mathscr{J}_{ft}`  Products produced by firm :math:`f` in market :math:`t`.
+========================  ========================================================
 
 
 Matrices, Vectors, and Scalars
@@ -68,7 +68,6 @@ Symbol                     Dimensions                                  Descripti
 :math:`\Sigma`             :math:`K_2 \times K_2`                      Cholesky decomposition of the covariance matrix that measures agents' random taste distribution.
 :math:`\Pi`                :math:`K_2 \times D`                        Parameters that measures how agent tastes vary with demographics.
 :math:`\gamma`             :math:`K_3 \times 1`                        Supply-side linear parameters.
-:math:`\alpha`             :math:`1 \times 1`                          Negative of the first element in :math:`\beta`, or, when subscripted with :math:`i`, in :math:`\Sigma\nu_i + \Pi d_i`.
 :math:`\theta`             :math:`P \times 1`                          Unknown elements in :math:`\Sigma` and :math:`\Pi`.
 :math:`Z_D`                :math:`N \times M_D`                        Demand-side instruments.
 :math:`Z_S`                :math:`N \times M_S`                        Supply-side instruments.

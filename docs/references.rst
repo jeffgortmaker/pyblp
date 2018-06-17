@@ -17,6 +17,10 @@ Berry, S., Levinsohn, J., & Pakes, A. (1995). `Automobile prices in market equil
 
 Berry, S., Levinsohn, J., & Pakes, A. (1999). `Voluntary export restraints on automobiles: Evaluating a trade policy <https://ideas.repec.org/a/aea/aecrev/v89y1999i3p400-430.html>`_. *American Economic Review, 83* (9), 400-430.
 
+.. _fw33:
+
+Frisch, R., & Waugh, F. V. (1933). `Partial time regressions as compared with individual trends <http://www.jstor.org/stable/1907330>`_. *Econometrica, 1* (4), 387-401.
+
 .. _hw08:
 
 Heiss, F., & Winschel V. (2008). `Likelihood approximation by numerical integration on sparse grids <https://ideas.repec.org/a/eee/econom/v144y2008i1p62-80.html>`_. *Journal of Econometrics, 144* (1), 62-80.
@@ -24,6 +28,10 @@ Heiss, F., & Winschel V. (2008). `Likelihood approximation by numerical integrat
 .. _km14:
 
 Knittel, C. R., & Metaxoglou, K. (2014). `Estimation of random-coefficient demand models: Two empiricists' perspective <https://ideas.repec.org/a/tpr/restat/v96y2014i1p34-59.html>`_. *Review of Economics and Statistics, 96* (1), 34-59.
+
+.. _l63:
+
+Lovell, M. (1963). `Seasonal adjustment of economic time series and multiple regression analysis <https://www.tandfonline.com/doi/abs/10.1080/01621459.1963.10480682>`_. *Journal of the American Statistical Association, 58* (304), 993-1010.
 
 .. _ms11:
 

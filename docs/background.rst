@@ -13,9 +13,9 @@ At a high level, there are :math:`t = 1, 2, \dotsc, T` markets, each with :math:
 Demand-Side
 ~~~~~~~~~~~
 
-Observed demand-side product characteristics are contained in the :math:`N \times K_1` matrix of linear characteristics, :math:`X_1`, and the :math:`N \times K_2` matrix of nonlinear characteristics, :math:`X_2`. Characteristic columns can overlap. For example, either matrix may contain a constant column, and :math:`X_2` often contains a column of prices that always exists in :math:`X_1`. Unobserved demand-side product characteristics, :math:`\xi`, are a :math:`N \times 1` column vector.
+Observed demand-side product characteristics are contained in the :math:`N \times K_1` matrix of linear characteristics, :math:`X_1`, and the :math:`N \times K_2` matrix of nonlinear characteristics, :math:`X_2`. Characteristic columns can overlap. For example, either matrix may contain a constant column and both matrices often contain a column of prices. Unobserved demand-side product characteristics, :math:`\xi`, are a :math:`N \times 1` column vector.
 
-In market :math:`t`, observed agent characteristics are a :math:`I_t \times D` matrix called demographics, :math:`d`. Note that in :ref:`Nevo (2000) <n00>`, :math:`d` refers to the number of demographics and :math:`D` to the matrix; the opposite is employed here so that all numbers are capital letters. Unobserved characteristics are a :math:`I_t \times K_2` matrix, :math:`\nu`, which has rows that are usually assumed to be IID draws from a mean-zero multivariate normal distribution.
+In market :math:`t`, observed agent characteristics are a :math:`I_t \times D` matrix called demographics, :math:`d`. Note that in :ref:`Nevo (2000) <n00>`, :math:`d` refers to the number of demographics and :math:`D` to the matrix; the opposite is employed here so that all numbers are capital letters. Unobserved characteristics are a :math:`I_t \times K_2` matrix, :math:`\nu`, which consists of rows that are usually assumed to be independent draws from a mean-zero multivariate normal distribution.
 
 The indirect utility of agent :math:`i` from consuming product :math:`j` in market :math:`t` is
 
@@ -29,8 +29,6 @@ in which the mean utility for products is
 and the type-specific portion for all products and agents in a single market is
 
 .. math:: \mu = X_2(\Sigma\nu' + \Pi d').
-
-Unconventionally, the linear coefficient on price, :math:`-\alpha`, is the first element in the :math:`K_1 \times 1` column vector :math:`\beta`. Accordingly, prices, :math:`p`, are the first column in :math:`X_1`. If prices enter utility nonlinearly, then :math:`p` will also be the first column in :math:`X_2`, and the nonlinear coefficient on price, :math:`-\alpha_i`, will be the first element in :math:`\Sigma\nu_i + \Pi d_i`.
 
 The :math:`K_2 \times K_2` matrix :math:`\Sigma` is the Cholesky decomposition of the covariance matrix that defines the multivariate normal distribution from which each :math:`\nu_i` is assumed to be drawn. The :math:`K_2 \times D` matrix :math:`\Pi` measures how agent tastes vary with demographics.
 
@@ -47,11 +45,11 @@ Supply-Side
 
 Observed supply-side product characteristics are the :math:`N \times K_3` matrix of cost characteristics, :math:`X_3`. Prices cannot be cost characteristics, but non-price product characteristics often overlap with the demand-side characteristics in :math:`X_1` and :math:`X_2`. Unobserved supply-side product characteristics, :math:`\omega`, are a :math:`N \times 1` column vector. Note that in contrast to :ref:`Berry, Levinsohn, and Pakes (1995) <blp95>`, the notation for observed cost characteristics is similar to the notation for demand-side characteristics.
 
-Firms play a differentiated Bertrand-Nash pricing game. Firm :math:`f` produces a subset of the :math:`J_t` products in market :math:`t` and chooses prices to maximize the sum of population-normalized gross expected profits, which for product :math:`j` in market :math:`t` are
+Firms play a differentiated Bertrand-Nash pricing game. Firm :math:`f` produces a subset :math:`\mathscr{J}_{ft} \subset \{1, 2, \ldots, J_t\}` of the products in market :math:`t` and chooses prices to maximize the sum of population-normalized gross expected profits, which for product :math:`j` in market :math:`t` are
 
 .. math:: \pi_{jt} = (p_{jt} - c_{jt})s_{jt},
 
-in which marginal costs for all products are defined according either to a linear or a log-linear specification:
+in which marginal costs for all products are defined according to either a linear or a log-linear specification:
 
 .. math:: \tilde{c} = X_3\gamma + \omega \quad\text{where}\quad \tilde{c} = c \quad\text{or}\quad \tilde{c} = \log c.
    :label: costs
@@ -66,7 +64,7 @@ Called the BLP-markup equation in :ref:`Morrow and Skerlos (2011) <ms11>`, the m
 .. math:: \eta = -(O \circ \frac{\partial s}{\partial p})^{-1}s,
    :label: eta
 
-in which the market's owenership matrix, :math:`O`, is definited in terms of its corresponding cooperation matrix, :math:`\kappa`, by :math:`O_{jk} = \kappa_{fg}` where :math:`j \in \mathscr{J}_{ft}`, the set of products produced by firm :math:`f` in the market, and similarly, :math:`g \in \mathscr{J}_{gt}`. Usually, :math:`\kappa = I`, the identity matrix, so :math:`O_{jk}` is simply :math:`1` if the same firm produces products :math:`j` and :math:`k`, and is :math:`0` otherwise.
+in which the market's owenership matrix, :math:`O`, is definited in terms of its corresponding cooperation matrix, :math:`\kappa`, by :math:`O_{jk} = \kappa_{fg}` where :math:`j \in \mathscr{J}_{ft}` and :math:`g \in \mathscr{J}_{gt}`. Usually, :math:`\kappa = I`, the identity matrix, so :math:`O_{jk}` is simply :math:`1` if the same firm produces products :math:`j` and :math:`k`, and is :math:`0` otherwise.
 
 The Jacobian in the BLP-markup equation can be decomposed into
 
@@ -77,12 +75,12 @@ in which :math:`\Lambda` is a diagonal :math:`J_t \times J_t` matrix that can be
 .. math:: \Lambda_{jj} = \sum_{i=1}^{I_t} w_i s_{jti}\frac{\partial U_{jti}}{\partial p_{jt}}
    :label: capital_lambda
 
-and :math:`\Gamma` is another :math:`J_t \times J_t` matrix that can be approximated by
+and :math:`\Gamma` is a more dense :math:`J_t \times J_t` matrix that can be approximated by
 
 .. math:: \Gamma_{jk} = \sum_{i=1}^{I_t} w_i s_{jti}s_{kti}\frac{\partial U_{jti}}{\partial p_{jt}}.
    :label: capital_gamma
 
-Derivatives in these expressions are derived from the definition of :math:`U` in :eq:`utilities`. An alternative way to write the first-order conditions is with what :ref:`Morrow and Skerlos (2011) <ms11>` call the :math:`\zeta`-markup equation,
+Derivatives in these expressions are derived from the definition of :math:`U` in :eq:`utilities`. An alternative form of the first-order conditions is called the :math:`\zeta`-markup equation in :ref:`Morrow and Skerlos (2011) <ms11>`:
 
 .. math:: p = c + \zeta,
    :label: zeta_markup
@@ -96,11 +94,11 @@ in which the markup term is
 Identification
 ~~~~~~~~~~~~~~
 
-The unobserved product characteristics can be stacked to form the combined error term,
+The unobserved product characteristics can be stacked to form a combined error term,
 
 .. math:: u = \begin{bmatrix} \xi \\ \omega \end{bmatrix},
 
-and similarly, :math:`Z_D` and :math:`Z_S`, which are :math:`N \times M_D` and :math:`N \times M_S` matrices of demand- and supply-side instruments, can be stacked to form the combined block-diagonal matrix of instruments,
+and similarly, :math:`Z_D` and :math:`Z_S`, which are :math:`N \times M_D` and :math:`N \times M_S` matrices of demand- and supply-side instruments, can be stacked to form a combined block-diagonal matrix of instruments,
 
 .. math:: Z = \begin{bmatrix} Z_D & 0 \\ 0 & Z_S \end{bmatrix}.
 
@@ -115,7 +113,7 @@ Demand-side instruments include all non-price product characteristics from :math
 Estimation
 ----------
 
-There are four sets of parameters to be estimated: :math:`\beta`, :math:`\Sigma`, :math:`\Pi`, and :math:`\gamma`. If the supply side is not considered, only the first three sets of parameters are estimated. The linear parameters, :math:`\beta` and :math:`\gamma`, are concentrated out of the problem. Unknown elements in the remaining matrices of nonlinear parameter, :math:`\Sigma` and :math:`\Pi`, are collectively referred to as :math:`\theta`, a :math:`P \times 1` column vector. If demographics are not included, :math:`\theta` will only consist of elements from :math:`\Sigma`.
+There are four sets of parameters to be estimated: :math:`\beta`, :math:`\Sigma`, :math:`\Pi`, and :math:`\gamma`. If the supply side is not considered, only the first three sets of parameters are estimated. The linear parameters, :math:`\beta` and :math:`\gamma`, are concentrated out of the problem. Unknown elements in the remaining matrices of nonlinear parameters, :math:`\Sigma` and :math:`\Pi`, are collectively referred to as :math:`\theta`, a :math:`P \times 1` column vector. If demographics are not considered, :math:`\theta` will only consist of elements from :math:`\Sigma`.
 
 The GMM problem is
 
@@ -128,9 +126,9 @@ in which :math:`W` is a combined block-diagonal weighting matrix that consists o
 
 which is assumed to have an inverse that is a consistant estimate of :math:`\mathrm{E}[Z'uu'Z]`.
 
-If only the demand side is estimated, :math:`u = \xi`, :math:`Z = Z_D`, and :math:`W = W_D`.
+If only the demand side is considered, :math:`u = \xi`, :math:`Z = Z_D`, and :math:`W = W_D`.
 
-Conventionally, the 2SLS weighting matrix, :math:`W = (Z'Z)^{-1}`, is used in the first stage. With two-step or iterated GMM, the weighting matrix is updated before each subsequent stage according to :math:`W = (g'g)^{-1}`. Before entering into this expression, the sample moments are often centered.
+Conventionally, the 2SLS weighting matrix, :math:`W = (Z'Z)^{-1}`, is used in the first stage. With two-step or iterated GMM, the weighting matrix is updated before each subsequent stage according to :math:`W = (g'g)^{-1}`. Before being used to update the weighting matrix, the sample moments are often centered.
 
 In each stage, a nonlinear optimizer is used to find values of :math:`\hat{\theta}` that minimize the GMM objective. The gradient of the objective is typically computed to speed up optimization.
 
@@ -147,10 +145,12 @@ where :math:`s` are the market's observed shares and :math:`s(\hat{\theta}, \del
 The mean utility in conjunction with the demand-side conditional independence assumption in :eq:`moments` is used to recover the demand-side linear parameters with
 
 .. math:: \hat{\beta} = (X_1'Z_DW_DZ_D'X_1)^{-1}X_1'Z_DW_DZ_D'\delta(\hat{\theta}).
+   :label: beta
 
 The demand-side linear parameters are in turn are used to recover the unobserved demand-side product characteristics,
 
 .. math:: \xi(\hat{\theta}) = \delta(\hat{\theta}) - X_1\hat{\beta}.
+   :label: xi
 
 If the supply side is considered, the BLP-markup equation from :eq:`eta_markup` is employed to compute marginal costs,
 
@@ -159,10 +159,12 @@ If the supply side is considered, the BLP-markup equation from :eq:`eta_markup` 
 and in conjunction with the supply-side conditional independence assumption in :eq:`moments`, marginal costs are used to recover the supply-side linear parameters according to their specification in :eq:`costs` with
 
 .. math:: \hat{\gamma} = (X_3'Z_SW_SZ_S'X_3)^{-1}X_3'Z_SW_SZ_S'\tilde{c}(\hat{\theta}).
+   :label: gamma
 
 The supply-side linear parameters are in turn are used to recover the unobserved supply-side product characteristics,
 
 .. math:: \omega(\hat{\theta}) = \tilde{c}(\hat{\theta}) - X_3\hat{\gamma}.
+   :label: omega
 
 Finally, interacting the estimated unobserved product characteristics with the instruments gives the GMM objective value in :eq:`objective`.
 
@@ -219,6 +221,18 @@ These standard errors are called robust. If the weighting matrix was chosen such
 .. math:: \text{Var}\begin{pmatrix} \hat{\theta} \\ \hat{\beta} \\ \hat{\gamma} \end{pmatrix} = (G'WG)^{-1}.
 
 The standard errors extracted from an estimate of this last expression are called unadjusted.
+
+
+Fixed Effect Absorption
+~~~~~~~~~~~~~~~~~~~~~~~
+
+One way to include demand-side fixed effects is to construct a large number of indicator variables and include them in :math:`X_1` and :math:`Z_D`. Similarly, indicator variables can be added to :math:`X_3` and :math:`Z_S` to incorporate supply-side fixed effects. However, this approach becomes infeasible when there are a large amount of data or a large number of fixed effects because estimation with many indicator variables can be both memory- and processor-intensive. In particular, inversion of large matrices in :eq:`beta` and :eq:`gamma` can be problematic.
+
+An alternative is to absorb or partial out fixed effects with a de-meaning procedure. If there is only one demand-side fixed effect, that is, if :math:`E_D = 1`, the de-meaning procedure is simple and efficient: :math:`X_1`, :math:`Z_D`, :math:`\delta(\hat{\theta})`, and :math:`\frac{\partial\xi}{\partial\theta}` are de-meaned within each level of the fixed effect. If there is only one supply-side effect, that is, if :math:`E_S = 1`, the same is done with :math:`X_3`, :math:`Z_S`, :math:`\tilde{c}(\hat{\theta})`, and :math:`\frac{\partial\omega}{\partial\theta}`.
+
+Estimates computed with the de-meaned data are guaranteed by the Frish-Waugh-Lovell (FWL) theorem (:ref:`Frisch and Waugh, 1933 <fw33>`; :ref:`Lovell, 1963 <l63>`) to be the same as estimates computed when fixed effects are included as indicator variables.
+
+When :math:`E_D > 1` or :math:`E_S > 1`, the iterative de-meaning algorithm of :ref:`Rios-Avila (2015) <r15>` can be applied to absorb the multiple fixed effects. Iterative de-meaning can be processor-intensive, but for large amounts of data or for large numbers of fixed effects, it is often a preferable alternative to including indicator variables.
 
 
 Bertrand-Nash Prices and Shares
