@@ -183,12 +183,6 @@ class TableFormatter(object):
         """Construct a blank row."""
         return self([""] * len(self.widths))
 
-    def border(self):
-        """Construct a border line."""
-        return "=" * len(self.blank())
-
     def line(self):
-        """Construct dividing line."""
-        return "-" * len(self.blank())
-
-
+        """Construct a horizontal line."""
+        return "=" * len(self.blank())

@@ -305,10 +305,10 @@ class Economy(object):
         dimension_formatter = output.table_formatter(dimension_widths)
         sections.append([
             "Dimensions:",
-            dimension_formatter.border(),
+            dimension_formatter.line(),
             dimension_formatter(dimension_header, underline=True),
             dimension_formatter([v for _, v in dimension_items]),
-            dimension_formatter.border()
+            dimension_formatter.line()
         ])
 
         # build the section for matrix labels
@@ -320,13 +320,13 @@ class Economy(object):
         matrix_formatter = output.table_formatter(matrix_widths)
         matrix_section = [
             "Matrices:",
-            matrix_formatter.border(),
+            matrix_formatter.line(),
             matrix_formatter(matrix_header, underline=True)
         ]
         for name, labels in matrix_items:
             if labels:
                 matrix_section.append(matrix_formatter([name] + labels))
-        matrix_section.append(matrix_formatter.border())
+        matrix_section.append(matrix_formatter.line())
         sections.append(matrix_section)
 
         # combine the sections into one string
@@ -760,7 +760,7 @@ class NonlinearParameters(object):
                     lines.append(formatter.blank())
 
         # wrap the table in borders and combine the lines into one string
-        return "\n".join([formatter.border()] + lines + [formatter.border()])
+        return "\n".join([formatter.line()] + lines + [formatter.line()])
 
     def compress(self, sigma, pi):
         """Compress nonlinear parameter matrices into theta."""
@@ -844,7 +844,7 @@ class LinearParameters(object):
 
         # build the table
         lines.extend([
-            formatter.border(),
+            formatter.line(),
             formatter(beta_header, underline=True),
             formatter([""] + [output.format_number(x) for x in beta_like])
         ])
@@ -858,7 +858,7 @@ class LinearParameters(object):
             ])
             if gamma_se is not None:
                 lines.append(formatter([""] + [output.format_se(x) for x in gamma_se]))
-        lines.append(formatter.border())
+        lines.append(formatter.line())
 
         # combine the lines into one string
         return "\n".join(lines)

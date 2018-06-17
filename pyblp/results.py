@@ -264,7 +264,7 @@ class Results(object):
         formatter = output.table_formatter(widths)
         sections.append([
             "Results Summary:",
-            formatter.border(),
+            formatter.line(),
             formatter([k[0] for k in header]),
             formatter([k[1] for k in header], underline=True),
             formatter([
@@ -276,7 +276,7 @@ class Results(object):
                 output.format_number(self.objective),
                 output.format_number(self.gradient_norm)
             ]),
-            formatter.border()
+            formatter.line()
         ])
 
         # construct a section containing linear estimates
