@@ -1,7 +1,9 @@
 """Tests of formulation of data matrices."""
 
+import itertools
 import traceback
 
+import patsy
 import pytest
 import numpy as np
 
@@ -74,7 +76,7 @@ from pyblp import Formulation
         id="interactions"
     )
 ])
-def test_valid_formulas(formula_data, formulas, build_columns, build_derivatives):
+def test_matrices(formula_data, formulas, build_columns, build_derivatives):
     """Test that equivalent formulas build columns and derivatives as expected. Take derivatives with respect to x."""
 
     # construct convenience columns of ones and zeros
@@ -83,7 +85,7 @@ def test_valid_formulas(formula_data, formulas, build_columns, build_derivatives
 
     # build columns and derivatives for each formula
     for formula in formulas:
-        matrix, column_formulations, underlying_data = Formulation(formula)._build(formula_data)
+        matrix, column_formulations, underlying_data = Formulation(formula)._build_matrix(formula_data)
         evaluated_matrix = np.column_stack([ones * f.evaluate(underlying_data) for f in column_formulations])
         derivatives = np.column_stack([ones * f.evaluate_derivative('x', underlying_data) for f in column_formulations])
 
@@ -99,29 +101,94 @@ def test_valid_formulas(formula_data, formulas, build_columns, build_derivatives
 
 
 @pytest.mark.usefixtures('formula_data')
-@pytest.mark.parametrize('formula', [
-    pytest.param(None, id="None"),
-    pytest.param(1, id="integer"),
-    pytest.param('x ~ y', id="left-hand side"),
-    pytest.param('I(1)', id="two intercepts"),
-    pytest.param('C(a, levels=["a1", "a2"])', id="categorical marker arguments"),
-    pytest.param('I(x + a)', id="categorical variable inside identity function"),
-    pytest.param('I(C(a))', id="categorical marker inside identity function"),
-    pytest.param('C(C(a))', id="nested categorical marker"),
-    pytest.param('log(a)', id="log of categorical variable"),
-    pytest.param('abs(x)', id="unsupported function"),
-    pytest.param('g', id="bad variable name"),
-    pytest.param('x ^ y', id="unsupported patsy operator"),
-    pytest.param('I(x | y)', id="unsupported SymPy operator"),
-    pytest.param('log(-x)', id="logarithm of negative values"),
-    pytest.param('Q("a")', id="unsupported patsy quoting")
+@pytest.mark.parametrize(['formulas', 'build_columns'], [
+    pytest.param(
+        ['a', 'C(a)', '1 + a', '0 + a', 'a - 1', 'a + 1 + 1'],
+        lambda d: [d['a']],
+        id="categorical variable"
+    ),
+    pytest.param(
+        ['C(x)'],
+        lambda d: [d['x']],
+        id="discretized continuous variable"
+    ),
+    pytest.param(
+        ['a * b', '(a + b) ** 2', 'a + b + a:b'],
+        lambda d: [d['a'], d['b'], d['ab']],
+        id="product short-hands"
+    ),
+    pytest.param(
+        ['a / b', 'a * b - b', 'a + a:b'],
+        lambda d: [d['a'], d['ab']],
+        id="division short-hand"
+    ),
+    pytest.param(
+        ['a + a:b:c + a:C(x):C(y)'],
+        lambda d: [d['a'], d['abc'], d['axy']],
+        id="interactions"
+    )
 ])
-def test_invalid_formula(formula_data, formula):
+def test_ids(formula_data, formulas, build_columns):
+    """Test that equivalent formulas build IDs as expected."""
+
+    # create convenience columns of tuples of categorical variables
+    old_formula_data = formula_data.copy()
+    for (key1, values1), (key2, values2), (key3, values3) in itertools.product(old_formula_data.items(), repeat=3):
+        key12 = f'{key1}{key2}'
+        key123 = f'{key1}{key2}{key3}'
+        if key12 not in formula_data:
+            values12 = np.empty_like(values1, np.object)
+            values12[:] = list(zip(values1, values2))
+            formula_data[key12] = values12
+        if key123 not in formula_data:
+            values123 = np.empty_like(values1, np.object)
+            values123[:] = list(zip(values1, values2, values3))
+            formula_data[key123] = values123
+
+    # build and compare columns for each formula
+    for absorb in formulas:
+        ids = Formulation('', absorb)._build_ids(formula_data)
+        expected_ids = np.column_stack(build_columns(formula_data))
+        np.testing.assert_array_equal(ids, expected_ids, err_msg=absorb)
+
+
+@pytest.mark.usefixtures('formula_data')
+@pytest.mark.parametrize(['exception', 'formula', 'absorb'], [
+    pytest.param(TypeError, None, None, id="None"),
+    pytest.param(TypeError, 1, None, id="integer"),
+    pytest.param(TypeError, '', 1, id="absorbed integer"),
+    pytest.param(patsy.PatsyError, 'x ~ y', None, id="left-hand side"),
+    pytest.param(patsy.PatsyError, '', 'a ~ b', id="absorbed left-hand side"),
+    pytest.param(patsy.PatsyError, 'I(1)', None, id="two intercepts"),
+    pytest.param(patsy.PatsyError, '', 'a + I(1)', id="absorbed intercept"),
+    pytest.param(patsy.PatsyError, '', 'x', id="absorbed continuous variable"),
+    pytest.param(patsy.PatsyError, '', 'x:a', id="absorbed continuous-categorical interaction"),
+    pytest.param(patsy.PatsyError, 'C(a, levels=["a1", "a2"])', None, id="categorical marker arguments"),
+    pytest.param(patsy.PatsyError, '', 'C(a, levels=["a1", "a2"])', id="absorbed categorical marker arguments"),
+    pytest.param(patsy.PatsyError, 'I(x + a)', None, id="categorical variable inside identity function"),
+    pytest.param(patsy.PatsyError, 'I(C(a))', None, id="categorical marker inside identity function"),
+    pytest.param(patsy.PatsyError, 'C(C(a))', None, id="nested categorical marker"),
+    pytest.param(patsy.PatsyError, '', 'C(C(a))', id="absorbed nested categorical marker"),
+    pytest.param(patsy.PatsyError, 'log(a)', None, id="log of categorical variable"),
+    pytest.param(patsy.PatsyError, 'abs(x)', None, id="unsupported function"),
+    pytest.param(patsy.PatsyError, '', 'log(x)', id="absorbed function"),
+    pytest.param(patsy.PatsyError, 'g', None, id="bad variable name"),
+    pytest.param(patsy.PatsyError, '', 'g', id="bad absorbed variable name"),
+    pytest.param(patsy.PatsyError, 'x ^ y', None, id="unsupported patsy operator"),
+    pytest.param(patsy.PatsyError, '', 'x ^ y', id="absorbed unsupported patsy operator"),
+    pytest.param(patsy.PatsyError, 'I(x | y)', None, id="unsupported SymPy operator"),
+    pytest.param(patsy.PatsyError, 'log(-x)', None, id="logarithm of negative values"),
+    pytest.param(patsy.PatsyError, 'Q("a")', None, id="unsupported patsy quoting"),
+    pytest.param(patsy.PatsyError, '', 'Q("a")', id="absorbed unsupported patsy quoting")
+])
+def test_invalid_formulas(formula_data, exception, formula, absorb):
     """Test that an invalid formula gives rise to an exception."""
     try:
-        formulation = Formulation(formula)
-        formulation._build(formula_data)
-    except:
+        formulation = Formulation(formula, absorb)
+        formulation._build_matrix(formula_data)
+        if absorb is not None:
+            formulation._build_ids(formula_data)
+    except exception:
         print(traceback.format_exc())
         return
-    raise RuntimeError(f"The formula '{formula}' was successfully formulated as '{formulation}'.")
+    raise RuntimeError(f"Successful formulation: {formulation}.")

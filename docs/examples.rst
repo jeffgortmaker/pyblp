@@ -61,7 +61,7 @@ The `product_data` argument in :class:`Problem` initialization is a structured a
    blp_products = {n: blp_products[n] for n in blp_products.dtype.names}
    nevo_products = {n: nevo_products[n] for n in nevo_products.dtype.names}
 
-Both sets of data contain market IDs, two sets of firm IDs (the second are IDs after a simple merger, which are used later), shares, prices, and a number of product characteristics. The fake cereal data also includes product IDs (``demand_ids``), which will be used to construct fixed effects, as well as pre-computed instruments (``demand_instruments0``, ``demand_instruments1``, and so on).
+Both sets of data contain market IDs, two sets of firm IDs (the second are IDs after a simple merger, which are used later), shares, prices, and a number of product characteristics. The fake cereal data also includes product IDs, which will be used to construct fixed effects, as well as pre-computed instruments.
 
 We'll use the :func:`build_blp_instruments` function to construct both demand- and supply-side instruments for the automobile problem. The function accepts a :class:`Formulation` configuration, which determines which product characteristics will be used to construct traditional BLP instruments. Additionally, we'll add the excluded demand variable, miles per dollar, to the set of supply-side instruments. As in :ref:`Berry, Levinsohn, and Pakes (1995) <blp95>`, even though miles per gallon and the trend will end up being excluded supply variables, we won't include them in the set of demand-side instruments because of collinearity issues.
 
@@ -174,12 +174,12 @@ Estimates, which are in the same order as product characteristics configured dur
 The Fake Cereal Problem
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-Unlike the automobile problem, we will not estimate a supply side when solving the fake cereal problem. However, we still need to specify formulations for :math:`X_1`, :math:`X_2`, and :math:`d`. The formulation for :math:`X_1` consists only of prices. However, since there is a ``demand_ids`` field in the fake cereal product data, fixed effects created from the categorical IDs in the field will be absorbed into :math:`X_1` (as well as into :math:`Z_D` and other relevant matrices) through a demeaning procedure. If there were more than one column of demand IDs to absorb, the iterative demeaning algorithm of :ref:`Rios-Avila (2015) <r15>` would be used. If we were interested in parameter estimates for each product, we could include ``C(demand_ids)`` in the formulation for :math:`X_1` and supplement :math:`Z_D` with product indicator variables (the documentation for the :func:`build_matrix` function demonstrates how to do this). Absorption of fixed effects yields the same first-stage results as including them as indicator variables (results for GMM stages after the first may be slightly different because the two methods can give rise to different updated weighting matrices).
+Unlike the automobile problem, we will not estimate a supply side when solving the fake cereal problem. However, we still need to specify formulations for :math:`X_1`, :math:`X_2`, and :math:`d`. The formulation for :math:`X_1` consists of prices and product fixed effects. We will use `absorb` in :class:`Formulation` to absorb these fixed effects into :math:`X_1` with the iterative demeaning algorithm of :ref:`Rios-Avila (2015) <r15>` would be used. If we were interested in parameter estimates for each product, we could add ``C(product_ids)`` to ``prices`` and supplement :math:`Z_D` with product indicator variables (the documentation for the :func:`build_matrix` function demonstrates how to do this). Absorption of fixed effects yields the same first-stage results as including them as indicator variables, although results for GMM stages after the first may be slightly different because the two methods can give rise to different weighting matrices.
 
 .. ipython:: python
 
    nevo_product_formulations = (
-       pyblp.Formulation('0 + prices'),
+       pyblp.Formulation('0 + prices', absorb='C(product_ids)'),
        pyblp.Formulation('prices + sugar + mushy')
    )
    nevo_product_formulations

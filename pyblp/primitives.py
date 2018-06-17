@@ -8,7 +8,7 @@ import numpy.lib.recfunctions
 
 from . import options, exceptions
 from .configurations import Formulation, Integration
-from .utilities import output, extract_matrix, iteratively_demean, Matrices
+from .utilities import output, extract_matrix, Matrices
 
 
 class Products(Matrices):
@@ -50,16 +50,18 @@ class Products(Matrices):
 
     """
 
-    def __new__(cls, product_formulations, product_data, demeaning_iteration=None):
+    def __new__(cls, product_formulations, product_data):
         """Validate and structure product data while absorbing any fixed effects."""
 
         # validate the formulations
         if not all(isinstance(f, Formulation) for f in product_formulations) or len(product_formulations) not in {2, 3}:
             raise TypeError("product_formulations must be a tuple of two or three Formulation instances.")
+        if product_formulations[1]._absorbed_terms:
+            raise ValueError("The formulation for X2 does not support fixed effect absorption.")
 
         # build X1 and X2
-        X1, X1_formulations, X1_data = product_formulations[0]._build(product_data)
-        X2, X2_formulations, X2_data = product_formulations[1]._build(product_data)
+        X1, X1_formulations, X1_data = product_formulations[0]._build_matrix(product_data)
+        X2, X2_formulations, X2_data = product_formulations[1]._build_matrix(product_data)
         if 'shares' in X1_data:
             raise NameError("shares cannot be included in the formulation for X1.")
         if 'shares' in X2_data:
@@ -72,7 +74,7 @@ class Products(Matrices):
         X3_data = {}
         X3_formulations = []
         if len(product_formulations) == 3:
-            X3, X3_formulations, X3_data = product_formulations[2]._build(product_data)
+            X3, X3_formulations, X3_data = product_formulations[2]._build_matrix(product_data)
             if 'shares' in X3_data:
                 raise NameError("shares cannot be included in the formulation for X3.")
             if 'prices' in X3_data:
@@ -86,19 +88,33 @@ class Products(Matrices):
         if (ZS is None) != (X3 is None):
             raise KeyError("product_data must have a supply_instruments field only when X3 is formulated.")
 
-        # load IDs
+        # load and absorb any demand-side fixed effects
+        demand_ids = None
+        if product_formulations[0]._absorbed_terms:
+            demand_ids = product_formulations[0]._build_ids(product_data)
+            X1, X1_errors = product_formulations[0]._demean(X1, demand_ids)
+            ZD, ZD_errors = product_formulations[0]._demean(ZD, demand_ids)
+            if X1_errors | ZD_errors:
+                raise exceptions.MultipleErrors(X1_errors | ZD_errors)
+
+        # load and absorb any demand-side fixed effects
+        supply_ids = None
+        if len(product_formulations) == 3 and product_formulations[2]._absorbed_terms:
+            supply_ids = product_formulations[2]._build_ids(product_data)
+            X3, X3_errors = product_formulations[2]._demean(X3, supply_ids)
+            ZS, ZS_errors = product_formulations[2]._demean(ZS, supply_ids)
+            if X3_errors | ZS_errors:
+                raise exceptions.MultipleErrors(X3_errors | ZS_errors)
+
+        # load other IDs
         market_ids = extract_matrix(product_data, 'market_ids')
         firm_ids = extract_matrix(product_data, 'firm_ids')
-        demand_ids = extract_matrix(product_data, 'demand_ids')
-        supply_ids = extract_matrix(product_data, 'supply_ids')
         if market_ids is None:
             raise KeyError("product_data must have a market_ids field.")
         if market_ids.shape[1] > 1:
             raise ValueError("The market_ids field of product_data must be one-dimensional.")
         if firm_ids is None and X3 is not None:
             raise KeyError("product_data must have firm_ids field when X3 is formulated.")
-        if supply_ids is not None and X3 is None:
-            raise KeyError("product_data must not have a supply_ids field when X3 not is formulated.")
 
         # load ownership matrices
         ownership = None
@@ -107,7 +123,8 @@ class Products(Matrices):
             if ownership is not None:
                 J = np.unique(market_ids, return_counts=True)[1].max()
                 if ownership.shape[1] != J * firm_ids.shape[1]:
-                    raise ValueError(f"The ownership field of product_data must have {J * firm_ids.shape[1]} columns.")
+                    raise ValueError(
+                        f"The ownership field of product_data must have {J * firm_ids.shape[1]} columns.")
 
         # load shares
         shares = extract_matrix(product_data, 'shares')
@@ -115,20 +132,6 @@ class Products(Matrices):
             raise KeyError("product_data must have a shares field.")
         if shares.shape[1] > 1:
             raise ValueError("The shares field of product_data must be one-dimensional.")
-
-        # absorb any demand-side fixed effects with iterative demeaning
-        if demand_ids is not None:
-            X1, X1_errors = iteratively_demean(X1, demand_ids, demeaning_iteration)
-            ZD, ZD_errors = iteratively_demean(ZD, demand_ids, demeaning_iteration)
-            if X1_errors | ZD_errors:
-                raise exceptions.MultipleErrors(X1_errors | ZD_errors)
-
-        # absorb any supply-side fixed effects with iterative demeaning
-        if supply_ids is not None:
-            X3, X3_errors = iteratively_demean(X3, supply_ids, demeaning_iteration)
-            ZS, ZS_errors = iteratively_demean(ZS, supply_ids, demeaning_iteration)
-            if X3_errors | ZS_errors:
-                raise exceptions.MultipleErrors(X3_errors | ZS_errors)
 
         # structure product fields as a mapping
         product_mapping = {
@@ -185,7 +188,9 @@ class Agents(Matrices):
                 raise TypeError("agent_formulation must be a Formulation instance.")
             if agent_data is None:
                 raise ValueError("agent_formulation is specified, so agent_data must be specified as well.")
-            demographics, demographics_formulations = agent_formulation._build(agent_data)[:2]
+            if agent_formulation._absorbed_terms:
+                raise ValueError("agent_formulation does not support fixed effect absorption.")
+            demographics, demographics_formulations = agent_formulation._build_matrix(agent_data)[:2]
 
         # verify that agent data and integration weren't mixed up
         if isinstance(agent_data, Integration):

@@ -90,47 +90,51 @@ def test_fixed_effects(simulated_problem, ED, ES):
     if ED == ES == 0:
         return
 
-    # create two sets of changeable product data
-    product_data1 = {k: product_data[k] for k in product_data.dtype.names}
-    product_data2 = product_data1.copy()
-
-    # add IDs for creating fixed effects to the two sets of data
+    # add fixed effect IDs to the data
     np.random.seed(0)
     demand_names = []
     supply_names = []
+    product_data = {k: product_data[k] for k in product_data.dtype.names}
     for side, count, names in [('demand', ED, demand_names), ('supply', ES, supply_names)]:
         for index in range(count):
-            ids = np.random.choice(['a', 'b', 'c'], product_data.shape[0], [0.7, 0.2, 0.1])
-            product_data1[f'{side}_ids{index}'] = product_data2[f'renamed_{side}_ids{index}'] = ids
-            names.append(f'renamed_{side}_ids{index}')
+            name = f'{side}_ids{index}'
+            ids = np.random.choice(['a', 'b', 'c'], product_data['market_ids'].size, [0.7, 0.2, 0.1])
+            product_data[name] = ids
+            names.append(name)
+
+    # remove constants
+    product_formulations = list(problem.product_formulations).copy()
+    if ED > 0:
+        product_formulations[0] = Formulation(f'{product_formulations[0]._formula} - 1')
+        product_data['demand_instruments'] = product_data['demand_instruments'][:, 1:]
+    if ES > 0:
+        product_formulations[2] = Formulation(f'{product_formulations[2]._formula} - 1')
+        product_data['supply_instruments'] = product_data['supply_instruments'][:, 1:]
+
+    # build formulas for the IDs
+    demand_formula = ' + '.join(demand_names)
+    supply_formula = ' + '.join(supply_names)
 
     # solve the first stage of a problem in which the fixed effects are absorbed
-    product_formulations1 = list(problem.product_formulations)
+    product_formulations1 = product_formulations.copy()
     if ED > 0:
-        product_formulations1[0] = Formulation(f'{product_formulations1[0]._formula} - 1')
-        product_data1['demand_instruments'] = product_data1['demand_instruments'][:, 1:]
+        product_formulations1[0] = Formulation(product_formulations[0]._formula, demand_formula)
     if ES > 0:
-        product_formulations1[2] = Formulation(f'{product_formulations1[2]._formula} - 1')
-        product_data1['supply_instruments'] = product_data1['supply_instruments'][:, 1:]
-    problem1 = Problem(product_formulations1, product_data1, problem.agent_formulation, simulation.agent_data)
+        product_formulations1[2] = Formulation(product_formulations[2]._formula, supply_formula)
+    problem1 = Problem(product_formulations1, product_data, problem.agent_formulation, simulation.agent_data)
     results1 = problem1.solve(simulation.sigma, simulation.pi, steps=1)
 
     # solve the first stage of a problem in which fixed effects are included as indicator variables
-    product_formulations2 = list(problem.product_formulations)
+    product_data2 = product_data.copy()
+    product_formulations2 = product_formulations.copy()
     if ED > 0:
-        demand_formula = ' + '.join(demand_names)
-        product_formulations2[0] = Formulation(f'{product_formulations2[0]._formula} - 1 + {demand_formula}')
-        product_data2['demand_instruments'] = np.c_[
-            product_data2['demand_instruments'][:, 1:],
-            build_matrix(Formulation(demand_formula), product_data2)
-        ]
+        demand_indicators = build_matrix(Formulation(demand_formula), product_data)
+        product_data2['demand_instruments'] = np.c_[product_data['demand_instruments'], demand_indicators]
+        product_formulations2[0] = Formulation(f'{product_formulations[0]._formula} + {demand_formula}')
     if ES > 0:
-        supply_formula = ' + '.join(supply_names)
-        product_formulations2[2] = Formulation(f'{product_formulations2[2]._formula} - 1 + {supply_formula}')
-        product_data2['supply_instruments'] = np.c_[
-            product_data2['supply_instruments'][:, 1:],
-            build_matrix(Formulation(supply_formula), product_data2)
-        ]
+        supply_indicators = build_matrix(Formulation(supply_formula), product_data)
+        product_data2['supply_instruments'] = np.c_[product_data['supply_instruments'], supply_indicators]
+        product_formulations2[2] = Formulation(f'{product_formulations[2]._formula} + {supply_formula}')
     problem2 = Problem(product_formulations2, product_data2, problem.agent_formulation, simulation.agent_data)
     results2 = problem2.solve(simulation.sigma, simulation.pi, steps=1)
 

@@ -1,4 +1,4 @@
-"""Formulation of data matrices."""
+"""Formulation of data matrices and absorption of fixed effects."""
 
 import token
 import functools
@@ -10,23 +10,39 @@ import patsy.origin
 import patsy.builtins
 from sympy.parsing import sympy_parser
 
+from .. import exceptions
 from ..utilities import extract_size
+from ..configurations import Iteration
 
 
 class Formulation(object):
-    """Configuration for the design of a matrix.
+    """Configuration for designing matrices and absorbing fixed effects.
 
     Internally, the :mod:`patsy` package is used to convert data and R-style formulas into matrices. All of the standard
-    operators can be used to design complex matrices of factor interactions. However, since factors need to be
-    differentiated (for example, when computing elasticities), only the most essential :mod:`patsy` functionality is
-    supported.
+    `binary operators <https://patsy.readthedocs.io/en/stable/formulas.html#operators>`_ can be used to design complex
+    matrices of factor interactions:
 
-    No :mod:`patsy` transformations are supported; instead, data associated with variables should generally already be
-    transformed. However, the basic mathematical operations are supported: addition, subtraction, multiplication,
-    division, exponentiation, and logarithms.
+        - ``+`` - Set union of terms.
+        - ``-`` - Set difference of terms.
+        - ``*`` - Short-hand. The formula ``a * b`` is the same as ``a + b + a:b``.
+        - ``/`` - Short-hand. The formula ``a / b`` is the same as ``a + a:b``.
+        - ``:`` - Interactions between two sets of terms.
+        - ``**`` - Interactions up to an integer degree.
+
+    However, since factors need to be differentiated (for example, when computing elasticities), only the most essential
+    functions are supported:
+
+        - ``C`` - Mark a variable as categorical. See :func:`patsy.builtins.C`. Arguments are not supported.
+        - ``I`` - Encapsulate mathematical operations. See :func:`patsy.builtins.I`.
+        - ``log`` - Natural logarithm function.
+        - ``exp`` - Natural exponential function.
+
+    Data associated with variables should generally already be transformed. However, when encapsulated by ``I()``, these
+    operators function like normal mathematical operators on numeric variables: ``+`` adds, ``-`` subtracts, ``*``
+    multiplies, ``/`` divides, and ``**`` exponentiates.
 
     Internally, mathematical operations are parsed and evaluated by the :mod:`sympy` package, which is also used to
-    symbolically differentiate terms when their derivatives are required (for example, when computing elasticities).
+    symbolically differentiate terms when their derivatives are required.
 
     Parameters
     ----------
@@ -34,25 +50,16 @@ class Formulation(object):
         R-style formula used to design a matrix. Variable names will be validated when this formulation along with
         data are passed to a function that uses them. By default, an intercept is included, which can be removed with
         ``0`` or ``-1``.
-
-        A small number of functions are included:
-
-            - ``C`` - Mark a variable as categorical. See :func:`patsy.builtins.C`. Arguments are not supported.
-            - ``I`` - Encapsulate mathematical operations. See :func:`patsy.builtins.I`.
-            - ``log`` - Natural logarithm function.
-            - ``exp`` - Natural exponential function.
-
-        All `binary operators <https://patsy.readthedocs.io/en/stable/formulas.html#operators>`_ are supported:
-
-            - ``+`` - Set union of terms.
-            - ``-`` - Set difference of terms.
-            - ``*`` - Short-hand. The formula ``a * b`` is the same as ``a + b + a:b``.
-            - ``/`` - Short-hand. The formula ``a / b`` is the same as ``a + a:b``.
-            - ``:`` - Interactions between two sets of terms.
-            - ``**`` - Interactions up to an integer degree.
-
-        When encapsulated by ``I()``, these operators function like normal mathematical operators on numeric variables:
-        ``+`` adds, ``-`` subtracts, ``*`` multiplies, ``/`` divides, and ``**`` exponentiates.
+    absorb : `str, optional`
+        R-style formula used to design a matrix of categorical variables that will be used to create fixed effects,
+        which will be absorbed into the matrix designed by `formula` with the simple iterative de-meaning algorithm of
+        :ref:`Rios-Avila (2015) <r15>`. Fixed effect absorption is only supported for some matrices. Unlike `formula`,
+        intercepts are ignored. Only categorical variables are supported.
+    iteration : `Iteration, optional`
+        :class:`Iteration` configuration for how to absorb fixed effects. By default,
+        ``Iteration('simple', {'tol': 1e-14})`` is used. This configuration is only relevant if `absorb` designs a
+        matrix with more than one variable, since a single fixed effect will be completely absorbed after only a single
+        de-meaning pass.
 
     Examples
     --------
@@ -64,15 +71,19 @@ class Formulation(object):
        formulation
 
     The following code designs a second matrix with an intercept, with first- and second-degree size terms, with
-    categorical product IDs and years, and with the interaction of the last two:
+    categorical product IDs and years, and with the interaction of the last two. The first formulation includes the
+    fixed effects as indicator variables, and the second absorbs them:
 
     .. ipython:: python
 
-       formulation = pyblp.Formulation('size + I(size ** 2) + C(product) * C(year)')
-       formulation
+       formulation1 = pyblp.Formulation('size + I(size ** 2) + C(product) * C(year)')
+       formulation1
+       formulation2 = pyblp.Formulation('size + I(size ** 2)', absorb='C(product) * C(year)')
+       formulation2
 
     The following code designs a third matrix with an intercept and with a yearly trend interacted with the natural
-    logarithm of income and categorical education:
+    logarithm of income and categorical education. Absorption of continuous variables is not supported, so indicators
+    must be used here:
 
     .. ipython:: python
 
@@ -81,39 +92,68 @@ class Formulation(object):
 
     """
 
-    def __init__(self, formula):
+    def __init__(self, formula, absorb=None, iteration=None):
         """Parse the formula into patsy terms and SymPy expressions. In the process, validate it as much as possible
         without any data.
         """
+
+        # validate the formulas
         if not isinstance(formula, str):
             raise TypeError("formula must be a string.")
+        if absorb is not None and not isinstance(absorb, str):
+            raise TypeError("absorb must be a None or a string.")
+
+        # parse the formulas into patsy terms
         self._formula = formula
+        self._absorb = absorb
         self._terms = parse_terms(formula)
-        self._expressions = [parse_term_expression(t) for t in self._terms]
-        self._names = {str(s) for e in self._expressions for s in e.free_symbols}
+        self._absorbed_terms = parse_terms(f'{absorb} - 1') if absorb is not None else []
         if not self._terms:
-            raise patsy.PatsyError("The formula has no terms.", patsy.origin.Origin(formula, 0, len(formula)))
-        if len(self._terms) > 1 and not any(e.free_symbols for e in self._expressions):
+            raise patsy.PatsyError("formula has no terms.", patsy.origin.Origin(formula, 0, len(formula)))
+
+        # parse the terms into SymPy expressions and extract variable names
+        self._expressions = [parse_term_expression(t) for t in self._terms]
+        self._absorbed_expressions = [parse_term_expression(t) for t in self._absorbed_terms]
+        self._names = {str(s) for e in self._expressions for s in e.free_symbols}
+        self._absorbed_names = {str(s) for e in self._absorbed_expressions for s in e.free_symbols}
+        if sum(not e.free_symbols for e in self._expressions) > 1:
             raise patsy.PatsyError(
-                "The formula has more than one term but no variables.",
+                "formula should have at most one constant term.",
                 patsy.origin.Origin(formula, 0, len(formula))
             )
+        if self._absorbed_expressions and any(not e.free_symbols for e in self._absorbed_expressions):
+            raise patsy.PatsyError(
+                "absorb should not have any constant terms.",
+                patsy.origin.Origin(absorb, 0, len(absorb))
+            )
+
+        # configure demeaning iteration
+        if iteration is None:
+            iteration = Iteration('simple', {'tol': 1e-14})
+        if not isinstance(iteration, Iteration):
+            raise TypeError("iteration must be None or an Iteration instance.")
+        self._iteration = iteration
 
     def __str__(self):
         """Format the terms as a string."""
-        return ' + '.join('1' if t == patsy.desc.INTERCEPT else t.name() for t in self._terms)
+        names = []
+        for term in self._terms:
+            names.append('1' if term == patsy.desc.INTERCEPT else term.name())
+        for absorbed_term in self._absorbed_terms:
+            names.append(f'Absorb[{absorbed_term.name()}]')
+        return ' + '.join(names)
 
     def __repr__(self):
         """Defer to the string representation."""
         return str(self)
 
-    def _build(self, data):
+    def _build_matrix(self, data):
         """Convert a mapping from variable names to arrays into the designed matrix, a list of column formulations that
         describe the columns of the matrix, and a mapping from variable names to arrays of data underlying the matrix,
         which include unchanged continuous variables and indicators constructed from categorical variables.
         """
 
-        # convert the data into a dictionary for convenience
+        # normalize the data
         data_mapping = {}
         for name in self._names:
             try:
@@ -127,16 +167,16 @@ class Formulation(object):
             data_mapping = {None: np.zeros(extract_size(data))}
 
         # design the matrix
-        design = design_matrix(self._terms, data_mapping)
+        matrix_design = design_matrix(self._terms, data_mapping)
 
         # store matrix column indices and build column formulations for each designed column
         column_indices = []
         column_formulations = []
         for term, expression in zip(self._terms, self._expressions):
-            term_slice = design.term_slices[term]
+            term_slice = matrix_design.term_slices[term]
             for index in range(term_slice.start, term_slice.stop):
                 column_indices.append(index)
-                formula = '1' if term == patsy.desc.INTERCEPT else design.column_names[index]
+                formula = '1' if term == patsy.desc.INTERCEPT else matrix_design.column_names[index]
                 column_formulations.append(ColumnFormulation(formula, expression))
 
         # construct a mapping from continuous variable names that appear in at least one column to their arrays
@@ -146,7 +186,7 @@ class Formulation(object):
                 underlying_data[symbol.name] = data_mapping.get(symbol.name)
 
         # supplement the mapping with indicators constructed from categorical variables
-        for factor, info in design.factor_infos.items():
+        for factor, info in matrix_design.factor_infos.items():
             if info.type == 'categorical':
                 indicator_design = design_matrix([patsy.desc.Term([factor])], data_mapping)
                 indicator_matrix = build_matrix(indicator_design, data_mapping)
@@ -156,8 +196,74 @@ class Formulation(object):
                         underlying_data[symbol.name] = indicator
 
         # build the matrix
-        matrix = build_matrix(design, data_mapping)
+        matrix = build_matrix(matrix_design, data_mapping)
         return matrix[:, column_indices], column_formulations, underlying_data
+
+    def _build_ids(self, data):
+        """Convert a mapping from variable names to arrays into the designed matrix of IDs to be absorbed."""
+
+        # normalize the data
+        data_mapping = {}
+        for name in self._absorbed_names:
+            try:
+                data_mapping[name] = np.asarray(data[name])
+            except Exception as exception:
+                origin = patsy.origin.Origin(self._absorb, 0, len(self._absorb))
+                raise patsy.PatsyError(f"Failed to load data for '{name}'.", origin) from exception
+
+        # build columns of absorbed IDs
+        ids_columns = []
+        for term in self._absorbed_terms:
+            factor_columns = []
+            term_design = design_matrix([term], data_mapping)
+            for factor, info in term_design.factor_infos.items():
+                if info.type != 'categorical':
+                    raise patsy.PatsyError("Only categorical variables can be absorbed.", factor.origin)
+                symbol = parse_expression(factor.name())
+                factor_columns.append(data_mapping[symbol.name])
+
+            # store interactions as tuples
+            column = factor_columns[0].astype(np.object)
+            if len(factor_columns) > 1:
+                column[:] = list(zip(*factor_columns))
+            ids_columns.append(column)
+
+        # build the matrix of IDs
+        return np.column_stack(ids_columns)
+
+    def _demean(self, matrix, ids):
+        """Iteratively demean matrix columns to absorb fixed effects defined by columns of IDs. Return any errors."""
+        errors = set()
+
+        # pre-compute indices that sort and de-sort each column of IDs, as well as information about unique values in
+        #   each sorted column
+        demeaning_info = []
+        for unsorted in ids.T:
+            sort_indices = unsorted.argsort()
+            undo_indices = sort_indices.argsort()
+            demeaning_info.append((
+                sort_indices,
+                undo_indices,
+                np.unique(unsorted[sort_indices], return_index=True, return_inverse=True, return_counts=True)[1:]
+            ))
+
+        # define the contraction mapping, which uses the pre-computed information to quickly demean the matrix
+        def demean(unaltered):
+            demeaned = unaltered.copy()
+            for sort, undo, (indices, inverse, counts) in demeaning_info:
+                means = np.add.reduceat(demeaned[sort], indices) / counts[:, np.newaxis]
+                demeaned -= means[inverse][undo]
+            return demeaned
+
+        # demean the matrix once if there is only one column of IDs
+        if ids.shape[1] == 1:
+            return demean(matrix), errors
+
+        # otherwise, iteratively demean
+        matrix, converged = self._iteration._iterate(matrix, demean)[:2]
+        if not converged:
+            errors.add(exceptions.AbsorptionConvergenceError)
+        return matrix, errors
 
 
 class ColumnFormulation(object):

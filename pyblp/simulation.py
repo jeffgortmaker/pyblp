@@ -244,26 +244,22 @@ class Simulation(Economy):
         # validate the formulations
         if not all(isinstance(f, Formulation) for f in product_formulations) or len(product_formulations) != 3:
             raise TypeError("product_formulations must be a tuple of three Formulation instances.")
+        if any(f._absorbed_terms for f in product_formulations):
+            raise ValueError("product_formulations do not support fixed effect absorption in simulations.")
         if agent_formulation is not None and not isinstance(agent_formulation, Formulation):
             raise TypeError("agent_formulation must be a Formulation instance.")
-        self.product_formulations = product_formulations
-        self.agent_formulation = agent_formulation
+        if agent_formulation is not None and agent_formulation._absorbed_terms:
+            raise ValueError("agent_formulation does not support fixed effect absorption.")
 
-        # load IDs (and make sure that fixed effect IDs aren't configured)
+        # load IDs
         market_ids = extract_matrix(product_data, 'market_ids')
         firm_ids = extract_matrix(product_data, 'firm_ids')
-        demand_ids = extract_matrix(product_data, 'demand_ids')
-        supply_ids = extract_matrix(product_data, 'supply_ids')
         if market_ids is None:
             raise KeyError("product_data must have a market_ids field.")
         if firm_ids is None:
             raise KeyError("product_data must have a firm_ids field.")
         if market_ids.shape[1] > 1:
             raise ValueError("The market_ids field of product_data must be one-dimensional.")
-        if demand_ids is not None:
-            raise KeyError("demand_ids are not supported in simulations, so product_data should not have their field.")
-        if supply_ids is not None:
-            raise KeyError("supply_ids are not supported in simulations, so product_data should not have their field.")
 
         # load ownership matrices
         ownership = extract_matrix(product_data, 'ownership')

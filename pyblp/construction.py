@@ -305,7 +305,7 @@ def build_matrix(formulation, data):
     .. ipython:: python
 
        instruments_string = ' + '.join(f'demand_instruments{i}' for i in range(20))
-       formulation = pyblp.Formulation(f'0 + C(demand_ids) + {instruments_string}')
+       formulation = pyblp.Formulation(f'0 + C(product_ids) + {instruments_string}')
        formulation
        data = np.recfromcsv(pyblp.data.NEVO_PRODUCTS_LOCATION)
        data.dtype.names
@@ -315,4 +315,4 @@ def build_matrix(formulation, data):
     """
     if not isinstance(formulation, Formulation):
         raise TypeError("formulation must be a Formulation instance.")
-    return formulation._build(data)[0]
+    return formulation._build_matrix(data)[0]

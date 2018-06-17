@@ -7,8 +7,8 @@ import numpy as np
 import scipy.linalg
 
 from . import options, exceptions
+from .utilities import output, ParallelItems, IV
 from .configurations import Iteration, Optimization
-from .utilities import output, iteratively_demean, ParallelItems, IV
 from .primitives import Products, Agents, Economy, Market, NonlinearParameters
 
 
@@ -30,7 +30,8 @@ class Problem(Economy):
         characteristics, :math:`X_1`, for the matrix of nonlinear product characteristics, :math:`X_2`, and, optionally,
         for the matrix of cost characteristics, :math:`X_3`, respectively. Variable names should correspond to fields in
         `product_data`. The ``shares`` variable should be included in none of the formulations and ``prices`` should
-        be included in the formulation for :math:`X_1` or :math:`X_2` (or both).
+        be included in the formulation for :math:`X_1` or :math:`X_2` (or both). The `absorb` argument of
+        :class:`Formulation` can be used to absorb fixed effects into :math:`X_1` and :math:`X_3`, but not :math:`X_2`.
     product_data : `structured array-like`
         Each row corresponds to a product. Markets can have differing numbers of products. The following fields are
         required:
@@ -60,14 +61,6 @@ class Problem(Economy):
               with a `firm_ids` column and must have as many columns as there are products in the market with the most
               products.
 
-        Any fixed effects are absorbed with the simple iterative demeaning algorithm of :ref:`Rios-Avila (2015) <r15>`:
-
-            - **demand_ids** : (`object, optional`) - Categorical variables used to create demand-side fixed effects.
-              Each column is one such effect.
-
-            - **supply_ids** : (`object, optional`) - Categorical variables used to create supply-side fixed effects.
-              Each column is one such effect.
-
         Along with `market_ids`, `firm_ids`, and `prices`, the names of any additional fields can be used as variables
         in `product_formulations`.
 
@@ -95,12 +88,6 @@ class Problem(Economy):
         :class:`Integration` configuration for how to build nodes and weights for integration over agent utilities,
         which will replace any `nodes` and `weights` fields in `agent_data`. This is required if `nodes` and `weights`
         in `agent_data` are not specified.
-    demeaning_iteration : `Iteration, optional`
-        :class:`Iteration` configuration for how to absorb fixed effects with the iterative demeaning algorithm of
-        :ref:`Rios-Avila (2015) <r15>`. By default, ``Iteration('simple', {'tol': 1e-14})`` is used. This configuration
-        is only used if `product_data` has `demand_ids` or `supply_ids` fields. More specifically, on either the demand
-        or supply  side, it will only be used if there is more than one fixed effect, since a single fixed effect will
-        be completely absorbed after only one iteration of the algorithm.
 
     Attributes
     ----------
@@ -172,19 +159,9 @@ class Problem(Economy):
 
     """
 
-    def __init__(self, product_formulations, product_data, agent_formulation=None, agent_data=None, integration=None,
-                 demeaning_iteration=None):
-        """Structure product and agent data and configure iterative demeaning."""
-
-        # configure iterative demeaning
-        if demeaning_iteration is None:
-            demeaning_iteration = Iteration('simple', {'tol': 1e-14})
-        if not isinstance(demeaning_iteration, Iteration):
-            raise TypeError("demeaning_iteration must be None or an Iteration instance.")
-        self._iteratively_demean = functools.partial(iteratively_demean, iteration=demeaning_iteration)
-
-        # structure product and agent data
-        products = Products(product_formulations, product_data, demeaning_iteration)
+    def __init__(self, product_formulations, product_data, agent_formulation=None, agent_data=None, integration=None):
+        """Structure product and agent data."""
+        products = Products(product_formulations, product_data)
         agents = Agents(products, agent_formulation, agent_data, integration)
         super().__init__(product_formulations, agent_formulation, products, agents)
 
@@ -591,10 +568,11 @@ class Problem(Economy):
         delta = true_delta
         xi_jacobian = true_xi_jacobian
         if self.ED > 0:
-            delta, delta_errors = self._iteratively_demean(delta, self.products.demand_ids)
+            demean = self.product_formulations[0]._demean
+            delta, delta_errors = demean(delta, self.products.demand_ids)
             errors |= delta_errors
             if compute_gradient:
-                xi_jacobian, jacobian_errors = self._iteratively_demean(xi_jacobian, self.products.demand_ids)
+                xi_jacobian, jacobian_errors = demean(xi_jacobian, self.products.demand_ids)
                 errors |= jacobian_errors
 
         # recover beta and compute xi
@@ -651,10 +629,11 @@ class Problem(Economy):
         tilde_costs = true_tilde_costs
         omega_jacobian = true_omega_jacobian
         if self.ES > 0:
-            tilde_costs, tilde_costs_errors = self._iteratively_demean(tilde_costs, self.products.supply_ids)
+            demean = self.product_formulations[2]._demean
+            tilde_costs, tilde_costs_errors = demean(tilde_costs, self.products.supply_ids)
             errors |= tilde_costs_errors
             if compute_gradient:
-                omega_jacobian, jacobian_errors = self._iteratively_demean(omega_jacobian, self.products.supply_ids)
+                omega_jacobian, jacobian_errors = demean(omega_jacobian, self.products.supply_ids)
                 errors |= jacobian_errors
 
         # recover gamma and compute omega

@@ -24,38 +24,6 @@ class IV(object):
         return (parameters, y - self.X @ parameters) if compute_residuals else parameters
 
 
-def iteratively_demean(matrix, ids, iteration):
-    """Iteratively demean matrix columns to absorb fixed effects defined by columns of IDs. Return any errors."""
-    errors = set()
-
-    # pre-compute indices that sort and de-sort each column of IDs, and then pre-compute information about unique values
-    #   in each sorted column
-    demeaning_info = []
-    for unsorted in ids.T:
-        sort_indices = unsorted.argsort()
-        undo_indices = sort_indices.argsort()
-        unique_info = np.unique(unsorted[sort_indices], return_index=True, return_inverse=True, return_counts=True)[1:]
-        demeaning_info.append((sort_indices, undo_indices, unique_info))
-
-    # define the contraction mapping, which uses the pre-computed information to quickly demean the matrix
-    def demean(unaltered):
-        demeaned = unaltered.copy()
-        for sort_indices, undo_indices, (unique_indices, unique_inverse, unique_counts) in demeaning_info:
-            means = np.add.reduceat(demeaned[sort_indices], unique_indices) / unique_counts[:, np.newaxis]
-            demeaned -= means[unique_inverse][undo_indices]
-        return demeaned
-
-    # demean the matrix once if there is only one column of IDs
-    if ids.shape[1] == 1:
-        return demean(matrix), errors
-
-    # otherwise, iteratively demean
-    matrix, converged = iteration._iterate(matrix, demean)[:2]
-    if not converged:
-        errors.add(exceptions.AbsorptionConvergenceError)
-    return matrix, errors
-
-
 def compute_gmm_se(u, Z, W, jacobian, se_type):
     """Use an error term, instruments, a weighting matrix, and the Jacobian of the error term with respect to parameters
     to estimate GMM standard errors. Return a set of any errors.
