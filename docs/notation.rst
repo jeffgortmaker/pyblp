@@ -23,6 +23,7 @@ Symbol                    Description
 :math:`M_S`               Supply-side instruments.
 :math:`E_D`               Absorbed demand-side fixed effects.
 :math:`E_S`               Absorbed supply-side fixed effects.
+:math:`C`                 Standard error clusters.
 :math:`P`                 Unknown nonlinear parameters.
 :math:`\mathscr{J}_{ft}`  Products produced by firm :math:`f` in market :math:`t`.
 ========================  ========================================================

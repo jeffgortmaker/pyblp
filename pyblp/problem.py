@@ -61,6 +61,12 @@ class Problem(Economy):
               with a `firm_ids` column and must have as many columns as there are products in the market with the most
               products.
 
+        Finally, standard errors and weighting matrices can be computed to account for arbitrary within-group
+        correlation by specifying clustering groups.
+
+            - **clustering_ids** (`object, optional`) - Cluster group IDs, which will be used when estimating standard
+              errors and updating weighting matrices if `se_type` in :meth:`Problem.solve` is ``'clustered'``.
+
         Along with `market_ids`, `firm_ids`, and `prices`, the names of any additional fields can be used as variables
         in `product_formulations`.
 
@@ -302,6 +308,11 @@ class Problem(Economy):
                 - ``'unadjusted'`` - Unadjusted standard errors computed under the assumption that weighting matrices
                   are optimal.
 
+                - ``'clustered'`` - Clustered standard errors, which account for arbitrary within-group correlation.
+                  Clusters must be defined by the `clustering_ids` field of `product_data` in :class:`Problem`.
+                  If there is more than one GMM `step`, weighting matrices will be updated to account for clustering
+                  as well.
+
         processes : `int, optional`
             Number of Python processes that will be used during estimation. By default, multiprocessing will not be
             used. For values greater than one, a pool of that many Python processes will be created during each
@@ -332,8 +343,10 @@ class Problem(Economy):
             raise ValueError("error_behavior must be 'raise', 'revert', or 'punish'.")
         if delta_behavior not in {'last', 'first'}:
             raise ValueError("delta_behavior must be 'last' or 'first'.")
-        if se_type not in {'robust', 'unadjusted'}:
-            raise ValueError("se_type must be 'robust' or 'unadjusted'.")
+        if se_type not in {'robust', 'unadjusted', 'clustered'}:
+            raise ValueError("se_type must be 'robust', 'unadjusted', or 'clustered'.")
+        if se_type == 'clustered' and 'clustering_ids' not in self.products.dtype.names:
+            raise ValueError("se_type can only be 'clustered' if clustering_ids were specified in product_data.")
 
         # configure or validate costs bounds
         if costs_bounds is None:

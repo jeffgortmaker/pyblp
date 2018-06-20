@@ -49,6 +49,7 @@ Features
 
 - Straightforward interface for configuring and solving BLP problems with R-style formulas.
 - Support for absorption of arbitrary fixed effects with iterative demeaning.
+- Support for robust and clustered standard errors.
 - Support for demographics and supply-side moments.
 - Support for nonlinear functions and interactions of product characteristics.
 - Customizable parameter matrices and bounds.
@@ -76,11 +77,10 @@ In no particular order, listed below are major features that will hopefully be a
 
 - Solving with logit and nested logit.
 - Tests for identification and overidentifying restrictions.
-- Clustered standard errors.
 - Parametric bootstrap computation of post-estimation standard errors.
 - Built-in IPOPT support.
 - Built-in support for more fixed point routines.
-- Nonlinear optimization alternatives to fixed point iteration when simulation synthetic data or mergers.
+- Nonlinear optimization alternatives to fixed point iteration when computing Bertrand-Nash prices and shares.
 - Hessian computation and tests for local minima.
 - Mathematical Program with Equilibrium Constraints (MPEC) formulation of the GMM objective function.
 - Generalized Empirical Likelihood (GEL) formulation of the problem.

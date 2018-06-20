@@ -46,6 +46,8 @@ class Products(Matrices):
 
         - **supply_ids** : (`object`) - Categorical variables used to create supply-side fixed effects.
 
+        - **clustering_ids** (`object`) - IDs used to compute clustered standard errors.
+
     Any additional fields are the variables underlying `X1`, `X2`, and `X3`.
 
     """
@@ -109,12 +111,18 @@ class Products(Matrices):
         # load other IDs
         market_ids = extract_matrix(product_data, 'market_ids')
         firm_ids = extract_matrix(product_data, 'firm_ids')
+        clustering_ids = extract_matrix(product_data, 'clustering_ids')
         if market_ids is None:
             raise KeyError("product_data must have a market_ids field.")
         if market_ids.shape[1] > 1:
             raise ValueError("The market_ids field of product_data must be one-dimensional.")
         if firm_ids is None and X3 is not None:
             raise KeyError("product_data must have firm_ids field when X3 is formulated.")
+        if clustering_ids is not None:
+            if clustering_ids.shape[1] > 1:
+                raise ValueError("The clustering_ids field of product_data must be one-dimensional.")
+            if np.unique(clustering_ids).size == 1:
+                raise ValueError("The clustering_ids field of product_data must have at least two distinct IDs.")
 
         # load ownership matrices
         ownership = None
@@ -139,6 +147,7 @@ class Products(Matrices):
             'firm_ids': (firm_ids, np.object),
             'demand_ids': (demand_ids, np.object),
             'supply_ids': (supply_ids, np.object),
+            'clustering_ids': (clustering_ids, np.object),
             'ownership': (ownership, options.dtype),
             'shares': (shares, options.dtype),
             'ZD': (ZD, options.dtype),

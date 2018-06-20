@@ -55,7 +55,9 @@ def small_simulation():
         correlation=0.7,
         seed=0
     )
-    return simulation, simulation.solve()
+    clustering_ids = np.random.choice(['a', 'b'], simulation.N)
+    product_data = np.lib.recfunctions.rec_append_fields(simulation.solve(), 'clustering_ids', clustering_ids)
+    return simulation, product_data
 
 
 @pytest.fixture
@@ -93,7 +95,9 @@ def medium_simulation():
         correlation=0.8,
         seed=1
     )
-    return simulation, simulation.solve()
+    clustering_ids = np.random.choice(['a', 'b', 'c'], simulation.N)
+    product_data = np.lib.recfunctions.rec_append_fields(simulation.solve(), 'clustering_ids', clustering_ids)
+    return simulation, product_data
 
 
 @pytest.fixture
@@ -128,7 +132,9 @@ def large_simulation():
         linear_costs=False,
         seed=2
     )
-    return simulation, simulation.solve()
+    clustering_ids = np.random.choice(['a', 'b', 'c', 'd'], simulation.N)
+    product_data = np.lib.recfunctions.rec_append_fields(simulation.solve(), 'clustering_ids', clustering_ids)
+    return simulation, product_data
 
 
 @pytest.fixture(params=[

@@ -24,7 +24,7 @@ class IV(object):
         return (parameters, y - self.X @ parameters) if compute_residuals else parameters
 
 
-def compute_gmm_se(u, Z, W, jacobian, se_type):
+def compute_gmm_se(u, Z, W, jacobian, se_type, clustering_ids):
     """Use an error term, instruments, a weighting matrix, and the Jacobian of the error term with respect to parameters
     to estimate GMM standard errors. Return a set of any errors.
     """
@@ -41,8 +41,10 @@ def compute_gmm_se(u, Z, W, jacobian, se_type):
     # compute the robust covariance matrix and extract standard errors
     covariances, approximation = invert(G.T @ W @ G)
     with np.errstate(invalid='ignore'):
-        if se_type == 'robust':
-            covariances = covariances @ G.T @ W @ Z.T @ (np.diagflat(u) ** 2) @ Z @ W @ G @ covariances
+        if se_type != 'unadjusted':
+            g = u * Z
+            S = compute_gmm_moment_covariances(g, se_type, clustering_ids)
+            covariances = covariances @ G.T @ W @ S @ W @ G @ covariances
         se = np.sqrt(np.c_[covariances.diagonal()])
 
     # handle null values
@@ -51,7 +53,7 @@ def compute_gmm_se(u, Z, W, jacobian, se_type):
     return se, errors
 
 
-def compute_gmm_weights(u, Z, center_moments):
+def compute_gmm_weights(u, Z, center_moments, se_type, clustering_ids):
     """Use an error term and instruments to compute a GMM weighting matrix. Return a set of any errors."""
     errors = set()
 
@@ -61,7 +63,7 @@ def compute_gmm_weights(u, Z, center_moments):
         g -= g.mean(axis=0)
 
     # attempt to compute the weighting matrix
-    W, approximation = invert(g.T @ g)
+    W, approximation = invert(compute_gmm_moment_covariances(g, se_type, clustering_ids))
     if approximation:
         errors.add(lambda: exceptions.GMMMomentCovariancesInversionError(approximation))
 
@@ -69,6 +71,13 @@ def compute_gmm_weights(u, Z, center_moments):
     if np.isnan(W).any():
         errors.add(exceptions.InvalidWeightsError)
     return W, errors
+
+
+def compute_gmm_moment_covariances(g, se_type, clustering_ids):
+    """Compute covariances between moment conditions."""
+    if se_type == 'clustered':
+        return sum(g[clustering_ids.flat == c].T @ g[clustering_ids.flat == c] for c in np.unique(clustering_ids))
+    return g.T @ g
 
 
 def invert(matrix):

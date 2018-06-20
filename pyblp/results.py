@@ -71,6 +71,8 @@ class Results(object):
     gamma : `ndarray`
         Estimated supply-side linear parameters, :math:`\hat{\gamma}`, which are ``None`` if the problem that created
         these results was not initialized with supply-side data.
+    se_type : `str`
+        The type of computed standard errors, which was specified by `se_type` in :meth:`Problem.solve`.
     sigma_se : `ndarray`
         Estimated standard errors for unknown :math:`\hat{\Sigma}` elements in :math:`\hat{\theta}`.
     pi_se : `ndarray`
@@ -186,6 +188,10 @@ class Results(object):
             true_X1 = np.column_stack((ones * f.evaluate(self.problem.products) for f in self.problem._X1_formulations))
             self.xi = self.true_delta - true_X1 @ self.beta
 
+        # store the standard error type and extract any clustering IDs
+        self.se_type = se_type
+        clustering_ids = self.problem.products.clustering_ids if se_type == 'clustered' else None
+
         # compute a version of omega that includes the contribution of any supply-side fixed effects
         self.omega = self.true_omega
         if self.problem.ES > 0:
@@ -194,21 +200,27 @@ class Results(object):
             self.omega = self.true_tilde_costs - true_X3 @ self.gamma
 
         # update the demand-side weighting matrix
-        self.updated_WD, WD_errors = compute_gmm_weights(self.true_xi, self.problem.products.ZD, center_moments)
+        self.updated_WD, WD_errors = compute_gmm_weights(
+            self.true_xi, self.problem.products.ZD, center_moments, se_type, clustering_ids
+        )
         self._errors |= WD_errors
 
         # update the supply-side weighting matrix
         self.updated_WS = None
         if self.problem.K3 > 0:
-            self.updated_WS, WS_errors = compute_gmm_weights(self.true_omega, self.problem.products.ZS, center_moments)
+            self.updated_WS, WS_errors = compute_gmm_weights(
+                self.true_omega, self.problem.products.ZS, center_moments, se_type, clustering_ids
+            )
             self._errors |= WS_errors
 
-        # stack the error terms, weighting matrices, instruments, and Jacobian of the errors with respect to parameters
+        # stack the error terms, weighting matrices, instruments, Jacobian of the errors with respect to parameters, and
+        #   clustering IDs
         if self.problem.K3 == 0:
             u = self.true_xi
             W = self.WD
             Z = self.problem.products.ZD
             jacobian = np.c_[self.xi_jacobian, self.problem.products.X1]
+            stacked_clustering_ids = clustering_ids if clustering_ids is not None else None
         else:
             u = np.r_[self.true_xi, self.true_omega]
             W = scipy.linalg.block_diag(self.WD, self.WS)
@@ -217,9 +229,10 @@ class Results(object):
                 np.r_[self.xi_jacobian, self.omega_jacobian],
                 scipy.linalg.block_diag(self.problem.products.X1, self.problem.products.X3)
             ]
+            stacked_clustering_ids = np.r_[clustering_ids, clustering_ids] if clustering_ids is not None else None
 
         # compute standard errors
-        se, se_errors = compute_gmm_se(u, Z, W, jacobian, se_type)
+        se, se_errors = compute_gmm_se(u, Z, W, jacobian, se_type, stacked_clustering_ids)
         self.sigma_se, self.pi_se = self._nonlinear_parameters.expand(se[:self._nonlinear_parameters.P])
         self.beta_se = se[self._nonlinear_parameters.P:self._nonlinear_parameters.P + self.problem.K1]
         self.gamma_se = se[-self.problem.K3:] if self.problem.K3 > 0 else None
@@ -285,15 +298,21 @@ class Results(object):
             formatter.line()
         ])
 
+        # construct a standard error description
+        se_description = "Unadjusted SEs" if self.se_type == 'unadjusted' else "Robust SEs"
+        if self.se_type == 'clustered':
+            C = np.unique(self.problem.products.clustering_ids).size
+            se_description = f'{se_description} Adjusted for {C} Clusters'
+
         # construct a section containing linear estimates
         sections.append([
-            "Linear Estimates (SEs in Parentheses):",
+            f"Linear Estimates ({se_description} in Parentheses):",
             self._linear_parameters.format(self.beta, self.gamma, self.beta_se, self.gamma_se)
         ])
 
         # construct a section containing nonlinear estimates
         sections.append([
-            "Nonlinear Estimates (SEs in Parentheses):",
+            f"Nonlinear Estimates ({se_description} in Parentheses):",
             self._nonlinear_parameters.format(self.sigma, self.pi, self.sigma_se, self.pi_se)
         ])
 

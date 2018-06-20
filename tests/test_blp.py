@@ -13,7 +13,8 @@ from pyblp import options, build_matrix, Problem, Iteration, Optimization, Formu
     pytest.param({'linear_fp': False}, id="nonlinear fixed point"),
     pytest.param({'delta_behavior': 'first'}, id="conservative starting delta values"),
     pytest.param({'error_behavior': 'punish', 'error_punishment': 1e10}, id="error punishment"),
-    pytest.param({'center_moments': False, 'se_type': 'unadjusted'}, id="simple covariance matrices")
+    pytest.param({'center_moments': False, 'se_type': 'unadjusted'}, id="simple covariance matrices"),
+    pytest.param({'se_type': 'clustered'}, id="clustered covariance matrices")
 ])
 def test_accuracy(simulated_problem, solve_options):
     """Test that starting parameters that are half their true values give rise to errors of less than 10%."""

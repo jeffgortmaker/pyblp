@@ -128,7 +128,11 @@ which is assumed to have an inverse that is a consistant estimate of :math:`\mat
 
 If only the demand side is considered, :math:`u = \xi`, :math:`Z = Z_D`, and :math:`W = W_D`.
 
-Conventionally, the 2SLS weighting matrix, :math:`W = (Z'Z)^{-1}`, is used in the first stage. With two-step or iterated GMM, the weighting matrix is updated before each subsequent stage according to :math:`W = (g'g)^{-1}`. Before being used to update the weighting matrix, the sample moments are often centered.
+Conventionally, the 2SLS weighting matrix, :math:`W = (Z'Z)^{-1}`, is used in the first stage. With two-step or iterated GMM, the weighting matrix is updated before each subsequent stage according to :math:`W = S^{-1}` where :math:`S = g'g`. When accounting for arbitrary correlation within :math:`c = 1, 2, \dotsc, C` clusters,
+
+.. math:: S = \sum_{c=1}^C g_c'g_c.
+
+Before being used to update the weighting matrix, the sample moments are often centered.
 
 In each stage, a nonlinear optimizer is used to find values of :math:`\hat{\theta}` that minimize the GMM objective. The gradient of the objective is typically computed to speed up optimization.
 
@@ -212,11 +216,11 @@ Before updating the weighting matrix, standard errors are extracted from an esti
 
 .. math:: \text{Var}\begin{pmatrix} \hat{\theta} \\ \hat{\beta} \\ \hat{\gamma} \end{pmatrix} = (G'WG)^{-1}G'WSWG(G'WG)^{-1},
 
-in which
+For robust standard errors, :math:`S = g'g`. For clustered standard errors, which account for arbitrary correlation within :math:`c = 1, 2, \dotsc, C` clusters,
 
-.. math:: S = Z' \begin{bmatrix} u_1^2 && 0 \\ & \ddots & \\ 0 && u_N^2 \end{bmatrix} Z.
+.. math:: S = \sum_{c=1}^C g_c'g_c.
 
-These standard errors are called robust. If the weighting matrix was chosen such that :math:`W = S^{-1}`, then
+If the weighting matrix was chosen such that :math:`W = S^{-1}`, then
 
 .. math:: \text{Var}\begin{pmatrix} \hat{\theta} \\ \hat{\beta} \\ \hat{\gamma} \end{pmatrix} = (G'WG)^{-1}.
 
