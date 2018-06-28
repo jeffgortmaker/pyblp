@@ -69,8 +69,7 @@ class Results(object):
     beta : `ndarray`
         Estimated demand-side linear parameters, :math:`\hat{\beta}`.
     gamma : `ndarray`
-        Estimated supply-side linear parameters, :math:`\hat{\gamma}`, which are ``None`` if the problem that created
-        these results was not initialized with supply-side data.
+        Estimated supply-side linear parameters, :math:`\hat{\gamma}`.
     se_type : `str`
         The type of computed standard errors, which was specified by `se_type` in :meth:`Problem.solve`.
     sigma_se : `ndarray`
@@ -82,19 +81,16 @@ class Results(object):
     gamma_se : `ndarray`
         Estimated standard errors for :math:`\hat{\gamma}`.
     delta : `ndarray`
-        Estimated mean utility, :math:`\delta(\hat{\theta})`, which may have been iteratively demeaned to absorb any
-        demand-side fixed effects.
+        Estimated mean utility, :math:`\delta(\hat{\theta})`, which may have been demeaned to absorb any demand-side
+        fixed effects.
     true_delta : `ndarray`
         Estimated mean utility, :math:`\delta(\hat{\theta})`.
     tilde_costs : `ndarray`
-        Estimated transformed marginal costs, :math:`\tilde{c}(\hat{\theta})`, which are ``None`` if the problem that
-        created these results was not initialized with supply-side data, and which may have been iteratively demeaned to
-        absorb any demand-side fixed effects. Transformed marginal costs are simply :math:`\tilde{c} = c`,
-        marginal costs, under a linear cost specification, and are :math:`\tilde{c} = \log c` under a log-linear
-        specification.
+        Estimated transformed marginal costs, :math:`\tilde{c}(\hat{\theta})`, which may have been demeaned to absorb
+        any demand-side fixed effects. Transformed marginal costs are simply :math:`\tilde{c} = c`, marginal costs,
+        under a linear cost specification, and are :math:`\tilde{c} = \log c` under a log-linear specification.
     true_tilde_costs : `ndarray`
-        Estimated transformed marginal costs, :math:`\tilde{c}(\hat{\theta})`, which are ``None`` if the problem that
-        created these results was not initialized with supply-side data.
+        Estimated transformed marginal costs, :math:`\tilde{c}(\hat{\theta})`.
     xi : `ndarray`
         Estimated unobserved demand-side product characteristics, :math:`\xi(\hat{\theta})`, or equivalently, the
         demand-side structural error term, which includes the contribution of any absorbed demand-side fixed effects.
@@ -102,27 +98,22 @@ class Results(object):
         Estimated unobserved demand-side product characteristics, :math:`\xi(\hat{\theta})`.
     omega : `ndarray`
         Estimated unobserved supply-side product characteristics, :math:`\omega(\hat{\theta})`, or equivalently, the
-        supply-side structural error term, which is ``None`` if the problem that created these results was not
-        initialized with supply-side data, and which includes the contribution of any absorbed supply-side fixed
-        effects.
-    omega : `ndarray`
+        supply-side structural error term, which includes the contribution of any absorbed supply-side fixed effects.
+    true_omega : `ndarray`
         Estimated unobserved supply-side product characteristics, :math:`\omega(\hat{\theta})`, or equivalently, the
-        supply-side structural error term, which is ``None`` if the problem that created these results was not
-        initialized with supply-side data.
+        supply-side structural error term.
     objective : `float`
         GMM objective value.
     xi_jacobian : `ndarray`
-        Estimated :math:`\partial\xi / \partial\theta = \partial\delta / \partial\theta`, which may have been
-        iteratively demeaned to absorb any demand-side fixed effects.
+        Estimated :math:`\partial\xi / \partial\theta = \partial\delta / \partial\theta`, which may have been demeaned
+        to absorb any demand-side fixed effects.
     true_xi_jacobian : `ndarray`
         Estimated :math:`\partial\xi / \partial\theta = \partial\delta / \partial\theta`.
     omega_jacobian : `ndarray`
-        Estimated :math:`\partial\omega / \partial\theta = \partial\tilde{c} / \partial\theta`, which is ``None`` if the
-        problem that created these results was not initialized with supply-side data, and which may have been
-        iteratively demeaned to absorb any supply-side fixed effects.
+        Estimated :math:`\partial\omega / \partial\theta = \partial\tilde{c} / \partial\theta`, which may have been
+        demeaned to absorb any supply-side fixed effects.
     true_omega_jacobian : `ndarray`
-        Estimated :math:`\partial\omega / \partial\theta = \partial\tilde{c} / \partial\theta`, which is ``None`` if the
-        problem that created these results was not initialized with supply-side data.
+        Estimated :math:`\partial\omega / \partial\theta = \partial\tilde{c} / \partial\theta`.
     gradient : `ndarray`
         Estimated gradient of the GMM objective with respect to :math:`\theta`.
     gradient_norm : `ndarray`
@@ -134,13 +125,11 @@ class Results(object):
     WD : `ndarray`
         Demand-side weighting matrix, :math:`W_D`, used to compute these results.
     WS : `ndarray`
-        Supply-side weighting matrix, :math:`W_S`, used to compute these results, which is ``None`` if the problem that
-        created these results was not initialized with supply-side data.
+        Supply-side weighting matrix, :math:`W_S`, used to compute these results.
     updated_WD : `ndarray`
         Updated demand-side weighting matrix.
     updated_WS : `ndarray`
-        Updated supply-side weighting matrix, which is ``None`` if the problem that created these results was not
-        initialized with supply-side data.
+        Updated supply-side weighting matrix.
     unique_market_ids : `ndarray`
         Unique market IDs, which are in the same order as post-estimation outputs returned by methods that compute a
         single value for each market.
@@ -178,8 +167,8 @@ class Results(object):
         self._linear_parameters = LinearParameters(self.problem, self.beta, self.gamma)
 
         # expand the nonlinear parameters and their gradient
-        self.sigma, self.pi = self._nonlinear_parameters.expand(self.theta, fill_fixed=True)
-        self.sigma_gradient, self.pi_gradient = self._nonlinear_parameters.expand(self.gradient)
+        self.sigma, self.pi = self._nonlinear_parameters.expand(self.theta)
+        self.sigma_gradient, self.pi_gradient = self._nonlinear_parameters.expand(self.gradient, nullify=True)
 
         # compute a version of xi that includes the contribution of any demand-side fixed effects
         self.xi = self.true_xi
@@ -188,10 +177,6 @@ class Results(object):
             true_X1 = np.column_stack((ones * f.evaluate(self.problem.products) for f in self.problem._X1_formulations))
             self.xi = self.true_delta - true_X1 @ self.beta
 
-        # store the standard error type and extract any clustering IDs
-        self.se_type = se_type
-        clustering_ids = self.problem.products.clustering_ids if se_type == 'clustered' else None
-
         # compute a version of omega that includes the contribution of any supply-side fixed effects
         self.omega = self.true_omega
         if self.problem.ES > 0:
@@ -199,19 +184,14 @@ class Results(object):
             true_X3 = np.column_stack((ones * f.evaluate(self.problem.products) for f in self.problem._X3_formulations))
             self.omega = self.true_tilde_costs - true_X3 @ self.gamma
 
-        # update the demand-side weighting matrix
+        # update the weighting matrices
         self.updated_WD, WD_errors = compute_gmm_weights(
-            self.true_xi, self.problem.products.ZD, center_moments, se_type, clustering_ids
+            self.true_xi, self.problem.products.ZD, center_moments, se_type, self.problem.products.clustering_ids
         )
-        self._errors |= WD_errors
-
-        # update the supply-side weighting matrix
-        self.updated_WS = None
-        if self.problem.K3 > 0:
-            self.updated_WS, WS_errors = compute_gmm_weights(
-                self.true_omega, self.problem.products.ZS, center_moments, se_type, clustering_ids
-            )
-            self._errors |= WS_errors
+        self.updated_WS, WS_errors = compute_gmm_weights(
+            self.true_omega, self.problem.products.ZS, center_moments, se_type, self.problem.products.clustering_ids
+        )
+        self._errors |= WD_errors | WS_errors
 
         # stack the error terms, weighting matrices, instruments, Jacobian of the errors with respect to parameters, and
         #   clustering IDs
@@ -220,7 +200,7 @@ class Results(object):
             W = self.WD
             Z = self.problem.products.ZD
             jacobian = np.c_[self.xi_jacobian, self.problem.products.X1]
-            stacked_clustering_ids = clustering_ids if clustering_ids is not None else None
+            stacked_clustering_ids = self.problem.products.clustering_ids
         else:
             u = np.r_[self.true_xi, self.true_omega]
             W = scipy.linalg.block_diag(self.WD, self.WS)
@@ -229,17 +209,15 @@ class Results(object):
                 np.r_[self.xi_jacobian, self.omega_jacobian],
                 scipy.linalg.block_diag(self.problem.products.X1, self.problem.products.X3)
             ]
-            stacked_clustering_ids = np.r_[clustering_ids, clustering_ids] if clustering_ids is not None else None
+            stacked_clustering_ids = np.r_[self.problem.products.clustering_ids, self.problem.products.clustering_ids]
 
         # compute standard errors
         se, se_errors = compute_gmm_se(u, Z, W, jacobian, se_type, stacked_clustering_ids)
-        self.sigma_se, self.pi_se = self._nonlinear_parameters.expand(se[:self._nonlinear_parameters.P])
+        self.sigma_se, self.pi_se = self._nonlinear_parameters.expand(se[:self._nonlinear_parameters.P], nullify=True)
         self.beta_se = se[self._nonlinear_parameters.P:self._nonlinear_parameters.P + self.problem.K1]
-        self.gamma_se = se[-self.problem.K3:] if self.problem.K3 > 0 else None
+        self.gamma_se = se[self._nonlinear_parameters.P + self.problem.K1:]
         self._errors |= se_errors
-
-        # load an array of unique and sorted market IDs
-        self.unique_market_ids = self.problem.unique_market_ids
+        self.se_type = se_type
 
         # initialize counts and times
         self.step = 1
@@ -248,7 +226,10 @@ class Results(object):
         self.optimization_iterations = self.cumulative_optimization_iterations = iterations
         self.objective_evaluations = self.cumulative_objective_evaluations = evaluations
 
-        # convert contraction mappings to a matrices with rows ordered by market
+        # store unique market IDs
+        self.unique_market_ids = self.problem.unique_market_ids
+
+        # convert contraction mappings to matrices with rows ordered by market
         contraction_iteration_lists = [[m[t] for m in iteration_mappings] for t in self.unique_market_ids]
         contraction_evaluation_lists = [[m[t] for m in evaluation_mappings] for t in self.unique_market_ids]
         self.fp_iterations = self.cumulative_fp_iterations = np.array(contraction_iteration_lists)
@@ -307,13 +288,13 @@ class Results(object):
         # construct a section containing linear estimates
         sections.append([
             f"Linear Estimates ({se_description} in Parentheses):",
-            self._linear_parameters.format(self.beta, self.gamma, self.beta_se, self.gamma_se)
+            self._linear_parameters.format_estimates(self.beta, self.gamma, self.beta_se, self.gamma_se)
         ])
 
         # construct a section containing nonlinear estimates
         sections.append([
             f"Nonlinear Estimates ({se_description} in Parentheses):",
-            self._nonlinear_parameters.format(self.sigma, self.pi, self.sigma_se, self.pi_se)
+            self._nonlinear_parameters.format_estimates(self.sigma, self.pi, self.sigma_se, self.pi_se)
         ])
 
         # combine the sections into one string
@@ -345,7 +326,7 @@ class Results(object):
 
         # define a function builds a market along with market-specific arguments used to compute results
         def market_factory(s):
-            market_s = ResultsMarket(self.problem, s, self.delta, self.beta, self.sigma, self.pi)
+            market_s = ResultsMarket(self.problem, s, self.sigma, self.pi, self.beta, self.delta)
             args_s = [None if a is None else a[self.problem.products.market_ids.flat == s] for a in market_args]
             return [market_s] + list(fixed_args) + args_s
 
@@ -379,7 +360,7 @@ class Results(object):
         return combined
 
     def compute_aggregate_elasticities(self, factor=0.1, name='prices', processes=1):
-        r"""Estimate aggregate elasticities of demand, :math:`E`, with respect to a variale, :math:`x`.
+        r"""Estimate aggregate elasticities of demand, :math:`E`, with respect to a variable, :math:`x`.
 
         In market :math:`t`, the aggregate elasticity of demand is
 
@@ -791,10 +772,8 @@ class ResultsMarket(Market):
     method returns a matrix and a set of any errors that were encountered.
     """
 
-    field_blacklist = {'X1', 'X3', 'ZD', 'ZS', 'demand_ids', 'supply_ids'}
-
     def compute_aggregate_elasticity(self, factor, name):
-        """Market-specific computation for Results.compute_aggregate_elasticities."""
+        """Estimate the aggregate elasticity of demand with respect to a variable."""
         scaled_variable = (1 + factor) * self.products[name]
         delta = self.update_delta_with_variable(name, scaled_variable)
         mu = self.update_mu_with_variable(name, scaled_variable)
@@ -803,14 +782,14 @@ class ResultsMarket(Market):
         return aggregate_elasticities, set()
 
     def compute_elasticities(self, name):
-        """Market-specific computation for Results.compute_elasticities."""
+        """Estimate a matrix of elasticities of demand with respect to a variable."""
         derivatives = self.compute_utility_by_variable_derivatives(name)
         jacobian = self.compute_shares_by_variable_jacobian(derivatives)
         elasticities = jacobian * self.products[name].T / self.products.shares
         return elasticities, set()
 
     def compute_diversion_ratios(self, name):
-        """Market-specific computation for Results.compute_diversion_ratios."""
+        """Estimate a matrix of diversion ratios with respect to a variable."""
         derivatives = self.compute_utility_by_variable_derivatives(name)
         jacobian = self.compute_shares_by_variable_jacobian(derivatives)
 
@@ -823,7 +802,7 @@ class ResultsMarket(Market):
         return ratios, set()
 
     def compute_long_run_diversion_ratios(self):
-        """Market-specific computation for Results.compute_long_run_diversion_ratios."""
+        """Estimate a matrix of long-run diversion ratios."""
 
         # compute share differences when products are excluded and store outside share differences on the diagonal
         changes = np.zeros((self.J, self.J), options.dtype)
@@ -837,17 +816,17 @@ class ResultsMarket(Market):
         return ratios, set()
 
     def extract_diagonal(self, matrix):
-        """Market-specific computation for Results.extract_diagonals."""
+        """Extract the diagonal from a matrix."""
         diagonal = matrix[:, :self.J].diagonal()
         return diagonal, set()
 
     def extract_diagonal_mean(self, matrix):
-        """Market-specific computation for Results.extract_diagonal_means."""
+        """Extract the mean of the diagonal from a matrix."""
         diagonal_mean = matrix[:, :self.J].diagonal().mean()
         return diagonal_mean, set()
 
     def compute_costs(self):
-        """Market-specific computation for Results.compute_costs."""
+        """Estimate marginal costs."""
         errors = set()
         try:
             costs = self.products.prices - self.compute_eta()
@@ -856,8 +835,10 @@ class ResultsMarket(Market):
             costs = np.full((self.J, 1), np.nan, options.dtype)
         return costs, errors
 
-    def solve_approximate_merger(self, firms_index, costs):
-        """Market-specific computation for Results.solve_approximate_merger."""
+    def solve_approximate_merger(self, firms_index=1, costs=None):
+        """Estimate approximate post-merger prices under the assumption that shares and their price derivatives are
+        unaffected by the merger. By default, use changed firm IDs and compute marginal costs.
+        """
         errors = set()
         if costs is None:
             costs, errors = self.compute_costs()
@@ -869,8 +850,10 @@ class ResultsMarket(Market):
             prices = np.full((self.J, 1), np.nan, options.dtype)
         return prices, errors
 
-    def solve_merger(self, iteration, firms_index, prices, costs):
-        """Market-specific computation for Results.solve_merger."""
+    def solve_merger(self, iteration, firms_index=1, prices=None, costs=None):
+        """Estimate post-merger prices. By default, use changed firm IDs, use unchanged prices as starting values, and
+        compute marginal costs.
+        """
         errors = set()
 
         # configure NumPy to identify floating point errors
@@ -883,8 +866,8 @@ class ResultsMarket(Market):
             errors.add(exceptions.ChangedPricesConvergenceError)
         return prices, errors
 
-    def compute_shares(self, prices):
-        """Market-specific computation for Results.compute_shares."""
+    def compute_shares(self, prices=None):
+        """Estimate shares evaluated at specified prices. By default, use unchanged prices."""
         if prices is None:
             prices = self.products.prices
         delta = self.update_delta_with_variable('prices', prices)
@@ -892,16 +875,16 @@ class ResultsMarket(Market):
         shares = self.compute_probabilities(delta, mu) @ self.agents.weights
         return shares, set()
 
-    def compute_hhi(self, firms_index, shares):
-        """Market-specific computation for Results.compute_hhi."""
+    def compute_hhi(self, firms_index=0, shares=None):
+        """Estimate HHI. By default, use unchanged firm IDs and shares."""
         if shares is None:
             shares = self.products.shares
         firm_ids = self.products.firm_ids[:, [firms_index]]
         hhi = 1e4 * sum((shares[firm_ids == f].sum() / shares.sum()) ** 2 for f in np.unique(firm_ids))
         return hhi, set()
 
-    def compute_markups(self, prices, costs):
-        """Market-specific computation for Results.compute_markups."""
+    def compute_markups(self, prices=None, costs=None):
+        """Estimate markups. By default, use unchanged prices and compute marginal costs."""
         errors = set()
         if prices is None:
             prices = self.products.prices
@@ -910,8 +893,10 @@ class ResultsMarket(Market):
         markups = (prices - costs) / prices
         return markups, errors
 
-    def compute_profits(self, prices, shares, costs):
-        """Market-specific computation for Results.compute_profits."""
+    def compute_profits(self, prices=None, shares=None, costs=None):
+        """Estimate population-normalized gross expected profits. By default, use unchanged prices, use unchanged
+        shares, and compute marginal costs.
+        """
         errors = set()
         if prices is None:
             prices = self.products.prices
@@ -922,8 +907,8 @@ class ResultsMarket(Market):
         profits = (prices - costs) * shares
         return profits, errors
 
-    def compute_consumer_surplus(self, prices):
-        """Market-specific computation for Results.compute_consumer_surpluses."""
+    def compute_consumer_surplus(self, prices=None):
+        """Estimate population-normalized consumer surplus. By defualt, use unchanged prices."""
         if prices is None:
             delta = self.delta
             mu = self.mu

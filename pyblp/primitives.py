@@ -1,6 +1,7 @@
 """Primitive structures that constitute the foundation of the BLP model."""
 
 import itertools
+import collections
 
 import numpy as np
 import scipy.linalg
@@ -12,35 +13,12 @@ from .utilities import output, extract_matrix, Matrices
 
 
 class Products(Matrices):
-    r"""Structured product data. The following fields are always present:
+    r"""Structured product data, which contains the following fields:
 
         - **market_ids** : (`object`) - IDs that associate products with markets.
 
-        - **shares** : (`numeric`) - Market shares, :math:`s`.
-
-        - **prices** : (`numeric`) - Product prices, :math:`p`.
-
-        - **X1** : (`numeric`) - Linear product characteristics, :math:`X_1`, which may have been iteratively demeaned
-          to absorb any demand-side fixed effects.
-
-        - **X2** : (`numeric`) - Nonlinear product characteristics, :math:`X_2`.
-
-        - **ZD** : (`numeric`) - Demand-side instruments, :math:`Z_D`, which may have been iteratively demeaned to
-          absorb any demand-side fixed effects.
-
-    Depending on the configuration, the following fields may also be present:
-
         - **firm_ids** : (`object`) - IDs that associate products with firms. Any columns after the first represent
           changes such as mergers.
-
-        - **ownership** : (`object`) - Stacked :math:`J_t \times J_t` ownership matrices, :math:`O`, for each market
-          :math:`t`. Each stack is associated with a `firm_ids` column.
-
-        - **X3** : (`numeric`) - Cost product characteristics, :math:`X_3`, which may have been iteratively demeaned to
-          absorb any supply-side fixed effects.
-
-        - **ZS** : (`numeric`) - Supply-side instruments, :math:`Z_S`, which may have been iteratively demeaned to
-          absorb any supply-side fixed effects.
 
         - **demand_ids** : (`object`) - Categorical variables used to create demand-side fixed effects.
 
@@ -48,12 +26,33 @@ class Products(Matrices):
 
         - **clustering_ids** (`object`) - IDs used to compute clustered standard errors.
 
+        - **ownership** : (`object`) - Stacked :math:`J_t \times J_t` ownership matrices, :math:`O`, for each market
+          :math:`t`. Each stack is associated with a `firm_ids` column.
+
+        - **shares** : (`numeric`) - Market shares, :math:`s`.
+
+        - **ZD** : (`numeric`) - Demand-side instruments, :math:`Z_D`, which may have been demeaned to absorb any
+          demand-side fixed effects.
+
+        - **ZS** : (`numeric`) - Supply-side instruments, :math:`Z_S`, which may have been demeaned to absorb any
+          supply-side fixed effects.
+
+        - **X1** : (`numeric`) - Linear product characteristics, :math:`X_1`, which may have been demeaned to absorb any
+          demand-side fixed effects.
+
+        - **X2** : (`numeric`) - Nonlinear product characteristics, :math:`X_2`.
+
+        - **X3** : (`numeric`) - Cost product characteristics, :math:`X_3`, which may have been demeaned to absorb any
+          supply-side fixed effects.
+
+        - **prices** : (`numeric`) - Product prices, :math:`p`.
+
     Any additional fields are the variables underlying `X1`, `X2`, and `X3`.
 
     """
 
     def __new__(cls, product_formulations, product_data):
-        """Validate and structure product data while absorbing any fixed effects."""
+        """Structure product data while absorbing any fixed effects."""
 
         # validate the formulations
         if not all(isinstance(f, Formulation) for f in product_formulations) or len(product_formulations) not in {2, 3}:
@@ -82,13 +81,17 @@ class Products(Matrices):
             if 'prices' in X3_data:
                 raise NameError("prices cannot be included in the formulation for X3.")
 
-        # load instruments
+        # load demand-side instruments
         ZD = extract_matrix(product_data, 'demand_instruments')
-        ZS = extract_matrix(product_data, 'supply_instruments')
         if ZD is None:
             raise KeyError("product_data must have a demand_instruments field.")
-        if (ZS is None) != (X3 is None):
-            raise KeyError("product_data must have a supply_instruments field only when X3 is formulated.")
+
+        # load supply-side instruments
+        ZS = None
+        if X3 is not None:
+            ZS = extract_matrix(product_data, 'supply_instruments')
+            if ZS is None:
+                raise KeyError("Since X3 is formulated, product_data must have a supply_instruments field.")
 
         # load and absorb any demand-side fixed effects
         demand_ids = None
@@ -117,7 +120,7 @@ class Products(Matrices):
         if market_ids.shape[1] > 1:
             raise ValueError("The market_ids field of product_data must be one-dimensional.")
         if firm_ids is None and X3 is not None:
-            raise KeyError("product_data must have firm_ids field when X3 is formulated.")
+            raise KeyError("product_data must have a firm_ids field when X3 is formulated.")
         if clustering_ids is not None:
             if clustering_ids.shape[1] > 1:
                 raise ValueError("The clustering_ids field of product_data must be one-dimensional.")
@@ -129,10 +132,9 @@ class Products(Matrices):
         if firm_ids is not None:
             ownership = extract_matrix(product_data, 'ownership')
             if ownership is not None:
-                J = np.unique(market_ids, return_counts=True)[1].max()
-                if ownership.shape[1] != J * firm_ids.shape[1]:
-                    raise ValueError(
-                        f"The ownership field of product_data must have {J * firm_ids.shape[1]} columns.")
+                columns = np.unique(market_ids, return_counts=True)[1].max() * firm_ids.shape[1]
+                if ownership.shape[1] != columns:
+                    raise ValueError(f"The ownership field of product_data must have {columns} columns.")
 
         # load shares
         shares = extract_matrix(product_data, 'shares')
@@ -161,7 +163,7 @@ class Products(Matrices):
         underlying_data = {**X1_data, **X2_data, **X3_data}
         invalid_names = set(underlying_data) & {k if isinstance(k, str) else k[1] for k in product_mapping}
         if invalid_names:
-            raise NameError(f"These names in product_formulations are invalid: {list(invalid_names)}.")
+            raise NameError(f"These reserved names in product_formulations are invalid: {list(invalid_names)}.")
         product_mapping.update({k: (v, options.dtype) for k, v in underlying_data.items()})
 
         # structure products
@@ -169,7 +171,7 @@ class Products(Matrices):
 
 
 class Agents(Matrices):
-    r"""Structured agent data. The following fields are always present:
+    r"""Structured agent data, which contains the following fields:
 
         - **market_ids** : (`object`) - IDs that associate agents with markets.
 
@@ -177,14 +179,12 @@ class Agents(Matrices):
 
         - **nodes** : (`numeric`) - Unobserved agent characteristics called integration nodes, :math:`\nu`.
 
-    Depending on the configuration, the following field may also be present:
-
         - **demographics** : (`numeric`) - Observed agent characteristics, :math:`d`.
 
     """
 
     def __new__(cls, products, agent_formulation=None, agent_data=None, integration=None):
-        """Validate and structure agent data."""
+        """Structure agent data."""
 
         # count the number of nonlinear characteristics
         K2 = products.X2.shape[1]
@@ -196,7 +196,7 @@ class Agents(Matrices):
             if not isinstance(agent_formulation, Formulation):
                 raise TypeError("agent_formulation must be a Formulation instance.")
             if agent_data is None:
-                raise ValueError("agent_formulation is specified, so agent_data must be specified as well.")
+                raise ValueError("Since agent_formulation is specified, agent_data must be specified as well.")
             if agent_formulation._absorbed_terms:
                 raise ValueError("agent_formulation does not support fixed effect absorption.")
             demographics, demographics_formulations = agent_formulation._build_matrix(agent_data)[:2]
@@ -224,7 +224,7 @@ class Agents(Matrices):
             loaded_market_ids = market_ids
             market_ids, nodes, weights = integration._build_many(K2, np.unique(products.market_ids))
 
-            # delete demographic rows if there are too many
+            # delete rows of demographics if there are too many
             if demographics is not None:
                 demographics_list = []
                 for t in np.unique(market_ids):
@@ -238,7 +238,7 @@ class Agents(Matrices):
                     demographics_list.append(demographics_t)
                 demographics = np.concatenate(demographics_list)
 
-        # if not already built, load nodes and weights
+        # load any unbuilt nodes and weights
         if integration is None:
             nodes = extract_matrix(agent_data, 'nodes')
             weights = extract_matrix(agent_data, 'weights')
@@ -249,7 +249,7 @@ class Agents(Matrices):
             if weights.shape[1] != 1:
                 raise ValueError("The weights field of agent_data must be one-dimensional.")
 
-            # delete node columns if there are too many
+            # delete columns of nodes if there are too many
             if nodes.shape[1] > K2:
                 nodes = nodes[:, :K2]
 
@@ -266,7 +266,7 @@ class Economy(object):
     """An economy, which is initialized with product and agent data."""
 
     def __init__(self, product_formulations, agent_formulation, products, agents):
-        """Store formulations and data data, count dimensions, and identify column formulations."""
+        """Store information about formulations and data."""
 
         # store formulations and data
         self.product_formulations = product_formulations
@@ -274,7 +274,7 @@ class Economy(object):
         self.products = products
         self.agents = agents
 
-        # identify unique markets
+        # identify unique markets and firms
         self.unique_market_ids = np.unique(self.products.market_ids).flatten()
 
         # count dimensions
@@ -282,61 +282,69 @@ class Economy(object):
         self.T = self.unique_market_ids.size
         self.K1 = self.products.X1.shape[1]
         self.K2 = self.products.X2.shape[1]
-        self.K3 = self.products.X3.shape[1] if 'X3' in self.products.dtype.fields else 0
-        self.D = self.agents.demographics.shape[1] if 'demographics' in self.agents.dtype.fields else 0
+        self.K3 = self.products.X3.shape[1]
+        self.D = self.agents.demographics.shape[1]
         self.MD = self.products.ZD.shape[1]
-        self.MS = self.products.ZS.shape[1] if 'ZS' in self.products.dtype.fields else 0
-        self.ED = self.products.demand_ids.shape[1] if 'demand_ids' in self.products.dtype.fields else 0
-        self.ES = self.products.supply_ids.shape[1] if 'supply_ids' in self.products.dtype.fields else 0
+        self.MS = self.products.ZS.shape[1]
+        self.ED = self.products.demand_ids.shape[1]
+        self.ES = self.products.supply_ids.shape[1]
 
         # identify column formulations
         self._X1_formulations = self.products.dtype.fields['X1'][2]
         self._X2_formulations = self.products.dtype.fields['X2'][2]
-        self._X3_formulations = self.products.dtype.fields['X3'][2] if self.K3 > 0 else tuple()
-        self._demographics_formulations = self.agents.dtype.fields['demographics'][2] if self.D > 0 else tuple()
+        self._X3_formulations = self.products.dtype.fields['X3'][2]
+        self._demographics_formulations = self.agents.dtype.fields['demographics'][2]
 
     def __str__(self):
         """Format economy information as a string."""
         sections = []
 
-        # collect all dimensions and matrix labels
-        dimension_items = [(k, str(getattr(self, k))) for k in 'N T K1 K3 K3 D MD MS ED ES'.split()]
-        matrix_items = [
-            ('X1', [str(f) for f in self._X1_formulations]),
-            ('X2', [str(f) for f in self._X2_formulations]),
-            ('X3', [str(f) for f in self._X3_formulations]),
-            ('d', [str(f) for f in self._demographics_formulations])
-        ]
+        # associate dimensions and formulations with names
+        dimensions = collections.OrderedDict([
+            ("Products (N)", self.N),
+            ("Markets (T)", self.T),
+            ("Linear Characteristics (K1)", self.K1),
+            ("Nonlinear Characteristics (K2)", self.K2),
+            ("Cost Characteristics (K3)", self.K3),
+            ("Demographics (D)", self.D),
+            ("Demand Instruments (MD)", self.MD),
+            ("Supply Instruments (MS)", self.MS),
+            ("Demand FEs (ED)", self.ED),
+            ("Supply FEs (ES)", self.ES)
+        ])
+        formulations = collections.OrderedDict([
+            ("Linear Characteristics (X1)", self._X1_formulations),
+            ("Nonlinear Characteristics (X2)", self._X2_formulations),
+            ("Cost Characteristics (X3)", self._X3_formulations),
+            ("Demographics (d)", self._demographics_formulations)
+        ])
 
-        # build the section for dimensions
-        dimension_header = [k for k, _ in dimension_items]
-        dimension_widths = [max(5, len(k), len(v)) for k, v in dimension_items]
+        # build a dimensions section
+        dimension_widths = [max(len(n), len(str(d))) for n, d in dimensions.items()]
         dimension_formatter = output.table_formatter(dimension_widths)
         sections.append([
             "Dimensions:",
             dimension_formatter.line(),
-            dimension_formatter(dimension_header, underline=True),
-            dimension_formatter([v for _, v in dimension_items]),
+            dimension_formatter(dimensions.keys(), underline=True),
+            dimension_formatter(dimensions.values()),
             dimension_formatter.line()
         ])
 
-        # build the section for matrix labels
-        matrix_header = ["Indices:"]
-        matrix_widths = [len(matrix_header[0])]
-        for matrix_index in range(max(self.K1, self.K2, self.K3, self.D)):
-            matrix_header.append(f'#{matrix_index}')
-            matrix_widths.append(max([5] + [len(l[matrix_index]) for _, l in matrix_items if len(l) > matrix_index]))
-        matrix_formatter = output.table_formatter(matrix_widths)
-        matrix_section = [
-            "Matrices:",
-            matrix_formatter.line(),
-            matrix_formatter(matrix_header, underline=True)
+        # build a formulations section
+        formulation_header = ["Matrix"]
+        formulation_widths = [max(len(formulation_header[0]), max(map(len, formulations.keys())))]
+        for index in range(max(map(len, formulations.values()))):
+            formulation_header.append(f'#{index}')
+            formulation_widths.append(max(5, max(len(str(f[index])) for f in formulations.values() if len(f) > index)))
+        formulation_formatter = output.table_formatter(formulation_widths)
+        formulation_section = [
+            "Formulations:",
+            formulation_formatter.line(),
+            formulation_formatter(formulation_header, underline=True)
         ]
-        for name, labels in matrix_items:
-            if labels:
-                matrix_section.append(matrix_formatter([name] + labels))
-        matrix_section.append(matrix_formatter.line())
-        sections.append(matrix_section)
+        formulation_section.extend([[n] + list(map(str, f)) for n, f in formulations.items() if f])
+        formulation_section.append(formulation_formatter.line())
+        sections.append(formulation_section)
 
         # combine the sections into one string
         return "\n\n".join("\n".join(s) for s in sections)
@@ -347,43 +355,27 @@ class Economy(object):
 
 
 class Market(object):
-    """A single market in an economy, which is initialized with market-level product and agent data, excluding any
-    unneeded product data fields. Given additional information such as components of utility or parameters, class
-    methods can compute a variety of market-specific outputs.
-    """
+    """A single market in an economy."""
 
-    field_whitelist = field_blacklist = None
+    def __init__(self, economy, t, sigma, pi, beta=None, delta=None):
+        """Store or compute information about formulations, data, parameters, and utility."""
 
-    def __init__(self, economy, t, delta=None, beta=None, sigma=None, pi=None):
-        """Restrict full data matrices and vectors to just this market, count dimensions, identify column formulations,
-        store parameter matrices, and either store or pre-compute utility components. If arguments are left unspecified,
-        dependent methods will raise exceptions.
-        """
+        # store data
+        self.products = np.lib.recfunctions.rec_drop_fields(
+            economy.products[economy.products.market_ids.flat == t],
+            self.get_unneeded_product_fields(set(economy.products.dtype.names))
+        )
+        self.agents = np.lib.recfunctions.rec_drop_fields(
+            economy.agents[economy.agents.market_ids.flat == t], 'market_ids'
+        )
 
-        # restrict relevant product data to just this market
-        unneeded_product_fields = {'market_ids'}
-        if self.field_whitelist is not None:
-            unneeded_product_fields |= set(economy.products.dtype.names) - self.field_whitelist
-        if self.field_blacklist is not None:
-            unneeded_product_fields |= set(economy.products.dtype.names) & self.field_blacklist
-        self.products = economy.products[economy.products.market_ids.flat == t]
-        self.products = np.lib.recfunctions.rec_drop_fields(self.products, unneeded_product_fields)
-
-        # restrict relevant agent data to just this market
-        self.agents = economy.agents[economy.agents.market_ids.flat == t]
-        self.agents = np.lib.recfunctions.rec_drop_fields(self.agents, 'market_ids')
-
-        # count data dimensions
+        # count dimensions
         self.J = self.products.shape[0]
         self.I = self.agents.shape[0]
         self.K1 = economy.K1
         self.K2 = economy.K2
         self.K3 = economy.K3
         self.D = economy.D
-        self.MD = economy.MD
-        self.MS = economy.MS
-        self.ED = economy.ED
-        self.ES = economy.ES
 
         # identify column formulations
         self._X1_formulations = economy._X1_formulations
@@ -391,38 +383,39 @@ class Market(object):
         self._X3_formulations = economy._X3_formulations
         self._demographics_formulations = economy._demographics_formulations
 
-        # store parameter matrices
-        self.beta = beta
+        # store parameters
         self.sigma = sigma
         self.pi = pi
+        self.beta = beta
 
-        # compute or store utility components
-        self.mu = self.delta = None
-        if sigma is not None:
-            self.mu = self.compute_mu()
-        if delta is not None:
-            self.delta = delta[economy.products.market_ids.flat == t]
+        # store delta and compute mu
+        self.delta = None if delta is None else delta[economy.products.market_ids.flat == t]
+        self.mu = self.compute_mu()
+
+    def get_unneeded_product_fields(self, fields):
+        """Collect fields that will be dropped from product data."""
+        return fields & {'market_ids', 'X1', 'X3', 'ZD', 'ZS', 'demand_ids', 'supply_ids'}
 
     def get_ownership_matrix(self, firms_index=0):
-        """Get a pre-computed ownership matrix or builds one. By default, use unchanged firm IDs."""
-        try:
+        """Get a pre-computed ownership matrix or build one. By default, use unchanged firm IDs."""
+
+        # get a pre-computed ownership matrix
+        if self.products.ownership.shape[1] > 0:
             offset = firms_index * self.products.ownership.shape[1] // self.products.firm_ids.shape[1]
             return self.products.ownership[:, offset:offset + self.J]
-        except AttributeError:
-            tiled_ids = np.tile(self.products.firm_ids[:, [firms_index]], self.J)
-            return np.where(tiled_ids == tiled_ids.T, 1, 0)
+
+        # build a standard ownership matrix
+        tiled_ids = np.tile(self.products.firm_ids[:, [firms_index]], self.J)
+        return np.where(tiled_ids == tiled_ids.T, 1, 0)
 
     def compute_mu(self, X2=None):
-        """Compute mu. By default, use the X2 with which this market was initialized."""
+        """Compute mu. By default, use the unchanged X2."""
         if X2 is None:
             X2 = self.products.X2
         return X2 @ (self.sigma @ self.agents.nodes.T + (self.pi @ self.agents.demographics.T if self.D > 0 else 0))
 
     def update_delta_with_variable(self, name, variable):
-        """Update delta to reflect a changed variable if it contributes to X1. To do so, add the parameter-weighted
-        change in the characteristic (delta cannot simply be recomputed because doing so would not account for any
-        fixed effects).
-        """
+        """Update delta to reflect a changed variable by adding any parameter-weighted characteristic changes to X1."""
 
         # if the variable does not contribute to X1, delta remains unchanged
         if not any(name in f.names for f in self._X1_formulations):
@@ -438,7 +431,7 @@ class Market(object):
         return delta
 
     def update_mu_with_variable(self, name, variable):
-        """Update mu to reflect a changed variable if it contributes to X2. To do so, recompute mu with the new X2."""
+        """Update mu to reflect a changed variable by re-computing mu under the changed X2."""
 
         # if the variable does not contribute to X2, mu remains unchanged
         if not any(name in f.names for f in self._X2_formulations):
@@ -454,10 +447,9 @@ class Market(object):
         return self.compute_mu(X2)
 
     def compute_probabilities(self, delta=None, mu=None, linear=True, eliminate_product=None):
-        """Compute choice probabilities. By default, use the delta with which this market was initialized and the mu
-        that was computed during initialization. If linear is False, delta and mu must be specified and must have
-        already been exponentiated. If eliminate_product is specified, eliminate the product associated with the
-        specified index from the choice set.
+        """Compute choice probabilities. By default, use unchanged delta and mu values. If linear is False, delta and mu
+        must be be specified and already be exponentiated. If eliminate_product is specified, eliminate the product
+        associated with the specified index from the choice set.
         """
         if delta is None:
             delta = self.delta
@@ -495,9 +487,7 @@ class Market(object):
         return derivatives
 
     def compute_utility_by_variable_derivatives(self, name, variable=None):
-        """Compute derivatives of utility with respect to a variable in X1 or X2 (or both). By default, use unchanged
-        variable values.
-        """
+        """Compute derivatives of utility with respect to a variable. By default, use unchanged variable values."""
         nonlinear = self.sigma @ self.agents.nodes.T + (self.pi @ self.agents.demographics.T if self.D > 0 else 0)
         return (
             self.compute_X1_by_variable_derivatives(name, variable) @ self.beta +
@@ -505,8 +495,8 @@ class Market(object):
         )
 
     def compute_shares_by_variable_jacobian(self, derivatives, probabilities=None):
-        """Use derivatives of utility with respect to a variable in X1 or X2 (or both) to compute the Jacobian of market
-        shares with respect to the same variable. By default, compute unchanged choice probabilities.
+        """Use derivatives of utility with respect to a variable to compute the Jacobian of market shares with respect
+        to the same variable. By default, compute unchanged choice probabilities.
         """
         if probabilities is None:
             probabilities = self.compute_probabilities()
@@ -516,8 +506,8 @@ class Market(object):
         return capital_lambda - capital_gamma
 
     def compute_eta(self, ownership_matrix=None, derivatives=None, prices=None):
-        """Compute the markup term in the BLP-markup equation. By default, construct an ownership matrix, compute
-        derivatives of utilities with respect to prices, and use the prices with which this market was initialized.
+        """Compute the markup term in the BLP-markup equation. By default, get an unchanged ownership matrix, compute
+        derivatives of utilities with respect to prices, and use unchanged prices.
         """
         if ownership_matrix is None:
             ownership_matrix = self.get_ownership_matrix()
@@ -538,9 +528,8 @@ class Market(object):
             return np.full_like(shares, np.nan)
 
     def compute_zeta(self, ownership_matrix=None, derivatives=None, prices=None, costs=None):
-        """Compute the markup term in the zeta-markup equation. By default, construct an ownership matrix, compute
-        derivatives of utilities with respect to prices, use the prices with which this market was initialized, and
-        compute marginal costs.
+        """Compute the markup term in the zeta-markup equation. By default, get an unchanged ownership matrix, compute
+        derivatives of utilities with respect to prices, use unchanged prices, and compute marginal costs.
         """
         if ownership_matrix is None:
             ownership_matrix = self.get_ownership_matrix()
@@ -594,10 +583,6 @@ class NonlinearParameter(object):
         self.ub = bounds[1][location]
         self.value = self.lb if self.lb == self.ub else None
 
-    def get_characteristics(self, products, agents):
-        """Get the product and agents characteristics associated with the parameter."""
-        raise NotImplementedError
-
 
 class SigmaParameter(NonlinearParameter):
     """Information about a single parameter in sigma."""
@@ -616,40 +601,35 @@ class PiParameter(NonlinearParameter):
 
 
 class NonlinearParameters(object):
-    """Combined information about sigma and pi."""
+    """Information about sigma and pi."""
 
-    def __init__(self, economy, sigma, pi, sigma_bounds=None, pi_bounds=None, supports_bounds=True):
-        """Validate parameter matrices and their bounds. Then, construct lists of information about fixed (equal bounds)
-        and unfixed (unequal bounds) elements of sigma and pi.
-        """
+    def __init__(self, economy, sigma, pi=None, sigma_bounds=None, pi_bounds=None, supports_bounds=True):
+        """Store information about fixed (equal bounds) and unfixed (unequal bounds) parameters in sigma and pi."""
 
         # store labels
         self.X2_labels = [str(f) for f in economy._X2_formulations]
         self.demographics_labels = [str(f) for f in economy._demographics_formulations]
 
-        # validate and clean up sigma
+        # store the upper triangle of sigma
         self.sigma = np.c_[np.asarray(sigma, options.dtype)]
         if self.sigma.shape != (economy.K2, economy.K2):
-            raise ValueError(f"sigma must be {economy.K2} by {economy.K2} matrix.")
+            raise ValueError(f"sigma must be a {economy.K2} by {economy.K2} matrix.")
         self.sigma[np.tril_indices(economy.K2, -1)] = 0
 
-        # validate and clean up pi
-        if (pi is None) != (economy.D == 0):
-            raise ValueError("pi should be None only when there are no demographics.")
-        self.pi = None
-        if pi is not None:
+        # store pi
+        self.pi = np.full((economy.K2, 0), np.nan, options.dtype)
+        if economy.D > 0:
             self.pi = np.c_[np.asarray(pi, options.dtype)]
-            if self.pi.shape != (economy.K2, economy.D):
+            if pi is None or self.pi.shape != (economy.K2, economy.D):
                 raise ValueError(f"pi must be a {economy.K2} by {economy.D} matrix.")
 
-        # construct default sigma bounds or validate specified bounds
-        if sigma_bounds is None or not supports_bounds:
-            self.sigma_bounds = (
-                np.full_like(self.sigma, -np.inf, options.dtype), np.full_like(self.sigma, +np.inf, options.dtype)
-            )
-            if supports_bounds:
-                np.fill_diagonal(self.sigma_bounds[0], 0)
-        else:
+        # construct or validate sigma bounds
+        self.sigma_bounds = (
+            np.full_like(self.sigma, -np.inf, options.dtype), np.full_like(self.sigma, +np.inf, options.dtype)
+        )
+        if supports_bounds:
+            np.fill_diagonal(self.sigma_bounds[0], 0)
+        if sigma_bounds is not None and supports_bounds:
             if len(sigma_bounds) != 2:
                 raise ValueError("sigma_bounds must be a tuple of the form (lb, ub).")
             self.sigma_bounds = [np.c_[np.asarray(b, options.dtype).copy()] for b in sigma_bounds]
@@ -660,14 +640,11 @@ class NonlinearParameters(object):
             if ((self.sigma < self.sigma_bounds[0]) | (self.sigma > self.sigma_bounds[1])).any():
                 raise ValueError("sigma must be within its bounds.")
 
-        # construct default pi bounds or validate specified bounds
-        if self.pi is None:
-            self.pi_bounds = (None, None)
-        elif pi_bounds is None or not supports_bounds:
-            self.pi_bounds = (
-                np.full_like(self.pi, -np.inf, options.dtype), np.full_like(self.pi, +np.inf, options.dtype)
-            )
-        else:
+        # construct or validate pi bounds
+        self.pi_bounds = (
+            np.full_like(self.pi, -np.inf, options.dtype), np.full_like(self.pi, +np.inf, options.dtype)
+        )
+        if pi_bounds is not None and supports_bounds:
             if len(pi_bounds) != 2:
                 raise ValueError("pi_bounds must be a tuple of the form (lb, ub).")
             self.pi_bounds = [np.c_[np.asarray(b, options.dtype).copy()] for b in pi_bounds]
@@ -680,10 +657,9 @@ class NonlinearParameters(object):
 
         # set upper and lower bounds to zero for parameters that are fixed at zero
         self.sigma_bounds[0][np.where(self.sigma == 0)] = self.sigma_bounds[1][np.where(self.sigma == 0)] = 0
-        if self.pi is not None:
-            self.pi_bounds[0][np.where(self.pi == 0)] = self.pi_bounds[1][np.where(self.pi == 0)] = 0
+        self.pi_bounds[0][np.where(self.pi == 0)] = self.pi_bounds[1][np.where(self.pi == 0)] = 0
 
-        # store information about individual sigma and pi elements in lists
+        # store information about individual elements in sigma and pi
         self.fixed = []
         self.unfixed = []
 
@@ -696,29 +672,41 @@ class NonlinearParameters(object):
                 self.fixed.append(parameter)
 
         # store information for pi
-        if self.pi is not None:
-            for location in np.ndindex(self.pi.shape):
-                parameter = PiParameter(location, self.pi_bounds)
-                if parameter.value is None:
-                    self.unfixed.append(parameter)
-                else:
-                    self.fixed.append(parameter)
+        for location in np.ndindex(self.pi.shape):
+            parameter = PiParameter(location, self.pi_bounds)
+            if parameter.value is None:
+                self.unfixed.append(parameter)
+            else:
+                self.fixed.append(parameter)
 
         # count the number of unfixed parameters
         self.P = len(self.unfixed)
 
-    def format(self, sigma_like, pi_like, sigma_se=None, pi_se=None):
-        """Format matrices that are of the same size as the matrices of nonlinear parameters as a string. If matrices
-        of standard errors are given, they will be formatted as numbers surrounded by parentheses underneath the
-        elements of sigma and pi.
-        """
+    def format(self):
+        """Format the initial sigma and pi as a string."""
+        return self.format_matrices(self.sigma, self.pi)
+
+    def format_lower_bounds(self):
+        """Format lower sigma and pi bounds as a string."""
+        return self.format_matrices(self.sigma_bounds[0], self.pi_bounds[0])
+
+    def format_upper_bounds(self):
+        """Format upper sigma and pi bounds as a string."""
+        return self.format_matrices(self.sigma_bounds[1], self.pi_bounds[1])
+
+    def format_estimates(self, sigma, pi, sigma_se, pi_se):
+        """Format sigma and pi estimates along with their standard errors as a string."""
+        return self.format_matrices(sigma, pi, sigma_se, pi_se)
+
+    def format_matrices(self, sigma_like, pi_like, sigma_se_like=None, pi_se_like=None):
+        """Format matrices (and optional standard errors) of the same size as sigma and pi as a string."""
         lines = []
 
         # construct the table header and formatter
         line_indices = {}
         header = ["Sigma:"] + self.X2_labels
         widths = [max(map(len, header))] + [max(len(k), options.digits + 8) for k in header[1:]]
-        if self.pi is not None:
+        if self.demographics_labels:
             line_indices = {len(widths) - 1}
             header.extend(["Pi:"] + self.demographics_labels)
             widths.extend([widths[0]] + [max(len(k), options.digits + 8) for k in header[len(widths) + 1:]])
@@ -734,14 +722,14 @@ class NonlinearParameters(object):
             values_row = [row_label] + [""] * row_index
             for column_index in range(row_index, sigma_like.shape[1]):
                 values_row.append(output.format_number(sigma_like[row_index, column_index]))
-            if self.pi is not None:
+            if pi_like.shape[1] > 0:
                 values_row.append(row_label)
                 for column_index in range(pi_like.shape[1]):
                     values_row.append(output.format_number(pi_like[row_index, column_index]))
             lines.append(formatter(values_row))
 
             # construct a row of standard errors for unfixed parameters
-            if sigma_se is not None:
+            if sigma_se_like is not None and pi_se_like is not None:
                 # determine which columns in this row correspond to unfixed parameters
                 sigma_indices = set()
                 pi_indices = set()
@@ -754,13 +742,13 @@ class NonlinearParameters(object):
 
                 # construct a row similar to the values row without row labels and with standard error formatting
                 se_row = [""] * (1 + row_index)
-                for column_index in range(row_index, sigma_se.shape[1]):
-                    se = sigma_se[row_index, column_index]
+                for column_index in range(row_index, sigma_se_like.shape[1]):
+                    se = sigma_se_like[row_index, column_index]
                     se_row.append(output.format_se(se) if column_index in sigma_indices else "")
-                if self.pi is not None:
+                if pi_se_like.shape[1] > 0:
                     se_row.append("")
-                    for column_index in range(pi_se.shape[1]):
-                        se = pi_se[row_index, column_index]
+                    for column_index in range(pi_se_like.shape[1]):
+                        se = pi_se_like[row_index, column_index]
                         se_row.append(output.format_se(se) if column_index in pi_indices else "")
 
                 # format the row of values and add an additional blank line if there is another row of values
@@ -771,21 +759,19 @@ class NonlinearParameters(object):
         # wrap the table in borders and combine the lines into one string
         return "\n".join([formatter.line()] + lines + [formatter.line()])
 
-    def compress(self, sigma, pi):
-        """Compress nonlinear parameter matrices into theta."""
-        sigma_locations = list(zip(*[p.location for p in self.unfixed if isinstance(p, SigmaParameter)]))
-        theta = sigma[sigma_locations].ravel()
-        if pi is not None:
-            pi_locations = list(zip(*[p.location for p in self.unfixed if isinstance(p, PiParameter)]))
-            theta = np.r_[theta, pi[pi_locations].ravel()]
-        return theta
+    def compress(self):
+        """Compress the initial sigma and pi into theta."""
+        return np.r_[
+            self.sigma[list(zip(*[p.location for p in self.unfixed if isinstance(p, SigmaParameter)]))].ravel(),
+            self.pi[list(zip(*[p.location for p in self.unfixed if isinstance(p, PiParameter)]))].ravel()
+        ]
 
-    def expand(self, theta_like, fill_fixed=False):
-        """Recover nonlinear parameter-sized matrices from a vector of the same size as theta. If fill_fixed is True,
-        elements corresponding to fixed parameters will be set to their fixed values instead of to None.
+    def expand(self, theta_like, nullify=False):
+        """Recover matrices of the same size as sigma and pi from a vector of the same size as theta. By default,
+        fill elements corresponding to fixed parameters with their fixed values.
         """
         sigma_like = np.full_like(self.sigma, np.nan)
-        pi_like = None if self.pi is None else np.full_like(self.pi, np.nan)
+        pi_like = np.full_like(self.pi, np.nan)
 
         # set values for elements that correspond to unfixed parameters
         for parameter, value in zip(self.unfixed, theta_like):
@@ -795,7 +781,7 @@ class NonlinearParameters(object):
                 pi_like[parameter.location] = value
 
         # set values for elements that correspond to fixed parameters
-        if fill_fixed:
+        if not nullify:
             sigma_like[np.tril_indices_from(sigma_like, -1)] = 0
             for parameter in self.fixed:
                 if isinstance(parameter, SigmaParameter):
@@ -810,30 +796,35 @@ class NonlinearParameters(object):
 class LinearParameters(object):
     """Information about beta and gamma."""
 
-    def __init__(self, economy, beta, gamma):
-        """Validate parameter vectors."""
+    def __init__(self, economy, beta, gamma=None):
+        """Store information about parameters in beta and gamma."""
 
         # store labels
         self.X1_labels = [str(f) for f in economy._X1_formulations]
         self.X3_labels = [str(f) for f in economy._X3_formulations]
 
-        # validate beta
+        # store beta
         self.beta = np.c_[np.asarray(beta, options.dtype)]
         if self.beta.shape != (economy.K1, 1):
             raise ValueError(f"beta must be a {economy.K1}-vector.")
 
-        # validate gamma
-        self.gamma = None
+        # store gamma
+        self.gamma = np.full((economy.K3, 0), np.nan, options.dtype)
         if gamma is not None:
             self.gamma = np.c_[np.asarray(gamma, options.dtype)]
             if self.gamma.shape != (economy.K3, 1):
                 raise ValueError(f"gamma must be a {economy.K3}-vector.")
 
-    def format(self, beta_like, gamma_like, beta_se=None, gamma_se=None):
-        """Format matrices that are of the same size as the vectors of linear parameters as a string. If vectors of
-        standard errors are given, they will be formatted as numbers surrounded by parentheses underneath the elements
-        of beta and gamma.
-        """
+    def format(self):
+        """Format the initial beta and gamma as a string."""
+        return self.format_vectors(self.beta, self.gamma)
+
+    def format_estimates(self, beta, gamma, beta_se, gamma_se):
+        """Format beta and gamma estimates along with their standard errors as a string."""
+        return self.format_vectors(beta, gamma, beta_se, gamma_se)
+
+    def format_vectors(self, beta_like, gamma_like, beta_se_like=None, gamma_se_like=None):
+        """Format matrices (and optional standard errors) of the same size as beta and gamma as a string."""
         lines = []
 
         # build the header for beta
@@ -843,7 +834,7 @@ class LinearParameters(object):
         # build the header for gamma
         gamma_header = None
         gamma_widths = []
-        if self.gamma is not None:
+        if self.X3_labels:
             gamma_header = ["Gamma:"] + self.X3_labels
             gamma_widths = [len(gamma_header[0])] + [max(len(k), options.digits + 8) for k in gamma_header[1:]]
 
@@ -857,16 +848,16 @@ class LinearParameters(object):
             formatter(beta_header, underline=True),
             formatter([""] + [output.format_number(x) for x in beta_like])
         ])
-        if beta_se is not None:
-            lines.append(formatter([""] + [output.format_se(x) for x in beta_se]))
-        if self.gamma is not None:
+        if beta_se_like is not None:
+            lines.append(formatter([""] + [output.format_se(x) for x in beta_se_like]))
+        if gamma_like.size > 0:
             lines.extend([
                 formatter.line(),
                 formatter(gamma_header, underline=True),
                 formatter([""] + [output.format_number(x) for x in gamma_like])
             ])
-            if gamma_se is not None:
-                lines.append(formatter([""] + [output.format_se(x) for x in gamma_se]))
+            if gamma_se_like is not None:
+                lines.append(formatter([""] + [output.format_se(x) for x in gamma_se_like]))
         lines.append(formatter.line())
 
         # combine the lines into one string

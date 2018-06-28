@@ -7,47 +7,47 @@ import multiprocessing
 import numpy as np
 
 
-def extract_matrix(mapping, key):
-    """Attempt to extract a field from a mapping or horizontally stack field0, field1, an so on, into a full matrix. The
-    extracted array will have at least two dimensions. Return None if there is no matrix to extract. The array can be a
-    NumPy structured array, a pandas DataFrame, or anything else that maps strings to array-like objects.
+def extract_matrix(structured_array_like, key):
+    """Attempt to extract a field from a structured array-like object or horizontally stack field0, field1, and so on,
+    into a full matrix. The extracted array will have at least two dimensions.
     """
     try:
-        return np.c_[mapping[key]]
+        matrix = np.c_[structured_array_like[key]]
+        return matrix if matrix.size > 0 else None
     except:
         index = 0
         parts = []
         while True:
             try:
-                parts.append(np.c_[mapping[f'{key}{index}']])
+                part = np.c_[structured_array_like[f'{key}{index}']]
             except:
                 break
             index += 1
+            if part.size > 0:
+                parts.append(part)
         return np.hstack(parts) if parts else None
 
 
-def extract_size(mapping):
-    """Attempt to extract the number of rows from a mapping. The array can be a NumPy structured array, a pandas
-    DataFrame, or anything else that maps strings to array-like objects.
-    """
+def extract_size(structured_array_like):
+    """Attempt to extract the number of rows from a structured array-like object."""
     size = 0
     getters = [
         lambda m: m.shape[0],
-        lambda m: next(iter(mapping.values())).shape[0],
-        lambda m: len(next(iter(mapping.values()))),
+        lambda m: next(iter(structured_array_like.values())).shape[0],
+        lambda m: len(next(iter(structured_array_like.values()))),
         lambda m: len(m)
     ]
     for get in getters:
         try:
-            size = get(mapping)
+            size = get(structured_array_like)
             break
         except:
             pass
     if size > 0:
         return size
     raise TypeError(
-        f"Failed to get the number of rows in the data mapping of type {type(mapping)}. Try using a dictionary, a "
-        f"NumPy structured array, a Pandas DataFrame, or any other standard type of data mapping."
+        f"Failed to get the number of rows in the structured array-like object of type {type(structured_array_like)}. "
+        f"Try using a dictionary, a NumPy structured array, a Pandas DataFrame, or any other standard type."
     )
 
 
@@ -55,12 +55,23 @@ class Matrices(np.recarray):
     """Record array, which guarantees that each sub-array is at least two-dimensional."""
 
     def __new__(cls, mapping):
-        """Construct the array from a mapping of field keys to (array, type) tuples. None is ignored."""
-        keys, arrays, types = zip(*((k, np.c_[a], t) for k, (a, t) in mapping.items() if a is not None))
-        dtype = [(k, t, (a.shape[1],)) for k, a, t in zip(keys, arrays, types)]
-        self = np.ndarray.__new__(cls, arrays[0].shape[0], (np.record, dtype))
-        for key, array in zip(keys, arrays):
-            self[key if isinstance(key, str) else key[1]] = array
+        """Construct the record array from a mapping of field keys to (array or None, type) tuples."""
+
+        # determine the number of rows in all matrices
+        size = next(a.shape[0] for a, _ in mapping.values() if a is not None)
+
+        # collect data types and matrices
+        dtypes = []
+        matrices = []
+        for key, (array, dtype) in mapping.items():
+            matrix = np.zeros((size, 0)) if array is None else np.c_[array]
+            dtypes.append((key, dtype, (matrix.shape[1],)))
+            matrices.append(matrix)
+
+        # build the record array
+        self = np.ndarray.__new__(cls, size, (np.record, dtypes))
+        for dtype, matrix in zip(dtypes, matrices):
+            self[dtype[0] if isinstance(dtype[0], str) else dtype[0][1]] = matrix
         return self
 
 

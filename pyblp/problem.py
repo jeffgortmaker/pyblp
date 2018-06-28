@@ -44,7 +44,7 @@ class Problem(Economy):
 
             - **demand_instruments** : (`numeric`) - Demand-side instruments, :math:`Z_D`.
 
-        If a `supply_formulation` is specified, the following fields are required as well, since they will be used to
+        If a `agent_formulation` is specified, the following fields are required as well, since they will be used to
         estimate the supply side of the problem:
 
             - **firm_ids** : (`object, optional`) - IDs that associate products with firms. Any columns after the first
@@ -103,7 +103,8 @@ class Problem(Economy):
         :class:`Formulation` configuration for :math:`d`.
     products : `Products`
         Structured `product_data` from :class:`Problem` initialization, which is an instance of
-        :class:`primitives.Products`. Matrices of product characteristics were built according to `demand_formulations`.
+        :class:`primitives.Products`. Matrices of product characteristics were built according to
+        `product_formulations`.
     agents : `Agents`
         Structured `agent_data` from :class:`Problem` initialization, which is an instance of
         :class:`primitives.Agents`. A matrix of demographics was built according to `agent_formulation` if it was
@@ -183,7 +184,7 @@ class Problem(Economy):
             agents' random taste distribution, :math:`\Sigma`, are fixed at zero and starting values for the other
             elements, which, if not fixed by `sigma_bounds`, are in the vector of unknown elements, :math:`\theta`. Rows
             and columns correspond to columns in :math:`X_2`, which is configured according to the second of
-            `demand_formulations` in :class:`Problem` initialization.
+            `product_formulations` in :class:`Problem` initialization.
 
             Values below the diagonal are ignored. Zeros are assumed to be zero throughout estimation and nonzeros are,
             if not fixed by `sigma_bounds`, starting values for unknown elements in :math:`\theta`.
@@ -366,16 +367,16 @@ class Problem(Economy):
         )
         if nonlinear_parameters.P == 0:
             raise ValueError("There must be at least one unfixed nonlinear parameter.")
-        theta = nonlinear_parameters.compress(nonlinear_parameters.sigma, nonlinear_parameters.pi)
+        theta = nonlinear_parameters.compress()
         output("")
         output("Initial Nonlinear Parameters:")
-        output(nonlinear_parameters.format(nonlinear_parameters.sigma, nonlinear_parameters.pi))
+        output(nonlinear_parameters.format())
         output("")
         output("Lower Bounds on Nonlinear Parameters:")
-        output(nonlinear_parameters.format(nonlinear_parameters.sigma_bounds[0], nonlinear_parameters.pi_bounds[0]))
+        output(nonlinear_parameters.format_lower_bounds())
         output("")
         output("Upper Bounds on Nonlinear Parameters:")
-        output(nonlinear_parameters.format(nonlinear_parameters.sigma_bounds[1], nonlinear_parameters.pi_bounds[1]))
+        output(nonlinear_parameters.format_upper_bounds())
 
         # construct or validate the demand-side weighting matrix
         if WD is None:
@@ -387,7 +388,7 @@ class Problem(Economy):
 
         # construct or validate the supply-side weighting matrix
         if self.MS == 0:
-            WS = None
+            WS = np.full((0, 0), np.nan, options.dtype)
         elif WS is None:
             WS = scipy.linalg.inv(self.products.ZS.T @ self.products.ZS)
         else:
@@ -406,27 +407,22 @@ class Problem(Economy):
             if true_delta.shape != (self.N, 1):
                 raise ValueError(f"delta must be a vector with {self.N} elements.")
 
-        # initialize the Jacobian of xi with respect to theta as all zeros
-        true_xi_jacobian = np.zeros((self.N, theta.size), options.dtype)
-
-        # initialize marginal costs as prices and the Jacobian of omega with respect to theta as all zeros
-        true_tilde_costs = true_omega_jacobian = None
+        # initialize marginal costs as prices
+        true_tilde_costs = np.full((self.N, 0), np.nan, options.dtype)
         if self.K3 > 0:
             true_tilde_costs = self.products.prices if linear_costs else np.log(self.products.prices)
-            true_omega_jacobian = true_xi_jacobian.copy()
+
+        # initialize Jacobians of xi and omega with respect to theta as all zeros
+        true_xi_jacobian = np.zeros((self.N, theta.size), options.dtype)
+        true_omega_jacobian = np.full_like(true_xi_jacobian, 0 if self.K3 > 0 else np.nan, options.dtype)
 
         # iterate through each step
         last_results = None
         for step in range(1, steps + 1):
-            # initialize an IV model for demand-side linear parameter estimation
+            # initialize IV models for demand- and supply-side linear parameter estimation
             demand_iv = IV(self.products.X1, self.products.ZD, WD)
-            self._handle_errors(error_behavior, demand_iv.errors)
-
-            # initialize an IV model for supply-side linear parameter estimation
-            supply_iv = None
-            if self.K3 > 0:
-                supply_iv = IV(self.products.X3, self.products.ZS, WS)
-                self._handle_errors(error_behavior, supply_iv.errors)
+            supply_iv = IV(self.products.X3, self.products.ZS, WS)
+            self._handle_errors(error_behavior, demand_iv.errors | supply_iv.errors)
 
             # wrap computation of objective information with step-specific information
             compute_step_info = functools.partial(
@@ -503,7 +499,7 @@ class Problem(Economy):
         """Compute demand- and supply-side contributions. Then, form the GMM objective value and its gradient. Finally,
         handle any errors that were encountered before structuring relevant objective information.
         """
-        sigma, pi = nonlinear_parameters.expand(theta, fill_fixed=True)
+        sigma, pi = nonlinear_parameters.expand(theta)
 
         # compute demand-side contributions
         true_delta, true_xi_jacobian, delta, xi_jacobian, beta, true_xi, iterations, evaluations, demand_errors = (
@@ -515,7 +511,9 @@ class Problem(Economy):
 
         # compute supply-side contributions
         supply_errors = set()
-        true_tilde_costs = true_omega_jacobian = tilde_costs = omega_jacobian = gamma = true_omega = None
+        gamma = np.full((self.K3, 1), np.nan, options.dtype)
+        true_tilde_costs = tilde_costs = true_omega = np.full((self.N, 0), np.nan, options.dtype)
+        true_omega_jacobian = omega_jacobian = np.full((self.N, nonlinear_parameters.P), np.nan, options.dtype)
         if self.K3 > 0:
             true_tilde_costs, true_omega_jacobian, tilde_costs, omega_jacobian, gamma, true_omega, supply_errors = (
                 self._compute_supply_contributions(
@@ -530,7 +528,7 @@ class Problem(Economy):
             objective += true_omega.T @ self.products.ZS @ WS @ self.products.ZS.T @ true_omega
 
         # compute its gradient
-        gradient = None
+        gradient = np.full_like(theta, np.nan, options.dtype)
         if compute_gradient:
             gradient = 2 * (xi_jacobian.T @ self.products.ZD @ WD @ self.products.ZD.T @ true_xi)
             if self.K3 > 0:
@@ -546,7 +544,8 @@ class Problem(Economy):
                     objective *= error_punishment
             elif error_behavior == 'punish':
                 objective = np.array(error_punishment)
-                gradient = np.zeros_like(theta) if compute_gradient else None
+                if compute_gradient:
+                    gradient = np.zeros_like(theta)
 
         # structure objective information
         next_delta = true_delta if delta_behavior == 'last' else last_objective_info.next_delta
@@ -565,15 +564,15 @@ class Problem(Economy):
 
         # define a function builds a market along with market-specific arguments used to compute delta and its Jacobian
         def market_factory(s):
-            market_s = DemandProblemMarket(self, s, sigma=sigma, pi=pi)
+            market_s = DemandProblemMarket(self, s, sigma, pi)
             initial_delta_s = last_objective_info.next_delta[self.products.market_ids.flat == s]
             return market_s, initial_delta_s, nonlinear_parameters, iteration, linear_fp, compute_gradient
 
-        # fill delta and its Jacobian market-by-market (the Jacobian will be null if the gradient isn't being computed)
+        # compute delta and its Jacobian market-by-market
         iterations = {}
         evaluations = {}
         true_delta = np.zeros((self.N, 1), options.dtype)
-        true_xi_jacobian = np.zeros((self.N, nonlinear_parameters.P), options.dtype)
+        true_xi_jacobian = np.full((self.N, nonlinear_parameters.P), np.nan, options.dtype)
         with ParallelItems(self.unique_market_ids, market_factory, DemandProblemMarket.solve, processes) as items:
             for t, (true_delta_t, true_xi_jacobian_t, errors_t, iterations[t], evaluations[t]) in items:
                 true_delta[self.products.market_ids.flat == t] = true_delta_t
@@ -618,12 +617,14 @@ class Problem(Economy):
         errors = set()
 
         # compute the Jacobian of beta with respect to theta, which is needed to compute other Jacobians
-        beta_jacobian = demand_iv.estimate(xi_jacobian, compute_residuals=False) if compute_gradient else None
+        beta_jacobian = np.full((self.K1, nonlinear_parameters.P), np.nan, options.dtype)
+        if compute_gradient:
+            beta_jacobian = demand_iv.estimate(xi_jacobian, compute_residuals=False)
 
         # define a function builds a market along with market-specific arguments used to compute transformed marginal
         #   costs and their Jacobian
         def market_factory(s):
-            market_s = SupplyProblemMarket(self, s, true_delta, beta, sigma, pi)
+            market_s = SupplyProblemMarket(self, s, sigma, pi, beta, true_delta)
             last_true_tilde_costs_s = last_objective_info.true_tilde_costs[self.products.market_ids.flat == s]
             true_xi_jacobian_s = true_xi_jacobian[self.products.market_ids.flat == s]
             return (
@@ -631,10 +632,9 @@ class Problem(Economy):
                 linear_costs, costs_bounds, compute_gradient
             )
 
-        # fill transformed marginal costs and their Jacobian market-by-market (the Jacobian will be null if the gradient
-        #   isn't being computed)
+        # compute transformed marginal costs and their Jacobian market-by-market
         true_tilde_costs = np.zeros((self.N, 1), options.dtype)
-        true_omega_jacobian = np.zeros((self.N, nonlinear_parameters.P), options.dtype)
+        true_omega_jacobian = np.full((self.N, nonlinear_parameters.P), np.nan, options.dtype)
         with ParallelItems(self.unique_market_ids, market_factory, SupplyProblemMarket.solve, processes) as items:
             for t, (true_tilde_costs_t, true_omega_jacobian_t, errors_t) in items:
                 true_tilde_costs[self.products.market_ids.flat == t] = true_tilde_costs_t
@@ -713,7 +713,8 @@ class ObjectiveInfo(object):
         self.iteration_mapping = iteration_mapping
         self.evaluation_mapping = evaluation_mapping
         self.errors = errors
-        self.gradient_norm = np.nan if gradient is None else np.abs(gradient).max()
+        with np.errstate(invalid='ignore'):
+            self.gradient_norm = None if gradient is None else np.abs(gradient).max()
 
     def format_progress(self, step, current_iterations, current_evaluations, smallest_objective,
                         smallest_gradient_norm):
@@ -763,9 +764,11 @@ class ObjectiveInfo(object):
 
 
 class DemandProblemMarket(Market):
-    """A single market in the BLP problem, which can be solved to compute delta--related information."""
+    """A single market in a problem, which can be solved to compute delta-related information."""
 
-    field_whitelist = {'shares', 'X2'}
+    def get_unneeded_product_fields(self, fields):
+        """Collect fields that will be dropped from product data."""
+        return fields - {'shares', 'X2'}
 
     def solve(self, initial_delta, nonlinear_parameters, iteration, linear_fp, compute_gradient):
         """Compute the mean utility for this market that equates market shares to observed values by solving a fixed
@@ -839,9 +842,7 @@ class DemandProblemMarket(Market):
 
 
 class SupplyProblemMarket(Market):
-    """A single market in the BLP problem, which can be solved to compute costs-related information."""
-
-    field_blacklist = {'X1', 'X3', 'ZD', 'ZS', 'demand_ids', 'supply_ids'}
+    """A single market in a problem, which can be solved to compute marginal cost-related information."""
 
     def solve(self, initial_tilde_costs, xi_jacobian, beta_jacobian, nonlinear_parameters, linear_costs, costs_bounds,
               compute_gradient):

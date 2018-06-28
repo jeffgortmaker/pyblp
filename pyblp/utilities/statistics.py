@@ -20,7 +20,7 @@ class IV(object):
 
     def estimate(self, y, compute_residuals=True):
         """Estimate parameters and compute residuals."""
-        parameters =  self.covariances @ self.X.T @ self.Z @ self.W @ self.Z.T @ y
+        parameters = self.covariances @ self.X.T @ self.Z @ self.W @ self.Z.T @ y
         return (parameters, y - self.X @ parameters) if compute_residuals else parameters
 
 
@@ -75,7 +75,7 @@ def compute_gmm_weights(u, Z, center_moments, se_type, clustering_ids):
 
 def compute_gmm_moment_covariances(g, se_type, clustering_ids):
     """Compute covariances between moment conditions."""
-    if se_type == 'clustered':
+    if se_type == 'clustered' and clustering_ids.shape[1] > 0:
         return sum(g[clustering_ids.flat == c].T @ g[clustering_ids.flat == c] for c in np.unique(clustering_ids))
     return g.T @ g
 

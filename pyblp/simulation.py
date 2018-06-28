@@ -301,12 +301,13 @@ class Simulation(Economy):
         product_data_mapping = {
             'market_ids': (market_ids, np.object),
             'firm_ids': (firm_ids, np.object),
-            'ownership': (ownership, options.dtype),
             'shares': (np.zeros(market_ids.size), options.dtype),
             'prices': (np.zeros(market_ids.size), options.dtype),
             'demand_instruments': (demand_instruments, options.dtype),
             'supply_instruments': (supply_instruments, options.dtype)
         }
+        if ownership is not None:
+            product_data_mapping['ownership'] = (ownership, options.dtype)
 
         # supplement the mapping with exogenous product variables
         variable_mapping = {**numerical_mapping, **categorical_mapping}
@@ -340,11 +341,11 @@ class Simulation(Economy):
                 agent_variable_mapping[name] = variable
 
         # structure agent data fields as a mapping
-        agent_data_mapping = {
-            'market_ids': (agent_market_ids, np.object),
-            'nodes': (nodes, options.dtype),
-            'weights': (weights, options.dtype)
-        }
+        agent_data_mapping = {'market_ids': (agent_market_ids, np.object)}
+        if nodes is not None:
+            agent_data_mapping['nodes'] = (nodes, options.dtype)
+        if weights is not None:
+            agent_data_mapping['weights'] = (weights, options.dtype)
 
         # supplement the mapping with agent variables
         invalid_names = set(agent_variable_mapping) & set(agent_data_mapping)
@@ -366,7 +367,7 @@ class Simulation(Economy):
         self.beta = self._linear_parameters.beta
         self.gamma = self._linear_parameters.gamma
         self.sigma = self._nonlinear_parameters.sigma
-        self.pi = self._nonlinear_parameters.pi
+        self.pi = self._nonlinear_parameters.pi if self.D > 0 else None
 
         # simulate xi and omega
         covariance = correlation * np.sqrt(xi_variance * omega_variance)
@@ -388,8 +389,8 @@ class Simulation(Economy):
         """Supplement general formatted information with other information about parameters."""
         sections = [
             [super().__str__()],
-            ["Linear Parameters:", self._linear_parameters.format(self.beta, self.gamma)],
-            ["Nonlinear Parameters:", self._nonlinear_parameters.format(self.sigma, self.pi)]
+            ["Linear Parameters:", self._linear_parameters.format()],
+            ["Nonlinear Parameters:", self._nonlinear_parameters.format()]
         ]
         return "\n\n".join("\n".join(s) for s in sections)
 
@@ -465,7 +466,7 @@ class Simulation(Economy):
 
         # define a function builds a market along with market-specific arguments used to compute prices and shares
         def market_factory(s):
-            market_s = SimulationMarket(self, s, delta, self.beta, self.sigma, self.pi)
+            market_s = SimulationMarket(self, s, self.sigma, self.pi, self.beta, delta)
             prices_s = prices[self.products.market_ids.flat == s]
             costs_s = self.costs[self.products.market_ids.flat == s]
             return market_s, iteration, firms_index, prices_s, costs_s
@@ -504,14 +505,11 @@ class Simulation(Economy):
 
 
 class SimulationMarket(Market):
-    """A single market in the BLP simulation, which can be used to solve for a single market's prices and shares."""
+    """A single market in a simulation, which can be used to solve for prices and shares."""
 
-    field_blacklist = {'X1', 'X3', 'ZD', 'ZS', 'demand_ids', 'supply_ids'}
-
-    def solve(self, iteration, firms_index, prices, costs):
-        """Solve the fixed point problem defined by the zeta-markup equation to compute prices and shares in this
-        market. Also return a set of any exception classes encountered during computation along with contraction
-        statistics.
+    def solve(self, iteration, firms_index=0, prices=None, costs=None):
+        """Solve for prices and shares. By default, use unchanged firm IDs, use unchanged prices as starting values,
+        and compute marginal costs.
         """
 
         # configure NumPy to identify floating point errors

@@ -28,7 +28,7 @@ def test_accuracy(simulated_problem, solve_options):
     # test the accuracy of the estimated parameters
     for key in ['gamma', 'beta', 'sigma', 'pi']:
         estimate = getattr(results, key, None)
-        if estimate is not None:
+        if estimate.size > 0:
             np.testing.assert_allclose(getattr(simulation, key), estimate, atol=0, rtol=0.1, err_msg=key)
 
 
