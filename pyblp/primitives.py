@@ -55,13 +55,8 @@ class Products(Matrices):
         """Structure product data while absorbing any fixed effects."""
 
         # validate the formulations
-        if isinstance(product_formulations, Formulation):
-            product_formulations = [product_formulations]
-        elif not isinstance(product_formulations, (list, tuple)) or len(product_formulations) > 3:
-            raise TypeError("product_formulations must be a Formulation instance of a tuple of up to three instances.")
         if not all(isinstance(f, Formulation) or f is None for f in product_formulations):
             raise TypeError("Each formulation in product_formulations must be a Formulation instance or None.")
-        product_formulations = list(product_formulations) + [None] * (3 - len(product_formulations))
         if product_formulations[0] is None:
             raise ValueError("The formulation for X1 must be specified.")
         if product_formulations[1] is not None and product_formulations[1]._absorbed_terms:

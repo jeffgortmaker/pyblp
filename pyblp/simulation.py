@@ -142,7 +142,7 @@ class Simulation(Economy):
     Attributes
     ----------
     product_formulations : `tuple`
-        Tuple of three :class:`Formulation` configurations for :math:`X_1`, :math:`X_2`, and :math:`X_3`, respectively.
+        :class:`Formulation` configurations for :math:`X_1`, :math:`X_2`, and :math:`X_3`, respectively.
     agent_formulation : `tuple`
         :class:`Formulation` configuration for :math:`d`.
     beta : `ndarray`

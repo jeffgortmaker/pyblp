@@ -7,7 +7,7 @@ import numpy as np
 import scipy.linalg
 
 from . import options, exceptions
-from .configurations import Iteration, Optimization
+from .configurations import Iteration, Optimization, Formulation
 from .utilities import output, compute_2sls_weights, ParallelItems, IV
 from .primitives import Products, Agents, Economy, Market, NonlinearParameters
 
@@ -107,8 +107,7 @@ class Problem(Economy):
     Attributes
     ----------
     product_formulations : `Formulation or tuple of Formulation`
-        :class:`Formulation` configurations or tuple of up to three :class:`Formulation` configurations for :math:`X_1`,
-        :math:`X_2`, and :math:`X_3`, respectively.
+        :class:`Formulation` configurations for :math:`X_1`, :math:`X_2`, and :math:`X_3`, respectively.
     agent_formulation : `Formulation`
         :class:`Formulation` configuration for :math:`d`.
     products : `Products`
@@ -176,6 +175,11 @@ class Problem(Economy):
 
     def __init__(self, product_formulations, product_data, agent_formulation=None, agent_data=None, integration=None):
         """Initialize the underlying economy with structured product and agent data."""
+        if isinstance(product_formulations, Formulation):
+            product_formulations = [product_formulations]
+        elif not isinstance(product_formulations, (list, tuple)) or len(product_formulations) > 3:
+            raise TypeError("product_formulations must be a Formulation instance or a tuple of up to three instances.")
+        product_formulations = list(product_formulations) + [None] * (3 - len(product_formulations))
         products = Products(product_formulations, product_data)
         agents = Agents(products, agent_formulation, agent_data, integration)
         super().__init__(product_formulations, agent_formulation, products, agents)
