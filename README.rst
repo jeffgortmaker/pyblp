@@ -53,6 +53,7 @@ Features
 - Support for demographics and supply-side moments.
 - Support for nonlinear functions and interactions of product characteristics.
 - Customizable parameter matrices and bounds.
+- Estimation of a Logit bechmark model.
 - Post-estimation functions for computing elasticities, diversion ratios, marginal costs, markups, profits, HHI, and consumer surplus.
 - Post-estimation merger simulation.
 - Flexible interface for simulating synthetic data under Bertrand-Nash competition.
@@ -75,8 +76,7 @@ Features Slated for Future Versions
 
 In no particular order, listed below are major features that will hopefully be added to the package in future versions:
 
-- Solving with logit and nested logit.
-- Tests for identification and overidentifying restrictions.
+- Support for nesting parameters.
 - Parametric bootstrap computation of post-estimation standard errors.
 - Built-in IPOPT support.
 - Built-in support for more fixed point routines.

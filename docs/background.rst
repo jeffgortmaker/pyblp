@@ -144,7 +144,7 @@ Given a :math:`\hat{\theta}`, the first step towards computing its associated ob
 
 .. math:: \delta \leftarrow \delta + \log s - \log s(\delta, \hat{\theta})
 
-where :math:`s` are the market's observed shares and :math:`s(\hat{\theta}, \delta)` are shares evaluated at :math:`\hat{\theta}` and the current iteration's :math:`\delta`. As noted in the appendix of :ref:`Nevo (2000) <n00>`, exponentiating both sides of the contraction mapping and iterating over :math:`\exp(\delta)` gives an alternate formulation that can be faster. Conventional starting values are those that solve the logit model, :math:`\delta_{jt} = \log s_{jt} - \log s_{0t}`.
+where :math:`s` are the market's observed shares and :math:`s(\hat{\theta}, \delta)` are shares evaluated at :math:`\hat{\theta}` and the current iteration's :math:`\delta`. As noted in the appendix of :ref:`Nevo (2000) <n00>`, exponentiating both sides of the contraction mapping and iterating over :math:`\exp(\delta)` gives an alternate formulation that can be faster. Conventional starting values are those that solve the Logit model, :math:`\delta_{jt} = \log s_{jt} - \log s_{0t}`.
 
 The mean utility in conjunction with the demand-side conditional independence assumption in :eq:`moments` is used to recover the demand-side linear parameters with
 
@@ -251,3 +251,9 @@ To efficiently compute equilibrium prices, the :math:`\zeta`-markup equation fro
 When computing :math:`\zeta(p)`, shares :math:`s(p)` associated with the candidate equilibrium prices are computed according to their definition in :eq:`shares`.
 
 Of course, marginal costs, :math:`c`, are required to iterate over the contraction. When evaluating counterfactuals, costs are usually computed first according to the BLP-markup equation in :eq:`eta_markup`. When simulating synthetic data, marginal costs are simulated according their specification in :eq:`costs`.
+
+
+Logit Benchmark
+---------------
+
+Excluding :math:`X_2` and :math:`\Sigma` leaves the Logit model, which serves as a simple benchmark for the full random coefficients BLP model. Although it lacks the realism of the full model, estimation of the Logit model is much simpler. Specifically, a closed-form solution for the mean utility, :math:`\delta_{jt} = \log s_{jt} - \log s_{0t}`, means that fixed point iteration is not required, and a lack of nonlinear parameters means that optimization is not required either. Importantly, a supply side can still be estimated jointly with demand. The only difference in the above equations, other than the absence of nonlinear characteristics and parameters, is that there can simply be a single, representative agent in each market. That is, each :math:`I_t = 1` with :math:`w_1 = 1`.

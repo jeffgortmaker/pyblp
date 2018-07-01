@@ -445,6 +445,24 @@ On the other hand, consumer surpluses, :math:`\text{CS}`, generally decrease.
 .. image:: images/cs_changes.png
 
 
+Logit Benchmark
+---------------
+
+Comparing results from the full BLP model with results from the simpler Logit model is straightforward. A Logit :class:`Problem` can be created by simply excluding the formulation for :math:`X_2` along with any agent information. We'll set up and solve a simpler version of the fake cereal problem. Since we won't include any nonlinear characteristics or parameters, we don't have to worry about configuring an optimization routine.
+
+.. ipython:: python
+   
+   nevo_logit_formulation = pyblp.Formulation('0 + prices', absorb='C(product_ids)')
+   nevo_logit_formulation
+   nevo_logit_problem = pyblp.Problem(nevo_logit_formulation, nevo_products)
+   nevo_logit_problem
+   nevo_logit_results = nevo_logit_problem.solve(steps=1)
+   nevo_logit_results
+
+Logit :class:`Results` can be to compute the same types of post-estimation outputs as as :class:`Results` created by the full BLP model.
+
+
+
 Simulating Problems
 -------------------
 
