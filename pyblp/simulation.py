@@ -131,10 +131,13 @@ class Simulation(Economy):
         Variance of the unobserved supply-side product characteristics, :math:`\omega`. The default value is ``1.0``.
     correlation : `float, optional`
         Correlation between :math:`\xi` and :math:`\omega`. The default value is ``0.9``.
-    linear_costs : `bool, optional`
-        Whether to compute marginal costs, :math:`c`, according to a linear or a log-linear marginal cost specification.
-        By default, a linear specification is used. That is, :math:`\tilde{c} = c` instead of
-        :math:`\tilde{c} = \log c`.
+    costs_type : `str, optional`
+        Marginal cost specification. The following specifications are supported:
+
+            - ``'linear'`` (default) - Linear specification: :math:`\tilde{c} = c`.
+
+            - ``'log'`` - Log-linear specification: :math:`\tilde{c} = \log c`.
+
     seed : `int, optional`
         Passed to :class:`numpy.random.RandomState` to seed the random number generator before data are simulated. By
         default, a seed is not passed to the random number generator.
@@ -175,9 +178,8 @@ class Simulation(Economy):
         Unobserved supply-side product characteristics, :math:`\omega`, that were simulated during initialization.
     costs : `ndarray`
         Marginal costs, :math:`c`, that were simulated during initialization.
-    linear_costs : `bool`
-        Whether :attr:`Simulation.costs` were simulated according to a linear or a log-linear marginal cost
-        specification during initialization.
+    costs_type : `bool`
+        The specification according to which :attr:`Simulation.costs` were simulated during initialization.
     N : `int`
         Number of products across all markets, :math:`N`.
     T : `int`
@@ -244,8 +246,8 @@ class Simulation(Economy):
     """
 
     def __init__(self, product_formulations, beta, sigma, gamma, product_data, agent_formulation=None, pi=None,
-                 agent_data=None, integration=None, xi_variance=1, omega_variance=1, correlation=0.9, linear_costs=True,
-                 seed=None):
+                 agent_data=None, integration=None, xi_variance=1, omega_variance=1, correlation=0.9,
+                 costs_type='linear', seed=None):
         """Load or simulate all data except for Bertrand-Nash prices and shares."""
 
         # validate the formulations
@@ -414,9 +416,11 @@ class Simulation(Economy):
         self.omega = shocks[:, [1]]
 
         # compute marginal costs
-        self.linear_costs = linear_costs
+        if costs_type not in {'linear', 'log'}:
+            raise ValueError("costs_type must be 'linear' or 'log'.")
+        self.costs_type = costs_type
         self.costs = self.products.X3 @ self.gamma + self.omega
-        if not linear_costs:
+        if costs_type == 'log':
             self.costs = np.exp(self.costs)
 
     def __str__(self):

@@ -186,7 +186,8 @@ class Problem(Economy):
 
     def solve(self, sigma=None, pi=None, sigma_bounds=None, pi_bounds=None, delta=None, WD=None, WS=None, steps=2,
               optimization=None, error_behavior='revert', error_punishment=1, delta_behavior='last', iteration=None,
-              linear_fp=True, linear_costs=True, costs_bounds=None,  center_moments=True, se_type='robust', processes=1):
+              fp_type='linear', costs_type='linear', costs_bounds=None, se_type='robust', center_moments=True,
+              processes=1):
         r"""Solve the problem.
 
         The problem is solved in one or more GMM steps. During each step, any unfixed nonlinear parameters in
@@ -302,36 +303,44 @@ class Problem(Economy):
             :math:`\delta(\hat{\theta})` in each market. This configuration is only relevant if there are nonlinear
             parameters, since :math:`\delta` can be estimated analytically in the Logit model. By default,
             ``Iteration('squarem', {'tol': 1e-14})`` is used.
-        linear_fp : `bool, optional`
-            Whether to compute :math:`\delta(\hat{\theta})` with the standard linear contraction mapping,
+        fp_type : `str, optional`
+            Configuration for the type of contraction mapping used to compute :math:`\delta(\hat{\theta})`. The
+            following types of contraction mappings are supported:
 
-            .. math:: \delta \leftarrow \delta + \log s - \log s(\delta, \hat{\theta}),
+                - ``'linear'`` (default) - Standard linear contraction mapping,
 
-            or with its nonlinear counterpart,
+                  .. math:: \delta \leftarrow \delta + \log s - \log s(\delta, \hat{\theta}),
 
-            .. math:: \exp(\delta) \leftarrow \exp(\delta)s / s(\delta, \hat{\theta}).
+                  which is the most popular type.
 
-            The default linear contraction is more popular; however, its nonlinear counterpart can be faster because
-            fewer logarithms need to be calculated, which can also help mitigate problems stemming from any negative
-            integration weights. This option is only relevant if there are nonlinear parameters, since :math:`\delta`
-            can be estimated analytically in the Logit model.
+                - ``'nonlinear'`` - Exponentiated version,
 
-        linear_costs : `bool, optional`
-            Whether to compute :math:`\tilde{c}(\hat{\theta})` according to a linear or a log-linear marginal cost
-            specification. This is only relevant if :math:`X_3` was formulated by `product_formulations` in
-            :class:`Problem`. By default, a linear specification is assumed. That is, :math:`\tilde{c} = c` instead of
-            :math:`\tilde{c} = \log c` by default.
+                  .. math:: \exp(\delta) \leftarrow \exp(\delta)s / s(\delta, \hat{\theta}),
+
+                  which can be faster because fewer logarithms need to be calculated. It can also help mitigate problems
+                  stemming from any negative integration weights.
+
+            This option is only relevant if there are nonlinear parameters, since :math:`\delta` can be estimated
+            analytically in the Logit model.
+
+        costs_type : `str, optional`
+            Marginal cost specification. The following specifications are supported:
+
+                - ``'linear'`` (default) - Linear specification: :math:`\tilde{c} = c`.
+
+                - ``'log'`` - Log-linear specification: :math:`\tilde{c} = \log c`.
+
+            This specification is only relevant if :math:`X_3` was formulated by `product_formulations` in
+            :class:`Problem`.
+
         costs_bounds : `tuple, optional`
             Configuration for :math:`c` bounds of the form ``(lb, ub)``, in which both ``lb`` and ``ub`` are floats.
             This is only relevant if :math:`X_3` was formulated by `product_formulations` in :class:`Problem`. By
-            default, marginal costs are unbounded. When `linear_costs` is ``False``, nonpositive :math:`c(\hat{\theta})`
+            default, marginal costs are unbounded. When `costs_type` is ``'log'``, nonpositive :math:`c(\hat{\theta})`
             values can create problems when computing :math:`\tilde{c}(\hat{\theta}) = \log c(\hat{\theta})`. One
             solution is to let ``lb`` equal some small number; however, doing so introduces error into gradient
             computation. Both ``None`` and ``numpy.nan`` are converted to ``-numpy.inf`` in ``lb`` and to ``numpy.inf``
             in ``ub``.
-        center_moments : `bool, optional`
-            Whether to center the sample moments before using them to update weighting matrices. By default, sample
-            moments are centered.
         se_type : `str, optional`
             How to compute standard errors. The following types of standard errors are supported:
 
@@ -345,6 +354,9 @@ class Problem(Economy):
                   If there is more than one GMM `step`, weighting matrices will be updated to account for clustering
                   as well.
 
+        center_moments : `bool, optional`
+            Whether to center the sample moments before using them to update weighting matrices. By default, sample
+            moments are centered.
         processes : `int, optional`
             Number of Python processes that will be used during estimation. By default, multiprocessing will not be
             used. For values greater than one, a pool of that many Python processes will be created during each
@@ -373,11 +385,15 @@ class Problem(Economy):
         if not isinstance(iteration, Iteration):
             raise TypeError("iteration must be None or an Iteration instance.")
 
-        # validate behaviors and the standard error type
+        # validate behaviors and types
         if error_behavior not in {'revert', 'punish', 'raise'}:
             raise ValueError("error_behavior must be 'revert', 'punish', or 'raise'.")
         if delta_behavior not in {'last', 'first'}:
             raise ValueError("delta_behavior must be 'last' or 'first'.")
+        if fp_type not in {'linear', 'nonlinear'}:
+            raise ValueError("fp_type must be 'linear' or 'nonlinear'.")
+        if costs_type not in {'linear', 'log'}:
+            raise ValueError("costs_type must be 'linear' or 'log'.")
         if se_type not in {'robust', 'unadjusted', 'clustered'}:
             raise ValueError("se_type must be 'robust', 'unadjusted', or 'clustered'.")
         if se_type == 'clustered' and 'clustering_ids' not in self.products.dtype.names:
@@ -445,7 +461,7 @@ class Problem(Economy):
         # initialize marginal costs as prices
         true_tilde_costs = np.full((self.N, 0), np.nan, options.dtype)
         if self.K3 > 0:
-            true_tilde_costs = self.products.prices if linear_costs else np.log(self.products.prices)
+            true_tilde_costs = self.products.prices if costs_type == 'linear' else np.log(self.products.prices)
 
         # initialize Jacobians of xi and omega with respect to theta as all zeros
         true_xi_jacobian = np.zeros((self.N, nonlinear_parameters.P), options.dtype)
@@ -462,7 +478,7 @@ class Problem(Economy):
             # wrap computation of objective information with step-specific information
             compute_step_info = functools.partial(
                 self._compute_objective_info, nonlinear_parameters, demand_iv, supply_iv, WD, WS, error_behavior,
-                error_punishment, delta_behavior, iteration, linear_fp, linear_costs, costs_bounds, processes
+                error_punishment, delta_behavior, iteration, fp_type, costs_type, costs_bounds, processes
             )
 
             # define the objective function for the optimization routine, which also outputs progress updates
@@ -533,7 +549,7 @@ class Problem(Economy):
             step_start_time = time.time()
 
     def _compute_objective_info(self, nonlinear_parameters, demand_iv, supply_iv, WD, WS, error_behavior,
-                                error_punishment, delta_behavior, iteration, linear_fp, linear_costs, costs_bounds,
+                                error_punishment, delta_behavior, iteration, fp_type, costs_type, costs_bounds,
                                 processes, theta, last_objective_info, compute_gradient):
         """Compute demand- and supply-side contributions. Then, form the GMM objective value and its gradient. Finally,
         handle any errors that were encountered before structuring relevant objective information.
@@ -543,7 +559,7 @@ class Problem(Economy):
         # compute demand-side contributions
         true_delta, true_xi_jacobian, delta, xi_jacobian, beta, true_xi, iterations, evaluations, demand_errors = (
             self._compute_demand_contributions(
-                nonlinear_parameters, demand_iv, iteration, linear_fp, processes, sigma, pi, last_objective_info,
+                nonlinear_parameters, demand_iv, iteration, fp_type, processes, sigma, pi, last_objective_info,
                 compute_gradient
             )
         )
@@ -556,7 +572,7 @@ class Problem(Economy):
         if self.K3 > 0:
             true_tilde_costs, true_omega_jacobian, tilde_costs, omega_jacobian, gamma, true_omega, supply_errors = (
                 self._compute_supply_contributions(
-                    nonlinear_parameters, demand_iv, supply_iv, linear_costs, costs_bounds, processes, beta, sigma, pi,
+                    nonlinear_parameters, demand_iv, supply_iv, costs_type, costs_bounds, processes, beta, sigma, pi,
                     true_delta, true_xi_jacobian, xi_jacobian, last_objective_info, compute_gradient
                 )
             )
@@ -594,7 +610,7 @@ class Problem(Economy):
             objective, gradient, iterations, evaluations, errors
         )
 
-    def _compute_demand_contributions(self, nonlinear_parameters, demand_iv, iteration, linear_fp, processes, sigma, pi,
+    def _compute_demand_contributions(self, nonlinear_parameters, demand_iv, iteration, fp_type, processes, sigma, pi,
                                       last_objective_info, compute_gradient):
         """Compute delta and the Jacobian of xi (equivalently, of delta) with respect to theta market-by-market. If
         necessary, revert problematic elements to their last values. Lastly, recover beta and compute xi.
@@ -615,7 +631,7 @@ class Problem(Economy):
             def market_factory(s):
                 market_s = DemandProblemMarket(self, s, sigma, pi)
                 initial_delta_s = last_objective_info.next_delta[self.products.market_ids.flat == s]
-                return market_s, initial_delta_s, nonlinear_parameters, iteration, linear_fp, compute_gradient
+                return market_s, initial_delta_s, nonlinear_parameters, iteration, fp_type, compute_gradient
 
             # compute delta and its Jacobian market-by-market
             with ParallelItems(self.unique_market_ids, market_factory, DemandProblemMarket.solve, processes) as items:
@@ -652,7 +668,7 @@ class Problem(Economy):
         beta, true_xi = demand_iv.estimate(delta)
         return true_delta, true_xi_jacobian, delta, xi_jacobian, beta, true_xi, iterations, evaluations, errors
 
-    def _compute_supply_contributions(self, nonlinear_parameters, demand_iv, supply_iv, linear_costs, costs_bounds,
+    def _compute_supply_contributions(self, nonlinear_parameters, demand_iv, supply_iv, costs_type, costs_bounds,
                                       processes, beta, sigma, pi, true_delta, true_xi_jacobian, xi_jacobian,
                                       last_objective_info, compute_gradient):
         """Compute transformed marginal costs and the Jacobian of omega (equivalently, of transformed marginal costs)
@@ -678,7 +694,7 @@ class Problem(Economy):
             true_xi_jacobian_s = true_xi_jacobian[self.products.market_ids.flat == s]
             return (
                 market_s, last_true_tilde_costs_s, true_xi_jacobian_s, beta_jacobian, nonlinear_parameters,
-                linear_costs, costs_bounds, compute_gradient
+                costs_type, costs_bounds, compute_gradient
             )
 
         # compute transformed marginal costs and their Jacobian market-by-market
@@ -817,7 +833,7 @@ class DemandProblemMarket(Market):
         """Collect fields that will be dropped from product data."""
         return fields - {'shares', 'X2'}
 
-    def solve(self, initial_delta, nonlinear_parameters, iteration, linear_fp, compute_gradient):
+    def solve(self, initial_delta, nonlinear_parameters, iteration, fp_type, compute_gradient):
         """Compute the mean utility for this market that equates market shares to observed values by solving a fixed
         point problem. Then, if compute_gradient is True, compute the Jacobian of xi (equivalently, of delta) with
         respect to theta. If necessary, replace null elements in delta with their last values before computing its
@@ -837,7 +853,7 @@ class DemandProblemMarket(Market):
                     return np.log(x)
 
             # solve the fixed point problem
-            if linear_fp:
+            if fp_type == 'linear':
                 log_shares = np.log(self.products.shares)
                 contraction = lambda d: d + log_shares - custom_log(self.compute_probabilities(d) @ self.agents.weights)
                 delta, converged, iterations, evaluations = iteration._iterate(initial_delta, contraction)
@@ -891,7 +907,7 @@ class DemandProblemMarket(Market):
 class SupplyProblemMarket(Market):
     """A single market in a problem, which can be solved to compute marginal cost-related information."""
 
-    def solve(self, initial_tilde_costs, xi_jacobian, beta_jacobian, nonlinear_parameters, linear_costs, costs_bounds,
+    def solve(self, initial_tilde_costs, xi_jacobian, beta_jacobian, nonlinear_parameters, costs_type, costs_bounds,
               compute_gradient):
         """Compute transformed marginal costs for this market. Then, if compute_gradient is True, compute the Jacobian
         of omega (equivalently, of transformed marginal costs) with respect to theta. If necessary, replace null
@@ -915,7 +931,7 @@ class SupplyProblemMarket(Market):
 
             # take the log of marginal costs under a log-linear specification
             tilde_costs = costs
-            if not linear_costs:
+            if costs_type == 'log':
                 with np.errstate(all='ignore'):
                     if np.any(costs <= 0):
                         errors.add(exceptions.NonpositiveCostsError)
@@ -929,15 +945,15 @@ class SupplyProblemMarket(Market):
                 bad_costs_indices = ~np.isfinite(tilde_costs)
                 valid_tilde_costs[bad_costs_indices] = initial_tilde_costs[bad_costs_indices]
                 omega_jacobian = self.compute_omega_by_theta_jacobian(
-                    valid_tilde_costs, xi_jacobian, beta_jacobian, nonlinear_parameters, linear_costs
+                    valid_tilde_costs, xi_jacobian, beta_jacobian, nonlinear_parameters, costs_type
                 )
             return tilde_costs, omega_jacobian, errors
 
     def compute_omega_by_theta_jacobian(self, tilde_costs, xi_jacobian, beta_jacobian, nonlinear_parameters,
-                                        linear_costs):
+                                        costs_type):
         """Compute the Jacobian of omega (equivalently, of transformed marginal costs) with respect to theta."""
         costs_jacobian = -self.compute_eta_by_theta_jacobian(xi_jacobian, beta_jacobian, nonlinear_parameters)
-        if linear_costs:
+        if costs_type == 'linear':
             return costs_jacobian
         return costs_jacobian / np.exp(tilde_costs)
 

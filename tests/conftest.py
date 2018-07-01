@@ -78,7 +78,7 @@ def large_logit_simulation():
         xi_variance=0.00001,
         omega_variance=0.00001,
         correlation=0.9,
-        linear_costs=False,
+        costs_type='log',
         seed=2
     )
     clustering_ids = np.random.RandomState(2).choice(['a', 'b', 'c', 'd'], simulation.N)
@@ -181,7 +181,7 @@ def large_blp_simulation():
         xi_variance=0.00001,
         omega_variance=0.00001,
         correlation=0.9,
-        linear_costs=False,
+        costs_type='log',
         seed=2
     )
     clustering_ids = np.random.RandomState(2).choice(['a', 'b', 'c', 'd'], simulation.N)
@@ -207,7 +207,7 @@ def simulated_problem(request):
     simulation, product_data = request.getfixturevalue(f'{name}_simulation')
     product_formulations = simulation.product_formulations[:2 + int(supply)]
     problem = Problem(product_formulations, product_data, simulation.agent_formulation, simulation.agent_data)
-    results = problem.solve(simulation.sigma, simulation.pi, steps=1, linear_costs=simulation.linear_costs)
+    results = problem.solve(simulation.sigma, simulation.pi, steps=1, costs_type=simulation.costs_type)
     return simulation, product_data, problem, results
 
 

@@ -10,7 +10,7 @@ from pyblp import build_matrix, Problem, Iteration, Optimization, Formulation
 @pytest.mark.usefixtures('simulated_problem')
 @pytest.mark.parametrize('solve_options', [
     pytest.param({'steps': 1}, id="one step"),
-    pytest.param({'linear_fp': False}, id="nonlinear fixed point"),
+    pytest.param({'fp_type': 'nonlinear'}, id="nonlinear fixed point"),
     pytest.param({'delta_behavior': 'first'}, id="conservative starting delta values"),
     pytest.param({'error_behavior': 'punish', 'error_punishment': 1e10}, id="error punishment"),
     pytest.param({'center_moments': False, 'se_type': 'unadjusted'}, id="simple covariance matrices"),
@@ -24,7 +24,7 @@ def test_accuracy(simulated_problem, solve_options):
     results = problem.solve(
         0.5 * simulation.sigma,
         0.5 * simulation.pi,
-        linear_costs=simulation.linear_costs,
+        costs_type=simulation.costs_type,
         **solve_options
     )
 
@@ -51,7 +51,7 @@ def test_trivial_changes(simulated_problem, solve_options1, solve_options2):
     results = []
     for solve_options in [solve_options1, solve_options2]:
         results.append(problem.solve(
-            simulation.sigma, simulation.pi, steps=1, linear_costs=simulation.linear_costs, **solve_options
+            simulation.sigma, simulation.pi, steps=1, costs_type=simulation.costs_type, **solve_options
         ))
 
     # test that all arrays in the results are essentially identical
@@ -443,7 +443,7 @@ def test_extra_demographics(simulated_problem):
 @pytest.mark.usefixtures('simulated_problem')
 @pytest.mark.parametrize('solve_options', [
     pytest.param({}, id="default"),
-    pytest.param({'linear_fp': False}, id="nonlinear fixed point")
+    pytest.param({'fp_type': 'nonlinear'}, id="nonlinear fixed point")
 ])
 def test_objective_gradient(simulated_problem, solve_options):
     """Implement central finite differences in a custom optimization routine to test that analytic gradient values
@@ -475,9 +475,9 @@ def test_objective_gradient(simulated_problem, solve_options):
         0.9 * simulation.sigma,
         0.9 * simulation.pi,
         steps=1,
-        linear_costs=simulation.linear_costs,
+        costs_type=simulation.costs_type,
         optimization=Optimization(test_finite_differences),
-        iteration=Iteration('squarem', {'tol': 1e-15 if solve_options.get('linear_fp') is False else 1e-14}),
+        iteration=Iteration('squarem', {'tol': 1e-15 if solve_options.get('fp_type') == 'nonlinear' else 1e-14}),
         **solve_options
     )
 
