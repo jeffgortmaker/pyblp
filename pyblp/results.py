@@ -35,8 +35,8 @@ class Results(object):
     cumulative_optimization_time : `float`
         Sum of :attr:`Results.optimization_time` for this step and all prior steps.
     total_time : `float`
-        Sum of :attr:`Results.optimization_time` and the number of seconds it took to compute results after
-        optimization had finished.
+        Sum of :attr:`Results.optimization_time` and the number of seconds it took to set up the GMM step and compute
+        results after optimization had finished.
     cumulative_total_time : `float`
         Sum of :attr:`Results.total_time` for this step and all prior steps.
     optimization_iterations : `int`
@@ -136,8 +136,8 @@ class Results(object):
 
     """
 
-    def __init__(self, objective_info, last_results, start_time, end_time, iterations, evaluations, iteration_mappings,
-                 evaluation_mappings, center_moments, se_type):
+    def __init__(self, objective_info, last_results, step_start_time, optimization_start_time, optimization_end_time,
+                 iterations, evaluations, iteration_mappings, evaluation_mappings, center_moments, se_type):
         """Update weighting matrices, estimate standard errors, and compute cumulative progress statistics."""
 
         # initialize values from the objective information
@@ -220,8 +220,8 @@ class Results(object):
 
         # initialize counts and times
         self.step = 1
-        self.total_time = self.cumulative_total_time = time.time() - start_time
-        self.optimization_time = self.cumulative_optimization_time = end_time - start_time
+        self.total_time = self.cumulative_total_time = time.time() - step_start_time
+        self.optimization_time = self.cumulative_optimization_time = optimization_end_time - optimization_start_time
         self.optimization_iterations = self.cumulative_optimization_iterations = iterations
         self.objective_evaluations = self.cumulative_objective_evaluations = evaluations
 
@@ -255,10 +255,10 @@ class Results(object):
         # construct section containing summary information
         header = [
             ("GMM", "Step"), ("Optimization", "Iterations"), ("Objective", "Evaluations"),
-            ("Total Fixed Point", "Iterations"), ("Total Contraction", "Evaluations"), ("Objective", "Value"),
-            ("Gradient", "Infinity Norm")
+            ("Total Fixed Point", "Iterations"), ("Total Contraction", "Evaluations"), ("Optimization", "Time"),
+            ("Total Step", "Time"), ("Objective", "Value"), ("Gradient", "Infinity Norm")
         ]
-        widths = [max(len(k1), len(k2), options.digits + 6 if i > 4 else 0) for i, (k1, k2) in enumerate(header)]
+        widths = [max(len(k1), len(k2), options.digits + 6 if i > 6 else 0) for i, (k1, k2) in enumerate(header)]
         formatter = output.table_formatter(widths)
         sections = [[
             "Results Summary:",
@@ -271,6 +271,8 @@ class Results(object):
                 self.objective_evaluations,
                 self.fp_iterations.sum(),
                 self.contraction_evaluations.sum(),
+                output.format_seconds(self.optimization_time),
+                output.format_seconds(self.total_time),
                 output.format_number(self.objective),
                 output.format_number(self.gradient_norm)
             ]),

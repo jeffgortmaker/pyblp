@@ -360,6 +360,9 @@ class Problem(Economy):
 
         """
 
+        # record the amount of time it takes to solve the problem
+        step_start_time = time.time()
+
         # configure or validate configurations
         if optimization is None:
             optimization = Optimization('l-bfgs-b')
@@ -487,7 +490,7 @@ class Problem(Economy):
 
             # optimize theta
             iterations = evaluations = 0
-            start_time = end_time = time.time()
+            optimization_start_time = optimization_end_time = time.time()
             if nonlinear_parameters.P > 0:
                 output("")
                 output(f"Starting optimization for step {step} out of {steps} ...")
@@ -495,19 +498,20 @@ class Problem(Economy):
                 bounds = [(p.lb, p.ub) for p in nonlinear_parameters.unfixed]
                 theta, converged, iterations, evaluations = optimization._optimize(theta, bounds, wrapper)
                 status = "completed" if converged else "failed"
-                end_time = time.time()
+                optimization_end_time = time.time()
+                optimization_time = optimization_end_time - optimization_start_time
                 if not converged:
                     self._handle_errors(error_behavior, {exceptions.ThetaConvergenceError})
                 output("")
-                output(f"Optimization {status} after {output.format_seconds(end_time - start_time)}.")
+                output(f"Optimization {status} after {output.format_seconds(optimization_time)}.")
 
             # use objective information computed at the optimal theta to compute results for the step
             output("")
             output(f"Computing results for step {step} ...")
             step_info = compute_step_info(theta, wrapper.cache, compute_gradient=nonlinear_parameters.P > 0)
             results = step_info.to_results(
-                last_results, start_time, end_time, iterations, evaluations + 1, wrapper.iteration_mappings,
-                wrapper.evaluation_mappings, center_moments, se_type
+                last_results, step_start_time, optimization_start_time, optimization_end_time, iterations,
+                evaluations + 1, wrapper.iteration_mappings, wrapper.evaluation_mappings, center_moments, se_type
             )
             self._handle_errors(error_behavior, results._errors)
             output(f"Computed results after {output.format_seconds(results.total_time - results.optimization_time)}.")
@@ -526,6 +530,7 @@ class Problem(Economy):
             true_omega_jacobian = step_info.true_omega_jacobian
             WD = results.updated_WD
             WS = results.updated_WS
+            step_start_time = time.time()
 
     def _compute_objective_info(self, nonlinear_parameters, demand_iv, supply_iv, WD, WS, error_behavior,
                                 error_punishment, delta_behavior, iteration, linear_fp, linear_costs, costs_bounds,
