@@ -17,14 +17,14 @@ class Simulation(Economy):
     All data are either loaded or simulated during initialization, except for Bertrand-Nash prices and shares, which are
     computed by :meth:`Simulation.solve`.
 
-    Unspecified exogenous variables that are used to formulate product characteristics, :math:`X_1`, :math:`X_2`, and
+    Unspecified exogenous variables that are used to formulate product characteristics in :math:`X_1`, :math:`X_2`, and
     :math:`X_3`, as well as agent demographics, :math:`d`, are all drawn from independent standard uniform
     distributions.
 
     Unobserved demand- and supply-side product characteristics, :math:`\xi` and :math:`\omega`, are drawn from a
     mean-zero bivariate normal distribution.
 
-    After variables are loaded or simulated, any unspecified nodes and weights will be constructed according to an
+    After variables are loaded or simulated, any unspecified nodes and weights are constructed according to an
     integration configuration. Next, some simple instruments are computed:
 
     .. math:: Z_D = [1, X, \mathrm{Rival}(X_D), \mathrm{Other}(X_D)]
@@ -43,35 +43,39 @@ class Simulation(Economy):
        These instruments are constructed only for convenience. Especially for more complicated formulations, instrument
        fields in simulated product data should be replaced with better instruments.
 
+    In both `product_data` and `agent_data`, fields with multiple columns can be either matrices or can be broken up
+    into multiple one-dimensional fields with column index suffixes that start at zero. For example, if there are two
+    columns of firm IDs, the `firm_ids` field, which in this case should be a matrix with two columns, can be replaced
+    by two one-dimensional fields: `firm_ids0` and `firm_ids1`.
+
     Parameters
     ----------
     product_formulations : `tuple`
         Tuple of three :class:`Formulation` configurations for the matrix of linear product characteristics,
         :math:`X_1`, for the matrix of nonlinear product characteristics, :math:`X_2`, and for the matrix of cost
-        characteristics, :math:`X_3`, respectively. The ``shares`` variable should be included in none of the
-        formulations and ``prices`` should be included in the formulation for :math:`X_1` or :math:`X_2` (or both). Any
-        additional variables that cannot be loaded from `product_data` will be drawn from independent standard uniform
-        distributions.
+        characteristics, :math:`X_3`, respectively. If the formulation for :math:`X_2` is ``None``, the Logit model will
+        be simulated.
+
+        The ``shares`` variable should not be included in any of the formulations and ``prices`` should be included in
+        the formulation for :math:`X_1` or :math:`X_2` (or both). Any additional variables that cannot be loaded from
+        `product_data` will be drawn from independent standard uniform distributions. Unlike in :class:`Problem`, fixed
+        effect absorption is not supported during simulation.
+
     beta : `array-like`
-        Vector of demand-side linear parameters, :math:`\beta`. Elements correspond to columns in :math:`X_1` configured
-        by the first formulation in `product_formulations`.
+        Vector of demand-side linear parameters, :math:`\beta`. Elements correspond to columns in :math:`X_1`, which
+        is formulated according to `product_formulations`.
     sigma : `array-like`
         Cholesky decomposition of the covariance matrix that measures agents' random taste distribution, :math:`\Sigma`,
         which is a square matrix with a lower triangle of all zeros. Rows and columns correspond to columns in
-        :math:`X_2` configured by the second formulation in `product_formulations`.
+        :math:`X_2`, which is formulated according to `product_formulations`. If the formulation for :math:`X_2` is
+        ``None``, this should be ``None`` as well.
     gamma : `array-like`
-        Vector of supply-side linear parameters, :math:`\gamma`. Elements correspond to columns in :math:`X_3`
-        configured by the third formulation in `product_formulations`.
+        Vector of supply-side linear parameters, :math:`\gamma`. Elements correspond to columns in :math:`X_3`, which
+        is formulated according to `product_formulations`.
     product_data : `structured array-like`
-        Each row corresponds to a product. Markets can have differing numbers of products.
-
-        Fields with multiple columns can be either matrices or can be broken up into multiple one-dimensional fields
-        with column index suffixes that start at zero. For example, if there are two columns of firm IDs, the `firm_ids`
-        field, which in this case should be a matrix with two columns, can be replaced by two one-dimensional fields:
-        `firm_ids0` and `firm_ids1`.
-
-        The convenience function :func:`build_id_data` can be used to construct the following required ID data from
-        market, product, and firm counts:
+        Each row corresponds to a product. Markets can have differing numbers of products. The convenience function
+        :func:`build_id_data` can be used to construct the following required ID data from market, product, and firm
+        counts:
 
             - **market_ids** : (`object`) - IDs that associate products with markets.
 
@@ -91,19 +95,21 @@ class Simulation(Economy):
         in `product_formulations`.
 
     agent_formulation : `Formulation, optional`
-        :class:`Formulation` configuration for the matrix of observed agent characteristics, :math:`d`, called
-        demographics, which will only be included in the model if this formulation is specified. Any variables that
-        cannot be loaded from `agent_data` will be drawn from independent standard uniform distributions.
+        :class:`Formulation` configuration for the matrix of observed agent characteristics called demographics,
+        :math:`d`, which will only be included in the model if this formulation is specified. Any variables that cannot
+        be loaded from `agent_data` will be drawn from independent standard uniform distributions.
     pi : `array-like, optional`
         Parameters that measure how agent tastes vary with demographics, :math:`\Pi`. Rows correspond to the same
-        product characteristics as in `sigma`. Columns correspond to to columns in :math:`d` configured by
-        `agent_formulation`.
+        product characteristics as in `sigma`. Columns correspond to to columns in :math:`d`, which is formulated
+        according to `agent_formulation`.
     agent_data : `structured array-like, optional`
-        Each row corresponds to an agent. Markets can have differing numbers of agents. The following field is required:
+        Each row corresponds to an agent. Markets can have differing numbers of agents. Since simulated agents are only
+        used if there are nonlinear product characteristics, agent data should only be specified if :math:`X_2` is
+        formulated in `product_formulations`. If agent data are specified, market IDs are required:
 
             - **market_ids** : (`object, optional`) - IDs that associate agents with markets. The set of distinct IDs
-              should be the same as the set in `product_data`. If `integration` is specified, there must be at least as
-              many rows in each market as the number of nodes and weights that are built for each market.
+              should be the same as the set of IDs in `product_data`. If `integration` is specified, there must be at
+              least as many rows in each market as the number of nodes and weights that are built for each market.
 
         If `integration` is not specified, the following fields are required:
 
@@ -116,8 +122,9 @@ class Simulation(Economy):
 
     integration : `Integration, optional`
         :class:`Integration` configuration for how to build nodes and weights for integration over agent utilities,
-        which will replace any `nodes` and `weights` fields in `agent_data`. This is required if `nodes` and `weights`
-        in `agent_data` are not specified.
+        which will replace any `nodes` and `weights` fields in `agent_data`. This configuration is required if `nodes`
+        and `weights` in `agent_data` are not specified. It should not be specified if :math:`X_2` is not formulated
+        in `product_formulations`.
     xi_variance : `float, optional`
         Variance of the unobserved demand-side product characteristics, :math:`\xi`. The default value is ``1.0``.
     omega_variance : `float, optional`
@@ -129,12 +136,13 @@ class Simulation(Economy):
         By default, a linear specification is used. That is, :math:`\tilde{c} = c` instead of
         :math:`\tilde{c} = \log c`.
     seed : `int, optional`
-        Passed to :class:`numpy.random.RandomState` to seed the random number generator before data are simulated.
+        Passed to :class:`numpy.random.RandomState` to seed the random number generator before data are simulated. By
+        default, a seed is not passed to the random number generator.
 
     Attributes
     ----------
     product_formulations : `tuple`
-        Tuple of three :class:`Formulation` configurations for :math:`X_1`, :math:`X_2`, and :math:`X_3`.
+        Tuple of three :class:`Formulation` configurations for :math:`X_1`, :math:`X_2`, and :math:`X_3`, respectively.
     agent_formulation : `tuple`
         :class:`Formulation` configuration for :math:`d`.
     beta : `ndarray`
@@ -150,13 +158,15 @@ class Simulation(Economy):
         shares, which are computed by :meth:`Simulation.solve`.
     agent_data : `recarray`
         Synthetic agent data that were loaded or simulated during initialization.
+    integration : `Integration`
+        :class:`Integration` configuration for how any nodes and weights were built during initialization.
     products : `Products`
-        Structured :attr:`Simulation.product_data`, which is an instance of :class:`primitives.Products`. Matrices of
-        product characteristics were built according to :attr:`Simulation.product_formulations`.
+        Product data structured as :class:`Products`, which consists of data taken from :attr:`Simulation.product_data`
+        along with matrices build according to :attr:`Simulation.product_formulations`.
     agents : `Agents`
-        Structured :attr:`Simulation.agent_data`, which is an instance of :class:`primitives.Agents`. A matrix of
-        demographics was built according to :attr:`Simulation.agent_formulation` if it was specified. Nodes and weights
-        were build according to :attr:`Simulation.integration` if it was specified.
+        Agent data structured as :class:`Agents`, which consists of data taken from :attr:`Simulation.agent_data` or
+        built by :attr:`Simulation.integration` along with any demographics formulated by
+        :attr:`Simulation.agent_formulation`.
     unique_market_ids : `ndarray`
         Unique market IDs in product and agent data.
     xi : `ndarray`
@@ -165,12 +175,9 @@ class Simulation(Economy):
         Unobserved supply-side product characteristics, :math:`\omega`, that were simulated during initialization.
     costs : `ndarray`
         Marginal costs, :math:`c`, that were simulated during initialization.
-    integration : `Integration`
-        :class:`Integration` configuration for how nodes and weights for integration over agent utilities were built
-        during :class:`Simulation` initialization.
     linear_costs : `bool`
         Whether :attr:`Simulation.costs` were simulated according to a linear or a log-linear marginal cost
-        specification during :class:`Simulation` initialization.
+        specification during initialization.
     N : `int`
         Number of products across all markets, :math:`N`.
     T : `int`
@@ -242,12 +249,16 @@ class Simulation(Economy):
         """Load or simulate all data except for Bertrand-Nash prices and shares."""
 
         # validate the formulations
-        if not all(isinstance(f, Formulation) for f in product_formulations) or len(product_formulations) != 3:
-            raise TypeError("product_formulations must be a tuple of three Formulation instances.")
-        if any(f._absorbed_terms for f in product_formulations):
+        if not isinstance(product_formulations, (list, tuple)) or len(product_formulations) != 3:
+            raise TypeError("product_formulations must be a tuple of three formulations.")
+        if not all(isinstance(f, Formulation) or f is None for f in product_formulations):
+            raise TypeError("Each formulation in product_formulations must be a Formulation instance or None.")
+        if product_formulations[0] is None:
+            raise ValueError("The formulation for X1 must be specified.")
+        if any(f._absorbed_terms for f in product_formulations if f is not None):
             raise ValueError("product_formulations do not support fixed effect absorption in simulations.")
         if agent_formulation is not None and not isinstance(agent_formulation, Formulation):
-            raise TypeError("agent_formulation must be a Formulation instance.")
+            raise TypeError("agent_formulation must be a Formulation instance or None.")
         if agent_formulation is not None and agent_formulation._absorbed_terms:
             raise ValueError("agent_formulation does not support fixed effect absorption.")
 
@@ -264,30 +275,43 @@ class Simulation(Economy):
         # load ownership matrices
         ownership = extract_matrix(product_data, 'ownership')
 
-        # set the seed before simulating data
+        # seed the random number generator
         state = np.random.RandomState(seed)
 
-        # load or simulate exogenous product variables (in sorted order so that seeds give rise to the same draws)
+        # load or simulate exogenous product variables in sorted order so that a seed always furnishes the same draws
         numerical_mapping = {}
         categorical_mapping = {}
         for formulation in product_formulations:
-            for name in sorted(formulation._names - set(numerical_mapping) - set(categorical_mapping) - {'prices'}):
-                variable = extract_matrix(product_data, name)
-                if variable is None:
-                    variable = state.uniform(size=market_ids.size).astype(options.dtype)
-                elif variable.shape[1] > 1:
-                    raise ValueError(f"The {name} variable has a field in product_data with more than one column.")
-                if np.issubdtype(variable.dtype, getattr(np, 'number')):
-                    numerical_mapping[name] = variable
-                else:
-                    categorical_mapping[name] = variable
+            if formulation is not None:
+                for name in sorted(formulation._names - set(numerical_mapping) - set(categorical_mapping) - {'prices'}):
+                    variable = extract_matrix(product_data, name)
+                    if variable is None:
+                        variable = state.uniform(size=market_ids.size).astype(options.dtype)
+                    elif variable.shape[1] > 1:
+                        raise ValueError(f"The {name} variable has a field in product_data with more than one column.")
+                    if np.issubdtype(variable.dtype, getattr(np, 'number')):
+                        numerical_mapping[name] = variable
+                    else:
+                        categorical_mapping[name] = variable
 
-        # construct instruments
-        instrument_data = {'market_ids': market_ids, 'firm_ids': firm_ids, **numerical_mapping}
-        demand_names = set(numerical_mapping) & (product_formulations[0]._names | product_formulations[1]._names)
+        # identify demand-side numerical variables
+        demand_names = set(numerical_mapping) & product_formulations[0]._names
+        if product_formulations[1] is not None:
+            demand_names |= set(numerical_mapping) & product_formulations[1]._names
+
+        # identify supply-side numerical variables
         supply_names = set(numerical_mapping) & product_formulations[2]._names
+
+        # identify numerical variables that are only on either the demand or supply side
         only_demand_names = demand_names - supply_names
         only_supply_names = supply_names - demand_names
+
+        # construct instruments
+        instrument_data = {
+            'market_ids': market_ids,
+            'firm_ids': firm_ids,
+            **numerical_mapping
+        }
         demand_instruments = np.c_[
             build_matrix(Formulation(' + '.join(sorted(only_supply_names))), numerical_mapping),
             build_blp_instruments(Formulation(' + '.join(['0'] + sorted(demand_names))), instrument_data)
@@ -315,47 +339,57 @@ class Simulation(Economy):
         if invalid_names:
             raise NameError(f"These names in product_formulations are invalid: {list(invalid_names)}.")
         product_data_mapping.update({k: (v, options.dtype) for k, v in variable_mapping.items()})
+        self.product_data = Matrices(product_data_mapping)
 
         # structure product data
-        self.product_data = Matrices(product_data_mapping)
         products = Products(product_formulations, self.product_data)
 
-        # determine the number of agents by loading market IDs or by building them along with nodes and weights
-        if integration is not None:
-            if not isinstance(integration, Integration):
-                raise ValueError("integration must be an Integration instance.")
-            agent_market_ids, nodes, weights = integration._build_many(products.X2.shape[1], np.unique(market_ids))
-        elif agent_data is not None:
-            agent_market_ids = extract_matrix(agent_data, 'market_ids')
-            nodes = weights = None
+        # if there are only linear characteristics, agents should not be specified
+        K2 = products.X2.shape[1]
+        if K2 == 0:
+            if agent_formulation is not None or agent_data is not None or integration is not None:
+                raise ValueError(
+                    "Since X2 is not formulated, none of agent_formulation, agent_data, and integration should be "
+                    "specified."
+                )
+            self.integration = self.agent_data = None
         else:
-            raise ValueError("Either agent_data or integration (or both) must be specified.")
+            # determine the number of agents by loading market IDs or by building them along with nodes and weights
+            if integration is not None:
+                if not isinstance(integration, Integration):
+                    raise ValueError("integration must be an Integration instance or None.")
+                agent_market_ids, nodes, weights = integration._build_many(K2, np.unique(market_ids))
+            elif agent_data is not None:
+                agent_market_ids = extract_matrix(agent_data, 'market_ids')
+                nodes = weights = None
+            else:
+                raise ValueError("At least one of agent_data and integration must be specified.")
 
-        # load or simulate agent variables (in sorted order so that seeds give rise to the same draws)
-        agent_variable_mapping = {}
-        if agent_formulation is not None:
-            for name in sorted(agent_formulation._names - set(agent_variable_mapping)):
-                variable = extract_matrix(agent_data, name) if agent_data is not None else None
-                if variable is None:
-                    variable = state.uniform(size=agent_market_ids.size).astype(options.dtype)
-                agent_variable_mapping[name] = variable
+            # load or simulate agent variables (in sorted order so that seeds give rise to the same draws)
+            agent_variable_mapping = {}
+            if agent_formulation is not None:
+                for name in sorted(agent_formulation._names - set(agent_variable_mapping)):
+                    variable = extract_matrix(agent_data, name) if agent_data is not None else None
+                    if variable is None:
+                        variable = state.uniform(size=agent_market_ids.size).astype(options.dtype)
+                    agent_variable_mapping[name] = variable
 
-        # structure agent data fields as a mapping
-        agent_data_mapping = {'market_ids': (agent_market_ids, np.object)}
-        if nodes is not None:
-            agent_data_mapping['nodes'] = (nodes, options.dtype)
-        if weights is not None:
-            agent_data_mapping['weights'] = (weights, options.dtype)
+            # structure agent data fields as a mapping
+            agent_data_mapping = {'market_ids': (agent_market_ids, np.object)}
+            if nodes is not None:
+                agent_data_mapping['nodes'] = (nodes, options.dtype)
+            if weights is not None:
+                agent_data_mapping['weights'] = (weights, options.dtype)
 
-        # supplement the mapping with agent variables
-        invalid_names = set(agent_variable_mapping) & set(agent_data_mapping)
-        if invalid_names:
-            raise NameError(f"These names in agent_formulation are invalid: {list(invalid_names)}.")
-        agent_data_mapping.update({k: (v, options.dtype) for k, v in agent_variable_mapping.items()})
+            # supplement the mapping with agent variables
+            invalid_names = set(agent_variable_mapping) & set(agent_data_mapping)
+            if invalid_names:
+                raise NameError(f"These names in agent_formulation are invalid: {list(invalid_names)}.")
+            agent_data_mapping.update({k: (v, options.dtype) for k, v in agent_variable_mapping.items()})
+            self.integration = integration
+            self.agent_data = Matrices(agent_data_mapping)
 
         # structure agent data
-        self.integration = integration
-        self.agent_data = Matrices(agent_data_mapping)
         agents = Agents(products, agent_formulation, self.agent_data, integration)
 
         # initialize the underlying economy
@@ -367,7 +401,7 @@ class Simulation(Economy):
         self.beta = self._linear_parameters.beta
         self.gamma = self._linear_parameters.gamma
         self.sigma = self._nonlinear_parameters.sigma
-        self.pi = self._nonlinear_parameters.pi if self.D > 0 else None
+        self.pi = self._nonlinear_parameters.pi
 
         # simulate xi and omega
         covariance = correlation * np.sqrt(xi_variance * omega_variance)
@@ -387,17 +421,15 @@ class Simulation(Economy):
 
     def __str__(self):
         """Supplement general formatted information with other information about parameters."""
-        sections = [
-            [super().__str__()],
-            ["Linear Parameters:", self._linear_parameters.format()],
-            ["Nonlinear Parameters:", self._nonlinear_parameters.format()]
-        ]
+        sections = [[super().__str__()], ["Linear Parameters:", self._linear_parameters.format()]]
+        if self.K2 > 0:
+            sections.append(["Nonlinear Parameters:", self._nonlinear_parameters.format()])
         return "\n\n".join("\n".join(s) for s in sections)
 
     def solve(self, firms_index=0, prices=None, iteration=None, error_behavior='raise', processes=1):
         r"""Compute Bertrand-Nash prices and shares.
 
-        Prices and shares are computed by iterating in each market over the :math:`\zeta`-markup equation from
+        Prices and shares are computed by iterating market-by-market over the :math:`\zeta`-markup equation from
         :ref:`Morrow and Skerlos (2011) <ms11>`,
 
         .. math:: p \leftarrow c + \zeta(p).
@@ -405,9 +437,9 @@ class Simulation(Economy):
         Parameters
         ----------
         firms_index : `int, optional`
-            Index of the column in the `firm_ids` field of `basic_product_data` in :class:`Simulation` initialization
-            that defines which firms produce which products. If an `ownership` field was specified, the corresponding
-            stack of ownership matrices will be used. By default, unchanged firm IDs are used.
+            Column index of the firm IDs in the `firm_ids` field of `product_data` in :class:`Simulation` that defines
+            which firms produce which products. If an `ownership` field was specified, the corresponding stack of
+            ownership matrices will be used. By default, unchanged firm IDs are used.
         prices : `array-like, optional`
             Prices at which the fixed point iteration routine will start. By default, marginal costs, :math:`c`, are
             used as starting values.
@@ -419,7 +451,7 @@ class Simulation(Economy):
             if the effects of nonlinear parameters on price overwhelm the linear parameter on price, which should be
             sufficiently negative. The following behaviors are supported:
 
-                - ``'raise'`` (default) - Raises an exception.
+                - ``'raise'`` (default) - Raise an exception.
 
                 - ``'warn'`` - Uses the last computed prices and shares. If the fixed point routine fails to converge,
                   these are the last prices and shares computed by the routine. If there are other issues, these are the
@@ -435,7 +467,7 @@ class Simulation(Economy):
         -------
         `recarray`
             Simulated :attr:`Simulation.product_data` that are updated with Bertrand-Nash prices and shares, which can
-            be passed to the `product_data` argument of :class:`Problem` initialization.
+            be passed to `product_data` in :class:`Problem`.
 
         """
 
@@ -464,7 +496,7 @@ class Simulation(Economy):
         # compute a baseline delta that will be updated when shares and prices are changed
         delta = self.products.X1 @ self.beta + self.xi
 
-        # define a function builds a market along with market-specific arguments used to compute prices and shares
+        # define a function that builds a market along with arguments used to compute prices and shares
         def market_factory(s):
             market_s = SimulationMarket(self, s, self.sigma, self.pi, self.beta, delta)
             prices_s = prices[self.products.market_ids.flat == s]
@@ -485,14 +517,11 @@ class Simulation(Economy):
 
         # handle any errors
         if errors:
-            exception = exceptions.MultipleErrors(errors)
             if error_behavior == 'raise':
-                raise exception
-            if error_behavior == 'warn':
-                output("")
-                output(exception)
-                output("Using the last computed prices and shares.")
-                output("")
+                raise exceptions.MultipleErrors(errors)
+            output("")
+            output(exceptions.MultipleErrors(errors))
+            output("")
 
         # output a message about computation
         end_time = time.time()

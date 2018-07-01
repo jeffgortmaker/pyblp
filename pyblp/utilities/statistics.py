@@ -53,6 +53,17 @@ def compute_gmm_se(u, Z, W, jacobian, se_type, clustering_ids):
     return se, errors
 
 
+def compute_2sls_weights(Z):
+    """Use instruments to compute a 2SLS weighting matrix."""
+    errors = set()
+
+    # attempt to compute the weighting matrix
+    W, approximation = invert(Z.T @ Z)
+    if approximation:
+        errors.add(lambda: exceptions.GMMMomentCovariancesInversionError(approximation))
+    return W, errors
+
+
 def compute_gmm_weights(u, Z, center_moments, se_type, clustering_ids):
     """Use an error term and instruments to compute a GMM weighting matrix. Return a set of any errors."""
     errors = set()

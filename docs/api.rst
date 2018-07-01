@@ -115,15 +115,15 @@ In addition to class attributes, other post-estimation outputs can be computed w
 Structured Data Classes
 -----------------------
 
-Product and agent data that are passed or constructed by :class:`Problem` and :class:`Simulation` are stuctured internally into classes with field names that more closely resemble BLP notation. Although these structured data classes are not directly constructable, they can be accessed with :class:`Problem` and :class:`Simulation` class attributes. It can be helpful to compare these structured data classes with the data or configurations used to create them.
+Product and agent data that are passed or constructed by :class:`Problem` and :class:`Simulation` are structured internally into classes with field names that more closely resemble BLP notation. Although these structured data classes are not directly constructable, they can be accessed with :class:`Problem` and :class:`Simulation` class attributes. It can be helpful to compare these structured data classes with the data or configurations used to create them.
 
 .. autosummary::
    :nosignatures:
    :toctree: api
    :template: class_without_methods.rst
 
-   primitives.Products
-   primitives.Agents
+   Products
+   Agents
 
 
 Options and Example Data

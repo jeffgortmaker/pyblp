@@ -7,8 +7,8 @@ import numpy as np
 import scipy.linalg
 
 from . import options, exceptions
-from .utilities import output, ParallelItems, IV
 from .configurations import Iteration, Optimization
+from .utilities import output, compute_2sls_weights, ParallelItems, IV
 from .primitives import Products, Agents, Economy, Market, NonlinearParameters
 
 
@@ -25,13 +25,18 @@ class Problem(Economy):
 
     Parameters
     ----------
-    product_formulations : `tuple`
-        Tuple of either two or three :class:`Formulation` configurations for the matrix of linear product
-        characteristics, :math:`X_1`, for the matrix of nonlinear product characteristics, :math:`X_2`, and, optionally,
-        for the matrix of cost characteristics, :math:`X_3`, respectively. Variable names should correspond to fields in
-        `product_data`. The ``shares`` variable should be included in none of the formulations and ``prices`` should
-        be included in the formulation for :math:`X_1` or :math:`X_2` (or both). The `absorb` argument of
-        :class:`Formulation` can be used to absorb fixed effects into :math:`X_1` and :math:`X_3`, but not :math:`X_2`.
+    product_formulations : `Formulation or tuple of Formulation`
+        :class:`Formulation` configuration or tuple of up to three :class:`Formulation` configurations for the matrix
+        of linear product characteristics, :math:`X_1`, for the matrix of nonlinear product characteristics,
+        :math:`X_2`, and for the matrix of cost characteristics, :math:`X_3`, respectively. If the formulation for
+        :math:`X_3` is not specified or is ``None``, a supply side will not be estimated. Similarly, if the formulation
+        for :math:`X_2` is not specified or is ``None``, the Logit model will be estimated.
+
+        Variable names should correspond to fields in `product_data`. The ``shares`` variable should not be included in
+        any of the formulations and ``prices`` should be included in the formulation for :math:`X_1` or :math:`X_2` (or
+        both). The `absorb` argument of :class:`Formulation` can be used to absorb fixed effects into :math:`X_1` and
+        :math:`X_3`, but not :math:`X_2`.
+
     product_data : `structured array-like`
         Each row corresponds to a product. Markets can have differing numbers of products. The following fields are
         required:
@@ -44,8 +49,8 @@ class Problem(Economy):
 
             - **demand_instruments** : (`numeric`) - Demand-side instruments, :math:`Z_D`.
 
-        If a `agent_formulation` is specified, the following fields are required as well, since they will be used to
-        estimate the supply side of the problem:
+        If a formulation for :math:`X_3` is specified in `product_formulations`, the following fields are also required,
+        since they will be used to estimate the supply side of the problem:
 
             - **firm_ids** : (`object, optional`) - IDs that associate products with firms. Any columns after the first
               can be used to compute post-estimation outputs for firm changes, such as mergers.
@@ -61,8 +66,8 @@ class Problem(Economy):
               with a `firm_ids` column and must have as many columns as there are products in the market with the most
               products.
 
-        Finally, standard errors and weighting matrices can be computed to account for arbitrary within-group
-        correlation by specifying clustering groups.
+        Finally, clustering groups can be specified to account for arbitrary within-group correlation while computing
+        standard errors and weighting matrices:
 
             - **clustering_ids** (`object, optional`) - Cluster group IDs, which will be used when estimating standard
               errors and updating weighting matrices if `se_type` in :meth:`Problem.solve` is ``'clustered'``.
@@ -71,14 +76,17 @@ class Problem(Economy):
         in `product_formulations`.
 
     agent_formulation : `Formulation, optional`
-        :class:`Formulation` configuration for the matrix of observed agent characteristics, :math:`d`, called
-        demographics, which will only be included in the model if this formulation is specified. Variable names should
-        correspond to fields in `agent_data`.
+        :class:`Formulation` configuration for the matrix of observed agent characteristics called demographics,
+        :math:`d`, which will only be included in the model if this formulation is specified. Since demographics are
+        only used if there are nonlinear product characteristics, this formulation should only be specified if
+        :math:`X_2` is formulated in `product_formulations`. Variable names should correspond to fields in `agent_data`.
     agent_data : `structured array-like, optional`
-        Each row corresponds to an agent. Markets can have differing numbers of agents. The following field is required:
+        Each row corresponds to an agent. Markets can have differing numbers of agents. Since simulated agents are only
+        used if there are nonlinear product characteristics, agent data should only be specified if :math:`X_2` is
+        formulated in `product_formulations`. If agent data are specified, market IDs are required:
 
-            - **market_ids** : (`object, optional`) - IDs that associate agents with markets. The set of distinct IDs
-              should be the same as the set in `product_data`. If `integration` is specified, there must be at least as
+            - **market_ids** : (`object`) - IDs that associate agents with markets. The set of distinct IDs should be
+              the same as the set of IDs in `product_data`. If `integration` is specified, there must be at least as
               many rows in each market as the number of nodes and weights that are built for each market.
 
         If `integration` is not specified, the following fields are required:
@@ -92,23 +100,23 @@ class Problem(Economy):
 
     integration : `Integration, optional`
         :class:`Integration` configuration for how to build nodes and weights for integration over agent utilities,
-        which will replace any `nodes` and `weights` fields in `agent_data`. This is required if `nodes` and `weights`
-        in `agent_data` are not specified.
+        which will replace any `nodes` and `weights` fields in `agent_data`. This configuration is required if `nodes`
+        and `weights` in `agent_data` are not specified. It should not be specified if :math:`X_2` is not formulated
+        in `product_formulations`.
 
     Attributes
     ----------
-    product_formulations : `tuple`
-        Tuple of three :class:`Formulation` configurations for :math:`X_1`, :math:`X_2`, and :math:`X_3`.
-    agent_formulation : `tuple`
+    product_formulations : `Formulation or tuple of Formulation`
+        :class:`Formulation` configurations or tuple of up to three :class:`Formulation` configurations for :math:`X_1`,
+        :math:`X_2`, and :math:`X_3`, respectively.
+    agent_formulation : `Formulation`
         :class:`Formulation` configuration for :math:`d`.
     products : `Products`
-        Structured `product_data` from :class:`Problem` initialization, which is an instance of
-        :class:`primitives.Products`. Matrices of product characteristics were built according to
-        `product_formulations`.
+        Product data structured as :class:`Products`, which consists of data taken from `product_data` along with
+        matrices build according to :attr:`Problem.product_formulations`.
     agents : `Agents`
-        Structured `agent_data` from :class:`Problem` initialization, which is an instance of
-        :class:`primitives.Agents`. A matrix of demographics was built according to `agent_formulation` if it was
-        specified. Nodes and weights were build according to `integration` if it was specified.
+        Agent data structured as :class:`Agents`, which consists of data taken from `agent_data` or built by
+        `integration` along with any demographics formulated by `agent_formulation`.
     unique_market_ids : `ndarray`
         Unique market IDs in product and agent data.
     N : `int`
@@ -167,24 +175,35 @@ class Problem(Economy):
     """
 
     def __init__(self, product_formulations, product_data, agent_formulation=None, agent_data=None, integration=None):
-        """Structure product and agent data."""
+        """Initialize the underlying economy with structured product and agent data."""
         products = Products(product_formulations, product_data)
         agents = Agents(products, agent_formulation, agent_data, integration)
         super().__init__(product_formulations, agent_formulation, products, agents)
 
-    def solve(self, sigma, pi=None, sigma_bounds=None, pi_bounds=None, delta=None, WD=None, WS=None, steps=2,
+    def solve(self, sigma=None, pi=None, sigma_bounds=None, pi_bounds=None, delta=None, WD=None, WS=None, steps=2,
               optimization=None, error_behavior='revert', error_punishment=1, delta_behavior='last', iteration=None,
               linear_fp=True, linear_costs=True, costs_bounds=None,  center_moments=True, se_type='robust', processes=1):
         r"""Solve the problem.
 
+        The problem is solved in one or more GMM steps. During each step, any unfixed nonlinear parameters in
+        :math:`\hat{theta}` are optimized to minimize the GMM objective value. If all nonlinear parameters are fixed or
+        if there are no nonlinear parameters (as in the Logit model), the objective is evaluated once during the step.
+
+        If there are nonlinear parameters, the mean utility, :math:`\delta(\hat{\theta})` is computed market-by-market
+        with fixed point iteration. Otherwise, it is computed analytically according to the solution of the Logit model.
+        If a supply side is to be estimated, marginal costs, :math:`c(\hat{\theta})`, are also computed
+        market-by-market. Linear parameters are then estimated, which are used to recover structural error terms, which
+        in turn are used to form the objective value. By default, the objective gradient is computed as well.
+
         Parameters
         ----------
-        sigma : `array-like`
+        sigma : `array-like, optional`
             Configuration for which elements in the Cholesky decomposition of the covariance matrix that measures
             agents' random taste distribution, :math:`\Sigma`, are fixed at zero and starting values for the other
             elements, which, if not fixed by `sigma_bounds`, are in the vector of unknown elements, :math:`\theta`. Rows
-            and columns correspond to columns in :math:`X_2`, which is configured according to the second of
-            `product_formulations` in :class:`Problem` initialization.
+            and columns correspond to columns in :math:`X_2`, which is formulated according `product_formulations` in
+            :class:`Problem`. If :math:`X_2` was not formulated, this should not be specified, since the Logit model
+            will be estimated.
 
             Values below the diagonal are ignored. Zeros are assumed to be zero throughout estimation and nonzeros are,
             if not fixed by `sigma_bounds`, starting values for unknown elements in :math:`\theta`.
@@ -193,8 +212,8 @@ class Problem(Economy):
             Configuration for which elements in the matrix of parameters that measures how agent tastes vary with
             demographics, :math:`\Pi`, are fixed at zero and starting values for the other elements, which, if not fixed
             by `pi_bounds`, are in the vector of unknown elements, :math:`\theta`. Rows correspond to the same product
-            characteristics as in `sigma`. Columns correspond to the columns in :math:`d`, which is configured according
-            to `agent_formulation` in :class:`Problem` initialization.
+            characteristics as in `sigma`. Columns correspond to columns in :math:`d`, which is formulated according to
+            `agent_formulation` in :class:`Problem`. If :math:`d` was not formulated, this should not be specified.
 
             Zeros are assumed to be zero throughout estimation and nonzeros are, if not fixed by `pi_bounds`, starting
             values for unknown elements in :math:`\theta`.
@@ -221,46 +240,49 @@ class Problem(Economy):
             in ``lb`` and to ``numpy.inf`` in ``ub``.
 
         delta : `array-like, optional`
-            Values for the mean utility, :math:`\delta`, at which the optimization routine will start. By default,
-            :math:`\delta_{jt} = \log s_{jt} - \log s_{0t}` is used.
+            Initial values for the mean utility, :math:`\delta`. If there are any nonlinear parameters, these are the
+            values at which the fixed point iteration routine will start during the first objective evaluation. By
+            default, :math:`\delta_{jt} = \log s_{jt} - \log s_{0t}` is used, which is the estimated :math:`\delta`
+            under the Logit model when there are no nonlinear parameters.
         WD : `array-like, optional`
             Starting values for the demand-side weighting matrix, :math:`W_D`. By default, the 2SLS weighting matrix,
             :math:`W_D = (Z_D'Z_D)^{-1}`, is used.
         WS : `array-like, optional`
-            Starting values for the supply-side weighting matrix, :math:`W_S`, which is only used if the problem was
-            initialized with supply-side data. By default, the 2SLS weighting matrix, :math:`W_S = (Z_S'Z_S)^{-1}`, is
-            used.
+            Starting values for the supply-side weighting matrix, :math:`W_S`, which is only used if :math:`X_3` was
+            formulated by `product_formulations` in :class:`Problem`. By default, the 2SLS weighting matrix,
+            :math:`W_S = (Z_S'Z_S)^{-1}`, is used.
         steps : `int, optional`
             Number of GMM steps. By default, two-step GMM is used.
         optimization : `Optimization, optional`
-            :class:`Optimization` configuration for how to solve the optimization problem in each GMM step. By default,
+            :class:`Optimization` configuration for how to solve the optimization problem in each GMM step, which is
+            only used if there are unfixed nonlinear parameters over which to optimize. By default,
             ``Optimization('l-bfgs-b')`` is used. Routines that do not support bounds will ignore `sigma_bounds` and
             `pi_bounds`. Choosing a routine that does not use analytic gradients will slow down estimation.
         error_behavior : `str, optional`
-            How to handle errors when computing the objective. For example, it is common to encounter overflow when
-            computing :math:`\delta(\hat{\theta})` at a large :math:`\hat{\theta}`. The following behaviors are
-            supported:
-
-                - ``'raise'`` - Raise an exception.
+            How to handle any errors. For example, it is common to encounter overflow when computing
+            :math:`\delta(\hat{\theta})` at a large :math:`\hat{\theta}`. The following behaviors are supported:
 
                 - ``'revert'`` (default) - Revert problematic :math:`\delta(\hat{\theta})` elements to their last
-                  computed values and use reverted values to compute :math:`\partial\xi / \partial\theta`. and, if
-                  the problem was configured with supply-side data, to compute :math:`\tilde{c}(\hat{\theta})` and
+                  computed values and use reverted values to compute :math:`\partial\xi / \partial\theta`, and, if the
+                  supply side is considered, to compute both :math:`\tilde{c}(\hat{\theta})` and
                   :math:`\partial\omega / \partial\theta` as well. If there are problematic elements in
                   :math:`\partial\xi / \partial\theta`, :math:`\tilde{c}(\hat{\theta})`, or
                   :math:`\partial\omega / \partial\theta`, revert these to their last computed values as well. If there
-                  are problematic elements in the first iteration, revert values in :math:`\delta(\hat{\theta})` to
-                  their starting values; in :math:`\tilde{c}(\hat{\theta})`, to prices; and in Jacobians, to zeros.
+                  are problematic elements in the first objective evaluation, revert values in
+                  :math:`\delta(\hat{\theta})` to their starting values; in :math:`\tilde{c}(\hat{\theta})`, to prices;
+                  and in Jacobians, to zeros.
 
                 - ``'punish'`` - Set the objective to ``1`` and its gradient to all zeros. This option along with a
                   large `error_punishment` can be helpful for routines that do not use analytic gradients.
 
+                - ``'raise'`` - Raise an exception.
+
         error_punishment : `float, optional`
-            How much to scale the GMM objective value when computing it gives rise to an error. By default, the value
-            is not scaled.
+            How to scale the GMM objective value after an error. By default, the objective value is not scaled.
         delta_behavior : `str, optional`
             Configuration for the values at which the fixed point computation of :math:`\delta(\hat{\theta})` in each
-            market will start. The following behaviors are supported:
+            market will start. This configuration is only relevant if there are unfixed nonlinear parameters over which
+            to optimize. The following behaviors are supported:
 
                 - ``'last'`` (default) - Start at the values of :math:`\delta(\hat{\theta})` computed during the last
                   objective evaluation, or, if this is the first evaluation, at the values configured by `delta`. This
@@ -273,36 +295,41 @@ class Problem(Economy):
 
         iteration : `Iteration, optional`
             :class:`Iteration` configuration for how to solve the fixed point problem used to compute
-            :math:`\delta(\hat{\theta})` in each market. By default, ``Iteration('squarem', {'tol': 1e-14})`` is used.
+            :math:`\delta(\hat{\theta})` in each market. This configuration is only relevant if there are nonlinear
+            parameters, since :math:`\delta` can be estimated analytically in the Logit model. By default,
+            ``Iteration('squarem', {'tol': 1e-14})`` is used.
         linear_fp : `bool, optional`
             Whether to compute :math:`\delta(\hat{\theta})` with the standard linear contraction mapping,
 
             .. math:: \delta \leftarrow \delta + \log s - \log s(\delta, \hat{\theta}),
 
-            or with its nonlinear formulation,
+            or with its nonlinear counterpart,
 
             .. math:: \exp(\delta) \leftarrow \exp(\delta)s / s(\delta, \hat{\theta}).
 
-            The default linear contraction is more popular; however, its nonlinear formulation can be faster because
-            fewer logarithms need to be calculated, which can also help mitigate problems stemming from negative
-            integration weights.
+            The default linear contraction is more popular; however, its nonlinear counterpart can be faster because
+            fewer logarithms need to be calculated, which can also help mitigate problems stemming from any negative
+            integration weights. This option is only relevant if there are nonlinear parameters, since :math:`\delta`
+            can be estimated analytically in the Logit model.
 
         linear_costs : `bool, optional`
             Whether to compute :math:`\tilde{c}(\hat{\theta})` according to a linear or a log-linear marginal cost
-            specification. This is only relevant if the problem was initialized with supply-side data. By default, a
-            linear specification is assumed. That is, :math:`\tilde{c} = c` instead of :math:`\tilde{c} = \log c`.
+            specification. This is only relevant if :math:`X_3` was formulated by `product_formulations` in
+            :class:`Problem`. By default, a linear specification is assumed. That is, :math:`\tilde{c} = c` instead of
+            :math:`\tilde{c} = \log c` by default.
         costs_bounds : `tuple, optional`
             Configuration for :math:`c` bounds of the form ``(lb, ub)``, in which both ``lb`` and ``ub`` are floats.
-            This is only relevant if the problem was initialized with supply-side data. By default, marginal costs are
-            unbounded. When `linear_costs` is ``False``, nonpositive :math:`c(\hat{\theta})` values can pose problems
-            when computing :math:`\tilde{c}(\hat{\theta}) = \log c(\hat{\theta})`. One solution is to let ``lb`` equal
-            some small number; however, doing so introduces error into gradient computation. Both ``None`` and
-            ``numpy.nan`` are converted to ``-numpy.inf`` in ``lb`` and to ``numpy.inf`` in ``ub``.
+            This is only relevant if :math:`X_3` was formulated by `product_formulations` in :class:`Problem`. By
+            default, marginal costs are unbounded. When `linear_costs` is ``False``, nonpositive :math:`c(\hat{\theta})`
+            values can create problems when computing :math:`\tilde{c}(\hat{\theta}) = \log c(\hat{\theta})`. One
+            solution is to let ``lb`` equal some small number; however, doing so introduces error into gradient
+            computation. Both ``None`` and ``numpy.nan`` are converted to ``-numpy.inf`` in ``lb`` and to ``numpy.inf``
+            in ``ub``.
         center_moments : `bool, optional`
             Whether to center the sample moments before using them to update weighting matrices. By default, sample
             moments are centered.
         se_type : `str, optional`
-            How to compute standard errors. The following types are supported:
+            How to compute standard errors. The following types of standard errors are supported:
 
                 - ``'robust'`` (default) - Robust standard errors.
 
@@ -317,10 +344,10 @@ class Problem(Economy):
         processes : `int, optional`
             Number of Python processes that will be used during estimation. By default, multiprocessing will not be
             used. For values greater than one, a pool of that many Python processes will be created during each
-            GMM objective evaluation. Market-by-market computation of :math:`\delta(\hat{\theta})` and, if the problem
-            was initialized with supply-side data, of :math:`\tilde{c}(\hat{\theta})`, along with associated Jacobians,
-            will be distributed among these processes. Using multiprocessing will only improve estimation speed if gains
-            from parallelization outweigh overhead from creating process pools.
+            GMM objective evaluation. Market-by-market computation of :math:`\delta(\hat{\theta})` and, if :math:`X_3`
+            was formulated by `product_formulations` in :class:`Problem`, of :math:`\tilde{c}(\hat{\theta})`, along with
+            associated Jacobians, will be distributed among these processes. Using multiprocessing will only improve
+            estimation speed if gains from parallelization outweigh overhead from creating process pools.
 
         Returns
         -------
@@ -340,8 +367,8 @@ class Problem(Economy):
             raise TypeError("iteration must be None or an Iteration instance.")
 
         # validate behaviors and the standard error type
-        if error_behavior not in {'raise', 'revert', 'punish'}:
-            raise ValueError("error_behavior must be 'raise', 'revert', or 'punish'.")
+        if error_behavior not in {'revert', 'punish', 'raise'}:
+            raise ValueError("error_behavior must be 'revert', 'punish', or 'raise'.")
         if delta_behavior not in {'last', 'first'}:
             raise ValueError("delta_behavior must be 'last' or 'first'.")
         if se_type not in {'robust', 'unadjusted', 'clustered'}:
@@ -365,43 +392,44 @@ class Problem(Economy):
         nonlinear_parameters = NonlinearParameters(
             self, sigma, pi, sigma_bounds, pi_bounds, optimization._supports_bounds
         )
-        if nonlinear_parameters.P == 0:
-            raise ValueError("There must be at least one unfixed nonlinear parameter.")
         theta = nonlinear_parameters.compress()
-        output("")
-        output("Initial Nonlinear Parameters:")
-        output(nonlinear_parameters.format())
-        output("")
-        output("Lower Bounds on Nonlinear Parameters:")
-        output(nonlinear_parameters.format_lower_bounds())
-        output("")
-        output("Upper Bounds on Nonlinear Parameters:")
-        output(nonlinear_parameters.format_upper_bounds())
+        if self.K2 > 0:
+            output("")
+            output("Initial Nonlinear Parameters:")
+            output(nonlinear_parameters.format())
+            output("")
+            output("Lower Bounds on Nonlinear Parameters:")
+            output(nonlinear_parameters.format_lower_bounds())
+            output("")
+            output("Upper Bounds on Nonlinear Parameters:")
+            output(nonlinear_parameters.format_upper_bounds())
 
-        # construct or validate the demand-side weighting matrix
+        # compute or load the demand-side weighting matrix
         if WD is None:
-            WD = scipy.linalg.inv(self.products.ZD.T @ self.products.ZD)
+            WD, WD_errors = compute_2sls_weights(self.products.ZD)
+            self._handle_errors(error_behavior, WD_errors)
         else:
             WD = np.asarray(WD, options.dtype)
             if WD.shape != (self.MD, self.MD):
                 raise ValueError(f"WD must have {self.MD} rows and columns.")
 
-        # construct or validate the supply-side weighting matrix
+        # compute or load the supply-side weighting matrix
         if self.MS == 0:
             WS = np.full((0, 0), np.nan, options.dtype)
         elif WS is None:
-            WS = scipy.linalg.inv(self.products.ZS.T @ self.products.ZS)
+            WS, WS_errors = compute_2sls_weights(self.products.ZS)
+            self._handle_errors(error_behavior, WS_errors)
         else:
             WS = np.asarray(WS, options.dtype)
             if WS.shape != (self.MS, self.MS):
                 raise ValueError(f"WS must have {self.MS} rows and columns.")
 
-        # construct or validate delta
+        # compute or load initial delta values
         if delta is None:
             true_delta = np.log(self.products.shares)
             for t in self.unique_market_ids:
                 shares_t = self.products.shares[self.products.market_ids.flat == t]
-                true_delta[self.products.market_ids.flat == t] -= np.log(shares_t.sum())
+                true_delta[self.products.market_ids.flat == t] -= np.log(1 - shares_t.sum())
         else:
             true_delta = np.c_[np.asarray(delta, options.dtype)]
             if true_delta.shape != (self.N, 1):
@@ -413,10 +441,10 @@ class Problem(Economy):
             true_tilde_costs = self.products.prices if linear_costs else np.log(self.products.prices)
 
         # initialize Jacobians of xi and omega with respect to theta as all zeros
-        true_xi_jacobian = np.zeros((self.N, theta.size), options.dtype)
+        true_xi_jacobian = np.zeros((self.N, nonlinear_parameters.P), options.dtype)
         true_omega_jacobian = np.full_like(true_xi_jacobian, 0 if self.K3 > 0 else np.nan, options.dtype)
 
-        # iterate through each step
+        # iterate over each GMM step
         last_results = None
         for step in range(1, steps + 1):
             # initialize IV models for demand- and supply-side linear parameter estimation
@@ -454,31 +482,38 @@ class Problem(Economy):
             )
 
             # optimize theta
-            output("")
-            output(f"Starting optimization for step {step} out of {steps} ...")
-            output("")
-            start_time = time.time()
-            bounds = [(p.lb, p.ub) for p in nonlinear_parameters.unfixed]
-            theta, converged, iterations, evaluations = optimization._optimize(theta, bounds, wrapper)
-            status = "completed" if converged else "failed"
-            end_time = time.time()
-            if not converged:
-                self._handle_errors(error_behavior, {exceptions.ThetaConvergenceError})
-            output("")
-            output(f"Optimization {status} after {output.format_seconds(end_time - start_time)}.")
+            iterations = evaluations = 0
+            start_time = end_time = time.time()
+            if nonlinear_parameters.P > 0:
+                output("")
+                output(f"Starting optimization for step {step} out of {steps} ...")
+                output("")
+                bounds = [(p.lb, p.ub) for p in nonlinear_parameters.unfixed]
+                theta, converged, iterations, evaluations = optimization._optimize(theta, bounds, wrapper)
+                status = "completed" if converged else "failed"
+                end_time = time.time()
+                if not converged:
+                    self._handle_errors(error_behavior, {exceptions.ThetaConvergenceError})
+                output("")
+                output(f"Optimization {status} after {output.format_seconds(end_time - start_time)}.")
 
             # use objective information computed at the optimal theta to compute results for the step
+            output("")
             output(f"Computing results for step {step} ...")
-            step_info = compute_step_info(theta, wrapper.cache, compute_gradient=True)
+            step_info = compute_step_info(theta, wrapper.cache, compute_gradient=nonlinear_parameters.P > 0)
             results = step_info.to_results(
-                last_results, start_time, end_time, iterations, evaluations, wrapper.iteration_mappings,
+                last_results, start_time, end_time, iterations, evaluations + 1, wrapper.iteration_mappings,
                 wrapper.evaluation_mappings, center_moments, se_type
             )
             self._handle_errors(error_behavior, results._errors)
-            output("")
             output(f"Computed results after {output.format_seconds(results.total_time - results.optimization_time)}.")
             output("")
             output(results)
+
+            # store the last results and return results from the final step
+            last_results = results
+            if step == steps:
+                return results
 
             # update vectors and matrices
             true_delta = step_info.true_delta
@@ -487,11 +522,6 @@ class Problem(Economy):
             true_omega_jacobian = step_info.true_omega_jacobian
             WD = results.updated_WD
             WS = results.updated_WS
-
-            # store the last results and return results from the last step
-            last_results = results
-            if step == steps:
-                return results
 
     def _compute_objective_info(self, nonlinear_parameters, demand_iv, supply_iv, WD, WS, error_behavior,
                                 error_punishment, delta_behavior, iteration, linear_fp, linear_costs, costs_bounds,
@@ -562,22 +592,28 @@ class Problem(Economy):
         """
         errors = set()
 
-        # define a function builds a market along with market-specific arguments used to compute delta and its Jacobian
-        def market_factory(s):
-            market_s = DemandProblemMarket(self, s, sigma, pi)
-            initial_delta_s = last_objective_info.next_delta[self.products.market_ids.flat == s]
-            return market_s, initial_delta_s, nonlinear_parameters, iteration, linear_fp, compute_gradient
-
-        # compute delta and its Jacobian market-by-market
+        # initialize delta and its Jacobian along with fixed point information so that they can be filled
         iterations = {}
         evaluations = {}
         true_delta = np.zeros((self.N, 1), options.dtype)
         true_xi_jacobian = np.full((self.N, nonlinear_parameters.P), np.nan, options.dtype)
-        with ParallelItems(self.unique_market_ids, market_factory, DemandProblemMarket.solve, processes) as items:
-            for t, (true_delta_t, true_xi_jacobian_t, errors_t, iterations[t], evaluations[t]) in items:
-                true_delta[self.products.market_ids.flat == t] = true_delta_t
-                true_xi_jacobian[self.products.market_ids.flat == t] = true_xi_jacobian_t
-                errors |= errors_t
+
+        # if there are only linear parameters, use the initial delta
+        if self.K2 == 0:
+            true_delta = last_objective_info.next_delta
+        else:
+            # define a function that builds a market along with arguments used to compute delta and its Jacobian
+            def market_factory(s):
+                market_s = DemandProblemMarket(self, s, sigma, pi)
+                initial_delta_s = last_objective_info.next_delta[self.products.market_ids.flat == s]
+                return market_s, initial_delta_s, nonlinear_parameters, iteration, linear_fp, compute_gradient
+
+            # compute delta and its Jacobian market-by-market
+            with ParallelItems(self.unique_market_ids, market_factory, DemandProblemMarket.solve, processes) as items:
+                for t, (true_delta_t, true_xi_jacobian_t, errors_t, iterations[t], evaluations[t]) in items:
+                    true_delta[self.products.market_ids.flat == t] = true_delta_t
+                    true_xi_jacobian[self.products.market_ids.flat == t] = true_xi_jacobian_t
+                    errors |= errors_t
 
         # replace invalid elements in delta with their last values
         bad_indices = ~np.isfinite(true_delta)
@@ -621,8 +657,12 @@ class Problem(Economy):
         if compute_gradient:
             beta_jacobian = demand_iv.estimate(xi_jacobian, compute_residuals=False)
 
-        # define a function builds a market along with market-specific arguments used to compute transformed marginal
-        #   costs and their Jacobian
+        # initialize transformed marginal costs and their Jacobian so that they can be filled
+        true_tilde_costs = np.zeros((self.N, 1), options.dtype)
+        true_omega_jacobian = np.full((self.N, nonlinear_parameters.P), np.nan, options.dtype)
+
+        # define a function that builds a market along with arguments used to compute transformed marginal costs and
+        #   their Jacobian
         def market_factory(s):
             market_s = SupplyProblemMarket(self, s, sigma, pi, beta, true_delta)
             last_true_tilde_costs_s = last_objective_info.true_tilde_costs[self.products.market_ids.flat == s]
@@ -633,8 +673,6 @@ class Problem(Economy):
             )
 
         # compute transformed marginal costs and their Jacobian market-by-market
-        true_tilde_costs = np.zeros((self.N, 1), options.dtype)
-        true_omega_jacobian = np.full((self.N, nonlinear_parameters.P), np.nan, options.dtype)
         with ParallelItems(self.unique_market_ids, market_factory, SupplyProblemMarket.solve, processes) as items:
             for t, (true_tilde_costs_t, true_omega_jacobian_t, errors_t) in items:
                 true_tilde_costs[self.products.market_ids.flat == t] = true_tilde_costs_t
@@ -714,7 +752,7 @@ class ObjectiveInfo(object):
         self.evaluation_mapping = evaluation_mapping
         self.errors = errors
         with np.errstate(invalid='ignore'):
-            self.gradient_norm = None if gradient is None else np.abs(gradient).max()
+            self.gradient_norm = None if gradient is None or gradient.size == 0 else np.abs(gradient).max()
 
     def format_progress(self, step, current_iterations, current_evaluations, smallest_objective,
                         smallest_gradient_norm):
@@ -851,7 +889,7 @@ class SupplyProblemMarket(Market):
         elements in transformed marginal costs with their last values before computing their Jacobian.
         """
 
-        # configure numpy to identify floating point errors
+        # configure NumPy to identify floating point errors
         errors = set()
         with np.errstate(divide='call', over='call', under='ignore', invalid='call'):
             np.seterrcall(lambda *_: errors.add(exceptions.CostsFloatingPointError))

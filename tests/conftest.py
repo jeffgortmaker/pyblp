@@ -35,7 +35,59 @@ def configure():
 
 
 @pytest.fixture
-def small_simulation():
+def small_logit_simulation():
+    """Solve a simulation with two markets, linear prices, a linear characteristic, a cost characteristic, and an
+    acquisition.
+    """
+    simulation = Simulation(
+        product_formulations=(
+            Formulation('0 + prices + x'),
+            None,
+            Formulation('0 + a')
+        ),
+        beta=[-5, 1],
+        sigma=None,
+        gamma=2,
+        product_data=build_id_data(T=2, J=18, F=3, mergers=[{1: 0}]),
+        xi_variance=0.001,
+        omega_variance=0.001,
+        correlation=0.7,
+        seed=0
+    )
+    clustering_ids = np.random.RandomState(0).choice(['a', 'b'], simulation.N)
+    product_data = np.lib.recfunctions.rec_append_fields(simulation.solve(), 'clustering_ids', clustering_ids)
+    return simulation, product_data
+
+
+@pytest.fixture
+def large_logit_simulation():
+    """Solve a simulation with ten markets, linear prices, a linear constant, a cost/linear characteristic, another
+    three cost characteristics, another two linear characteristics, an acquisition, a triple acquisition, and a
+    log-linear cost specification.
+    """
+    simulation = Simulation(
+        product_formulations=(
+            Formulation('1 + prices + x + y + z'),
+            None,
+            Formulation('0 + log(x) + a + b + c')
+        ),
+        beta=[1, -6, 1, 2, 3],
+        sigma=None,
+        gamma=[0.1, 0.2, 0.3, 0.5],
+        product_data=build_id_data(T=10, J=20, F=9, mergers=[{f: 4 + int(f > 0) for f in range(4)}]),
+        xi_variance=0.00001,
+        omega_variance=0.00001,
+        correlation=0.9,
+        linear_costs=False,
+        seed=2
+    )
+    clustering_ids = np.random.RandomState(2).choice(['a', 'b', 'c', 'd'], simulation.N)
+    product_data = np.lib.recfunctions.rec_append_fields(simulation.solve(), 'clustering_ids', clustering_ids)
+    return simulation, product_data
+
+
+@pytest.fixture
+def small_blp_simulation():
     """Solve a simulation with two markets, linear prices, a nonlinear characteristic, a cost characteristic, and an
     acquisition.
     """
@@ -55,13 +107,13 @@ def small_simulation():
         correlation=0.7,
         seed=0
     )
-    clustering_ids = np.random.choice(['a', 'b'], simulation.N)
+    clustering_ids = np.random.RandomState(0).choice(['a', 'b'], simulation.N)
     product_data = np.lib.recfunctions.rec_append_fields(simulation.solve(), 'clustering_ids', clustering_ids)
     return simulation, product_data
 
 
 @pytest.fixture
-def medium_simulation():
+def medium_blp_simulation():
     """Solve a simulation with four markets, a nonlinear/cost constant, two linear characteristics, two cost
     characteristics, a demographic interacted with second-degree prices, a double acquisition, and a non-standard
     ownership structure.
@@ -95,13 +147,13 @@ def medium_simulation():
         correlation=0.8,
         seed=1
     )
-    clustering_ids = np.random.choice(['a', 'b', 'c'], simulation.N)
+    clustering_ids = np.random.RandomState(1).choice(['a', 'b', 'c'], simulation.N)
     product_data = np.lib.recfunctions.rec_append_fields(simulation.solve(), 'clustering_ids', clustering_ids)
     return simulation, product_data
 
 
 @pytest.fixture
-def large_simulation():
+def large_blp_simulation():
     """Solve a simulation with ten markets, linear/nonlinear prices, a linear constant, a cost/linear/nonlinear
     characteristic, another three cost characteristics, another two linear characteristics, demographics interacted with
     prices and the cost/linear/nonlinear characteristic, dense parameter matrices, an acquisition, a triple acquisition,
@@ -132,24 +184,28 @@ def large_simulation():
         linear_costs=False,
         seed=2
     )
-    clustering_ids = np.random.choice(['a', 'b', 'c', 'd'], simulation.N)
+    clustering_ids = np.random.RandomState(2).choice(['a', 'b', 'c', 'd'], simulation.N)
     product_data = np.lib.recfunctions.rec_append_fields(simulation.solve(), 'clustering_ids', clustering_ids)
     return simulation, product_data
 
 
 @pytest.fixture(params=[
-    pytest.param(['small', False], id="small without supply"),
-    pytest.param(['small', True], id="small with supply"),
-    pytest.param(['medium', False], id="medium without supply"),
-    pytest.param(['medium', True], id="medium with supply"),
-    pytest.param(['large', False], id="large without supply"),
-    pytest.param(['large', True], id="large with supply")
+    pytest.param(['small_logit', False], id="small Logit simulation without supply"),
+    pytest.param(['small_logit', True], id="small Logit simulation with supply"),
+    pytest.param(['large_logit', False], id="large Logit simulation without supply"),
+    pytest.param(['large_logit', True], id="large Logit simulation with supply"),
+    pytest.param(['small_blp', False], id="small BLP simulation without supply"),
+    pytest.param(['small_blp', True], id="small BLP simulation with supply"),
+    pytest.param(['medium_blp', False], id="medium BLP simulation without supply"),
+    pytest.param(['medium_blp', True], id="medium BLP simulation with supply"),
+    pytest.param(['large_blp', False], id="large BLP simulation without supply"),
+    pytest.param(['large_blp', True], id="large BLP simulation with supply")
 ])
 def simulated_problem(request):
     """Configure and solve a simulated problem, either with or without supply-side data."""
     name, supply = request.param
     simulation, product_data = request.getfixturevalue(f'{name}_simulation')
-    product_formulations = simulation.product_formulations if supply else simulation.product_formulations[:2]
+    product_formulations = simulation.product_formulations[:2 + int(supply)]
     problem = Problem(product_formulations, product_data, simulation.agent_formulation, simulation.agent_data)
     results = problem.solve(simulation.sigma, simulation.pi, steps=1, linear_costs=simulation.linear_costs)
     return simulation, product_data, problem, results

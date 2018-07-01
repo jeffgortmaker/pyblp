@@ -4,7 +4,7 @@ import pytest
 import numpy as np
 import scipy.optimize
 
-from pyblp import options, build_matrix, Problem, Iteration, Optimization, Formulation
+from pyblp import build_matrix, Problem, Iteration, Optimization, Formulation
 
 
 @pytest.mark.usefixtures('simulated_problem')
@@ -21,15 +21,19 @@ def test_accuracy(simulated_problem, solve_options):
     simulation, _, problem, _ = simulated_problem
 
     # solve the problem
-    sigma = 0.5 * simulation.sigma
-    pi = 0.5 * simulation.pi if simulation.pi is not None else None
-    results = problem.solve(sigma, pi, linear_costs=simulation.linear_costs, **solve_options)
+    results = problem.solve(
+        0.5 * simulation.sigma,
+        0.5 * simulation.pi,
+        linear_costs=simulation.linear_costs,
+        **solve_options
+    )
 
     # test the accuracy of the estimated parameters
-    for key in ['gamma', 'beta', 'sigma', 'pi']:
-        estimate = getattr(results, key, None)
-        if estimate.size > 0:
-            np.testing.assert_allclose(getattr(simulation, key), estimate, atol=0, rtol=0.1, err_msg=key)
+    keys = ['beta', 'sigma', 'pi']
+    if problem.K3 > 0:
+        keys.append('gamma')
+    for key in keys:
+        np.testing.assert_allclose(getattr(simulation, key), getattr(results, key), atol=0, rtol=0.1, err_msg=key)
 
 
 @pytest.mark.usefixtures('simulated_problem')
@@ -53,8 +57,7 @@ def test_trivial_changes(simulated_problem, solve_options1, solve_options2):
     # test that all arrays in the results are essentially identical
     for key, result1 in results[0].__dict__.items():
         if isinstance(result1, np.ndarray) and result1.dtype != np.object:
-            result2 = getattr(results[1], key)
-            np.testing.assert_allclose(result1, result2, atol=1e-14, rtol=0, err_msg=key)
+            np.testing.assert_allclose(result1, getattr(results[1], key), atol=1e-14, rtol=0, err_msg=key)
 
 
 @pytest.mark.usefixtures('simulated_problem')
@@ -82,9 +85,7 @@ def test_fixed_effects(simulated_problem, ED, ES):
     for key in ['delta', 'tilde_costs', 'xi', 'omega', 'xi_jacobian', 'omega_jacobian']:
         result = getattr(results, key)
         true_result = getattr(results, f'true_{key}')
-        assert (result is not None) == (true_result is not None)
-        if result is not None:
-            np.testing.assert_allclose(result, true_result, atol=1e-14, rtol=0, err_msg=key)
+        np.testing.assert_allclose(result, true_result, atol=1e-14, rtol=0, err_msg=key)
 
     # there cannot be supply-side fixed effects if there isn't a supply side
     if problem.K3 == 0:
@@ -148,11 +149,10 @@ def test_fixed_effects(simulated_problem, ED, ES):
     ]
     for key in keys:
         result1 = getattr(results1, key)
-        if result1 is not None:
-            result2 = getattr(results2, key)
-            if 'beta' in key or 'gamma' in key:
-                result2 = result2[:result1.size]
-            np.testing.assert_allclose(result1, result2, atol=1e-8, rtol=1e-5, err_msg=key)
+        result2 = getattr(results2, key)
+        if 'beta' in key or 'gamma' in key:
+            result2 = result2[:result1.size]
+        np.testing.assert_allclose(result1, result2, atol=1e-8, rtol=1e-5, err_msg=key)
 
 
 @pytest.mark.usefixtures('simulated_problem')
@@ -200,6 +200,14 @@ def test_markup_positivity(simulated_problem):
     _, _, _, results = simulated_problem
     markups = results.compute_markups()
     np.testing.assert_array_less(0, markups, verbose=True)
+
+
+@pytest.mark.usefixtures('simulated_problem')
+def test_shares(simulated_problem):
+    """Test that shares computed from estimated parameters are essentially equal to actual shares."""
+    _, product_data, _, results = simulated_problem
+    shares = results.compute_shares()
+    np.testing.assert_allclose(product_data.shares, shares, atol=1e-14, rtol=0)
 
 
 @pytest.mark.usefixtures('simulated_problem')
@@ -270,8 +278,7 @@ def test_second_step(simulated_problem):
     # test that results are essentially identical
     for key, result in results.__dict__.items():
         if 'cumulative' not in key and isinstance(result, np.ndarray) and result.dtype != np.object:
-            result2 = getattr(results2, key)
-            np.testing.assert_allclose(result, result2, atol=1e-14, rtol=0, err_msg=key)
+            np.testing.assert_allclose(result, getattr(results2, key), atol=1e-14, rtol=0, err_msg=key)
 
 
 @pytest.mark.usefixtures('simulated_problem')
@@ -284,6 +291,10 @@ def test_gradient_optionality(simulated_problem, scipy_method):
     isn't used.
     """
     simulation, _, problem, _ = simulated_problem
+
+    # skip simulations without gradients
+    if simulation.K2 == 0:
+        return
 
     # define a custom optimization method that doesn't use gradients
     def custom_method(initial, bounds, objective_function, _):
@@ -300,8 +311,7 @@ def test_gradient_optionality(simulated_problem, scipy_method):
     # test that all arrays are essentially identical
     for key, result1 in results1.__dict__.items():
         if isinstance(result1, np.ndarray) and result1.dtype != np.object:
-            result2 = getattr(results2, key)
-            np.testing.assert_allclose(result1, result2, atol=1e-14, rtol=0, err_msg=key)
+            np.testing.assert_allclose(result1, getattr(results2, key), atol=1e-14, rtol=0, err_msg=key)
 
 
 @pytest.mark.usefixtures('simulated_problem')
@@ -317,10 +327,14 @@ def test_bounds(simulated_problem, method):
     """
     simulation, _, problem, _ = simulated_problem
 
+    # skip simulations without nonlinear parameters to bound
+    if simulation.K2 == 0:
+        return
+
     # all problems will be solved with the same optimization method starting as close to the true parameters as possible
     solve = lambda s, p: problem.solve(
         np.minimum(np.maximum(simulation.sigma, s[0]), s[1]),
-        np.minimum(np.maximum(simulation.pi, p[0]), p[1]) if simulation.pi is not None else None,
+        np.minimum(np.maximum(simulation.pi, p[0]), p[1]) if simulation.D > 0 else None,
         sigma_bounds=s,
         pi_bounds=p,
         steps=1,
@@ -329,41 +343,35 @@ def test_bounds(simulated_problem, method):
 
     # solve the problem when unbounded
     unbounded_sigma_bounds = (np.full_like(simulation.sigma, -np.inf), np.full_like(simulation.sigma, +np.inf))
-    unbounded_pi_bounds = None
-    if simulation.pi is not None:
-        unbounded_pi_bounds = (np.full_like(simulation.pi, -np.inf), np.full_like(simulation.pi, +np.inf))
+    unbounded_pi_bounds = (np.full_like(simulation.pi, -np.inf), np.full_like(simulation.pi, +np.inf))
     unbounded_results = solve(unbounded_sigma_bounds, unbounded_pi_bounds)
 
-    # choose an element in each parameter matrix and identify its estimated value
+    # choose an element in sigma and identify its estimated value
     sigma_index = (simulation.sigma.nonzero()[0][0], simulation.sigma.nonzero()[1][0])
     sigma_value = unbounded_results.sigma[sigma_index]
-    pi_index = None
-    if simulation.pi is not None:
+
+    # do the same for pi
+    pi_index = pi_value = None
+    if simulation.D > 0:
         pi_index = (simulation.pi.nonzero()[0][0], simulation.pi.nonzero()[1][0])
         pi_value = unbounded_results.pi[pi_index]
 
-    # use different types of binding bounds and skip types that fix all parameters
+    # use different types of binding bounds
     for lb_scale, ub_scale in [(+np.inf, -0.1), (-0.1, +np.inf), (+1, -0.1), (-0.1, +1), (0, 0)]:
         binding_sigma_bounds = (np.full_like(simulation.sigma, -np.inf), np.full_like(simulation.sigma, +np.inf))
+        binding_pi_bounds = (np.full_like(simulation.pi, -np.inf), np.full_like(simulation.pi, +np.inf))
         binding_sigma_bounds[0][sigma_index] = sigma_value - lb_scale * np.abs(sigma_value)
         binding_sigma_bounds[1][sigma_index] = sigma_value + ub_scale * np.abs(sigma_value)
-        if simulation.pi is None:
-            binding_pi_bounds = None
-            if np.array_equal(*map(np.abs, binding_sigma_bounds)):
-                continue
-        else:
-            binding_pi_bounds = (np.full_like(simulation.pi, -np.inf), np.full_like(simulation.pi, +np.inf))
+        if simulation.D > 0:
             binding_pi_bounds[0][pi_index] = pi_value - lb_scale * np.abs(pi_value)
             binding_pi_bounds[1][pi_index] = pi_value + ub_scale * np.abs(pi_value)
-            if np.array_equal(*map(np.abs, binding_sigma_bounds)) and np.array_equal(*map(np.abs, binding_pi_bounds)):
-                continue
 
         # solve the problem with binding bounds and test that they are essentially respected
         binding_results = solve(binding_sigma_bounds, binding_pi_bounds)
         assert_array_less = lambda a, b: np.testing.assert_array_less(a, b + 1e-14, verbose=True)
         assert_array_less(binding_sigma_bounds[0], binding_results.sigma)
         assert_array_less(binding_results.sigma, binding_sigma_bounds[1])
-        if simulation.pi is not None:
+        if simulation.D > 0:
             assert_array_less(binding_pi_bounds[0], binding_results.pi)
             assert_array_less(binding_results.pi, binding_pi_bounds[1])
 
@@ -374,15 +382,13 @@ def test_bounds(simulated_problem, method):
             simulation.sigma - 1e10 * np.abs(simulation.sigma),
             simulation.sigma + 1e10 * np.abs(simulation.sigma)
         )
-        unbinding_pi_bounds = None
-        if simulation.pi is not None:
-            unbinding_pi_bounds = (
-                simulation.pi - 1e10 * np.abs(simulation.pi),
-                simulation.pi + 1e10 * np.abs(simulation.pi)
-            )
+        unbinding_pi_bounds = (
+            simulation.pi - 1e10 * np.abs(simulation.pi),
+            simulation.pi + 1e10 * np.abs(simulation.pi)
+        )
         unbinding_results = solve(unbinding_sigma_bounds, unbinding_pi_bounds)
         np.testing.assert_allclose(unbounded_results.sigma, unbinding_results.sigma, atol=0, rtol=0.1)
-        if simulation.pi is not None:
+        if simulation.D > 0:
             np.testing.assert_allclose(unbounded_results.pi, unbinding_results.pi, atol=0, rtol=0.1)
 
 
@@ -393,6 +399,10 @@ def test_extra_nodes(simulated_problem):
     """
     simulation, product_data, problem1, _ = simulated_problem
 
+    # skip simulations without agents
+    if simulation.K2 == 0:
+        return
+
     # reconstruct the problem with unnecessary columns of nodes
     agent_data2 = {k: simulation.agent_data[k] for k in simulation.agent_data.dtype.names}
     agent_data2['nodes'] = np.c_[agent_data2['nodes'], agent_data2['nodes']]
@@ -400,10 +410,8 @@ def test_extra_nodes(simulated_problem):
 
     # test that the agents are essentially identical
     for key in problem1.agents.dtype.names:
-        if np.issubdtype(problem1.agents.dtype[key], options.dtype):
-            values1 = problem1.agents[key]
-            values2 = problem2.agents[key]
-            np.testing.assert_allclose(values1, values2, atol=1e-14, rtol=0, err_msg=key)
+        if problem1.agents[key].dtype != np.object:
+            np.testing.assert_allclose(problem1.agents[key], problem2.agents[key], atol=1e-14, rtol=0, err_msg=key)
 
 
 @pytest.mark.usefixtures('simulated_problem')
@@ -428,10 +436,8 @@ def test_extra_demographics(simulated_problem):
 
     # test that the agents are essentially identical
     for key in problem1.agents.dtype.names:
-        if np.issubdtype(problem1.agents.dtype[key], options.dtype):
-            values1 = problem1.agents[key]
-            values2 = problem2.agents[key]
-            np.testing.assert_allclose(values1, values2, atol=1e-14, rtol=0, err_msg=key)
+        if problem1.agents[key].dtype != np.object:
+            np.testing.assert_allclose(problem1.agents[key], problem2.agents[key], atol=1e-14, rtol=0, err_msg=key)
 
 
 @pytest.mark.usefixtures('simulated_problem')
@@ -444,6 +450,10 @@ def test_objective_gradient(simulated_problem, solve_options):
     are within 1% of estimated values.
     """
     simulation, _, problem, _ = simulated_problem
+
+    # skip simulations without gradients
+    if simulation.K2 == 0:
+        return
 
     # define a custom optimization routine that tests central finite differences around starting parameter values
     def test_finite_differences(*args):
@@ -463,7 +473,7 @@ def test_objective_gradient(simulated_problem, solve_options):
     # test the gradient at parameter values slightly different from the true ones so that the objective is sizable
     problem.solve(
         0.9 * simulation.sigma,
-        0.9 * simulation.pi if simulation.pi is not None else None,
+        0.9 * simulation.pi,
         steps=1,
         linear_costs=simulation.linear_costs,
         optimization=Optimization(test_finite_differences),
@@ -507,5 +517,4 @@ def test_knittel_metaxoglou_2014(knittel_metaxoglou_2014):
 
     # test closeness of post-estimation outputs
     for key, computed in post_estimation.items():
-        expected = knittel_metaxoglou_2014[key]
-        np.testing.assert_allclose(expected, computed, atol=1e-8, rtol=1e-4, err_msg=key)
+        np.testing.assert_allclose(knittel_metaxoglou_2014[key], computed, atol=1e-8, rtol=1e-4, err_msg=key)

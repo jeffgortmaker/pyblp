@@ -38,7 +38,7 @@ class Integration(object):
         The number of draws if `specification` is ``'monte_carlo'``, and the level of the quadrature rule otherwise.
     seed : `int, optional`
         Passed to :class:`numpy.random.RandomState` when `specification` is ``'monte_carlo'`` to seed the random number
-        generator before building nodes.
+        generator before building nodes. By default, a seed is not passed to the random number generator.
 
     Example
     -------

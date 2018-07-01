@@ -25,11 +25,11 @@ class Results(object):
     Attributes
     ----------
     problem : `Problem`
-        The BLP :class:`Problem` that created these results.
+        :class:`Problem` that created these results.
     last_results : `Results`
-        The :class:`Results` from the last GMM step if the GMM step that created these results was not the first.
+        :class:`Results` from the last GMM step.
     step : `int`
-        The GMM step that created these results.
+        GMM step that created these results.
     optimization_time : `float`
         Number of seconds it took the optimization routine to finish.
     cumulative_optimization_time : `float`
@@ -44,7 +44,7 @@ class Results(object):
     cumulative_optimization_iterations : `int`
         Sum of :attr:`Results.optimization_iterations` for this step and all prior steps.
     objective_evaluations : `int`
-        Number of times the GMM objective was evaluated.
+        Number of GMM objective evaluations.
     cumulative_objective_evaluations : `int`
         Sum of :attr:`Results.objective_evaluations` for this step and all prior steps.
     fp_iterations : `ndarray`
@@ -60,7 +60,7 @@ class Results(object):
     cumulative_contraction_evaluations : `ndarray`
         Concatenation of :attr:`Results.contraction_evaluations` for this step and all prior steps.
     theta : `ndarray`
-        Estimated unknown nonlinear parameters, :math:`\hat{\theta}`.
+        Estimated unfixed nonlinear parameters, :math:`\hat{\theta}`.
     sigma : `ndarray`
         Estimated Cholesky decomposition of the covariance matrix that measures agents' random taste distribution,
         :math:`\hat{\Sigma}`.
@@ -193,8 +193,7 @@ class Results(object):
         )
         self._errors |= WD_errors | WS_errors
 
-        # stack the error terms, weighting matrices, instruments, Jacobian of the errors with respect to parameters, and
-        #   clustering IDs
+        # stack errors, weights, instruments, Jacobian of the errors with respect to parameters, and clustering IDs
         if self.problem.K3 == 0:
             u = self.true_xi
             W = self.WD
@@ -230,10 +229,10 @@ class Results(object):
         self.unique_market_ids = self.problem.unique_market_ids
 
         # convert contraction mappings to matrices with rows ordered by market
-        contraction_iteration_lists = [[m[t] for m in iteration_mappings] for t in self.unique_market_ids]
-        contraction_evaluation_lists = [[m[t] for m in evaluation_mappings] for t in self.unique_market_ids]
-        self.fp_iterations = self.cumulative_fp_iterations = np.array(contraction_iteration_lists)
-        self.contraction_evaluations = self.cumulative_contraction_evaluations = np.array(contraction_evaluation_lists)
+        iteration_lists = [[m[t] for m in iteration_mappings] for t in self.unique_market_ids]
+        evaluation_lists = [[m[t] for m in evaluation_mappings] for t in self.unique_market_ids]
+        self.fp_iterations = self.cumulative_fp_iterations = np.array(iteration_lists, np.int)
+        self.contraction_evaluations = self.cumulative_contraction_evaluations = np.array(evaluation_lists, np.int)
 
         # initialize last results and add to cumulative values
         self.last_results = last_results
@@ -252,7 +251,6 @@ class Results(object):
 
     def __str__(self):
         """Format full results as a string."""
-        sections = []
 
         # construct section containing summary information
         header = [
@@ -262,7 +260,7 @@ class Results(object):
         ]
         widths = [max(len(k1), len(k2), options.digits + 6 if i > 4 else 0) for i, (k1, k2) in enumerate(header)]
         formatter = output.table_formatter(widths)
-        sections.append([
+        sections = [[
             "Results Summary:",
             formatter.line(),
             formatter([k[0] for k in header]),
@@ -277,7 +275,7 @@ class Results(object):
                 output.format_number(self.gradient_norm)
             ]),
             formatter.line()
-        ])
+        ]]
 
         # construct a standard error description
         se_description = "Unadjusted SEs" if self.se_type == 'unadjusted' else "Robust SEs"
@@ -292,10 +290,11 @@ class Results(object):
         ])
 
         # construct a section containing nonlinear estimates
-        sections.append([
-            f"Nonlinear Estimates ({se_description} in Parentheses):",
-            self._nonlinear_parameters.format_estimates(self.sigma, self.pi, self.sigma_se, self.pi_se)
-        ])
+        if self.problem.K2 > 0:
+            sections.append([
+                f"Nonlinear Estimates ({se_description} in Parentheses):",
+                self._nonlinear_parameters.format_estimates(self.sigma, self.pi, self.sigma_se, self.pi_se)
+            ])
 
         # combine the sections into one string
         return "\n\n".join("\n".join(s) for s in sections)
@@ -324,7 +323,7 @@ class Results(object):
         # keep track of how long it takes to compute results
         start_time = time.time()
 
-        # define a function builds a market along with market-specific arguments used to compute results
+        # define a function that builds a market along with arguments used to compute results
         def market_factory(s):
             market_s = ResultsMarket(self.problem, s, self.sigma, self.pi, self.beta, self.delta)
             args_s = [None if a is None else a[self.problem.products.market_ids.flat == s] for a in market_args]
@@ -555,9 +554,9 @@ class Results(object):
         Parameters
         ----------
         firms_index : `int, optional`
-            Column index of the changed firm IDs in the `firm_ids` field of `product_data` in :class:`Problem`
-            initialization. If an `ownership` field was specified, the corresponding stack of ownership matrices will be
-            used. Ownership changes need not reflect an actual merger.
+            Column index of the changed firm IDs in the `firm_ids` field of `product_data` in :class:`Problem`. If an
+            `ownership` field was specified, the corresponding stack of ownership matrices will be used. Ownership
+            changes need not reflect an actual merger.
         costs : `array-like, optional`
             Marginal costs, :math:`c`, computed by :meth:`Results.compute_costs`. By default, marginal costs are
             computed.
@@ -594,9 +593,9 @@ class Results(object):
             :class:`Iteration` configuration for how to solve the fixed point problem in each market. By default,
             ``Iteration('simple', {'tol': 1e-12})`` is used.
         firms_index : `int, optional`
-            Column index of the changed firm IDs in the `firm_ids` field of `product_data` in :class:`Problem`
-            initialization. If an `ownership` field was specified, the corresponding stack of ownership matrices will be
-            used. Ownership changes need not reflect an actual merger.
+            Column index of the changed firm IDs in the `firm_ids` field of `product_data` in :class:`Problem`. If an
+            `ownership` field was specified, the corresponding stack of ownership matrices will be used. Ownership
+            changes need not reflect an actual merger.
         prices : `array-like, optional`
             Prices at which the fixed point iteration routine will start. By default, pre-merger prices, :math:`p`, are
             used as starting values. Other reasonable starting prices include :math:`p^a`, computed by
@@ -653,8 +652,8 @@ class Results(object):
         Parameters
         ----------
         firms_index : `int, optional`
-            Column index of the firm IDs in the `firm_ids` field of `product_data` in :class:`Problem` initialization.
-            By default, unchanged firm IDs are used.
+            Column index of the firm IDs in the `firm_ids` field of `product_data` in :class:`Problem`. By default,
+            unchanged firm IDs are used.
         shares : `array-like, optional`
             Shares, :math:`s`, such as those computed by :meth:`Results.compute_shares`. By default, unchanged shares
             are used.
@@ -915,6 +914,8 @@ class ResultsMarket(Market):
         else:
             delta = self.update_delta_with_variable('prices', prices)
             mu = self.update_mu_with_variable('prices', prices)
+        if self.K2 == 0:
+            mu = 0
         alpha = -self.compute_utility_by_variable_derivatives('prices')[0]
         consumer_surplus = (np.log1p(np.exp(delta + mu).sum(axis=0)) / alpha) @ self.agents.weights
         return consumer_surplus, set()
