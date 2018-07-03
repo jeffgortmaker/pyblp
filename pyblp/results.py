@@ -538,12 +538,12 @@ class Results(object):
         output("Computing marginal costs ...")
         return self._combine_results(ResultsMarket.compute_costs, [], [], processes)
 
-    def solve_approximate_merger(self, firms_index=1, costs=None, processes=1):
-        r"""Estimate approximate post-merger prices, :math:`p^a`, under the assumption that shares and their price
-        derivatives are unaffected by the merger.
+    def compute_approximate_prices(self, firms_index=1, costs=None, processes=1):
+        r"""Estimate approximate Bertrand-Nash prices after firm ID changes, :math:`p^a`, under the assumption that
+        shares and their price derivatives are unaffected by such changes.
 
         This approximation is discussed in, for example, :ref:`Nevo (1997) <n97>`. Prices in each market are computed
-        according to the approximate post-merger version of the BLP-markup equation,
+        according to the BLP-markup equation,
 
         .. math:: p^a = c + \eta^a,
 
@@ -551,14 +551,13 @@ class Results(object):
 
         .. math:: \eta^a = -\left(O^* \circ \frac{\partial s}{\partial p}\right)^{-1}s
 
-        where :math:`O^*` is the post-merger ownership matrix.
+        where :math:`O^*` is the ownership matrix associated with specified firm IDs.
 
         Parameters
         ----------
         firms_index : `int, optional`
-            Column index of the changed firm IDs in the `firm_ids` field of `product_data` in :class:`Problem`. If an
-            `ownership` field was specified, the corresponding stack of ownership matrices will be used. Ownership
-            changes need not reflect an actual merger.
+            Column index of the firm IDs in the `firm_ids` field of `product_data` in :class:`Problem`. If an
+            `ownership` field was specified, the corresponding stack of ownership matrices will be used.
         costs : `array-like, optional`
             Marginal costs, :math:`c`, computed by :meth:`Results.compute_costs`. By default, marginal costs are
             computed.
@@ -568,17 +567,17 @@ class Results(object):
         Returns
         -------
         `ndarray`
-            Estimates of approximate post-merger prices, :math:`p^a`.
+            Estimates of approximate Bertrand-Nash prices after any firm ID changes, :math:`p^a`.
 
         """
-        output("Solving for approximate post-merger prices ...")
-        return self._combine_results(ResultsMarket.solve_approximate_merger, [firms_index], [costs], processes)
+        output("Solving for approximate Bertrand-Nash prices ...")
+        return self._combine_results(ResultsMarket.compute_approximate_prices, [firms_index], [costs], processes)
 
-    def solve_merger(self, iteration=None, firms_index=1, prices=None, costs=None, processes=1):
-        r"""Estimate post-merger prices, :math:`p^*`.
+    def compute_prices(self, iteration=None, firms_index=1, prices=None, costs=None, processes=1):
+        r"""Estimate Bertrand-Nash prices after firm ID changes, :math:`p^*`.
 
-        Prices are computed in each market by iterating over the post-merger version of the :math:`\zeta`-markup
-        equation from :ref:`Morrow and Skerlos (2011) <ms11>`,
+        Prices are computed in each market by iterating over the :math:`\zeta`-markup equation from
+        :ref:`Morrow and Skerlos (2011) <ms11>`,
 
         .. math:: p^* \leftarrow c + \zeta^*(p^*),
 
@@ -586,8 +585,7 @@ class Results(object):
 
         .. math:: \zeta^*(p^*) = \Lambda^{-1}(p^*)[O^* \circ \Gamma(p^*)]'(p^* - c) - \Lambda^{-1}(p^*)
 
-        where :math:`O^*` is the post-merger ownership matrix and the other terms are the same as in the pre-merger
-        :math:`\zeta`-markup equation but are evaluated at post-merger prices and shares.
+        where :math:`O^*` is the ownership matrix associated with specified firm IDs.
 
         Parameters
         ----------
@@ -595,13 +593,12 @@ class Results(object):
             :class:`Iteration` configuration for how to solve the fixed point problem in each market. By default,
             ``Iteration('simple', {'tol': 1e-12})`` is used.
         firms_index : `int, optional`
-            Column index of the changed firm IDs in the `firm_ids` field of `product_data` in :class:`Problem`. If an
-            `ownership` field was specified, the corresponding stack of ownership matrices will be used. Ownership
-            changes need not reflect an actual merger.
+            Column index of the firm IDs in the `firm_ids` field of `product_data` in :class:`Problem`. If an
+            `ownership` field was specified, the corresponding stack of ownership matrices will be used.
         prices : `array-like, optional`
-            Prices at which the fixed point iteration routine will start. By default, pre-merger prices, :math:`p`, are
+            Prices at which the fixed point iteration routine will start. By default, unchanged prices, :math:`p`, are
             used as starting values. Other reasonable starting prices include :math:`p^a`, computed by
-            :meth:`Results.solve_approximate_merger`.
+            :meth:`Results.compute_approximate_prices`.
         costs : `array-like`
             Marginal costs, :math:`c`, computed by :meth:`Results.compute_costs`. By default, marginal costs are
             computed.
@@ -611,15 +608,15 @@ class Results(object):
         Returns
         -------
         `ndarray`
-            Estimates of post-merger prices, :math:`p^*`.
+            Estimates of Bertrand-Nash prices after any firm ID changes, :math:`p^*`.
 
         """
-        output("Solving for post-merger prices ...")
+        output("Solving for Bertrand-Nash prices ...")
         if iteration is None:
             iteration = Iteration('simple', {'tol': 1e-12})
         elif not isinstance(iteration, Iteration):
             raise ValueError("iteration must an Iteration instance.")
-        return self._combine_results(ResultsMarket.solve_merger, [iteration, firms_index], [prices, costs], processes)
+        return self._combine_results(ResultsMarket.compute_prices, [iteration, firms_index], [prices, costs], processes)
 
     def compute_shares(self, prices=None, processes=1):
         r"""Estimate shares evaluated at specified prices.
@@ -627,9 +624,9 @@ class Results(object):
         Parameters
         ----------
         prices : `array-like`
-            Prices at which to evaluate shares, such as post-merger prices, :math:`p^*`, computed by
-            :meth:`Results.solve_merger`, or approximate post-merger prices, :math:`p^a`, computed by
-            :meth:`Results.solve_approximate_merger`. By default, unchanged prices are used.
+            Prices at which to evaluate shares, such as Bertrand-Nash prices, :math:`p^*`, computed by
+            :meth:`Results.compute_prices`, or approximate Bertrand-Nash prices, :math:`p^a`, computed by
+            :meth:`Results.compute_approximate_prices`. By default, unchanged prices are used.
         processes : `int, optional`
             Number of Python processes that will be used during computation.
 
@@ -682,8 +679,8 @@ class Results(object):
         Parameters
         ----------
         prices : `array-like, optional`
-            Prices, :math:`p`, such as post-merger prices, :math:`p^*`, computed by :meth:`Results.solve_merger`, or
-            approximate post-merger prices, :math:`p^a`, computed by :meth:`Results.solve_approximate_merger`. By
+            Prices, :math:`p`, such as Bertrand-Nash prices, :math:`p^*`, computed by :meth:`Results.compute_prices`, or
+            approximate Bertrand-Nash prices, :math:`p^a`, computed by :meth:`Results.compute_approximate_prices`. By
             default, unchanged prices are used.
         costs : `array-like`
             Marginal costs, :math:`c`, computed by :meth:`Results.compute_costs`. By default, marginal costs are
@@ -710,8 +707,8 @@ class Results(object):
         Parameters
         ----------
         prices : `array-like, optional`
-            Prices, :math:`p`, such as post-merger prices, :math:`p^*`, computed by :meth:`Results.solve_merger`, or
-            approximate post-merger prices, :math:`p^a`, computed by :meth:`Results.solve_approximate_merger`. By
+            Prices, :math:`p`, such as Bertrand-Nash prices, :math:`p^*`, computed by :meth:`Results.compute_prices`, or
+            approximate Bertrand-Nash prices, :math:`p^a`, computed by :meth:`Results.compute_approximate_prices`. By
             default, unchanged prices are used.
         shares : `array-like, optional`
             Shares, :math:`s`, such as those computed by :meth:`Results.compute_shares`. By default, unchanged shares
@@ -751,8 +748,8 @@ class Results(object):
         ----------
         prices : `array-like, optional`
             Prices at which utilities, :math:`u`, and price derivatives, :math:`\alpha` and :math:`\alpha_i`, will be
-            evaluated, such as post-merger prices, :math:`p^*`, computed by :meth:`Results.solve_merger`, or
-            approximate post-merger prices, :math:`p^a`, computed by :meth:`Results.solve_approximate_merger`. By
+            evaluated, such as Bertrand-Nash prices, :math:`p^*`, computed by :meth:`Results.compute_prices`, or
+            approximate Bertrand-Nash prices, :math:`p^a`, computed by :meth:`Results.compute_approximate_prices`. By
             default, unchanged prices are used.
         processes : `int, optional`
             Number of Python processes that will be used during computation.
@@ -836,9 +833,9 @@ class ResultsMarket(Market):
             costs = np.full((self.J, 1), np.nan, options.dtype)
         return costs, errors
 
-    def solve_approximate_merger(self, firms_index=1, costs=None):
-        """Estimate approximate post-merger prices under the assumption that shares and their price derivatives are
-        unaffected by the merger. By default, use changed firm IDs and compute marginal costs.
+    def compute_approximate_prices(self, firms_index=0, costs=None):
+        """Estimate approximate Bertrand-Nash prices under the assumption that shares and their price derivatives are
+        unaffected by firm ID changes. By default, use unchanged firm IDs and compute marginal costs.
         """
         errors = set()
         if costs is None:
@@ -851,9 +848,9 @@ class ResultsMarket(Market):
             prices = np.full((self.J, 1), np.nan, options.dtype)
         return prices, errors
 
-    def solve_merger(self, iteration, firms_index=1, prices=None, costs=None):
-        """Estimate post-merger prices. By default, use changed firm IDs, use unchanged prices as starting values, and
-        compute marginal costs.
+    def compute_prices(self, iteration, firms_index=0, prices=None, costs=None):
+        """Estimate Bertrand-Nash prices. By default, use unchanged firm IDs, use unchanged prices as starting values,
+        and compute marginal costs.
         """
         errors = set()
 

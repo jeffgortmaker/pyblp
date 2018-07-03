@@ -34,28 +34,28 @@ Matrices, Vectors, and Scalars
 
 Dimensions that can differ across markets are reported for a single market :math:`t`.
 
-=========================  ==========================================  ===========================================================================================================================================================
+=========================  ==========================================  ======================================================================================================================================================================
 Symbol                     Dimensions                                  Description
-=========================  ==========================================  ===========================================================================================================================================================
+=========================  ==========================================  ======================================================================================================================================================================
 :math:`X_1`                :math:`N \times K_1`                        Linear product characteristics.
 :math:`X_2`                :math:`N \times K_2`                        Nonlinear product characteristics.
 :math:`X_3`                :math:`N \times K_3`                        Cost product characteristics.
 :math:`\xi`                :math:`N \times 1`                          Unobserved demand-side product characteristics, or equivalently, the demand-side structural error term.
 :math:`\omega`             :math:`N \times 1`                          Unobserved supply-side product characteristics, or equivalently, the supply-side structural error term.
 :math:`p`                  :math:`N \times 1`                          Prices.
-:math:`p^*`                :math:`N \times 1`                          Post-merger prices.
-:math:`p^a`                :math:`N \times 1`                          Post-merger prices approximated with the assumption that shares and their price derivatives are unaffected by the merger.
+:math:`p^*`                :math:`N \times 1`                          Bertrand-Nash prices after firm ID changes.
+:math:`p^a`                :math:`N \times 1`                          Bertrand-Nash prices after firm ID changes approximated with the assumption that shares and their price derivatives are unaffected by the changes.
 :math:`s`                  :math:`N \times 1`                          Shares, or, when subscripted with :math:`i`, choice probabilities with :math:`I_t` columns.
 :math:`c`                  :math:`N \times 1`                          Marginal costs.
 :math:`\tilde{c}`          :math:`N \times 1`                          Marginal costs, :math:`c`, under a linear specification, and :math:`\log c` under a log-linear specification.
 :math:`\eta`               :math:`N \times 1`                          Markup term from the BLP-markup equation.
-:math:`\eta^a`             :math:`N \times 1`                          Post-merger markup term from the BLP-markup equation approximated with the assumption that shares and their price derivatives are unaffected by the merger.
+:math:`\eta^a`             :math:`N \times 1`                          Markup term after firm ID changes from the BLP-markup equation approximated with the assumption that shares and their price derivatives are unaffected by the changes.
 :math:`\zeta`              :math:`N \times 1`                          Markup term from the :math:`\zeta`-markup equation.
-:math:`\zeta^*`            :math:`N \times 1`                          Post-merger markup term from the :math:`\zeta`-markup equation.
+:math:`\zeta^*`            :math:`N \times 1`                          Markup term after firm ID changes from the :math:`\zeta`-markup equation.
 :math:`O`                  :math:`J_t \times J_t`                      Ownership matrix in market :math:`t`.
-:math:`O^*`                :math:`J_t \times J_t`                      Post-merger ownership matrix in market :math:`t`.
+:math:`O^*`                :math:`J_t \times J_t`                      Ownership matrix in market :math:`t` after firm ID changes.
 :math:`\kappa`             :math:`F_t \times F_t`                      Cooperation matrix in market :math:`t`.
-:math:`\kappa^*`           :math:`F_t \times F_t`                      Post-merger cooperation matrix in market :math:`t`.
+:math:`\kappa^*`           :math:`F_t \times F_t`                      Cooperation matrix in market :math:`t` after firm ID changes.
 :math:`\Lambda`            :math:`J_t \times J_t`                      Diagonal matrix used to decompose :math:`\eta` and :math:`\zeta` in market :math:`t`.
 :math:`\Gamma`             :math:`J_t \times J_t`                      Another matrix used to decompose :math:`\eta` and :math:`\zeta` in market :math:`t`.
 :math:`d`                  :math:`I_t \times D`                        Observed agent characteristics called demographics in market :math:`t`.
@@ -87,4 +87,4 @@ Symbol                     Dimensions                                  Descripti
 :math:`\mathscr{M}`        :math:`N \times 1`                          Markups.
 :math:`\pi`                :math:`N \times 1`                          Population-normalized gross expected profits.
 :math:`\text{CS}`          :math:`1 \times 1`                          Population-normalized consumer surplus of a market.
-=========================  ==========================================  ===========================================================================================================================================================
+=========================  ==========================================  ======================================================================================================================================================================

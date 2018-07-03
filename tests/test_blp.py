@@ -173,8 +173,8 @@ def test_merger(simulated_problem, solve_options):
     changed_product_data = simulation.solve(firms_index=1)
 
     # solve for approximate and actual changed prices and shares
-    approximated_prices = results.solve_approximate_merger()
-    estimated_prices = results.solve_merger(**solve_options)
+    approximated_prices = results.compute_approximate_prices()
+    estimated_prices = results.compute_prices(**solve_options)
     approximated_shares = results.compute_shares(approximated_prices)
     estimated_shares = results.compute_shares(estimated_prices)
 
@@ -501,7 +501,7 @@ def test_knittel_metaxoglou_2014(knittel_metaxoglou_2014):
 
     # structure post-estimation outputs
     elasticities = results.compute_elasticities()
-    changed_prices = results.solve_approximate_merger()
+    changed_prices = results.compute_approximate_prices()
     changed_shares = results.compute_shares(changed_prices)
     post_estimation = {
         'elasticities': elasticities,

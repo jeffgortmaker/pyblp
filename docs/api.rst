@@ -103,8 +103,8 @@ In addition to class attributes, other post-estimation outputs can be computed w
    Results.extract_diagonals
    Results.extract_diagonal_means
    Results.compute_costs
-   Results.solve_approximate_merger
-   Results.solve_merger
+   Results.compute_approximate_prices
+   Results.compute_prices
    Results.compute_shares
    Results.compute_hhi
    Results.compute_markups

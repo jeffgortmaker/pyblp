@@ -362,12 +362,12 @@ Before computing post-merger outputs, we'll supplement our pre-merger markups wi
 
 To compute post-merger outputs, the `firm_ids` field in the `product_data` passed to :class:`Problem` must have had at least two columns. Columns after the first represent changes, such as mergers. Although mergers are commonly what firm ID changes represent, these additional columns can represent any type of change.
 
-Since we included two columns of firm IDs in both problems, we can use :meth:`Results.solve_approximate_merger` or :meth:`Results.solve_merger` to estimate post-merger prices. The first method, which is discussed, for example, in :ref:`Nevo (1997) <n97>`, assumes that shares and their price derivatives are unaffected by the merger. The second method does not make these two assumptions and iterates over the :math:`\zeta`-markup equation from :ref:`Morrow and Skerlos (2011) <ms11>` to solve the full system of :math:`J_t` equations and :math:`J_t` unknowns in each market :math:`t`. We'll use the latter, since it is fast enough for the two example problems.
+Since we included two columns of firm IDs in both problems, we can use :meth:`Results.compute_approximate_prices` or :meth:`Results.compute_prices` to estimate post-merger prices. The first method, which is discussed, for example, in :ref:`Nevo (1997) <n97>`, assumes that shares and their price derivatives are unaffected by the merger. The second method does not make these two assumptions and iterates over the :math:`\zeta`-markup equation from :ref:`Morrow and Skerlos (2011) <ms11>` to solve the full system of :math:`J_t` equations and :math:`J_t` unknowns in each market :math:`t`. We'll use the latter, since it is fast enough for the two example problems.
 
 .. ipython:: python
 
-   blp_changed_prices = blp_results.solve_approximate_merger(costs=blp_costs)
-   nevo_changed_prices = nevo_results.solve_merger(costs=nevo_costs)
+   blp_changed_prices = blp_results.compute_approximate_prices(costs=blp_costs)
+   nevo_changed_prices = nevo_results.compute_prices(costs=nevo_costs)
 
 If the problems were configured with more than two columns of firm IDs, we could estimate post-merger prices for the other mergers with the `firms_index` argument, which is by default ``1``.
 
@@ -518,7 +518,7 @@ The instruments in :attr:`Simulation.product_data` are basic ones computed with 
 
 The :class:`Simulation` can be further configured with other arguments that determine how unobserved product characteristics are simulated and how marginal costs are specified.
 
-Since at this stage, prices and shares are all zeros, we still need to solve the simulation with :meth:`Simulation.solve`. This method computes Bertrand-Nash prices and shares. Just like :meth:`Results.solve_merger`, it iterates over the :math:`\zeta`-markup equation from :ref:`Morrow and Skerlos (2011) <ms11>` to do so.
+Since at this stage, prices and shares are all zeros, we still need to solve the simulation with :meth:`Simulation.solve`. This method computes Bertrand-Nash prices and shares. Just like :meth:`Results.compute_prices`, it iterates over the :math:`\zeta`-markup equation from :ref:`Morrow and Skerlos (2011) <ms11>` to do so.
 
 .. ipython:: python
 

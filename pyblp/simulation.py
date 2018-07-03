@@ -436,7 +436,7 @@ class Simulation(Economy):
         Prices and shares are computed by iterating market-by-market over the :math:`\zeta`-markup equation from
         :ref:`Morrow and Skerlos (2011) <ms11>`,
 
-        .. math:: p \leftarrow c + \zeta(p).
+        .. math:: p^* \leftarrow c + \zeta(p^*).
 
         Parameters
         ----------
