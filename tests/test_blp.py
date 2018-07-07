@@ -61,20 +61,20 @@ def test_trivial_changes(simulated_problem, solve_options1, solve_options2):
 
 
 @pytest.mark.usefixtures('simulated_problem')
-@pytest.mark.parametrize(['ED', 'ES'], [
-    pytest.param(1, 0, id="1 demand-side FE"),
-    pytest.param(0, 1, id="1 supply-side FE"),
-    pytest.param(1, 1, id="1 demand- and 1 supply-side FE"),
-    pytest.param(2, 0, id="2 demand-side FEs"),
-    pytest.param(0, 2, id="2 supply-side FEs"),
-    pytest.param(2, 2, id="2 demand- and 2 supply-side FEs"),
-    pytest.param(3, 0, id="3 demand-side FEs"),
-    pytest.param(0, 3, id="3 supply-side FEs"),
-    pytest.param(3, 3, id="3 demand- and 3 supply-side FEs"),
-    pytest.param(2, 1, id="2 demand- and 1 supply-side FEs"),
-    pytest.param(1, 2, id="1 demand- and 2 supply-side FEs"),
+@pytest.mark.parametrize(['ED', 'ES', 'absorb_method'], [
+    pytest.param(1, 0, None, id="1 demand-side FE, default method"),
+    pytest.param(0, 1, None, id="1 supply-side FE, default method"),
+    pytest.param(1, 1, 'simple', id="1 demand- and 1 supply-side FE, simple de-meaning"),
+    pytest.param(2, 0, None, id="2 demand-side FEs, default method"),
+    pytest.param(0, 2, 'memory', id="2 supply-side FEs, memory"),
+    pytest.param(2, 2, 'speed', id="2 demand- and 2 supply-side FEs, speed"),
+    pytest.param(3, 0, None, id="3 demand-side FEs"),
+    pytest.param(0, 3, None, id="3 supply-side FEs"),
+    pytest.param(3, 3, None, id="3 demand- and 3 supply-side FEs, default method"),
+    pytest.param(2, 1, None, id="2 demand- and 1 supply-side FEs, default method"),
+    pytest.param(1, 2, Iteration('simple', {'tol': 1e-12}), id="1 demand- and 2 supply-side FEs, iteration")
 ])
-def test_fixed_effects(simulated_problem, ED, ES):
+def test_fixed_effects(simulated_problem, ED, ES, absorb_method):
     """Test that absorbing different numbers of demand- and supply-side fixed effects gives rise to essentially
     identical first-stage results as including indicator variables. Also test that results that should be equal when
     there aren't any fixed effects are indeed equal.
@@ -121,9 +121,9 @@ def test_fixed_effects(simulated_problem, ED, ES):
     # solve the first stage of a problem in which the fixed effects are absorbed
     product_formulations1 = product_formulations.copy()
     if ED > 0:
-        product_formulations1[0] = Formulation(product_formulations[0]._formula, demand_formula)
+        product_formulations1[0] = Formulation(product_formulations[0]._formula, demand_formula, absorb_method)
     if ES > 0:
-        product_formulations1[2] = Formulation(product_formulations[2]._formula, supply_formula)
+        product_formulations1[2] = Formulation(product_formulations[2]._formula, supply_formula, absorb_method)
     problem1 = Problem(product_formulations1, product_data, problem.agent_formulation, simulation.agent_data)
     results1 = problem1.solve(simulation.sigma, simulation.pi, steps=1)
 

@@ -653,15 +653,14 @@ class Problem(Economy):
                 true_xi_jacobian[bad_indices] = last_objective_info.true_xi_jacobian[bad_indices]
                 errors.add(lambda: exceptions.XiJacobianReversionError(bad_indices.sum()))
 
-        # demean delta and its Jacobian
+        # absorb any demand-side fixed effects
         delta = true_delta
         xi_jacobian = true_xi_jacobian
         if self.ED > 0:
-            demean = self.product_formulations[0]._demean
-            delta, delta_errors = demean(delta, self.products.demand_ids)
+            delta, delta_errors = self._absorb_demand_ids(delta)
             errors |= delta_errors
             if compute_gradient:
-                xi_jacobian, jacobian_errors = demean(xi_jacobian, self.products.demand_ids)
+                xi_jacobian, jacobian_errors = self._absorb_demand_ids(xi_jacobian)
                 errors |= jacobian_errors
 
         # recover beta and compute xi
@@ -717,15 +716,14 @@ class Problem(Economy):
                 true_omega_jacobian[bad_indices] = last_objective_info.true_omega_jacobian[bad_indices]
                 errors.add(lambda: exceptions.OmegaJacobianReversionError(bad_indices.sum()))
 
-        # demean transformed marginal costs and their Jacobian
+        # absorb any supply-side fixed effects
         tilde_costs = true_tilde_costs
         omega_jacobian = true_omega_jacobian
         if self.ES > 0:
-            demean = self.product_formulations[2]._demean
-            tilde_costs, tilde_costs_errors = demean(tilde_costs, self.products.supply_ids)
+            tilde_costs, tilde_costs_errors = self._absorb_supply_ids(tilde_costs)
             errors |= tilde_costs_errors
             if compute_gradient:
-                omega_jacobian, jacobian_errors = demean(omega_jacobian, self.products.supply_ids)
+                omega_jacobian, jacobian_errors = self._absorb_supply_ids(omega_jacobian)
                 errors |= jacobian_errors
 
         # recover gamma and compute omega

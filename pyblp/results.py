@@ -81,14 +81,14 @@ class Results(object):
     gamma_se : `ndarray`
         Estimated standard errors for :math:`\hat{\gamma}`.
     delta : `ndarray`
-        Estimated mean utility, :math:`\delta(\hat{\theta})`, which may have been demeaned to absorb any demand-side
+        Estimated mean utility, :math:`\delta(\hat{\theta})`, which may have been residualized to absorb any demand-side
         fixed effects.
     true_delta : `ndarray`
         Estimated mean utility, :math:`\delta(\hat{\theta})`.
     tilde_costs : `ndarray`
-        Estimated transformed marginal costs, :math:`\tilde{c}(\hat{\theta})`, which may have been demeaned to absorb
-        any demand-side fixed effects. Transformed marginal costs are simply :math:`\tilde{c} = c`, marginal costs,
-        under a linear cost specification, and are :math:`\tilde{c} = \log c` under a log-linear specification.
+        Estimated transformed marginal costs, :math:`\tilde{c}(\hat{\theta})`, which may have been residualized to
+        absorb any demand-side fixed effects. Transformed marginal costs are simply :math:`\tilde{c} = c`, marginal
+        costs, under a linear cost specification, and are :math:`\tilde{c} = \log c` under a log-linear specification.
     true_tilde_costs : `ndarray`
         Estimated transformed marginal costs, :math:`\tilde{c}(\hat{\theta})`.
     xi : `ndarray`
@@ -105,13 +105,13 @@ class Results(object):
     objective : `float`
         GMM objective value.
     xi_jacobian : `ndarray`
-        Estimated :math:`\partial\xi / \partial\theta = \partial\delta / \partial\theta`, which may have been demeaned
-        to absorb any demand-side fixed effects.
+        Estimated :math:`\partial\xi / \partial\theta = \partial\delta / \partial\theta`, which may have been
+        residualized to absorb any demand-side fixed effects.
     true_xi_jacobian : `ndarray`
         Estimated :math:`\partial\xi / \partial\theta = \partial\delta / \partial\theta`.
     omega_jacobian : `ndarray`
         Estimated :math:`\partial\omega / \partial\theta = \partial\tilde{c} / \partial\theta`, which may have been
-        demeaned to absorb any supply-side fixed effects.
+        residualized to absorb any supply-side fixed effects.
     true_omega_jacobian : `ndarray`
         Estimated :math:`\partial\omega / \partial\theta = \partial\tilde{c} / \partial\theta`.
     gradient : `ndarray`

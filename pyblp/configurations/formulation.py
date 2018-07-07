@@ -6,13 +6,15 @@ import functools
 import patsy
 import sympy
 import numpy as np
+import scipy.linalg
+import scipy.sparse
 import patsy.origin
 import patsy.builtins
 from sympy.parsing import sympy_parser
 
 from .. import exceptions
-from ..utilities import extract_size
 from ..configurations import Iteration
+from ..utilities import extract_size, Groups
 
 
 class Formulation(object):
@@ -51,15 +53,29 @@ class Formulation(object):
         data are passed to a function that uses them. By default, an intercept is included, which can be removed with
         ``0`` or ``-1``.
     absorb : `str, optional`
-        R-style formula used to design a matrix of categorical variables that will be used to create fixed effects,
-        which will be absorbed into the matrix designed by `formula` with the simple iterative de-meaning algorithm of
-        :ref:`Rios-Avila (2015) <r15>`. Fixed effect absorption is only supported for some matrices. Unlike `formula`,
-        intercepts are ignored. Only categorical variables are supported.
-    iteration : `Iteration, optional`
-        :class:`Iteration` configuration for how to absorb fixed effects. By default,
-        ``Iteration('simple', {'tol': 1e-14})`` is used. This configuration is only relevant if `absorb` designs a
-        matrix with more than one variable, since a single fixed effect will be completely absorbed after only a single
-        de-meaning pass.
+        R-style formula used to design a matrix of categorical variables representing fixed effects, which will be
+        absorbed into the matrix designed by `formula`. Fixed effect absorption is only supported for some matrices.
+        Unlike `formula`, intercepts are ignored. Only categorical variables are supported. There are no checks for
+        multicollinearity.
+    absorb_method : `str or Iteration, optional`
+        The method with which fixed effects will be absorbed. One of the following:
+
+            - ``'simple'`` (default for one fixed effect) - Use simple de-meaning. This method is very unlikely to fully
+              absorb more than one fixed effect.
+
+            - ``'memory'`` (default for two fixed effects) - Use the :ref:`Somaini and Wolak (2016) <sw16>` algorithm,
+              which only works for two-way fixed effects, and which requires inversion of a dense matrix with dimensions
+              equal to the smaller number of fixed effect groups.
+
+            - ``'speed'`` - Use the same :ref:`Somaini and Wolak (2016) <sw16>` algorithm but pre-compute the :math:`A`
+              matrix, which is a dense matrix with dimensions equal to the larger number of fixed effect groups. Again,
+              this method only works for two-way fixed effects.
+
+            - ``Iteration`` (default for more than two fixed effects) - Use the iterative de-meaning algorithm of
+              :ref:`Rios-Avila (2015) <r15>` and configure the fixed point iteration with a :class:`Iteration`
+              configuration. By default, ``Iteration('simple', {'tol': 1e-14})`` is used. This method is equivalent to
+              ``'simple'`` for one fixed effect, and it will also work for two fixed effects, although either variant of
+              the :ref:`Somaini and Wolak (2016) <sw16>` algorithm is usually more performant.
 
     Examples
     --------
@@ -92,7 +108,7 @@ class Formulation(object):
 
     """
 
-    def __init__(self, formula, absorb=None, iteration=None):
+    def __init__(self, formula, absorb=None, absorb_method=None):
         """Parse the formula into patsy terms and SymPy expressions. In the process, validate it as much as possible
         without any data.
         """
@@ -127,12 +143,10 @@ class Formulation(object):
                 patsy.origin.Origin(absorb, 0, len(absorb))
             )
 
-        # configure demeaning iteration
-        if iteration is None:
-            iteration = Iteration('simple', {'tol': 1e-14})
-        if not isinstance(iteration, Iteration):
-            raise TypeError("iteration must be None or an Iteration instance.")
-        self._iteration = iteration
+        # configure fixed effect absorption
+        if absorb_method not in {None, 'simple', 'memory', 'speed'} and not isinstance(absorb_method, Iteration):
+            raise TypeError("absorb_method must be None, 'simple', 'memory', 'speed', or an Iteration instance.")
+        self._absorb_method = absorb_method
 
     def __str__(self):
         """Format the terms as a string."""
@@ -231,39 +245,85 @@ class Formulation(object):
         # build the matrix of IDs
         return np.column_stack(ids_columns)
 
-    def _demean(self, matrix, ids):
-        """Iteratively demean matrix columns to absorb fixed effects defined by columns of IDs. Return any errors."""
-        errors = set()
+    def _build_absorb(self, ids):
+        """Build a function used to absorb fixed effects defined by columns of IDs."""
 
-        # pre-compute indices that sort and de-sort each column of IDs, as well as information about unique values in
-        #   each sorted column
-        demeaning_info = []
-        for unsorted in ids.T:
-            sort_indices = unsorted.argsort()
-            undo_indices = sort_indices.argsort()
-            demeaning_info.append((
-                sort_indices,
-                undo_indices,
-                np.unique(unsorted[sort_indices], return_index=True, return_inverse=True, return_counts=True)[1:]
-            ))
+        # choose a default absorption method
+        method = self._absorb_method
+        if method is None:
+            if ids.shape[1] == 1:
+                method = 'simple'
+            elif ids.shape[1] == 2:
+                method = 'memory'
+            else:
+                method = Iteration('simple', {'tol': 1e-12})
 
-        # define the contraction mapping, which uses the pre-computed information to quickly demean the matrix
-        def demean(unaltered):
-            demeaned = unaltered.copy()
-            for sort, undo, (indices, inverse, counts) in demeaning_info:
-                means = np.add.reduceat(demeaned[sort], indices) / counts[:, np.newaxis]
-                demeaned -= means[inverse][undo]
-            return demeaned
+        # simple and iterated de-meaning both require group information for each fixed effect
+        if method == 'simple' or isinstance(method, Iteration):
+            groups_list = [Groups(i) for i in ids.T]
 
-        # demean the matrix once if there is only one column of IDs
-        if ids.shape[1] == 1:
-            return demean(matrix), errors
+            # define a single de-meaning pass
+            def demean(matrix):
+                matrix = matrix.copy()
+                for groups in groups_list:
+                    matrix -= groups.expand(groups.mean(matrix))
+                return matrix
 
-        # otherwise, iteratively demean
-        matrix, converged = self._iteration._iterate(matrix, demean)[:2]
-        if not converged:
-            errors.add(exceptions.AbsorptionConvergenceError)
-        return matrix, errors
+            # if the method is simple de-meaning, supplement the de-meaning pass with an empty set of errors
+            if method == 'simple':
+                return lambda m: (demean(m), set())
+
+            # otherwise, use iterated de-meaning
+            def absorb(matrix):
+                matrix, converged = method._iterate(matrix, demean)[:2]
+                return matrix, set() if converged else {exceptions.AbsorptionConvergenceError}
+            return absorb
+
+        # validate that the method is a variation of the algorithm of Somaini and Wolak (2016)
+        assert method in {'memory', 'speed'}
+        if ids.shape[1] != 2:
+            raise ValueError("The absorption methods 'memory' and 'speed' are only applicable for two fixed effects.")
+
+        # compute fixed effect indices and identify the fixed effects with the larger dimension
+        ids1, ids2 = ids.T
+        unique1, indices1 = np.unique(ids1, return_inverse=True)
+        unique2, indices2 = np.unique(ids2, return_inverse=True)
+        if unique1.size > unique2.size:
+            indices1, indices2 = indices2, indices1
+
+        # construct sparse matrices and drop the last column to remove multicollinearity
+        D = scipy.sparse.coo_matrix((np.ones_like(indices1), (np.arange(indices1.size), indices1))).tocsr()
+        H = scipy.sparse.coo_matrix((np.ones_like(indices2), (np.arange(indices2.size), indices2))).tocsc()[:, :-1]
+
+        # compute the straightforward components of the annihilator matrix
+        DH = (D.T @ H).todense()
+        DD_inverse = scipy.sparse.diags(1 / (D.T @ D).diagonal())
+
+        # attempt to compute the only non-diagonal inverse
+        try:
+            C = scipy.linalg.inv(H.T @ H - DH.T @ DD_inverse @ DH)
+        except scipy.linalg.LinAlgError:
+            raise exceptions.AbsorptionInversionError
+
+        # compute the remaining components and the function for computing AD'x, optionally pre-computing A
+        B = -DD_inverse @ DH @ C
+        if method == 'speed':
+            A = DD_inverse + DD_inverse @ DH @ C @ DH.T @ DD_inverse
+            compute_ADx = lambda Dx: A @ Dx
+        else:
+            compute_ADx = lambda Dx: DD_inverse @ Dx + DD_inverse @ (DH @ (C @ (DH.T @ (DD_inverse @ Dx))))
+
+        # define the absorption function
+        def absorb(matrix):
+            matrix = matrix.copy()
+            for k, x in enumerate(matrix.T):
+                Dx = D.T @ np.c_[x]
+                Hx = H.T @ np.c_[x]
+                delta_hat = compute_ADx(Dx) + B @ Hx
+                tau_hat = B.T @ Dx + C @ Hx
+                matrix[:, [k]] -= D @ delta_hat + H @ tau_hat
+            return matrix, set()
+        return absorb
 
 
 class ColumnFormulation(object):

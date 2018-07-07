@@ -53,6 +53,10 @@ Reynaerts, J., Varadhan, R., & Nash, J. C. (2012). `Enhancing the convergence pr
 
 Rios-Avila, F. (2015). `Feasible fitting of linear models with N fixed effects <https://ideas.repec.org/a/tsj/stataj/v15y2015i3p881-898.html>`_. *Stata Journal, 15* (3), 881-898.
 
+.. _sw16:
+
+Somaini, P., & Wolak, F. A. (2016). `An algorithm to estimate the two-way fixed effects model <https://ideas.repec.org/a/bpj/jecome/v5y2016i1p143-152n4.html>`_. *Journal of Econometric Methods, 5* (1), 143-152.
+
 .. _s12:
 
 Skrainka, B. (2012). `A large scale study of the small sample performance of random coefficient models of demand <https://papers.ssrn.com/sol3/papers.cfm?abstract_id=1942627>`_.

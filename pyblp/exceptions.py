@@ -96,6 +96,17 @@ class AbsorptionConvergenceError(Exception):
         )
 
 
+class AbsorptionInversionError(Exception):
+    """Problems with inversion of the A matrix in Somaini and Wolak (2016) when absorbing two-way fixed effects."""
+
+    def __str__(self):
+        return (
+            "Encountered a singular matrix when absorbing two-way fixed effects. Specifically, the A matrix from "
+            "Somaini and  Wolak (2016) is singular. There may be multicollinearity in the formulated two-way fixed "
+            "effecdts."
+        )
+
+
 class ThetaConvergenceError(Exception):
     """Convergence issues when optimizing over theta."""
 

@@ -1,5 +1,6 @@
 """Primitive structures that constitute the foundation of the BLP model."""
 
+import time
 import itertools
 import collections
 
@@ -31,19 +32,15 @@ class Products(Matrices):
 
         - **shares** : (`numeric`) - Market shares, :math:`s`.
 
-        - **ZD** : (`numeric`) - Demand-side instruments, :math:`Z_D`, which may have been demeaned to absorb any
-          demand-side fixed effects.
+        - **ZD** : (`numeric`) - Demand-side instruments, :math:`Z_D`.
 
-        - **ZS** : (`numeric`) - Supply-side instruments, :math:`Z_S`, which may have been demeaned to absorb any
-          supply-side fixed effects.
+        - **ZS** : (`numeric`) - Supply-side instruments, :math:`Z_S`.
 
-        - **X1** : (`numeric`) - Linear product characteristics, :math:`X_1`, which may have been demeaned to absorb any
-          demand-side fixed effects.
+        - **X1** : (`numeric`) - Linear product characteristics, :math:`X_1`.
 
         - **X2** : (`numeric`) - Nonlinear product characteristics, :math:`X_2`.
 
-        - **X3** : (`numeric`) - Cost product characteristics, :math:`X_3`, which may have been demeaned to absorb any
-          supply-side fixed effects.
+        - **X3** : (`numeric`) - Cost product characteristics, :math:`X_3`.
 
         - **prices** : (`numeric`) - Product prices, :math:`p`.
 
@@ -52,7 +49,7 @@ class Products(Matrices):
     """
 
     def __new__(cls, product_formulations, product_data):
-        """Structure product data while absorbing any fixed effects."""
+        """Structure product data."""
 
         # validate the formulations
         if not all(isinstance(f, Formulation) or f is None for f in product_formulations):
@@ -103,23 +100,12 @@ class Products(Matrices):
             if ZS is None:
                 raise KeyError("Since X3 is formulated, product_data must have a supply_instruments field.")
 
-        # load and absorb any demand-side fixed effects
-        demand_ids = None
+        # load fixed effect IDs
+        demand_ids = supply_ids = None
         if product_formulations[0]._absorbed_terms:
             demand_ids = product_formulations[0]._build_ids(product_data)
-            X1, X1_errors = product_formulations[0]._demean(X1, demand_ids)
-            ZD, ZD_errors = product_formulations[0]._demean(ZD, demand_ids)
-            if X1_errors | ZD_errors:
-                raise exceptions.MultipleErrors(X1_errors | ZD_errors)
-
-        # load and absorb any demand-side fixed effects
-        supply_ids = None
         if product_formulations[2] is not None and product_formulations[2]._absorbed_terms:
             supply_ids = product_formulations[2]._build_ids(product_data)
-            X3, X3_errors = product_formulations[2]._demean(X3, supply_ids)
-            ZS, ZS_errors = product_formulations[2]._demean(ZS, supply_ids)
-            if X3_errors | ZS_errors:
-                raise exceptions.MultipleErrors(X3_errors | ZS_errors)
 
         # load other IDs
         market_ids = extract_matrix(product_data, 'market_ids')
@@ -282,7 +268,7 @@ class Economy(object):
     """An economy, which is initialized with product and agent data."""
 
     def __init__(self, product_formulations, agent_formulation, products, agents):
-        """Store information about formulations and data."""
+        """Store information about formulations and data before absorbing any fixed effects."""
 
         # store formulations and data
         self.product_formulations = product_formulations
@@ -310,6 +296,34 @@ class Economy(object):
         self._X2_formulations = self.products.dtype.fields['X2'][2]
         self._X3_formulations = self.products.dtype.fields['X3'][2]
         self._demographics_formulations = self.agents.dtype.fields['demographics'][2]
+
+        # absorb any demand-side fixed effects
+        self._absorb_demand_ids = None
+        if self.ED > 0:
+            start_time = time.time()
+            output("")
+            output("Absorbing demand-side fixed effects ...")
+            self._absorb_demand_ids = product_formulations[0]._build_absorb(self.products.demand_ids)
+            self.products.X1, X1_errors = self._absorb_demand_ids(self.products.X1)
+            self.products.ZD, ZD_errors = self._absorb_demand_ids(self.products.ZD)
+            if X1_errors | ZD_errors:
+                raise exceptions.MultipleErrors(X1_errors | ZD_errors)
+            end_time = time.time()
+            output(f"Absorbed demand-side fixed effects after {output.format_seconds(end_time - start_time)}.")
+
+        # absorb any supply-side fixed effects
+        self._absorb_supply_ids = None
+        if self.ES > 0:
+            start_time = time.time()
+            output("")
+            output("Absorbing supply-side fixed effects ...")
+            self._absorb_supply_ids = product_formulations[2]._build_absorb(self.products.supply_ids)
+            self.products.X3, X3_errors = self._absorb_supply_ids(self.products.X3)
+            self.products.ZS, ZS_errors = self._absorb_supply_ids(self.products.ZS)
+            if X3_errors | ZS_errors:
+                raise exceptions.MultipleErrors(X3_errors | ZS_errors)
+            end_time = time.time()
+            output(f"Absorbed supply-side fixed effects after {output.format_seconds(end_time - start_time)}.")
 
     def __str__(self):
         """Format economy information as a string."""
