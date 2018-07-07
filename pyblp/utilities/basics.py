@@ -51,6 +51,30 @@ def extract_size(structured_array_like):
     )
 
 
+class Groups(object):
+    """Computation of grouped statistics."""
+
+    def __init__(self, ids):
+        """Sort and index IDs that define groups."""
+        self.sort = ids.argsort()
+        self.undo = self.sort.argsort()
+        self.unique, self.index, self.inverse, self.counts = np.unique(
+            ids[self.sort], return_index=True, return_inverse=True, return_counts=True
+        )
+
+    def sum(self, matrix):
+        """Compute the sum of each group."""
+        return np.add.reduceat(matrix[self.sort], self.index)
+
+    def mean(self, matrix):
+        """Compute the mean of each group."""
+        return self.sum(matrix) / self.counts[:, np.newaxis]
+
+    def expand(self, statistics):
+        """Expand statistics for each group to the size of the original matrix."""
+        return statistics[self.inverse][self.undo]
+
+
 class Matrices(np.recarray):
     """Record array, which guarantees that each sub-array is at least two-dimensional."""
 
