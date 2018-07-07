@@ -582,16 +582,16 @@ class Problem(Economy):
             )
 
         # compute the objective value
-        objective = true_xi.T @ self.products.ZD @ WD @ self.products.ZD.T @ true_xi
+        objective = (true_xi.T @ self.products.ZD) @ WD @ (self.products.ZD.T @ true_xi)
         if self.K3 > 0:
-            objective += true_omega.T @ self.products.ZS @ WS @ self.products.ZS.T @ true_omega
+            objective += (true_omega.T @ self.products.ZS) @ WS @ (self.products.ZS.T @ true_omega)
 
         # compute its gradient
         gradient = np.full_like(theta, np.nan, options.dtype)
         if compute_gradient:
-            gradient = 2 * (xi_jacobian.T @ self.products.ZD @ WD @ self.products.ZD.T @ true_xi)
+            gradient = 2 * ((xi_jacobian.T @ self.products.ZD) @ WD @ (self.products.ZD.T @ true_xi))
             if self.K3 > 0:
-                gradient += 2 * (omega_jacobian.T @ self.products.ZS @ WS @ self.products.ZS.T @ true_omega)
+                gradient += 2 * ((omega_jacobian.T @ self.products.ZS) @ WS @ (self.products.ZS.T @ true_omega))
 
         # handle any errors
         errors = demand_errors | supply_errors
@@ -1001,7 +1001,7 @@ class SupplyProblemMarket(Market):
         # compute the tensor derivative of A with respect to xi
         capital_gamma_by_xi_tensor = (
             V @ square_weights @ probabilities_by_xi_tensor.swapaxes(1, 2) +
-            V_by_xi_tensor @ square_weights @ probabilities.T
+            V_by_xi_tensor @ (square_weights @ probabilities.T)
         )
         capital_lambda_by_xi_tensor = np.zeros_like(capital_gamma_by_xi_tensor)
         V_by_xi_tensor_times_weights = np.squeeze(V_by_xi_tensor @ self.agents.weights)

@@ -14,13 +14,13 @@ class IV(object):
         self.X = X
         self.Z = Z
         self.W = W
-        self.covariances, approximation = invert(self.X.T @ self.Z @ self.W @ self.Z.T @ self.X)
+        self.covariances, approximation = invert((self.X.T @ self.Z) @ self.W @ (self.Z.T @ self.X))
         if approximation:
             self.errors.add(lambda: exceptions.LinearParameterCovariancesInversionError(approximation))
 
     def estimate(self, y, compute_residuals=True):
         """Estimate parameters and compute residuals."""
-        parameters = self.covariances @ self.X.T @ self.Z @ self.W @ self.Z.T @ y
+        parameters = self.covariances @ (self.X.T @ self.Z) @ self.W @ (self.Z.T @ y)
         return (parameters, y - self.X @ parameters) if compute_residuals else parameters
 
 
