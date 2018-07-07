@@ -8,7 +8,7 @@ class Iteration(object):
 
     Parameters
     ----------
-    method : `str`
+    method : `str or callable`
         The fixed point iteration routine that will be used. One of the following:
 
             - ``'simple'`` - Non-accelerated iteration.

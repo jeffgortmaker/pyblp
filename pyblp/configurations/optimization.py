@@ -16,7 +16,7 @@ class Optimization(object):
 
     Parameters
     ----------
-    method : `str`
+    method : `str or callable`
         The optimization routine that will be used. The following routines support parameter bounds and use analytic
         gradients:
 
