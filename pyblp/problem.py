@@ -461,7 +461,11 @@ class Problem(Economy):
         # initialize marginal costs as prices
         true_tilde_costs = np.full((self.N, 0), np.nan, options.dtype)
         if self.K3 > 0:
-            true_tilde_costs = self.products.prices if costs_type == 'linear' else np.log(self.products.prices)
+            if costs_type == 'linear':
+                true_tilde_costs = self.products.prices
+            else:
+                assert costs_type == 'log'
+                true_tilde_costs = np.log(self.products.prices)
 
         # initialize Jacobians of xi and omega with respect to theta as all zeros
         true_xi_jacobian = np.zeros((self.N, nonlinear_parameters.P), options.dtype)
@@ -597,13 +601,20 @@ class Problem(Economy):
             if error_behavior == 'revert':
                 if error_punishment != 1:
                     objective *= error_punishment
-            elif error_behavior == 'punish':
+            else:
+                assert error_behavior == 'punish'
                 objective = np.array(error_punishment)
                 if compute_gradient:
                     gradient = np.zeros_like(theta)
 
+        # select the delta that will be used in the next objective evaluation
+        if delta_behavior == 'last':
+            next_delta = true_delta
+        else:
+            assert delta_behavior == 'first'
+            next_delta = last_objective_info.next_delta
+
         # structure objective information
-        next_delta = true_delta if delta_behavior == 'last' else last_objective_info.next_delta
         return ObjectiveInfo(
             self, nonlinear_parameters, WD, WS, theta, next_delta, true_delta, true_tilde_costs, true_xi_jacobian,
             true_omega_jacobian, delta, tilde_costs, xi_jacobian, omega_jacobian, true_xi, true_omega, beta, gamma,
@@ -856,6 +867,7 @@ class DemandProblemMarket(Market):
                 contraction = lambda d: d + log_shares - custom_log(self.compute_probabilities(d) @ self.agents.weights)
                 delta, converged, iterations, evaluations = iteration._iterate(initial_delta, contraction)
             else:
+                assert fp_type == 'nonlinear'
                 compute_probabilities = functools.partial(self.compute_probabilities, mu=np.exp(self.mu), linear=False)
                 contraction = lambda d: d * self.products.shares / (compute_probabilities(d) @ self.agents.weights)
                 exp_delta, converged, iterations, evaluations = iteration._iterate(np.exp(initial_delta), contraction)
@@ -928,8 +940,10 @@ class SupplyProblemMarket(Market):
             costs = np.clip(costs, *costs_bounds)
 
             # take the log of marginal costs under a log-linear specification
-            tilde_costs = costs
-            if costs_type == 'log':
+            if costs_type == 'linear':
+                tilde_costs = costs
+            else:
+                assert costs_type == 'log'
                 with np.errstate(all='ignore'):
                     if np.any(costs <= 0):
                         errors.add(exceptions.NonpositiveCostsError)
@@ -953,6 +967,7 @@ class SupplyProblemMarket(Market):
         costs_jacobian = -self.compute_eta_by_theta_jacobian(xi_jacobian, beta_jacobian, nonlinear_parameters)
         if costs_type == 'linear':
             return costs_jacobian
+        assert costs_type == 'log'
         return costs_jacobian / np.exp(tilde_costs)
 
     def compute_eta_by_theta_jacobian(self, xi_jacobian, beta_jacobian, nonlinear_parameters):

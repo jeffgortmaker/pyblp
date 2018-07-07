@@ -788,6 +788,7 @@ class NonlinearParameters(object):
                         if isinstance(parameter, SigmaParameter):
                             sigma_indices.add(parameter.location[1])
                         else:
+                            assert isinstance(parameter, PiParameter)
                             pi_indices.add(parameter.location[1])
 
                 # construct a row similar to the values row without row labels and optionally with standard error
@@ -828,6 +829,7 @@ class NonlinearParameters(object):
             if isinstance(parameter, SigmaParameter):
                 sigma_like[parameter.location] = value
             else:
+                assert isinstance(parameter, PiParameter)
                 pi_like[parameter.location] = value
 
         # set values for elements that correspond to fixed parameters
@@ -837,6 +839,7 @@ class NonlinearParameters(object):
                 if isinstance(parameter, SigmaParameter):
                     sigma_like[parameter.location] = parameter.value
                 else:
+                    assert isinstance(parameter, PiParameter)
                     pi_like[parameter.location] = parameter.value
 
         # return the expanded matrices

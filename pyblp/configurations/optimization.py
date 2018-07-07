@@ -194,6 +194,7 @@ class Optimization(object):
                 'outlev': 4 if not universal_display and options.verbose else 0
             })
         else:
+            assert unwrapped_optimizer == scipy_optimizer
             self._optimizer = functools.partial(self._optimizer, method=method)
             if not universal_display and options.verbose:
                 self._method_options['disp'] = True

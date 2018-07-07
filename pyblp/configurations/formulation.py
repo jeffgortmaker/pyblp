@@ -274,6 +274,7 @@ class Formulation(object):
                 return lambda m: (demean(m), set())
 
             # otherwise, use iterated de-meaning
+            assert isinstance(method, Iteration)
             def absorb(matrix):
                 matrix, converged = method._iterate(matrix, demean)[:2]
                 return matrix, set() if converged else {exceptions.AbsorptionConvergenceError}
@@ -311,6 +312,7 @@ class Formulation(object):
             A = DD_inverse + DD_inverse @ DH @ C @ DH.T @ DD_inverse
             compute_ADx = lambda Dx: A @ Dx
         else:
+            assert method == 'memory'
             compute_ADx = lambda Dx: DD_inverse @ Dx + DD_inverse @ (DH @ (C @ (DH.T @ (DD_inverse @ Dx))))
 
         # define the absorption function

@@ -523,6 +523,7 @@ class Simulation(Economy):
         if errors:
             if error_behavior == 'raise':
                 raise exceptions.MultipleErrors(errors)
+            assert error_behavior == 'warn'
             output("")
             output(exceptions.MultipleErrors(errors))
             output("")

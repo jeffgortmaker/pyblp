@@ -280,10 +280,13 @@ class Results(object):
         ]]
 
         # construct a standard error description
-        se_description = "Unadjusted SEs" if self.se_type == 'unadjusted' else "Robust SEs"
-        if self.se_type == 'clustered':
-            C = np.unique(self.problem.products.clustering_ids).size
-            se_description = f'{se_description} Adjusted for {C} Clusters'
+        if self.se_type == 'unadjusted':
+            se_description = "Unadjusted SEs"
+        elif self.se_type == 'robust':
+            se_description = "Robust SEs"
+        else:
+            assert self.se_type == 'clustered'
+            se_description = f'Robust SEs Adjusted for {np.unique(self.problem.products.clustering_ids).size} Clusters'
 
         # construct a section containing linear estimates
         sections.append([
