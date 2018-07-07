@@ -1,7 +1,7 @@
 pyblp
 =====
 
-|docs-badge|_ |pypi-badge|_ |python-badge|_ |license-badge|_
+|docs-badge|_ |pypi-badge|_ |downloads-badge|_ |python-badge|_ |license-badge|_
 
 .. |docs-badge| image:: https://img.shields.io/readthedocs/pyblp/stable.svg
 .. _docs-badge: https://pyblp.readthedocs.io/en/stable/
@@ -9,7 +9,10 @@ pyblp
 .. |pypi-badge| image:: https://img.shields.io/pypi/v/pyblp.svg
 .. _pypi-badge: https://pypi.org/project/pyblp/
 
-.. |python-badge| image::  https://img.shields.io/pypi/pyversions/pyblp.svg
+.. |downloads-badge| image:: https://pepy.tech/badge/pyblp
+.. _downloads-badge: https://pepy.tech/project/pyblp
+
+.. |python-badge| image:: https://img.shields.io/pypi/pyversions/pyblp.svg
 .. _python-badge: https://pypi.org/project/pyblp/
 
 .. |license-badge| image:: https://img.shields.io/pypi/l/pyblp.svg
