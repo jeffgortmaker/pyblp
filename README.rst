@@ -48,7 +48,7 @@ Features
 --------
 
 - Straightforward interface for configuring and solving BLP problems with R-style formulas.
-- Support for absorption of arbitrary fixed effects with iterative demeaning.
+- Performant absorption of arbitrary fixed effects.
 - Support for robust and clustered standard errors.
 - Support for demographics and supply-side moments.
 - Support for nonlinear functions and interactions of product characteristics.
