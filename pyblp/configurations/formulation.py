@@ -297,7 +297,7 @@ class Formulation(object):
         H = scipy.sparse.coo_matrix((np.ones_like(indices2), (np.arange(indices2.size), indices2))).tocsc()[:, :-1]
 
         # compute the straightforward components of the annihilator matrix
-        DH = (D.T @ H).todense()
+        DH = (D.T @ H).toarray()
         DD_inverse = scipy.sparse.diags(1 / (D.T @ D).diagonal())
 
         # attempt to compute the only non-diagonal inverse
@@ -309,7 +309,7 @@ class Formulation(object):
         # compute the remaining components and the function for computing AD'x, optionally pre-computing A
         B = -DD_inverse @ DH @ C
         if method == 'speed':
-            A = DD_inverse + DD_inverse @ DH @ C @ DH.T @ DD_inverse
+            A = DD_inverse.toarray() + DD_inverse @ DH @ C @ DH.T @ DD_inverse
             compute_ADx = lambda Dx: A @ Dx
         else:
             assert method == 'memory'
@@ -317,14 +317,11 @@ class Formulation(object):
 
         # define the absorption function
         def absorb(matrix):
-            matrix = matrix.copy()
-            for k, x in enumerate(matrix.T):
-                Dx = D.T @ np.c_[x]
-                Hx = H.T @ np.c_[x]
-                delta_hat = compute_ADx(Dx) + B @ Hx
-                tau_hat = B.T @ Dx + C @ Hx
-                matrix[:, [k]] -= D @ delta_hat + H @ tau_hat
-            return matrix, set()
+            Dx = D.T @ matrix
+            Hx = H.T @ matrix
+            delta_hat = compute_ADx(Dx) + B @ Hx
+            tau_hat = B.T @ Dx + C @ Hx
+            return matrix - D @ delta_hat - H @ tau_hat, set()
         return absorb
 
 
