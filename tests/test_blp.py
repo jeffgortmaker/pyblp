@@ -131,15 +131,35 @@ def test_fixed_effects(simulated_problem, ED, ES, absorb_method):
     product_data2 = product_data.copy()
     product_formulations2 = product_formulations.copy()
     if ED > 0:
-        demand_indicators = build_matrix(Formulation(demand_formula), product_data)
-        product_data2['demand_instruments'] = np.c_[product_data['demand_instruments'], demand_indicators]
+        demand_indicators2 = build_matrix(Formulation(demand_formula), product_data)
+        product_data2['demand_instruments'] = np.c_[product_data['demand_instruments'], demand_indicators2]
         product_formulations2[0] = Formulation(f'{product_formulations[0]._formula} + {demand_formula}')
     if ES > 0:
-        supply_indicators = build_matrix(Formulation(supply_formula), product_data)
-        product_data2['supply_instruments'] = np.c_[product_data['supply_instruments'], supply_indicators]
+        supply_indicators2 = build_matrix(Formulation(supply_formula), product_data)
+        product_data2['supply_instruments'] = np.c_[product_data['supply_instruments'], supply_indicators2]
         product_formulations2[2] = Formulation(f'{product_formulations[2]._formula} + {supply_formula}')
     problem2 = Problem(product_formulations2, product_data2, problem.agent_formulation, simulation.agent_data)
     results2 = problem2.solve(simulation.sigma, simulation.pi, steps=1)
+
+    # solve the first stage of a problem in which some fixed effects are absorbed and some are included as indicators
+    results3 = results2
+    if ED > 1 or ES > 1:
+        product_data3 = product_data.copy()
+        product_formulations3 = product_formulations.copy()
+        if ED > 0:
+            demand_indicators3 = build_matrix(Formulation(demand_names[0]), product_data)[:, int(ED > 1):]
+            product_data3['demand_instruments'] = np.c_[product_data['demand_instruments'], demand_indicators3]
+            product_formulations3[0] = Formulation(
+                f'{product_formulations[0]._formula} + {demand_names[0]}', ' + '.join(demand_names[1:]) or None
+            )
+        if ES > 0:
+            supply_indicators3 = build_matrix(Formulation(supply_names[0]), product_data)[:, int(ES > 1):]
+            product_data3['supply_instruments'] = np.c_[product_data['supply_instruments'], supply_indicators3]
+            product_formulations3[2] = Formulation(
+                f'{product_formulations[2]._formula} + {supply_names[0]}', ' + '.join(supply_names[1:]) or None
+            )
+        problem3 = Problem(product_formulations3, product_data3, problem.agent_formulation, simulation.agent_data)
+        results3 = problem3.solve(simulation.sigma, simulation.pi, steps=1)
 
     # test that all arrays expected to be identical are identical
     keys = [
@@ -150,9 +170,12 @@ def test_fixed_effects(simulated_problem, ED, ES, absorb_method):
     for key in keys:
         result1 = getattr(results1, key)
         result2 = getattr(results2, key)
+        result3 = getattr(results3, key)
         if 'beta' in key or 'gamma' in key:
             result2 = result2[:result1.size]
+            result3 = result3[:result1.size]
         np.testing.assert_allclose(result1, result2, atol=1e-8, rtol=1e-5, err_msg=key)
+        np.testing.assert_allclose(result1, result3, atol=1e-8, rtol=1e-5, err_msg=key)
 
 
 @pytest.mark.usefixtures('simulated_problem')

@@ -147,7 +147,7 @@ def test_ids(formula_data, formulas, build_columns):
 
     # build and compare columns for each formula
     for absorb in formulas:
-        ids = Formulation('', absorb)._build_ids(formula_data)
+        ids = Formulation('x', absorb)._build_ids(formula_data)
         expected_ids = np.column_stack(build_columns(formula_data))
         np.testing.assert_array_equal(ids, expected_ids, err_msg=absorb)
 

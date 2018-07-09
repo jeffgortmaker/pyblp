@@ -51,7 +51,7 @@ class Formulation(object):
     formula : `str`
         R-style formula used to design a matrix. Variable names will be validated when this formulation along with
         data are passed to a function that uses them. By default, an intercept is included, which can be removed with
-        ``0`` or ``-1``.
+        ``0`` or ``-1``. If `absorb` is specified, intercepts are ignored.
     absorb : `str, optional`
         R-style formula used to design a matrix of categorical variables representing fixed effects, which will be
         absorbed into the matrix designed by `formula`. Fixed effect absorption is only supported for some matrices.
@@ -124,6 +124,10 @@ class Formulation(object):
         self._absorb = absorb
         self._terms = parse_terms(formula)
         self._absorbed_terms = parse_terms(f'{absorb} - 1') if absorb is not None else []
+
+        # ignore intercepts if there are any absorbed terms and check that there is at least one term
+        if self._absorbed_terms:
+            self._terms = [t for t in self._terms if t != patsy.desc.INTERCEPT]
         if not self._terms:
             raise patsy.PatsyError("formula has no terms.", patsy.origin.Origin(formula, 0, len(formula)))
 
@@ -180,18 +184,23 @@ class Formulation(object):
         if not data_mapping:
             data_mapping = {None: np.zeros(extract_size(data))}
 
-        # design the matrix
-        matrix_design = design_matrix(self._terms, data_mapping)
+        # design the matrix (adding an intercept term if there are absorbed terms gets Patsy to use reduced coding)
+        if self._absorbed_terms:
+            matrix_design = design_matrix([patsy.desc.INTERCEPT] + self._terms, data_mapping)
+        else:
+            matrix_design = design_matrix(self._terms, data_mapping)
 
-        # store matrix column indices and build column formulations for each designed column
+        # store matrix column indices and build column formulations for each designed column (ignore the intercept if
+        #   it was added only to get Patsy to use reduced coding)
         column_indices = []
         column_formulations = []
         for term, expression in zip(self._terms, self._expressions):
-            term_slice = matrix_design.term_slices[term]
-            for index in range(term_slice.start, term_slice.stop):
-                column_indices.append(index)
-                formula = '1' if term == patsy.desc.INTERCEPT else matrix_design.column_names[index]
-                column_formulations.append(ColumnFormulation(formula, expression))
+            if term != patsy.desc.INTERCEPT or not self._absorbed_terms:
+                term_slice = matrix_design.term_slices[term]
+                for index in range(term_slice.start, term_slice.stop):
+                    column_indices.append(index)
+                    formula = '1' if term == patsy.desc.INTERCEPT else matrix_design.column_names[index]
+                    column_formulations.append(ColumnFormulation(formula, expression))
 
         # construct a mapping from continuous variable names that appear in at least one column to their arrays
         underlying_data = {}
