@@ -52,22 +52,22 @@ Features
 
 - Straightforward interface for configuring and solving BLP problems with R-style formulas.
 - Performant absorption of arbitrary fixed effects.
-- Support for robust and clustered standard errors.
 - Support for demographics and supply-side moments.
 - Support for nonlinear functions and interactions of product characteristics.
 - Customizable parameter matrices and bounds.
-- Estimation of a Logit bechmark model.
-- Post-estimation functions for computing elasticities, diversion ratios, marginal costs, markups, profits, HHI, and consumer surplus.
-- Post-estimation merger simulation.
+- Estimation of a Logit benchmark model.
+- Post-estimation computation of elasticities, diversion ratios, marginal costs, markups, profits, HHI, and consumer surplus.
+- Post-estimation merger (or any type of firm ID changes) simulation.
 - Flexible interface for simulating synthetic data under Bertrand-Nash competition.
 - Optimization with Artleys Knitro, SciPy, or custom routines.
 - Fixed point iteration with SQUAREM acceleration or custom routines.
 - Integration with Monte Carlo, Gauss-Hermite/Kronrod-Patterson product rules, sparse grids, or custom specifications.
-- One-step, two-step, or iterated GMM.  
-- Control over weighting matrix and standard error computation.
+- One-step, two-step, or iterated GMM.
+- Support for robust and clustered standard errors.
+- Control over weighting matrix computation.
 - Linear or log-linear marginal cost specifications.
 - Support for non-standard ownership matrices.
-- Functions for building ownership matrices and BLP instruments.
+- Functions for building custom ownership matrices and BLP instruments.
 - Support for market-by-market parallelization.
 - Support for extended floating point precision.
 - Robust handling of computational errors.
@@ -77,16 +77,15 @@ Features
 Features Slated for Future Versions
 -----------------------------------
 
-In no particular order, listed below are major features that will hopefully be added to the package in future versions:
-
 - Support for nesting parameters.
+- Hessian computation.
+- Mathematical Program with Equilibrium Constraints (MPEC) formulation of the GMM objective function.
+- Generalized Empirical Likelihood (GEL) formulation of the problem.
 - Parametric bootstrap computation of post-estimation standard errors.
+- Support for micro moments.
 - Built-in IPOPT support.
 - Built-in support for more fixed point routines.
 - Nonlinear optimization alternatives to fixed point iteration when computing Bertrand-Nash prices and shares.
-- Hessian computation and tests for local minima.
-- Mathematical Program with Equilibrium Constraints (MPEC) formulation of the GMM objective function.
-- Generalized Empirical Likelihood (GEL) formulation of the problem.
 
 
 Bugs and Requests
