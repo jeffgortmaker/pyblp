@@ -4,6 +4,15 @@ Version Notes
 These notes will only include major changes.
 
 
+0.4
+---
+
+- Estimation of a Logit benchmark model.
+- Support for fixing of all nonlinear parameters.
+- More efficient two-way fixed effect absorption.
+- Clustered standard errors.
+
+
 0.3
 ---
 
