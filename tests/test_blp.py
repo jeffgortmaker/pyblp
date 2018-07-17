@@ -76,8 +76,9 @@ def test_trivial_changes(simulated_problem, solve_options1, solve_options2):
 ])
 def test_fixed_effects(simulated_problem, ED, ES, absorb_method):
     """Test that absorbing different numbers of demand- and supply-side fixed effects gives rise to essentially
-    identical first-stage results as including indicator variables. Also test that results that should be equal when
-    there aren't any fixed effects are indeed equal.
+    identical first-stage results as does including indicator variables. Also test that results that should be equal
+    when there aren't any fixed effects are indeed equal, and that marginal costs are equal as well (this is a check
+    for equality of post-estimation results).
     """
     simulation, product_data, problem, results = simulated_problem
 
@@ -176,6 +177,14 @@ def test_fixed_effects(simulated_problem, ED, ES, absorb_method):
             result3 = result3[:result1.size]
         np.testing.assert_allclose(result1, result2, atol=1e-8, rtol=1e-5, err_msg=key)
         np.testing.assert_allclose(result1, result3, atol=1e-8, rtol=1e-5, err_msg=key)
+
+    # test that post-estimation results are identical (just check marginal costs, since they encompass a lot of
+    #   post-estimation machinery)
+    costs1 = results1.compute_costs()
+    costs2 = results2.compute_costs()
+    costs3 = results3.compute_costs()
+    np.testing.assert_allclose(costs1, costs2, atol=1e-8, rtol=1e-5)
+    np.testing.assert_allclose(costs1, costs3, atol=1e-8, rtol=1e-5)
 
 
 @pytest.mark.usefixtures('simulated_problem')

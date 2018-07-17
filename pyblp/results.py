@@ -330,7 +330,7 @@ class Results(object):
 
         # define a function that builds a market along with arguments used to compute results
         def market_factory(s):
-            market_s = ResultsMarket(self.problem, s, self.sigma, self.pi, self.beta, self.delta)
+            market_s = ResultsMarket(self.problem, s, self.sigma, self.pi, self.beta, self.true_delta)
             args_s = [None if a is None else a[self.problem.products.market_ids.flat == s] for a in market_args]
             return [market_s] + list(fixed_args) + args_s
 
