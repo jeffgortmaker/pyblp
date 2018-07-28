@@ -56,7 +56,7 @@ class Groups(object):
 
     def __init__(self, ids):
         """Sort and index IDs that define groups."""
-        self.sort = ids.argsort()
+        self.sort = ids.flatten().argsort()
         self.undo = self.sort.argsort()
         self.unique, self.index, self.inverse, self.counts = np.unique(
             ids[self.sort], return_index=True, return_inverse=True, return_counts=True

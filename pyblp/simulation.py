@@ -244,9 +244,10 @@ class Simulation(Economy):
        product_data
 
     """
+    # todo
 
     def __init__(self, product_formulations, beta, sigma, gamma, product_data, agent_formulation=None, pi=None,
-                 agent_data=None, integration=None, xi_variance=1, omega_variance=1, correlation=0.9,
+                 agent_data=None, integration=None, rho=None, xi_variance=1, omega_variance=1, correlation=0.9,
                  costs_type='linear', seed=None):
         """Load or simulate all data except for Bertrand-Nash prices and shares."""
 
@@ -267,6 +268,8 @@ class Simulation(Economy):
         # load IDs
         market_ids = extract_matrix(product_data, 'market_ids')
         firm_ids = extract_matrix(product_data, 'firm_ids')
+        nesting_ids = extract_matrix(product_data, 'nesting_ids')
+        clustering_ids = extract_matrix(product_data, 'clustering_ids')
         if market_ids is None:
             raise KeyError("product_data must have a market_ids field.")
         if firm_ids is None:
@@ -332,6 +335,10 @@ class Simulation(Economy):
             'demand_instruments': (demand_instruments, options.dtype),
             'supply_instruments': (supply_instruments, options.dtype)
         }
+        if nesting_ids is not None:
+            product_data_mapping['nesting_ids'] = (nesting_ids, np.object)
+        if clustering_ids is not None:
+            product_data_mapping['clustering_ids'] = (clustering_ids, np.object)
         if ownership is not None:
             product_data_mapping['ownership'] = (ownership, options.dtype)
 
@@ -399,11 +406,12 @@ class Simulation(Economy):
 
         # validate parameters
         self._linear_parameters = LinearParameters(self, beta, gamma)
-        self._nonlinear_parameters = NonlinearParameters(self, sigma, pi)
+        self._nonlinear_parameters = NonlinearParameters(self, sigma, pi, rho)
         self.beta = self._linear_parameters.beta
         self.gamma = self._linear_parameters.gamma
         self.sigma = self._nonlinear_parameters.sigma
         self.pi = self._nonlinear_parameters.pi
+        self.rho = self._nonlinear_parameters.rho
 
         # simulate xi and omega
         covariance = correlation * np.sqrt(xi_variance * omega_variance)
@@ -426,7 +434,7 @@ class Simulation(Economy):
     def __str__(self):
         """Supplement general formatted information with other information about parameters."""
         sections = [[super().__str__()], ["Linear Parameters:", self._linear_parameters.format()]]
-        if self.K2 > 0:
+        if self.K2 > 0 or self.G > 0:
             sections.append(["Nonlinear Parameters:", self._nonlinear_parameters.format()])
         return "\n\n".join("\n".join(s) for s in sections)
 
@@ -502,7 +510,7 @@ class Simulation(Economy):
 
         # define a function that builds a market along with arguments used to compute prices and shares
         def market_factory(s):
-            market_s = SimulationMarket(self, s, self.sigma, self.pi, self.beta, delta)
+            market_s = SimulationMarket(self, s, self.sigma, self.pi, self.rho, self.beta, delta)
             prices_s = prices[self.products.market_ids.flat == s]
             costs_s = self.costs[self.products.market_ids.flat == s]
             return market_s, iteration, firms_index, prices_s, costs_s

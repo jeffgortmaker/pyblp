@@ -135,6 +135,7 @@ class Results(object):
         single value for each market.
 
     """
+    # todo
 
     def __init__(self, objective_info, last_results, step_start_time, optimization_start_time, optimization_end_time,
                  iterations, evaluations, iteration_mappings, evaluation_mappings, center_moments, se_type):
@@ -167,8 +168,10 @@ class Results(object):
         self._linear_parameters = LinearParameters(self.problem, self.beta, self.gamma)
 
         # expand the nonlinear parameters and their gradient
-        self.sigma, self.pi = self._nonlinear_parameters.expand(self.theta)
-        self.sigma_gradient, self.pi_gradient = self._nonlinear_parameters.expand(self.gradient, nullify=True)
+        self.sigma, self.pi, self.rho = self._nonlinear_parameters.expand(self.theta)
+        self.sigma_gradient, self.pi_gradient, self.rho_gradient = self._nonlinear_parameters.expand(
+            self.gradient, nullify=True
+        )
 
         # compute a version of xi that includes the contribution of any demand-side fixed effects
         self.xi = self.true_xi
@@ -212,7 +215,9 @@ class Results(object):
 
         # compute standard errors
         se, se_errors = compute_gmm_se(u, Z, W, jacobian, se_type, stacked_clustering_ids)
-        self.sigma_se, self.pi_se = self._nonlinear_parameters.expand(se[:self._nonlinear_parameters.P], nullify=True)
+        self.sigma_se, self.pi_se, self.rho_se = self._nonlinear_parameters.expand(
+            se[:self._nonlinear_parameters.P], nullify=True
+        )
         self.beta_se = se[self._nonlinear_parameters.P:self._nonlinear_parameters.P + self.problem.K1]
         self.gamma_se = se[self._nonlinear_parameters.P + self.problem.K1:]
         self._errors |= se_errors
@@ -229,8 +234,8 @@ class Results(object):
         self.unique_market_ids = self.problem.unique_market_ids
 
         # convert contraction mappings to matrices with rows ordered by market
-        iteration_lists = [[m[t] for m in iteration_mappings] for t in self.unique_market_ids]
-        evaluation_lists = [[m[t] for m in evaluation_mappings] for t in self.unique_market_ids]
+        iteration_lists = [[m[t] for m in iteration_mappings if m] for t in self.unique_market_ids]
+        evaluation_lists = [[m[t] for m in evaluation_mappings if m] for t in self.unique_market_ids]
         self.fp_iterations = self.cumulative_fp_iterations = np.array(iteration_lists, np.int)
         self.contraction_evaluations = self.cumulative_contraction_evaluations = np.array(evaluation_lists, np.int)
 
@@ -295,10 +300,12 @@ class Results(object):
         ])
 
         # construct a section containing nonlinear estimates
-        if self.problem.K2 > 0:
+        if self.problem.K2 > 0 or self.problem.G > 0:
             sections.append([
                 f"Nonlinear Estimates ({se_description} in Parentheses):",
-                self._nonlinear_parameters.format_estimates(self.sigma, self.pi, self.sigma_se, self.pi_se)
+                self._nonlinear_parameters.format_estimates(
+                    self.sigma, self.pi, self.rho, self.sigma_se, self.pi_se, self.rho_se
+                )
             ])
 
         # combine the sections into one string
@@ -330,7 +337,7 @@ class Results(object):
 
         # define a function that builds a market along with arguments used to compute results
         def market_factory(s):
-            market_s = ResultsMarket(self.problem, s, self.sigma, self.pi, self.beta, self.delta)
+            market_s = ResultsMarket(self.problem, s, self.sigma, self.pi, self.rho, self.beta, self.delta)
             args_s = [None if a is None else a[self.problem.products.market_ids.flat == s] for a in market_args]
             return [market_s] + list(fixed_args) + args_s
 
@@ -764,6 +771,7 @@ class Results(object):
             order as :attr:`Results.unique_market_ids`.
 
         """
+        # todo
         output("Computing consumer surpluses with the equation that assumes away nonlinear income effects ...")
         return self._combine_results(ResultsMarket.compute_consumer_surplus, [], [prices], processes)
 
@@ -784,14 +792,14 @@ class ResultsMarket(Market):
 
     def compute_elasticities(self, name):
         """Estimate a matrix of elasticities of demand with respect to a variable."""
-        derivatives = self.compute_utility_by_variable_derivatives(name)
+        derivatives = self.compute_utility_derivatives(name)
         jacobian = self.compute_shares_by_variable_jacobian(derivatives)
         elasticities = jacobian * self.products[name].T / self.products.shares
         return elasticities, set()
 
     def compute_diversion_ratios(self, name):
         """Estimate a matrix of diversion ratios with respect to a variable."""
-        derivatives = self.compute_utility_by_variable_derivatives(name)
+        derivatives = self.compute_utility_derivatives(name)
         jacobian = self.compute_shares_by_variable_jacobian(derivatives)
 
         # replace the diagonal with derivatives with respect to the outside option
@@ -909,7 +917,7 @@ class ResultsMarket(Market):
         return profits, errors
 
     def compute_consumer_surplus(self, prices=None):
-        """Estimate population-normalized consumer surplus. By defualt, use unchanged prices."""
+        """Estimate population-normalized consumer surplus. By default, use unchanged prices."""
         if prices is None:
             delta = self.delta
             mu = self.mu
@@ -918,6 +926,15 @@ class ResultsMarket(Market):
             mu = self.update_mu_with_variable('prices', prices)
         if self.K2 == 0:
             mu = 0
-        alpha = -self.compute_utility_by_variable_derivatives('prices')[0]
-        consumer_surplus = (np.log1p(np.exp(delta + mu).sum(axis=0)) / alpha) @ self.agents.weights
+
+        # compute the exponentiated utilities that will be summed in the expression for consume surplus
+        exp_utilities = np.exp(delta + mu)
+        if self.G > 0:
+            exp_utilities = self.groups.sum(exp_utilities ** (1 / (1 - self.rho))) ** (1 - self.group_rho)
+
+        # compute the derivatives of utility with respect to prices, which are assumed to be constant across products
+        alpha = -self.compute_utility_derivatives('prices')[0]
+
+        # compute consumer surplus
+        consumer_surplus = (np.log1p(exp_utilities.sum(axis=0)) / alpha) @ self.agents.weights
         return consumer_surplus, set()

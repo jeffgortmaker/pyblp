@@ -24,12 +24,13 @@ def test_accuracy(simulated_problem, solve_options):
     results = problem.solve(
         0.5 * simulation.sigma,
         0.5 * simulation.pi,
+        0.5 * simulation.rho,
         costs_type=simulation.costs_type,
         **solve_options
     )
 
     # test the accuracy of the estimated parameters
-    keys = ['beta', 'sigma', 'pi']
+    keys = ['beta', 'sigma', 'pi', 'rho']
     if problem.K3 > 0:
         keys.append('gamma')
     for key in keys:
@@ -51,7 +52,7 @@ def test_trivial_changes(simulated_problem, solve_options1, solve_options2):
     results = []
     for solve_options in [solve_options1, solve_options2]:
         results.append(problem.solve(
-            simulation.sigma, simulation.pi, steps=1, costs_type=simulation.costs_type, **solve_options
+            simulation.sigma, simulation.pi, simulation.rho, steps=1, costs_type=simulation.costs_type, **solve_options
         ))
 
     # test that all arrays in the results are essentially identical
@@ -125,7 +126,7 @@ def test_fixed_effects(simulated_problem, ED, ES, absorb_method):
     if ES > 0:
         product_formulations1[2] = Formulation(product_formulations[2]._formula, supply_formula, absorb_method)
     problem1 = Problem(product_formulations1, product_data, problem.agent_formulation, simulation.agent_data)
-    results1 = problem1.solve(simulation.sigma, simulation.pi, steps=1)
+    results1 = problem1.solve(simulation.sigma, simulation.pi, simulation.rho, steps=1)
 
     # solve the first stage of a problem in which fixed effects are included as indicator variables
     product_data2 = product_data.copy()
@@ -139,13 +140,13 @@ def test_fixed_effects(simulated_problem, ED, ES, absorb_method):
         product_data2['supply_instruments'] = np.c_[product_data['supply_instruments'], supply_indicators]
         product_formulations2[2] = Formulation(f'{product_formulations[2]._formula} + {supply_formula}')
     problem2 = Problem(product_formulations2, product_data2, problem.agent_formulation, simulation.agent_data)
-    results2 = problem2.solve(simulation.sigma, simulation.pi, steps=1)
+    results2 = problem2.solve(simulation.sigma, simulation.pi, simulation.rho, steps=1)
 
     # test that all arrays expected to be identical are identical
     keys = [
-        'theta', 'sigma', 'pi', 'beta', 'gamma', 'sigma_se', 'pi_se', 'beta_se', 'gamma_se', 'true_delta',
-        'true_tilde_costs', 'true_xi', 'true_omega', 'true_xi_jacobian', 'true_omega_jacobian', 'objective', 'gradient',
-        'sigma_gradient', 'pi_gradient'
+        'theta', 'sigma', 'pi', 'rho', 'beta', 'gamma', 'sigma_se', 'pi_se', 'rho_se', 'beta_se', 'gamma_se',
+        'true_delta', 'true_tilde_costs', 'true_xi', 'true_omega', 'true_xi_jacobian', 'true_omega_jacobian',
+        'objective', 'gradient', 'sigma_gradient', 'pi_gradient', 'rho_gradient'
     ]
     for key in keys:
         result1 = getattr(results1, key)
@@ -264,13 +265,13 @@ def test_second_step(simulated_problem):
     unbounded_sigma_bounds = (np.full_like(simulation.sigma, -np.inf), np.full_like(simulation.sigma, +np.inf))
 
     # get two-step GMM results
-    results = problem.solve(simulation.sigma, simulation.pi, unbounded_sigma_bounds, steps=2)
+    results = problem.solve(simulation.sigma, simulation.pi, simulation.rho, unbounded_sigma_bounds, steps=2)
     assert results.step == 2 and results.last_results.step == 1 and results.last_results.last_results is None
 
     # manually get the same results
-    results1 = problem.solve(simulation.sigma, simulation.pi, unbounded_sigma_bounds, steps=1)
+    results1 = problem.solve(simulation.sigma, simulation.pi, simulation.rho, unbounded_sigma_bounds, steps=1)
     results2 = problem.solve(
-        results1.sigma, results1.pi, unbounded_sigma_bounds, delta=results1.delta, WD=results1.updated_WD,
+        results1.sigma, results1.pi, results1.rho, unbounded_sigma_bounds, delta=results1.delta, WD=results1.updated_WD,
         WS=results1.updated_WS, steps=1
     )
     assert results1.step == results2.step == 1 and results1.last_results is None and results2.last_results is None
@@ -293,7 +294,7 @@ def test_gradient_optionality(simulated_problem, scipy_method):
     simulation, _, problem, _ = simulated_problem
 
     # skip simulations without gradients
-    if simulation.K2 == 0:
+    if simulation.K2 == simulation.G == 0:
         return
 
     # define a custom optimization method that doesn't use gradients
@@ -305,8 +306,8 @@ def test_gradient_optionality(simulated_problem, scipy_method):
     # solve the problem when not using gradients and when not computing them
     optimization1 = Optimization(custom_method)
     optimization2 = Optimization(scipy_method, compute_gradient=False)
-    results1 = problem.solve(simulation.sigma, simulation.pi, steps=1, optimization=optimization1)
-    results2 = problem.solve(simulation.sigma, simulation.pi, steps=1, optimization=optimization2)
+    results1 = problem.solve(simulation.sigma, simulation.pi, simulation.rho, steps=1, optimization=optimization1)
+    results2 = problem.solve(simulation.sigma, simulation.pi, simulation.rho, steps=1, optimization=optimization2)
 
     # test that all arrays are essentially identical
     for key, result1 in results1.__dict__.items():
@@ -328,15 +329,17 @@ def test_bounds(simulated_problem, method):
     simulation, _, problem, _ = simulated_problem
 
     # skip simulations without nonlinear parameters to bound
-    if simulation.K2 == 0:
+    if simulation.K2 == simulation.G == 0:
         return
 
     # all problems will be solved with the same optimization method starting as close to the true parameters as possible
-    solve = lambda s, p: problem.solve(
+    solve = lambda s, p, r: problem.solve(
         np.minimum(np.maximum(simulation.sigma, s[0]), s[1]),
         np.minimum(np.maximum(simulation.pi, p[0]), p[1]) if simulation.D > 0 else None,
+        np.minimum(np.maximum(simulation.rho, r[0]), r[1]) if simulation.G > 0 else None,
         sigma_bounds=s,
         pi_bounds=p,
+        rho_bounds=r,
         steps=1,
         optimization=Optimization(method)
     )
@@ -344,11 +347,14 @@ def test_bounds(simulated_problem, method):
     # solve the problem when unbounded
     unbounded_sigma_bounds = (np.full_like(simulation.sigma, -np.inf), np.full_like(simulation.sigma, +np.inf))
     unbounded_pi_bounds = (np.full_like(simulation.pi, -np.inf), np.full_like(simulation.pi, +np.inf))
-    unbounded_results = solve(unbounded_sigma_bounds, unbounded_pi_bounds)
+    unbounded_rho_bounds = (np.full_like(simulation.rho, -np.inf), np.full_like(simulation.rho, +np.inf))
+    unbounded_results = solve(unbounded_sigma_bounds, unbounded_pi_bounds, unbounded_rho_bounds)
 
     # choose an element in sigma and identify its estimated value
-    sigma_index = (simulation.sigma.nonzero()[0][0], simulation.sigma.nonzero()[1][0])
-    sigma_value = unbounded_results.sigma[sigma_index]
+    sigma_index = sigma_value = None
+    if simulation.K2 > 0:
+        sigma_index = (simulation.sigma.nonzero()[0][0], simulation.sigma.nonzero()[1][0])
+        sigma_value = unbounded_results.sigma[sigma_index]
 
     # do the same for pi
     pi_index = pi_value = None
@@ -356,40 +362,59 @@ def test_bounds(simulated_problem, method):
         pi_index = (simulation.pi.nonzero()[0][0], simulation.pi.nonzero()[1][0])
         pi_value = unbounded_results.pi[pi_index]
 
+    # do the same for rho
+    rho_index = rho_value = None
+    if simulation.G > 0:
+        rho_index = (simulation.rho.nonzero()[0][0], simulation.rho.nonzero()[1][0])
+        rho_value = unbounded_results.rho[rho_index]
+
     # use different types of binding bounds
     for lb_scale, ub_scale in [(+np.inf, -0.1), (-0.1, +np.inf), (+1, -0.1), (-0.1, +1), (0, 0)]:
         binding_sigma_bounds = (np.full_like(simulation.sigma, -np.inf), np.full_like(simulation.sigma, +np.inf))
         binding_pi_bounds = (np.full_like(simulation.pi, -np.inf), np.full_like(simulation.pi, +np.inf))
-        binding_sigma_bounds[0][sigma_index] = sigma_value - lb_scale * np.abs(sigma_value)
-        binding_sigma_bounds[1][sigma_index] = sigma_value + ub_scale * np.abs(sigma_value)
+        binding_rho_bounds = (np.full_like(simulation.rho, -np.inf), np.full_like(simulation.rho, +np.inf))
+        if simulation.K2 > 0:
+            binding_sigma_bounds[0][sigma_index] = sigma_value - lb_scale * np.abs(sigma_value)
+            binding_sigma_bounds[1][sigma_index] = sigma_value + ub_scale * np.abs(sigma_value)
         if simulation.D > 0:
             binding_pi_bounds[0][pi_index] = pi_value - lb_scale * np.abs(pi_value)
             binding_pi_bounds[1][pi_index] = pi_value + ub_scale * np.abs(pi_value)
+        if simulation.G > 0:
+            binding_rho_bounds[0][rho_index] = rho_value - lb_scale * np.abs(rho_value)
+            binding_rho_bounds[1][rho_index] = rho_value + ub_scale * np.abs(rho_value)
 
         # solve the problem with binding bounds and test that they are essentially respected
-        binding_results = solve(binding_sigma_bounds, binding_pi_bounds)
+        binding_results = solve(binding_sigma_bounds, binding_pi_bounds, binding_rho_bounds)
         assert_array_less = lambda a, b: np.testing.assert_array_less(a, b + 1e-14, verbose=True)
-        assert_array_less(binding_sigma_bounds[0], binding_results.sigma)
-        assert_array_less(binding_results.sigma, binding_sigma_bounds[1])
+        if simulation.K2 > 0:
+            assert_array_less(binding_sigma_bounds[0], binding_results.sigma)
+            assert_array_less(binding_results.sigma, binding_sigma_bounds[1])
         if simulation.D > 0:
             assert_array_less(binding_pi_bounds[0], binding_results.pi)
             assert_array_less(binding_results.pi, binding_pi_bounds[1])
+        if simulation.G > 0:
+            assert_array_less(binding_rho_bounds[0], binding_results.rho)
+            assert_array_less(binding_results.rho, binding_rho_bounds[1])
 
     # for methods other than TNC, which works differently with bounds, test that non-binding bounds furnish results that
     #   are similar to their unbounded counterparts
     if method != 'tnc':
         unbinding_sigma_bounds = (
-            simulation.sigma - 1e10 * np.abs(simulation.sigma),
-            simulation.sigma + 1e10 * np.abs(simulation.sigma)
+            simulation.sigma - 1e10 * np.abs(simulation.sigma), simulation.sigma + 1e10 * np.abs(simulation.sigma)
         )
         unbinding_pi_bounds = (
-            simulation.pi - 1e10 * np.abs(simulation.pi),
-            simulation.pi + 1e10 * np.abs(simulation.pi)
+            simulation.pi - 1e10 * np.abs(simulation.pi), simulation.pi + 1e10 * np.abs(simulation.pi)
         )
-        unbinding_results = solve(unbinding_sigma_bounds, unbinding_pi_bounds)
-        np.testing.assert_allclose(unbounded_results.sigma, unbinding_results.sigma, atol=0, rtol=0.1)
+        unbinding_rho_bounds = (
+            simulation.rho - 1e10 * np.abs(simulation.rho), simulation.rho + 1e10 * np.abs(simulation.rho)
+        )
+        unbinding_results = solve(unbinding_sigma_bounds, unbinding_pi_bounds, unbinding_rho_bounds)
+        if simulation.K2 > 0:
+            np.testing.assert_allclose(unbounded_results.sigma, unbinding_results.sigma, atol=0, rtol=0.1)
         if simulation.D > 0:
             np.testing.assert_allclose(unbounded_results.pi, unbinding_results.pi, atol=0, rtol=0.1)
+        if simulation.G > 0:
+            np.testing.assert_allclose(unbounded_results.rho, unbinding_results.rho, atol=0, rtol=0.1)
 
 
 @pytest.mark.usefixtures('simulated_problem')
@@ -452,7 +477,7 @@ def test_objective_gradient(simulated_problem, solve_options):
     simulation, _, problem, _ = simulated_problem
 
     # skip simulations without gradients
-    if simulation.K2 == 0:
+    if simulation.K2 == simulation.G == 0:
         return
 
     # define a custom optimization routine that tests central finite differences around starting parameter values
@@ -474,6 +499,7 @@ def test_objective_gradient(simulated_problem, solve_options):
     problem.solve(
         0.9 * simulation.sigma,
         0.9 * simulation.pi,
+        0.9 * simulation.rho,
         steps=1,
         costs_type=simulation.costs_type,
         optimization=Optimization(test_finite_differences),
