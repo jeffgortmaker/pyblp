@@ -21,9 +21,11 @@ class Products(Matrices):
         - **firm_ids** : (`object`) - IDs that associate products with firms. Any columns after the first represent
           changes such as mergers.
 
-        - **demand_ids** : (`object`) - Categorical variables used to create demand-side fixed effects.
+        - **demand_ids** : (`object`) - IDs used to create demand-side fixed effects.
 
-        - **supply_ids** : (`object`) - Categorical variables used to create supply-side fixed effects.
+        - **supply_ids** : (`object`) - IDs used to create supply-side fixed effects.
+
+        - **nesting_ids** : (`object`) - IDs that associate products with nesting groups.
 
         - **clustering_ids** (`object`) - IDs used to compute clustered standard errors.
 
@@ -47,7 +49,6 @@ class Products(Matrices):
     Any additional fields are the variables underlying `X1`, `X2`, and `X3`.
 
     """
-    # todo
 
     def __new__(cls, product_formulations, product_data):
         """Structure product data."""
@@ -296,7 +297,7 @@ class Economy(object):
         self.MS = self.products.ZS.shape[1]
         self.ED = self.products.demand_ids.shape[1]
         self.ES = self.products.supply_ids.shape[1]
-        self.G = self.unique_nesting_ids.size
+        self.H = self.unique_nesting_ids.size
 
         # identify column formulations
         self._X1_formulations = self.products.dtype.fields['X1'][2]
@@ -347,7 +348,7 @@ class Economy(object):
             ("Supply Instruments (MS)", self.MS),
             ("Demand FEs (ED)", self.ED),
             ("Supply FEs (ES)", self.ES),
-            ("Nesting Groups (G)", self.G)
+            ("Nesting Groups (H)", self.H)
         ])
         formulation_mapping = collections.OrderedDict([
             ("Linear Characteristics (X1)", self._X1_formulations),
@@ -421,7 +422,7 @@ class Market(object):
         self.K2 = economy.K2
         self.K3 = economy.K3
         self.D = economy.D
-        self.G = self.groups.unique.size
+        self.H = self.groups.unique.size
 
         # identify column formulations
         self._X1_formulations = economy._X1_formulations
@@ -434,7 +435,7 @@ class Market(object):
         self.pi = pi
         self.beta = beta
         if rho.size == 1:
-            self.group_rho = np.full((self.G, 1), rho)
+            self.group_rho = np.full((self.H, 1), rho)
             self.rho = np.full((self.J, 1), rho)
         else:
             self.group_rho = rho[np.searchsorted(economy.unique_nesting_ids, self.groups.unique)]
@@ -563,7 +564,7 @@ class Market(object):
             exp_utilities[eliminate_product] = 0
 
         # compute standard or nested probabilities
-        if self.G == 0:
+        if self.H == 0:
             conditionals = None
             probabilities = exp_utilities / (1 + exp_utilities.sum(axis=0))
         else:
@@ -582,7 +583,7 @@ class Market(object):
         lambda matrix used to decompose markups.
         """
         capital_lamda = np.diagflat(value_derivatives @ self.agents.weights)
-        if self.G > 0:
+        if self.H > 0:
             capital_lamda /= 1 - self.rho
         return capital_lamda
 
@@ -592,7 +593,7 @@ class Market(object):
         """
         diagonal_weights = np.diagflat(self.agents.weights)
         capital_gamma = value_derivatives @ diagonal_weights @ probabilities.T
-        if self.G > 0:
+        if self.H > 0:
             membership = self.get_membership_matrix()
             capital_gamma += self.rho / (1 - self.rho) * membership * (
                 value_derivatives @ diagonal_weights @ conditionals.T
@@ -620,7 +621,7 @@ class Market(object):
             mu = self.mu
 
         # without nesting, compute only the tangent of probabilities with respect to the parameter
-        if self.G == 0:
+        if self.H == 0:
             assert isinstance(parameter, RandomCoefficientParameter)
             v = parameter.get_agent_characteristic(self.agents)
             x = parameter.get_product_characteristic(self.products)
@@ -839,14 +840,14 @@ class NonlinearParameters(object):
 
         # store rho
         self.rho = np.full((0, 1), np.nan, options.dtype)
-        if rho is None and economy.G > 0:
+        if rho is None and economy.H > 0:
             raise ValueError("Nesting IDs were specified, so rho should not be None.")
         elif rho is not None:
             self.rho = np.c_[np.asarray(rho, options.dtype)]
-            if economy.G == 0 and self.rho.size > 0:
+            if economy.H == 0 and self.rho.size > 0:
                 raise ValueError("Nesting IDs were not specified, so rho should be None.")
-            if self.rho.shape not in {(1, 1), (economy.G, 1)}:
-                raise ValueError(f"rho must be a scalar or a {economy.G}-vector.")
+            if self.rho.shape not in {(1, 1), (economy.H, 1)}:
+                raise ValueError(f"rho must be a scalar or a {economy.H}-vector.")
 
         # construct or validate sigma bounds
         self.sigma_bounds = (
@@ -887,7 +888,7 @@ class NonlinearParameters(object):
         if supports_bounds:
             self.rho_bounds[0][:] = 0
             self.rho_bounds[1][:] = 0.99
-        if economy.G > 0 and rho_bounds is not None and supports_bounds:
+        if economy.H > 0 and rho_bounds is not None and supports_bounds:
             if len(rho_bounds) != 2:
                 raise ValueError("rho_bounds must be a tuple of the form (lb, ub).")
             self.rho_bounds = [np.c_[np.asarray(b, options.dtype).copy()] for b in rho_bounds]

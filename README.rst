@@ -55,7 +55,8 @@ Features
 - Support for demographics and supply-side moments.
 - Support for nonlinear functions and interactions of product characteristics.
 - Customizable parameter matrices and bounds.
-- Estimation of a Logit benchmark model.
+- Support for nesting parameters that can vary between groups in a full random coefficients nested Logit (RCNL) model.
+- Estimation of Logit and nested Logit benchmark models.
 - Post-estimation computation of elasticities, diversion ratios, marginal costs, markups, profits, HHI, and consumer surplus.
 - Post-estimation merger (or any type of firm ID changes) simulation.
 - Flexible interface for simulating synthetic data under Bertrand-Nash competition.
@@ -68,6 +69,7 @@ Features
 - Linear or log-linear marginal cost specifications.
 - Support for non-standard ownership matrices.
 - Functions for building custom ownership matrices and BLP instruments.
+- Computation of analytic gradients.
 - Support for market-by-market parallelization.
 - Support for extended floating point precision.
 - Robust handling of computational errors.
@@ -77,7 +79,6 @@ Features
 Features Slated for Future Versions
 -----------------------------------
 
-- Support for nesting parameters.
 - Hessian computation.
 - Mathematical Program with Equilibrium Constraints (MPEC) formulation of the GMM objective function.
 - Generalized Empirical Likelihood (GEL) formulation of the problem.

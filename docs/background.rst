@@ -34,10 +34,13 @@ The :math:`K_2 \times K_2` matrix :math:`\Sigma` is the Cholesky decomposition o
 
 Random idiosyncratic preferences :math:`\epsilon_{jti}` are assumed to be Type I Extreme Value so that market shares can be approximated with Monte Carlo integration or quadrature rules as in :ref:`Heiss and Winschel (2008) <hw08>` and :ref:`Skrainka and Judd (2011) <sj11>`:
 
-.. math:: s_{jt} = \sum_{i=1}^{I_t} w_i s_{jti}(\nu_i) = \sum_{i=1}^{I_t} w_i\,\frac{\exp(\delta_{jt} + \mu_{jti})}{1 + \sum_{k=1}^{J_t} \exp(\delta_{kt} + \mu_{kti})},
+.. math:: s_{jt} = \sum_{i=1}^{I_t} w_i s_{jti},
    :label: shares
 
-in which :math:`s_{jti}` is the probability that agent :math:`i` chooses product :math:`j` in market :math:`t`, :math:`w` is a :math:`I_t \times 1` column vector of integration weights, and :math:`\nu_i` consists of the :math:`K_2` integration nodes associated with :math:`w_i`.
+in which :math:`w` is a :math:`I_t \times 1` column vector of integration weights and the probability that agent :math:`i` chooses product :math:`j` in market :math:`t` is
+
+.. math:: s_{jti} = \frac{\exp(\delta_{jt} + \mu_{jti})}{1 + \sum_{k=1}^{J_t} \exp(\delta_{kt} + \mu_{kti})}.
+   :label: probabilities
 
 
 Supply-Side
@@ -144,7 +147,7 @@ Given a :math:`\hat{\theta}`, the first step towards computing its associated ob
 
 .. math:: \delta \leftarrow \delta + \log s - \log s(\delta, \hat{\theta})
 
-where :math:`s` are the market's observed shares and :math:`s(\hat{\theta}, \delta)` are shares evaluated at :math:`\hat{\theta}` and the current iteration's :math:`\delta`. As noted in the appendix of :ref:`Nevo (2000) <n00>`, exponentiating both sides of the contraction mapping and iterating over :math:`\exp(\delta)` gives an alternate formulation that can be faster. Conventional starting values are those that solve the Logit model, :math:`\delta_{jt} = \log s_{jt} - \log s_{0t}`.
+where :math:`s` are the market's observed shares and :math:`s(\hat{\theta}, \delta)` are shares evaluated at :math:`\hat{\theta}` and the current iteration's :math:`\delta`. As noted in the appendix of :ref:`Nevo (2000) <n00>`, exponentiating both sides of the contraction mapping and iterating over :math:`\exp(\delta)` gives an alternate formulation that can be faster. Conventional starting values are those that solve the Logit model.
 
 The mean utility in conjunction with the demand-side conditional independence assumption in :eq:`moments` is used to recover the demand-side linear parameters with
 
@@ -239,6 +242,52 @@ Estimates computed with the de-meaned or residualized data are guaranteed by the
 When :math:`E_D > 1` or :math:`E_S > 1`, the iterative de-meaning algorithm of :ref:`Rios-Avila (2015) <r15>` can be applied to absorb the multiple fixed effects. Iterative de-meaning can be processor-intensive, but for large amounts of data or for large numbers of fixed effects, it is often preferable to including indicator variables. When :math:`E_D = 2` or :math:`E_S = 2`, the more performant algorithm of :ref:`Somaini and Wolak (2016) <sw16>` can be used instead.
 
 
+Random Coefficients Nested Logit
+--------------------------------
+
+Incorporating parameters that measure within nesting group correlation gives rise to the random coefficients nested logit (RCNL) model described, for example, by :ref:`Grigolon and Verboven (2014) <gv14>`. In this model, there are :math:`h = 1, 2, \dotsc, H` nesting groups and each product :math:`j` is assigned to a group :math:`h(j)`. The set :math:`\mathscr{J}_{ht} \subset \{1, 2, \ldots, J_t\}` denotes the products in group :math:`h` and market :math:`t`.
+
+In the RCNL model, the error term is decomposed into
+
+.. math:: \epsilon_{jti} = \bar{\epsilon}_{h(j)ti} + (1 - \rho_{h(j)})\bar{\epsilon}_{jti},
+
+in which :math:`\bar{\epsilon}_{jti}` is Type I Extreme Value and the group-specific term :math:`\bar{\epsilon}_{h(j)ti}` is distributed such that :math:`\epsilon_{jti}` is also Type I Extreme Value. 
+
+The nesting parameter, :math:`\rho_{h(j)} \in [0, 1]`, measures within nesting group correlation. Collectively, :math:`\rho` can be either a scalar that corresponds to all groups or a :math:`H \times 1` column vector to give each group a different nesting parameter. The standard BLP model arises when :math:`\rho = 0`. On the other hand, setting any :math:`\rho_h = 1` creates division by zero errors during estimation. Values larger than one are inconsistent with utility maximization.
+
+Under nesting, the expression for choice probabilities in :eq:`probabilities` is more complicated:
+
+.. math:: s_{jti} = \frac{\exp[V_{jti} / (1 - \rho_{h(j)})]}{\exp[V_{h(j)ti} / (1 - \rho_{h(j)})]}\cdot\frac{\exp V_{h(j)ti}}{1 + \sum_{h=1}^H \exp V_{hti}}
+
+where
+
+.. math:: V_{jti} = \delta_{jt} + \mu_{jti}
+
+and
+
+.. math:: V_{hti} = (1 - \rho_h)\log\sum_{k\in\mathscr{J}_{ht}} \exp[V_{kti} / (1 - \rho_h)].
+
+During estimation, unknown elements in :math:`\rho` are included in :math:`\theta`. Otherwise, estimation proceeds exactly as described in the above sections, except that expressions derived from definitions of :math:`U` in :eq:`utilities` and :math:`s` in :eq:`shares` are more complicated. In particular, Jacobians are much simpler when :math:`\rho = 0`.
+
+
+Logit and Nested Logit Benchmarks
+---------------------------------
+
+Excluding :math:`X_2` and :math:`\Sigma` leaves the simple Logit model (or the nested Logit model), which serves as a simple benchmark for the full random coefficients BLP model (or the full RCNL model). Although it lacks the realism of the full model, estimation of the Logit or nested Logit model is much simpler. Specifically, a closed-form solution for the mean utility means that fixed point iteration is not required. In the simple Logit model, this solution is
+
+.. math:: \delta_{jt} = \log s_{jt} - \log s_{0t},
+
+and in the nested Logit model, it is
+
+.. math:: \delta_{jt} = \log s_{jt} - \log s_{0t} - \rho_{h(j)}\log\frac{s_{jt}}{s_{h(j)t}}
+
+where
+
+.. math:: s_{h(j)t} = \sum_{k\in\mathscr{J}_{h(j)t}} s_{kt}.
+
+In the simple Logit model, a lack of nonlinear parameters means that optimization is not required either. Importantly, a supply side can still be estimated jointly with demand. The only difference in the above sections, other than the absence of nonlinear characteristics and parameters, is that there is simply a single, representative agent in each market. That is, each :math:`I_t = 1` with :math:`w_1 = 1`.
+
+
 Bertrand-Nash Prices and Shares
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -253,7 +302,3 @@ When computing :math:`\zeta(p)`, shares :math:`s(p)` associated with the candida
 Of course, marginal costs, :math:`c`, are required to iterate over the contraction. When evaluating counterfactuals, costs are usually computed first according to the BLP-markup equation in :eq:`eta_markup`. When simulating synthetic data, marginal costs are simulated according their specification in :eq:`costs`.
 
 
-Logit Benchmark
----------------
-
-Excluding :math:`X_2` and :math:`\Sigma` leaves the Logit model, which serves as a simple benchmark for the full random coefficients BLP model. Although it lacks the realism of the full model, estimation of the Logit model is much simpler. Specifically, a closed-form solution for the mean utility, :math:`\delta_{jt} = \log s_{jt} - \log s_{0t}`, means that fixed point iteration is not required, and a lack of nonlinear parameters means that optimization is not required either. Importantly, a supply side can still be estimated jointly with demand. The only difference in the above equations, other than the absence of nonlinear characteristics and parameters, is that there can simply be a single, representative agent in each market. That is, each :math:`I_t = 1` with :math:`w_1 = 1`.

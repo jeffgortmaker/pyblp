@@ -91,8 +91,13 @@ class Simulation(Economy):
               with a `firm_ids` column and must have as many columns as there are products in the market with the most
               products.
 
-        Along with `market_ids` and `firm_ids`, the names of any additional fields can be used as variables
-        in `product_formulations`.
+        To simulate a nested Logit or random coefficients nested Logit (RCNL) model, nesting groups must be specified:
+
+            - **nesting_ids** (`object, optional`) - IDs that associate products with nesting groups. When these IDs are
+              specified, `rho` must be specified as well.
+
+        Along with `market_ids`, `firm_ids`, and `nesting_ids`, the names of any additional fields can be used as
+        variables in `product_formulations`.
 
     agent_formulation : `Formulation, optional`
         :class:`Formulation` configuration for the matrix of observed agent characteristics called demographics,
@@ -125,6 +130,11 @@ class Simulation(Economy):
         which will replace any `nodes` and `weights` fields in `agent_data`. This configuration is required if `nodes`
         and `weights` in `agent_data` are not specified. It should not be specified if :math:`X_2` is not formulated
         in `product_formulations`.
+    rho : `array-like, optional`
+        Parameters that measure within nesting group correlation, :math:`\rho`. If there is only one element, it
+        corresponds to all groups defined by the `nesting_ids` field of `product_data`. If there is more than one
+        element, there must be as many elements as :math:`H`, the number of distinct nesting groups, and elements
+        correspond to group IDs in the sorted order given by :attr:`Simulation.unique_nesting_ids`.
     xi_variance : `float, optional`
         Variance of the unobserved demand-side product characteristics, :math:`\xi`. The default value is ``1.0``.
     omega_variance : `float, optional`
@@ -156,6 +166,8 @@ class Simulation(Economy):
         Supply-side linear parameters, :math:`\gamma`.
     pi : `ndarray`
         Parameters that measures how agent tastes vary with demographics, :math:`\Pi`.
+    rho : `ndarray`
+        Parameters that measure within nesting group correlation, :math:`\rho`.
     product_data : `recarray`
         Synthetic product data that were loaded or simulated during initialization, except for Bertrand-Nash prices and
         shares, which are computed by :meth:`Simulation.solve`.
@@ -172,6 +184,8 @@ class Simulation(Economy):
         :attr:`Simulation.agent_formulation`.
     unique_market_ids : `ndarray`
         Unique market IDs in product and agent data.
+    unique_nesting_ids : `ndarray`
+        Unique nesting IDs in product data.
     xi : `ndarray`
         Unobserved demand-side product characteristics, :math:`\xi`, that were simulated during initialization.
     omega : `ndarray`
@@ -202,6 +216,8 @@ class Simulation(Economy):
     ES : `int`
         Number of absorbed supply-side fixed effects, :math:`E_S`, which is always zero because simulations do not
         support fixed effect absorption.
+    H : `int`
+        Number of nesting groups, :math:`H`.
 
     Example
     -------
@@ -244,7 +260,6 @@ class Simulation(Economy):
        product_data
 
     """
-    # todo
 
     def __init__(self, product_formulations, beta, sigma, gamma, product_data, agent_formulation=None, pi=None,
                  agent_data=None, integration=None, rho=None, xi_variance=1, omega_variance=1, correlation=0.9,
@@ -434,7 +449,7 @@ class Simulation(Economy):
     def __str__(self):
         """Supplement general formatted information with other information about parameters."""
         sections = [[super().__str__()], ["Linear Parameters:", self._linear_parameters.format()]]
-        if self.K2 > 0 or self.G > 0:
+        if self.K2 > 0 or self.H > 0:
             sections.append(["Nonlinear Parameters:", self._nonlinear_parameters.format()])
         return "\n\n".join("\n".join(s) for s in sections)
 

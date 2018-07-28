@@ -66,14 +66,20 @@ class Problem(Economy):
               with a `firm_ids` column and must have as many columns as there are products in the market with the most
               products.
 
+        To estimate a nested Logit or random coefficients nested Logit (RCNL) model, nesting groups must be specified:
+
+            - **nesting_ids** (`object, optional`) - IDs that associate products with nesting groups. When these IDs are
+              specified, `rho` in :meth:`Problem.solve`, the vector of parameters that measure within nesting group
+              correlation, must be specified as well.
+
         Finally, clustering groups can be specified to account for arbitrary within-group correlation while computing
         standard errors and weighting matrices:
 
             - **clustering_ids** (`object, optional`) - Cluster group IDs, which will be used when estimating standard
               errors and updating weighting matrices if `se_type` in :meth:`Problem.solve` is ``'clustered'``.
 
-        Along with `market_ids`, `firm_ids`, and `prices`, the names of any additional fields can be used as variables
-        in `product_formulations`.
+        Along with `market_ids`, `firm_ids`, `nesting_ids`, `clustering_ids`, and `prices`, the names of any additional
+        fields can be used as variables in `product_formulations`.
 
     agent_formulation : `Formulation, optional`
         :class:`Formulation` configuration for the matrix of observed agent characteristics called demographics,
@@ -118,6 +124,8 @@ class Problem(Economy):
         `integration` along with any demographics formulated by `agent_formulation`.
     unique_market_ids : `ndarray`
         Unique market IDs in product and agent data.
+    unique_nesting_ids : `ndarray`
+        Unique nesting IDs in product data.
     N : `int`
         Number of products across all markets, :math:`N`.
     T : `int`
@@ -138,6 +146,8 @@ class Problem(Economy):
         Number of absorbed demand-side fixed effects, :math:`E_D`.
     ES : `int`
         Number of absorbed supply-side fixed effects, :math:`E_S`.
+    H : `int`
+        Number of nesting groups, :math:`H`.
 
     Example
     -------
@@ -172,7 +182,6 @@ class Problem(Economy):
        results
 
     """
-    # todo
 
     def __init__(self, product_formulations, product_data, agent_formulation=None, agent_data=None, integration=None):
         """Initialize the underlying economy with structured product and agent data."""
@@ -192,7 +201,7 @@ class Problem(Economy):
         r"""Solve the problem.
 
         The problem is solved in one or more GMM steps. During each step, any unfixed nonlinear parameters in
-        :math:`\hat{theta}` are optimized to minimize the GMM objective value. If all nonlinear parameters are fixed or
+        :math:`\hat{\theta}` are optimized to minimize the GMM objective value. If all nonlinear parameters are fixed or
         if there are no nonlinear parameters (as in the Logit model), the objective is evaluated once during the step.
 
         If there are nonlinear parameters, the mean utility, :math:`\delta(\hat{\theta})` is computed market-by-market
@@ -224,6 +233,18 @@ class Problem(Economy):
             Zeros are assumed to be zero throughout estimation and nonzeros are, if not fixed by `pi_bounds`, starting
             values for unknown elements in :math:`\theta`.
 
+        rho : `array-like, optional`
+            Configuration for which elements in the vector of parameters that measure within nesting group correlation,
+            :math:`\rho`, are fixed at zero and starting values for the other elements, which, if not fixed by
+            `rho_bounds`, are in the vector of unknown elements, :math:`\theta`. If there is only one element, it
+            corresponds to all groups defined by the `nesting_ids` field of `product_data` in :class:`Problem`. If there
+            is more than one element, there must be as many elements as :math:`H`, the number of distinct nesting
+            groups, and elements correspond to group IDs in the sorted order given by
+            :attr:`Problem.unique_nesting_ids`. If nesting IDs were not specified, this should not be specified either.
+
+            Zeros are assumed to be zero throughout estimation and nonzeros are, if not fixed by `rho_bounds`, starting
+            values for unknown elements in :math:`\theta`.
+
         sigma_bounds : `tuple, optional`
             Configuration for :math:`\Sigma` bounds of the form ``(lb, ub)``, in which both ``lb`` and ``ub`` are of the
             same size as `sigma`. Each element in ``lb`` and ``ub`` determines the lower and upper bound for its
@@ -236,7 +257,7 @@ class Problem(Economy):
             ``numpy.nan`` are converted to ``-numpy.inf`` in ``lb`` and to ``numpy.inf`` in ``ub``.
 
         pi_bounds : `tuple, optional`
-            Configuration for :math:`\Pi` bounds of the form ``(lb, ub)``, in which both ``lb`` are ``ub`` are of the
+            Configuration for :math:`\Pi` bounds of the form ``(lb, ub)``, in which both ``lb`` and ``ub`` are of the
             same size as `pi`. Each element in ``lb`` and ``ub`` determines the lower and upper bound for its
             counterpart in `pi`. If `optimization` does not support bounds, these will be ignored. By default, if bounds
             are supported, all unfixed elements are unbounded.
@@ -245,11 +266,33 @@ class Problem(Economy):
             upper bound fixes the corresponding element. Both ``None`` and ``numpy.nan`` are converted to ``-numpy.inf``
             in ``lb`` and to ``numpy.inf`` in ``ub``.
 
+        rho_bounds : `tuple, optional`
+            Configuration for :math:`\rho` bounds of the form ``(lb, ub)``, in which both ``lb`` and ``ub`` are of the
+            same size as `rho`. Each element in ``lb`` and ``ub`` determines the lower and upper bound for its
+            counterpart in `rho`. If `optimization` does not support bounds, these will be ignored. By default, if
+            bounds are supported, all elements are bounded from below by `0` (the simple Logit case) and from above by
+            `0.99` (a value of exactly `1` gives rise to division by zero errors and values greater than `1` are
+            inconsistent with utility maximization).
+
+            Lower and upper bounds corresponding to zeros in `rho` are set to zero. Setting a lower bound equal to an
+            upper bound fixes the corresponding element. Both ``None`` and ``numpy.nan`` are converted to ``-numpy.inf``
+            in ``lb`` and to ``numpy.inf`` in ``ub``.
+
         delta : `array-like, optional`
             Initial values for the mean utility, :math:`\delta`. If there are any nonlinear parameters, these are the
             values at which the fixed point iteration routine will start during the first objective evaluation. By
-            default, :math:`\delta_{jt} = \log s_{jt} - \log s_{0t}` is used, which is the estimated :math:`\delta`
-            under the Logit model when there are no nonlinear parameters.
+            default, the solution to the sample Logit model is used:
+
+            .. math:: \delta_{jt} = \log s_{jt} - \log s_{0t}.
+
+            If there is nesting, the solution to the nested Logit model under the initial `rho` is used instead:
+
+            .. math:: \delta_{jt} = \log s_{jt} - \log s_{0t} - \rho_{h(j)}\log\frac{s_{jt}}{s_{h(j)t}}
+
+            where
+
+            .. math:: s_{h(j)t} = \sum_{k\in\mathscr{J}_{h(j)t}} s_{kt}.
+
         WD : `array-like, optional`
             Starting values for the demand-side weighting matrix, :math:`W_D`. By default, the 2SLS weighting matrix,
             :math:`W_D = (Z_D'Z_D)^{-1}`, is used.
@@ -372,7 +415,6 @@ class Problem(Economy):
             :class:`Results` of the solved problem.
 
         """
-        # todo
 
         # record the amount of time it takes to solve the problem
         step_start_time = time.time()
@@ -418,7 +460,7 @@ class Problem(Economy):
             self, sigma, pi, rho, sigma_bounds, pi_bounds, rho_bounds, optimization._supports_bounds
         )
         theta = nonlinear_parameters.compress()
-        if self.K2 > 0 or self.G > 0:
+        if self.K2 > 0 or self.H > 0:
             output("")
             output("Initial Nonlinear Parameters:")
             output(nonlinear_parameters.format())
@@ -634,7 +676,7 @@ class Problem(Economy):
         true_xi_jacobian = np.full((self.N, nonlinear_parameters.P), np.nan, options.dtype)
 
         # use a closed-form solution when there are no nonlinear parameters
-        if self.K2 == self.G == 0:
+        if self.K2 == self.H == 0:
             true_delta = self._compute_logit_delta()
         else:
             # define a function that builds a market along with arguments used to compute delta and its Jacobian
@@ -747,7 +789,7 @@ class Problem(Economy):
             shares_t = self.products.shares[self.products.market_ids.flat == t]
             outside_share_t = 1 - shares_t.sum()
             delta[self.products.market_ids.flat == t] -= np.log(outside_share_t)
-            if self.G > 0:
+            if self.H > 0:
                 assert rho is not None
                 groups_t = Groups(self.products.nesting_ids[self.products.market_ids.flat == t])
                 group_shares_t = shares_t / groups_t.expand(groups_t.sum(shares_t))
@@ -880,7 +922,7 @@ class DemandProblemMarket(Market):
 
             # compute delta either with a closed-form solution or by solving a fixed point problem
             if self.K2 == 0:
-                assert self.G > 0
+                assert self.H > 0
                 converged = True
                 iterations = evaluations = 0
                 outside_share = 1 - self.products.shares.sum()
@@ -928,7 +970,7 @@ class DemandProblemMarket(Market):
         diagonal_shares = np.diagflat(self.products.shares)
         diagonal_weights = np.diagflat(self.agents.weights)
         jacobian = diagonal_shares - probabilities @ diagonal_weights @ probabilities.T
-        if self.G > 0:
+        if self.H > 0:
             membership = self.get_membership_matrix()
             jacobian += self.rho / (1 - self.rho) * (
                 diagonal_shares - membership * (conditionals @ diagonal_weights @ probabilities.T)
@@ -1030,7 +1072,7 @@ class SupplyProblemMarket(Market):
         # compute the tensor derivatives with respect to xi (equivalently, to delta), indexed with the first axis, of
         #   conditional probabilities
         conditionals_tensor = None
-        if self.G > 0:
+        if self.H > 0:
             conditionals_tensor = self.compute_conditionals_by_xi_tensor(conditionals)
 
         # compute the tensor derivative of A with respect to xi (equivalently, to delta)
@@ -1086,7 +1128,7 @@ class SupplyProblemMarket(Market):
         """
         tensor = -probabilities[None] * probabilities[None].swapaxes(0, 1)
         tensor[np.diag_indices(self.J)] += probabilities
-        if self.G > 0:
+        if self.H > 0:
             membership = self.get_membership_matrix()
             tensor -= membership[..., None] * self.rho[None] / (1 - self.rho[None]) * (
                 conditionals[None] * probabilities[None].swapaxes(0, 1)
@@ -1112,7 +1154,7 @@ class SupplyProblemMarket(Market):
         """
         tensor = np.zeros((self.J, self.J, self.J), options.dtype)
         tensor[:, np.arange(self.J), np.arange(self.J)] = np.squeeze(value_derivatives_tensor @ self.agents.weights)
-        if self.G > 0:
+        if self.H > 0:
             tensor /= 1 - self.rho[None]
         return tensor
 
@@ -1127,7 +1169,7 @@ class SupplyProblemMarket(Market):
             value_derivatives @ diagonal_weights @ probabilities_tensor.swapaxes(1, 2) +
             value_derivatives_tensor @ (diagonal_weights @ probabilities.T)
         )
-        if self.G > 0:
+        if self.H > 0:
             membership = self.get_membership_matrix()
             tensor += membership[None] * self.rho[None] / (1 - self.rho[None]) * (
                 value_derivatives @ diagonal_weights @ conditionals_tensor.swapaxes(1, 2) +
@@ -1140,7 +1182,7 @@ class SupplyProblemMarket(Market):
         respect to prices to compute the tangent of the diagonal capital lambda matrix with respect to the parameter.
         """
         tangent = np.diagflat(value_derivatives_tangent @ self.agents.weights)
-        if self.G > 0:
+        if self.H > 0:
             tangent /= 1 - self.rho
             if isinstance(parameter, RhoParameter):
                 associations = self.groups.expand(parameter.get_group_associations(self.groups))
@@ -1159,7 +1201,7 @@ class SupplyProblemMarket(Market):
             value_derivatives @ diagonal_weights @ probabilities_tangent.T +
             value_derivatives_tangent @ diagonal_weights @ probabilities.T
         )
-        if self.G > 0:
+        if self.H > 0:
             membership = self.get_membership_matrix()
             tangent += membership * self.rho / (1 - self.rho) * (
                 value_derivatives @ diagonal_weights @ conditionals_tangent.T +

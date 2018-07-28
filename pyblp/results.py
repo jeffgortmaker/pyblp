@@ -66,6 +66,8 @@ class Results(object):
         :math:`\hat{\Sigma}`.
     pi : `ndarray`
         Estimated parameters that measures how agent tastes vary with demographics, :math:`\hat{\Pi}`.
+    rho : `ndarray`
+        Estimated parameters that measure within nesting group correlations, :math:`\hat{\rho}`.
     beta : `ndarray`
         Estimated demand-side linear parameters, :math:`\hat{\beta}`.
     gamma : `ndarray`
@@ -76,6 +78,8 @@ class Results(object):
         Estimated standard errors for unknown :math:`\hat{\Sigma}` elements in :math:`\hat{\theta}`.
     pi_se : `ndarray`
         Estimated standard errors for unknown :math:`\hat{\Pi}` elements in :math:`\hat{\theta}`.
+    rho_se : `ndarray`
+        Estimated standard errors for unknown :math:`\hat{\rho}` elements in :math:`\hat{\theta}`.
     beta_se : `ndarray`
         Estimated standard errors for :math:`\hat{\beta}`.
     gamma_se : `ndarray`
@@ -122,6 +126,8 @@ class Results(object):
         Estimated gradient of the GMM objective with respect to unknown :math:`\Sigma` elements in :math:`\theta`.
     pi_gradient : `ndarray`
         Estimated gradient of the GMM objective with respect to unknown :math:`\Pi` elements in :math:`\theta`.
+    rho_gradient : `ndarray`
+        Estimated gradient of the GMM objective with respect to unknown :math:`\rho` elements in :math:`\theta`.
     WD : `ndarray`
         Demand-side weighting matrix, :math:`W_D`, used to compute these results.
     WS : `ndarray`
@@ -135,7 +141,6 @@ class Results(object):
         single value for each market.
 
     """
-    # todo
 
     def __init__(self, objective_info, last_results, step_start_time, optimization_start_time, optimization_end_time,
                  iterations, evaluations, iteration_mappings, evaluation_mappings, center_moments, se_type):
@@ -300,7 +305,7 @@ class Results(object):
         ])
 
         # construct a section containing nonlinear estimates
-        if self.problem.K2 > 0 or self.problem.G > 0:
+        if self.problem.K2 > 0 or self.problem.H > 0:
             sections.append([
                 f"Nonlinear Estimates ({se_description} in Parentheses):",
                 self._nonlinear_parameters.format_estimates(
@@ -745,9 +750,21 @@ class Results(object):
 
         .. math:: \text{CS} = \sum_{i=1}^{I_t} w_i\text{CS}_i,
 
-        in which the consumer surplus for individual :math:`i` is
+        in which, if there is no nesting, the consumer surplus for individual :math:`i` is
 
-        .. math:: \text{CS}_i = \frac{\log(1 + \sum_{j=1}^{J_t} \exp u_{jti})}{\alpha + \alpha_i}.
+        .. math:: \text{CS}_i = \frac{\log\left(1 + \sum_{j=1}^{J_t} \exp V_{jti}\right)}{\alpha + \alpha_i}
+
+        where
+
+        .. math:: V_{jti} = \delta_{jt} + \mu_{jti}.
+
+        If there is nesting,
+
+        .. math:: \text{CS}_i = \frac{\log\left(1 + \sum_{h=1}^H \exp V_{hti}\right)}{\alpha + \alpha_i}
+
+        where
+
+        .. math:: V_{hti} = (1 - \rho_h)\log\sum_{j\in\mathscr{J}_{ht}} \exp[V_{jti} / (1 - \rho_h)].
 
         .. warning::
 
@@ -771,7 +788,6 @@ class Results(object):
             order as :attr:`Results.unique_market_ids`.
 
         """
-        # todo
         output("Computing consumer surpluses with the equation that assumes away nonlinear income effects ...")
         return self._combine_results(ResultsMarket.compute_consumer_surplus, [], [prices], processes)
 
@@ -929,7 +945,7 @@ class ResultsMarket(Market):
 
         # compute the exponentiated utilities that will be summed in the expression for consume surplus
         exp_utilities = np.exp(delta + mu)
-        if self.G > 0:
+        if self.H > 0:
             exp_utilities = self.groups.sum(exp_utilities ** (1 / (1 - self.rho))) ** (1 - self.group_rho)
 
         # compute the derivatives of utility with respect to prices, which are assumed to be constant across products

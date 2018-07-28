@@ -1,15 +1,15 @@
 Notation
 ========
 
-The notation in pyblp is a customized amalgamation of the notation employed by :ref:`Berry, Levinsohn, and Pakes (1995) <blp95>`, :ref:`Nevo (2000) <n00>`, and :ref:`Morrow and Skerlos (2011) <ms11>`.
+The notation in pyblp is a customized amalgamation of the notation employed by :ref:`Berry, Levinsohn, and Pakes (1995) <blp95>`, :ref:`Nevo (2000) <n00>`, :ref:`Morrow and Skerlos (2011) <ms11>`, :ref:`Grigolon and Verboven (2014) <gv14>`, and others.
 
 
 Dimensions and Sets
 -------------------
 
-========================  ========================================================
+========================  =========================================================
 Symbol                    Description
-========================  ========================================================
+========================  =========================================================
 :math:`N`                 Products across all markets.
 :math:`T`                 Markets.
 :math:`J_t`               Products in market :math:`t`.
@@ -23,10 +23,12 @@ Symbol                    Description
 :math:`M_S`               Supply-side instruments.
 :math:`E_D`               Absorbed demand-side fixed effects.
 :math:`E_S`               Absorbed supply-side fixed effects.
+:math:`H`                 Nesting groups.
 :math:`C`                 Standard error clusters.
 :math:`P`                 Unknown nonlinear parameters.
 :math:`\mathscr{J}_{ft}`  Products produced by firm :math:`f` in market :math:`t`.
-========================  ========================================================
+:math:`\mathscr{J}_{ht}`  Products in group :math:`h` and market :math:`t`.
+========================  =========================================================
 
 
 Matrices, Vectors, and Scalars
@@ -45,7 +47,7 @@ Symbol                     Dimensions                                  Descripti
 :math:`p`                  :math:`N \times 1`                          Prices.
 :math:`p^*`                :math:`N \times 1`                          Bertrand-Nash prices after firm ID changes.
 :math:`p^a`                :math:`N \times 1`                          Bertrand-Nash prices after firm ID changes approximated with the assumption that shares and their price derivatives are unaffected by the changes.
-:math:`s`                  :math:`N \times 1`                          Shares, or, when subscripted with :math:`i`, choice probabilities with :math:`I_t` columns.
+:math:`s`                  :math:`N \times 1`                          Shares when indexed with :math:`j`, group shares when indexed with :math:`h`, and choice probabiltiies with :math:`I_t` columns when indexed with :math:`i`.
 :math:`c`                  :math:`N \times 1`                          Marginal costs.
 :math:`\tilde{c}`          :math:`N \times 1`                          Marginal costs, :math:`c`, under a linear specification, and :math:`\log c` under a log-linear specification.
 :math:`\eta`               :math:`N \times 1`                          Markup term from the BLP-markup equation.
@@ -62,14 +64,17 @@ Symbol                     Dimensions                                  Descripti
 :math:`\nu`                :math:`I_t \times K_2`                      Unobserved agent characteristics called integration nodes in market :math:`t`.
 :math:`w`                  :math:`I_t \times 1`                        Integration weights in market :math:`t`.
 :math:`\delta`             :math:`N \times 1`                          Mean utility.
-:math:`\epsilon`           :math:`N \times 1`                          Type I Extreme Value idiosyncratic preferences.
 :math:`\mu`                :math:`J_t \times I_t`                      Type-specific portion of utility in market :math:`t`.
-:math:`U`                  :math:`J_t \times I_t`                      Agent utilities in market :math:`t`.
+:math:`\epsilon`           :math:`N \times 1`                          Type I Extreme Value idiosyncratic preferences.
+:math:`\bar{\epsilon}`     :math:`N \times 1`                          Type I Extreme Value term used to decompose :math:`\epsilon` when indexed with :math:`j` and the group-specific term in the decomposition when indexed with :math:`h`.
+:math:`U`                  :math:`J_t \times I_t`                      Indirect utilities in market :math:`t`.
+:math:`V`                  :math:`J_t \times I_t`                      Indirect utilities in market :math:`t` minus :math:`\epsilon` when indexed with :math:`j` and the inclusive value of a nesting group when indexed with :math:`h`.
 :math:`\beta`              :math:`K_1 \times 1`                        Demand-side linear parameters.
 :math:`\Sigma`             :math:`K_2 \times K_2`                      Cholesky decomposition of the covariance matrix that measures agents' random taste distribution.
 :math:`\Pi`                :math:`K_2 \times D`                        Parameters that measures how agent tastes vary with demographics.
+:math:`\rho`               :math:`H \times 1`                          Parameters that measures within nesting group correlation.
 :math:`\gamma`             :math:`K_3 \times 1`                        Supply-side linear parameters.
-:math:`\theta`             :math:`P \times 1`                          Unknown elements in :math:`\Sigma` and :math:`\Pi`.
+:math:`\theta`             :math:`P \times 1`                          Unknown elements in :math:`\Sigma`, :math:`\Pi`, and :math:`\rho`.
 :math:`Z_D`                :math:`N \times M_D`                        Demand-side instruments.
 :math:`Z_S`                :math:`N \times M_S`                        Supply-side instruments.
 :math:`W_D`                :math:`M_D \times M_D`                      Demand-side weighting matrix.

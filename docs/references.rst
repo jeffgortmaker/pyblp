@@ -21,6 +21,10 @@ Berry, S., Levinsohn, J., & Pakes, A. (1999). `Voluntary export restraints on au
 
 Frisch, R., & Waugh, F. V. (1933). `Partial time regressions as compared with individual trends <https://www.econometricsociety.org/publications/econometrica/1933/10/01/partial-time-regressions-compared-individual-trends>`_. *Econometrica, 1* (4), 387-401.
 
+.. _gv14:
+
+Grigolon, L., & Verboven, F. (2014). `Nested logit or random coefficients logit? A comparison of alternative discrete choice models of product differentiation <https://ideas.repec.org/a/tpr/restat/v96y2014i5p916-935.html>`_. *Review of Economics and Statistics, 96* (5), 916-935.
+
 .. _hw08:
 
 Heiss, F., & Winschel V. (2008). `Likelihood approximation by numerical integration on sparse grids <https://ideas.repec.org/a/eee/econom/v144y2008i1p62-80.html>`_. *Journal of Econometrics, 144* (1), 62-80.
