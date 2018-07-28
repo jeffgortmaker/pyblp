@@ -8,7 +8,7 @@ import scipy.linalg
 
 from . import options, exceptions
 from .configurations import Iteration, Optimization, Formulation
-from .utilities import output, compute_2sls_weights, ParallelItems, IV
+from .utilities import output, compute_2sls_weights, Groups, ParallelItems, IV
 from .primitives import Products, Agents, Economy, Market, NonlinearParameters, RhoParameter
 
 
@@ -451,7 +451,7 @@ class Problem(Economy):
 
         # compute or load initial delta values
         if delta is None:
-            true_delta = self._compute_logit_delta()
+            true_delta = self._compute_logit_delta(nonlinear_parameters.rho)
         else:
             true_delta = np.c_[np.asarray(delta, options.dtype)]
             if true_delta.shape != (self.N, 1):
@@ -740,12 +740,22 @@ class Problem(Economy):
         gamma, true_omega = supply_iv.estimate(tilde_costs)
         return true_tilde_costs, true_omega_jacobian, tilde_costs, omega_jacobian, gamma, true_omega, errors
 
-    def _compute_logit_delta(self):
-        """Compute the delta that solves the simple Logit model."""
+    def _compute_logit_delta(self, rho=None):
+        """Compute the delta that solves the simple Logit (or nested Logit) model."""
         delta = np.log(self.products.shares)
         for t in self.unique_market_ids:
-            outside_share_t = 1 - self.products.shares[self.products.market_ids.flat == t].sum()
+            shares_t = self.products.shares[self.products.market_ids.flat == t]
+            outside_share_t = 1 - shares_t.sum()
             delta[self.products.market_ids.flat == t] -= np.log(outside_share_t)
+            if self.G > 0:
+                assert rho is not None
+                groups_t = Groups(self.products.nesting_ids[self.products.market_ids.flat == t])
+                group_shares_t = shares_t / groups_t.expand(groups_t.sum(shares_t))
+                if rho.size == 1:
+                    rho_t = np.full_like(shares_t, rho)
+                else:
+                    rho_t = groups_t.expand(rho[np.searchsorted(self.unique_nesting_ids, groups_t.unique)])
+                delta[self.products.market_ids.flat == t] -= rho_t * np.log(group_shares_t)
         return delta
 
     @staticmethod
@@ -867,8 +877,6 @@ class DemandProblemMarket(Market):
                     if np.any(x <= 0):
                         errors.add(exceptions.NonpositiveSharesError)
                     return np.log(x)
-
-            # todo: figure out why I'm getting floating point errors here -- I shouldn't be when there's a closed-form solution
 
             # compute delta either with a closed-form solution or by solving a fixed point problem
             if self.K2 == 0:
