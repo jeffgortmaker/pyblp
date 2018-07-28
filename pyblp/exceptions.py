@@ -47,9 +47,9 @@ class DeltaFloatingPointError(Exception):
 
     def __str__(self):
         return (
-            "Encountered floating point issues when computing delta. This problem is often due to overflow and can "
-            "sometimes be mitigated by reducing the magnitude of initial parameter values, by setting more "
-            "conservative bounds, or by rescaling variables."
+            "Encountered floating point issues when computing delta or its Jacobian with respect to theta. This problem "
+            "is often due to overflow and can sometimes be mitigated by reducing the magnitude of initial parameter "
+            "values, by setting more conservative bounds, or by rescaling variables."
         )
 
 
@@ -58,9 +58,9 @@ class CostsFloatingPointError(Exception):
 
     def __str__(self):
         return (
-            "Encountered floating point issues when computing marginal costs. This problem is often due to overflow "
-            "and can sometimes be mitigated by reducing the magnitude of initial parameter values, by setting more "
-            "conservative bounds, or by rescaling other variables."
+            "Encountered floating point issues when computing marginal costs or their Jacobian with respect to theta. "
+            "This problem is often due to overflow and can sometimes be mitigated by reducing the magnitude of initial "
+            "parameter values, by setting more conservative bounds, or by rescaling variables."
         )
 
 
