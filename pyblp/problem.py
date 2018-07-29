@@ -384,9 +384,8 @@ class Problem(Economy):
             This is only relevant if :math:`X_3` was formulated by `product_formulations` in :class:`Problem`. By
             default, marginal costs are unbounded. When `costs_type` is ``'log'``, nonpositive :math:`c(\hat{\theta})`
             values can create problems when computing :math:`\tilde{c}(\hat{\theta}) = \log c(\hat{\theta})`. One
-            solution is to let ``lb`` equal some small number; however, doing so introduces error into gradient
-            computation. Both ``None`` and ``numpy.nan`` are converted to ``-numpy.inf`` in ``lb`` and to ``numpy.inf``
-            in ``ub``.
+            solution is to set ``lb`` to a small number. Both ``None`` and ``numpy.nan`` are converted to ``-numpy.inf``
+            in ``lb`` and to ``numpy.inf`` in ``ub``.
         se_type : `str, optional`
             How to compute standard errors. The following types of standard errors are supported:
 
@@ -1030,6 +1029,7 @@ class SupplyProblemMarket(Market):
                 costs = np.full((self.J, 1), np.nan, options.dtype)
 
             # clip marginal costs that are outside of acceptable bounds
+            clipped_indices = (costs < costs_bounds[0]) | (costs > costs_bounds[1])
             costs = np.clip(costs, *costs_bounds)
 
             # take the log of marginal costs under a log-linear specification
@@ -1043,7 +1043,7 @@ class SupplyProblemMarket(Market):
                     tilde_costs = np.log(costs)
 
             # if the gradient is to be computed, replace invalid transformed marginal costs with their last computed
-            #   values before computing their Jacobian
+            #   values before computing their Jacobian, which is zero for clipped marginal costs
             omega_jacobian = np.full((self.J, nonlinear_parameters.P), np.nan, options.dtype)
             if compute_gradient:
                 valid_tilde_costs = tilde_costs.copy()
@@ -1052,6 +1052,7 @@ class SupplyProblemMarket(Market):
                 omega_jacobian = self.compute_omega_by_theta_jacobian(
                     valid_tilde_costs, xi_jacobian, beta_jacobian, nonlinear_parameters, costs_type
                 )
+                omega_jacobian[clipped_indices.flat] = 0
             return tilde_costs, omega_jacobian, errors
 
     def compute_omega_by_theta_jacobian(self, tilde_costs, xi_jacobian, beta_jacobian, nonlinear_parameters,
