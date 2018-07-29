@@ -244,6 +244,40 @@ def test_shares(simulated_problem):
 
 
 @pytest.mark.usefixtures('simulated_problem')
+def test_shares_by_prices_jacobian(simulated_problem):
+    """Use central finite differences to test that analytic values in the Jacobian of shares with respect to prices are
+    essentially within 0.1% of estimated values.
+    """
+    simulation, product_data, _, results = simulated_problem
+
+    # extract the Jacobian from the analytic expression for elasticities
+    exact = np.nan_to_num(results.compute_elasticities())
+    for t in simulation.unique_market_ids:
+        prices_t = product_data.prices[product_data.market_ids.flat == t]
+        shares_t = product_data.shares[product_data.market_ids.flat == t]
+        exact[product_data.market_ids.flat == t] /= prices_t.T / shares_t
+
+    # estimate the Jacobian with central finite differences
+    estimated = np.zeros_like(exact)
+    change = np.sqrt(np.finfo(np.float64).eps)
+    for index in range(estimated.shape[1]):
+        prices1 = product_data.prices.copy()
+        prices2 = product_data.prices.copy()
+        for t in simulation.unique_market_ids:
+            if index < np.sum(product_data.market_ids.flat == t):
+                prices1_t = prices1[product_data.market_ids.flat == t]
+                prices2_t = prices2[product_data.market_ids.flat == t]
+                prices1_t[index] += change / 2
+                prices2_t[index] -= change / 2
+                prices1[product_data.market_ids.flat == t] = prices1_t
+                prices2[product_data.market_ids.flat == t] = prices2_t
+        estimated[:, [index]] = (results.compute_shares(prices1) - results.compute_shares(prices2)) / change
+
+    # compare the two sets of elasticity matrices
+    np.testing.assert_allclose(exact, estimated, atol=1e-8, rtol=0.001)
+
+
+@pytest.mark.usefixtures('simulated_problem')
 @pytest.mark.parametrize('factor', [pytest.param(0.01, id="large"), pytest.param(0.0001, id="small")])
 def test_elasticity_aggregates_and_means(simulated_problem, factor):
     """Test that the magnitude of simulated aggregate elasticities is less than the magnitude of mean elasticities, both
@@ -258,7 +292,7 @@ def test_elasticity_aggregates_and_means(simulated_problem, factor):
         verbose=True
     )
 
-    # test the same inequality but for all non-price characteristics
+    # test the same inequality but for all non-price variables
     for name in {n for f in simulation._X1_formulations + simulation._X2_formulations for n in f.names} - {'prices'}:
         np.testing.assert_array_less(
             np.abs(results.compute_aggregate_elasticities(factor, name)),
@@ -280,7 +314,7 @@ def test_diversion_ratios(simulated_problem):
         np.testing.assert_array_less(ratios, 1, err_msg=compute.__name__, verbose=True)
         np.testing.assert_allclose(ratios.sum(axis=1), 1, atol=1e-14, rtol=0, err_msg=compute.__name__)
 
-    # test that rows sum to one even when computing ratios for non-price characteristics
+    # test that rows sum to one even when computing ratios for non-price variables
     for name in {n for f in simulation._X1_formulations + simulation._X2_formulations for n in f.names} - {'prices'}:
         ratios = results.compute_diversion_ratios(name)
         np.testing.assert_allclose(ratios.sum(axis=1), 1, atol=1e-14, rtol=0, err_msg=name)
@@ -484,7 +518,7 @@ def test_extra_demographics(simulated_problem):
 ])
 def test_objective_gradient(simulated_problem, solve_options):
     """Implement central finite differences in a custom optimization routine to test that analytic gradient values
-    are within 1% of estimated values.
+    are within 0.1% of estimated values.
     """
     simulation, _, problem, _ = simulated_problem
 
