@@ -239,8 +239,8 @@ class Results(object):
         self.unique_market_ids = self.problem.unique_market_ids
 
         # convert contraction mappings to matrices with rows ordered by market
-        iteration_lists = [[m[t] for m in iteration_mappings if m] for t in self.unique_market_ids]
-        evaluation_lists = [[m[t] for m in evaluation_mappings if m] for t in self.unique_market_ids]
+        iteration_lists = [[m[t] if m else 0 for m in iteration_mappings] for t in self.unique_market_ids]
+        evaluation_lists = [[m[t] if m else 0 for m in evaluation_mappings] for t in self.unique_market_ids]
         self.fp_iterations = self.cumulative_fp_iterations = np.array(iteration_lists, np.int)
         self.contraction_evaluations = self.cumulative_contraction_evaluations = np.array(evaluation_lists, np.int)
 
