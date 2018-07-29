@@ -1175,14 +1175,14 @@ class SupplyProblemMarket(Market):
         """
         diagonal_weights = np.diagflat(self.agents.weights)
         tensor = (
-            value_derivatives @ diagonal_weights @ probabilities_tensor.swapaxes(1, 2) +
-            value_derivatives_tensor @ (diagonal_weights @ probabilities.T)
+            probabilities_tensor @ (diagonal_weights @ value_derivatives.T) +
+            probabilities @ diagonal_weights @ value_derivatives_tensor.swapaxes(1, 2)
         )
         if self.H > 0:
             membership = self.get_membership_matrix()
             tensor += membership[None] * self.rho[None] / (1 - self.rho[None]) * (
-                value_derivatives @ diagonal_weights @ conditionals_tensor.swapaxes(1, 2) +
-                value_derivatives_tensor @ (diagonal_weights @ conditionals.T)
+                conditionals_tensor @ (diagonal_weights @ value_derivatives.T) +
+                conditionals @ diagonal_weights @ value_derivatives_tensor.swapaxes(1, 2)
             )
         return tensor
 
@@ -1207,18 +1207,18 @@ class SupplyProblemMarket(Market):
         """
         diagonal_weights = np.diagflat(self.agents.weights)
         tangent = (
-            value_derivatives @ diagonal_weights @ probabilities_tangent.T +
-            value_derivatives_tangent @ diagonal_weights @ probabilities.T
+            probabilities_tangent @ diagonal_weights @ value_derivatives.T +
+            probabilities @ diagonal_weights @ value_derivatives_tangent.T
         )
         if self.H > 0:
             membership = self.get_membership_matrix()
             tangent += membership * self.rho / (1 - self.rho) * (
-                value_derivatives @ diagonal_weights @ conditionals_tangent.T +
-                value_derivatives_tangent @ diagonal_weights @ conditionals.T
+                conditionals_tangent @ diagonal_weights @ value_derivatives.T +
+                conditionals @ diagonal_weights @ value_derivatives_tangent.T
             )
             if isinstance(parameter, RhoParameter):
                 associations = self.groups.expand(parameter.get_group_associations(self.groups))
-                tangent += associations * membership / (1 - self.rho)**2 * (
-                    value_derivatives @ diagonal_weights @ conditionals.T
+                tangent += associations * membership / (1 - self.rho) ** 2 * (
+                    conditionals @ diagonal_weights @ value_derivatives.T
                 )
         return tangent

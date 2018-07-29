@@ -595,11 +595,11 @@ class Market(object):
         the dense capital gamma matrix used to decompose markups.
         """
         diagonal_weights = np.diagflat(self.agents.weights)
-        capital_gamma = value_derivatives @ diagonal_weights @ probabilities.T
+        capital_gamma = probabilities @ diagonal_weights @ value_derivatives.T
         if self.H > 0:
             membership = self.get_membership_matrix()
             capital_gamma += self.rho / (1 - self.rho) * membership * (
-                value_derivatives @ diagonal_weights @ conditionals.T
+                conditionals @ diagonal_weights @ value_derivatives.T
             )
         return capital_gamma
 
