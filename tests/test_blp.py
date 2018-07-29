@@ -228,14 +228,6 @@ def test_merger(simulated_problem, solve_options):
 
 
 @pytest.mark.usefixtures('simulated_problem')
-def test_markup_positivity(simulated_problem):
-    """Test that simulated markups are positive."""
-    _, _, _, results = simulated_problem
-    markups = results.compute_markups()
-    np.testing.assert_array_less(0, markups, verbose=True)
-
-
-@pytest.mark.usefixtures('simulated_problem')
 def test_shares(simulated_problem):
     """Test that shares computed from estimated parameters are essentially equal to actual shares."""
     _, product_data, _, results = simulated_problem
@@ -316,6 +308,24 @@ def test_diversion_ratios(simulated_problem):
     for name in {n for f in simulation._X1_formulations + simulation._X2_formulations for n in f.names} - {'prices'}:
         ratios = results.compute_diversion_ratios(name)
         np.testing.assert_allclose(ratios.sum(axis=1), 1, atol=1e-14, rtol=0, err_msg=name)
+
+
+@pytest.mark.usefixtures('simulated_problem')
+def test_result_positivity(simulated_problem):
+    """Test that simulated markups, profits, consumer surpluses are positive, both before and after a merger."""
+    _, _, _, results = simulated_problem
+
+    # compute post-merger prices and shares
+    changed_prices = results.compute_approximate_prices()
+    changed_shares = results.compute_shares(changed_prices)
+
+    # compute surpluses and test positivity
+    np.testing.assert_array_less(0, results.compute_markups(), verbose=True)
+    np.testing.assert_array_less(0, results.compute_profits(), verbose=True)
+    np.testing.assert_array_less(0, results.compute_consumer_surpluses(), verbose=True)
+    np.testing.assert_array_less(0, results.compute_markups(changed_prices), verbose=True)
+    np.testing.assert_array_less(0, results.compute_profits(changed_prices, changed_shares), verbose=True)
+    np.testing.assert_array_less(0, results.compute_consumer_surpluses(changed_prices), verbose=True)
 
 
 @pytest.mark.usefixtures('simulated_problem')
