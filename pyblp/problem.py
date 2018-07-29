@@ -675,9 +675,9 @@ class Problem(Economy):
         true_delta = np.zeros((self.N, 1), options.dtype)
         true_xi_jacobian = np.full((self.N, nonlinear_parameters.P), np.nan, options.dtype)
 
-        # use a closed-form solution when there are no nonlinear parameters
-        if self.K2 == self.H == 0:
-            true_delta = self._compute_logit_delta()
+        # when possible and when a gradient isn't needed, compute delta with a closed-form solution
+        if self.K2 == 0 and (nonlinear_parameters.P == 0 or not compute_gradient):
+            true_delta = self._compute_logit_delta(rho)
         else:
             # define a function that builds a market along with arguments used to compute delta and its Jacobian
             def market_factory(s):
@@ -782,7 +782,7 @@ class Problem(Economy):
         gamma, true_omega = supply_iv.estimate(tilde_costs)
         return true_tilde_costs, true_omega_jacobian, tilde_costs, omega_jacobian, gamma, true_omega, errors
 
-    def _compute_logit_delta(self, rho=None):
+    def _compute_logit_delta(self, rho):
         """Compute the delta that solves the simple Logit (or nested Logit) model."""
         delta = np.log(self.products.shares)
         for t in self.unique_market_ids:
@@ -790,7 +790,6 @@ class Problem(Economy):
             outside_share_t = 1 - shares_t.sum()
             delta[self.products.market_ids.flat == t] -= np.log(outside_share_t)
             if self.H > 0:
-                assert rho is not None
                 groups_t = Groups(self.products.nesting_ids[self.products.market_ids.flat == t])
                 group_shares_t = shares_t / groups_t.expand(groups_t.sum(shares_t))
                 if rho.size == 1:
