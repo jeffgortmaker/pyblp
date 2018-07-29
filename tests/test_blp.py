@@ -304,17 +304,15 @@ def test_elasticity_aggregates_and_means(simulated_problem, factor):
 
 @pytest.mark.usefixtures('simulated_problem')
 def test_diversion_ratios(simulated_problem):
-    """Test simulated diversion ratio magnitudes and row sums."""
+    """Test simulated diversion ratio rows sum to one."""
     simulation, _, _, results = simulated_problem
 
-    # test that price-based ratios are between zero and one and that ratio matrix rows sum to one
+    # test price-based ratios
     for compute in [results.compute_diversion_ratios, results.compute_long_run_diversion_ratios]:
         ratios = compute()
-        np.testing.assert_array_less(0, ratios, err_msg=compute.__name__, verbose=True)
-        np.testing.assert_array_less(ratios, 1, err_msg=compute.__name__, verbose=True)
         np.testing.assert_allclose(ratios.sum(axis=1), 1, atol=1e-14, rtol=0, err_msg=compute.__name__)
 
-    # test that rows sum to one even when computing ratios for non-price variables
+    # test ratios based on other variables
     for name in {n for f in simulation._X1_formulations + simulation._X2_formulations for n in f.names} - {'prices'}:
         ratios = results.compute_diversion_ratios(name)
         np.testing.assert_allclose(ratios.sum(axis=1), 1, atol=1e-14, rtol=0, err_msg=name)
