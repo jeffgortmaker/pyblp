@@ -934,6 +934,7 @@ class ResultsMarket(Market):
 
     def compute_consumer_surplus(self, prices=None):
         """Estimate population-normalized consumer surplus. By default, use unchanged prices."""
+        assert self.delta is not None
         if prices is None:
             delta = self.delta
             mu = self.mu

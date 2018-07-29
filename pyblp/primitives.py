@@ -481,6 +481,7 @@ class Market(object):
 
     def update_delta_with_variable(self, name, variable):
         """Update delta to reflect a changed variable by adding any parameter-weighted characteristic changes to X1."""
+        assert self.beta is not None and self.delta is not None
 
         # if the variable does not contribute to X1, delta remains unchanged
         if not any(name in f.names for f in self._X1_formulations):
@@ -539,6 +540,7 @@ class Market(object):
 
     def compute_utility_derivatives(self, name, variable=None):
         """Compute derivatives of utility with respect to a variable. By default, use unchanged variable values."""
+        assert self.beta is not None
         derivatives = np.tile(self.compute_X1_derivatives(name, variable) @ self.beta, self.I)
         if self.K2 > 0:
             derivatives += self.compute_X2_derivatives(name, variable) @ self.compute_random_coefficients()
@@ -552,6 +554,7 @@ class Market(object):
         chosen.
         """
         if delta is None:
+            assert self.delta is not None
             delta = self.delta
         if mu is None:
             mu = self.mu
@@ -616,6 +619,7 @@ class Market(object):
         delta and mu.
         """
         if delta is None:
+            assert self.delta is not None
             delta = self.delta
         if mu is None:
             mu = self.mu
