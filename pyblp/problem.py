@@ -319,7 +319,9 @@ class Problem(Economy):
                   :math:`\partial\omega / \partial\theta`, revert these to their last computed values as well. If there
                   are problematic elements in the first objective evaluation, revert values in
                   :math:`\delta(\hat{\theta})` to their starting values; in :math:`\tilde{c}(\hat{\theta})`, to prices;
-                  and in Jacobians, to zeros.
+                  and in Jacobians, to zeros. In the unlikely event that the gradient or its objective have problematic
+                  elements, revert them as well, and if this happens during the first objective evaluation, revert the
+                  objective to ``1e10`` and its gradient to zeros.
 
                 - ``'punish'`` - Set the objective to ``1`` and its gradient to all zeros. This option along with a
                   large `error_punishment` can be helpful for routines that do not use analytic gradients.
@@ -499,7 +501,8 @@ class Problem(Economy):
             if true_delta.shape != (self.N, 1):
                 raise ValueError(f"delta must be a vector with {self.N} elements.")
 
-        # initialize marginal costs as prices
+        # initialize marginal costs as prices, which will only be used if there are computation errors during the first
+        #   objective evaluation
         true_tilde_costs = np.full((self.N, 0), np.nan, options.dtype)
         if self.K3 > 0:
             if costs_type == 'linear':
@@ -508,9 +511,15 @@ class Problem(Economy):
                 assert costs_type == 'log'
                 true_tilde_costs = np.log(self.products.prices)
 
-        # initialize Jacobians of xi and omega with respect to theta as all zeros
+        # initialize Jacobians of xi and omega with respect to theta as all zeros, which will only be used if there are
+        #   computation errors during the first objective evaluation
         true_xi_jacobian = np.zeros((self.N, nonlinear_parameters.P), options.dtype)
         true_omega_jacobian = np.full_like(true_xi_jacobian, 0 if self.K3 > 0 else np.nan, options.dtype)
+
+        # initialize the objective as a large number and its gradient as all zeros, which will only be used if there are
+        #   computation errors during the first objective evaluation
+        objective = np.array(1e10, options.dtype)
+        gradient = np.zeros((nonlinear_parameters.P, 1), options.dtype)
 
         # iterate over each GMM step
         last_results = None
@@ -545,8 +554,8 @@ class Problem(Economy):
             wrapper.evaluation_mappings = []
             wrapper.smallest_objective = wrapper.smallest_gradient_norm = np.inf
             wrapper.cache = ObjectiveInfo(
-                self, nonlinear_parameters, WD, WS, theta, true_delta, true_delta, true_tilde_costs, true_xi_jacobian,
-                true_omega_jacobian
+                self, nonlinear_parameters, WD, WS, theta, objective, gradient, true_delta, true_delta,
+                true_tilde_costs, true_xi_jacobian, true_omega_jacobian
             )
 
             # optimize theta
@@ -622,26 +631,39 @@ class Problem(Economy):
                 )
             )
 
+        # combine both sets of errors
+        errors = demand_errors | supply_errors
+
         # compute the objective value
         objective = (true_xi.T @ self.products.ZD) @ WD @ (self.products.ZD.T @ true_xi)
         if self.K3 > 0:
             objective += (true_omega.T @ self.products.ZS) @ WS @ (self.products.ZS.T @ true_omega)
 
-        # compute its gradient
+        # replace the objective with its last value if its computation failed, which is unlikely but possible
+        if not np.isfinite(np.squeeze(objective)):
+            objective = last_objective_info.objective
+            errors.add(exceptions.ObjectiveReversionError)
+
+        # compute the gradient
         gradient = np.full_like(theta, np.nan, options.dtype)
         if compute_gradient:
             gradient = 2 * ((xi_jacobian.T @ self.products.ZD) @ WD @ (self.products.ZD.T @ true_xi))
             if self.K3 > 0:
                 gradient += 2 * ((omega_jacobian.T @ self.products.ZS) @ WS @ (self.products.ZS.T @ true_omega))
 
+        # replace invalid elements in the gradient with their last values
+        if compute_gradient:
+            bad_indices = ~np.isfinite(gradient)
+            if np.any(bad_indices):
+                gradient[bad_indices] = last_objective_info.gradient[bad_indices]
+                errors.add(lambda: exceptions.GradientReversionError(bad_indices.sum()))
+
         # handle any errors
-        errors = demand_errors | supply_errors
         if errors:
             if error_behavior == 'raise':
                 raise exceptions.MultipleErrors(errors)
             if error_behavior == 'revert':
-                if error_punishment != 1:
-                    objective *= error_punishment
+                objective *= error_punishment
             else:
                 assert error_behavior == 'punish'
                 objective = np.array(error_punishment)
@@ -657,9 +679,9 @@ class Problem(Economy):
 
         # structure objective information
         return ObjectiveInfo(
-            self, nonlinear_parameters, WD, WS, theta, next_delta, true_delta, true_tilde_costs, true_xi_jacobian,
-            true_omega_jacobian, delta, tilde_costs, xi_jacobian, omega_jacobian, true_xi, true_omega, beta, gamma,
-            objective, gradient, iterations, evaluations, errors
+            self, nonlinear_parameters, WD, WS, theta, objective, gradient, next_delta, true_delta, true_tilde_costs,
+            true_xi_jacobian, true_omega_jacobian, delta, tilde_costs, xi_jacobian, omega_jacobian, true_xi, true_omega,
+            beta, gamma, iterations, evaluations, errors
         )
 
     def _compute_demand_contributions(self, nonlinear_parameters, demand_iv, iteration, fp_type, processes, sigma, pi,
@@ -813,10 +835,10 @@ class Problem(Economy):
 class ObjectiveInfo(object):
     """Structured information about a completed iteration of the optimization routine."""
 
-    def __init__(self, problem, nonlinear_parameters, WD, WS, theta, next_delta, true_delta, true_tilde_costs,
-                 true_xi_jacobian, true_omega_jacobian, delta=None, tilde_costs=None, xi_jacobian=None,
-                 omega_jacobian=None, true_xi=None, true_omega=None, beta=None, gamma=None, objective=None,
-                 gradient=None, iteration_mapping=None, evaluation_mapping=None, errors=None):
+    def __init__(self, problem, nonlinear_parameters, WD, WS, theta, objective, gradient, next_delta, true_delta,
+                 true_tilde_costs, true_xi_jacobian, true_omega_jacobian, delta=None, tilde_costs=None,
+                 xi_jacobian=None, omega_jacobian=None, true_xi=None, true_omega=None, beta=None, gamma=None,
+                 iteration_mapping=None, evaluation_mapping=None, errors=None):
         """Initialize objective information. Optional parameters will not be specified when preparing for the first
         objective evaluation.
         """
@@ -825,6 +847,8 @@ class ObjectiveInfo(object):
         self.WD = WD
         self.WS = WS
         self.theta = theta
+        self.objective = objective
+        self.gradient = gradient
         self.next_delta = next_delta
         self.true_delta = true_delta
         self.true_tilde_costs = true_tilde_costs
@@ -838,13 +862,11 @@ class ObjectiveInfo(object):
         self.true_omega = true_omega
         self.beta = beta
         self.gamma = gamma
-        self.objective = objective
-        self.gradient = gradient
         self.iteration_mapping = iteration_mapping
         self.evaluation_mapping = evaluation_mapping
         self.errors = errors
         with np.errstate(invalid='ignore'):
-            self.gradient_norm = None if gradient is None or gradient.size == 0 else np.abs(gradient).max()
+            self.gradient_norm = None if gradient.size == 0 else np.abs(gradient).max()
 
     def format_progress(self, step, current_iterations, current_evaluations, smallest_objective,
                         smallest_gradient_norm):

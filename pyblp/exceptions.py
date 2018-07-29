@@ -1,28 +1,41 @@
 """Exceptions that are specific to the BLP problem."""
 
 
-class _ReversionError(Exception):
+class ObjectiveReversionError(Exception):
+    """Reversion of a problematic objective value."""
+
+    def __str__(self):
+        return "Reverted a problematic GMM objective value."
+
+class _MultipleReversionError(Exception):
     """Reversion of problematic elements."""
 
     def __init__(self, reverted):
         self.reverted = reverted
 
 
-class DeltaReversionError(_ReversionError):
+class GradientReversionError(_MultipleReversionError):
+    """Reversion of problematic elements in the gradient."""
+
+    def __str__(self):
+        return f"Number of problematic elements in the GMM objective gradient that were reverted: {self.reverted}."
+
+
+class DeltaReversionError(_MultipleReversionError):
     """Reversion of problematic elements in delta."""
 
     def __str__(self):
         return f"Number of problematic elements in delta that were reverted: {self.reverted}."
 
 
-class CostsReversionError(_ReversionError):
+class CostsReversionError(_MultipleReversionError):
     """Reversion of problematic marginal costs."""
 
     def __str__(self):
         return f"Number of problematic marginal costs that were reverted: {self.reverted}."
 
 
-class XiJacobianReversionError(_ReversionError):
+class XiJacobianReversionError(_MultipleReversionError):
     """Reversion of problematic elements in the Jacobian of xi with respect to theta."""
 
     def __str__(self):
@@ -32,7 +45,7 @@ class XiJacobianReversionError(_ReversionError):
         )
 
 
-class OmegaJacobianReversionError(_ReversionError):
+class OmegaJacobianReversionError(_MultipleReversionError):
     """Reversion of problematic elements in the Jacobian of omega with respect to theta."""
 
     def __str__(self):
