@@ -1066,14 +1066,8 @@ class SupplyProblemMarket(Market):
 
         # compute the tensor derivative with respect to xi (equivalently, to delta), indexed with the first axis, of
         #   derivatives of aggregate inclusive values
-        probabilities_tensor = self.compute_probabilities_by_xi_tensor(probabilities, conditionals)
+        probabilities_tensor, conditionals_tensor = self.compute_probabilities_by_xi_tensor(probabilities, conditionals)
         value_derivatives_tensor = probabilities_tensor * utility_derivatives
-
-        # compute the tensor derivatives with respect to xi (equivalently, to delta), indexed with the first axis, of
-        #   conditional probabilities
-        conditionals_tensor = None
-        if self.H > 0:
-            conditionals_tensor = self.compute_conditionals_by_xi_tensor(conditionals)
 
         # compute the tensor derivative of A with respect to xi (equivalently, to delta)
         capital_lamda_tensor = self.compute_capital_lamda_by_xi_tensor(value_derivatives_tensor)
@@ -1126,26 +1120,20 @@ class SupplyProblemMarket(Market):
         """Use choice probabilities to compute their tensor derivatives with respect to xi (equivalently, to delta),
         indexed with the first axis.
         """
-        tensor = -probabilities[None] * probabilities[None].swapaxes(0, 1)
-        tensor[np.diag_indices(self.J)] += probabilities
+        probabilities_tensor = -probabilities[None] * probabilities[None].swapaxes(0, 1)
+        probabilities_tensor[np.diag_indices(self.J)] += probabilities
+        conditionals_tensor = None
         if self.H > 0:
             membership = self.get_membership_matrix()
-            tensor -= membership[..., None] * self.rho[None] / (1 - self.rho[None]) * (
+            probabilities_tensor -= membership[..., None] * self.rho[None] / (1 - self.rho[None]) * (
                 conditionals[None] * probabilities[None].swapaxes(0, 1)
             )
-            tensor[np.diag_indices(self.J)] += self.rho / (1 - self.rho) * probabilities
-        return tensor
-
-    def compute_conditionals_by_xi_tensor(self, conditionals):
-        """Use conditional choice probabilities to compute their tensor derivatives with respect to xi (equivalently, to
-        delta), indexed with the first axis.
-        """
-        membership = self.get_membership_matrix()
-        tensor = -membership[..., None] / (1 - self.rho[None]) * (
-            conditionals[None] * conditionals[None].swapaxes(0, 1)
-        )
-        tensor[np.diag_indices(self.J)] += 1 / (1 - self.rho) * conditionals
-        return tensor
+            conditionals_tensor = -membership[..., None] / (1 - self.rho[None]) * (
+                conditionals[None] * conditionals[None].swapaxes(0, 1)
+            )
+            probabilities_tensor[np.diag_indices(self.J)] += self.rho / (1 - self.rho) * probabilities
+            conditionals_tensor[np.diag_indices(self.J)] += 1 / (1 - self.rho) * conditionals
+        return probabilities_tensor, conditionals_tensor
 
     def compute_capital_lamda_by_xi_tensor(self, value_derivatives_tensor):
         """Use the tensor derivative with respect to xi (equivalently, to delta), indexed with the first axis, of
