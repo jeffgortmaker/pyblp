@@ -49,8 +49,8 @@ def test_hasselblad(scheme):
     def contraction(x):
         i = np.arange(y.size)
         z = np.divide(
-            x[0] * np.exp(-x[1]) * (x[1] ** i),
-            x[0] * np.exp(-x[1]) * (x[1] ** i) + (1 - x[0]) * np.exp(-x[2]) * (x[2] ** i)
+            x[0] * np.exp(-x[1]) * x[1]**i,
+            x[0] * np.exp(-x[1]) * x[1]**i + (1 - x[0]) * np.exp(-x[2]) * x[2]**i
         )
         return np.array([
             (y * z).sum() / y.sum(),

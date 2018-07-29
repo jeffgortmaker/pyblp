@@ -905,7 +905,7 @@ class ResultsMarket(Market):
         if shares is None:
             shares = self.products.shares
         firm_ids = self.products.firm_ids[:, [firms_index]]
-        hhi = 1e4 * sum((shares[firm_ids == f].sum() / shares.sum()) ** 2 for f in np.unique(firm_ids))
+        hhi = 1e4 * sum((shares[firm_ids == f].sum() / shares.sum())**2 for f in np.unique(firm_ids))
         return hhi, set()
 
     def compute_markups(self, prices=None, costs=None):
@@ -946,7 +946,7 @@ class ResultsMarket(Market):
         # compute the exponentiated utilities that will be summed in the expression for consume surplus
         exp_utilities = np.exp(delta + mu)
         if self.H > 0:
-            exp_utilities = self.groups.sum(exp_utilities ** (1 / (1 - self.rho))) ** (1 - self.group_rho)
+            exp_utilities = self.groups.sum(exp_utilities**(1 / (1 - self.rho)))**(1 - self.group_rho)
 
         # compute the derivatives of utility with respect to prices, which are assumed to be constant across products
         alpha = -self.compute_utility_derivatives('prices')[0]

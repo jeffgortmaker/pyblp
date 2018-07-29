@@ -1174,7 +1174,7 @@ class SupplyProblemMarket(Market):
             tangent /= 1 - self.rho
             if isinstance(parameter, RhoParameter):
                 associations = self.groups.expand(parameter.get_group_associations(self.groups))
-                tangent += associations / (1 - self.rho) ** 2 * np.diagflat(value_derivatives @ self.agents.weights)
+                tangent += associations / (1 - self.rho)**2 * np.diagflat(value_derivatives @ self.agents.weights)
         return tangent
 
     def compute_capital_gamma_by_parameter_tangent(self, parameter, value_derivatives, value_derivatives_tangent,
@@ -1197,7 +1197,7 @@ class SupplyProblemMarket(Market):
             )
             if isinstance(parameter, RhoParameter):
                 associations = self.groups.expand(parameter.get_group_associations(self.groups))
-                tangent += associations * membership / (1 - self.rho) ** 2 * (
+                tangent += associations * membership / (1 - self.rho)**2 * (
                     value_derivatives @ diagonal_weights @ conditionals.T
                 )
         return tangent

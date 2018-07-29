@@ -231,7 +231,7 @@ def squarem_iterator(initial, contraction, iteration_callback, max_evaluations, 
 
         # acceleration step
         with np.errstate(all='ignore'):
-            x2, x = x, x0 - 2 * alpha * r + (alpha ** 2) * v
+            x2, x = x, x0 - 2 * alpha * r + alpha**2 * v
             x3, x = x, contraction(x)
 
         # record the completion of a major iteration

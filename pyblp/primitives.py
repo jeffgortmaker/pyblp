@@ -568,9 +568,9 @@ class Market(object):
             conditionals = None
             probabilities = exp_utilities / (1 + exp_utilities.sum(axis=0))
         else:
-            exp_weighted_utilities = exp_utilities ** (1 / (1 - self.rho))
+            exp_weighted_utilities = exp_utilities**(1 / (1 - self.rho))
             exp_inclusives = self.groups.sum(exp_weighted_utilities)
-            exp_weighted_inclusives = exp_inclusives ** (1 - self.group_rho)
+            exp_weighted_inclusives = exp_inclusives**(1 - self.group_rho)
             conditionals = exp_weighted_utilities / self.groups.expand(exp_inclusives)
             marginals = exp_weighted_inclusives / (1 + exp_weighted_inclusives.sum(axis=0))
             probabilities = conditionals * self.groups.expand(marginals)

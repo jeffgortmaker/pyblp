@@ -129,7 +129,7 @@ def sparse_grid(dimensions, level, nested=False):
     for q in range(max(0, level - dimensions), level):
 
         # compute the combinatorial coefficient applied to the component product rules
-        coefficient = (-1) ** (level - q - 1) * scipy.special.binom(dimensions - 1, dimensions + q - level)
+        coefficient = (-1)**(level - q - 1) * scipy.special.binom(dimensions - 1, dimensions + q - level)
 
         # compute product rules for each level in all dimensions-length sequences that sum to dimensions + q
         for base_levels in same_size_sequences(dimensions, dimensions + q):

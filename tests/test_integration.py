@@ -23,7 +23,7 @@ def test_hermite_integral(dimensions, specification, size, naive_specification):
     respect to the standard normal density) are reasonably correct. Then, if a naive specification is given, tests that
     it performs worse, even with an order of magnitude more nodes.
     """
-    integral = lambda n, w: w.T @ (n ** 2).prod(axis=1)
+    integral = lambda n, w: w.T @ (n**2).prod(axis=1)
     nodes, weights = Integration(specification, size, seed=0)._build(dimensions)
     simulated = integral(nodes, weights)
     np.testing.assert_allclose(simulated, 1, rtol=0, atol=0.01)
