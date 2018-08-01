@@ -4,7 +4,7 @@ import numpy as np
 
 from . import options
 from .configurations import Formulation
-from .utilities import extract_matrix, Matrices
+from .utilities import extract_matrix, Matrices, Groups
 
 
 def build_id_data(T, J, F, mergers=()):
@@ -192,7 +192,7 @@ def build_ownership(product_data, kappa_specification=None):
     return np.hstack(stacks)
 
 
-def build_blp_instruments(formulation, product_data, average=False):
+def build_blp_instruments(formulation, product_data, firms_index=0):
     r"""Construct traditional BLP instruments.
 
     Traditional BLP instruments are
@@ -223,15 +223,12 @@ def build_blp_instruments(formulation, product_data, average=False):
 
             - **market_ids** : (`object`) - IDs that associate products with markets.
 
-            - **firm_ids** : (`object`) - IDs that associate products with firms. If this field contains multiple
-              columns, only the first will be used. For example, if it contains two columns or if there are `firm_ids0`
-              and `firm_ids1` fields, only the first column or the `firm_ids0` field will be used.
+            - **firm_ids** : (`object`) - IDs that associate products with firms.
 
         Along with `market_ids` and `firm_ids`, the names of any additional fields can be used as variables in
         `formulation`.
-
-    average : `bool`
-        Whether to sum or average over characteristics. By default, characteristics are summed.
+    firms_index : `int, optional`
+        Column index of the firm IDs in the `firm_ids` field of `product_data`.
 
     Returns
     -------
@@ -262,22 +259,21 @@ def build_blp_instruments(formulation, product_data, average=False):
     if market_ids.shape[1] > 1:
         raise ValueError("The market_ids field of product_data must be one-dimensional.")
 
-    # use only the first column of firm IDs
-    firm_ids = firm_ids[:, [0]]
+    # use only one column of firm IDs
+    firm_ids = firm_ids[:, [firms_index]]
 
-    # build the matrix of product characteristics
-    X = build_matrix(formulation, product_data)
+    # construct a set of market-firm pair IDs
+    paired_ids = market_ids.flatten().astype(np.object)
+    paired_ids[:] = list(zip(market_ids, firm_ids))
 
-    # determine the aggregation function
-    aggregate = np.mean if average else np.sum
+    # initialize grouping objects
+    paired_groups = Groups(paired_ids)
+    market_groups = Groups(market_ids)
 
     # build the instruments
-    indices = np.arange(market_ids.size)
-    rival = np.zeros_like(X, options.dtype)
-    other = np.zeros_like(X, options.dtype)
-    for n, (t, f) in enumerate(zip(market_ids, firm_ids)):
-        rival[n] = aggregate(X[(market_ids.flat == t) & (firm_ids.flat != f)], axis=0)
-        other[n] = aggregate(X[(market_ids.flat == t) & (firm_ids.flat == f) & (indices != n)], axis=0)
+    X = build_matrix(formulation, product_data)
+    other = paired_groups.expand(paired_groups.sum(X)) - X
+    rival = market_groups.expand(market_groups.sum(X)) - X - other
     return np.ascontiguousarray(np.c_[X, rival, other])
 
 
