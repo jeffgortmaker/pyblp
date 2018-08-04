@@ -197,7 +197,7 @@ def build_blp_instruments(formulation, product_data, firms_index=0):
 
     Traditional BLP instruments are
 
-    .. math:: \mathrm{BLP}(X) = [X, \mathrm{Rival}(X), \mathrm{Other}(X)],
+    .. math:: \mathrm{BLP}(X) = [X, \mathrm{Other}(X), \mathrm{Rival}(X)],
 
     in which :math:`X` is a matrix of product characteristics, :math:`\mathrm{Rival}(X)` consists of sums over
     characteristics of rival goods, and :math:`\mathrm{Other}(X)` consists of sums over characteristics of other
@@ -274,7 +274,7 @@ def build_blp_instruments(formulation, product_data, firms_index=0):
     X = build_matrix(formulation, product_data)
     other = paired_groups.expand(paired_groups.sum(X)) - X
     rival = market_groups.expand(market_groups.sum(X)) - X - other
-    return np.ascontiguousarray(np.c_[X, rival, other])
+    return np.ascontiguousarray(np.c_[X, other, rival])
 
 
 def build_matrix(formulation, data):
