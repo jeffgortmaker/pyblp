@@ -780,7 +780,7 @@ class Problem(Economy):
         bad_indices = ~np.isfinite(true_tilde_costs)
         if np.any(bad_indices):
             true_tilde_costs[bad_indices] = last_objective_info.true_tilde_costs[bad_indices]
-            errors.add(lambda: exceptions.CostsReversionError(tilde_costs.sum()))
+            errors.add(lambda: exceptions.CostsReversionError(bad_indices.sum()))
 
         # replace invalid elements in their Jacobian with their last values
         if compute_gradient:
