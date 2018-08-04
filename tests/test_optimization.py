@@ -29,6 +29,7 @@ from pyblp import options, Optimization
     pytest.param('cg', {}, id="CG"),
     pytest.param('bfgs', {}, id="BFGS"),
     pytest.param('newton-cg', {}, id="Newton-CG"),
+    pytest.param('return', {}, id="Return"),
     pytest.param(lambda i, b, f, _, **o: (scipy.optimize.minimize(f, i, bounds=b, **o).x, True), {}, id="custom")
 ])
 @pytest.mark.parametrize('compute_gradient', [
@@ -66,15 +67,17 @@ def test_entropy(lb, ub, method, method_options, compute_gradient, universal_dis
         gradient = F.T @ p - K
         return (objective, gradient) if compute_gradient else objective
 
-    # estimate the solution
+    # define the exact solution
+    exact_values = np.array([0, -0.524869316, 0.487525860], options.dtype)
+
+    # estimate the solution (use the exact values if the optimization routine will just return them)
     optimization = Optimization(method, method_options, compute_gradient, universal_display)
-    start_values = np.array([0, 0, 0], options.dtype)
+    start_values = exact_values if method == 'return' else np.array([0, 0, 0], options.dtype)
     bounds = 3 * [(lb, ub)]
     estimated_values, converged = optimization._optimize(start_values, bounds, lambda x, *_: objective_function(x))[:2]
     assert converged
 
     # test that the estimated objective is reasonably close to the exact objective
-    exact_values = np.array([0, -0.524869316, 0.487525860], options.dtype)
     exact_results = objective_function(exact_values)
     estimated_results = objective_function(estimated_values)
     exact_objective = exact_results[0] if compute_gradient else exact_results

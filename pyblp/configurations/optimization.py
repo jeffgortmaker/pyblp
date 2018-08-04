@@ -47,6 +47,10 @@ class Optimization(object):
 
             - ``'powell'`` - Uses the :func:`scipy.optimize.minimize` Powell routine.
 
+        The following trivial routine can be used to evaluate an objective at specific parameter values:
+
+            - ``'return'`` - Assume that the initial parameter values are the optimal ones.
+
         Also accepted is a custom callable method with the following form::
 
             method(initial, bounds, objective_function, iteration_callback, **options) -> (final, converged)
@@ -65,8 +69,8 @@ class Optimization(object):
     method_options : `dict, optional`
         Options for the optimization routine.
 
-        For any non-custom `method` other than ``'knitro'``, these options will be passed to `options` in
-        :func:`scipy.optimize.minimize`. Refer to the SciPy documentation for information about which options are
+        For any non-custom `method` other than ``'knitro'`` and ``'return'``, these options will be passed to `options`
+        in :func:`scipy.optimize.minimize`. Refer to the SciPy documentation for information about which options are
         available for each optimization routine.
 
         If `method` is ``'knitro'``, these options should be
@@ -151,7 +155,8 @@ class Optimization(object):
             'l-bfgs-b': (scipy_optimizer, "the L-BFGS-B algorithm implemented in SciPy"),
             'tnc': (scipy_optimizer, "the truncated Newton algorithm implemented in SciPy"),
             'slsqp': (scipy_optimizer, "Sequential Least SQuares Programming implemented in SciPy"),
-            'knitro': (knitro_optimizer, "an installed version of Artleys Knitro")
+            'knitro': (knitro_optimizer, "an installed version of Artleys Knitro"),
+            'return': (return_optimizer, "a trivial routine that returns the initial parameter values")
         }
         methods = {**simple_methods, **unbounded_methods, **bounded_methods}
 
@@ -193,13 +198,14 @@ class Optimization(object):
                 'knitro_dir': os.environ.get('KNITRODIR'),
                 'outlev': 4 if not universal_display and options.verbose else 0
             })
-        else:
-            assert unwrapped_optimizer == scipy_optimizer
+        elif unwrapped_optimizer == scipy_optimizer:
             self._optimizer = functools.partial(self._optimizer, method=method)
             if not universal_display and options.verbose:
                 self._method_options['disp'] = True
                 if method in {'l-bfgs-b', 'slsqp'}:
                     self._method_options['iprint'] = 2
+        else:
+            assert unwrapped_optimizer == return_optimizer
 
         # validate options for non-custom methods
         self._method_options.update(method_options)
@@ -259,6 +265,14 @@ class Optimization(object):
         )
         final_values = np.asarray(raw_final_values).astype(initial_values.dtype).reshape(initial_values.shape)
         return final_values, converged, iteration_callback.iterations, objective_wrapper.evaluations
+
+
+def return_optimizer(initial_values, *args, **kwargs):
+    """Assume the initial values are the optimal ones."""
+    del args
+    del kwargs
+    success = True
+    return initial_values, success
 
 
 def scipy_optimizer(initial_values, bounds, objective_function, iteration_callback, method, compute_gradient,
