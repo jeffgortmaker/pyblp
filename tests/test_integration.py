@@ -12,7 +12,7 @@ from pyblp import Integration
     pytest.param(1, 'product', 5, 'monte_carlo', id="1D product rule and Monte Carlo"),
     pytest.param(5, 'product', 2, 'monte_carlo', id="5D product rule and Monte Carlo"),
     pytest.param(1, 'nested_product', 6, 'monte_carlo', id="1D nested product rule and Monte Carlo"),
-    pytest.param(7, 'nested_product', 7, 'monte_carlo', id="7D nested product rule and Monte Carlo"),
+    pytest.param(6, 'nested_product', 6, 'monte_carlo', id="6D nested product rule and Monte Carlo"),
     pytest.param(1, 'grid', 4, 'monte_carlo', id="1D sparse grid and Monte Carlo"),
     pytest.param(6, 'grid', 8, 'monte_carlo', id="6D sparse grid and Monte Carlo"),
     pytest.param(1, 'nested_grid', 3, 'monte_carlo', id="1D nested sparse grid and Monte Carlo"),
@@ -51,10 +51,17 @@ def test_weight_sums(dimensions, specification, size):
     np.testing.assert_allclose(weights.sum(), 1, rtol=0, atol=1e-12)
 
 
-@pytest.mark.usefixtures('nwspgr')
-def test_nwspgr(nwspgr):
-    """Replicate output from the Matlab function nwspgr by Florian Heiss and Viktor Winschel."""
-    dimensions, level, nested, expected_nodes, expected_weights = nwspgr
+@pytest.mark.serial
+@pytest.mark.usefixtures('matlab')
+@pytest.mark.parametrize('dimensions', [pytest.param(1, id="1D"), pytest.param(3, id="3D"), pytest.param(10, id="10D")])
+@pytest.mark.parametrize('level', [pytest.param(1, id="L1"), pytest.param(2, id="L2"), pytest.param(4, id="L4")])
+@pytest.mark.parametrize('nested', [pytest.param(True, id="nested"), pytest.param(False, id="not nested")])
+def test_nwspgr(matlab, dimensions, level, nested):
+    """Compare with output from the Matlab function nwspgr by Florian Heiss and Viktor Winschel. This test is marked as
+    serial because multiple Matlab instances running in parallel tends to create hangups.
+    """
+    nwspgr_results = matlab.run_func('nwspgr', 'KPN' if nested else 'GQN', dimensions, level, nargout=2)
+    nwspgr_nodes, nwspgr_weights = nwspgr_results['result']
     nodes, weights = Integration('nested_grid' if nested else 'grid', level)._build(dimensions)
-    np.testing.assert_allclose(nodes, expected_nodes, rtol=0, atol=1e-9)
-    np.testing.assert_allclose(weights, expected_weights, rtol=0, atol=1e-9)
+    np.testing.assert_allclose(nwspgr_nodes, np.c_[nodes], rtol=0, atol=1e-9)
+    np.testing.assert_allclose(nwspgr_weights, np.c_[weights], rtol=0, atol=1e-9)

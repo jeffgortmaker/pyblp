@@ -1,12 +1,11 @@
 """Fixtures used by tests."""
 
 import os
-import re
-from pathlib import Path
 
 import patsy
 import pytest
 import scipy.io
+import warnings
 import numpy as np
 
 from .data import TEST_DATA_PATH
@@ -16,7 +15,7 @@ from pyblp import (
 )
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture(scope='session', autouse=True)
 def configure():
     """Configure NumPy so that it raises all warnings as exceptions, and, if a DTYPE environment variable is set in this
     testing environment that is different from the default data type, use it for all numeric calculations.
@@ -33,7 +32,7 @@ def configure():
     np.seterr(**old_error)
 
 
-@pytest.fixture
+@pytest.fixture(scope='session')
 def small_logit_simulation():
     """Solve a simulation with two markets, linear prices, a linear characteristic, a cost characteristic, and an
     acquisition.
@@ -61,7 +60,7 @@ def small_logit_simulation():
     return simulation, simulation.solve()
 
 
-@pytest.fixture
+@pytest.fixture(scope='session')
 def large_logit_simulation():
     """Solve a simulation with ten markets, linear prices, a linear constant, a cost/linear characteristic, another
     three cost characteristics, another two linear characteristics, an acquisition, a triple acquisition, and a
@@ -91,7 +90,7 @@ def large_logit_simulation():
     return simulation, simulation.solve()
 
 
-@pytest.fixture
+@pytest.fixture(scope='session')
 def small_nested_logit_simulation():
     """Solve a simulation with four markets, linear prices, a linear characteristic, two cost characteristics, two
     nesting groups with different nesting parameters, and an acquisition.
@@ -121,7 +120,7 @@ def small_nested_logit_simulation():
     return simulation, simulation.solve()
 
 
-@pytest.fixture
+@pytest.fixture(scope='session')
 def large_nested_logit_simulation():
     """Solve a simulation with ten markets, linear prices, a linear constant, a cost/linear characteristic, another
     three cost characteristics, another two linear characteristics, three nesting groups with the same nesting
@@ -153,7 +152,7 @@ def large_nested_logit_simulation():
     return simulation, simulation.solve()
 
 
-@pytest.fixture
+@pytest.fixture(scope='session')
 def small_blp_simulation():
     """Solve a simulation with two markets, linear prices, a nonlinear characteristic, a cost characteristic, and an
     acquisition.
@@ -182,7 +181,7 @@ def small_blp_simulation():
     return simulation, simulation.solve()
 
 
-@pytest.fixture
+@pytest.fixture(scope='session')
 def medium_blp_simulation():
     """Solve a simulation with four markets, a nonlinear/cost constant, two linear characteristics, two cost
     characteristics, a demographic interacted with second-degree prices, a double acquisition, and a non-standard
@@ -221,7 +220,7 @@ def medium_blp_simulation():
     return simulation, simulation.solve()
 
 
-@pytest.fixture
+@pytest.fixture(scope='session')
 def large_blp_simulation():
     """Solve a simulation with ten markets, linear/nonlinear prices, a linear constant, a cost/linear/nonlinear
     characteristic, another three cost characteristics, another two linear characteristics, demographics interacted with
@@ -261,7 +260,7 @@ def large_blp_simulation():
     return simulation, simulation.solve()
 
 
-@pytest.fixture
+@pytest.fixture(scope='session')
 def small_nested_blp_simulation():
     """Solve a simulation with four markets, linear prices, a nonlinear characteristic, two cost characteristics, two
     nesting groups with different nesting parameters, and an acquisition.
@@ -292,7 +291,7 @@ def small_nested_blp_simulation():
     return simulation, simulation.solve()
 
 
-@pytest.fixture
+@pytest.fixture(scope='session')
 def large_nested_blp_simulation():
     """Solve a simulation with ten markets, linear/nonlinear prices, a linear constant, a cost/linear/nonlinear
     characteristic, another three cost characteristics, another two linear characteristics, demographics interacted with
@@ -334,7 +333,7 @@ def large_nested_blp_simulation():
     return simulation, simulation.solve()
 
 
-@pytest.fixture(params=[
+@pytest.fixture(scope='session', params=[
     pytest.param(['small_logit', False], id="small Logit simulation without supply"),
     pytest.param(['small_logit', True], id="small Logit simulation with supply"),
     pytest.param(['large_logit', False], id="large Logit simulation without supply"),
@@ -364,7 +363,7 @@ def simulated_problem(request):
     return simulation, product_data, problem, results
 
 
-@pytest.fixture
+@pytest.fixture(scope='session')
 def knittel_metaxoglou_2014():
     """Configure the example automobile problem from Knittel and Metaxoglou (2014) and load initial parameter values and
     estimates created by replication code.
@@ -397,20 +396,22 @@ def knittel_metaxoglou_2014():
     return scipy.io.loadmat(str(TEST_DATA_PATH / 'knittel_metaxoglou_2014.mat'), {'problem': problem})
 
 
-@pytest.fixture(params=[pytest.param(p, id=p.name) for p in Path(TEST_DATA_PATH / 'nwspgr').iterdir()])
-def nwspgr(request):
-    """Load a sample of sparse grids of nodes and weights constructed according to the Gauss-Hermite quadrature rule and
-    its nested analog, which were computed by the Matlab function nwspgr by Florian Heiss and Viktor Winschel.
-    """
-    rule, dimensions, level = re.search(r'(GQN|KPN)_d(\d+)_l(\d+)', request.param.name).groups()
-    matrix = np.atleast_2d(np.genfromtxt(request.param, delimiter=','))
-    nested = rule == 'KPN'
-    nodes = matrix[:, :-1]
-    weights = matrix[:, -1]
-    return int(dimensions), int(level), nested, nodes, weights
+@pytest.fixture(scope='session')
+def matlab():
+    """Start a Matlab session."""
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        from pymatbridge import Matlab
+    session = Matlab()
+    try:
+        session.start()
+    except Exception as exception:
+        pytest.skip(f"Failed to connect to Matlab: {exception}.")
+    yield session
+    session.stop()
 
 
-@pytest.fixture(params=[pytest.param(1, id="1 observation"), pytest.param(10, id="10 observations")])
+@pytest.fixture(scope='session', params=[pytest.param(1, id="1 observation"), pytest.param(10, id="10 observations")])
 def formula_data(request):
     """Simulate patsy demo data with two-level categorical variables and varying numbers of observations."""
     raw_data = patsy.user_util.demo_data('a', 'b', 'c', 'x', 'y', 'z', nlevels=2, min_rows=request.param)
