@@ -406,6 +406,12 @@ def test_bounds(simulated_problem, method):
     if simulation.K2 == simulation.H == 0:
         return
 
+    # skip optimization methods that haven't been configured properly
+    try:
+        optimization = Optimization(method)
+    except OSError as exception:
+        return pytest.skip(f"Failed to use the {method} method in this environment: {exception}.")
+
     # all problems will be solved with the same optimization method starting as close to the true parameters as possible
     solve = lambda s, p, r: problem.solve(
         np.minimum(np.maximum(simulation.sigma, s[0]), s[1]),
@@ -415,7 +421,7 @@ def test_bounds(simulated_problem, method):
         pi_bounds=p,
         rho_bounds=r,
         steps=1,
-        optimization=Optimization(method)
+        optimization=optimization
     )
 
     # solve the problem when unbounded
@@ -565,10 +571,18 @@ def test_objective_gradient(simulated_problem, solve_options):
 @pytest.mark.usefixtures('knittel_metaxoglou_2014')
 def test_knittel_metaxoglou_2014(knittel_metaxoglou_2014):
     """Replicate estimates created by replication code for Knittel and Metaxoglou (2014)."""
+
+    # skip optimization methods that haven't been configured properly
+    try:
+        optimization = Optimization('knitro', {'opttol': 1e-8, 'xtol': 1e-8})
+    except OSError as exception:
+        return pytest.skip(f"Failed to use the knitro method in this environment: {exception}.")
+
+    # compute results
     results = knittel_metaxoglou_2014['problem'].solve(
         knittel_metaxoglou_2014.get('initial_sigma'),
         knittel_metaxoglou_2014.get('initial_pi'),
-        optimization=Optimization('knitro', {'opttol': 1e-8, 'xtol': 1e-8}),
+        optimization=optimization,
         iteration=Iteration('simple', {'tol': 1e-12}),
         steps=1
     )

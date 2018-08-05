@@ -57,6 +57,12 @@ def test_entropy(lb, ub, method, method_options, compute_gradient, universal_dis
     if callable(method):
         method_options['jac'] = compute_gradient
 
+    # skip optimization methods that haven't been configured properly
+    try:
+        optimization = Optimization(method, method_options, compute_gradient, universal_display)
+    except OSError as exception:
+        return pytest.skip(f"Failed to use the {method} method in this environment: {exception}.")
+
     # define the objective function
     K = np.array([1, 0.3, 0.5])
     F = np.array([[1, 1, 1], [1, 1, 0], [1, 0, 1], [1, 0, 0], [1, 0, 0]])
@@ -71,7 +77,6 @@ def test_entropy(lb, ub, method, method_options, compute_gradient, universal_dis
     exact_values = np.array([0, -0.524869316, 0.487525860], options.dtype)
 
     # estimate the solution (use the exact values if the optimization routine will just return them)
-    optimization = Optimization(method, method_options, compute_gradient, universal_display)
     start_values = exact_values if method == 'return' else np.array([0, 0, 0], options.dtype)
     bounds = 3 * [(lb, ub)]
     estimated_values, converged = optimization._optimize(start_values, bounds, lambda x, *_: objective_function(x))[:2]
