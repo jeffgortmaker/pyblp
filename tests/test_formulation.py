@@ -132,8 +132,8 @@ def test_ids(formula_data, formulas, build_columns):
     """Test that equivalent formulas build IDs as expected."""
 
     # create convenience columns of tuples of categorical variables
-    old_formula_data = formula_data.copy()
-    for (key1, values1), (key2, values2), (key3, values3) in itertools.product(old_formula_data.items(), repeat=3):
+    formula_data = formula_data.copy()
+    for (key1, values1), (key2, values2), (key3, values3) in itertools.product(formula_data.items(), repeat=3):
         key12 = f'{key1}{key2}'
         key123 = f'{key1}{key2}{key3}'
         if key12 not in formula_data:
