@@ -1053,11 +1053,10 @@ class NonlinearParameters(object):
 
     def compress(self):
         """Compress the initial sigma, pi, and rho into theta."""
-        return np.r_[
-            self.sigma[list(zip(*[p.location for p in self.unfixed if isinstance(p, SigmaParameter)]))].ravel(),
-            self.pi[list(zip(*[p.location for p in self.unfixed if isinstance(p, PiParameter)]))].ravel(),
-            self.rho[list(zip(*[p.location for p in self.unfixed if isinstance(p, RhoParameter)]))].ravel()
-        ]
+        theta = []
+        for values, parameter_type in [(self.sigma, SigmaParameter), (self.pi, PiParameter), (self.rho, RhoParameter)]:
+            theta.extend(values[p.location] for p in self.unfixed if isinstance(p, parameter_type))
+        return np.r_[theta]
 
     def expand(self, theta_like, nullify=False):
         """Recover matrices of the same size as sigma, pi, and rho from a vector of the same size as theta. By default,
