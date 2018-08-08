@@ -15,7 +15,7 @@ setup(
     python_requires='>=3.6',
     install_requires=read('requirements.txt').splitlines(),
     extras_require={
-        'tests': ['pytest', 'pytest-xdist', 'pymatbridge', 'zmq'],
+        'tests': ['pytest', 'pytest-xdist'],
         'docs': ['sphinx', 'pandas', 'ipython', 'matplotlib', 'sphinx_rtd_theme'],
     },
     include_package_data=True,
@@ -33,6 +33,7 @@ setup(
         "Programming Language :: Python",
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.6",
+        "Programming Language :: Python :: 3.7",
         "Topic :: Scientific/Engineering"
     ],
     url="https://github.com/jeffgortmaker/pyblp",

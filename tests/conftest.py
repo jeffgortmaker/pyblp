@@ -396,21 +396,6 @@ def knittel_metaxoglou_2014():
     return scipy.io.loadmat(str(TEST_DATA_PATH / 'knittel_metaxoglou_2014.mat'), {'problem': problem})
 
 
-@pytest.fixture(scope='session')
-def matlab():
-    """Start a Matlab session."""
-    with warnings.catch_warnings():
-        warnings.simplefilter('ignore')
-        from pymatbridge import Matlab
-    session = Matlab()
-    try:
-        session.start()
-    except Exception as exception:
-        pytest.skip(f"Failed to connect to Matlab: {exception}.")
-    yield session
-    session.stop()
-
-
 @pytest.fixture(scope='session', params=[pytest.param(1, id="1 observation"), pytest.param(10, id="10 observations")])
 def formula_data(request):
     """Simulate patsy demo data with two-level categorical variables and varying numbers of observations."""

@@ -7,9 +7,9 @@ Testing is done with the `tox <https://tox.readthedocs.io/en/latest/>`_ automati
 Testing Requirements
 --------------------
 
-In addition to the installation requirements for the package itself, running tests and building documentation requires additional packages. Most of these will be included in a standard Anaconda installation; a full list can be found in ``setup.py``.
+In addition to the installation requirements for the package itself, running tests and building documentation requires additional packages specified by the ``tests`` and ``docs`` extras in ``setup.py``.
 
-The full suite of tests also requires the installation of the following software:
+The full suite of tests also requires installation of the following software:
 
 - `Artleys Knitro <https://www.artelys.com/en/optimization-tools/knitro>`_ version 10.3 or newer: testing optimization routines.
 - `MATLAB <https://www.mathworks.com/products/matlab.html>`_: comparing sparse grids with those created by the function `nwspgr <http://www.sparse-grids.de/>`_ created by Florian Heiss and Viktor Winschel, which must be included in a directory on the MATLAB path.
@@ -20,7 +20,7 @@ If software is not installed, its associated tests will be skipped. Additionally
 Running Tests
 -------------
 
-Defined in ``tox.ini`` are environments that test the package, verify the integrity of the documentation, and release the package. The following command can be run in the top-level pyblp directory to run all testing environments::
+Defined in ``tox.ini`` are environments that test the package under different python versions, verify the integrity of the documentation, and release the package. The following command can be run in the top-level pyblp directory to run all testing environments::
 
     tox
 
@@ -32,7 +32,7 @@ You can choose to run only one environment, such as the one that builds the docu
 Test Organization
 -----------------
 
-Fixtures, which are defined in ``tests.confest``, configure the testing environment, load example problems, and simulate other problems according to a range of specifications.
+Fixtures, which are defined in ``tests.confest``, configure the testing environment and simulate problems according to a range of specifications.
 
 Most BLP-specific tests in ``tests.test_blp`` verify properties about results obtained by solving the simulated problems under various parameterizations. Examples include:
 
