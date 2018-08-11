@@ -811,8 +811,12 @@ class NonlinearParameters(object):
     """Information about sigma and pi."""
 
     def __init__(self, economy, sigma=None, pi=None, rho=None, sigma_bounds=None, pi_bounds=None, rho_bounds=None,
-                 supports_bounds=True):
-        """Store information about fixed (equal bounds) and unfixed (unequal bounds) elements of sigma, pi, and rho."""
+                 bounded=False):
+        """Store information about fixed (equal bounds) and unfixed (unequal bounds) elements of sigma, pi, and rho.
+        Also verify that parameters have been chosen such that choice probability computation is unlikely to overflow.
+        If unspecified, determine reasonable bounds as well.
+        """
+        self.errors = set()
 
         # store labels
         self.X2_labels = list(map(str, economy._X2_formulations))
@@ -853,55 +857,86 @@ class NonlinearParameters(object):
             if self.rho.shape not in {(1, 1), (economy.H, 1)}:
                 raise ValueError(f"rho must be a scalar or a {economy.H}-vector.")
 
+        # verify that parameters have been chosen such that choice probability computation is unlikely to overflow
+        mu_max = np.log(np.finfo(options.dtype).max)
+        mu_norm = self.compute_mu_norm(economy, self.sigma, self.pi)
+        if mu_max < mu_norm:
+            self.errors.add(exceptions.LargeInitialParametersError)
+
         # construct or validate sigma bounds
         self.sigma_bounds = (
             np.full_like(self.sigma, -np.inf, options.dtype), np.full_like(self.sigma, +np.inf, options.dtype)
         )
-        if supports_bounds:
-            np.fill_diagonal(self.sigma_bounds[0], 0)
-        if economy.K2 > 0 and sigma_bounds is not None and supports_bounds:
-            if len(sigma_bounds) != 2:
-                raise ValueError("sigma_bounds must be a tuple of the form (lb, ub).")
-            self.sigma_bounds = [np.c_[np.asarray(b, options.dtype).copy()] for b in sigma_bounds]
-            for bounds_index, bounds in enumerate(self.sigma_bounds):
-                bounds[np.isnan(bounds)] = -np.inf if bounds_index == 0 else +np.inf
-                if bounds.shape != self.sigma.shape:
-                    raise ValueError(f"sigma_bounds[{bounds_index}] must have the same shape as sigma.")
-            if ((self.sigma < self.sigma_bounds[0]) | (self.sigma > self.sigma_bounds[1])).any():
-                raise ValueError("sigma must be within its bounds.")
+        if bounded:
+            if economy.K2 == 0 or sigma_bounds is None:
+                for location in zip(*self.sigma.nonzero()):
+                    value = self.sigma[location]
+                    other_sigma = self.sigma.copy()
+                    other_sigma[location] = 0
+                    other_mu_norm = self.compute_mu_norm(economy, other_sigma, self.pi)
+                    products_norm = np.abs(economy.products.X2[:, location[0]]).max()
+                    agents_norm = np.abs(economy.agents.nodes[:, location[1]]).max()
+                    with np.errstate(divide='ignore'):
+                        bound = self.normalize_bound(max(0, mu_max - other_mu_norm) / products_norm / agents_norm)
+                    self.sigma_bounds[0][location] = min(value, -bound) if location[0] != location[1] else 0
+                    self.sigma_bounds[1][location] = max(value, +bound)
+            else:
+                if len(sigma_bounds) != 2:
+                    raise ValueError("sigma_bounds must be a tuple of the form (lb, ub).")
+                self.sigma_bounds = [np.c_[np.asarray(b, options.dtype).copy()] for b in sigma_bounds]
+                for bounds_index, bounds in enumerate(self.sigma_bounds):
+                    bounds[np.isnan(bounds)] = -np.inf if bounds_index == 0 else +np.inf
+                    if bounds.shape != self.sigma.shape:
+                        raise ValueError(f"sigma_bounds[{bounds_index}] must have the same shape as sigma.")
+                if ((self.sigma < self.sigma_bounds[0]) | (self.sigma > self.sigma_bounds[1])).any():
+                    raise ValueError("sigma must be within its bounds.")
 
         # construct or validate pi bounds
         self.pi_bounds = (
             np.full_like(self.pi, -np.inf, options.dtype), np.full_like(self.pi, +np.inf, options.dtype)
         )
-        if economy.D > 0 and pi_bounds is not None and supports_bounds:
-            if len(pi_bounds) != 2:
-                raise ValueError("pi_bounds must be a tuple of the form (lb, ub).")
-            self.pi_bounds = [np.c_[np.asarray(b, options.dtype).copy()] for b in pi_bounds]
-            for bounds_index, bounds in enumerate(self.pi_bounds):
-                bounds[np.isnan(bounds)] = -np.inf if bounds_index == 0 else +np.inf
-                if bounds.shape != self.pi.shape:
-                    raise ValueError(f"pi_bounds[{bounds_index}] must have the same shape as pi.")
-            if ((self.pi < self.pi_bounds[0]) | (self.pi > self.pi_bounds[1])).any():
-                raise ValueError("pi must be within its bounds.")
+        if bounded:
+            if economy.D == 0 or pi_bounds is None:
+                for location in zip(*self.pi.nonzero()):
+                    value = self.pi[location]
+                    other_pi = self.pi.copy()
+                    other_pi[location] = 0
+                    other_mu_norm = self.compute_mu_norm(economy, self.sigma, other_pi)
+                    products_norm = np.abs(economy.products.X2[:, location[0]]).max()
+                    agents_norm = np.abs(economy.agents.demographics[:, location[1]]).max()
+                    with np.errstate(divide='ignore'):
+                        bound = self.normalize_bound(max(0, mu_max - other_mu_norm) / products_norm / agents_norm)
+                    self.pi_bounds[0][location] = min(value, -bound)
+                    self.pi_bounds[1][location] = max(value, +bound)
+            else:
+                if len(pi_bounds) != 2:
+                    raise ValueError("pi_bounds must be a tuple of the form (lb, ub).")
+                self.pi_bounds = [np.c_[np.asarray(b, options.dtype).copy()] for b in pi_bounds]
+                for bounds_index, bounds in enumerate(self.pi_bounds):
+                    bounds[np.isnan(bounds)] = -np.inf if bounds_index == 0 else +np.inf
+                    if bounds.shape != self.pi.shape:
+                        raise ValueError(f"pi_bounds[{bounds_index}] must have the same shape as pi.")
+                if ((self.pi < self.pi_bounds[0]) | (self.pi > self.pi_bounds[1])).any():
+                    raise ValueError("pi must be within its bounds.")
 
         # construct or validate rho bounds
         self.rho_bounds = (
             np.full_like(self.rho, -np.inf, options.dtype), np.full_like(self.rho, +np.inf, options.dtype)
         )
-        if supports_bounds:
-            self.rho_bounds[0][:] = 0
-            self.rho_bounds[1][:] = 0.99
-        if economy.H > 0 and rho_bounds is not None and supports_bounds:
-            if len(rho_bounds) != 2:
-                raise ValueError("rho_bounds must be a tuple of the form (lb, ub).")
-            self.rho_bounds = [np.c_[np.asarray(b, options.dtype).copy()] for b in rho_bounds]
-            for bounds_index, bounds in enumerate(self.rho_bounds):
-                bounds[np.isnan(bounds)] = -np.inf if bounds_index == 0 else +np.inf
-                if bounds.shape != self.rho.shape:
-                    raise ValueError(f"rho_bounds[{bounds_index}] must have the same shape as rho.")
-            if ((self.rho < self.rho_bounds[0]) | (self.rho > self.rho_bounds[1])).any():
-                raise ValueError("rho must be within its bounds.")
+        if bounded:
+            if economy.H == 0 or rho_bounds is None:
+                self.rho_bounds[0][:] = 0
+                self.rho_bounds[1][:] = self.normalize_bound(1 - min(1, mu_norm / mu_max))
+            else:
+                if len(rho_bounds) != 2:
+                    raise ValueError("rho_bounds must be a tuple of the form (lb, ub).")
+                self.rho_bounds = [np.c_[np.asarray(b, options.dtype).copy()] for b in rho_bounds]
+                for bounds_index, bounds in enumerate(self.rho_bounds):
+                    bounds[np.isnan(bounds)] = -np.inf if bounds_index == 0 else +np.inf
+                    if bounds.shape != self.rho.shape:
+                        raise ValueError(f"rho_bounds[{bounds_index}] must have the same shape as rho.")
+                if ((self.rho < self.rho_bounds[0]) | (self.rho > self.rho_bounds[1])).any():
+                    raise ValueError("rho must be within its bounds.")
 
         # set upper and lower bounds to zero for parameters that are fixed at zero
         self.sigma_bounds[0][np.where(self.sigma == 0)] = self.sigma_bounds[1][np.where(self.sigma == 0)] = 0
@@ -938,6 +973,23 @@ class NonlinearParameters(object):
 
         # count the number of unfixed parameters
         self.P = len(self.unfixed)
+
+    def compute_mu_norm(self, economy, sigma, pi):
+        """Compute the infinity norm of mu computed according to specified parameters."""
+        norm = 0
+        if economy.K2 > 0:
+            for t in economy.unique_market_ids:
+                coefficients_t = sigma @ economy.agents.nodes[economy.agents.market_ids.flat == t].T
+                if economy.D > 0:
+                    coefficients_t += pi @ economy.agents.demographics[economy.agents.market_ids.flat == t].T
+                mu_t = economy.products.X2[economy.products.market_ids.flat == t] @ coefficients_t
+                norm = max(norm, np.abs(mu_t).max())
+        return norm
+
+    def normalize_bound(self, bound):
+        """Reduce by 10% and round an initial parameter bound to two significant figures."""
+        reduced = 0.9 * bound
+        return bound if not np.isfinite(bound) else np.round(reduced, 1 + int(reduced < 1) - int(np.log10(reduced)))
 
     def format(self):
         """Format the initial sigma, pi, and rho as a string."""

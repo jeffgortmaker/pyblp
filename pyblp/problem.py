@@ -248,9 +248,12 @@ class Problem(Economy):
         sigma_bounds : `tuple, optional`
             Configuration for :math:`\Sigma` bounds of the form ``(lb, ub)``, in which both ``lb`` and ``ub`` are of the
             same size as `sigma`. Each element in ``lb`` and ``ub`` determines the lower and upper bound for its
-            counterpart in `sigma`. If `optimization` does not support bounds, these will be ignored. By default, if
-            bounds are supported, the only unfixed elements that are bounded are those on the diagonal of `sigma`, which
-            are bounded below by zero. That is, the diagonal of ``lb`` is all zeros by default.
+            counterpart in `sigma`. If `optimization` does not support bounds, these will be ignored.
+
+            By default, if bounds are supported, the diagonal of `sigma` is bounded from below by zero. Conditional on
+            :math:`X_2`, :math:`\nu`, an initial estimate of :math:`\mu`, and the precision of :attr:`options.dtype`,
+            default bounds for off-diagonal parameters are chosen to reduce the chance of overflow. If the default
+            bounds are too restrictive, consider rescaling data, removing outliers, or changing :attr:`options.dtype`.
 
             Values below the diagonal are ignored. Lower and upper bounds corresponding to zeros in `sigma` are set to
             zero. Setting a lower bound equal to an upper bound fixes the corresponding element. Both ``None`` and
@@ -259,8 +262,12 @@ class Problem(Economy):
         pi_bounds : `tuple, optional`
             Configuration for :math:`\Pi` bounds of the form ``(lb, ub)``, in which both ``lb`` and ``ub`` are of the
             same size as `pi`. Each element in ``lb`` and ``ub`` determines the lower and upper bound for its
-            counterpart in `pi`. If `optimization` does not support bounds, these will be ignored. By default, if bounds
-            are supported, all unfixed elements are unbounded.
+            counterpart in `pi`. If `optimization` does not support bounds, these will be ignored.
+
+            By default, if bounds are supported, conditional on  :math:`X_2`, :math:`d`, an initial estimate of
+            :math:`\mu`, and the precision of :attr:`options.dtype`, default bounds are chosen to reduce the chance of
+            overflow. If the default bounds are too restrictive, consider rescaling data, removing outliers, or changing
+            :attr:`options.dtype`.
 
             Lower and upper bounds corresponding to zeros in `pi` are set to zero. Setting a lower bound equal to an
             upper bound fixes the corresponding element. Both ``None`` and ``numpy.nan`` are converted to ``-numpy.inf``
@@ -269,10 +276,13 @@ class Problem(Economy):
         rho_bounds : `tuple, optional`
             Configuration for :math:`\rho` bounds of the form ``(lb, ub)``, in which both ``lb`` and ``ub`` are of the
             same size as `rho`. Each element in ``lb`` and ``ub`` determines the lower and upper bound for its
-            counterpart in `rho`. If `optimization` does not support bounds, these will be ignored. By default, if
-            bounds are supported, all elements are bounded from below by `0` (the simple Logit case) and from above by
-            `0.99` (a value of exactly `1` gives rise to division by zero errors and values greater than `1` are
-            inconsistent with utility maximization).
+            counterpart in `rho`. If `optimization` does not support bounds, these will be ignored.
+
+            By default, if bounds are supported, all elements are bounded from below by ``0``, which corresponds to the
+            simple Logit model. Conditional on an initial estimate of :math:`\mu` and the precision of
+            :attr:`options.dtype`, upper bounds are chosen to reduce the chance of overflow and are less than ``1``
+            because larger values are inconsistent with utility maximization. If the default bounds are too restrictive,
+            consider rescaling data, removing outliers, or changing :attr:`options.dtype`.
 
             Lower and upper bounds corresponding to zeros in `rho` are set to zero. Setting a lower bound equal to an
             upper bound fixes the corresponding element. Both ``None`` and ``numpy.nan`` are converted to ``-numpy.inf``
@@ -460,6 +470,7 @@ class Problem(Economy):
         nonlinear_parameters = NonlinearParameters(
             self, sigma, pi, rho, sigma_bounds, pi_bounds, rho_bounds, optimization._supports_bounds
         )
+        self._handle_errors(error_behavior, nonlinear_parameters.errors)
         theta = nonlinear_parameters.compress()
         if self.K2 > 0 or self.H > 0:
             output("")

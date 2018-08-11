@@ -1,11 +1,23 @@
 """Exceptions that are specific to the BLP problem."""
 
 
+class LargeInitialParametersError(Exception):
+    """Large initial nonlinear parameters are likely to give rise to overflow during probability computation."""
+
+    def __str__(self):
+        return (
+            "The specified initial nonlinear parameters are likely to give rise to overflow during choice probability "
+            "computation. Consider choosing smaller initial values, rescaling data, removing outliers, or changing "
+            "options.dtype."
+        )
+
+
 class ObjectiveReversionError(Exception):
     """Reversion of a problematic objective value."""
 
     def __str__(self):
         return "Reverted a problematic GMM objective value."
+
 
 class _MultipleReversionError(Exception):
     """Reversion of problematic elements."""
@@ -60,9 +72,9 @@ class DeltaFloatingPointError(Exception):
 
     def __str__(self):
         return (
-            "Encountered floating point issues when computing delta or its Jacobian with respect to theta. This problem "
-            "is often due to overflow and can sometimes be mitigated by reducing the magnitude of initial parameter "
-            "values, by setting more conservative bounds, or by rescaling variables."
+            "Encountered floating point issues when computing delta or its Jacobian with respect to theta. This "
+            "problem is often due to overflow and can sometimes be mitigated by choosing smaller initial parameter "
+            "values, setting more conservative bounds, rescaling data, removing outliers, or changing options.dtype."
         )
 
 
@@ -72,8 +84,9 @@ class CostsFloatingPointError(Exception):
     def __str__(self):
         return (
             "Encountered floating point issues when computing marginal costs or their Jacobian with respect to theta. "
-            "This problem is often due to overflow and can sometimes be mitigated by reducing the magnitude of initial "
-            "parameter values, by setting more conservative bounds, or by rescaling variables."
+            "This problem is often due to overflow and can sometimes be mitigated by choosing smaller initial "
+            "parameter values, setting more conservative bounds, rescaling data, removing outliers, or changing "
+            "options.dtype."
         )
 
 
@@ -84,7 +97,7 @@ class SyntheticPricesFloatingPointError(Exception):
         return (
             "Encountered floating point issues when computing synthetic prices. This problem is often due to overflow "
             "and can sometimes be mitigated by making sure that the specified parameters are reasonable. For example, "
-            "the parameters on prices should imply a generally downward sloping demand curve."
+            "the parameters on prices should generally imply a downward sloping demand curve."
         )
 
 
@@ -94,7 +107,7 @@ class ChangedPricesFloatingPointError(Exception):
     def __str__(self):
         return (
             "Encountered floating point issues when computing changed prices. This problem is often due to overflow "
-            "and can sometimes be mitigated by rescaling variables."
+            "and can sometimes be mitigated by rescaling data."
         )
 
 
@@ -103,8 +116,8 @@ class AbsorptionConvergenceError(Exception):
 
     def __str__(self):
         return (
-            "An iterative demeaning procedure failed to converge when absorbing fixed effects. This problem can "
-            "sometimes be mitigated by choosing less complicated sets of fixed effects or by configuring demeaning "
+            "An iterative de-meaning procedure failed to converge when absorbing fixed effects. This problem can "
+            "sometimes be mitigated by choosing less complicated sets of fixed effects or by configuring de-meaning "
             "iteration options."
         )
 
@@ -126,8 +139,8 @@ class ThetaConvergenceError(Exception):
     def __str__(self):
         return (
             "The optimization routine failed to converge. This problem can sometimes be mitigated by choosing more "
-            "reasonable initial parameter values, by setting more conservative bounds, by configuring other "
-            "optimization settings, by or choosing a different optimization routine."
+            "reasonable initial parameter values, setting more conservative bounds, or configuring other optimization "
+            "settings."
         )
 
 
@@ -137,7 +150,7 @@ class DeltaConvergenceError(Exception):
     def __str__(self):
         return (
             "The fixed point computation of delta failed to converge. This problem can sometimes be mitigated by "
-            "increasing the maximum number of fixed point iterations or by reducing the fixed point tolerance."
+            "increasing the maximum number of fixed point iterations or reducing the fixed point tolerance."
         )
 
 
@@ -147,9 +160,9 @@ class SyntheticPricesConvergenceError(Exception):
     def __str__(self):
         return (
             "The fixed point computation of synthetic prices failed to converge. This problem can sometimes be "
-            "mitigated by increasing the maximum number of fixed point iterations, by reducing the fixed point "
-            "tolerance, or by making sure that the specified parameters are reasonable. For example, the linear "
-            "parameter on price should be negative and should overwhelm the effects of nonlinear parameters on prices."
+            "mitigated by increasing the maximum number of fixed point iterations, reducing the fixed point tolerance, "
+            "or making sure that the specified parameters are reasonable. For example, the parameters on prices should "
+            "generally imply a downward sloping demand curve."
         )
 
 
@@ -159,7 +172,7 @@ class ChangedPricesConvergenceError(Exception):
     def __str__(self):
         return (
             "The fixed point computation of changed prices failed to converge. This problem can sometimes be mitigated "
-            "by increasing the maximum number of fixed point iterations or by reducing the fixed point tolerance."
+            "by increasing the maximum number of fixed point iterations or reducing the fixed point tolerance."
         )
 
 
@@ -169,7 +182,7 @@ class CostsSingularityError(Exception):
     def __str__(self):
         return (
             "Encountered a singular intra-firm Jacobian of shares with respect to prices when computing marginal "
-            "costs. This problem can sometimes by mitigated by changing initial parameter values or by setting more "
+            "costs. This problem can sometimes by mitigated by changing initial parameter values or setting more "
             "conservative bounds."
         )
 
@@ -180,8 +193,8 @@ class NonpositiveSharesError(Exception):
     def __str__(self):
         return (
             "Encountered nonpositive shares when computing delta. This problem can sometimes be mitigated by changing "
-            "initial parameter values, by setting more restrictive bounds, by using draws without negative weights, or "
-            "by using a nonlinear fixed point formulation."
+            "initial parameter values, setting more conservative bounds, using a different integration specification, "
+            "or using a nonlinear fixed point formulation."
         )
 
 
@@ -191,8 +204,8 @@ class NonpositiveCostsError(Exception):
     def __str__(self):
         return (
             "Encountered nonpositive marginal costs when recovering gamma in a log-linear specification. This problem "
-            "can sometimes be mitigated by reducing the magnitude of initial parameter values, by setting more "
-            "conservative bounds, by changing how errors are handled, or by using a linear costs specification."
+            "can sometimes be mitigated by bounding costs from below, choosing more reasonable initial parameter "
+            "values, setting more conservative parameter bounds, or using a linear costs specification."
         )
 
 
