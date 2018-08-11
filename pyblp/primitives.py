@@ -750,10 +750,10 @@ class Market(object):
 class NonlinearParameter(object):
     """Information about a single nonlinear parameter."""
 
-    def __init__(self, location, bounds, unspecified_bounds):
+    def __init__(self, location, bounds, unbounded):
         """Store the information and determine whether the parameter is fixed or unfixed."""
         self.location = location
-        self.unspecified_bounds = unspecified_bounds
+        self.unbounded = unbounded
         self.value = bounds[0][location] if bounds[0][location] == bounds[1][location] else None
 
 
@@ -788,15 +788,15 @@ class PiParameter(RandomCoefficientParameter):
 class RhoParameter(NonlinearParameter):
     """Information about a single parameter in rho."""
 
-    def __init__(self, location, bounds, unspecified_bounds, all_groups):
+    def __init__(self, location, bounds, unbounded, single):
         """Store the information along with whether there is only a single parameter for all groups."""
-        super().__init__(location, bounds, unspecified_bounds)
-        self.all_groups = all_groups
+        super().__init__(location, bounds, unbounded)
+        self.single = single
 
     def get_group_associations(self, groups):
         """Get an indicator for which groups are associated with the parameter."""
         associations = np.ones((groups.unique.size, 1), options.dtype)
-        if not self.all_groups:
+        if not self.single:
             associations[:] = 0
             associations[self.location] = 1
         return associations
@@ -910,29 +910,21 @@ class NonlinearParameters(object):
 
         # store information for the upper triangle of sigma
         for location in zip(*np.triu_indices_from(self.sigma)):
-            parameter = SigmaParameter(location, self.sigma_bounds, unspecified_bounds=sigma_bounds is None)
-            if parameter.value is None:
-                self.unfixed.append(parameter)
-            else:
-                self.fixed.append(parameter)
+            parameter = SigmaParameter(location, self.sigma_bounds, unbounded=sigma_bounds is None)
+            parameter_list = self.unfixed if parameter.value is None else self.fixed
+            parameter_list.append(parameter)
 
         # store information for pi
         for location in np.ndindex(self.pi.shape):
-            parameter = PiParameter(location, self.pi_bounds, unspecified_bounds=pi_bounds is None)
-            if parameter.value is None:
-                self.unfixed.append(parameter)
-            else:
-                self.fixed.append(parameter)
+            parameter = PiParameter(location, self.pi_bounds, unbounded=pi_bounds is None)
+            parameter_list = self.unfixed if parameter.value is None else self.fixed
+            parameter_list.append(parameter)
 
         # store information for rho
         for location in np.ndindex(self.rho.shape):
-            parameter = RhoParameter(
-                location, self.rho_bounds, unspecified_bounds=rho_bounds is None, all_groups=self.rho.size == 1
-            )
-            if parameter.value is None:
-                self.unfixed.append(parameter)
-            else:
-                self.fixed.append(parameter)
+            parameter = RhoParameter(location, self.rho_bounds, unbounded=rho_bounds is None, single=self.rho.size == 1)
+            parameter_list = self.unfixed if parameter.value is None else self.fixed
+            parameter_list.append(parameter)
 
         # count the number of unfixed parameters
         self.P = len(self.unfixed)
@@ -946,7 +938,7 @@ class NonlinearParameters(object):
         # compute default bounds for each parameter such that conditional on reasonable values for all other parameters,
         #   choice probability computation is unlikely to overflow
         for parameter in self.unfixed:
-            if parameter.unspecified_bounds:
+            if parameter.unbounded:
                 location = parameter.location
                 if isinstance(parameter, RandomCoefficientParameter):
                     v_norm = np.abs(parameter.get_agent_characteristic(economy.agents)).max()
