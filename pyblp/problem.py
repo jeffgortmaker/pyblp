@@ -4,12 +4,11 @@ import time
 import functools
 
 import numpy as np
-import scipy.linalg
 
 from . import options, exceptions
 from .configurations import Iteration, Optimization, Formulation
-from .utilities import output, compute_2sls_weights, Groups, ParallelItems, IV
 from .primitives import Products, Agents, Economy, Market, NonlinearParameters, RhoParameter
+from .utilities import solve, invert, output, compute_2sls_weights, Groups, ParallelItems, IV
 
 
 class Problem(Economy):
@@ -666,7 +665,7 @@ class Problem(Economy):
             bad_indices = ~np.isfinite(gradient)
             if np.any(bad_indices):
                 gradient[bad_indices] = last_objective_info.gradient[bad_indices]
-                errors.add(lambda: exceptions.GradientReversionError(bad_indices.sum()))
+                errors.add(functools.partial(exceptions.GradientReversionError, bad_indices.sum()))
 
         # handle any errors
         if errors:
@@ -728,14 +727,14 @@ class Problem(Economy):
         bad_indices = ~np.isfinite(true_delta)
         if np.any(bad_indices):
             true_delta[bad_indices] = last_objective_info.true_delta[bad_indices]
-            errors.add(lambda: exceptions.DeltaReversionError(bad_indices.sum()))
+            errors.add(functools.partial(exceptions.DeltaReversionError, bad_indices.sum()))
 
         # replace invalid elements in its Jacobian with their last values
         if compute_gradient:
             bad_indices = ~np.isfinite(true_xi_jacobian)
             if np.any(bad_indices):
                 true_xi_jacobian[bad_indices] = last_objective_info.true_xi_jacobian[bad_indices]
-                errors.add(lambda: exceptions.XiJacobianReversionError(bad_indices.sum()))
+                errors.add(functools.partial(exceptions.XiJacobianReversionError, bad_indices.sum()))
 
         # absorb any demand-side fixed effects
         delta = true_delta
@@ -791,14 +790,14 @@ class Problem(Economy):
         bad_indices = ~np.isfinite(true_tilde_costs)
         if np.any(bad_indices):
             true_tilde_costs[bad_indices] = last_objective_info.true_tilde_costs[bad_indices]
-            errors.add(lambda: exceptions.CostsReversionError(bad_indices.sum()))
+            errors.add(functools.partial(exceptions.CostsReversionError, bad_indices.sum()))
 
         # replace invalid elements in their Jacobian with their last values
         if compute_gradient:
             bad_indices = ~np.isfinite(true_omega_jacobian)
             if np.any(bad_indices):
                 true_omega_jacobian[bad_indices] = last_objective_info.true_omega_jacobian[bad_indices]
-                errors.add(lambda: exceptions.OmegaJacobianReversionError(bad_indices.sum()))
+                errors.add(functools.partial(exceptions.OmegaJacobianReversionError, bad_indices.sum()))
 
         # absorb any supply-side fixed effects
         tilde_costs = true_tilde_costs
@@ -991,10 +990,7 @@ class DemandProblemMarket(Market):
         probabilities, conditionals = self.compute_probabilities(delta, keep_conditionals=True)
         xi_jacobian = self.compute_shares_by_xi_jacobian(probabilities, conditionals)
         theta_jacobian = self.compute_shares_by_theta_jacobian(nonlinear_parameters, delta, probabilities, conditionals)
-        try:
-            return scipy.linalg.solve(-xi_jacobian, theta_jacobian)
-        except (ValueError, scipy.linalg.LinAlgError):
-            return np.full_like(theta_jacobian, np.nan)
+        return solve(-xi_jacobian, theta_jacobian)
 
     def compute_shares_by_xi_jacobian(self, probabilities, conditionals):
         """Compute the Jacobian of shares with respect to xi (equivalently, to delta)."""
@@ -1033,11 +1029,9 @@ class SupplyProblemMarket(Market):
             np.seterrcall(lambda *_: errors.add(exceptions.CostsFloatingPointError))
 
             # compute marginal costs
-            try:
-                costs = self.products.prices - self.compute_eta()
-            except scipy.linalg.LinAlgError:
+            costs = self.products.prices - self.compute_eta()
+            if np.isnan(costs).any():
                 errors.add(exceptions.CostsSingularityError)
-                costs = np.full((self.J, 1), np.nan, options.dtype)
 
             # clip marginal costs that are outside of acceptable bounds
             clipped_indices = (costs < costs_bounds[0]) | (costs > costs_bounds[1])
@@ -1091,10 +1085,7 @@ class SupplyProblemMarket(Market):
         A = -ownership * (capital_lamda - capital_gamma)
 
         # compute the inverse of A and use it to compute eta
-        try:
-            A_inverse = scipy.linalg.inv(A)
-        except (ValueError, scipy.linalg.LinAlgError):
-            A_inverse = np.full_like(A, np.nan)
+        A_inverse = invert(A)
         eta = A_inverse @ self.products.shares
 
         # compute the tensor derivative with respect to xi (equivalently, to delta), indexed with the first axis, of

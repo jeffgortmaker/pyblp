@@ -5,7 +5,6 @@ import os
 import patsy
 import pytest
 import scipy.io
-import warnings
 import numpy as np
 
 from .data import TEST_DATA_PATH

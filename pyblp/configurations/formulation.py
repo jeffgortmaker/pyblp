@@ -6,7 +6,6 @@ import functools
 import patsy
 import sympy
 import numpy as np
-import scipy.linalg
 import scipy.sparse
 import patsy.origin
 import patsy.builtins
@@ -14,7 +13,7 @@ from sympy.parsing import sympy_parser
 
 from .. import exceptions
 from ..configurations import Iteration
-from ..utilities import extract_size, Groups
+from ..utilities import invert, extract_size, Groups
 
 
 class Formulation(object):
@@ -310,9 +309,8 @@ class Formulation(object):
         DD_inverse = scipy.sparse.diags(1 / (D.T @ D).diagonal())
 
         # attempt to compute the only non-diagonal inverse
-        try:
-            C = scipy.linalg.inv(H.T @ H - DH.T @ DD_inverse @ DH)
-        except scipy.linalg.LinAlgError:
+        C = invert(H.T @ H - DH.T @ DD_inverse @ DH)
+        if np.isnan(C).any():
             raise exceptions.AbsorptionInversionError
 
         # compute the remaining components and the function for computing AD'x, optionally pre-computing A

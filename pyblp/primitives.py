@@ -5,12 +5,11 @@ import itertools
 import collections
 
 import numpy as np
-import scipy.linalg
 import numpy.lib.recfunctions
 
 from . import options, exceptions
 from .configurations import Formulation, Integration
-from .utilities import output, extract_matrix, Matrices, Groups
+from .utilities import solve, output, extract_matrix, Matrices, Groups
 
 
 class Products(Matrices):
@@ -700,10 +699,7 @@ class Market(object):
             probabilities, conditionals = self.compute_probabilities(delta, mu)
             shares = probabilities @ self.agents.weights
         jacobian = self.compute_shares_by_variable_jacobian(utility_derivatives, probabilities, conditionals)
-        try:
-            return -scipy.linalg.solve(ownership_matrix * jacobian, shares)
-        except ValueError:
-            return np.full_like(shares, np.nan)
+        return -solve(ownership_matrix * jacobian, shares)
 
     def compute_zeta(self, ownership_matrix=None, utility_derivatives=None, prices=None, costs=None):
         """Compute the markup term in the zeta-markup equation. By default, get an unchanged ownership matrix, compute

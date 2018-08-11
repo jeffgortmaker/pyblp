@@ -1,5 +1,8 @@
 """Standard statistical routines."""
 
+import warnings
+import functools
+
 import numpy as np
 import scipy.linalg
 
@@ -14,9 +17,9 @@ class IV(object):
         self.X = X
         self.Z = Z
         self.W = W
-        self.covariances, approximation = invert((self.X.T @ self.Z) @ self.W @ (self.Z.T @ self.X))
+        self.covariances, approximation = approximate_invert((self.X.T @ self.Z) @ self.W @ (self.Z.T @ self.X))
         if approximation:
-            self.errors.add(lambda: exceptions.LinearParameterCovariancesInversionError(approximation))
+            self.errors.add(functools.partial(exceptions.LinearParameterCovariancesInversionError, approximation))
 
     def estimate(self, y, compute_residuals=True):
         """Estimate parameters and compute residuals."""
@@ -34,12 +37,12 @@ def compute_gmm_se(u, Z, W, jacobian, se_type, clustering_ids):
     G = Z.T @ jacobian
 
     # attempt to compute the covariance matrix
-    covariances, approximation = invert(G.T @ W @ G)
+    covariances, approximation = approximate_invert(G.T @ W @ G)
     if approximation:
-        errors.add(lambda: exceptions.GMMParameterCovariancesInversionError(approximation))
+        errors.add(functools.partial(exceptions.GMMParameterCovariancesInversionError, approximation))
 
     # compute the robust covariance matrix and extract standard errors
-    covariances, approximation = invert(G.T @ W @ G)
+    covariances, approximation = approximate_invert(G.T @ W @ G)
     with np.errstate(invalid='ignore'):
         if se_type != 'unadjusted':
             g = u * Z
@@ -58,9 +61,9 @@ def compute_2sls_weights(Z):
     errors = set()
 
     # attempt to compute the weighting matrix
-    W, approximation = invert(Z.T @ Z)
+    W, approximation = approximate_invert(Z.T @ Z)
     if approximation:
-        errors.add(lambda: exceptions.GMMMomentCovariancesInversionError(approximation))
+        errors.add(functools.partial(exceptions.GMMMomentCovariancesInversionError, approximation))
     return W, errors
 
 
@@ -74,9 +77,9 @@ def compute_gmm_weights(u, Z, center_moments, se_type, clustering_ids):
         g -= g.mean(axis=0)
 
     # attempt to compute the weighting matrix
-    W, approximation = invert(compute_gmm_moment_covariances(g, se_type, clustering_ids))
+    W, approximation = approximate_invert(compute_gmm_moment_covariances(g, se_type, clustering_ids))
     if approximation:
-        errors.add(lambda: exceptions.GMMMomentCovariancesInversionError(approximation))
+        errors.add(functools.partial(exceptions.GMMMomentCovariancesInversionError, approximation))
 
     # handle null values
     if np.isnan(W).any():
@@ -91,20 +94,56 @@ def compute_gmm_moment_covariances(g, se_type, clustering_ids):
     return g.T @ g
 
 
-def invert(matrix):
-    """Attempt to invert a matrix with decreasingly precise inversion functions. The first attempt is with a
-    standard inversion function; the second, with the Moore-Penrose pseudo inverse; the third, with simple diagonal
-    inversion. Along with the inverted matrix, return a description of any approximation used.
-    """
-    try:
-        return scipy.linalg.inv(matrix), None
-    except ValueError:
-        return np.full_like(matrix, np.nan), None
-    except scipy.linalg.LinAlgError:
+def solve(a, b):
+    """Solve a system of equations and return a solution of nans if anything goes wrong."""
+    with warnings.catch_warnings():
+        warnings.filterwarnings('error')
         try:
-            return scipy.linalg.pinv(matrix), "computing the Moore-Penrose pseudo inverse"
-        except scipy.linalg.LinAlgError:
-            return (
-                np.diag(1 / np.diag(matrix)),
-                "inverting only the variance terms, since the Moore-Penrose pseudo inverse could not be computed"
-            )
+            return scipy.linalg.solve(a, b)
+        except (ValueError, scipy.linalg.LinAlgError, scipy.linalg.LinAlgWarning):
+            return np.full_like(b, np.nan)
+
+
+def invert(x):
+    """Invert a matrix and return a solution of nans if anything goes wrong."""
+    with warnings.catch_warnings():
+        warnings.filterwarnings('error')
+        try:
+            return scipy.linalg.inv(x)
+        except (ValueError, scipy.linalg.LinAlgError, scipy.linalg.LinAlgWarning):
+            return np.full_like(x, np.nan)
+
+
+def approximate_solve(a, b):
+    """Attempt to solve a system of equations with decreasingly precise inversion functions. Along with the solution,
+    return a description of any approximation that was used.
+    """
+    with warnings.catch_warnings():
+        warnings.filterwarnings('error')
+        try:
+            return scipy.linalg.solve(a, b), None
+        except ValueError:
+            return np.full_like(b, np.nan), None
+        except (scipy.linalg.LinAlgError, scipy.linalg.LinAlgWarning):
+            inverse, approximation = invert(a)
+            return inverse @ b, approximation
+
+
+def approximate_invert(x):
+    """Attempt to invert a matrix with decreasingly precise inversion functions. Along with the inverted matrix, return
+    a description of any approximation that was used.
+    """
+    with warnings.catch_warnings():
+        warnings.filterwarnings('error')
+        try:
+            return scipy.linalg.inv(x), None
+        except ValueError:
+            return np.full_like(x, np.nan), None
+        except (scipy.linalg.LinAlgError, scipy.linalg.LinAlgWarning):
+            try:
+                return scipy.linalg.pinv(x), "computing the Moore-Penrose pseudo inverse"
+            except (scipy.linalg.LinAlgError, scipy.linalg.LinAlgWarning):
+                return (
+                    np.diag(1 / np.diag(x)),
+                    "inverting only the variance terms, since the Moore-Penrose pseudo inverse could not be computed"
+                )

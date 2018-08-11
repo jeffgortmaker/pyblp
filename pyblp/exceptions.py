@@ -73,8 +73,9 @@ class DeltaFloatingPointError(Exception):
     def __str__(self):
         return (
             "Encountered floating point issues when computing delta or its Jacobian with respect to theta. This "
-            "problem is often due to overflow and can sometimes be mitigated by choosing smaller initial parameter "
-            "values, setting more conservative bounds, rescaling data, removing outliers, or changing options.dtype."
+            "problem is often due to prior problems or overflow and can sometimes be mitigated by choosing smaller "
+            "initial parameter values, setting more conservative bounds, rescaling data, removing outliers, or "
+            "changing options.dtype."
         )
 
 
@@ -84,9 +85,9 @@ class CostsFloatingPointError(Exception):
     def __str__(self):
         return (
             "Encountered floating point issues when computing marginal costs or their Jacobian with respect to theta. "
-            "This problem is often due to overflow and can sometimes be mitigated by choosing smaller initial "
-            "parameter values, setting more conservative bounds, rescaling data, removing outliers, or changing "
-            "options.dtype."
+            "This problem is often due to prior problems or overflow and can sometimes be mitigated by choosing "
+            "smaller initial parameter values, setting more conservative bounds, rescaling data, removing outliers, or "
+            "changing options.dtype."
         )
 
 
@@ -95,9 +96,9 @@ class SyntheticPricesFloatingPointError(Exception):
 
     def __str__(self):
         return (
-            "Encountered floating point issues when computing synthetic prices. This problem is often due to overflow "
-            "and can sometimes be mitigated by making sure that the specified parameters are reasonable. For example, "
-            "the parameters on prices should generally imply a downward sloping demand curve."
+            "Encountered floating point issues when computing synthetic prices. This problem is often due to prior "
+            "problems or overflow and can sometimes be mitigated by making sure that the specified parameters are "
+            "reasonable. For example, the parameters on prices should generally imply a downward sloping demand curve."
         )
 
 
@@ -106,8 +107,8 @@ class ChangedPricesFloatingPointError(Exception):
 
     def __str__(self):
         return (
-            "Encountered floating point issues when computing changed prices. This problem is often due to overflow "
-            "and can sometimes be mitigated by rescaling data."
+            "Encountered floating point issues when computing changed prices. This problem is often due to prior "
+            "problems or overflow and can sometimes be mitigated by rescaling data."
         )
 
 
