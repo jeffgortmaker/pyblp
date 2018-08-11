@@ -125,7 +125,8 @@ class Results(object):
     true_omega_jacobian : `ndarray`
         Estimated :math:`\partial\omega / \partial\theta = \partial\tilde{c} / \partial\theta`.
     gradient : `ndarray`
-        Estimated gradient of the GMM objective with respect to :math:`\theta`.
+        Estimated gradient of the GMM objective with respect to :math:`\theta`. This is still computed once at the end
+        of an optimization routine that was configured to not use analytic gradients.
     gradient_norm : `ndarray`
         Infinity norm of :attr:`Results.gradient`.
     sigma_gradient : `ndarray`
