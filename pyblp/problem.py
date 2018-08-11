@@ -263,7 +263,7 @@ class Problem(Economy):
             same size as `pi`. Each element in ``lb`` and ``ub`` determines the lower and upper bound for its
             counterpart in `pi`. If `optimization` does not support bounds, these will be ignored.
 
-            By default, if bounds are supported, conditional on  :math:`X_2`, :math:`d`, an initial estimate of
+            By default, if bounds are supported, conditional on :math:`X_2`, :math:`d`, an initial estimate of
             :math:`\mu`, and the precision of :attr:`options.dtype`, default bounds are chosen to reduce the chance of
             overflow. If the default bounds are too restrictive, consider rescaling data, removing outliers, or changing
             :attr:`options.dtype`.
@@ -471,6 +471,7 @@ class Problem(Economy):
         )
         self._handle_errors(error_behavior, nonlinear_parameters.errors)
         theta = nonlinear_parameters.compress()
+        theta_bounds = nonlinear_parameters.compress_bounds()
         if self.K2 > 0 or self.H > 0:
             output("")
             output("Initial Nonlinear Parameters:")
@@ -574,8 +575,7 @@ class Problem(Economy):
                 output("")
                 output(f"Starting optimization for step {step} out of {steps} ...")
                 output("")
-                bounds = [(p.lb, p.ub) for p in nonlinear_parameters.unfixed]
-                theta, converged, iterations, evaluations = optimization._optimize(theta, bounds, wrapper)
+                theta, converged, iterations, evaluations = optimization._optimize(theta, theta_bounds, wrapper)
                 status = "completed" if converged else "failed"
                 optimization_end_time = time.time()
                 optimization_time = optimization_end_time - optimization_start_time
