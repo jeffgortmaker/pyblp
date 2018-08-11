@@ -887,9 +887,11 @@ class ObjectiveInfo(object):
         header = [
             ("GMM", "Step"), ("Optimization", "Iterations"), ("Objective", "Evaluations"),
             ("Fixed Point", "Iterations"), ("Contraction", "Evaluations"), ("Objective", "Value"),
-            ("Objective", "Improvement"), ("Gradient", "Infinity Norm"), ("Gradient", "Improvement")
+            ("Objective", "Improvement"), ("Gradient", "Infinity Norm"), ("Gradient", "Improvement"),
+            ("", "Theta")
         ]
-        widths = [max(len(k1), len(k2), options.digits + 6 if i > 4 else 0) for i, (k1, k2) in enumerate(header)]
+        widths = [max(len(k1), len(k2), options.digits + 6 if i > 4 else 0) for i, (k1, k2) in enumerate(header[:-1])]
+        widths.append(max(len(header[-1][0]), len(header[-1][1]), self.theta.size * (options.digits + 8) - 2))
         formatter = output.table_formatter(widths)
 
         # if this is the first iteration, include the header
@@ -913,6 +915,7 @@ class ObjectiveInfo(object):
             output.format_number(smallest_objective - self.objective) if objective_improved else "",
             output.format_number(self.gradient_norm),
             output.format_number(smallest_gradient_norm - self.gradient_norm) if gradient_improved else "",
+            ", ".join(output.format_number(x) for x in self.theta)
         ]))
 
         # combine the lines into one string
