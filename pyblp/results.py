@@ -84,6 +84,12 @@ class Results(object):
         Estimated standard errors for :math:`\hat{\beta}`.
     gamma_se : `ndarray`
         Estimated standard errors for :math:`\hat{\gamma}`.
+    sigma_bounds : `tuple`
+        Bounds for :math:`\Sigma` that were used during optimization, which are of the form ``(lb, ub)``.
+    pi_bounds : `tuple`
+        Bounds for :math:`\Pi` that were used during optimization, which are of the form ``(lb, ub)``.
+    rho_bounds : `tuple`
+        Bounds for :math:`\Rho` that were used during optimization, which are of the form ``(lb, ub)``.
     delta : `ndarray`
         Estimated mean utility, :math:`\delta(\hat{\theta})`, which may have been residualized to absorb any demand-side
         fixed effects.
@@ -169,8 +175,11 @@ class Results(object):
         self.gradient_norm = objective_info.gradient_norm
 
         # store parameter information
-        self._nonlinear_parameters = objective_info.nonlinear_parameters
         self._linear_parameters = LinearParameters(self.problem, self.beta, self.gamma)
+        self._nonlinear_parameters = objective_info.nonlinear_parameters
+        self.sigma_bounds = self._nonlinear_parameters.sigma_bounds
+        self.pi_bounds = self._nonlinear_parameters.pi_bounds
+        self.rho_bounds = self._nonlinear_parameters.rho_bounds
 
         # expand the nonlinear parameters and their gradient
         self.sigma, self.pi, self.rho = self._nonlinear_parameters.expand(self.theta)
