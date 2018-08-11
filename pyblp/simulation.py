@@ -434,7 +434,7 @@ class Simulation(Economy):
         try:
             shocks = state.multivariate_normal([0, 0], variances, self.N, check_valid='raise').astype(options.dtype)
         except ValueError:
-            raise ValueError("xi_variance, omega_variance, and covariance must furnish a positive-semidefinite matrix.")
+            raise ValueError("xi_variance, omega_variance, and correlation must give a positive-semidefinite matrix.")
         self.xi = shocks[:, [0]]
         self.omega = shocks[:, [1]]
 
