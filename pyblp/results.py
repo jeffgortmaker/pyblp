@@ -99,8 +99,12 @@ class Results(object):
         Estimated transformed marginal costs, :math:`\tilde{c}(\hat{\theta})`, which may have been residualized to
         absorb any demand-side fixed effects. Transformed marginal costs are simply :math:`\tilde{c} = c`, marginal
         costs, under a linear cost specification, and are :math:`\tilde{c} = \log c` under a log-linear specification.
+        If `costs_bounds` were specified in :meth:`Problem.solve`, :math:`c` may have been clipped.
     true_tilde_costs : `ndarray`
-        Estimated transformed marginal costs, :math:`\tilde{c}(\hat{\theta})`.
+        Estimated transformed marginal costs, :math:`\tilde{c}(\hat{\theta})`. Transformed marginal costs are simply
+        :math:`\tilde{c} = c`, marginal costs, under a linear cost specification, and are :math:`\tilde{c} = \log c`
+        under a log-linear specification. If `costs_bounds` were specified in :meth:`Problem.solve`, :math:`c` may have
+        been clipped.
     xi : `ndarray`
         Estimated unobserved demand-side product characteristics, :math:`\xi(\hat{\theta})`, or equivalently, the
         demand-side structural error term, which includes the contribution of any absorbed demand-side fixed effects.
