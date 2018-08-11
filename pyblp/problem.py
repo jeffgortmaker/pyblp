@@ -550,11 +550,12 @@ class Problem(Economy):
                 info = wrapper.cache = compute_step_info(new_theta, wrapper.cache, optimization._compute_gradient)
                 wrapper.iteration_mappings.append(info.iteration_mapping)
                 wrapper.evaluation_mappings.append(info.evaluation_mapping)
-                if optimization._universal_display:
-                    output(info.format_progress(
-                        step, current_iterations, current_evaluations, wrapper.smallest_objective,
-                        wrapper.smallest_gradient_norm
-                    ))
+                update = info.format_progress(
+                    optimization._universal_display, step, current_iterations, current_evaluations,
+                    wrapper.smallest_objective, wrapper.smallest_gradient_norm
+                )
+                if update:
+                    output(update)
                 wrapper.smallest_objective = min(wrapper.smallest_objective, info.objective)
                 wrapper.smallest_gradient_norm = min(wrapper.smallest_gradient_norm, info.gradient_norm)
                 return (info.objective, info.gradient) if optimization._compute_gradient else info.objective
@@ -877,11 +878,12 @@ class ObjectiveInfo(object):
         with np.errstate(invalid='ignore'):
             self.gradient_norm = None if gradient.size == 0 else np.abs(gradient).max()
 
-    def format_progress(self, step, current_iterations, current_evaluations, smallest_objective,
+    def format_progress(self, universal_display, step, current_iterations, current_evaluations, smallest_objective,
                         smallest_gradient_norm):
-        """Format optimization progress as a string. The first iteration will include the progress table header. If
-        there are any errors, information about them will be formatted as well. The smallest_objective is the smallest
-        objective value encountered so far during optimization.
+        """Format a universal display of optimization progress as a string. The first iteration will include the
+        progress table header. If there are any errors, information about them will be formatted as well, regardless of
+        whether or not a universal display is to be used. The smallest_objective is the smallest objective value
+        encountered so far during optimization.
         """
         lines = []
         header = [
@@ -895,7 +897,7 @@ class ObjectiveInfo(object):
         formatter = output.table_formatter(widths)
 
         # if this is the first iteration, include the header
-        if current_evaluations == 1:
+        if universal_display and current_evaluations == 1:
             lines.extend([formatter([k[0] for k in header]), formatter([k[1] for k in header], underline=True)])
 
         # include information about any errors
@@ -903,20 +905,21 @@ class ObjectiveInfo(object):
             lines.extend(["", str(exceptions.MultipleErrors(self.errors)), ""])
 
         # include the progress update
-        objective_improved = np.isfinite(smallest_objective) and self.objective < smallest_objective
-        gradient_improved = np.isfinite(smallest_gradient_norm) and self.gradient_norm < smallest_gradient_norm
-        lines.append(formatter([
-            step,
-            current_iterations,
-            current_evaluations,
-            sum(self.iteration_mapping.values()),
-            sum(self.evaluation_mapping.values()),
-            output.format_number(self.objective),
-            output.format_number(smallest_objective - self.objective) if objective_improved else "",
-            output.format_number(self.gradient_norm),
-            output.format_number(smallest_gradient_norm - self.gradient_norm) if gradient_improved else "",
-            ", ".join(output.format_number(x) for x in self.theta)
-        ]))
+        if universal_display:
+            objective_improved = np.isfinite(smallest_objective) and self.objective < smallest_objective
+            gradient_improved = np.isfinite(smallest_gradient_norm) and self.gradient_norm < smallest_gradient_norm
+            lines.append(formatter([
+                step,
+                current_iterations,
+                current_evaluations,
+                sum(self.iteration_mapping.values()),
+                sum(self.evaluation_mapping.values()),
+                output.format_number(self.objective),
+                output.format_number(smallest_objective - self.objective) if objective_improved else "",
+                output.format_number(self.gradient_norm),
+                output.format_number(smallest_gradient_norm - self.gradient_norm) if gradient_improved else "",
+                ", ".join(output.format_number(x) for x in self.theta)
+            ]))
 
         # combine the lines into one string
         return "\n".join(lines)
