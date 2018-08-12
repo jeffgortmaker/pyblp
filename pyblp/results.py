@@ -213,7 +213,7 @@ class Results(object):
         self.updated_WS, WS_errors = compute_gmm_weights(
             self.true_omega, self.problem.products.ZS, center_moments, se_type, self.problem.products.clustering_ids
         )
-        self._errors |= WD_errors | WS_errors
+        self._errors.extend(WD_errors + WS_errors)
 
         # stack errors, weights, instruments, Jacobian of the errors with respect to parameters, and clustering IDs
         if self.problem.K3 == 0:
@@ -239,7 +239,7 @@ class Results(object):
         )
         self.beta_se = se[self._nonlinear_parameters.P:self._nonlinear_parameters.P + self.problem.K1]
         self.gamma_se = se[self._nonlinear_parameters.P + self.problem.K1:]
-        self._errors |= se_errors
+        self._errors.extend(se_errors)
         self.se_type = se_type
 
         # initialize counts and times
@@ -361,12 +361,12 @@ class Results(object):
             return [market_s] + list(fixed_args) + args_s
 
         # construct a mapping from market IDs to market-specific results and compute the full results matrix size
-        errors = set()
+        errors = []
         rows = columns = 0
         matrix_mapping = {}
         with ParallelItems(self.unique_market_ids, market_factory, compute_market_results, processes) as items:
             for t, (array_t, errors_t) in items:
-                errors |= errors_t
+                errors.extend(errors_t)
                 matrix_mapping[t] = np.c_[array_t]
                 rows += matrix_mapping[t].shape[0]
                 columns = max(columns, matrix_mapping[t].shape[1])
@@ -808,7 +808,7 @@ class Results(object):
 
 class ResultsMarket(Market):
     """Results for a single market of a solved BLP problem, which can be used to compute post-estimation outputs. Each
-    method returns a matrix and a set of any errors that were encountered.
+    method returns a matrix and a list of any errors that were encountered.
     """
 
     def compute_aggregate_elasticity(self, factor, name):
@@ -818,14 +818,14 @@ class ResultsMarket(Market):
         mu = self.update_mu_with_variable(name, scaled_variable)
         shares = self.compute_probabilities(delta, mu) @ self.agents.weights
         aggregate_elasticities = (shares - self.products.shares).sum() / factor
-        return aggregate_elasticities, set()
+        return aggregate_elasticities, []
 
     def compute_elasticities(self, name):
         """Estimate a matrix of elasticities of demand with respect to a variable."""
         derivatives = self.compute_utility_derivatives(name)
         jacobian = self.compute_shares_by_variable_jacobian(derivatives)
         elasticities = jacobian * self.products[name].T / self.products.shares
-        return elasticities, set()
+        return elasticities, []
 
     def compute_diversion_ratios(self, name):
         """Estimate a matrix of diversion ratios with respect to a variable."""
@@ -838,7 +838,7 @@ class ResultsMarket(Market):
 
         # compute the ratios
         ratios = -jacobian / np.tile(jacobian_diagonal, self.J)
-        return ratios, set()
+        return ratios, []
 
     def compute_long_run_diversion_ratios(self):
         """Estimate a matrix of long-run diversion ratios."""
@@ -852,57 +852,53 @@ class ResultsMarket(Market):
 
         # compute the ratios
         ratios = changes / np.tile(self.products.shares, self.J)
-        return ratios, set()
+        return ratios, []
 
     def extract_diagonal(self, matrix):
         """Extract the diagonal from a matrix."""
         diagonal = matrix[:, :self.J].diagonal()
-        return diagonal, set()
+        return diagonal, []
 
     def extract_diagonal_mean(self, matrix):
         """Extract the mean of the diagonal from a matrix."""
         diagonal_mean = matrix[:, :self.J].diagonal().mean()
-        return diagonal_mean, set()
+        return diagonal_mean, []
 
     def compute_costs(self):
         """Estimate marginal costs."""
-        errors = set()
-        try:
-            costs = self.products.prices - self.compute_eta()
-        except scipy.linalg.LinAlgError:
-            errors.add(exceptions.CostsSingularityError)
-            costs = np.full((self.J, 1), np.nan, options.dtype)
+        eta, errors = self.compute_eta()
+        costs = self.products.prices - eta
         return costs, errors
 
     def compute_approximate_prices(self, firms_index=0, costs=None):
         """Estimate approximate Bertrand-Nash prices under the assumption that shares and their price derivatives are
         unaffected by firm ID changes. By default, use unchanged firm IDs and compute marginal costs.
         """
-        errors = set()
+        errors = []
         if costs is None:
             costs, errors = self.compute_costs()
         ownership_matrix = self.get_ownership_matrix(firms_index)
-        try:
-            prices = costs + self.compute_eta(ownership_matrix)
-        except scipy.linalg.LinAlgError:
-            errors.add(exceptions.CostsSingularityError)
-            prices = np.full((self.J, 1), np.nan, options.dtype)
+        eta, eta_errors = self.compute_eta(ownership_matrix)
+        errors.extend(eta_errors)
+        prices = costs + eta
         return prices, errors
 
     def compute_prices(self, iteration, firms_index=0, prices=None, costs=None):
         """Estimate Bertrand-Nash prices. By default, use unchanged firm IDs, use unchanged prices as starting values,
         and compute marginal costs.
         """
-        errors = set()
+        errors = []
+        if costs is None:
+            costs, errors = self.compute_costs()
 
         # configure NumPy to identify floating point errors
         with np.errstate(divide='call', over='call', under='ignore', invalid='call'):
-            np.seterrcall(lambda *_: errors.add(exceptions.ChangedPricesFloatingPointError))
-            prices, converged = self.compute_bertrand_nash_prices(iteration, firms_index, prices, costs)[:2]
+            np.seterrcall(lambda *_: errors.append(exceptions.BertrandNashPricesFloatingPointError()))
+            prices, converged = self.compute_bertrand_nash_prices(costs, iteration, firms_index, prices)[:2]
 
         # determine whether the fixed point converged
         if not converged:
-            errors.add(exceptions.ChangedPricesConvergenceError)
+            errors.append(exceptions.BertrandNashPricesConvergenceError())
         return prices, errors
 
     def compute_shares(self, prices=None):
@@ -912,7 +908,7 @@ class ResultsMarket(Market):
         delta = self.update_delta_with_variable('prices', prices)
         mu = self.update_mu_with_variable('prices', prices)
         shares = self.compute_probabilities(delta, mu) @ self.agents.weights
-        return shares, set()
+        return shares, []
 
     def compute_hhi(self, firms_index=0, shares=None):
         """Estimate HHI. By default, use unchanged firm IDs and shares."""
@@ -920,11 +916,11 @@ class ResultsMarket(Market):
             shares = self.products.shares
         firm_ids = self.products.firm_ids[:, [firms_index]]
         hhi = 1e4 * sum((shares[firm_ids == f].sum() / shares.sum())**2 for f in np.unique(firm_ids))
-        return hhi, set()
+        return hhi, []
 
     def compute_markups(self, prices=None, costs=None):
         """Estimate markups. By default, use unchanged prices and compute marginal costs."""
-        errors = set()
+        errors = []
         if prices is None:
             prices = self.products.prices
         if costs is None:
@@ -936,7 +932,7 @@ class ResultsMarket(Market):
         """Estimate population-normalized gross expected profits. By default, use unchanged prices, use unchanged
         shares, and compute marginal costs.
         """
-        errors = set()
+        errors = []
         if prices is None:
             prices = self.products.prices
         if shares is None:
@@ -948,7 +944,6 @@ class ResultsMarket(Market):
 
     def compute_consumer_surplus(self, prices=None):
         """Estimate population-normalized consumer surplus. By default, use unchanged prices."""
-        assert self.delta is not None
         if prices is None:
             delta = self.delta
             mu = self.mu
@@ -968,4 +963,4 @@ class ResultsMarket(Market):
 
         # compute consumer surplus
         consumer_surplus = (np.log1p(exp_utilities.sum(axis=0)) / alpha) @ self.agents.weights
-        return consumer_surplus, set()
+        return consumer_surplus, []

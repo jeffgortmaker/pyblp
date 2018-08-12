@@ -8,7 +8,9 @@ import numpy as np
 from . import options, exceptions
 from .configurations import Iteration, Optimization, Formulation
 from .primitives import Products, Agents, Economy, Market, NonlinearParameters, RhoParameter
-from .utilities import solve, invert, output, compute_2sls_weights, Groups, ParallelItems, IV
+from .utilities import (
+    approximately_solve, approximately_invert, output, compute_2sls_weights, Groups, ParallelItems, IV
+)
 
 
 class Problem(Economy):
@@ -537,7 +539,7 @@ class Problem(Economy):
             # initialize IV models for demand- and supply-side linear parameter estimation
             demand_iv = IV(self.products.X1, self.products.ZD, WD)
             supply_iv = IV(self.products.X3, self.products.ZS, WS)
-            self._handle_errors(error_behavior, demand_iv.errors | supply_iv.errors)
+            self._handle_errors(error_behavior, demand_iv.errors + supply_iv.errors)
 
             # wrap computation of objective information with step-specific information
             compute_step_info = functools.partial(
@@ -581,7 +583,7 @@ class Problem(Economy):
                 optimization_end_time = time.time()
                 optimization_time = optimization_end_time - optimization_start_time
                 if not converged:
-                    self._handle_errors(error_behavior, {exceptions.ThetaConvergenceError})
+                    self._handle_errors(error_behavior, [exceptions.ThetaConvergenceError()])
                 output("")
                 output(f"Optimization {status} after {output.format_seconds(optimization_time)}.")
 
@@ -629,7 +631,7 @@ class Problem(Economy):
         )
 
         # compute supply-side contributions
-        supply_errors = set()
+        supply_errors = []
         gamma = np.full((self.K3, 1), np.nan, options.dtype)
         true_tilde_costs = tilde_costs = true_omega = np.full((self.N, 0), np.nan, options.dtype)
         true_omega_jacobian = omega_jacobian = np.full((self.N, nonlinear_parameters.P), np.nan, options.dtype)
@@ -642,7 +644,7 @@ class Problem(Economy):
             )
 
         # combine both sets of errors
-        errors = demand_errors | supply_errors
+        errors = demand_errors + supply_errors
 
         # compute the objective value
         objective = (true_xi.T @ self.products.ZD) @ WD @ (self.products.ZD.T @ true_xi)
@@ -652,7 +654,7 @@ class Problem(Economy):
         # replace the objective with its last value if its computation failed, which is unlikely but possible
         if not np.isfinite(np.squeeze(objective)):
             objective = last_objective_info.objective
-            errors.add(exceptions.ObjectiveReversionError)
+            errors.append(exceptions.ObjectiveReversionError())
 
         # compute the gradient
         gradient = np.full_like(theta, np.nan, options.dtype)
@@ -666,7 +668,7 @@ class Problem(Economy):
             bad_indices = ~np.isfinite(gradient)
             if np.any(bad_indices):
                 gradient[bad_indices] = last_objective_info.gradient[bad_indices]
-                errors.add(functools.partial(exceptions.GradientReversionError, bad_indices.sum()))
+                errors.append(exceptions.GradientReversionError(bad_indices))
 
         # handle any errors
         if errors:
@@ -699,7 +701,7 @@ class Problem(Economy):
         """Compute delta and the Jacobian of xi (equivalently, of delta) with respect to theta market-by-market. If
         necessary, revert problematic elements to their last values. Lastly, recover beta and compute xi.
         """
-        errors = set()
+        errors = []
 
         # initialize delta and its Jacobian along with fixed point information so that they can be filled
         iterations = {}
@@ -722,30 +724,30 @@ class Problem(Economy):
                 for t, (true_delta_t, true_xi_jacobian_t, errors_t, iterations[t], evaluations[t]) in items:
                     true_delta[self.products.market_ids.flat == t] = true_delta_t
                     true_xi_jacobian[self.products.market_ids.flat == t] = true_xi_jacobian_t
-                    errors |= errors_t
+                    errors.extend(errors_t)
 
         # replace invalid elements in delta with their last values
         bad_indices = ~np.isfinite(true_delta)
         if np.any(bad_indices):
             true_delta[bad_indices] = last_objective_info.true_delta[bad_indices]
-            errors.add(functools.partial(exceptions.DeltaReversionError, bad_indices.sum()))
+            errors.append(exceptions.DeltaReversionError(bad_indices))
 
         # replace invalid elements in its Jacobian with their last values
         if compute_gradient:
             bad_indices = ~np.isfinite(true_xi_jacobian)
             if np.any(bad_indices):
                 true_xi_jacobian[bad_indices] = last_objective_info.true_xi_jacobian[bad_indices]
-                errors.add(functools.partial(exceptions.XiJacobianReversionError, bad_indices.sum()))
+                errors.append(exceptions.XiJacobianReversionError(bad_indices))
 
         # absorb any demand-side fixed effects
         delta = true_delta
         xi_jacobian = true_xi_jacobian
         if self.ED > 0:
             delta, delta_errors = self._absorb_demand_ids(delta)
-            errors |= delta_errors
+            errors.extend(delta_errors)
             if compute_gradient:
                 xi_jacobian, jacobian_errors = self._absorb_demand_ids(xi_jacobian)
-                errors |= jacobian_errors
+                errors.extend(jacobian_errors)
 
         # recover beta and compute xi
         beta, true_xi = demand_iv.estimate(delta)
@@ -758,7 +760,7 @@ class Problem(Economy):
         with respect to theta market-by-market. If necessary, revert problematic elements to their last values. Lastly,
         recover gamma and compute omega.
         """
-        errors = set()
+        errors = []
 
         # compute the Jacobian of beta with respect to theta, which is needed to compute other Jacobians
         beta_jacobian = np.full((self.K1, nonlinear_parameters.P), np.nan, options.dtype)
@@ -785,30 +787,30 @@ class Problem(Economy):
             for t, (true_tilde_costs_t, true_omega_jacobian_t, errors_t) in items:
                 true_tilde_costs[self.products.market_ids.flat == t] = true_tilde_costs_t
                 true_omega_jacobian[self.products.market_ids.flat == t] = true_omega_jacobian_t
-                errors |= errors_t
+                errors.extend(errors_t)
 
         # replace invalid transformed marginal costs with their last values
         bad_indices = ~np.isfinite(true_tilde_costs)
         if np.any(bad_indices):
             true_tilde_costs[bad_indices] = last_objective_info.true_tilde_costs[bad_indices]
-            errors.add(functools.partial(exceptions.CostsReversionError, bad_indices.sum()))
+            errors.append(exceptions.CostsReversionError(bad_indices))
 
         # replace invalid elements in their Jacobian with their last values
         if compute_gradient:
             bad_indices = ~np.isfinite(true_omega_jacobian)
             if np.any(bad_indices):
                 true_omega_jacobian[bad_indices] = last_objective_info.true_omega_jacobian[bad_indices]
-                errors.add(functools.partial(exceptions.OmegaJacobianReversionError, bad_indices.sum()))
+                errors.append(exceptions.OmegaJacobianReversionError(bad_indices))
 
         # absorb any supply-side fixed effects
         tilde_costs = true_tilde_costs
         omega_jacobian = true_omega_jacobian
         if self.ES > 0:
             tilde_costs, tilde_costs_errors = self._absorb_supply_ids(tilde_costs)
-            errors |= tilde_costs_errors
+            errors.extend(tilde_costs_errors)
             if compute_gradient:
                 omega_jacobian, jacobian_errors = self._absorb_supply_ids(omega_jacobian)
-                errors |= jacobian_errors
+                errors.extend(jacobian_errors)
 
         # recover gamma and compute omega
         gamma, true_omega = supply_iv.estimate(tilde_costs)
@@ -953,17 +955,17 @@ class DemandProblemMarket(Market):
         respect to theta. If necessary, replace null elements in delta with their last values before computing its
         Jacobian.
         """
+        errors = []
 
         # configure NumPy to identify floating point errors
-        errors = set()
         with np.errstate(divide='call', over='call', under='ignore', invalid='call'):
-            np.seterrcall(lambda *_: errors.add(exceptions.DeltaFloatingPointError))
+            np.seterrcall(lambda *_: errors.append(exceptions.DeltaFloatingPointError()))
 
             # define a custom log wrapper that identifies issues with taking logs
             def custom_log(x):
                 with np.errstate(all='ignore'):
                     if np.any(x <= 0):
-                        errors.add(exceptions.NonpositiveSharesError)
+                        errors.append(exceptions.NonpositiveSharesError())
                     return np.log(x)
 
             # compute delta either with a closed-form solution or by solving a fixed point problem
@@ -992,21 +994,28 @@ class DemandProblemMarket(Market):
                 valid_delta = delta.copy()
                 bad_delta_indices = ~np.isfinite(delta)
                 valid_delta[bad_delta_indices] = initial_delta[bad_delta_indices]
-                xi_jacobian = self.compute_xi_by_theta_jacobian(nonlinear_parameters, valid_delta)
+                xi_jacobian, jacobian_errors = self.compute_xi_by_theta_jacobian(nonlinear_parameters, valid_delta)
+                errors.extend(jacobian_errors)
 
         # determine whether the fixed point routine converged
         if not converged:
-            errors.add(exceptions.DeltaConvergenceError)
+            errors.append(exceptions.DeltaConvergenceError())
         return delta, xi_jacobian, errors, iterations, evaluations
 
     def compute_xi_by_theta_jacobian(self, nonlinear_parameters, delta):
         """Use the Implicit Function Theorem to compute the Jacobian of xi (equivalently, of delta) with respect to
         theta.
         """
+        errors = []
         probabilities, conditionals = self.compute_probabilities(delta, keep_conditionals=True)
-        xi_jacobian = self.compute_shares_by_xi_jacobian(probabilities, conditionals)
-        theta_jacobian = self.compute_shares_by_theta_jacobian(nonlinear_parameters, delta, probabilities, conditionals)
-        return solve(-xi_jacobian, theta_jacobian)
+        shares_by_xi_jacobian = self.compute_shares_by_xi_jacobian(probabilities, conditionals)
+        shares_by_theta_jacobian = self.compute_shares_by_theta_jacobian(
+            nonlinear_parameters, delta, probabilities, conditionals
+        )
+        xi_by_theta_jacobian, replacement = approximately_solve(shares_by_xi_jacobian, -shares_by_theta_jacobian)
+        if replacement:
+            errors.append(exceptions.SharesByXiJacobianInversionError(shares_by_xi_jacobian, replacement))
+        return xi_by_theta_jacobian, errors
 
     def compute_shares_by_xi_jacobian(self, probabilities, conditionals):
         """Compute the Jacobian of shares with respect to xi (equivalently, to delta)."""
@@ -1038,16 +1047,16 @@ class SupplyProblemMarket(Market):
         of omega (equivalently, of transformed marginal costs) with respect to theta. If necessary, replace null
         elements in transformed marginal costs with their last values before computing their Jacobian.
         """
+        errors = []
 
         # configure NumPy to identify floating point errors
-        errors = set()
         with np.errstate(divide='call', over='call', under='ignore', invalid='call'):
-            np.seterrcall(lambda *_: errors.add(exceptions.CostsFloatingPointError))
+            np.seterrcall(lambda *_: errors.append(exceptions.CostsFloatingPointError()))
 
             # compute marginal costs
-            costs = self.products.prices - self.compute_eta()
-            if np.isnan(costs).any():
-                errors.add(exceptions.CostsSingularityError)
+            eta, eta_errors = self.compute_eta()
+            errors.extend(eta_errors)
+            costs = self.products.prices - eta
 
             # clip marginal costs that are outside of acceptable bounds
             clipped_indices = (costs < costs_bounds[0]) | (costs > costs_bounds[1])
@@ -1058,9 +1067,9 @@ class SupplyProblemMarket(Market):
                 tilde_costs = costs
             else:
                 assert costs_type == 'log'
+                if np.any(costs <= 0):
+                    errors.append(exceptions.NonpositiveCostsError())
                 with np.errstate(all='ignore'):
-                    if np.any(costs <= 0):
-                        errors.add(exceptions.NonpositiveCostsError)
                     tilde_costs = np.log(costs)
 
             # if the gradient is to be computed, replace invalid transformed marginal costs with their last computed
@@ -1070,23 +1079,27 @@ class SupplyProblemMarket(Market):
                 valid_tilde_costs = tilde_costs.copy()
                 bad_costs_indices = ~np.isfinite(tilde_costs)
                 valid_tilde_costs[bad_costs_indices] = initial_tilde_costs[bad_costs_indices]
-                omega_jacobian = self.compute_omega_by_theta_jacobian(
+                omega_jacobian, jacobian_errors = self.compute_omega_by_theta_jacobian(
                     valid_tilde_costs, xi_jacobian, beta_jacobian, nonlinear_parameters, costs_type
                 )
+                errors.extend(jacobian_errors)
                 omega_jacobian[clipped_indices.flat] = 0
             return tilde_costs, omega_jacobian, errors
 
     def compute_omega_by_theta_jacobian(self, tilde_costs, xi_jacobian, beta_jacobian, nonlinear_parameters,
                                         costs_type):
         """Compute the Jacobian of omega (equivalently, of transformed marginal costs) with respect to theta."""
-        costs_jacobian = -self.compute_eta_by_theta_jacobian(xi_jacobian, beta_jacobian, nonlinear_parameters)
+        eta_jacobian, errors = self.compute_eta_by_theta_jacobian(xi_jacobian, beta_jacobian, nonlinear_parameters)
         if costs_type == 'linear':
-            return costs_jacobian
-        assert costs_type == 'log'
-        return costs_jacobian / np.exp(tilde_costs)
+            omega_jacobian = -eta_jacobian
+        else:
+            assert costs_type == 'log'
+            omega_jacobian = -eta_jacobian / np.exp(tilde_costs)
+        return omega_jacobian, errors
 
     def compute_eta_by_theta_jacobian(self, xi_jacobian, beta_jacobian, nonlinear_parameters):
         """Compute the Jacobian of the markup term in the BLP-markup equation with respect to theta."""
+        errors = []
 
         # compute derivatives of aggregate inclusive values with respect to prices
         probabilities, conditionals = self.compute_probabilities(keep_conditionals=True)
@@ -1101,7 +1114,9 @@ class SupplyProblemMarket(Market):
         A = -ownership * (capital_lamda - capital_gamma)
 
         # compute the inverse of A and use it to compute eta
-        A_inverse = invert(A)
+        A_inverse, replacement = approximately_invert(A)
+        if replacement:
+            errors.append(exceptions.IntraFirmJacobianInversionError(A, replacement))
         eta = A_inverse @ self.products.shares
 
         # compute the tensor derivative with respect to xi (equivalently, to delta), indexed with the first axis, of
@@ -1154,7 +1169,7 @@ class SupplyProblemMarket(Market):
             eta_jacobian[:, [p]] = -A_inverse @ (A_tangent @ eta + A_tensor_times_eta.T @ xi_jacobian[:, [p]])
 
         # return the filled Jacobian
-        return eta_jacobian
+        return eta_jacobian, errors
 
     def compute_probabilities_by_xi_tensor(self, probabilities, conditionals):
         """Use choice probabilities to compute their tensor derivatives with respect to xi (equivalently, to delta),

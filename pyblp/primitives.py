@@ -9,7 +9,7 @@ import numpy.lib.recfunctions
 
 from . import options, exceptions
 from .configurations import Formulation, Integration
-from .utilities import solve, output, extract_matrix, Matrices, Groups
+from .utilities import approximately_solve, output, extract_matrix, Matrices, Groups
 
 
 class Products(Matrices):
@@ -313,8 +313,8 @@ class Economy(object):
             self._absorb_demand_ids = product_formulations[0]._build_absorb(self.products.demand_ids)
             self.products.X1, X1_errors = self._absorb_demand_ids(self.products.X1)
             self.products.ZD, ZD_errors = self._absorb_demand_ids(self.products.ZD)
-            if X1_errors | ZD_errors:
-                raise exceptions.MultipleErrors(X1_errors | ZD_errors)
+            if X1_errors or ZD_errors:
+                raise exceptions.MultipleErrors(X1_errors + ZD_errors)
             end_time = time.time()
             output(f"Absorbed demand-side fixed effects after {output.format_seconds(end_time - start_time)}.")
 
@@ -327,8 +327,8 @@ class Economy(object):
             self._absorb_supply_ids = product_formulations[2]._build_absorb(self.products.supply_ids)
             self.products.X3, X3_errors = self._absorb_supply_ids(self.products.X3)
             self.products.ZS, ZS_errors = self._absorb_supply_ids(self.products.ZS)
-            if X3_errors | ZS_errors:
-                raise exceptions.MultipleErrors(X3_errors | ZS_errors)
+            if X3_errors or ZS_errors:
+                raise exceptions.MultipleErrors(X3_errors + ZS_errors)
             end_time = time.time()
             output(f"Absorbed supply-side fixed effects after {output.format_seconds(end_time - start_time)}.")
 
@@ -686,6 +686,7 @@ class Market(object):
         """Compute the markup term in the BLP-markup equation. By default, get an unchanged ownership matrix, compute
         derivatives of utilities with respect to prices, and use unchanged prices.
         """
+        errors = []
         if ownership_matrix is None:
             ownership_matrix = self.get_ownership_matrix()
         if utility_derivatives is None:
@@ -699,11 +700,15 @@ class Market(object):
             probabilities, conditionals = self.compute_probabilities(delta, mu)
             shares = probabilities @ self.agents.weights
         jacobian = self.compute_shares_by_variable_jacobian(utility_derivatives, probabilities, conditionals)
-        return -solve(ownership_matrix * jacobian, shares)
+        intra_firm_jacobian = ownership_matrix * jacobian
+        eta, replacement = approximately_solve(intra_firm_jacobian, -shares)
+        if replacement:
+            errors.append(exceptions.IntraFirmJacobianInversionError(intra_firm_jacobian, replacement))
+        return eta, errors
 
-    def compute_zeta(self, ownership_matrix=None, utility_derivatives=None, prices=None, costs=None):
-        """Compute the markup term in the zeta-markup equation. By default, get an unchanged ownership matrix, compute
-        derivatives of utilities with respect to prices, use unchanged prices, and compute marginal costs.
+    def compute_zeta(self, costs, ownership_matrix=None, utility_derivatives=None, prices=None):
+        """Use marginal costs to compute the markup term in the zeta-markup equation. By default, get an unchanged
+        ownership matrix, compute derivatives of utilities with respect to prices and use unchanged prices.
         """
         if ownership_matrix is None:
             ownership_matrix = self.get_ownership_matrix()
@@ -717,22 +722,18 @@ class Market(object):
             mu = self.update_mu_with_variable('prices', prices)
             probabilities, conditionals = self.compute_probabilities(delta, mu, keep_conditionals=True)
             shares = probabilities @ self.agents.weights
-        if costs is None:
-            costs = prices - self.compute_eta(ownership_matrix, utility_derivatives, prices)
         value_derivatives = probabilities * utility_derivatives
         capital_lamda_inverse = np.diag(1 / self.compute_capital_lamda(value_derivatives).diagonal())
         capital_gamma = self.compute_capital_gamma(value_derivatives, probabilities, conditionals)
         tilde_capital_omega = capital_lamda_inverse @ (ownership_matrix * capital_gamma).T
         return tilde_capital_omega @ (prices - costs) - capital_lamda_inverse @ shares
 
-    def compute_bertrand_nash_prices(self, iteration, firms_index=0, prices=None, costs=None):
-        """Compute Bertrand-Nash prices by iterating over the zeta-markup equation. By default, use unchanged firm IDs,
-        use unchanged prices as initial values, and compute marginal costs.
+    def compute_bertrand_nash_prices(self, costs, iteration, firms_index=0, prices=None):
+        """Use marginal costs and an integration configuration to compute Bertrand-Nash prices by iterating over the
+        zeta-markup equation. By default, use unchanged firm IDs and use unchanged prices as initial values.
         """
         if prices is None:
             prices = self.products.prices
-        if costs is None:
-            costs = self.products.prices - self.compute_eta()
 
         # derivatives of utilities with respect to prices change during iteration only if second derivatives are nonzero
         if any(f.differentiate('prices', order=2) != 0 for f in self._X1_formulations + self._X2_formulations):
@@ -743,7 +744,7 @@ class Market(object):
 
         # solve the fixed point problem
         ownership_matrix = self.get_ownership_matrix(firms_index)
-        contraction = lambda p: costs + self.compute_zeta(ownership_matrix, get_derivatives(p), p, costs)
+        contraction = lambda p: costs + self.compute_zeta(costs, ownership_matrix, get_derivatives(p), p)
         return iteration._iterate(prices, contraction)
 
 
@@ -811,7 +812,6 @@ class NonlinearParameters(object):
         Also verify that parameters have been chosen such that choice probability computation is unlikely to overflow.
         If unspecified, determine reasonable bounds as well.
         """
-        self.errors = set()
 
         # store labels
         self.X2_labels = list(map(str, economy._X2_formulations))
@@ -930,10 +930,11 @@ class NonlinearParameters(object):
         self.P = len(self.unfixed)
 
         # verify that parameters have been chosen such that choice probability computation is unlikely to overflow
+        self.errors = []
         mu_norm = self.compute_mu_norm(economy)
         mu_max = np.log(np.finfo(options.dtype).max)
         if mu_norm > mu_max or (economy.H > 0 and mu_norm > mu_max * (1 - self.rho.max())):
-            self.errors.add(exceptions.LargeInitialParametersError)
+            self.errors.append(exceptions.LargeInitialParametersError())
 
         # compute default bounds for each parameter such that conditional on reasonable values for all other parameters,
         #   choice probability computation is unlikely to overflow

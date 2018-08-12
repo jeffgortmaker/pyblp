@@ -13,7 +13,7 @@ from sympy.parsing import sympy_parser
 
 from .. import exceptions
 from ..configurations import Iteration
-from ..utilities import invert, extract_size, Groups
+from ..utilities import precisely_invert, extract_size, Groups
 
 
 class Formulation(object):
@@ -277,15 +277,18 @@ class Formulation(object):
                     matrix -= groups.expand(groups.mean(matrix))
                 return matrix
 
-            # if the method is simple de-meaning, supplement the de-meaning pass with an empty set of errors
+            # if the method is simple de-meaning, supplement the de-meaning pass with an empty list of errors
             if method == 'simple':
-                return lambda m: (demean(m), set())
+                return lambda m: (demean(m), [])
 
             # otherwise, use iterated de-meaning
             assert isinstance(method, Iteration)
             def absorb(matrix):
+                errors = []
                 matrix, converged = method._iterate(matrix, demean)[:2]
-                return matrix, set() if converged else {exceptions.AbsorptionConvergenceError}
+                if not converged:
+                    errors.append(exceptions.AbsorptionConvergenceError())
+                return matrix, errors
             return absorb
 
         # validate that the method is a variation of the algorithm of Somaini and Wolak (2016)
@@ -309,9 +312,10 @@ class Formulation(object):
         DD_inverse = scipy.sparse.diags(1 / (D.T @ D).diagonal())
 
         # attempt to compute the only non-diagonal inverse
-        C = invert(H.T @ H - DH.T @ DD_inverse @ DH)
-        if np.isnan(C).any():
-            raise exceptions.AbsorptionInversionError
+        C_inverse = H.T @ H - DH.T @ DD_inverse @ DH
+        C, successful = precisely_invert(C_inverse)
+        if not successful:
+            raise exceptions.AbsorptionInversionError(C_inverse)
 
         # compute the remaining components and the function for computing AD'x, optionally pre-computing A
         B = -DD_inverse @ DH @ C
@@ -322,13 +326,13 @@ class Formulation(object):
             assert method == 'memory'
             compute_ADx = lambda Dx: DD_inverse @ Dx + DD_inverse @ (DH @ (C @ (DH.T @ (DD_inverse @ Dx))))
 
-        # define the absorption function
+        # define the absorption function, which returns an empty set of errors
         def absorb(matrix):
             Dx = D.T @ matrix
             Hx = H.T @ matrix
             delta_hat = compute_ADx(Dx) + B @ Hx
             tau_hat = B.T @ Dx + C @ Hx
-            return matrix - D @ delta_hat - H @ tau_hat, set()
+            return matrix - D @ delta_hat - H @ tau_hat, []
         return absorb
 
 

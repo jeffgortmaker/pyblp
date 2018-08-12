@@ -497,6 +497,7 @@ class Simulation(Economy):
             be passed to `product_data` in :class:`Problem`.
 
         """
+        errors = []
 
         # choose or validate initial prices
         if prices is None:
@@ -526,19 +527,18 @@ class Simulation(Economy):
         # define a function that builds a market along with arguments used to compute prices and shares
         def market_factory(s):
             market_s = SimulationMarket(self, s, self.sigma, self.pi, self.rho, self.beta, delta)
-            prices_s = prices[self.products.market_ids.flat == s]
             costs_s = self.costs[self.products.market_ids.flat == s]
-            return market_s, iteration, firms_index, prices_s, costs_s
+            prices_s = prices[self.products.market_ids.flat == s]
+            return market_s, costs_s, prices_s, iteration, firms_index
 
         # update prices and shares market-by-market
-        errors = set()
         iterations = evaluations = 0
         updated_product_data = self.product_data.copy()
         with ParallelItems(self.unique_market_ids, market_factory, SimulationMarket.solve, processes) as items:
             for t, (prices_t, shares_t, errors_t, iterations_t, evaluations_t) in items:
                 updated_product_data.prices[self.products.market_ids.flat == t] = prices_t
                 updated_product_data.shares[self.products.market_ids.flat == t] = shares_t
-                errors |= errors_t
+                errors.extend(errors_t)
                 iterations += iterations_t
                 evaluations += evaluations_t
 
@@ -564,19 +564,19 @@ class Simulation(Economy):
 class SimulationMarket(Market):
     """A single market in a simulation, which can be used to solve for prices and shares."""
 
-    def solve(self, iteration, firms_index=0, prices=None, costs=None):
-        """Solve for prices and shares. By default, use unchanged firm IDs, use unchanged prices as starting values,
-        and compute marginal costs.
+    def solve(self, costs, prices, iteration, firms_index=0):
+        """Use marginal costs, initial prices, and an iteration configuration to solve for Bertrand-Nash prices and
+        shares. By default, use unchanged firm IDs.
         """
+        errors = []
 
         # configure NumPy to identify floating point errors
-        errors = set()
         with np.errstate(divide='call', over='call', under='ignore', invalid='call'):
-            np.seterrcall(lambda *_: errors.add(exceptions.SyntheticPricesFloatingPointError))
+            np.seterrcall(lambda *_: errors.append(exceptions.SyntheticPricesFloatingPointError()))
 
             # solve the fixed point problem
             prices, converged, iterations, evaluations = self.compute_bertrand_nash_prices(
-                iteration, firms_index, prices, costs
+                costs, iteration, firms_index, prices
             )
 
             # compute the associated shares
@@ -586,5 +586,5 @@ class SimulationMarket(Market):
 
         # determine whether the fixed point converged
         if not converged:
-            errors.add(exceptions.SyntheticPricesConvergenceError)
+            errors.append(exceptions.SyntheticPricesConvergenceError())
         return prices, shares, errors, iterations, evaluations
