@@ -174,7 +174,7 @@ class Output(object):
     def __call__(self, message):
         """Print a message if verbose."""
         if self.options.verbose:
-            print(str(message))
+            self.options.verbose_output(str(message))
 
     @staticmethod
     def table_formatter(widths, line_indices=()):

@@ -5,11 +5,13 @@ Attributes
 digits : `int`
     Number of digits displayed by status updates. The default number of digits is ``10``. The number of digits can be
     changed to, for example, ``20``, with ``pyblp.options.digits = 20``.
-
 verbose : `bool`
-    Whether to output information and status updates. By default, verbosity is turned on. Verbosity can be turned off
-    with ``pyblp.options.verbose = False``.
-
+    Whether to output status updates. By default, verbosity is turned on. Verbosity can be turned off with
+    ``pyblp.options.verbose = False``.
+verbose_output : `callable`
+    Function used to output status updates. The default function is simply ``print``. The function can be changed, for
+    example, to include an indicator that statuses are from this package, with
+    ``pyblp.verbose_output = lambda x: print(f"pyblp: {x}")``.
 dtype : `dtype`
     The data type used for internal calculations, which is by default ``numpy.float64``. The other recommended option is
     ``numpy.longdouble``, which is the only extended precision floating point type currently supported by NumPy.
@@ -46,4 +48,5 @@ import numpy as np
 
 digits = 10
 verbose = True
+verbose_output = print
 dtype = np.float64
