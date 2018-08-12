@@ -910,7 +910,13 @@ class ObjectiveInfo(object):
 
         # include information about any errors
         if self.errors:
-            lines.extend(["", str(exceptions.MultipleErrors(self.errors)), ""])
+            preamble = (
+                "At least one error was encountered. As long as the optimization routine does not get stuck at values "
+                "of theta that give rise to errors, this is not necessarily a problem. If the errors persist or seem "
+                "to be impacting the optimizatin results, consider setting an error punishment or following any of the "
+                "other suggestions below:"
+            )
+            lines.extend(["", preamble, str(exceptions.MultipleErrors(self.errors)), ""])
 
         # include the progress update
         if optimization._universal_display:
