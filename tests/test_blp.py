@@ -12,7 +12,7 @@ from pyblp import build_matrix, Problem, Iteration, Optimization, Formulation
     pytest.param({'steps': 1}, id="one step"),
     pytest.param({'fp_type': 'nonlinear'}, id="nonlinear fixed point"),
     pytest.param({'delta_behavior': 'first'}, id="conservative starting delta values"),
-    pytest.param({'error_behavior': 'punish', 'error_punishment': 1e10}, id="error punishment"),
+    pytest.param({'error_behavior': 'punish', 'error_punishment': 100}, id="error punishment"),
     pytest.param({'center_moments': False, 'se_type': 'unadjusted'}, id="simple covariance matrices"),
     pytest.param({'se_type': 'clustered'}, id="clustered covariance matrices")
 ])
