@@ -989,7 +989,7 @@ class NonlinearParameters(object):
     @staticmethod
     def normalize_default_bound(bound):
         """Reduce an initial parameter bound by 5% and round it to two significant figures."""
-        if not np.isfinite(bound):
+        if not np.isfinite(bound) or bound == 0:
             return bound
         reduced = 0.95 * bound
         return np.round(reduced, 1 + int(reduced < 1) - int(np.log10(reduced)))
