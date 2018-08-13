@@ -370,7 +370,8 @@ class Problem(Economy):
                   .. math:: \exp(\delta) \leftarrow \exp(\delta)s / s(\delta, \hat{\theta}),
 
                   which can be faster because fewer logarithms need to be calculated. It can also help mitigate problems
-                  stemming from any negative integration weights.
+                  stemming from any negative integration weights. However, without conservative parameter bounds, using
+                  this formulation may increase the chance of overflow errors.
 
             This option is only relevant if there are nonlinear parameters, since :math:`\delta` can be estimated
             analytically in the Logit model.
