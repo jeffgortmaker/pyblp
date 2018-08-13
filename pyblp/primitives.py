@@ -932,7 +932,7 @@ class NonlinearParameters(object):
         # verify that parameters have been chosen such that choice probability computation is unlikely to overflow
         self.errors = []
         mu_norm = self.compute_mu_norm(economy)
-        mu_max = np.log(np.finfo(options.dtype).max)
+        mu_max = np.log(np.finfo(np.float64).max)
         if mu_norm > mu_max or (economy.H > 0 and mu_norm > mu_max * (1 - self.rho.max())):
             self.errors.append(exceptions.LargeInitialParametersError())
 

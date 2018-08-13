@@ -252,9 +252,8 @@ class Problem(Economy):
             counterpart in `sigma`. If `optimization` does not support bounds, these will be ignored.
 
             By default, if bounds are supported, the diagonal of `sigma` is bounded from below by zero. Conditional on
-            :math:`X_2`, :math:`\nu`, an initial estimate of :math:`\mu`, and the precision of :attr:`options.dtype`,
-            default bounds for off-diagonal parameters are chosen to reduce the chance of overflow. If the default
-            bounds are too restrictive, consider rescaling data, removing outliers, or changing :attr:`options.dtype`.
+            :math:`X_2`, :math:`\nu`, and an initial estimate of :math:`\mu`, default bounds for off-diagonal parameters
+            are chosen to reduce the chance of overflow.
 
             Values below the diagonal are ignored. Lower and upper bounds corresponding to zeros in `sigma` are set to
             zero. Setting a lower bound equal to an upper bound fixes the corresponding element. Both ``None`` and
@@ -265,10 +264,8 @@ class Problem(Economy):
             same size as `pi`. Each element in ``lb`` and ``ub`` determines the lower and upper bound for its
             counterpart in `pi`. If `optimization` does not support bounds, these will be ignored.
 
-            By default, if bounds are supported, conditional on :math:`X_2`, :math:`d`, an initial estimate of
-            :math:`\mu`, and the precision of :attr:`options.dtype`, default bounds are chosen to reduce the chance of
-            overflow. If the default bounds are too restrictive, consider rescaling data, removing outliers, or changing
-            :attr:`options.dtype`.
+            By default, if bounds are supported, conditional on :math:`X_2`, :math:`d`, and an initial estimate of
+            :math:`\mu`, default bounds are chosen to reduce the chance of overflow.
 
             Lower and upper bounds corresponding to zeros in `pi` are set to zero. Setting a lower bound equal to an
             upper bound fixes the corresponding element. Both ``None`` and ``numpy.nan`` are converted to ``-numpy.inf``
@@ -280,10 +277,8 @@ class Problem(Economy):
             counterpart in `rho`. If `optimization` does not support bounds, these will be ignored.
 
             By default, if bounds are supported, all elements are bounded from below by ``0``, which corresponds to the
-            simple Logit model. Conditional on an initial estimate of :math:`\mu` and the precision of
-            :attr:`options.dtype`, upper bounds are chosen to reduce the chance of overflow and are less than ``1``
-            because larger values are inconsistent with utility maximization. If the default bounds are too restrictive,
-            consider rescaling data, removing outliers, or changing :attr:`options.dtype`.
+            simple Logit model. Conditional on an initial estimate of :math:`\mu`, upper bounds are chosen to reduce the
+            chance of overflow and are less than ``1`` because larger values are inconsistent with utility maximization.
 
             Lower and upper bounds corresponding to zeros in `rho` are set to zero. Setting a lower bound equal to an
             upper bound fixes the corresponding element. Both ``None`` and ``numpy.nan`` are converted to ``-numpy.inf``
@@ -1136,7 +1131,6 @@ class SupplyProblemMarket(Market):
             value_derivatives, value_derivatives_tensor, probabilities, probabilities_tensor, conditionals,
             conditionals_tensor
         )
-
         A_tensor = -ownership[None] * (capital_lamda_tensor - capital_gamma_tensor)
 
         # compute the product of the tensor and eta
