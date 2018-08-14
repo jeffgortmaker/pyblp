@@ -9,7 +9,8 @@ from . import options, exceptions
 from .configurations import Iteration, Optimization, Formulation
 from .primitives import Products, Agents, Economy, Market, NonlinearParameters, RhoParameter
 from .utilities import (
-    approximately_solve, approximately_invert, output, compute_2sls_weights, Groups, ParallelItems, IV
+    multiply_tensor_and_matrix, multiply_matrix_and_tensor, approximately_solve, approximately_invert, output,
+    compute_2sls_weights, Groups, ParallelItems, IV
 )
 
 
@@ -1135,7 +1136,7 @@ class SupplyProblemMarket(Market):
         A_tensor = -ownership[None] * (capital_lamda_tensor - capital_gamma_tensor)
 
         # compute the product of the tensor and eta
-        A_tensor_times_eta = np.squeeze(A_tensor @ eta)
+        A_tensor_times_eta = np.squeeze(multiply_tensor_and_matrix(A_tensor, eta))
 
         # compute derivatives of X1 and X2 with respect to prices
         X1_derivatives = self.compute_X1_derivatives('prices')
@@ -1197,7 +1198,9 @@ class SupplyProblemMarket(Market):
         diagonal capital lambda matrix with respect to xi.
         """
         tensor = np.zeros((self.J, self.J, self.J), options.dtype)
-        tensor[:, np.arange(self.J), np.arange(self.J)] = np.squeeze(value_derivatives_tensor @ self.agents.weights)
+        tensor[:, np.arange(self.J), np.arange(self.J)] = np.squeeze(
+            multiply_tensor_and_matrix(value_derivatives_tensor, self.agents.weights)
+        )
         if self.H > 0:
             tensor /= 1 - self.rho[None]
         return tensor
@@ -1210,14 +1213,14 @@ class SupplyProblemMarket(Market):
         """
         diagonal_weights = np.diagflat(self.agents.weights)
         tensor = (
-            probabilities_tensor @ (diagonal_weights @ value_derivatives.T) +
-            probabilities @ diagonal_weights @ value_derivatives_tensor.swapaxes(1, 2)
+            multiply_tensor_and_matrix(probabilities_tensor, diagonal_weights @ value_derivatives.T) +
+            multiply_matrix_and_tensor(probabilities @ diagonal_weights, value_derivatives_tensor.swapaxes(1, 2))
         )
         if self.H > 0:
             membership = self.get_membership_matrix()
             tensor += membership[None] * self.rho[None] / (1 - self.rho[None]) * (
-                conditionals_tensor @ (diagonal_weights @ value_derivatives.T) +
-                conditionals @ diagonal_weights @ value_derivatives_tensor.swapaxes(1, 2)
+                multiply_tensor_and_matrix(conditionals_tensor, diagonal_weights @ value_derivatives.T) +
+                multiply_matrix_and_tensor(conditionals @ diagonal_weights, value_derivatives_tensor.swapaxes(1, 2))
             )
         return tensor
 

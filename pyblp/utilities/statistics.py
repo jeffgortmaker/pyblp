@@ -1,11 +1,10 @@
 """Standard statistical routines."""
 
-import warnings
 
 import numpy as np
-import scipy.linalg
 
 from .. import exceptions
+from .algebra import approximately_invert
 
 
 class IV(object):
@@ -101,62 +100,3 @@ def compute_gmm_moment_covariances(g, se_type, clustering_ids):
     if se_type == 'clustered' and clustering_ids.shape[1] > 0:
         return sum(g[clustering_ids.flat == c].T @ g[clustering_ids.flat == c] for c in np.unique(clustering_ids))
     return g.T @ g
-
-
-def precisely_solve(a, b):
-    """Attempt to precisely solve a system of equations."""
-    try:
-        with warnings.catch_warnings():
-            warnings.filterwarnings('error')
-            solved = scipy.linalg.solve(a, b) if b.size > 0 else b
-            successful = True
-    except (ValueError, scipy.linalg.LinAlgError, scipy.linalg.LinAlgWarning):
-        solved = np.full_like(b, np.nan)
-        successful = False
-    return solved, successful
-
-
-def precisely_invert(x):
-    """Attempt to precisely invert a matrix."""
-    try:
-        with warnings.catch_warnings():
-            warnings.filterwarnings('error')
-            inverted = scipy.linalg.inv(x) if x.size > 0 else x
-            successful = True
-    except (ValueError, scipy.linalg.LinAlgError, scipy.linalg.LinAlgWarning):
-        inverted = np.full_like(x, np.nan)
-        successful = False
-    return inverted, successful
-
-
-def approximately_solve(a, b):
-    """Attempt to solve a system of equations with decreasingly precise replacements for the inverse."""
-    try:
-        with warnings.catch_warnings():
-            warnings.filterwarnings('error')
-            solved = scipy.linalg.solve(a, b) if b.size > 0 else b
-            replacement = None
-    except:
-        inverse, replacement = approximately_invert(a)
-        solved = inverse @ b
-    return solved, replacement
-
-
-def approximately_invert(x):
-    """Attempt to invert a matrix with decreasingly precise replacements for the inverse."""
-    try:
-        with warnings.catch_warnings():
-            warnings.filterwarnings('error')
-            inverted = scipy.linalg.inv(x) if x.size > 0 else x
-            replacement = None
-    except ValueError:
-        inverted = np.full_like(x, np.nan)
-        replacement = "null values"
-    except (scipy.linalg.LinAlgError, scipy.linalg.LinAlgWarning):
-        try:
-            inverted = scipy.linalg.pinv(x)
-            replacement = "its Moore-Penrose pseudo inverse"
-        except (scipy.linalg.LinAlgError, scipy.linalg.LinAlgWarning):
-            inverted = np.diag(1 / np.diag(x))
-            replacement = "inverted diagonal terms because the Moore-Penrose pseudo inverse could not be computed"
-    return inverted, replacement
