@@ -136,3 +136,42 @@ In addition to classes and functions, there are also two modules that can be use
 
    options
    data
+
+
+Exceptions
+----------
+
+When errors occur, they will either be displayed as warnings or raised as exceptions.
+
+.. autosummary::
+   :nosignatures:
+   :toctree: api
+   :template: class_without_signature.rst
+
+   exceptions.MultipleErrors
+   exceptions.LargeInitialParametersError
+   exceptions.NonpositiveSharesError
+   exceptions.NonpositiveCostsError
+   exceptions.InvalidParameterCovariancesError
+   exceptions.InvalidMomentCovariancesError
+   exceptions.DeltaFloatingPointError
+   exceptions.CostsFloatingPointError
+   exceptions.SyntheticPricesFloatingPointError
+   exceptions.BertrandNashPricesFloatingPointError
+   exceptions.AbsorptionConvergenceError
+   exceptions.ThetaConvergenceError
+   exceptions.DeltaConvergenceError
+   exceptions.SyntheticPricesConvergenceError
+   exceptions.BertrandNashPricesConvergenceError
+   exceptions.ObjectiveReversionError
+   exceptions.GradientReversionError
+   exceptions.DeltaReversionError
+   exceptions.CostsReversionError
+   exceptions.XiJacobianReversionError
+   exceptions.OmegaJacobianReversionError
+   exceptions.AbsorptionInversionError
+   exceptions.SharesByXiJacobianInversionError
+   exceptions.IntraFirmJacobianInversionError
+   exceptions.LinearParameterCovariancesInversionError
+   exceptions.GMMParameterCovariancesInversionError
+   exceptions.GMMMomentCovariancesInversionError

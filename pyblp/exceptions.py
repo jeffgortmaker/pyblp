@@ -1,5 +1,7 @@
 """Exceptions that are specific to the BLP problem."""
 
+import re
+import inspect
 import collections
 
 import numpy as np
@@ -10,33 +12,59 @@ from .utilities import output
 class _Error(Exception):
     """Common error functionality."""
 
-    def __hash__(self):
-        """Hash this instance such that in collections it is indistinguishable from others with the same message."""
-        return hash((type(self).__name__, str(self)))
-
     def __eq__(self, other):
         """Defer to hashes."""
         return hash(self) == hash(other)
 
+    def __hash__(self):
+        """Hash this instance such that in collections it is indistinguishable from others with the same message."""
+        return hash((type(self).__name__, str(self)))
+
     def __repr__(self):
         """Defer to the string representation."""
         return str(self)
+
+    def __str__(self):
+        """Replace docstring markdown with simple text."""
+        doc = inspect.getdoc(self)
+
+        # normalize LaTeX
+        for match in re.finditer(r':math:`(.+)`', doc):
+            start, end = match.span()
+            doc = doc[:start] + re.sub(r'\s+', ' ', re.sub(r'[\\{}]', ' ', match.group(1))).lower() + doc[end:]
+
+        # normalize references
+        for match in re.finditer(r':ref:`(.+)`', doc):
+            start, end = match.span()
+            doc = doc[:start] + re.sub(r'<.+>', '', match.group(1)) + doc[end:]
+
+        # remove all remaining domains and compress whitespace
+        return re.sub(r'[\s\n]+', ' ', re.sub(r':[a-z\-]+:|`', '', doc))
 
 
 class _MultipleReversionError(_Error):
     """Reversion of problematic elements."""
 
     def __init__(self, bad_indices):
-        """Store a message about the number of non-finite elements."""
-        self.reverted = f"{bad_indices.sum()} out of {bad_indices.size}"
+        """Store element counts."""
+        self.bad = bad_indices.sum()
+        self.total = bad_indices.size
+
+    def __str__(self):
+        """Supplement the error with the counts."""
+        return f"{super().__str__()} Number of reverted elements: {self.bad} out of {self.total}."
 
 
 class _InversionError(_Error):
     """Problems with inverting a matrix."""
 
     def __init__(self, matrix):
-        """Compute and format the condition number of the matrix."""
-        self.condition = output.format_number(np.nan if not np.isfinite(matrix).all() else np.linalg.cond(matrix))
+        """Compute condition number of the matrix."""
+        self.condition = np.nan if not np.isfinite(matrix).all() else np.linalg.cond(matrix)
+
+    def __str__(self):
+        """Supplement the error with the condition number."""
+        return f"{super().__str__()} Condition number: {output.format_number(self.condition)}."
 
 
 class _InversionReplacementError(_InversionError):
@@ -46,6 +74,10 @@ class _InversionReplacementError(_InversionError):
         """Store the replacement description."""
         super().__init__(matrix)
         self.replacement = replacement
+
+    def __str__(self):
+        """Supplement the error with the description."""
+        return f"{super().__str__()} The inverse was replaced with {self.replacement}."
 
 
 class MultipleErrors(_Error):
@@ -67,260 +99,194 @@ class MultipleErrors(_Error):
 
 
 class LargeInitialParametersError(_Error):
-    """Large initial nonlinear parameters encountered."""
+    """Specified initial nonlinear parameters are likely to give rise to overflow during choice probability computation.
 
-    def __str__(self):
-        return (
-            "The specified initial nonlinear parameters are likely to give rise to overflow during choice probability "
-            "computation. Consider choosing smaller initial values, rescaling data, removing outliers, or changing "
-            "options.dtype."
-        )
+    Consider choosing smaller initial values, rescaling data, removing outliers, or changing the floating point
+    precision.
+
+    """
 
 
 class NonpositiveSharesError(_Error):
-    """Nonpositive shares encountered during delta computation."""
+    r"""Encountered nonpositive shares when computing :math:`\delta`.
 
-    def __str__(self):
-        return (
-            "Encountered nonpositive shares when computing delta. This problem can sometimes be mitigated by changing "
-            "initial parameter values, setting more conservative bounds, using a different integration configuration, "
-            "or using a nonlinear fixed point formulation."
-        )
+    This problem can sometimes be mitigated by changing initial parameter values, setting more conservative bounds,
+    using a different integration configuration, or using a nonlinear fixed point formulation.
+
+    """
 
 
 class NonpositiveCostsError(_Error):
-    """Nonpositive marginal costs encountered in a log-linear specification."""
+    """Encountered nonpositive marginal costs in a log-linear specification.
 
-    def __str__(self):
-        return (
-            "Encountered nonpositive marginal costs in a log-linear specification. This problem can sometimes be "
-            "mitigated by bounding costs from below, choosing more reasonable initial parameter values, setting more "
-            "conservative parameter bounds, or using a linear costs specification."
-        )
+    This problem can sometimes be mitigated by bounding costs from below, choosing more reasonable initial parameter
+    values, setting more conservative parameter bounds, or using a linear costs specification.
+
+    """
 
 
 class InvalidParameterCovariancesError(_Error):
-    """Failure to compute standard errors because of invalid estimated covariances of GMM parameters."""
-
-    def __str__(self):
-        return "Failed to compute standard errors because of invalid estimated covariances of GMM parameters."
+    """Failed to compute standard errors because of invalid estimated covariances of GMM parameters."""
 
 
 class InvalidMomentCovariancesError(_Error):
-    """Failure to compute a weighting matrix because of invalid estimated covariances of GMM moments."""
-
-    def __str__(self):
-        return "Failed to compute a weighting matrix because of invalid estimated covariances of GMM moments."
+    """Failed to compute a weighting matrix because of invalid estimated covariances of GMM moments."""
 
 
 class DeltaFloatingPointError(_Error):
-    """Floating point problems with delta computation."""
+    r"""Encountered floating point issues when computing :math:`\delta` or its Jacobian with respect to :math:`\theta`.
 
-    def __str__(self):
-        return (
-            "Encountered floating point issues when computing delta or its Jacobian with respect to theta. This "
-            "problem is often due to prior problems or overflow and can sometimes be mitigated by choosing smaller "
-            "initial parameter values, setting more conservative bounds, rescaling data, removing outliers, or "
-            "changing options.dtype."
-        )
+    This problem is often due to prior problems or overflow and can sometimes be mitigated by choosing smaller initial
+    parameter values, setting more conservative bounds, rescaling data, removing outliers, or changing the floating
+    point precision.
+
+    """
 
 
 class CostsFloatingPointError(_Error):
-    """Floating point problems with marginal cost computation."""
+    r"""Encountered floating point issues when computing marginal costs or their Jacobian with respect to
+    :math:`\theta`.
 
-    def __str__(self):
-        return (
-            "Encountered floating point issues when computing marginal costs or their Jacobian with respect to theta. "
-            "This problem is often due to prior problems or overflow and can sometimes be mitigated by choosing "
-            "smaller initial parameter values, setting more conservative bounds, rescaling data, removing outliers, or "
-            "changing options.dtype."
-        )
+    This problem is often due to prior problems or overflow and can sometimes be mitigated by choosing smaller initial
+    parameter values, setting more conservative bounds, rescaling data, removing outliers, or changing the floating
+    point precision.
+
+    """
 
 
 class SyntheticPricesFloatingPointError(_Error):
-    """Floating point problems with synthetic price computation."""
+    """Encountered floating point issues when computing synthetic prices.
 
-    def __str__(self):
-        return (
-            "Encountered floating point issues when computing synthetic prices. This problem is often due to prior "
-            "problems or overflow and can sometimes be mitigated by making sure that the specified parameters are "
-            "reasonable. For example, the parameters on prices should generally imply a downward sloping demand curve."
-        )
+    This problem is often due to prior problems or overflow and can sometimes be mitigated by making sure that the
+    specified parameters are reasonable. For example, the parameters on prices should generally imply a downward sloping
+    demand curve.
+
+    """
 
 
 class BertrandNashPricesFloatingPointError(_Error):
-    """Floating point problems with Bertrand-Nash price computation."""
+    """Encountered floating point issues when computing Bertrand-Nash prices.
 
-    def __str__(self):
-        return (
-            "Encountered floating point issues when computing Bertrand-Nash prices. This problem is often due to prior "
-            "problems or overflow and can sometimes be mitigated by rescaling data, removing outliers, or changing "
-            "options.dtype."
-        )
+    This problem is often due to prior problems or overflow and can sometimes be mitigated by rescaling data, removing
+    outliers, or changing the floating point precision.
+
+    """
 
 
 class AbsorptionConvergenceError(_Error):
-    """Convergence problems with iterative de-meaning."""
+    """An iterative de-meaning procedure failed to converge when absorbing fixed effects.
 
-    def __str__(self):
-        return (
-            "An iterative de-meaning procedure failed to converge when absorbing fixed effects. This problem can "
-            "sometimes be mitigated by increasing the maximum number of fixed point iterations, increasing the fixed "
-            "point tolerance, configuring other iteration settings, or choosing less complicated sets of fixed effects."
-        )
+    This problem can sometimes be mitigated by increasing the maximum number of fixed point iterations, increasing the
+    fixed point tolerance, configuring other iteration settings, or choosing less complicated sets of fixed effects.
+
+    """
 
 
 class ThetaConvergenceError(_Error):
-    """Convergence problems with theta optimization."""
+    """The optimization routine failed to converge.
 
-    def __str__(self):
-        return (
-            "The optimization routine failed to converge. This problem can sometimes be mitigated by choosing more "
-            "reasonable initial parameter values, setting more conservative bounds, or configuring other optimization "
-            "settings."
-        )
+    This problem can sometimes be mitigated by choosing more reasonable initial parameter values, setting more
+    conservative bounds, or configuring other optimization settings.
+
+    """
 
 
 class DeltaConvergenceError(_Error):
-    """Convergence problems with the fixed point computation of delta."""
+    r"""The fixed point computation of :math:`\delta` failed to converge.
 
-    def __str__(self):
-        return (
-            "The fixed point computation of delta failed to converge. This problem can sometimes be mitigated by "
-            "increasing the maximum number of fixed point iterations, increasing the fixed point tolerance, or "
-            "configuring other iteration settings."
-        )
+    This problem can sometimes be mitigated by increasing the maximum number of fixed point iterations, increasing the
+    fixed point tolerance, or configuring other iteration settings.
+
+    """
 
 
 class SyntheticPricesConvergenceError(_Error):
-    """Convergence problems with the fixed point computation of synthetic prices."""
+    """The fixed point computation of synthetic prices failed to converge.
 
-    def __str__(self):
-        return (
-            "The fixed point computation of synthetic prices failed to converge. This problem can sometimes be "
-            "mitigated by increasing the maximum number of fixed point iterations, increasing the fixed point "
-            "tolerance, configuring other iteration settings, or making sure the specified parameters are reasonable. "
-            "For example, the parameters on prices should generally imply a downward sloping demand curve."
-        )
+    This problem can sometimes be mitigated by increasing the maximum number of fixed point iterations, increasing the
+    fixed point tolerance, configuring other iteration settings, or making sure the specified parameters are reasonable.
+    For example, the parameters on prices should generally imply a downward sloping demand curve.
+
+    """
 
 
 class BertrandNashPricesConvergenceError(_Error):
-    """Convergence problems with the fixed point computation of Bertrand-Nash prices."""
+    """The fixed point computation of Bertrand-Nash prices failed to converge.
 
-    def __str__(self):
-        return (
-            "The fixed point computation of Bertrand-Nash prices failed to converge. This problem can sometimes be "
-            "mitigated by increasing the maximum number of fixed point iterations, increasing the fixed point "
-            "tolerance, or configuring other iteration settings."
-        )
+    This problem can sometimes be mitigated by increasing the maximum number of fixed point iterations, increasing the
+    fixed point tolerance, or configuring other iteration settings.
+
+    """
 
 
 class ObjectiveReversionError(_Error):
-    """Reversion of a problematic objective value."""
-
-    def __str__(self):
-        return "Reverted a problematic GMM objective value."
+    """Reverted a problematic GMM objective value."""
 
 
 class GradientReversionError(_MultipleReversionError):
-    """Reversion of problematic elements in the gradient."""
-
-    def __str__(self):
-        return f"Number of problematic elements in the GMM objective gradient that were reverted: {self.reverted}."
+    """Reverted problematic elements in the GMM objective gradient."""
 
 
 class DeltaReversionError(_MultipleReversionError):
-    """Reversion of problematic elements in delta."""
-
-    def __str__(self):
-        return f"Number of problematic elements in delta that were reverted: {self.reverted}."
+    r"""Reverted problematic elements in :math:`\delta`."""
 
 
 class CostsReversionError(_MultipleReversionError):
-    """Reversion of problematic marginal costs."""
-
-    def __str__(self):
-        return f"Number of problematic marginal costs that were reverted: {self.reverted}."
+    """Reverted problematic marginal costs."""
 
 
 class XiJacobianReversionError(_MultipleReversionError):
-    """Reversion of problematic elements in the Jacobian of xi with respect to theta."""
+    r"""Reverted problematic elements in the Jacobian of :math:`\xi` (equivalently, of :math:`\delta`) with respect to
+    :math:`\theta`.
 
-    def __str__(self):
-        return (
-            f"Number of problematic elements in the Jacobian of xi (equivalently, of delta) with respect to theta that "
-            f"were reverted: {self.reverted}."
-        )
+    """
 
 
 class OmegaJacobianReversionError(_MultipleReversionError):
-    """Reversion of problematic elements in the Jacobian of omega with respect to theta."""
+    r"""Reverted problematic elements in the Jacobian of :math:`\omega` (equivalently, of transformed marginal costs)
+    with respect to :math:`\theta`.
 
-    def __str__(self):
-        return (
-            f"Number of problematic elements in the Jacobian of omega (equivalently, of transformed marginal costs) "
-            f"with respect to theta that were reverted: {self.reverted}."
-        )
+    """
 
 
 class AbsorptionInversionError(_InversionError):
-    """Problems with inversion of the A matrix in Somaini and Wolak (2016)."""
+    """Failed to invert the A matrix from :ref:`Somaini and Wolak (2016) <sw16>` when absorbing two-way fixed effects.
 
-    def __str__(self):
-        return (
-            f"Failed to invert the A matrix from Somaini and Wolak (2016) when absorbing two-way fixed effects. Its "
-            f"condition number is {self.condition}. The formulated fixed effects may be highly collinear."
-        )
+    The formulated fixed effects may be highly collinear.
+
+    """
 
 
 class SharesByXiJacobianInversionError(_InversionReplacementError):
-    """Problems with inversion of the Jacobian of shares with respect to xi."""
+    r"""Failed to invert a Jacobian of shares with respect to :math:`\xi` when computing the Jacobian of :math:`\xi`
+    (equivalently, of :math:`\delta`) with respect to :math:`\theta`.
 
-    def __str__(self):
-        return (
-            f"Failed to invert a Jacobian of shares with respect to xi when computing the Jacobian of xi "
-            f"(equivalently, of delta) with respect to theta. Its condition number is {self.condition} and its inverse "
-            f"was replaced with {self.replacement}."
-        )
+    """
 
 
 class IntraFirmJacobianInversionError(_InversionReplacementError):
-    """Problems with inversion of the intra-firm Jacobian of shares with respect to prices."""
-
-    def __str__(self):
-        return (
-            f"Failed to invert an intra-firm Jacobian of shares with respect to prices when computing eta. Its "
-            f"condition number is {self.condition} and its inverse was replaced with {self.replacement}."
-        )
+    r"""Failed to invert an intra-firm Jacobian of shares with respect to prices when computing :math:`\eta`."""
 
 
 class LinearParameterCovariancesInversionError(_InversionReplacementError):
-    """Problems with inversion of a covariance matrix of linear IV parameters."""
+    """Failed to invert an estimated covariance matrix of linear IV parameters.
 
-    def __str__(self):
-        return (
-            f"Failed to invert an estimated covariance matrix of linear IV parameters. Its condition number is "
-            f"{self.condition} and its inverse was replaced with {self.replacement}. One or more data matrices may be "
-            f"highly collinear."
-        )
+    One or more data matrices may be highly collinear.
+
+    """
 
 
 class GMMParameterCovariancesInversionError(_InversionReplacementError):
-    """Problems with inversion of a covariance matrix of GMM parameters."""
+    """Failed to invert an estimated covariance matrix of GMM parameters.
 
-    def __str__(self):
-        return (
-            f"Failed to invert an estimated covariance matrix of GMM parameters. Its condition number is "
-            f"{self.condition} and its inverse was replaced with {self.replacement}. One or more data matrices may be "
-            f"highly collinear."
-        )
+    One or more data matrices may be highly collinear.
+
+    """
 
 
 class GMMMomentCovariancesInversionError(_InversionReplacementError):
-    """Problems with inversion of a covariance matrix of GMM moments."""
+    """Failed to invert an estimated covariance matrix of GMM moments.
 
-    def __str__(self):
-        return (
-            f"Failed to invert an estimated covariance matrix of GMM moments. Its condition number is {self.condition} "
-            f"and its inverse was replaced with {self.replacement}. One or more data matrices may be highly collinear."
-        )
+    One or more data matrices may be highly collinear.
+
+    """
