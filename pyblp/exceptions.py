@@ -6,7 +6,7 @@ import collections
 
 import numpy as np
 
-from .utilities import output
+from .utilities import format_number
 
 
 class _Error(Exception):
@@ -64,7 +64,7 @@ class _InversionError(_Error):
 
     def __str__(self):
         """Supplement the error with the condition number."""
-        return f"{super().__str__()} Condition number: {output.format_number(self.condition)}."
+        return f"{super().__str__()} Condition number: {format_number(self.condition)}."
 
 
 class _InversionReplacementError(_InversionError):

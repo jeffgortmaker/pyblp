@@ -1,4 +1,4 @@
-"""Loads configuration classes into the top-level configurations namespace."""
+"""Configuration classes."""
 
 from .iteration import Iteration
 from .integration import Integration

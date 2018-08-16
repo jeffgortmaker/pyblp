@@ -1,4 +1,4 @@
-"""Loads public-facing objects into the top-level namespace."""
+"""Public-facing objects."""
 
 from .construction import build_id_data, build_ownership, build_blp_instruments, build_matrix
 from .configurations import Iteration, Integration, Formulation, Optimization

@@ -7,7 +7,7 @@ import numpy as np
 from . import options, exceptions
 from .construction import build_blp_instruments, build_matrix
 from .configurations import Formulation, Iteration, Integration
-from .utilities import output, extract_matrix, Matrices, ParallelItems
+from .utilities import extract_matrix, output, format_seconds, Matrices, ParallelItems
 from .primitives import Products, Agents, Economy, Market, NonlinearParameters, LinearParameters
 
 
@@ -555,8 +555,8 @@ class Simulation(Economy):
         end_time = time.time()
         run_time = end_time - start_time
         output(
-            f"Finished computing prices and shares after {output.format_seconds(run_time)}, a total of {iterations} "
-            f"major iterations, and a total of {evaluations} contraction evaluations."
+            f"Finished computing prices and shares after {format_seconds(run_time)}, a total of {iterations} major "
+            f"iterations, and a total of {evaluations} contraction evaluations."
         )
         return updated_product_data
 

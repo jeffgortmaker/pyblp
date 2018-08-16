@@ -8,7 +8,9 @@ import scipy.linalg
 from . import options, exceptions
 from .configurations import Iteration
 from .primitives import Market, LinearParameters
-from .utilities import output, compute_gmm_se, compute_gmm_weights, ParallelItems
+from .utilities import (
+    compute_gmm_se, compute_gmm_weights, output, format_seconds, format_number, TableFormatter, ParallelItems
+)
 
 
 class Results(object):
@@ -283,7 +285,7 @@ class Results(object):
             ("Total Step", "Time"), ("Objective", "Value"), ("Gradient", "Infinity Norm")
         ]
         widths = [max(len(k1), len(k2), options.digits + 6 if i > 6 else 0) for i, (k1, k2) in enumerate(header)]
-        formatter = output.table_formatter(widths)
+        formatter = TableFormatter(widths)
         sections = [[
             "Results Summary:",
             formatter.line(),
@@ -295,10 +297,10 @@ class Results(object):
                 self.objective_evaluations,
                 self.fp_iterations.sum(),
                 self.contraction_evaluations.sum(),
-                output.format_seconds(self.optimization_time),
-                output.format_seconds(self.total_time),
-                output.format_number(self.objective),
-                output.format_number(self.gradient_norm)
+                format_seconds(self.optimization_time),
+                format_seconds(self.total_time),
+                format_number(self.objective),
+                format_number(self.gradient_norm)
             ]),
             formatter.line()
         ]]
@@ -385,7 +387,7 @@ class Results(object):
 
         # output how long it took to compute results
         end_time = time.time()
-        output(f"Finished after {output.format_seconds(end_time - start_time)}.")
+        output(f"Finished after {format_seconds(end_time - start_time)}.")
         output("")
         return combined
 

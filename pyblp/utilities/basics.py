@@ -6,6 +6,8 @@ import multiprocessing
 
 import numpy as np
 
+from .. import options
+
 
 def extract_matrix(structured_array_like, key):
     """Attempt to extract a field from a structured array-like object or horizontally stack field0, field1, and so on,
@@ -49,6 +51,59 @@ def extract_size(structured_array_like):
         f"Failed to get the number of rows in the structured array-like object of type {type(structured_array_like)}. "
         f"Try using a dictionary, a NumPy structured array, a Pandas DataFrame, or any other standard type."
     )
+
+
+def output(message):
+    """Print a message if verbosity is turned on."""
+    if options.verbose:
+        if not callable(options.verbose_output):
+            raise TypeError("options.verbose_output should be callable.")
+        options.verbose_output(str(message))
+
+
+def format_seconds(seconds):
+    """Prepare a number of seconds to be displayed as a string."""
+    return str(datetime.timedelta(seconds=int(round(seconds))))
+
+
+def format_number(number):
+    """Prepare a number to be displayed as a string."""
+    if number is None or np.isnan(number):
+        return "NA"
+    if not isinstance(options.digits, int):
+        raise TypeError("options.digits must be an int.")
+    template = f"{{:+.{options.digits - 1}E}}"
+    return template.format(float(number))
+
+
+def format_se(se):
+    """Prepare a standard error to be displayed as a string."""
+    return f"({format_number(se)})"
+
+
+class TableFormatter(object):
+    """Formatter of tables with fixed-width columns."""
+
+    def __init__(self, widths, line_indices=()):
+        """Build the table's template string, which has fixed widths and vertical lines after specified indices."""
+        parts = ["{{:^{}}}{}".format(w, "  |" if i in line_indices else "") for i, w in enumerate(widths)]
+        self.template = "  ".join(parts)
+        self.widths = widths
+
+    def __call__(self, values, underline=False):
+        """Construct a row. If underline is True, construct a second row of underlines."""
+        formatted = self.template.format(*map(str, list(values) + [""] * (len(self.widths) - len(values))))
+        if underline:
+            return "\n".join([formatted, self(["-" * w for w in self.widths[:len(values)]])])
+        return formatted
+
+    def blank(self):
+        """Construct a blank row."""
+        return self([""] * len(self.widths))
+
+    def line(self):
+        """Construct a horizontal line."""
+        return "=" * len(self.blank())
 
 
 class Groups(object):
@@ -162,62 +217,3 @@ class ParallelItems(object):
             self.out_queue.put((key, self.method(*args)))
             with self.remaining.get_lock():
                 self.remaining.value -= 1
-
-
-class Output(object):
-    """Output standardization."""
-
-    def __init__(self, options):
-        """Store options that configure verbosity and the number of digits to display."""
-        self.options = options
-
-    def __call__(self, message):
-        """Print a message if verbose."""
-        if self.options.verbose:
-            self.options.verbose_output(str(message))
-
-    @staticmethod
-    def table_formatter(widths, line_indices=()):
-        """Initialize a TableFormatter."""
-        return TableFormatter(widths, line_indices)
-
-    @staticmethod
-    def format_seconds(seconds):
-        """Prepare a number of seconds to be displayed as a string."""
-        return str(datetime.timedelta(seconds=int(round(seconds))))
-
-    def format_number(self, number):
-        """Prepare a number to be displayed as a string."""
-        if number is None or np.isnan(number):
-            return "NA"
-        template = f"{{:+.{self.options.digits - 1}E}}"
-        return template.format(float(number))
-
-    def format_se(self, se):
-        """Prepare a standard error to be displayed as a string."""
-        return f"({self.format_number(se)})"
-
-
-class TableFormatter(object):
-    """Formatter of tables with fixed-width columns."""
-
-    def __init__(self, widths, line_indices):
-        """Build the table's template string, which has fixed widths and vertical lines after specified indices."""
-        parts = ["{{:^{}}}{}".format(w, "  |" if i in line_indices else "") for i, w in enumerate(widths)]
-        self.template = "  ".join(parts)
-        self.widths = widths
-
-    def __call__(self, values, underline=False):
-        """Construct a row. If underline is True, construct a second row of underlines."""
-        formatted = self.template.format(*map(str, list(values) + [""] * (len(self.widths) - len(values))))
-        if underline:
-            return "\n".join([formatted, self(["-" * w for w in self.widths[:len(values)]])])
-        return formatted
-
-    def blank(self):
-        """Construct a blank row."""
-        return self([""] * len(self.widths))
-
-    def line(self):
-        """Construct a horizontal line."""
-        return "=" * len(self.blank())

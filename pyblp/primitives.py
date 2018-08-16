@@ -9,7 +9,10 @@ import numpy.lib.recfunctions
 
 from . import options, exceptions
 from .configurations import Formulation, Integration
-from .utilities import approximately_solve, output, extract_matrix, Matrices, Groups
+from .utilities import (
+    approximately_solve, extract_matrix, output, format_seconds, format_number, format_se, TableFormatter, Matrices,
+    Groups
+)
 
 
 class Products(Matrices):
@@ -316,7 +319,7 @@ class Economy(object):
             if X1_errors or ZD_errors:
                 raise exceptions.MultipleErrors(X1_errors + ZD_errors)
             end_time = time.time()
-            output(f"Absorbed demand-side fixed effects after {output.format_seconds(end_time - start_time)}.")
+            output(f"Absorbed demand-side fixed effects after {format_seconds(end_time - start_time)}.")
 
         # absorb any supply-side fixed effects
         self._absorb_supply_ids = None
@@ -330,7 +333,7 @@ class Economy(object):
             if X3_errors or ZS_errors:
                 raise exceptions.MultipleErrors(X3_errors + ZS_errors)
             end_time = time.time()
-            output(f"Absorbed supply-side fixed effects after {output.format_seconds(end_time - start_time)}.")
+            output(f"Absorbed supply-side fixed effects after {format_seconds(end_time - start_time)}.")
 
     def __str__(self):
         """Format economy information as a string."""
@@ -358,7 +361,7 @@ class Economy(object):
 
         # build a dimensions section
         dimension_widths = [max(len(n), len(str(d))) for n, d in dimension_mapping.items()]
-        dimension_formatter = output.table_formatter(dimension_widths)
+        dimension_formatter = TableFormatter(dimension_widths)
         dimension_section = [
             "Dimensions:",
             dimension_formatter.line(),
@@ -377,7 +380,7 @@ class Economy(object):
                 if len(formulation) > index:
                     column_width = max(column_width, len(str(formulation[index])))
             formulation_widths.append(column_width)
-        formulation_formatter = output.table_formatter(formulation_widths)
+        formulation_formatter = TableFormatter(formulation_widths)
         formulation_section = [
             "Formulations:",
             formulation_formatter.line(),
@@ -1023,7 +1026,7 @@ class NonlinearParameters(object):
                 line_indices = {len(widths) - 1}
                 header.extend(["Pi:"] + self.demographics_labels)
                 widths.extend([widths[0]] + [max(len(k), options.digits + 8) for k in header[len(widths) + 1:]])
-            formatter = output.table_formatter(widths, line_indices)
+            formatter = TableFormatter(widths, line_indices)
 
             # build the top of the table
             lines.extend([formatter.line(), formatter(header, underline=True)])
@@ -1033,11 +1036,11 @@ class NonlinearParameters(object):
                 # the row is a label, blanks for sigma's lower triangle, sigma values, the label again, and pi values
                 values_row = [row_label] + [""] * row_index
                 for column_index in range(row_index, sigma_like.shape[1]):
-                    values_row.append(output.format_number(sigma_like[row_index, column_index]))
+                    values_row.append(format_number(sigma_like[row_index, column_index]))
                 if pi_like.shape[1] > 0:
                     values_row.append(row_label)
                     for column_index in range(pi_like.shape[1]):
-                        values_row.append(output.format_number(pi_like[row_index, column_index]))
+                        values_row.append(format_number(pi_like[row_index, column_index]))
                 lines.append(formatter(values_row))
 
                 # construct a row of standard errors for unfixed parameters
@@ -1057,12 +1060,12 @@ class NonlinearParameters(object):
                     se_row = [""] * (1 + row_index)
                     for column_index in range(row_index, sigma_se_like.shape[1]):
                         se = sigma_se_like[row_index, column_index]
-                        se_row.append(output.format_se(se) if column_index in unfixed_sigma_indices else "")
+                        se_row.append(format_se(se) if column_index in unfixed_sigma_indices else "")
                     if pi_se_like.shape[1] > 0:
                         se_row.append("")
                         for column_index in range(pi_se_like.shape[1]):
                             se = pi_se_like[row_index, column_index]
-                            se_row.append(output.format_se(se) if column_index in unfixed_pi_indices else "")
+                            se_row.append(format_se(se) if column_index in unfixed_pi_indices else "")
 
                     # format the row of values and add an additional blank line if there is another row of values
                     lines.append(formatter(se_row))
@@ -1076,7 +1079,7 @@ class NonlinearParameters(object):
         if rho_like.size > 0:
             rho_header = ["Rho:"] + (self.group_labels if rho_like.size > 1 else ["All Groups"])
             rho_widths = [len(rho_header[0])] + [max(len(k), options.digits + 8) for k in rho_header[1:]]
-            rho_formatter = output.table_formatter(rho_widths)
+            rho_formatter = TableFormatter(rho_widths)
 
             # build the top of the table, replacing the top and bottom of the table for sigma and pi if necessary
             if not lines:
@@ -1092,12 +1095,12 @@ class NonlinearParameters(object):
                     unfixed_rho_indices.add(parameter.location[0])
 
             # build the content of the table
-            lines.append(rho_formatter([""] + [output.format_number(x) for x in rho_like]))
+            lines.append(rho_formatter([""] + [format_number(x) for x in rho_like]))
             if rho_se_like is not None:
                 se_row = [""]
                 for row_index in range(rho_se_like.shape[0]):
                     se = rho_se_like[row_index]
-                    se_row.append(output.format_se(se) if row_index in unfixed_rho_indices else "")
+                    se_row.append(format_se(se) if row_index in unfixed_rho_indices else "")
                 lines.append(rho_formatter(se_row))
 
             # build the bottom of the table
@@ -1205,24 +1208,24 @@ class LinearParameters(object):
 
         # build the table formatter
         widths = [max(w) for w in itertools.zip_longest(beta_widths, gamma_widths, fillvalue=0)]
-        formatter = output.table_formatter(widths)
+        formatter = TableFormatter(widths)
 
         # build the table
         lines.extend([
             formatter.line(),
             formatter(beta_header, underline=True),
-            formatter([""] + [output.format_number(x) for x in beta_like])
+            formatter([""] + [format_number(x) for x in beta_like])
         ])
         if beta_se_like is not None:
-            lines.append(formatter([""] + [output.format_se(x) for x in beta_se_like]))
+            lines.append(formatter([""] + [format_se(x) for x in beta_se_like]))
         if gamma_like.size > 0:
             lines.extend([
                 formatter.line(),
                 formatter(gamma_header, underline=True),
-                formatter([""] + [output.format_number(x) for x in gamma_like])
+                formatter([""] + [format_number(x) for x in gamma_like])
             ])
             if gamma_se_like is not None:
-                lines.append(formatter([""] + [output.format_se(x) for x in gamma_se_like]))
+                lines.append(formatter([""] + [format_se(x) for x in gamma_se_like]))
         lines.append(formatter.line())
 
         # combine the lines into one string

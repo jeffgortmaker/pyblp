@@ -9,8 +9,8 @@ from . import options, exceptions
 from .configurations import Iteration, Optimization, Formulation
 from .primitives import Products, Agents, Economy, Market, NonlinearParameters, RhoParameter
 from .utilities import (
-    multiply_tensor_and_matrix, multiply_matrix_and_tensor, approximately_solve, approximately_invert, output,
-    compute_2sls_weights, Groups, ParallelItems, IV
+    multiply_tensor_and_matrix, multiply_matrix_and_tensor, approximately_solve, approximately_invert,
+    compute_2sls_weights, output, format_seconds, format_number, TableFormatter, Groups, ParallelItems, IV
 )
 
 
@@ -582,7 +582,7 @@ class Problem(Economy):
                 if not converged:
                     self._handle_errors(error_behavior, [exceptions.ThetaConvergenceError()])
                 output("")
-                output(f"Optimization {status} after {output.format_seconds(optimization_time)}.")
+                output(f"Optimization {status} after {format_seconds(optimization_time)}.")
 
             # use objective information computed at the optimal theta to compute results for the step
             output("")
@@ -593,7 +593,7 @@ class Problem(Economy):
                 evaluations + 1, wrapper.iteration_mappings, wrapper.evaluation_mappings, center_moments, se_type
             )
             self._handle_errors(error_behavior, results._errors)
-            output(f"Computed results after {output.format_seconds(results.total_time - results.optimization_time)}.")
+            output(f"Computed results after {format_seconds(results.total_time - results.optimization_time)}.")
             output("")
             output(results)
 
@@ -899,7 +899,7 @@ class ObjectiveInfo(object):
         # build the formatter of the universal display
         widths = [max(len(k1), len(k2), options.digits + 6 if i > 4 else 0) for i, (k1, k2) in enumerate(header[:-1])]
         widths.append(max(len(header[-1][0]), len(header[-1][1]), self.theta.size * (options.digits + 8) - 2))
-        formatter = output.table_formatter(widths)
+        formatter = TableFormatter(widths)
 
         # if this is the first iteration, include the header
         if optimization._universal_display and current_evaluations == 1:
@@ -925,15 +925,15 @@ class ObjectiveInfo(object):
                 current_evaluations,
                 sum(self.iteration_mapping.values()),
                 sum(self.evaluation_mapping.values()),
-                output.format_number(self.objective),
-                output.format_number(smallest_objective - self.objective) if objective_improved else "",
+                format_number(self.objective),
+                format_number(smallest_objective - self.objective) if objective_improved else "",
             ]
             if optimization._compute_gradient:
                 values.extend([
-                    output.format_number(self.gradient_norm),
-                    output.format_number(smallest_gradient_norm - self.gradient_norm) if gradient_improved else "",
+                    format_number(self.gradient_norm),
+                    format_number(smallest_gradient_norm - self.gradient_norm) if gradient_improved else "",
                 ])
-            values.append(", ".join(output.format_number(x) for x in self.theta))
+            values.append(", ".join(format_number(x) for x in self.theta))
             lines.append(formatter(values))
 
         # combine the lines into one string
