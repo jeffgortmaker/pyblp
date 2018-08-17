@@ -5,6 +5,7 @@ from .configurations import Iteration, Integration, Formulation, Optimization
 from .primitives import Products, Agents
 from .simulation import Simulation
 from .version import __version__
+from .utilities import parallel
 from .problem import Problem
 from .results import Results
 from . import data, options

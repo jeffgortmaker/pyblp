@@ -1,12 +1,107 @@
 """Basic functionality."""
 
+import time
 import datetime
-import itertools
+import contextlib
 import multiprocessing
 
 import numpy as np
 
 from .. import options
+
+
+@contextlib.contextmanager
+def parallel(processes):
+    """Context manager used for parallel processing in a ``with`` statement context.
+
+    This manager creates a a context in which a pool of Python processes will be used by any of the following methods,
+    which all support parallel processing:
+
+        - :meth:`Simulation.solve`
+        - :meth:`Problem.solve`
+        - Any method in :class:`Results`.
+
+    These methods, which perform market-by-market computation, will distribute their work among the processes.
+    After the context created by the ``with`` statement ends, all worker processes in the pool will be terminated.
+    Outside of this context, such methods will not use multiprocessing.
+
+    Importantly, multiprocessing will only improve speed if gains from parallelization outweigh overhead from
+    serializing and passing data between processes. For example, if computation for a single market is very fast and
+    there is a lot of data in each market that must be serialized and passed between processes, using multiprocessing
+    may reduce overall speed.
+
+    Arguments
+    ---------
+    processes : `int`
+        Number of Python processes that will be created and used by any method that supports parallel processing.
+
+    Example
+    -------
+    The following code uses multiprocessing to solve a very simple problem with some of the automobile product data from
+    :ref:`Berry, Levinsohn, and Pakes (1995) <blp95>`. The same process pool is then used to compute elasticities. Since
+    this problem uses a small dataset, there are no gains from parallelization.
+
+    .. ipython:: python
+
+       products = np.recfromcsv(pyblp.data.BLP_PRODUCTS_LOCATION)
+       products = {n: products[n] for n in products.dtype.names}
+       products['demand_instruments'] = pyblp.build_blp_instruments(
+           pyblp.Formulation('hpwt + air + mpg + space'),
+           products
+       )
+       problem = pyblp.Problem(
+           product_formulations=(
+               pyblp.Formulation('prices + hpwt + air + mpg + space'),
+               pyblp.Formulation('hpwt + air')
+           ),
+           product_data=products,
+           integration=pyblp.Integration('monte_carlo', 50, seed=0)
+       )
+       initial_sigma = np.eye(3)
+       with pyblp.parallel(2):
+           results = problem.solve(initial_sigma, steps=1)
+           elasticities = results.compute_elasticities()
+       results
+       elasticities
+
+    """
+
+    # validate the number of processes
+    if not isinstance(processes, int):
+        raise TypeError("processes must be an int.")
+    if processes < 2:
+        raise ValueError("processes must be at least 2.")
+
+    # start the process pool, wait for work to be done, and then terminate it
+    output(f"Starting a pool of {processes} processes ...")
+    start_time = time.time()
+    with multiprocessing.Pool(processes) as parallel._pool:
+        output(f"Started the process pool after {format_seconds(time.time() - start_time)}.")
+        yield
+        output(f"Terminating the pool of {processes} processes ...")
+        terminate_time = time.time()
+    del parallel._pool
+    output(f"Terminated the process pool after {format_seconds(time.time() - terminate_time)}.")
+
+
+def generate_items(keys, factory, method):
+    """Generate (key, method(*factory(key))) tuples for each key. The first element returned by factory is an instance
+    of the class to which method is attached. If parallel._pool is initialized, use multiprocessing; otherwise, use
+    serial processing.
+    """
+    try:
+        generate = parallel._pool.imap_unordered
+    except AttributeError:
+        generate = map
+    return generate(generate_items_worker, ((k, factory(k), method) for k in keys))
+
+
+def generate_items_worker(args):
+    """Call the the specified method of a class instance with any additional arguments. Return the associated key along
+    with the returned object.
+    """
+    key, (instance, *method_args), method = args
+    return key, method(instance, *method_args)
 
 
 def extract_matrix(structured_array_like, key):
@@ -152,68 +247,3 @@ class Matrices(np.recarray):
         for dtype, matrix in zip(dtypes, matrices):
             self[dtype[0] if isinstance(dtype[0], str) else dtype[0][1]] = matrix
         return self
-
-
-class ParallelItems(object):
-    """Generator that passes keys to a factory function, which returns a corresponding (instance, *arguments) tuple;
-    yields items from a mapping of the keys to objects returned in parallel from a method of the instance, which is
-    passed the arguments returned by the factory. Used in a with clause.
-    """
-
-    def __init__(self, keys, factory, method, processes):
-        """Initialize class attributes."""
-        self.keys = keys
-        self.factory = factory
-        self.method = method
-        self.processes = processes
-        self.process_objects = []
-        self.in_queue = self.out_queue = self.remaining = None
-
-    def __enter__(self):
-        """If there is only one process, return a generator that iteratively creates and passes arguments to the method.
-        Otherwise, fill an "in" queue with factory-created items, start processes that fill an "out" queue, and return a
-        generator that gets method-processed items from the "out" queue.
-        """
-        if self.processes == 1:
-            return ((k, self.method(*self.factory(k))) for k in self.keys)
-
-        # start with an empty "out" queue and fill an "in" queue with keys corresponding to factory-created arguments
-        self.in_queue = multiprocessing.Queue()
-        self.out_queue = multiprocessing.Queue()
-        for key in self.keys:
-            self.in_queue.put((key, self.factory(key)))
-
-        # destroy the factory, which does not need to be pickled
-        self.factory = None
-
-        # share the number of remaining items between processes
-        self.remaining = multiprocessing.Value('i', len(self.keys))
-
-        # define a function to generate processes that fill the "out" queue by calling this same class (__call__ is used
-        #   because the multiprocessing module can only pickle methods in the module-level namespace)
-        def generate():
-            while True:
-                process = multiprocessing.Process(target=self)
-                process.daemon = True
-                process.start()
-                yield process
-
-        # start the processes and return a generator that gets items from the "out" queue
-        self.process_objects = list(itertools.islice(generate(), self.processes))
-        return (self.out_queue.get() for _ in self.keys)
-
-    def __exit__(self, *_):
-        """Terminate any remaining processes."""
-        for process in self.process_objects:
-            try:
-                process.terminate()
-            except:
-                pass
-
-    def __call__(self):
-        """Get items from the "in" queue and put items processed by the method into the "out" queue."""
-        while self.remaining.value > 0:
-            key, args = self.in_queue.get()
-            self.out_queue.put((key, self.method(*args)))
-            with self.remaining.get_lock():
-                self.remaining.value -= 1

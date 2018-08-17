@@ -10,7 +10,7 @@ from .configurations import Iteration, Optimization, Formulation
 from .primitives import Products, Agents, Economy, Market, NonlinearParameters, RhoParameter
 from .utilities import (
     multiply_tensor_and_matrix, multiply_matrix_and_tensor, approximately_solve, approximately_invert,
-    compute_2sls_weights, output, format_seconds, format_number, TableFormatter, Groups, ParallelItems, IV
+    compute_2sls_weights, generate_items, output, format_seconds, format_number, TableFormatter, Groups, IV
 )
 
 
@@ -162,7 +162,7 @@ class Problem(Economy):
        products = {n: products[n] for n in products.dtype.names}
        products['demand_instruments'] = pyblp.build_blp_instruments(
            pyblp.Formulation('hpwt + air + mpg + space'),
-            products
+           products
        )
        problem = pyblp.Problem(
            product_formulations=(
@@ -199,7 +199,7 @@ class Problem(Economy):
     def solve(self, sigma=None, pi=None, rho=None, sigma_bounds=None, pi_bounds=None, rho_bounds=None, delta=None,
               WD=None, WS=None, steps=2, optimization=None, error_behavior='revert', error_punishment=1,
               delta_behavior='last', iteration=None, fp_type='linear', costs_type='linear', costs_bounds=None,
-              se_type='robust', center_moments=True, processes=1):
+              se_type='robust', center_moments=True):
         r"""Solve the problem.
 
         The problem is solved in one or more GMM steps. During each step, any unfixed nonlinear parameters in
@@ -211,6 +211,13 @@ class Problem(Economy):
         If a supply side is to be estimated, marginal costs, :math:`c(\hat{\theta})`, are also computed
         market-by-market. Linear parameters are then estimated, which are used to recover structural error terms, which
         in turn are used to form the objective value. By default, the objective gradient is computed as well.
+
+        .. note::
+
+           This method supports :func:`parallel` processing. If multiprocessing is used, market-by-market computation of
+           :math:`\delta(\hat{\theta})` and, if :math:`X_3` was formulated by `product_formulations` in
+           :class:`Problem`, of :math:`\tilde{c}(\hat{\theta})`, along with associated Jacobians, will be distributed
+           among the processes.
 
         Parameters
         ----------
@@ -410,13 +417,6 @@ class Problem(Economy):
         center_moments : `bool, optional`
             Whether to center the sample moments before using them to update weighting matrices. By default, sample
             moments are centered.
-        processes : `int, optional`
-            Number of Python processes that will be used during estimation. By default, multiprocessing will not be
-            used. For values greater than one, a pool of that many Python processes will be created during each
-            GMM objective evaluation. Market-by-market computation of :math:`\delta(\hat{\theta})` and, if :math:`X_3`
-            was formulated by `product_formulations` in :class:`Problem`, of :math:`\tilde{c}(\hat{\theta})`, along with
-            associated Jacobians, will be distributed among these processes. Using multiprocessing will only improve
-            estimation speed if gains from parallelization outweigh overhead from creating process pools.
 
         Returns
         -------
@@ -541,7 +541,7 @@ class Problem(Economy):
             # wrap computation of objective information with step-specific information
             compute_step_info = functools.partial(
                 self._compute_objective_info, nonlinear_parameters, demand_iv, supply_iv, WD, WS, error_behavior,
-                error_punishment, delta_behavior, iteration, fp_type, costs_type, costs_bounds, processes
+                error_punishment, delta_behavior, iteration, fp_type, costs_type, costs_bounds
             )
 
             # define the objective function for the optimization routine, which also outputs progress updates
@@ -612,8 +612,8 @@ class Problem(Economy):
             step_start_time = time.time()
 
     def _compute_objective_info(self, nonlinear_parameters, demand_iv, supply_iv, WD, WS, error_behavior,
-                                error_punishment, delta_behavior, iteration, fp_type, costs_type, costs_bounds,
-                                processes, theta, last_objective_info, compute_gradient):
+                                error_punishment, delta_behavior, iteration, fp_type, costs_type, costs_bounds, theta,
+                                last_objective_info, compute_gradient):
         """Compute demand- and supply-side contributions. Then, form the GMM objective value and its gradient. Finally,
         handle any errors that were encountered before structuring relevant objective information.
         """
@@ -622,7 +622,7 @@ class Problem(Economy):
         # compute demand-side contributions
         true_delta, true_xi_jacobian, delta, xi_jacobian, beta, true_xi, iterations, evaluations, demand_errors = (
             self._compute_demand_contributions(
-                nonlinear_parameters, demand_iv, iteration, fp_type, processes, sigma, pi, rho, last_objective_info,
+                nonlinear_parameters, demand_iv, iteration, fp_type, sigma, pi, rho, last_objective_info,
                 compute_gradient
             )
         )
@@ -635,8 +635,8 @@ class Problem(Economy):
         if self.K3 > 0:
             true_tilde_costs, true_omega_jacobian, tilde_costs, omega_jacobian, gamma, true_omega, supply_errors = (
                 self._compute_supply_contributions(
-                    nonlinear_parameters, demand_iv, supply_iv, costs_type, costs_bounds, processes, beta, sigma, pi,
-                    rho, true_delta, true_xi_jacobian, xi_jacobian, last_objective_info, compute_gradient
+                    nonlinear_parameters, demand_iv, supply_iv, costs_type, costs_bounds, beta, sigma, pi, rho,
+                    true_delta, true_xi_jacobian, xi_jacobian, last_objective_info, compute_gradient
                 )
             )
 
@@ -693,8 +693,8 @@ class Problem(Economy):
             beta, gamma, iterations, evaluations, errors
         )
 
-    def _compute_demand_contributions(self, nonlinear_parameters, demand_iv, iteration, fp_type, processes, sigma, pi,
-                                      rho, last_objective_info, compute_gradient):
+    def _compute_demand_contributions(self, nonlinear_parameters, demand_iv, iteration, fp_type, sigma, pi, rho,
+                                      last_objective_info, compute_gradient):
         """Compute delta and the Jacobian of xi (equivalently, of delta) with respect to theta market-by-market. If
         necessary, revert problematic elements to their last values. Lastly, recover beta and compute xi.
         """
@@ -717,11 +717,11 @@ class Problem(Economy):
                 return market_s, initial_delta_s, nonlinear_parameters, iteration, fp_type, compute_gradient
 
             # compute delta and its Jacobian market-by-market
-            with ParallelItems(self.unique_market_ids, market_factory, DemandProblemMarket.solve, processes) as items:
-                for t, (true_delta_t, true_xi_jacobian_t, errors_t, iterations[t], evaluations[t]) in items:
-                    true_delta[self.products.market_ids.flat == t] = true_delta_t
-                    true_xi_jacobian[self.products.market_ids.flat == t] = true_xi_jacobian_t
-                    errors.extend(errors_t)
+            generator = generate_items(self.unique_market_ids, market_factory, DemandProblemMarket.solve)
+            for t, (true_delta_t, true_xi_jacobian_t, errors_t, iterations[t], evaluations[t]) in generator:
+                true_delta[self.products.market_ids.flat == t] = true_delta_t
+                true_xi_jacobian[self.products.market_ids.flat == t] = true_xi_jacobian_t
+                errors.extend(errors_t)
 
         # replace invalid elements in delta with their last values
         bad_indices = ~np.isfinite(true_delta)
@@ -750,9 +750,9 @@ class Problem(Economy):
         beta, true_xi = demand_iv.estimate(delta)
         return true_delta, true_xi_jacobian, delta, xi_jacobian, beta, true_xi, iterations, evaluations, errors
 
-    def _compute_supply_contributions(self, nonlinear_parameters, demand_iv, supply_iv, costs_type, costs_bounds,
-                                      processes, beta, sigma, pi, rho, true_delta, true_xi_jacobian, xi_jacobian,
-                                      last_objective_info, compute_gradient):
+    def _compute_supply_contributions(self, nonlinear_parameters, demand_iv, supply_iv, costs_type, costs_bounds, beta,
+                                      sigma, pi, rho, true_delta, true_xi_jacobian, xi_jacobian, last_objective_info,
+                                      compute_gradient):
         """Compute transformed marginal costs and the Jacobian of omega (equivalently, of transformed marginal costs)
         with respect to theta market-by-market. If necessary, revert problematic elements to their last values. Lastly,
         recover gamma and compute omega.
@@ -780,11 +780,11 @@ class Problem(Economy):
             )
 
         # compute transformed marginal costs and their Jacobian market-by-market
-        with ParallelItems(self.unique_market_ids, market_factory, SupplyProblemMarket.solve, processes) as items:
-            for t, (true_tilde_costs_t, true_omega_jacobian_t, errors_t) in items:
-                true_tilde_costs[self.products.market_ids.flat == t] = true_tilde_costs_t
-                true_omega_jacobian[self.products.market_ids.flat == t] = true_omega_jacobian_t
-                errors.extend(errors_t)
+        generator = generate_items(self.unique_market_ids, market_factory, SupplyProblemMarket.solve)
+        for t, (true_tilde_costs_t, true_omega_jacobian_t, errors_t) in generator:
+            true_tilde_costs[self.products.market_ids.flat == t] = true_tilde_costs_t
+            true_omega_jacobian[self.products.market_ids.flat == t] = true_omega_jacobian_t
+            errors.extend(errors_t)
 
         # replace invalid transformed marginal costs with their last values
         bad_indices = ~np.isfinite(true_tilde_costs)

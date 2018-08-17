@@ -9,7 +9,7 @@ from . import options, exceptions
 from .configurations import Iteration
 from .primitives import Market, LinearParameters
 from .utilities import (
-    compute_gmm_se, compute_gmm_weights, output, format_seconds, format_number, TableFormatter, ParallelItems
+    compute_gmm_se, compute_gmm_weights, generate_items, output, format_seconds, format_number, TableFormatter
 )
 
 
@@ -18,11 +18,10 @@ class Results(object):
 
     Many results are class attributes. Other post-estimation outputs be computed by calling class methods.
 
-    Most class method have a `processes` argument, which determines the number of Python processes that will be used
-    when computing a post-estimation output. By default, multiprocessing will not be used. For values greater than one,
-    a pool of that many Python processes will be created. Market-by-market computation of the post-estimation output
-    will be distributed among these processes. Using multiprocessing will only improve computation speed if gains from
-    parallelization outweigh overhead from creating the process pool.
+    .. note::
+
+       All methods in this class support :func:`parallel` processing. If multiprocessing is used, market-by-market
+       computation of each post-estimation output will be distributed among the processes.
 
     Attributes
     ----------
@@ -91,7 +90,7 @@ class Results(object):
     pi_bounds : `tuple`
         Bounds for :math:`\Pi` that were used during optimization, which are of the form ``(lb, ub)``.
     rho_bounds : `tuple`
-        Bounds for :math:`\Rho` that were used during optimization, which are of the form ``(lb, ub)``.
+        Bounds for :math:`\rho` that were used during optimization, which are of the form ``(lb, ub)``.
     delta : `ndarray`
         Estimated mean utility, :math:`\delta(\hat{\theta})`, which may have been residualized to absorb any demand-side
         fixed effects.
@@ -343,9 +342,8 @@ class Results(object):
         if name not in names:
             raise NameError(f"The name '{name}' is not one of the underlying variables, {list(sorted(names))}.")
 
-    def _combine_results(self, compute_market_results, fixed_args, market_args, processes=1):
-        """Compute post-estimation outputs for each market and stack them into a single matrix. Multiprocessing can be
-        used to compute outputs in parallel.
+    def _combine_results(self, compute_market_results, fixed_args, market_args):
+        """Compute post-estimation outputs for each market and stack them into a single matrix
 
         An output for a single market is computed by passing fixed_args (identical for all markets) and market_args
         (matrices with as many rows as there are products that are restricted to the market) to compute_market_results,
@@ -366,12 +364,11 @@ class Results(object):
         errors = []
         rows = columns = 0
         matrix_mapping = {}
-        with ParallelItems(self.unique_market_ids, market_factory, compute_market_results, processes) as items:
-            for t, (array_t, errors_t) in items:
-                errors.extend(errors_t)
-                matrix_mapping[t] = np.c_[array_t]
-                rows += matrix_mapping[t].shape[0]
-                columns = max(columns, matrix_mapping[t].shape[1])
+        for t, (array_t, errors_t) in generate_items(self.unique_market_ids, market_factory, compute_market_results):
+            errors.extend(errors_t)
+            matrix_mapping[t] = np.c_[array_t]
+            rows += matrix_mapping[t].shape[0]
+            columns = max(columns, matrix_mapping[t].shape[1])
 
         # output a warning about any errors
         if errors:
@@ -391,7 +388,7 @@ class Results(object):
         output("")
         return combined
 
-    def compute_aggregate_elasticities(self, factor=0.1, name='prices', processes=1):
+    def compute_aggregate_elasticities(self, factor=0.1, name='prices'):
         r"""Estimate aggregate elasticities of demand, :math:`E`, with respect to a variable, :math:`x`.
 
         In market :math:`t`, the aggregate elasticity of demand is
@@ -407,8 +404,6 @@ class Results(object):
             The scalar factor, :math:`\Delta`.
         name : `str, optional`
             Name of the variable, :math:`x`. By default, :math:`x = p`, prices.
-        processes : `int, optional`
-            Number of Python processes that will be used during computation.
 
         Returns
         -------
@@ -419,9 +414,9 @@ class Results(object):
         """
         output(f"Computing aggregate elasticities with respect to {name} ...")
         self._validate_name(name)
-        return self._combine_results(ResultsMarket.compute_aggregate_elasticity, [factor, name], [], processes)
+        return self._combine_results(ResultsMarket.compute_aggregate_elasticity, [factor, name], [])
 
-    def compute_elasticities(self, name='prices', processes=1):
+    def compute_elasticities(self, name='prices'):
         r"""Estimate matrices of elasticities of demand, :math:`\varepsilon`, with respect to a variable, :math:`x`.
 
         For each market, the value in row :math:`j` and column :math:`k` of :math:`\varepsilon` is
@@ -432,8 +427,6 @@ class Results(object):
         ----------
         name : `str, optional`
             Name of the variable, :math:`x`. By default, :math:`x = p`, prices.
-        processes : `int, optional`
-            Number of Python processes that will be used during computation.
 
         Returns
         -------
@@ -445,9 +438,9 @@ class Results(object):
         """
         output(f"Computing elasticities with respect to {name} ...")
         self._validate_name(name)
-        return self._combine_results(ResultsMarket.compute_elasticities, [name], [], processes)
+        return self._combine_results(ResultsMarket.compute_elasticities, [name], [])
 
-    def compute_diversion_ratios(self, name='prices', processes=1):
+    def compute_diversion_ratios(self, name='prices'):
         r"""Estimate matrices of diversion ratios, :math:`\mathscr{D}`, with respect to a variable, :math:`x`.
 
         Diversion ratios to the outside good are reported on diagonals. For each market, the value in row :math:`j` and
@@ -461,8 +454,6 @@ class Results(object):
         ----------
         name : `str, optional`
             Name of the variable, :math:`x`. By default, :math:`x = p`, prices.
-        processes : `int, optional`
-            Number of Python processes that will be used during computation.
 
         Returns
         -------
@@ -474,9 +465,9 @@ class Results(object):
         """
         output(f"Computing diversion ratios with respect to {name} ...")
         self._validate_name(name)
-        return self._combine_results(ResultsMarket.compute_diversion_ratios, [name], [], processes)
+        return self._combine_results(ResultsMarket.compute_diversion_ratios, [name], [])
 
-    def compute_long_run_diversion_ratios(self, processes=1):
+    def compute_long_run_diversion_ratios(self):
         r"""Estimate matrices of long-run diversion ratios, :math:`\bar{\mathscr{D}}`.
 
         Long-run diversion ratios to the outside good are reported on diagonals. For each market, the value in row
@@ -489,8 +480,6 @@ class Results(object):
 
         Parameters
         ----------
-        processes : `int, optional`
-            Number of Python processes that will be used during computation.
 
         Returns
         -------
@@ -501,7 +490,7 @@ class Results(object):
 
         """
         output("Computing long run mean diversion ratios ...")
-        return self._combine_results(ResultsMarket.compute_long_run_diversion_ratios, [], [], processes)
+        return self._combine_results(ResultsMarket.compute_long_run_diversion_ratios, [], [])
 
     def extract_diagonals(self, matrices):
         r"""Extract diagonals from stacked :math:`J_t \times J_t` matrices for each market :math:`t`.
@@ -548,7 +537,7 @@ class Results(object):
         output("Computing mean own elasticities ...")
         return self._combine_results(ResultsMarket.extract_diagonal_mean, [], [matrices])
 
-    def compute_costs(self, processes=1):
+    def compute_costs(self):
         r"""Estimate marginal costs, :math:`c`.
 
         Marginal costs are computed with the BLP-markup equation,
@@ -557,8 +546,6 @@ class Results(object):
 
         Parameters
         ----------
-        processes : `int, optional`
-            Number of Python processes that will be used during computation.
 
         Returns
         -------
@@ -567,9 +554,9 @@ class Results(object):
 
         """
         output("Computing marginal costs ...")
-        return self._combine_results(ResultsMarket.compute_costs, [], [], processes)
+        return self._combine_results(ResultsMarket.compute_costs, [], [])
 
-    def compute_approximate_prices(self, firms_index=1, costs=None, processes=1):
+    def compute_approximate_prices(self, firms_index=1, costs=None):
         r"""Estimate approximate Bertrand-Nash prices after firm ID changes, :math:`p^a`, under the assumption that
         shares and their price derivatives are unaffected by such changes.
 
@@ -592,8 +579,6 @@ class Results(object):
         costs : `array-like, optional`
             Marginal costs, :math:`c`, computed by :meth:`Results.compute_costs`. By default, marginal costs are
             computed.
-        processes : `int, optional`
-            Number of Python processes that will be used during computation.
 
         Returns
         -------
@@ -602,9 +587,9 @@ class Results(object):
 
         """
         output("Solving for approximate Bertrand-Nash prices ...")
-        return self._combine_results(ResultsMarket.compute_approximate_prices, [firms_index], [costs], processes)
+        return self._combine_results(ResultsMarket.compute_approximate_prices, [firms_index], [costs])
 
-    def compute_prices(self, iteration=None, firms_index=1, prices=None, costs=None, processes=1):
+    def compute_prices(self, iteration=None, firms_index=1, prices=None, costs=None):
         r"""Estimate Bertrand-Nash prices after firm ID changes, :math:`p^*`.
 
         Prices are computed in each market by iterating over the :math:`\zeta`-markup equation from
@@ -633,8 +618,6 @@ class Results(object):
         costs : `array-like`
             Marginal costs, :math:`c`, computed by :meth:`Results.compute_costs`. By default, marginal costs are
             computed.
-        processes : `int, optional`
-            Number of Python processes that will be used during computation.
 
         Returns
         -------
@@ -647,9 +630,9 @@ class Results(object):
             iteration = Iteration('simple', {'tol': 1e-12})
         elif not isinstance(iteration, Iteration):
             raise ValueError("iteration must an Iteration instance.")
-        return self._combine_results(ResultsMarket.compute_prices, [iteration, firms_index], [prices, costs], processes)
+        return self._combine_results(ResultsMarket.compute_prices, [iteration, firms_index], [prices, costs])
 
-    def compute_shares(self, prices=None, processes=1):
+    def compute_shares(self, prices=None):
         r"""Estimate shares evaluated at specified prices.
 
         Parameters
@@ -658,8 +641,6 @@ class Results(object):
             Prices at which to evaluate shares, such as Bertrand-Nash prices, :math:`p^*`, computed by
             :meth:`Results.compute_prices`, or approximate Bertrand-Nash prices, :math:`p^a`, computed by
             :meth:`Results.compute_approximate_prices`. By default, unchanged prices are used.
-        processes : `int, optional`
-            Number of Python processes that will be used during computation.
 
         Returns
         -------
@@ -668,9 +649,9 @@ class Results(object):
 
         """
         output("Computing shares ...")
-        return self._combine_results(ResultsMarket.compute_shares, [], [prices], processes)
+        return self._combine_results(ResultsMarket.compute_shares, [], [prices])
 
-    def compute_hhi(self, firms_index=0, shares=None, processes=1):
+    def compute_hhi(self, firms_index=0, shares=None):
         r"""Estimate Herfindahl-Hirschman Indices, :math:`\text{HHI}`.
 
         The index in market :math:`t` is
@@ -687,8 +668,6 @@ class Results(object):
         shares : `array-like, optional`
             Shares, :math:`s`, such as those computed by :meth:`Results.compute_shares`. By default, unchanged shares
             are used.
-        processes : `int, optional`
-            Number of Python processes that will be used during computation.
 
         Returns
         -------
@@ -698,9 +677,9 @@ class Results(object):
 
         """
         output("Computing HHI ...")
-        return self._combine_results(ResultsMarket.compute_hhi, [firms_index], [shares], processes)
+        return self._combine_results(ResultsMarket.compute_hhi, [firms_index], [shares])
 
-    def compute_markups(self, prices=None, costs=None, processes=1):
+    def compute_markups(self, prices=None, costs=None):
         r"""Estimate markups, :math:`\mathscr{M}`.
 
         The markup of product :math:`j` in market :math:`t` is
@@ -716,8 +695,6 @@ class Results(object):
         costs : `array-like`
             Marginal costs, :math:`c`, computed by :meth:`Results.compute_costs`. By default, marginal costs are
             computed.
-        processes : `int, optional`
-            Number of Python processes that will be used during computation.
 
         Returns
         -------
@@ -726,9 +703,9 @@ class Results(object):
 
         """
         output("Computing markups ...")
-        return self._combine_results(ResultsMarket.compute_markups, [], [prices, costs], processes)
+        return self._combine_results(ResultsMarket.compute_markups, [], [prices, costs])
 
-    def compute_profits(self, prices=None, shares=None, costs=None, processes=1):
+    def compute_profits(self, prices=None, shares=None, costs=None):
         r"""Estimate population-normalized gross expected profits, :math:`\pi`.
 
         The profit of product :math:`j` in market :math:`t` is
@@ -747,8 +724,6 @@ class Results(object):
         costs : `array-like`
             Marginal costs, :math:`c`, computed by :meth:`Results.compute_costs`. By default, marginal costs are
             computed.
-        processes : `int, optional`
-            Number of Python processes that will be used during computation.
 
         Returns
         -------
@@ -757,9 +732,9 @@ class Results(object):
 
         """
         output("Computing profits ...")
-        return self._combine_results(ResultsMarket.compute_profits, [], [prices, shares, costs], processes)
+        return self._combine_results(ResultsMarket.compute_profits, [], [prices, shares, costs])
 
-    def compute_consumer_surpluses(self, prices=None, processes=1):
+    def compute_consumer_surpluses(self, prices=None):
         r"""Estimate population-normalized consumer surpluses, :math:`\text{CS}`.
 
         Assuming away nonlinear income effects, the surplus in market :math:`t` is
@@ -794,8 +769,6 @@ class Results(object):
             evaluated, such as Bertrand-Nash prices, :math:`p^*`, computed by :meth:`Results.compute_prices`, or
             approximate Bertrand-Nash prices, :math:`p^a`, computed by :meth:`Results.compute_approximate_prices`. By
             default, unchanged prices are used.
-        processes : `int, optional`
-            Number of Python processes that will be used during computation.
 
         Returns
         -------
@@ -805,7 +778,7 @@ class Results(object):
 
         """
         output("Computing consumer surpluses with the equation that assumes away nonlinear income effects ...")
-        return self._combine_results(ResultsMarket.compute_consumer_surplus, [], [prices], processes)
+        return self._combine_results(ResultsMarket.compute_consumer_surplus, [], [prices])
 
 
 class ResultsMarket(Market):

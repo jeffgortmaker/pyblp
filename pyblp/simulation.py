@@ -7,7 +7,7 @@ import numpy as np
 from . import options, exceptions
 from .construction import build_blp_instruments, build_matrix
 from .configurations import Formulation, Iteration, Integration
-from .utilities import extract_matrix, output, format_seconds, Matrices, ParallelItems
+from .utilities import extract_matrix, generate_items, output, format_seconds, Matrices
 from .primitives import Products, Agents, Economy, Market, NonlinearParameters, LinearParameters
 
 
@@ -453,13 +453,18 @@ class Simulation(Economy):
             sections.append(["Nonlinear Parameters:", self._nonlinear_parameters.format()])
         return "\n\n".join("\n".join(s) for s in sections)
 
-    def solve(self, firms_index=0, prices=None, iteration=None, error_behavior='raise', processes=1):
+    def solve(self, firms_index=0, prices=None, iteration=None, error_behavior='raise'):
         r"""Compute Bertrand-Nash prices and shares.
 
         Prices and shares are computed by iterating market-by-market over the :math:`\zeta`-markup equation from
         :ref:`Morrow and Skerlos (2011) <ms11>`,
 
         .. math:: p^* \leftarrow c + \zeta(p^*).
+
+        .. note::
+
+           This method supports :func:`parallel` processing. If multiprocessing is used, market-by-market computation of
+           prices and shares will be distributed among the processes.
 
         Parameters
         ----------
@@ -483,12 +488,6 @@ class Simulation(Economy):
                 - ``'warn'`` - Uses the last computed prices and shares. If the fixed point routine fails to converge,
                   these are the last prices and shares computed by the routine. If there are other issues, these are the
                   starting prices and their associated shares.
-
-        processes : `int, optional`
-            Number of Python processes that will be used during computation. By default, multiprocessing will not be
-            used. For values greater than one, a pool of that many Python processes will be created. Market-by-market
-            computation of prices and shares will be distributed among these processes. Using multiprocessing will only
-            improve computation speed if gains from parallelization outweigh overhead from creating the process pool.
 
         Returns
         -------
@@ -534,13 +533,13 @@ class Simulation(Economy):
         # update prices and shares market-by-market
         iterations = evaluations = 0
         updated_product_data = self.product_data.copy()
-        with ParallelItems(self.unique_market_ids, market_factory, SimulationMarket.solve, processes) as items:
-            for t, (prices_t, shares_t, errors_t, iterations_t, evaluations_t) in items:
-                updated_product_data.prices[self.products.market_ids.flat == t] = prices_t
-                updated_product_data.shares[self.products.market_ids.flat == t] = shares_t
-                errors.extend(errors_t)
-                iterations += iterations_t
-                evaluations += evaluations_t
+        generator = generate_items(self.unique_market_ids, market_factory, SimulationMarket.solve)
+        for t, (prices_t, shares_t, errors_t, iterations_t, evaluations_t) in generator:
+            updated_product_data.prices[self.products.market_ids.flat == t] = prices_t
+            updated_product_data.shares[self.products.market_ids.flat == t] = shares_t
+            errors.extend(errors_t)
+            iterations += iterations_t
+            evaluations += evaluations_t
 
         # handle any errors
         if errors:

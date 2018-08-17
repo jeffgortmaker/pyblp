@@ -4,7 +4,7 @@ import pytest
 import numpy as np
 import scipy.optimize
 
-from pyblp import build_matrix, Problem, Iteration, Optimization, Formulation
+from pyblp import parallel, build_matrix, Problem, Iteration, Optimization, Formulation
 
 
 @pytest.mark.usefixtures('simulated_problem')
@@ -39,7 +39,6 @@ def test_accuracy(simulated_problem, solve_options):
 
 @pytest.mark.usefixtures('simulated_problem')
 @pytest.mark.parametrize(['solve_options1', 'solve_options2'], [
-    pytest.param({'processes': 1}, {'processes': 2}, id="single process and multiprocessing"),
     pytest.param({'costs_bounds': (-np.inf, np.inf)}, {'costs_bounds': (-1e10, 1e10)}, id="non-binding costs bounds")
 ])
 def test_trivial_changes(simulated_problem, solve_options1, solve_options2):
@@ -59,6 +58,41 @@ def test_trivial_changes(simulated_problem, solve_options1, solve_options2):
     for key, result1 in results[0].__dict__.items():
         if isinstance(result1, np.ndarray) and result1.dtype != np.object:
             np.testing.assert_allclose(result1, getattr(results[1], key), atol=1e-14, rtol=0, err_msg=key)
+
+
+@pytest.mark.usefixtures('simulated_problem')
+def test_parallel(simulated_problem):
+    """Test that solving simulations, solving problems, and computing results with parallelization gives rise to the
+    same results as when using serial processing.
+    """
+    simulation, product_data, problem, results = simulated_problem
+
+    # compute marginal costs as a test of results (everything else has already been computed without parallelization)
+    costs = results.compute_costs()
+
+    # solve the simulation, solve the problem, and compute costs in parallel
+    with parallel(2):
+        parallel_product_data = simulation.solve()
+        parallel_problem = Problem(
+            problem.product_formulations, parallel_product_data, problem.agent_formulation, simulation.agent_data
+        )
+        parallel_results = parallel_problem.solve(
+            simulation.sigma, simulation.pi, simulation.rho, steps=1, costs_type=simulation.costs_type
+        )
+        parallel_costs = parallel_results.compute_costs()
+
+    # test that product data are essentially identical
+    for key in product_data.dtype.names:
+        if product_data[key].dtype != np.object:
+            np.testing.assert_allclose(product_data[key], parallel_product_data[key], atol=1e-14, rtol=0, err_msg=key)
+
+    # test that all arrays in the results are essentially identical
+    for key, result in results.__dict__.items():
+        if isinstance(result, np.ndarray) and result.dtype != np.object:
+            np.testing.assert_allclose(result, getattr(parallel_results, key), atol=1e-14, rtol=0, err_msg=key)
+
+    # test that marginal costs are essentially equal
+    np.testing.assert_allclose(costs, parallel_costs, atol=1e-14, rtol=0)
 
 
 @pytest.mark.usefixtures('simulated_problem')
@@ -190,8 +224,8 @@ def test_fixed_effects(simulated_problem, ED, ES, absorb_method):
 
 @pytest.mark.usefixtures('simulated_problem')
 @pytest.mark.parametrize('solve_options', [
-    pytest.param({'iteration': Iteration('simple')}, id="configured iteration"),
-    pytest.param({'processes': 2}, id="multiprocessing")
+    pytest.param({}, id="defaults"),
+    pytest.param({'iteration': Iteration('simple')}, id="configured iteration")
 ])
 def test_merger(simulated_problem, solve_options):
     """Test that prices and shares simulated under changed firm IDs are reasonably close to prices and shares computed

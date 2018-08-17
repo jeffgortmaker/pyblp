@@ -126,6 +126,17 @@ Product and agent data that are passed or constructed by :class:`Problem` and :c
    Agents
 
 
+Multiprocessing
+---------------
+
+A context manager can be used to enable parallel processing for methods that perform market-by-market computation.
+
+.. autosummary::
+   :toctree: api
+
+   parallel
+
+
 Options and Example Data
 ------------------------
 
