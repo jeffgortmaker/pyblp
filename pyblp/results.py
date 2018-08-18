@@ -357,7 +357,7 @@ class Results(object):
         # define a function that builds a market along with arguments used to compute results
         def market_factory(s):
             market_s = ResultsMarket(self.problem, s, self.sigma, self.pi, self.rho, self.beta, self.true_delta)
-            args_s = [None if a is None else a[self.problem.products.market_ids.flat == s] for a in market_args]
+            args_s = [None if a is None else a[self.problem._product_market_indices[s]] for a in market_args]
             return [market_s] + list(fixed_args) + args_s
 
         # construct a mapping from market IDs to market-specific results and compute the full results matrix size
@@ -378,9 +378,11 @@ class Results(object):
 
         # preserve the original product order or the sorted market order when stacking the matrices
         combined = np.full((rows, columns), np.nan, options.dtype)
-        market_ids = self.problem.products.market_ids.flat if rows == self.problem.N else self.unique_market_ids
         for t, matrix_t in matrix_mapping.items():
-            combined[market_ids == t, :matrix_t.shape[1]] = matrix_t
+            if rows == self.problem.N:
+                combined[self.problem._product_market_indices[t], :matrix_t.shape[1]] = matrix_t
+            else:
+                combined[self.unique_market_ids == t, :matrix_t.shape[1]] = matrix_t
 
         # output how long it took to compute results
         end_time = time.time()

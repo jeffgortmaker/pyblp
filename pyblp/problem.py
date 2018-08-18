@@ -713,14 +713,14 @@ class Problem(Economy):
             # define a function that builds a market along with arguments used to compute delta and its Jacobian
             def market_factory(s):
                 market_s = DemandProblemMarket(self, s, sigma, pi, rho)
-                initial_delta_s = last_objective_info.next_delta[self.products.market_ids.flat == s]
+                initial_delta_s = last_objective_info.next_delta[self._product_market_indices[s]]
                 return market_s, initial_delta_s, nonlinear_parameters, iteration, fp_type, compute_gradient
 
             # compute delta and its Jacobian market-by-market
             generator = generate_items(self.unique_market_ids, market_factory, DemandProblemMarket.solve)
             for t, (true_delta_t, true_xi_jacobian_t, errors_t, iterations[t], evaluations[t]) in generator:
-                true_delta[self.products.market_ids.flat == t] = true_delta_t
-                true_xi_jacobian[self.products.market_ids.flat == t] = true_xi_jacobian_t
+                true_delta[self._product_market_indices[t]] = true_delta_t
+                true_xi_jacobian[self._product_market_indices[t]] = true_xi_jacobian_t
                 errors.extend(errors_t)
 
         # replace invalid elements in delta with their last values
@@ -772,8 +772,8 @@ class Problem(Economy):
         #   their Jacobian
         def market_factory(s):
             market_s = SupplyProblemMarket(self, s, sigma, pi, rho, beta, true_delta)
-            last_true_tilde_costs_s = last_objective_info.true_tilde_costs[self.products.market_ids.flat == s]
-            true_xi_jacobian_s = true_xi_jacobian[self.products.market_ids.flat == s]
+            last_true_tilde_costs_s = last_objective_info.true_tilde_costs[self._product_market_indices[s]]
+            true_xi_jacobian_s = true_xi_jacobian[self._product_market_indices[s]]
             return (
                 market_s, last_true_tilde_costs_s, true_xi_jacobian_s, beta_jacobian, nonlinear_parameters,
                 costs_type, costs_bounds, compute_gradient
@@ -782,8 +782,8 @@ class Problem(Economy):
         # compute transformed marginal costs and their Jacobian market-by-market
         generator = generate_items(self.unique_market_ids, market_factory, SupplyProblemMarket.solve)
         for t, (true_tilde_costs_t, true_omega_jacobian_t, errors_t) in generator:
-            true_tilde_costs[self.products.market_ids.flat == t] = true_tilde_costs_t
-            true_omega_jacobian[self.products.market_ids.flat == t] = true_omega_jacobian_t
+            true_tilde_costs[self._product_market_indices[t]] = true_tilde_costs_t
+            true_omega_jacobian[self._product_market_indices[t]] = true_omega_jacobian_t
             errors.extend(errors_t)
 
         # replace invalid transformed marginal costs with their last values
@@ -817,17 +817,17 @@ class Problem(Economy):
         """Compute the delta that solves the simple Logit (or nested Logit) model."""
         delta = np.log(self.products.shares)
         for t in self.unique_market_ids:
-            shares_t = self.products.shares[self.products.market_ids.flat == t]
+            shares_t = self.products.shares[self._product_market_indices[t]]
             outside_share_t = 1 - shares_t.sum()
-            delta[self.products.market_ids.flat == t] -= np.log(outside_share_t)
+            delta[self._product_market_indices[t]] -= np.log(outside_share_t)
             if self.H > 0:
-                groups_t = Groups(self.products.nesting_ids[self.products.market_ids.flat == t])
+                groups_t = Groups(self.products.nesting_ids[self._product_market_indices[t]])
                 group_shares_t = shares_t / groups_t.expand(groups_t.sum(shares_t))
                 if rho.size == 1:
                     rho_t = np.full_like(shares_t, rho)
                 else:
                     rho_t = groups_t.expand(rho[np.searchsorted(self.unique_nesting_ids, groups_t.unique)])
-                delta[self.products.market_ids.flat == t] -= rho_t * np.log(group_shares_t)
+                delta[self._product_market_indices[t]] -= rho_t * np.log(group_shares_t)
         return delta
 
     @staticmethod

@@ -301,6 +301,10 @@ class Economy(object):
         self.ES = self.products.supply_ids.shape[1]
         self.H = self.unique_nesting_ids.size
 
+        # identify market indices
+        self._product_market_indices = {t: np.where(self.products.market_ids.flat == t) for t in self.unique_market_ids}
+        self._agent_market_indices = {t: np.where(self.agents.market_ids.flat == t) for t in self.unique_market_ids}
+
         # identify column formulations
         self._X1_formulations = self.products.dtype.fields['X1'][2]
         self._X2_formulations = self.products.dtype.fields['X2'][2]
@@ -407,11 +411,11 @@ class Market(object):
 
         # store data
         self.products = np.lib.recfunctions.rec_drop_fields(
-            economy.products[economy.products.market_ids.flat == t],
+            economy.products[economy._product_market_indices[t]],
             self.get_unneeded_product_fields(set(economy.products.dtype.names))
         )
         self.agents = np.lib.recfunctions.rec_drop_fields(
-            economy.agents[economy.agents.market_ids.flat == t], 'market_ids'
+            economy.agents[economy._agent_market_indices[t]], 'market_ids'
         )
 
         # create nesting groups
@@ -444,7 +448,7 @@ class Market(object):
             self.rho = self.groups.expand(self.group_rho)
 
         # store delta and compute mu
-        self.delta = None if delta is None else delta[economy.products.market_ids.flat == t]
+        self.delta = None if delta is None else delta[economy._product_market_indices[t]]
         self.mu = self.compute_mu()
 
     def get_unneeded_product_fields(self, fields):
@@ -982,10 +986,10 @@ class NonlinearParameters(object):
         norm = 0
         if economy.K2 > 0:
             for t in economy.unique_market_ids:
-                coefficients_t = sigma @ economy.agents.nodes[economy.agents.market_ids.flat == t].T
+                coefficients_t = sigma @ economy.agents.nodes[economy._agent_market_indices[t]].T
                 if economy.D > 0:
-                    coefficients_t += pi @ economy.agents.demographics[economy.agents.market_ids.flat == t].T
-                mu_t = economy.products.X2[economy.products.market_ids.flat == t] @ coefficients_t
+                    coefficients_t += pi @ economy.agents.demographics[economy._agent_market_indices[t]].T
+                mu_t = economy.products.X2[economy._product_market_indices[t]] @ coefficients_t
                 norm = max(norm, np.abs(mu_t).max())
         return norm
 

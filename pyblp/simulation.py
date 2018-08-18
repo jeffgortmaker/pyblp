@@ -526,8 +526,8 @@ class Simulation(Economy):
         # define a function that builds a market along with arguments used to compute prices and shares
         def market_factory(s):
             market_s = SimulationMarket(self, s, self.sigma, self.pi, self.rho, self.beta, delta)
-            costs_s = self.costs[self.products.market_ids.flat == s]
-            prices_s = prices[self.products.market_ids.flat == s]
+            costs_s = self.costs[self._product_market_indices[s]]
+            prices_s = prices[self._product_market_indices[s]]
             return market_s, costs_s, prices_s, iteration, firms_index
 
         # update prices and shares market-by-market
@@ -535,8 +535,8 @@ class Simulation(Economy):
         updated_product_data = self.product_data.copy()
         generator = generate_items(self.unique_market_ids, market_factory, SimulationMarket.solve)
         for t, (prices_t, shares_t, errors_t, iterations_t, evaluations_t) in generator:
-            updated_product_data.prices[self.products.market_ids.flat == t] = prices_t
-            updated_product_data.shares[self.products.market_ids.flat == t] = shares_t
+            updated_product_data.prices[self._product_market_indices[t]] = prices_t
+            updated_product_data.shares[self._product_market_indices[t]] = shares_t
             errors.extend(errors_t)
             iterations += iterations_t
             evaluations += evaluations_t
