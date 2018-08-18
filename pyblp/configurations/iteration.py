@@ -171,19 +171,22 @@ class Iteration(object):
         #   also counts the total number of contraction evaluations
         def contraction_wrapper(raw_values):
             contraction_wrapper.evaluations += 1
-            raw_values = np.asarray(raw_values)
-            values = raw_values.reshape(initial_values.shape).astype(initial_values.dtype)
-            return np.asarray(contraction(values)).astype(np.float64).reshape(raw_values.shape)
+            if not isinstance(raw_values, np.ndarray):
+                raw_values = np.asarray(raw_values)
+            values = raw_values.reshape(initial_values.shape).astype(initial_values.dtype, copy=False)
+            return contraction(values).astype(np.float64, copy=False).reshape(raw_values.shape)
 
         # initialize the counters and normalize the starting values
         iteration_callback.iterations = contraction_wrapper.evaluations = 0
-        raw_initial_values = initial_values.astype(np.float64).flatten()
+        raw_initial_values = initial_values.astype(np.float64, copy=False).flatten()
 
         # solve the problem and convert the raw final values to the same data type and shape as the initial values
         raw_final_values, converged = self._iterator(
             raw_initial_values, contraction_wrapper, iteration_callback, **self._method_options
         )
-        final_values = np.asarray(raw_final_values).reshape(initial_values.shape).astype(initial_values.dtype)
+        if not isinstance(raw_final_values, np.ndarray):
+            raw_final_values = np.asarray(raw_final_values)
+        final_values = raw_final_values.reshape(initial_values.shape).astype(initial_values.dtype, copy=False)
         return final_values, converged, iteration_callback.iterations, contraction_wrapper.evaluations
 
 
@@ -202,14 +205,14 @@ def squarem_iterator(initial, contraction, iteration_callback, max_evaluations, 
         x0, x = x, contraction(x)
         g0 = x - x0
         evaluations += 1
-        if evaluations >= max_evaluations or not np.isfinite(x).all() or norm(g0) < tol:
+        if evaluations >= max_evaluations or safe_norm(norm, g0) < tol:
             break
 
         # second step
         x1, x = x, contraction(x)
         g1 = x - x1
         evaluations += 1
-        if evaluations >= max_evaluations or not np.isfinite(x).all() or norm(g1) < tol:
+        if evaluations >= max_evaluations or safe_norm(norm, g1) < tol:
             break
 
         # compute the step length
@@ -244,7 +247,7 @@ def squarem_iterator(initial, contraction, iteration_callback, max_evaluations, 
 
         # check for convergence
         evaluations += 1
-        if evaluations >= max_evaluations or not np.isfinite(x).all() or norm(x - x3) < tol:
+        if evaluations >= max_evaluations or safe_norm(norm, x - x3) < tol:
             break
 
     # determine whether there was convergence
@@ -260,8 +263,15 @@ def simple_iterator(initial, contraction, iteration_callback, max_evaluations, t
         x0, x = x, contraction(x)
         iteration_callback()
         evaluations += 1
-        if evaluations >= max_evaluations or not np.isfinite(x).all() or norm(x - x0) < tol:
+        if evaluations >= max_evaluations or safe_norm(norm, x - x0) < tol:
             break
 
     # determine whether there was convergence
     return x, evaluations < max_evaluations and np.isfinite(x).all()
+
+
+def safe_norm(norm, x):
+    """Compute the norm of an array. Return zero if the norm is not finite."""
+    with np.errstate(all='ignore'):
+        value = norm(x)
+    return value if np.isfinite(value) else 0

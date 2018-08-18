@@ -246,24 +246,24 @@ class Optimization(object):
         #   and also counts the number of evaluations
         def objective_wrapper(raw_values):
             objective_wrapper.evaluations += 1
-            raw_values = np.asarray(raw_values)
-            values = raw_values.reshape(initial_values.shape).astype(initial_values.dtype)
+            raw_values = np.asanyarray(raw_values)
+            values = raw_values.reshape(initial_values.shape).astype(initial_values.dtype, copy=False)
             returned = verbose_objective_function(values, iteration_callback.iterations, objective_wrapper.evaluations)
             if self._compute_gradient:
                 objective, gradient = returned
-                return float(objective), gradient.astype(raw_values.dtype).flatten()
+                return float(objective), gradient.astype(raw_values.dtype, copy=False).flatten()
             return float(returned)
 
         # initialize the counters and normalize values
         iteration_callback.iterations = objective_wrapper.evaluations = 0
-        raw_initial_values = initial_values.astype(np.float64).flatten()
+        raw_initial_values = initial_values.astype(np.float64, copy=False).flatten()
         raw_bounds = None if bounds is None or not self._supports_bounds else [(float(l), float(u)) for l, u in bounds]
 
         # solve the problem and convert the raw final values to the same data type and shape as the initial values
         raw_final_values, converged = self._optimizer(
             raw_initial_values, raw_bounds, objective_wrapper, iteration_callback, **self._method_options
         )
-        final_values = np.asarray(raw_final_values).astype(initial_values.dtype).reshape(initial_values.shape)
+        final_values = np.asanyarray(raw_final_values).astype(initial_values.dtype).reshape(initial_values.shape)
         return final_values, converged, iteration_callback.iterations, objective_wrapper.evaluations
 
 
