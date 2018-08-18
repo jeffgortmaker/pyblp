@@ -1,4 +1,4 @@
-numpy
-patsy
-scipy
-sympy
+numpy>=1.12.0
+patsy>=0.4.0
+scipy>=1.0.0
+sympy>=1.1.0
