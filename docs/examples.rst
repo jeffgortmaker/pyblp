@@ -549,3 +549,19 @@ Now, we can try to recover the true parameters by creating and solving a :class:
 The parameters seem to have been estimated reasonably well.
 
 In addition to checking that the configuration for a model based on actual data makes sense, the :class:`Simulation` class can also be a helpful tool for better understanding under what general conditions BLP models can be accurately estimated. Simulations are also used extensively in pyblp's test suite.
+
+
+Multiprocessing
+---------------
+
+For large problems or simulations, multiprocessing may be useful if your computing environment has access to many cores. Multiprocessing can be enabled with the :func:`parallel` context manager, which is used in a ``with`` statement. Any methods that perform market-by-market computation will distribute their work among the processes in the context created by :func:`parallel`.
+
+Although the problems in this example are small enough that there are no gains from parallel processing, the following code demonstrates how to compute elasticities with a pool of two processes for the problem that we simulated and solved above.
+
+.. ipython:: python
+  
+   with pyblp.parallel(2):
+       elasticities = simulated_results.compute_elasticities()
+   elasticities.shape
+
+Similarly, if we executed :meth:`Problem.solve` or :meth:`Simulation.solve` within a :func:`parallel` context, all of their market-by-market computation would be distributed among the processes in the pool.
