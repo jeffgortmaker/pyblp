@@ -107,15 +107,6 @@ class LargeInitialParametersError(_Error):
     """
 
 
-class NonpositiveSharesError(_Error):
-    r"""Encountered nonpositive shares when computing :math:`\delta`.
-
-    This problem can sometimes be mitigated by changing initial parameter values, setting more conservative bounds,
-    using a different integration configuration, or using a nonlinear fixed point formulation.
-
-    """
-
-
 class NonpositiveCostsError(_Error):
     """Encountered nonpositive marginal costs in a log-linear specification.
 
@@ -136,9 +127,10 @@ class InvalidMomentCovariancesError(_Error):
 class DeltaFloatingPointError(_Error):
     r"""Encountered floating point issues when computing :math:`\delta` or its Jacobian with respect to :math:`\theta`.
 
-    This problem is often due to prior problems or overflow and can sometimes be mitigated by choosing smaller initial
-    parameter values, setting more conservative bounds, rescaling data, removing outliers, or changing the floating
-    point precision.
+    This problem is often due to prior problems, overflow, or nonpositive shares, and can sometimes be mitigated by
+    choosing smaller initial parameter values, setting more conservative bounds, rescaling data, removing outliers,
+    changing the floating point precision, using different iteration and integration configurations, or using a
+    different fixed point formulation.
 
     """
 

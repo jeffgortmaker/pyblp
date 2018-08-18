@@ -964,13 +964,6 @@ class DemandProblemMarket(Market):
         with np.errstate(divide='call', over='call', under='ignore', invalid='call'):
             np.seterrcall(lambda *_: errors.append(exceptions.DeltaFloatingPointError()))
 
-            # define a custom log wrapper that identifies issues with taking logs
-            def custom_log(x):
-                with np.errstate(all='ignore'):
-                    if np.any(x <= 0):
-                        errors.append(exceptions.NonpositiveSharesError())
-                    return np.log(x)
-
             # compute delta either with a closed-form solution or by solving a fixed point problem
             if self.K2 == 0:
                 assert self.H > 0
@@ -981,14 +974,14 @@ class DemandProblemMarket(Market):
                 delta = np.log(self.products.shares) - np.log(outside_share) - self.rho * np.log(group_shares)
             elif fp_type == 'linear':
                 log_shares = np.log(self.products.shares)
-                contraction = lambda d: d + log_shares - custom_log(self.compute_probabilities(d) @ self.agents.weights)
+                contraction = lambda d: d + log_shares - np.log(self.compute_probabilities(d) @ self.agents.weights)
                 delta, converged, iterations, evaluations = iteration._iterate(initial_delta, contraction)
             else:
                 assert fp_type == 'nonlinear'
                 compute_probabilities = functools.partial(self.compute_probabilities, mu=np.exp(self.mu), linear=False)
                 contraction = lambda d: d * self.products.shares / (compute_probabilities(d) @ self.agents.weights)
                 exp_delta, converged, iterations, evaluations = iteration._iterate(np.exp(initial_delta), contraction)
-                delta = custom_log(exp_delta)
+                delta = np.log(exp_delta)
 
             # if the gradient is to be computed, replace invalid values in delta with the last computed values before
             #   computing its Jacobian
