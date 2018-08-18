@@ -29,14 +29,20 @@ class _Error(Exception):
         doc = inspect.getdoc(self)
 
         # normalize LaTeX
-        for match in re.finditer(r':math:`(.+)`', doc):
+        while True:
+            match = re.search(r':math:`([^`]+)`', doc)
+            if not match:
+                break
             start, end = match.span()
             doc = doc[:start] + re.sub(r'\s+', ' ', re.sub(r'[\\{}]', ' ', match.group(1))).lower() + doc[end:]
 
         # normalize references
-        for match in re.finditer(r':ref:`(.+)`', doc):
+        while True:
+            match = re.search(r':ref:`([^`]+)`', doc)
+            if not match:
+                break
             start, end = match.span()
-            doc = doc[:start] + re.sub(r'<.+>', '', match.group(1)) + doc[end:]
+            doc = doc[:start] + re.sub(r'<[^>]+>', '', match.group(1)) + doc[end:]
 
         # remove all remaining domains and compress whitespace
         return re.sub(r'[\s\n]+', ' ', re.sub(r':[a-z\-]+:|`', '', doc))
