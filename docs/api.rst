@@ -161,7 +161,6 @@ When errors occur, they will either be displayed as warnings or raised as except
 
    exceptions.MultipleErrors
    exceptions.LargeInitialParametersError
-   exceptions.NonpositiveSharesError
    exceptions.NonpositiveCostsError
    exceptions.InvalidParameterCovariancesError
    exceptions.InvalidMomentCovariancesError
