@@ -318,9 +318,13 @@ class Simulation(Economy):
         demand_names = set(numerical_mapping) & product_formulations[0]._names
         if product_formulations[1] is not None:
             demand_names |= set(numerical_mapping) & product_formulations[1]._names
+        if not demand_names:
+            raise ValueError("The formulations for X1 and X2 must have at least one non-price numerical variable.")
 
         # identify supply-side numerical variables
         supply_names = set(numerical_mapping) & product_formulations[2]._names
+        if not supply_names:
+            raise ValueError("The formulation for X3 must have at least one numerical variable.")
 
         # identify numerical variables that are only on either the demand or supply side
         only_demand_names = demand_names - supply_names
