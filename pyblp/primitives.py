@@ -594,22 +594,20 @@ class Market(object):
         """Use derivatives of aggregate inclusive values with respect to a variable to compute the diagonal capital
         lambda matrix used to decompose markups.
         """
-        capital_lamda = np.diagflat(value_derivatives @ self.agents.weights)
+        diagonal = value_derivatives @ self.agents.weights
         if self.H > 0:
-            capital_lamda /= 1 - self.rho
-        return capital_lamda
+            diagonal /= 1 - self.rho
+        return np.diagflat(diagonal)
 
     def compute_capital_gamma(self, value_derivatives, probabilities, conditionals):
         """Use derivatives of aggregate inclusive values with respect to a variable and choice probabilities to compute
         the dense capital gamma matrix used to decompose markups.
         """
-        diagonal_weights = np.diagflat(self.agents.weights)
-        capital_gamma = probabilities @ diagonal_weights @ value_derivatives.T
+        weighted_value_derivatives = self.agents.weights * value_derivatives.T
+        capital_gamma = probabilities @ weighted_value_derivatives
         if self.H > 0:
             membership = self.get_membership_matrix()
-            capital_gamma += self.rho / (1 - self.rho) * membership * (
-                conditionals @ diagonal_weights @ value_derivatives.T
-            )
+            capital_gamma += self.rho / (1 - self.rho) * membership * (conditionals @ weighted_value_derivatives)
         return capital_gamma
 
     def compute_utility_derivatives_by_parameter_tangent(self, parameter, X1_derivatives, X2_derivatives, beta_tangent):

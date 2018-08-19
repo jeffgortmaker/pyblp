@@ -1183,14 +1183,16 @@ class SupplyProblemMarket(Market):
         conditionals_tensor = None
         if self.H > 0:
             membership = self.get_membership_matrix()
-            probabilities_tensor -= membership[..., None] * self.rho[None] / (1 - self.rho[None]) * (
-                conditionals[None] * probabilities[None].swapaxes(0, 1)
+            multiplied_probabilities = self.rho / (1 - self.rho) * probabilities
+            multiplied_conditionals = 1 / (1 - self.rho) * conditionals
+            probabilities_tensor -= membership[..., None] * (
+                conditionals[None] * multiplied_probabilities[None].swapaxes(0, 1)
             )
-            conditionals_tensor = -membership[..., None] / (1 - self.rho[None]) * (
-                conditionals[None] * conditionals[None].swapaxes(0, 1)
+            conditionals_tensor = -membership[..., None] * (
+                conditionals[None] * multiplied_conditionals[None].swapaxes(0, 1)
             )
-            probabilities_tensor[np.diag_indices(self.J)] += self.rho / (1 - self.rho) * probabilities
-            conditionals_tensor[np.diag_indices(self.J)] += 1 / (1 - self.rho) * conditionals
+            probabilities_tensor[np.diag_indices(self.J)] += multiplied_probabilities
+            conditionals_tensor[np.diag_indices(self.J)] += multiplied_conditionals
         return probabilities_tensor, conditionals_tensor
 
     def compute_capital_lamda_by_xi_tensor(self, value_derivatives_tensor):
@@ -1198,12 +1200,11 @@ class SupplyProblemMarket(Market):
         derivatives of aggregate inclusive values with respect to prices to compute the tensor derivative of the
         diagonal capital lambda matrix with respect to xi.
         """
-        tensor = np.zeros((self.J, self.J, self.J), options.dtype)
-        tensor[:, np.arange(self.J), np.arange(self.J)] = np.squeeze(
-            multiply_tensor_and_matrix(value_derivatives_tensor, self.agents.weights)
-        )
+        diagonal = np.squeeze(multiply_tensor_and_matrix(value_derivatives_tensor, self.agents.weights))
         if self.H > 0:
-            tensor /= 1 - self.rho[None]
+            diagonal /= 1 - self.rho
+        tensor = np.zeros((self.J, self.J, self.J), options.dtype)
+        tensor[:, np.arange(self.J), np.arange(self.J)] = diagonal
         return tensor
 
     def compute_capital_gamma_by_xi_tensor(self, value_derivatives, value_derivatives_tensor, probabilities,
@@ -1212,16 +1213,18 @@ class SupplyProblemMarket(Market):
         derivatives with respect to xi (equivalently, to delta), indexed with the first axis, to compute the tensor
         derivative of the dense capital gamma matrix with respect to xi.
         """
-        diagonal_weights = np.diagflat(self.agents.weights)
+        weighted_value_derivatives = self.agents.weights * value_derivatives.T
+        weighted_probabilities = self.agents.weights.T * probabilities
         tensor = (
-            multiply_tensor_and_matrix(probabilities_tensor, diagonal_weights @ value_derivatives.T) +
-            multiply_matrix_and_tensor(probabilities @ diagonal_weights, value_derivatives_tensor.swapaxes(1, 2))
+            multiply_tensor_and_matrix(probabilities_tensor, weighted_value_derivatives) +
+            multiply_matrix_and_tensor(weighted_probabilities, value_derivatives_tensor.swapaxes(1, 2))
         )
         if self.H > 0:
             membership = self.get_membership_matrix()
+            weighted_conditionals = self.agents.weights.T * conditionals
             tensor += membership[None] * self.rho[None] / (1 - self.rho[None]) * (
-                multiply_tensor_and_matrix(conditionals_tensor, diagonal_weights @ value_derivatives.T) +
-                multiply_matrix_and_tensor(conditionals @ diagonal_weights, value_derivatives_tensor.swapaxes(1, 2))
+                multiply_tensor_and_matrix(conditionals_tensor, weighted_value_derivatives) +
+                multiply_matrix_and_tensor(weighted_conditionals, value_derivatives_tensor.swapaxes(1, 2))
             )
         return tensor
 
@@ -1229,13 +1232,13 @@ class SupplyProblemMarket(Market):
         """Use the tangent with respect to a nonlinear parameter of derivatives of aggregate inclusive values with
         respect to prices to compute the tangent of the diagonal capital lambda matrix with respect to the parameter.
         """
-        tangent = np.diagflat(value_derivatives_tangent @ self.agents.weights)
+        diagonal = value_derivatives_tangent @ self.agents.weights
         if self.H > 0:
-            tangent /= 1 - self.rho
+            diagonal /= 1 - self.rho
             if isinstance(parameter, RhoParameter):
                 associations = self.groups.expand(parameter.get_group_associations(self.groups))
-                tangent += associations / (1 - self.rho)**2 * np.diagflat(value_derivatives @ self.agents.weights)
-        return tangent
+                diagonal += associations / (1 - self.rho)**2 * (value_derivatives @ self.agents.weights)
+        return np.diagflat(diagonal)
 
     def compute_capital_gamma_by_parameter_tangent(self, parameter, value_derivatives, value_derivatives_tangent,
                                                    probabilities, probabilities_tangent, conditionals,
@@ -1244,20 +1247,19 @@ class SupplyProblemMarket(Market):
         tangents with respect to a nonlinear parameter to compute the tangent of the dense capital gamma matrix with
         respect to the parameter.
         """
-        diagonal_weights = np.diagflat(self.agents.weights)
+        weighted_value_derivatives = self.agents.weights * value_derivatives.T
+        weighted_value_derivatives_tangent = self.agents.weights * value_derivatives_tangent.T
         tangent = (
-            probabilities_tangent @ diagonal_weights @ value_derivatives.T +
-            probabilities @ diagonal_weights @ value_derivatives_tangent.T
+            probabilities_tangent @ weighted_value_derivatives +
+            probabilities @ weighted_value_derivatives_tangent
         )
         if self.H > 0:
             membership = self.get_membership_matrix()
             tangent += membership * self.rho / (1 - self.rho) * (
-                conditionals_tangent @ diagonal_weights @ value_derivatives.T +
-                conditionals @ diagonal_weights @ value_derivatives_tangent.T
+                conditionals_tangent @ weighted_value_derivatives +
+                conditionals @ weighted_value_derivatives_tangent
             )
             if isinstance(parameter, RhoParameter):
                 associations = self.groups.expand(parameter.get_group_associations(self.groups))
-                tangent += associations * membership / (1 - self.rho) ** 2 * (
-                    conditionals @ diagonal_weights @ value_derivatives.T
-                )
+                tangent += associations * membership / (1 - self.rho)**2 * (conditionals @ weighted_value_derivatives)
         return tangent
