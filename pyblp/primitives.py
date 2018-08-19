@@ -552,12 +552,13 @@ class Market(object):
             derivatives += self.compute_X2_derivatives(name, variable) @ self.compute_random_coefficients()
         return derivatives
 
-    def compute_probabilities(self, delta=None, mu=None, linear=True, eliminate_product=None, keep_conditionals=False):
+    def compute_probabilities(self, delta=None, mu=None, linear=True, numerator=None, eliminate_product=None,
+                              keep_conditionals=False):
         """Compute choice probabilities. By default, use unchanged delta and mu values. If linear is False, delta and mu
-        must be specified and already be exponentiated. If eliminate_product is specified, eliminate the product
-        associated with the specified index from the choice set. If keep_conditionals is True, return a tuple in which
-        if there is nesting, the second element are conditional probabilities given that an alternative in a nest is
-        chosen.
+        must be specified and already be exponentiated. If numerator is specified, it will be used as the numerator in
+        the non-nested Logit expression. If eliminate_product is specified, eliminate the product associated with the
+        specified index from the choice set. If keep_conditionals is True, return a tuple in which if there is nesting,
+        the second element are conditional probabilities given that an alternative in a nest is chosen.
         """
         if delta is None:
             assert self.delta is not None
@@ -575,7 +576,9 @@ class Market(object):
         # compute standard or nested probabilities
         if self.H == 0:
             conditionals = None
-            probabilities = exp_utilities / (1 + exp_utilities.sum(axis=0))
+            if numerator is None:
+                numerator = exp_utilities
+            probabilities = numerator / (1 + exp_utilities.sum(axis=0))
         else:
             exp_weighted_utilities = exp_utilities**(1 / (1 - self.rho))
             exp_inclusives = self.groups.sum(exp_weighted_utilities)

@@ -17,6 +17,10 @@ Berry, S., Levinsohn, J., & Pakes, A. (1995). `Automobile prices in market equil
 
 Berry, S., Levinsohn, J., & Pakes, A. (1999). `Voluntary export restraints on automobiles: Evaluating a trade policy <https://ideas.repec.org/a/aea/aecrev/v89y1999i3p400-430.html>`_. *American Economic Review, 83* (9), 400-430.
 
+.. _bhrw17:
+
+Brunner, D., Heiss, F., Romahn, A., & Weiser, C. (2017) `Reliable estimation of random coefficient logit demand models <https://ideas.repec.org/p/zbw/dicedp/267.html>`_. DICE Discussion Paper 267.
+
 .. _fw33:
 
 Frisch, R., & Waugh, F. V. (1933). `Partial time regressions as compared with individual trends <https://www.econometricsociety.org/publications/econometrica/1933/10/01/partial-time-regressions-compared-individual-trends>`_. *Econometrica, 1* (4), 387-401.

@@ -369,17 +369,20 @@ class Problem(Economy):
 
                 - ``'linear'`` (default) - Standard linear contraction mapping,
 
-                  .. math:: \delta \leftarrow \delta + \log s - \log s(\delta, \hat{\theta}),
+                  .. math:: \delta_{jt} \leftarrow \delta_{jt} + \log s_{jt} - \log s_{jt}(\delta, \hat{\theta}),
 
-                  which is the most popular type.
+                  which is the standard formulation.
 
                 - ``'nonlinear'`` - Exponentiated version,
 
-                  .. math:: \exp(\delta) \leftarrow \exp(\delta)s / s(\delta, \hat{\theta}),
+                  .. math:: \exp(\delta_{jt}) \leftarrow \exp(\delta_{jt})s_{jt} / s_{jt}(\delta, \hat{\theta}),
 
-                  which can be faster because fewer logarithms need to be calculated. It can also help mitigate problems
-                  stemming from any negative integration weights. However, without conservative parameter bounds, using
-                  this formulation may increase the chance of overflow errors.
+                  which can be faster because fewer logarithms need to be calculated. Additionally, when there are no
+                  nesting parameters, as in :ref:`Brunner, Heiss, Romahn, and Weiser (2017) <bhrw17>`,
+                  :math:`\exp(\delta)` is cancelled out of the numerator in the expression for
+                  :math:`s(\delta, \hat{\theta})`, which slightly reduces the computational burden. This formulation can
+                  also help mitigate problems stemming from any negative integration weights; however, without
+                  conservative parameter bounds, using this formulation may increase the chance of overflow errors.
 
             This option is only relevant if there are nonlinear parameters, since :math:`\delta` can be estimated
             analytically in the Logit model.
@@ -978,8 +981,13 @@ class DemandProblemMarket(Market):
                 delta, converged, iterations, evaluations = iteration._iterate(initial_delta, contraction)
             else:
                 assert fp_type == 'nonlinear'
-                compute_probabilities = functools.partial(self.compute_probabilities, mu=np.exp(self.mu), linear=False)
-                contraction = lambda d: d * self.products.shares / (compute_probabilities(d) @ self.agents.weights)
+                exp_mu = np.exp(self.mu)
+                compute_probabilities = functools.partial(self.compute_probabilities, mu=exp_mu, linear=False)
+                if self.H > 0:
+                    contraction = lambda d: d * self.products.shares / (compute_probabilities(d) @ self.agents.weights)
+                else:
+                    compute_quotient = functools.partial(compute_probabilities, numerator=exp_mu)
+                    contraction = lambda d: self.products.shares / (compute_quotient(d) @ self.agents.weights)
                 exp_delta, converged, iterations, evaluations = iteration._iterate(np.exp(initial_delta), contraction)
                 delta = np.log(exp_delta)
 
