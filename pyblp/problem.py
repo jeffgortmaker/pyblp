@@ -367,7 +367,7 @@ class Problem(Economy):
             Configuration for the type of contraction mapping used to compute :math:`\delta(\hat{\theta})`. The
             following types of contraction mappings are supported:
 
-                - ``'linear'`` (default) - Standard linear contraction mapping,
+                - ``'linear'`` (default) - Linear contraction mapping,
 
                   .. math:: \delta_{jt} \leftarrow \delta_{jt} + \log s_{jt} - \log s_{jt}(\delta, \hat{\theta}),
 
