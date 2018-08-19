@@ -1024,12 +1024,12 @@ class DemandProblemMarket(Market):
     def compute_shares_by_xi_jacobian(self, probabilities, conditionals):
         """Compute the Jacobian of shares with respect to xi (equivalently, to delta)."""
         diagonal_shares = np.diagflat(self.products.shares)
-        diagonal_weights = np.diagflat(self.agents.weights)
-        jacobian = diagonal_shares - probabilities @ diagonal_weights @ probabilities.T
+        weighted_probabilities = self.agents.weights * probabilities.T
+        jacobian = diagonal_shares - probabilities @ weighted_probabilities
         if self.H > 0:
             membership = self.get_membership_matrix()
             jacobian += self.rho / (1 - self.rho) * (
-                diagonal_shares - membership * (conditionals @ diagonal_weights @ probabilities.T)
+                diagonal_shares - membership * (conditionals @ weighted_probabilities)
             )
         return jacobian
 
