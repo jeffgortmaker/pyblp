@@ -66,7 +66,7 @@ class _InversionError(_Error):
 
     def __init__(self, matrix):
         """Compute condition number of the matrix."""
-        self.condition = np.nan if not np.isfinite(matrix).all() else np.linalg.cond(matrix)
+        self.condition = np.nan if not np.isfinite(matrix).all() else np.linalg.cond(matrix.astype(np.float64))
 
     def __str__(self):
         """Supplement the error with the condition number."""
