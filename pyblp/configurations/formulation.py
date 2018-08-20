@@ -4,8 +4,8 @@ import token
 import functools
 
 import patsy
-import sympy
 import numpy as np
+import sympy as sp
 import scipy.sparse
 import patsy.origin
 import patsy.builtins
@@ -373,7 +373,7 @@ class ColumnFormulation(object):
 
     def differentiate(self, name, order=1):
         """Differentiate the SymPy column expression with respect to a variable name."""
-        return self.expression.diff(sympy.Symbol(name), order)
+        return self.expression.diff(sp.Symbol(name), order)
 
 
 class EvaluationEnvironment(patsy.eval.EvalEnvironment):
@@ -398,7 +398,7 @@ class EvaluationEnvironment(patsy.eval.EvalEnvironment):
 
         # replace categorical variables with unicode objects and explicitly mark them as categorical so that labels are
         #   unique and so that all categorical variables are treated the same
-        C = sympy.Function('C')
+        C = sp.Function('C')
         for symbol in expression.free_symbols:
             if not np.issubdtype(data[symbol.name].dtype, getattr(np, 'number')):
                 expression = expression.replace(symbol, C(symbol))
@@ -466,7 +466,7 @@ class CategoricalTreatment(patsy.contrasts.Treatment):
         indicator variable.
         """
         suffix = cls.extract_suffix(name)
-        return None if suffix is None else sympy.Symbol(f'{cls.parse_base_symbol(name)}{suffix}')
+        return None if suffix is None else sp.Symbol(f'{cls.parse_base_symbol(name)}{suffix}')
 
 
 def parse_terms(formula):
@@ -504,7 +504,7 @@ def build_matrix(design, data):
 
 def parse_term_expression(term):
     """Multiply the SymPy expressions parsed from each factor in a patsy term."""
-    expression = sympy.Integer(1)
+    expression = sp.Integer(1)
     for factor in term.factors:
         try:
             expression *= parse_expression(factor.name())
@@ -525,8 +525,8 @@ def parse_expression(string, mark_categorical=False):
 
     # build a mapping from reserved names to the functions and classes that they represent (patsy functions are dealt
     #   with after parsing)
-    mapping = {n: sympy.Function(n) for n in patsy_function_names}
-    mapping.update({n: getattr(sympy, n) for n in sympy_function_names | sympy_class_names})
+    mapping = {n: sp.Function(n) for n in patsy_function_names}
+    mapping.update({n: getattr(sp, n) for n in sympy_function_names | sympy_class_names})
 
     # define a function that validates a list of tokens into which the string is broken, and that also adds any
     #   unrecognized names as new SymPy symbols
@@ -556,7 +556,7 @@ def parse_expression(string, mark_categorical=False):
         if categorical and depth > 1:
             raise ValueError("The C function must not be an argument to another function.")
         for arg in candidate.args:
-            if categorical and not isinstance(arg, sympy.Symbol):
+            if categorical and not isinstance(arg, sp.Symbol):
                 raise ValueError("The C function accepts only a single variable.")
             validate_categorical(arg, depth + 1, candidate.func == mapping['C'])
 
@@ -571,7 +571,7 @@ def parse_expression(string, mark_categorical=False):
     # replace patsy functions with the identity function, unless categorical variables are to be explicitly marked
     for name in patsy_function_names:
         if name != 'C' or not mark_categorical:
-            expression = expression.replace(mapping[name], sympy.Id)
+            expression = expression.replace(mapping[name], sp.Id)
     return expression
 
 
@@ -579,7 +579,11 @@ def evaluate_expression(expression, data, function_mapping=None):
     """Evaluate a SymPy expression at data mapping variable names to arrays. Optionally, supplement the default suite of
     NumPy functions with a mapping from non-default function names to functions.
     """
+    if expression.is_number:
+        return float(expression)
+    if expression.is_symbol:
+        return data[expression.name]
     symbols = list(expression.free_symbols)
     columns = (data[s.name] for s in symbols)
     modules = [function_mapping or {}, 'numpy']
-    return sympy.lambdify(symbols, expression, modules)(*columns)
+    return sp.lambdify(symbols, expression, modules)(*columns)
