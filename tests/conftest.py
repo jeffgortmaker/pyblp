@@ -97,11 +97,11 @@ def small_nested_logit_simulation():
     id_data = build_id_data(T=4, J=18, F=3, mergers=[{1: 0}])
     simulation = Simulation(
         product_formulations=(
-            Formulation('0 + prices + x'),
+            Formulation('0 + prices + x + y'),
             None,
             Formulation('0 + a + b')
         ),
-        beta=[-5, 1],
+        beta=[-5, 1, 1],
         sigma=None,
         gamma=[2, 1],
         product_data={
@@ -353,13 +353,23 @@ def large_nested_blp_simulation():
     pytest.param(['large_nested_blp', True], id="large nested BLP simulation with supply")
 ])
 def simulated_problem(request):
-    """Configure and solve a simulated problem, either with or without supply-side data."""
+    """Configure and solve a simulated problem, either with or without supply-side data. Preclude overflow with rho
+    bounds that are more conservative than the default ones.
+    """
     name, supply = request.param
     simulation, product_data = request.getfixturevalue(f'{name}_simulation')
     product_formulations = simulation.product_formulations[:2 + int(supply)]
     problem = Problem(product_formulations, product_data, simulation.agent_formulation, simulation.agent_data)
-    results = problem.solve(simulation.sigma, simulation.pi, simulation.rho, steps=1, costs_type=simulation.costs_type)
-    return simulation, product_data, problem, results
+    solve_options = {
+        'sigma': simulation.sigma,
+        'pi': simulation.pi,
+        'rho': simulation.rho,
+        'rho_bounds': (np.zeros_like(simulation.rho), np.minimum(0.9, 2 * simulation.rho)),
+        'costs_type': simulation.costs_type,
+        'steps': 1
+    }
+    results = problem.solve(**solve_options)
+    return simulation, product_data, problem, solve_options, results
 
 
 @pytest.fixture(scope='session')
