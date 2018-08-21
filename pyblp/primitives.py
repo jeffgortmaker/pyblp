@@ -495,11 +495,10 @@ class Market(object):
 
         # if the variable does contribute to X1, delta may change
         delta = self.delta.copy()
-        products = self.products.copy()
-        products[name] = variable
+        override = {name: variable}
         for index, formulation in enumerate(self._X1_formulations):
             if name in formulation.names:
-                delta += self.beta[index] * (formulation.evaluate(products) - self.products[name])
+                delta += self.beta[index] * (formulation.evaluate(self.products, override) - self.products[name])
         return delta
 
     def update_mu_with_variable(self, name, variable):
@@ -511,37 +510,28 @@ class Market(object):
 
         # if the variable does contribute to X2, mu may change
         X2 = self.products.X2.copy()
-        products = self.products.copy()
-        products[name] = variable
+        override = {name: variable}
         for index, formulation in enumerate(self._X2_formulations):
             if name in formulation.names:
-                X2[:, [index]] = formulation.evaluate(products)
+                X2[:, [index]] = formulation.evaluate(self.products, override)
         return self.compute_mu(X2)
 
     def compute_X1_derivatives(self, name, variable=None):
         """Compute derivatives of X1 with respect to a variable. By default, use unchanged variable values."""
-        if variable is None:
-            products = self.products
-        else:
-            products = self.products.copy()
-            products[name] = variable
+        override = None if variable is None else {name: variable}
         derivatives = np.zeros((self.J, self.K1), options.dtype)
         for index, formulation in enumerate(self._X1_formulations):
             if name in formulation.names:
-                derivatives[:, [index]] = formulation.evaluate_derivative(name, products)
+                derivatives[:, [index]] = formulation.evaluate_derivative(name, self.products, override)
         return derivatives
 
     def compute_X2_derivatives(self, name, variable=None):
         """Compute derivatives of X2 with respect to a variable. By default, use unchanged variable values."""
-        if variable is None:
-            products = self.products
-        else:
-            products = self.products.copy()
-            products[name] = variable
+        override = None if variable is None else {name: variable}
         derivatives = np.zeros((self.J, self.K2), options.dtype)
         for index, formulation in enumerate(self._X2_formulations):
             if name in formulation.names:
-                derivatives[:, [index]] = formulation.evaluate_derivative(name, products)
+                derivatives[:, [index]] = formulation.evaluate_derivative(name, self.products, override)
         return derivatives
 
     def compute_utility_derivatives(self, name, variable=None):

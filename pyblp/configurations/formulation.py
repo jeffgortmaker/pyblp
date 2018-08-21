@@ -364,15 +364,15 @@ class ColumnFormulation(object):
         """Defer to the string representation."""
         return str(self)
 
-    def evaluate(self, data):
-        """Evaluate the SymPy column expression at the values supplied by the mapping from variable names to arrays."""
-        return evaluate_expression(self.expression, data)
+    def evaluate(self, data, data_override=None):
+        """Evaluate the SymPy column expression at the values supplied by mappings from variable names to arrays."""
+        return evaluate_expression(self.expression, data, data_override)
 
-    def evaluate_derivative(self, name, data):
+    def evaluate_derivative(self, name, data, data_override=None):
         """Differentiate the SymPy column expression with respect to a variable name and evaluate the derivative at
-        values supplied by the mapping from variable names to arrays.
+        values supplied by mappings from variable names to arrays.
         """
-        return evaluate_expression(self.differentiate(name), data)
+        return evaluate_expression(self.differentiate(name), data, data_override)
 
     def differentiate(self, name):
         """Differentiate the SymPy column expression with respect to a variable name. Cache calls for speed."""
@@ -412,8 +412,9 @@ class EvaluationEnvironment(patsy.eval.EvalEnvironment):
                 data[symbol.name] = data[symbol.name].astype(np.unicode_).astype(np.object_)
 
         # evaluate the expression and handle universally-marked categorical variables with a non-default coding class
-        function_mapping = {'C': functools.partial(patsy.builtins.C, contrast=CategoricalTreatment)}
-        evaluated = evaluate_expression(expression, self._namespaces[0], function_mapping)
+        evaluated = evaluate_expression(expression, self._namespaces[0], function_mapping={
+            'C': functools.partial(patsy.builtins.C, contrast=CategoricalTreatment)
+        })
 
         # if the evaluated expression is a float or integer, it is a constant that needs to be repeated
         if isinstance(evaluated, (float, int)):
@@ -582,15 +583,23 @@ def parse_expression(string, mark_categorical=False):
     return expression
 
 
-def evaluate_expression(expression, data, function_mapping=None):
+def evaluate_expression(expression, data, data_override=None, function_mapping=None):
     """Evaluate a SymPy expression at data mapping variable names to arrays. Optionally, supplement the default suite of
     NumPy functions with a mapping from non-default function names to functions.
     """
     if expression.is_number:
         return float(expression)
     if expression.is_symbol:
-        return data[expression.name]
+        return get_symbol_data(expression, data, data_override)
     symbols = list(expression.free_symbols)
-    columns = (data[s.name] for s in symbols)
     modules = [function_mapping or {}, 'numpy']
+    columns = (get_symbol_data(s, data, data_override) for s in symbols)
     return sp.lambdify(symbols, expression, modules)(*columns)
+
+
+def get_symbol_data(symbol, data, data_override=None):
+    """Fetch data corresponding to a symbol from data mapping variable names to arrays."""
+    try:
+        return data_override[symbol.name]
+    except:
+        return data[symbol.name]
