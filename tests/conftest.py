@@ -4,14 +4,9 @@ import os
 
 import patsy
 import pytest
-import scipy.io
 import numpy as np
 
-from .data import TEST_DATA_PATH
-from pyblp.data import BLP_PRODUCTS_LOCATION, BLP_AGENTS_LOCATION
-from pyblp import (
-    Problem, Simulation, Formulation, Integration, options, build_id_data, build_ownership, build_blp_instruments
-)
+from pyblp import Problem, Simulation, Formulation, Integration, options, build_id_data, build_ownership
 
 
 @pytest.fixture(scope='session', autouse=True)
@@ -370,39 +365,6 @@ def simulated_problem(request):
     }
     results = problem.solve(**solve_options)
     return simulation, product_data, problem, solve_options, results
-
-
-@pytest.fixture(scope='session')
-def knittel_metaxoglou_2014():
-    """Configure the example automobile problem from Knittel and Metaxoglou (2014) and load initial parameter values and
-    estimates created by replication code.
-
-    The replication code was modified to output a Matlab data file for the automobile dataset, which contains the
-    results of one round of Knitro optimization and post-estimation calculations. The replication code was kept mostly
-    intact, but was modified slightly in the following ways:
-
-        - Tolerance parameters, Knitro optimization parameters, and starting values for sigma were all configured.
-        - A bug in the code's computation of the BLP instruments was fixed. When creating a vector of "other" and
-          "rival" sums, the code did not specify a dimension over which to sum, which created problems with one-
-          dimensional vectors. A dimension of 1 was added to both sum commands.
-        - Delta was initialized as the solution to the Logit model.
-        - After estimation, the objective was called again at the optimal parameters to re-load globals at the optimal
-          parameter values.
-        - Before being saved to a Matlab data file, matrices were renamed and reshaped.
-
-    """
-    product_data = np.recfromcsv(BLP_PRODUCTS_LOCATION)
-    product_data = {n: product_data[n] for n in product_data.dtype.names}
-    product_data['demand_instruments'] = build_blp_instruments(Formulation('hpwt + air + mpg + space'), product_data)
-    problem = Problem(
-        product_formulations=(
-            Formulation('0 + prices + I(1) + hpwt + air + mpg + space'),
-            Formulation('0 + prices + I(1) + hpwt + air + mpg')
-        ),
-        product_data=product_data,
-        agent_data=np.recfromcsv(BLP_AGENTS_LOCATION)
-    )
-    return scipy.io.loadmat(str(TEST_DATA_PATH / 'knittel_metaxoglou_2014.mat'), {'problem': problem})
 
 
 @pytest.fixture(scope='session', params=[pytest.param(1, id="1 observation"), pytest.param(10, id="10 observations")])

@@ -1,6 +1,5 @@
 graft docs
 graft pyblp/data
-graft tests/data
 
 include README.rst
 include LICENSE.txt
