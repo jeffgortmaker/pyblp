@@ -743,8 +743,9 @@ class Market(object):
         if prices is None:
             prices = self.products.prices
 
-        # derivatives of utilities with respect to prices change during iteration only if second derivatives are nonzero
-        if any(f.differentiate('prices', order=2) != 0 for f in self._X1_formulations + self._X2_formulations):
+        # derivatives of utilities with respect to prices change during iteration only if they depend on prices
+        formulations = self._X1_formulations + self._X2_formulations
+        if any(s.name == 'prices' for f in formulations for s in f.differentiate('prices').free_symbols):
             get_derivatives = lambda p: self.compute_utility_derivatives('prices', p)
         else:
             derivatives = self.compute_utility_derivatives('prices')

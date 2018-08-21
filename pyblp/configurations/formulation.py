@@ -353,6 +353,9 @@ class ColumnFormulation(object):
             if base_symbol is not None:
                 self.expression = self.expression.replace(base_symbol, CategoricalTreatment.parse_full_symbol(name))
 
+        # cache evaluated derivatives
+        self.derivatives = {}
+
     def __str__(self):
         """Format the expression as a string."""
         return str(self.expression)
@@ -365,15 +368,19 @@ class ColumnFormulation(object):
         """Evaluate the SymPy column expression at the values supplied by the mapping from variable names to arrays."""
         return evaluate_expression(self.expression, data)
 
-    def evaluate_derivative(self, name, data, order=1):
+    def evaluate_derivative(self, name, data):
         """Differentiate the SymPy column expression with respect to a variable name and evaluate the derivative at
         values supplied by the mapping from variable names to arrays.
         """
-        return evaluate_expression(self.differentiate(name, order), data)
+        return evaluate_expression(self.differentiate(name), data)
 
-    def differentiate(self, name, order=1):
-        """Differentiate the SymPy column expression with respect to a variable name."""
-        return self.expression.diff(sp.Symbol(name), order)
+    def differentiate(self, name):
+        """Differentiate the SymPy column expression with respect to a variable name. Cache calls for speed."""
+        derivative = self.derivatives.get(name)
+        if derivative is None:
+            derivative = self.expression.diff(sp.Symbol(name))
+            self.derivatives[name] = derivative
+        return derivative
 
 
 class EvaluationEnvironment(patsy.eval.EvalEnvironment):
