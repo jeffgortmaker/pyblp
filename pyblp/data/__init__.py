@@ -9,9 +9,17 @@ BLP_PRODUCTS_LOCATION : `str`
     :ref:`Berry, Levinsohn, and Pakes (1995) <blp95>`. The file includes pre-computed instruments.
 BLP_AGENTS_LOCATION : `str`
     Location of a CSV file containing the automobile agent data, which are also extracted from the original GAUSS code.
-    Included in the file are importance sampling weights, unobservables for product characteristics, and income, which
-    before importance sampling consists of draws from lognormal distributions with standard deviation ``1.72`` and
-    the following means:
+    Included in the file are importance sampling weights, nodes for integration, and income.
+
+    Instead of being named ``nodes0``, ``nodes1``, ``nodes2``, and so on as expected by :class:`~pyblp.Problem`, each
+    column of nodes is associated with a named product characteristic. Usually, it wouldn't matter which nodes were
+    associated with which characteristics in :math:`X_2`. However, since nodes in the automobile problem were computed
+    according to importance sampling, the ordering of nodes severely impacts estimation results. If you want to use
+    these nodes, before passing them to :class:`~pyblp.Problem`, they will need to be renamed. Alternatively, the
+    :doc:`Examples </examples>` section demonstrates how use :func:`~pyblp.build_matrix` to build a new ``nodes`` field.
+
+    Before importance sampling, income consists of draws from lognormal distributions with standard deviation ``1.72``
+    and the following means:
 
     ====  =======
     Year  Mean
@@ -45,9 +53,15 @@ NEVO_AGENTS_LOCATION : `str`
     Location of a CSV file containing the fake cereal agent data. Included in the file Monte Carlo weights and draws,
     along with demographics, which collectively are used by :ref:`Nevo (2000) <n00>` to solve the fake cereal problem.
 
+    Unlike for the automobile data, integration nodes are named ``nodes0``, ``nodes1``, ``nodes2``, and so on as
+    expected by :class:`~pyblp.Problem`. This is because for a large enough set of Monte Carlo draws, the ordering of
+    nodes shouldn't impact estimation results. However, since there are only a small number of agents in these example
+    data, their ordering does somewhat impact results. For this reason, when formulating :math:`X_2`, the following
+    ordering is the one that is generally used: ``1 + prices + sugar + mushy``.
+
 Examples
 --------
-Any number of functions can be used to load these data into memory. For example, the following code uses :mod:`numpy`:
+Any number of functions can be used to load these data into memory. In this example, we'll first use :mod:`numpy`.
 
 .. ipython:: python
 
@@ -57,13 +71,15 @@ Any number of functions can be used to load these data into memory. For example,
 
 Record arrays can be cumbersome to manipulate. A more flexible alternative, the :class:`pandas.DataFrame`, can be built
 by the :func:`pandas.read_csv` function in the :mod:`pandas` package, which, unlike :mod:`numpy`, is not a pyblp
-requirement:
+requirement.
 
 .. ipython:: python
 
    import pandas as pd
    blp_product_data = pd.read_csv(pyblp.data.BLP_PRODUCTS_LOCATION)
    blp_agent_data = pd.read_csv(pyblp.data.BLP_AGENTS_LOCATION)
+
+For more examples, refer to the :doc:`Examples </examples>` section.
 
 """
 
