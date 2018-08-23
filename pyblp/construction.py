@@ -38,7 +38,7 @@ def build_id_data(T, J, F, mergers=()):
 
     Example
     -------
-    The following code builds a small panel of market and firm IDs with an extra column of firm IDs that represents a
+    In this example, we'll build a small panel of market and firm IDs with an extra column of firm IDs that represent a
     simple acquisition:
 
     .. ipython:: python
@@ -48,6 +48,8 @@ def build_id_data(T, J, F, mergers=()):
 
        id_data = pyblp.build_id_data(T=2, J=5, F=4, mergers=[{2: 0}])
        id_data
+
+    For more examples, refer to the :doc:`Examples </examples>` section.
 
     """
 
@@ -123,7 +125,7 @@ def build_ownership(product_data, kappa_specification=None):
 
     Example
     -------
-    The following code uses IDs created by the example for :func:`build_id_data` to build two stacks of standard
+    In this example, we'll use the IDs created in the example for :func:`build_id_data` to build two stacks of standard
     ownership matrices.
 
     .. ipython:: python
@@ -135,8 +137,8 @@ def build_ownership(product_data, kappa_specification=None):
        ownership = pyblp.build_ownership(id_data)
        ownership
 
-    We'll now define modify the default :math:`\kappa` specification so that the elements associated with firm IDs ``0``
-    and ``1`` are equal to ``0.5``.
+    We'll now modify the default :math:`\kappa` specification so that the elements associated with firm IDs ``0`` and
+    ``1`` are equal to ``0.5``.
 
     .. ipython:: python
 
@@ -145,7 +147,7 @@ def build_ownership(product_data, kappa_specification=None):
                return 1
            return 0.5 if f < 2 and g < 2 else 0
 
-    The following code uses this specification to build two more stacks of non-standard ownership matrices.
+    Finally, we'll use this specification to build two more stacks of non-standard ownership matrices.
 
     .. ipython:: python
 
@@ -154,6 +156,8 @@ def build_ownership(product_data, kappa_specification=None):
 
        ownership = pyblp.build_ownership(id_data, kappa_specification)
        ownership
+
+    For more examples, refer to the :doc:`Examples </examples>` section.
 
     """
 
@@ -237,17 +241,20 @@ def build_blp_instruments(formulation, product_data, firms_index=0):
 
     Example
     -------
-    The following code loads the automobile product data from :ref:`Berry, Levinsohn, and Pakes (1995) <blp95>` and
-    builds some simple demand-side instruments for the problem.
+    In this example, we'll load the automobile product data from :ref:`Berry, Levinsohn, and Pakes (1995) <blp95>` and
+    build some very simple demand-side instruments for the problem. These instruments are different from the pre-built
+    ones included in the automobile product data file.
 
     .. ipython:: python
 
-       formulation = pyblp.Formulation('hpwt + air + mpg + space')
+       formulation = pyblp.Formulation('1 + hpwt + air + mpd + space')
        formulation
-       product_data = np.recfromcsv(pyblp.data.BLP_PRODUCTS_LOCATION)
+       product_data = np.recfromcsv(pyblp.data.BLP_PRODUCTS_LOCATION, encoding='utf-8')
        product_data.dtype.names
        instruments = pyblp.build_blp_instruments(formulation, product_data)
        instruments.shape
+
+    For more examples, refer to the :doc:`Examples </examples>` section.
 
     """
 
@@ -294,19 +301,21 @@ def build_matrix(formulation, data):
 
     Example
     -------
-    The following code loads the fake cereal data from :ref:`Nevo (2000) <n00>` and builds instruments for the problem
-    when instead of absorbing product fixed effects, :math:`X_1` is configured to include product indicator variables.
-    Specifically, :math:`Z_D` is then product ID indicators followed by the instrument variables in the data:
+    In this example, we'll load the fake cereal data from :ref:`Nevo (2000) <n00>` and build instruments for a problem
+    when instead of absorbing product fixed effects, we configure :math:`X_1` to include product indicator variables.
+    Specifically, :math:`Z_D` is then product ID indicators followed by the pre-built instruments.
 
     .. ipython:: python
 
        instruments_string = ' + '.join(f'demand_instruments{i}' for i in range(20))
        formulation = pyblp.Formulation(f'0 + C(product_ids) + {instruments_string}')
        formulation
-       data = np.recfromcsv(pyblp.data.NEVO_PRODUCTS_LOCATION)
+       data = np.recfromcsv(pyblp.data.NEVO_PRODUCTS_LOCATION, encoding='utf-8')
        data.dtype.names
        instruments = pyblp.build_matrix(formulation, data)
        instruments.shape
+
+    For more examples, refer to the :doc:`Examples </examples>` section.
 
     """
     if not isinstance(formulation, Formulation):

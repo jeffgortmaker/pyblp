@@ -152,6 +152,10 @@ class Results(object):
         Unique market IDs, which are in the same order as post-estimation outputs returned by methods that compute a
         single value for each market.
 
+    Examples
+    --------
+    For examples of how to use class methods, refer to the :doc:`Examples </examples>` section.
+
     """
 
     def __init__(self, objective_info, last_results, step_start_time, optimization_start_time, optimization_end_time,

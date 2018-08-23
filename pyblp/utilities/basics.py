@@ -37,32 +37,27 @@ def parallel(processes):
 
     Example
     -------
-    The following code uses multiprocessing to solve a very simple problem with some of the automobile product data from
-    :ref:`Berry, Levinsohn, and Pakes (1995) <blp95>`. The same process pool is then used to compute elasticities. Since
-    this problem uses a small dataset, there are no gains from parallelization.
+    The following code uses multiprocessing to compute elasticities market-by-market for a simple Logit problem
+    configured with some of the fake cereal data from :ref:`Nevo (2000) <n00>`.
 
     .. ipython:: python
 
-       products = np.recfromcsv(pyblp.data.BLP_PRODUCTS_LOCATION)
-       products = {n: products[n] for n in products.dtype.names}
-       products['demand_instruments'] = pyblp.build_blp_instruments(
-           pyblp.Formulation('hpwt + air + mpg + space'),
-           products
-       )
-       problem = pyblp.Problem(
-           product_formulations=(
-               pyblp.Formulation('prices + hpwt + air + mpg + space'),
-               pyblp.Formulation('hpwt + air')
-           ),
-           product_data=products,
-           integration=pyblp.Integration('monte_carlo', 50, seed=0)
-       )
-       initial_sigma = np.eye(3)
+       products = np.recfromcsv(pyblp.data.NEVO_PRODUCTS_LOCATION, encoding='utf-8')
+       formulation = pyblp.Formulation('0 + prices', absorb='C(product_ids)')
+       problem = pyblp.Problem(formulation, products)
+       results = problem.solve()
        with pyblp.parallel(2):
-           results = problem.solve(initial_sigma, steps=1)
-           elasticities = results.compute_elasticities()
-       results
+            elasticities = results.compute_elasticities()
        elasticities
+
+    Solving a Logit problem does not require market-by-market computation, so parallelization does not change its
+    estimation procedure. Although elasticity computation does happen market-by-market, this problem is very small, so
+    there are no gains from parallelization in this example.
+
+    If the problem were much larger, running :meth:`Problem.solve` and :meth:`Results.compute_elasticities` under the
+    ``with`` statement could substantially speed up estimation and elasticity computation.
+
+    For more examples, refer to the :doc:`Examples </examples>` section.
 
     """
 

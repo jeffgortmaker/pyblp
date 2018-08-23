@@ -78,16 +78,16 @@ class Formulation(object):
 
     Examples
     --------
-    The following code designs a matrix without an intercept, but with both prices and another numeric size variable:
+    In this example, we'll design a matrix without an intercept, but with both prices and another numeric size variable.
 
     .. ipython:: python
 
        formulation = pyblp.Formulation('0 + prices + size')
        formulation
 
-    The following code designs a second matrix with an intercept, with first- and second-degree size terms, with
-    categorical product IDs and years, and with the interaction of the last two. The first formulation includes the
-    fixed effects as indicator variables, and the second absorbs them:
+    Next, we'll design a second matrix with an intercept, with first- and second-degree size terms, with categorical
+    product IDs and years, and with the interaction of the last two. The first formulation will include include the
+    fixed effects  as indicator variables, and the second will absorb them.
 
     .. ipython:: python
 
@@ -96,14 +96,16 @@ class Formulation(object):
        formulation2 = pyblp.Formulation('size + I(size ** 2)', absorb='C(product) * C(year)')
        formulation2
 
-    The following code designs a third matrix with an intercept and with a yearly trend interacted with the natural
-    logarithm of income and categorical education. Absorption of continuous variables is not supported, so indicators
-    must be used here:
+    Finally, we'll design a third matrix with an intercept and with a yearly trend interacted with the natural logarithm
+    of income and categorical education. Absorption of continuous variables is not supported, so we need to use
+    indicator variables here.
 
     .. ipython:: python
 
        formulation = pyblp.Formulation('year:(log(income) + C(education))')
        formulation
+
+    For more examples, refer to the :doc:`Examples </examples>` section.
 
     """
 

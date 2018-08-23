@@ -42,12 +42,23 @@ class Integration(object):
 
     Example
     -------
-    The following code builds a Monte Carlo configuration with 1,000 draws for each market and a fixed seed:
+    In this example, we'll build a Monte Carlo configuration with 1,000 draws for each market and a fixed seed.
 
     .. ipython:: python
 
        integration = pyblp.Integration('monte_carlo', size=1000, seed=0)
        integration
+
+    Depending on the dimension of the integration problem, a level six sparse grid configuration may have a similar
+    number of nodes. However, even if there are fewer nodes, it is likely to perform better in the BLP problem. Sparse
+    grid construction is deterministic, so a seed is not needed to fix the grid every time we use this configuration.
+
+    .. ipython:: python
+
+       integration = pyblp.Integration('grid', size=7)
+       integration
+
+    For more examples, refer to the :doc:`Examples </examples>` section.
 
     """
 

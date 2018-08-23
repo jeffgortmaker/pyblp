@@ -153,35 +153,22 @@ class Problem(Economy):
 
     Example
     -------
-    The following code initializes a very simple problem with some of the automobile product data from
-    :ref:`Berry, Levinsohn, and Pakes (1995) <blp95>`:
+    In this example, we'll set up the fake cereal problem from :ref:`Nevo (2000) <n00>`.
 
     .. ipython:: python
 
-       products = np.recfromcsv(pyblp.data.BLP_PRODUCTS_LOCATION)
-       products = {n: products[n] for n in products.dtype.names}
-       products['demand_instruments'] = pyblp.build_blp_instruments(
-           pyblp.Formulation('hpwt + air + mpg + space'),
-           products
+       products = np.recfromcsv(pyblp.data.NEVO_PRODUCTS_LOCATION, encoding='utf-8')
+       agents = np.recfromcsv(pyblp.data.NEVO_AGENTS_LOCATION, encoding='utf-8')
+       product_formulations = (
+           pyblp.Formulation('0 + prices', absorb='C(product_ids)'),
+           pyblp.Formulation('1 + prices + sugar + mushy')
        )
-       problem = pyblp.Problem(
-           product_formulations=(
-               pyblp.Formulation('prices + hpwt + air + mpg + space'),
-               pyblp.Formulation('hpwt + air')
-           ),
-           product_data=products,
-           integration=pyblp.Integration('monte_carlo', 50, seed=0)
-       )
+       agent_formulation = pyblp.Formulation('0 + income + income_squared + age + child')
+       problem = pyblp.Problem(product_formulations, products, agent_formulation, agents)
        problem
 
-    After choosing to optimize over the diagonal variance elements in :math:`\Sigma` and choosing starting values, the
-    initialized problem can be solved. For simplicity, the following code halts estimation after one GMM step:
-
-    .. ipython:: python
-
-       initial_sigma = np.eye(3)
-       results = problem.solve(initial_sigma, steps=1)
-       results
+    We'll solve this example problem in :meth:`Problem.solve`. For more examples, refer to the
+    :doc:`Examples </examples>` section.
 
     """
 
@@ -425,6 +412,41 @@ class Problem(Economy):
         -------
         `Results`
             :class:`Results` of the solved problem.
+
+        Examples
+        --------
+        In this example, we'll first set up the fake cereal problem used in the example for :class:`Problem` from
+        :ref:`Nevo (2000) <n00>`.
+
+        .. ipython:: python
+
+           products = np.recfromcsv(pyblp.data.NEVO_PRODUCTS_LOCATION, encoding='utf-8')
+           agents = np.recfromcsv(pyblp.data.NEVO_AGENTS_LOCATION, encoding='utf-8')
+           product_formulations = (
+               pyblp.Formulation('0 + prices', absorb='C(product_ids)'),
+               pyblp.Formulation('1 + prices + sugar + mushy')
+           )
+           agent_formulation = pyblp.Formulation('0 + income + income_squared + age + child')
+           problem = pyblp.Problem(product_formulations, products, agent_formulation, agents)
+           problem
+
+        To solve the problem, we'll use the same starting values as :ref:`Nevo (2000) <n00>`. We'll also use a
+        non-default unbounded optimization routine that is similar to the default one in Matlab and we'll halt
+        estimation after one GMM step for the sake of speed in this example.
+
+        .. ipython:: python
+
+           sigma = np.diag([0.3302, 2.4526, 0.0163, 0.2441])
+           pi = [
+              [ 5.4819,  0,      0.2037,  0     ],
+              [15.8935, -1.2000, 0,       2.6342],
+              [-0.2506,  0,      0.0511,  0     ],
+              [ 1.2650,  0,     -0.8091,  0     ]
+           ]
+           results = problem.solve(sigma, pi, steps=1, optimization=pyblp.Optimization('bfgs'))
+           results
+
+        For more examples, refer to the :doc:`Examples </examples>` section.
 
         """
 

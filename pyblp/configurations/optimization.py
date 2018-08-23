@@ -107,15 +107,15 @@ class Optimization(object):
 
     Examples
     --------
-    The following code builds a SLSQP configuration with a non-default tolerance:
+    In this example, we'll build a SLSQP configuration with a non-default tolerance.
 
     .. ipython:: python
 
        optimization = pyblp.Optimization('slsqp', {'tol': 1e-10})
        optimization
 
-    Instead of using a non-custom routine, the following code builds a custom method that implements a grid search over
-    parameter values between specified bounds:
+    Next, instead of using a non-custom routine, we'll create a custom method that implements a grid search over
+    parameter values between specified bounds.
 
     .. ipython:: python
 
@@ -131,12 +131,14 @@ class Optimization(object):
                iteration_callback()
            return best_values, True
 
-    You can then use this custom method to build an optimization configuration:
+    We can then use this custom method to build an optimization configuration.
 
     .. ipython:: python
 
        optimization = pyblp.Optimization(custom_method, compute_gradient=False)
        optimization
+
+    For more examples, refer to the :doc:`Examples </examples>` section.
 
     """
 

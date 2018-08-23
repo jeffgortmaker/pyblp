@@ -57,17 +57,17 @@ class Iteration(object):
 
     Examples
     --------
-    The following code builds a SQUAREM configuration with a :math:`\ell^\infty`-norm that uses scheme S1 from
-    :ref:`Varadhan and Roland (2008) <vr08>`:
+    In this example, we'll build a SQUAREM configuration with a :math:`\ell^2`-norm and use scheme S1 from
+    :ref:`Varadhan and Roland (2008) <vr08>`.
 
     .. ipython:: python
 
-       iteration = pyblp.Iteration('squarem', {'norm': lambda x: np.abs(x).max(), 'scheme': 1})
+       iteration = pyblp.Iteration('squarem', {'norm': np.linalg.norm, 'scheme': 1})
        iteration
 
-    Instead of using a non-custom routine, the following code builds a custom method that implements a version of simple
+    Next, instead of using a built-in routine, we'll create a custom method that implements a version of simple
     iteration, which, for the sake of having a nontrivial example, arbitrarily identifies a major iteration with three
-    objective evaluations:
+    objective evaluations.
 
     .. ipython:: python
 
@@ -81,12 +81,14 @@ class Iteration(object):
                    callback()
            return x, evaluations < max_evaluations
 
-    You can then use this custom method to build an iteration configuration:
+    We can then use this custom method to build an iteration configuration.
 
     .. ipython:: python
 
        iteration = pyblp.Iteration(custom_method)
        iteration
+
+    For more examples, refer to the :doc:`Examples </examples>` section.
 
     """
 

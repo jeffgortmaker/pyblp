@@ -221,16 +221,16 @@ class Simulation(Economy):
 
     Example
     -------
-    The following code simulates a small amount of data for two markets. Exogenous product data, ``size`` and
-    ``weight``, along with a demographic, ``income``, are simulated; unobserved agent data are constructed according to
-    a low-level Gauss-Hermite product rule.
+    In this example, we'll simulate a small amount of data for two markets. Specifically, we'll simulate exogenous
+    product data, ``size`` and ``weight``, along with a demographic, ``income``. We'll construct unobserved agent data
+    according to a low-level Gauss-Hermite product rule. A non-example simulation would be much larger.
 
     .. ipython:: python
 
        simulation = pyblp.Simulation(
            product_formulations=(
                pyblp.Formulation('0 + prices + size'),
-               pyblp.Formulation('prices'),
+               pyblp.Formulation('1 + prices'),
                pyblp.Formulation('0 + size + weight')
            ),
            beta=[-10, 1],
@@ -252,12 +252,8 @@ class Simulation(Economy):
        simulation.agent_data
        simulation.product_data
 
-    Bertrand-Nash prices and shares, which are initialized as zero above, can be computed by solving the simulation:
-
-    .. ipython:: python
-
-       product_data = simulation.solve()
-       product_data
+    We'll solve this example simulation in :meth:`Simulation.solve`. For more examples, refer to the
+    :doc:`Examples </examples>` section.
 
     """
 
@@ -498,6 +494,46 @@ class Simulation(Economy):
         `recarray`
             Simulated :attr:`Simulation.product_data` that are updated with Bertrand-Nash prices and shares, which can
             be passed to `product_data` in :class:`Problem`.
+
+        Example
+        -------
+        In this example, we'll first create the simulation from the example for :class:`Simulation`.
+
+        .. ipython:: python
+
+           simulation = pyblp.Simulation(
+               product_formulations=(
+                   pyblp.Formulation('0 + prices + size'),
+                   pyblp.Formulation('1 + prices'),
+                   pyblp.Formulation('0 + size + weight')
+               ),
+               beta=[-10, 1],
+               sigma=[
+                   [2, 0],
+                   [0, 1]
+               ],
+               gamma=[1, 2],
+               product_data=pyblp.build_id_data(T=2, J=20, F=5),
+               agent_formulation=pyblp.Formulation('0 + income'),
+               integration=pyblp.Integration('product', 4),
+               pi=[
+                   [0],
+                   [1]
+               ],
+               seed=0
+           )
+           simulation
+           simulation.agent_data
+           simulation.product_data
+
+        We'll compute Bertrand-Nash prices and shares, which are initialized as zero above, by solving the simulation.
+
+        .. ipython:: python
+
+           product_data = simulation.solve()
+           product_data
+
+        For more examples, refer to the :doc:`Examples </examples>` section.
 
         """
         errors = []
