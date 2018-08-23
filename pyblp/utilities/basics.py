@@ -42,9 +42,9 @@ def parallel(processes):
 
     .. ipython:: python
 
-       products = np.recfromcsv(pyblp.data.NEVO_PRODUCTS_LOCATION, encoding='utf-8')
+       product_data = np.recfromcsv(pyblp.data.NEVO_PRODUCTS_LOCATION, encoding='utf-8')
        formulation = pyblp.Formulation('0 + prices', absorb='C(product_ids)')
-       problem = pyblp.Problem(formulation, products)
+       problem = pyblp.Problem(formulation, product_data)
        results = problem.solve()
        with pyblp.parallel(2):
             elasticities = results.compute_elasticities()

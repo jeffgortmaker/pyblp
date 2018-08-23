@@ -310,9 +310,9 @@ def build_matrix(formulation, data):
        instruments_string = ' + '.join(f'demand_instruments{i}' for i in range(20))
        formulation = pyblp.Formulation(f'0 + C(product_ids) + {instruments_string}')
        formulation
-       data = np.recfromcsv(pyblp.data.NEVO_PRODUCTS_LOCATION, encoding='utf-8')
-       data.dtype.names
-       instruments = pyblp.build_matrix(formulation, data)
+       product_data = np.recfromcsv(pyblp.data.NEVO_PRODUCTS_LOCATION, encoding='utf-8')
+       product_data.dtype.names
+       instruments = pyblp.build_matrix(formulation, product_data)
        instruments.shape
 
     For more examples, refer to the :doc:`Examples </examples>` section.

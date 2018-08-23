@@ -157,14 +157,14 @@ class Problem(Economy):
 
     .. ipython:: python
 
-       products = np.recfromcsv(pyblp.data.NEVO_PRODUCTS_LOCATION, encoding='utf-8')
-       agents = np.recfromcsv(pyblp.data.NEVO_AGENTS_LOCATION, encoding='utf-8')
+       product_data = np.recfromcsv(pyblp.data.NEVO_PRODUCTS_LOCATION, encoding='utf-8')
+       agent_data = np.recfromcsv(pyblp.data.NEVO_AGENTS_LOCATION, encoding='utf-8')
        product_formulations = (
            pyblp.Formulation('0 + prices', absorb='C(product_ids)'),
            pyblp.Formulation('1 + prices + sugar + mushy')
        )
        agent_formulation = pyblp.Formulation('0 + income + income_squared + age + child')
-       problem = pyblp.Problem(product_formulations, products, agent_formulation, agents)
+       problem = pyblp.Problem(product_formulations, product_data, agent_formulation, agent_data)
        problem
 
     We'll solve this example problem in :meth:`Problem.solve`. For more examples, refer to the
@@ -420,14 +420,14 @@ class Problem(Economy):
 
         .. ipython:: python
 
-           products = np.recfromcsv(pyblp.data.NEVO_PRODUCTS_LOCATION, encoding='utf-8')
-           agents = np.recfromcsv(pyblp.data.NEVO_AGENTS_LOCATION, encoding='utf-8')
+           product_data = np.recfromcsv(pyblp.data.NEVO_PRODUCTS_LOCATION, encoding='utf-8')
+           agent_data = np.recfromcsv(pyblp.data.NEVO_AGENTS_LOCATION, encoding='utf-8')
            product_formulations = (
                pyblp.Formulation('0 + prices', absorb='C(product_ids)'),
                pyblp.Formulation('1 + prices + sugar + mushy')
            )
            agent_formulation = pyblp.Formulation('0 + income + income_squared + age + child')
-           problem = pyblp.Problem(product_formulations, products, agent_formulation, agents)
+           problem = pyblp.Problem(product_formulations, product_data, agent_formulation, agent_data)
            problem
 
         To solve the problem, we'll use the same starting values as :ref:`Nevo (2000) <n00>`. We'll also use a

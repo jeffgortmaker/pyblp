@@ -48,10 +48,10 @@ The `product_data` argument of :class:`Problem` should be a structured array-lik
 
 .. ipython:: python
 
-   nevo_products = np.recfromcsv(pyblp.data.NEVO_PRODUCTS_LOCATION, encoding='utf-8')
-   blp_products = np.recfromcsv(pyblp.data.BLP_PRODUCTS_LOCATION, encoding='utf-8')
-   nevo_products.dtype.names
-   blp_products.dtype.names
+   nevo_product_data = np.recfromcsv(pyblp.data.NEVO_PRODUCTS_LOCATION, encoding='utf-8')
+   blp_product_data = np.recfromcsv(pyblp.data.BLP_PRODUCTS_LOCATION, encoding='utf-8')
+   nevo_product_data.dtype.names
+   blp_product_data.dtype.names
 
 Both sets of product data contain market IDs, product IDs, two sets of firm IDs (the second are IDs after a simple merger, which are used later), shares, prices, a number of product characteristics, and pre-computed instruments. The fake cereal product IDs will be used to construct fixed effects and the automobile product IDs are called clustering IDs because they will be used to compute clustered standard errors.
 
@@ -63,10 +63,10 @@ The `agent_data` argument of :class:`Problem` should also be a structured array-
 
 .. ipython:: python
 
-   nevo_agents = np.recfromcsv(pyblp.data.NEVO_AGENTS_LOCATION, encoding='utf-8')
-   blp_agents = np.recfromcsv(pyblp.data.BLP_AGENTS_LOCATION, encoding='utf-8')
-   nevo_agents.dtype.names
-   blp_agents.dtype.names
+   nevo_agent_data = np.recfromcsv(pyblp.data.NEVO_AGENTS_LOCATION, encoding='utf-8')
+   blp_agent_data = np.recfromcsv(pyblp.data.BLP_AGENTS_LOCATION, encoding='utf-8')
+   nevo_agent_data.dtype.names
+   blp_agent_data.dtype.names
 
 Both sets of agent data contain market IDs, integration weights, integration nodes, and demographics. The fake cereal data contains multiple demographics, whereas income is the only demographic included in the automobile data. The fake cereal data contains simple Monte Carlo draws. Nodes and weights in the automobile data are from importance sampling.
 
@@ -76,10 +76,10 @@ When constructing the automobile ``nodes`` field expected by :class:`Problem`, w
 
 .. ipython:: python
 
-   blp_agents = {n: blp_agents[n] for n in blp_agents.dtype.names}
-   blp_agents['nodes'] = pyblp.build_matrix(
+   blp_agent_data = {n: blp_agent_data[n] for n in blp_agent_data.dtype.names}
+   blp_agent_data['nodes'] = pyblp.build_matrix(
        pyblp.Formulation('0 + constant_nodes + I(0) + hpwt_nodes + air_nodes + mpd_nodes + space_nodes'),
-       blp_agents
+       blp_agent_data
    )
 
 We've included an arbitrary column of zeros because in the automobile problem, we'll end up interacting prices only with income, not with unobserved characteristics. 
@@ -107,9 +107,9 @@ Up to four :class:`Formulation` configurations can be used to configure a :class
    nevo_agent_formulation
    nevo_problem = pyblp.Problem(
        nevo_product_formulations, 
-       nevo_products,
+       nevo_product_data,
        nevo_agent_formulation,
-       nevo_agents
+       nevo_agent_data
    )
    nevo_problem
 
@@ -181,9 +181,9 @@ Similar to :ref:`Andrews, Gentzkow, and Shapiro (2017) <ags17>`, who replicated 
    ]
    blp_problem = pyblp.Problem(
        blp_product_formulations, 
-       blp_products, 
+       blp_product_data, 
        blp_agent_formulation, 
-       blp_agents
+       blp_agent_data
    )
 
 A linear marginal cost specification is the default, so we'll need to use the `costs_type` argument to employ the log-linear specification used by :ref:`Berry, Levinsohn, and Pakes (1995) <blp95>`. A downside of this specification is that nonpositive estimated marginal costs can create problems for the optimization routine when computing :math:`\tilde{c}(\hat{\theta}) = \log c(\hat{\theta})`. Since this specification of the automobile problem suffers from such problems, we'll use the `costs_bounds` argument to bound marginal costs from below by a small number. 
@@ -238,8 +238,8 @@ Post-estimation outputs are computed for each market and stacked. We'll use :fun
 
 .. ipython:: python
 
-   single_nevo_market = nevo_products['market_ids'] == 'C01Q1'
-   single_blp_market = blp_products['market_ids'] == 1971
+   single_nevo_market = nevo_product_data['market_ids'] == 'C01Q1'
+   single_blp_market = blp_product_data['market_ids'] == 1971
    plt.colorbar(plt.matshow(nevo_elasticities[single_nevo_market]));
 
    @suppress
@@ -451,7 +451,7 @@ Comparing results from the full BLP model with results from the simpler Logit mo
    
    nevo_logit_formulation = pyblp.Formulation('0 + prices', absorb='C(product_ids)')
    nevo_logit_formulation
-   nevo_logit_problem = pyblp.Problem(nevo_logit_formulation, nevo_products)
+   nevo_logit_problem = pyblp.Problem(nevo_logit_formulation, nevo_product_data)
    nevo_logit_problem
    nevo_logit_results = nevo_logit_problem.solve()
    nevo_logit_results
