@@ -459,6 +459,25 @@ Comparing results from the full BLP model with results from the simpler Logit mo
 Logit :class:`Results` can be to compute the same types of post-estimation outputs as :class:`Results` created by a full BLP problem.
 
 
+Nesting Parameters
+------------------
+
+It is also straightforward to incorporate parameters that measure within nesting group correlation. Incorporating such parameters into the Logit benchmark model gives the nested Logit model, and incorporating them into the full model gives the random coefficients nested logit (RCNL) model described, for example, by :ref:`Grigolon and Verboven (2014) <gv14>`.
+
+As an example, we'll supplement the above Logit benchmark model with a nesting parameter that measures correlation within products that have the same ``sugar`` category. We'll have to add a new ``nesting_ids`` field to the product data and specify an initial value for :math:`\rho`, the nesting parameter.
+
+.. ipython:: python
+
+   nevo_nested_data = {k: nevo_product_data[k] for k in nevo_product_data.dtype.names}
+   nevo_nested_data['nesting_ids'] = nevo_nested_data['sugar']
+   nevo_nested_problem = pyblp.Problem(nevo_logit_formulation, nevo_nested_data)
+   nevo_nested_problem
+   nevo_nested_results = nevo_nested_problem.solve(rho=0.7)
+   nevo_nested_results
+
+If there were fewer nesting groups, we may have wanted to allow the nesting parameter to differ for different groups. We could have done this by specifying a vector with as many elements as there are groups. On the other hand, incorporating nesting IDs and :math:`\rho` into the full fake cereal problem would give us more general RCNL estimates. For the sake of brevity in this examples section, we won't undertake either of those extensions.
+
+
 Simulating Problems
 -------------------
 
