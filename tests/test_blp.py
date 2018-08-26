@@ -646,6 +646,9 @@ def test_logit(simulated_problem, steps, covariance_type, center_moments):
     # configure covariance options
     covariance_options = {'clusters': product_data.clustering_ids} if covariance_type == 'clustered' else {}
 
+    # monkey-patch a problematic linearmodels method that shouldn't be called but is anyways
+    linearmodels.IVLIML._estimate_kappa = lambda _: 1
+
     # solve the problem with linearmodels
     model = linearmodels.IVGMM(
         delta, exog=None, endog=problem.products.X1, instruments=problem.products.ZD, weight_type=covariance_type,
