@@ -73,8 +73,8 @@ class Results(object):
         Estimated demand-side linear parameters, :math:`\hat{\beta}`.
     gamma : `ndarray`
         Estimated supply-side linear parameters, :math:`\hat{\gamma}`.
-    se_type : `str`
-        The type of computed standard errors, which was specified by `se_type` in :meth:`Problem.solve`.
+    covariance_type : `str`
+        The type of computed standard errors, which was specified by `covariance_type` in :meth:`Problem.solve`.
     sigma_se : `ndarray`
         Estimated standard errors for unknown :math:`\hat{\Sigma}` elements in :math:`\hat{\theta}`.
     pi_se : `ndarray`
@@ -159,7 +159,7 @@ class Results(object):
     """
 
     def __init__(self, objective_info, last_results, step_start_time, optimization_start_time, optimization_end_time,
-                 iterations, evaluations, iteration_mappings, evaluation_mappings, center_moments, se_type):
+                 iterations, evaluations, iteration_mappings, evaluation_mappings, center_moments, covariance_type):
         """Update weighting matrices, estimate standard errors, and compute cumulative progress statistics."""
 
         # initialize values from the objective information
@@ -190,62 +190,6 @@ class Results(object):
         self.sigma_bounds = self._nonlinear_parameters.sigma_bounds
         self.pi_bounds = self._nonlinear_parameters.pi_bounds
         self.rho_bounds = self._nonlinear_parameters.rho_bounds
-
-        # expand the nonlinear parameters and their gradient
-        self.sigma, self.pi, self.rho = self._nonlinear_parameters.expand(self.theta)
-        self.sigma_gradient, self.pi_gradient, self.rho_gradient = self._nonlinear_parameters.expand(
-            self.gradient, nullify=True
-        )
-
-        # compute a version of xi that includes the contribution of any demand-side fixed effects
-        self.xi = self.true_xi
-        if self.problem.ED > 0:
-            ones = np.ones_like(self.xi)
-            true_X1 = np.column_stack((ones * f.evaluate(self.problem.products) for f in self.problem._X1_formulations))
-            self.xi = self.true_delta - true_X1 @ self.beta
-
-        # compute a version of omega that includes the contribution of any supply-side fixed effects
-        self.omega = self.true_omega
-        if self.problem.ES > 0:
-            ones = np.ones_like(self.xi)
-            true_X3 = np.column_stack((ones * f.evaluate(self.problem.products) for f in self.problem._X3_formulations))
-            self.omega = self.true_tilde_costs - true_X3 @ self.gamma
-
-        # update the weighting matrices
-        self.updated_WD, WD_errors = compute_gmm_weights(
-            self.true_xi, self.problem.products.ZD, center_moments, se_type, self.problem.products.clustering_ids
-        )
-        self.updated_WS, WS_errors = compute_gmm_weights(
-            self.true_omega, self.problem.products.ZS, center_moments, se_type, self.problem.products.clustering_ids
-        )
-        self._errors.extend(WD_errors + WS_errors)
-
-        # stack errors, weights, instruments, Jacobian of the errors with respect to parameters, and clustering IDs
-        if self.problem.K3 == 0:
-            u = self.true_xi
-            W = self.WD
-            Z = self.problem.products.ZD
-            jacobian = np.c_[self.xi_jacobian, self.problem.products.X1]
-            stacked_clustering_ids = self.problem.products.clustering_ids
-        else:
-            u = np.r_[self.true_xi, self.true_omega]
-            W = scipy.linalg.block_diag(self.WD, self.WS)
-            Z = scipy.linalg.block_diag(self.problem.products.ZD, self.problem.products.ZS)
-            jacobian = np.c_[
-                np.r_[self.xi_jacobian, self.omega_jacobian],
-                scipy.linalg.block_diag(self.problem.products.X1, self.problem.products.X3)
-            ]
-            stacked_clustering_ids = np.r_[self.problem.products.clustering_ids, self.problem.products.clustering_ids]
-
-        # compute standard errors
-        se, se_errors = compute_gmm_se(u, Z, W, jacobian, se_type, stacked_clustering_ids)
-        self.sigma_se, self.pi_se, self.rho_se = self._nonlinear_parameters.expand(
-            se[:self._nonlinear_parameters.P], nullify=True
-        )
-        self.beta_se = se[self._nonlinear_parameters.P:self._nonlinear_parameters.P + self.problem.K1]
-        self.gamma_se = se[self._nonlinear_parameters.P + self.problem.K1:]
-        self._errors.extend(se_errors)
-        self.se_type = se_type
 
         # initialize counts and times
         self.step = 1
@@ -278,6 +222,64 @@ class Results(object):
                 last_results.cumulative_contraction_evaluations, self.cumulative_contraction_evaluations
             ]
 
+        # expand the nonlinear parameters and their gradient
+        self.sigma, self.pi, self.rho = self._nonlinear_parameters.expand(self.theta)
+        self.sigma_gradient, self.pi_gradient, self.rho_gradient = self._nonlinear_parameters.expand(
+            self.gradient, nullify=True
+        )
+
+        # compute a version of xi that includes the contribution of any demand-side fixed effects
+        self.xi = self.true_xi
+        if self.problem.ED > 0:
+            ones = np.ones_like(self.xi)
+            true_X1 = np.column_stack((ones * f.evaluate(self.problem.products) for f in self.problem._X1_formulations))
+            self.xi = self.true_delta - true_X1 @ self.beta
+
+        # compute a version of omega that includes the contribution of any supply-side fixed effects
+        self.omega = self.true_omega
+        if self.problem.ES > 0:
+            ones = np.ones_like(self.xi)
+            true_X3 = np.column_stack((ones * f.evaluate(self.problem.products) for f in self.problem._X3_formulations))
+            self.omega = self.true_tilde_costs - true_X3 @ self.gamma
+
+        # update the weighting matrices
+        self.updated_WD, WD_errors = compute_gmm_weights(
+            self.true_xi, self.problem.products.ZD, center_moments, covariance_type,
+            self.problem.products.clustering_ids
+        )
+        self.updated_WS, WS_errors = compute_gmm_weights(
+            self.true_omega, self.problem.products.ZS, center_moments, covariance_type,
+            self.problem.products.clustering_ids
+        )
+        self._errors.extend(WD_errors + WS_errors)
+
+        # stack errors, weights, instruments, Jacobian of the errors with respect to parameters, and clustering IDs
+        if self.problem.K3 == 0:
+            u = self.true_xi
+            W = self.WD
+            Z = self.problem.products.ZD
+            jacobian = np.c_[self.xi_jacobian, self.problem.products.X1]
+            stacked_clustering_ids = self.problem.products.clustering_ids
+        else:
+            u = np.r_[self.true_xi, self.true_omega]
+            W = scipy.linalg.block_diag(self.WD, self.WS)
+            Z = scipy.linalg.block_diag(self.problem.products.ZD, self.problem.products.ZS)
+            jacobian = np.c_[
+                np.r_[self.xi_jacobian, self.omega_jacobian],
+                scipy.linalg.block_diag(self.problem.products.X1, self.problem.products.X3)
+            ]
+            stacked_clustering_ids = np.r_[self.problem.products.clustering_ids, self.problem.products.clustering_ids]
+
+        # compute standard errors
+        se, se_errors = compute_gmm_se(u, Z, W, jacobian, self.step, covariance_type, stacked_clustering_ids)
+        self.sigma_se, self.pi_se, self.rho_se = self._nonlinear_parameters.expand(
+            se[:self._nonlinear_parameters.P], nullify=True
+        )
+        self.beta_se = se[self._nonlinear_parameters.P:self._nonlinear_parameters.P + self.problem.K1]
+        self.gamma_se = se[self._nonlinear_parameters.P + self.problem.K1:]
+        self._errors.extend(se_errors)
+        self.covariance_type = covariance_type
+
     def __str__(self):
         """Format full results as a string."""
 
@@ -309,12 +311,12 @@ class Results(object):
         ]]
 
         # construct a standard error description
-        if self.se_type == 'unadjusted':
+        if self.covariance_type == 'unadjusted':
             se_description = "Unadjusted SEs"
-        elif self.se_type == 'robust':
+        elif self.covariance_type == 'robust':
             se_description = "Robust SEs"
         else:
-            assert self.se_type == 'clustered'
+            assert self.covariance_type == 'clustered'
             se_description = f'Robust SEs Adjusted for {np.unique(self.problem.products.clustering_ids).size} Clusters'
 
         # construct a section containing linear estimates

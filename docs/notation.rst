@@ -24,8 +24,9 @@ Symbol                    Description
 :math:`E_D`               Absorbed demand-side fixed effects.
 :math:`E_S`               Absorbed supply-side fixed effects.
 :math:`H`                 Nesting groups.
-:math:`C`                 Standard error clusters.
+:math:`C`                 Clustering groups.
 :math:`P`                 Unknown nonlinear parameters.
+:math:`\mathscr{J}_c`     Products in cluster :math:`c`.
 :math:`\mathscr{J}_{ft}`  Products produced by firm :math:`f` in market :math:`t`.
 :math:`\mathscr{J}_{ht}`  Products in group :math:`h` and market :math:`t`.
 ========================  =========================================================
@@ -83,7 +84,8 @@ Symbol                     Dimensions                                  Descripti
 :math:`W`                  :math:`(M_D + M_S) \times (M_D + M_S)`      Block-diagonal weighting matrices.
 :math:`u`                  :math:`2N \times 1`                         Stacked unobserved product characteristics, or equivalently, stacked structural error terms.
 :math:`g`                  :math:`2N \times (M_D + M_S)`               Sample moments.
-:math:`G`                  :math:`(M_D + M_S) \times (P + K_1 + K_2)`  Jacobian of the sample moments with respect to all parameters.
+:math:`q`                  :math:`C \times (M_D + M_S)`                Within clustering group sample moment sums.
+:math:`G`                  :math:`(M_D + M_S) \times (P + K_1 + K_2)`  Sample mean of the Jacobian of the moments with respect to all parameters.
 :math:`E`                  :math:`1 \times 1`                          Aggregate elasticity of demand of a market.
 :math:`\varepsilon`        :math:`J_t \times J_t`                      Elasticities of demand in market :math:`t`.
 :math:`\mathscr{D}`        :math:`J_t \times J_t`                      Diversion ratios in market :math:`t`.

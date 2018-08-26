@@ -1,9 +1,9 @@
 """Standard statistical routines."""
 
-
 import numpy as np
 
 from .. import exceptions
+from .basics import Groups
 from .algebra import approximately_invert
 
 
@@ -33,14 +33,15 @@ class IV(object):
         return parameters
 
 
-def compute_gmm_se(u, Z, W, jacobian, se_type, clustering_ids):
+def compute_gmm_se(u, Z, W, jacobian, step, covariance_type, clustering_ids):
     """Use an error term, instruments, a weighting matrix, and the Jacobian of the error term with respect to parameters
     to estimate GMM standard errors.
     """
     errors = []
+    N = u.size
 
     # compute the Jacobian of the sample moments with respect to all parameters
-    G = Z.T @ jacobian
+    G = Z.T @ jacobian / N
 
     # attempt to compute the covariance matrix
     covariances_inverse = G.T @ W @ G
@@ -48,15 +49,22 @@ def compute_gmm_se(u, Z, W, jacobian, se_type, clustering_ids):
     if replacement:
         errors.append(exceptions.GMMParameterCovariancesInversionError(covariances_inverse, replacement))
 
-    # compute the robust covariance matrix and extract standard errors
-    with np.errstate(invalid='ignore'):
-        if se_type != 'unadjusted':
-            g = u * Z
-            S = compute_gmm_moment_covariances(g, se_type, clustering_ids)
-            covariances = covariances @ G.T @ W @ S @ W @ G @ covariances
-        se = np.sqrt(np.c_[covariances.diagonal()])
+    # if this is the first step, the covariances need to be scaled by the estimated variance of the error term when
+    #   computing unadjusted standard errors
+    if step == 1 and covariance_type == 'unadjusted':
+        with np.errstate(invalid='ignore'):
+            covariances *= compute_gmm_error_variance(u)
 
-    # handle null values
+    # compute the robust covariance matrix
+    if covariance_type != 'unadjusted':
+        with np.errstate(invalid='ignore'):
+            g = u * Z
+            S = compute_gmm_moment_covariances(g, covariance_type, clustering_ids)
+            covariances = covariances @ G.T @ W @ S @ W @ G @ covariances
+
+    # compute standard errors and handle null values
+    with np.errstate(invalid='ignore'):
+        se = np.sqrt(np.c_[covariances.diagonal()] / N)
     if np.isnan(se).any():
         errors.append(exceptions.InvalidParameterCovariancesError())
     return se, errors
@@ -67,27 +75,32 @@ def compute_2sls_weights(Z):
     errors = []
 
     # attempt to compute the weighting matrix
-    covariances = Z.T @ Z
-    W, replacement = approximately_invert(covariances)
+    S = compute_gmm_moment_covariances(Z)
+    W, replacement = approximately_invert(S)
     if replacement:
-        errors.append(exceptions.GMMMomentCovariancesInversionError(covariances, replacement))
+        errors.append(exceptions.GMMMomentCovariancesInversionError(S, replacement))
     return W, errors
 
 
-def compute_gmm_weights(u, Z, center_moments, se_type, clustering_ids):
+def compute_gmm_weights(u, Z, center_moments, covariance_type, clustering_ids):
     """Use an error term and instruments to compute a GMM weighting matrix."""
     errors = []
 
-    # compute and center the sample moments
-    g = u * Z
-    if center_moments:
-        g -= g.mean(axis=0)
+    # compute moment conditions or their analogues for the given covariance type
+    if u.size == 0:
+        g = Z
+    elif covariance_type == 'unadjusted':
+        g = np.sqrt(compute_gmm_error_variance(u)) * Z
+    else:
+        g = u * Z
+        if center_moments:
+            g -= g.mean(axis=0)
 
     # attempt to compute the weighting matrix
-    covariances = compute_gmm_moment_covariances(g, se_type, clustering_ids)
-    W, replacement = approximately_invert(covariances)
+    S = compute_gmm_moment_covariances(g, covariance_type, clustering_ids)
+    W, replacement = approximately_invert(S)
     if replacement:
-        errors.append(exceptions.GMMMomentCovariancesInversionError(covariances, replacement))
+        errors.append(exceptions.GMMMomentCovariancesInversionError(S, replacement))
 
     # handle null values
     if np.isnan(W).any():
@@ -95,8 +108,20 @@ def compute_gmm_weights(u, Z, center_moments, se_type, clustering_ids):
     return W, errors
 
 
-def compute_gmm_moment_covariances(g, se_type, clustering_ids):
+def compute_gmm_error_variance(u):
+    """Compute the variance of an error term."""
+    return np.cov(u.flatten(), bias=True)
+
+
+def compute_gmm_moment_covariances(g, covariance_type='unadjusted', clustering_ids=None):
     """Compute covariances between moment conditions."""
-    if se_type == 'clustered' and clustering_ids.shape[1] > 0:
-        return sum(g[clustering_ids.flat == c].T @ g[clustering_ids.flat == c] for c in np.unique(clustering_ids))
-    return g.T @ g
+    N, M = g.shape
+    if covariance_type != 'clustered':
+        S = g.T @ g / N
+    else:
+        assert clustering_ids is not None
+        S = np.zeros((M, M))
+        for q_c in Groups(clustering_ids).sum(g):
+            q_c = np.c_[q_c]
+            S += q_c @ q_c.T / N
+    return S

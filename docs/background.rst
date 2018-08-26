@@ -131,11 +131,19 @@ which is assumed to have an inverse that is a consistant estimate of :math:`\mat
 
 If only the demand side is considered, :math:`u = \xi`, :math:`Z = Z_D`, and :math:`W = W_D`.
 
-Conventionally, the 2SLS weighting matrix, :math:`W = (Z'Z)^{-1}`, is used in the first stage. With two-step or iterated GMM, the weighting matrix is updated before each subsequent stage according to :math:`W = S^{-1}` where :math:`S = g'g`. When accounting for arbitrary correlation within :math:`c = 1, 2, \dotsc, C` clusters,
+Conventionally, the 2SLS weighting matrix, :math:`W = N^{-1}(Z'Z)^{-1}`, is used in the first stage. With two-step or iterated GMM, the weighting matrix is updated before each subsequent stage according to :math:`W = S^{-1}`. For robust covariance estimates, :math:`S = N^{-1}g'g`. For clustered covariance estimates, which account for arbitrary correlation within :math:`c = 1, 2, \dotsc, C` clusters,
 
-.. math:: S = \sum_{c=1}^C g_c'g_c.
+.. math:: S = N^{-1}\sum_{c=1}^C q_cq_c'.
 
-Before being used to update the weighting matrix, the sample moments are often centered.
+where, letting the set :math:`\mathscr{J}_c \subset \{1, 2, \ldots, N\}` denote the products in cluster :math:`c`,
+
+.. math:: q_c = \sum_{j\in\mathscr{J}_c} g_j.
+
+Before being used to update the weighting matrix, the sample moments are often centered. That is, :math:`g - \bar{g}` is often used instead.
+
+On the other hand, for unadjusted covariance estimates, the instruments are simply scaled by the estimated variance of the error term:
+
+.. math:: S = N^{-2}[(u - \bar{u})'(u - \bar{u})] Z'Z.
 
 In each stage, a nonlinear optimizer is used to find values of :math:`\hat{\theta}` that minimize the GMM objective. The gradient of the objective is typically computed to speed up optimization.
 
@@ -211,23 +219,27 @@ are derived from the definitions of :math:`\Gamma` and :math:`\Lambda` in :eq:`c
 Standard Errors
 ~~~~~~~~~~~~~~~
 
-Computing standard errors requires the Jacobian of the moments with respect to :math:`\theta`, :math:`\beta`, and :math:`\gamma`, which is
+Computing standard errors requires an estimate of the Jacobian of the moments with respect to :math:`\theta`, :math:`\beta`, and :math:`\gamma`, which is
 
-.. math:: G = Z' \begin{bmatrix} \frac{\partial\xi}{\partial\theta} & X_1 & 0 \\ \frac{\partial\omega}{\partial\theta} & 0 & X_3 \end{bmatrix}.
+.. math:: G = N^{-1}Z'\begin{bmatrix} \frac{\partial\xi}{\partial\theta} & X_1 & 0 \\ \frac{\partial\omega}{\partial\theta} & 0 & X_3 \end{bmatrix}.
 
-Before updating the weighting matrix, standard errors are extracted from an estimate of
+Before updating the weighting matrix, standard errors are extracted from
 
-.. math:: \text{Var}\begin{pmatrix} \hat{\theta} \\ \hat{\beta} \\ \hat{\gamma} \end{pmatrix} = (G'WG)^{-1}G'WSWG(G'WG)^{-1},
+.. math:: \hat{\text{Var}}\begin{pmatrix} \hat{\theta} \\ \hat{\beta} \\ \hat{\gamma} \end{pmatrix} = (G'WG)^{-1}G'WSWG(G'WG)^{-1},
 
-For robust standard errors, :math:`S = g'g`. For clustered standard errors, which account for arbitrary correlation within :math:`c = 1, 2, \dotsc, C` clusters,
+For robust standard errors, :math:`S = N^{-1}g'g`. For clustered standard errors, which account for arbitrary correlation within :math:`c = 1, 2, \dotsc, C` clusters,
 
-.. math:: S = \sum_{c=1}^C g_c'g_c.
+.. math:: S = \sum_{c=1}^C q_cq_c'
+
+where, letting the set :math:`\mathscr{J}_c \subset \{1, 2, \ldots, N\}` denote the products in cluster :math:`c`,
+
+.. math:: q_c = \sum_{j\in\mathscr{J}_c} g_j.
 
 If the weighting matrix was chosen such that :math:`W = S^{-1}`, then
 
-.. math:: \text{Var}\begin{pmatrix} \hat{\theta} \\ \hat{\beta} \\ \hat{\gamma} \end{pmatrix} = (G'WG)^{-1}.
+.. math:: \hat{\text{Var}}\begin{pmatrix} \hat{\theta} \\ \hat{\beta} \\ \hat{\gamma} \end{pmatrix} = (G'WG)^{-1}.
 
-The standard errors extracted from an estimate of this last expression are called unadjusted.
+Standard errors extracted from an estimate of this last expression are called unadjusted. One caveat is that after only one GMM step, the above expression for the unadjusted covariance matrix must be divided by the estimated variance of the error term, :math:`N^{-1}(u - \bar{u})'(u - \bar{u})`.
 
 
 Fixed Effect Absorption
