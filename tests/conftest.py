@@ -44,7 +44,7 @@ def small_logit_simulation():
         product_data={
             'market_ids': id_data.market_ids,
             'firm_ids': id_data.firm_ids,
-            'clustering_ids': np.random.RandomState(0).choice(['a', 'b'], id_data.size)
+            'clustering_ids': np.random.RandomState(0).choice(range(10), id_data.size)
         },
         xi_variance=0.001,
         omega_variance=0.001,
@@ -73,7 +73,7 @@ def large_logit_simulation():
         product_data={
             'market_ids': id_data.market_ids,
             'firm_ids': id_data.firm_ids,
-            'clustering_ids': np.random.RandomState(2).choice(['a', 'b', 'c', 'd'], id_data.size)
+            'clustering_ids': np.random.RandomState(2).choice(range(30), id_data.size)
         },
         xi_variance=0.00001,
         omega_variance=0.00001,
@@ -103,7 +103,7 @@ def small_nested_logit_simulation():
             'market_ids': id_data.market_ids,
             'firm_ids': id_data.firm_ids,
             'nesting_ids': np.random.RandomState(0).choice(['f', 'g'], id_data.size),
-            'clustering_ids': np.random.RandomState(0).choice(['a', 'b'], id_data.size)
+            'clustering_ids': np.random.RandomState(0).choice(range(10), id_data.size)
         },
         rho=[0.1, 0.2],
         xi_variance=0.001,
@@ -134,7 +134,7 @@ def large_nested_logit_simulation():
             'market_ids': id_data.market_ids,
             'firm_ids': id_data.firm_ids,
             'nesting_ids': np.random.RandomState(2).choice(['f', 'g', 'h'], id_data.size),
-            'clustering_ids': np.random.RandomState(2).choice(['a', 'b', 'c', 'd'], id_data.size)
+            'clustering_ids': np.random.RandomState(2).choice(range(30), id_data.size)
         },
         rho=0.1,
         xi_variance=0.00001,
@@ -164,7 +164,7 @@ def small_blp_simulation():
         product_data={
             'market_ids': id_data.market_ids,
             'firm_ids': id_data.firm_ids,
-            'clustering_ids': np.random.RandomState(0).choice(['a', 'b'], id_data.size)
+            'clustering_ids': np.random.RandomState(0).choice(range(10), id_data.size)
         },
         integration=Integration('product', 3),
         xi_variance=0.001,
@@ -197,7 +197,7 @@ def medium_blp_simulation():
         product_data={
             'market_ids': id_data.market_ids,
             'firm_ids': id_data.firm_ids,
-            'clustering_ids': np.random.RandomState(1).choice(['a', 'b', 'c'], id_data.size),
+            'clustering_ids': np.random.RandomState(1).choice(range(20), id_data.size),
             'ownership': build_ownership(id_data, lambda f, g: 1 if f == g else (0.1 if f > 3 and g > 3 else 0))
         },
         agent_formulation=Formulation('0 + f'),
@@ -237,7 +237,7 @@ def large_blp_simulation():
         product_data={
             'market_ids': id_data.market_ids,
             'firm_ids': id_data.firm_ids,
-            'clustering_ids': np.random.RandomState(2).choice(['a', 'b', 'c', 'd'], id_data.size)
+            'clustering_ids': np.random.RandomState(2).choice(range(30), id_data.size)
         },
         agent_formulation=Formulation('0 + f + g'),
         pi=[
@@ -273,7 +273,7 @@ def small_nested_blp_simulation():
             'market_ids': id_data.market_ids,
             'firm_ids': id_data.firm_ids,
             'nesting_ids': np.random.RandomState(0).choice(['f', 'g'], id_data.size),
-            'clustering_ids': np.random.RandomState(0).choice(['a', 'b'], id_data.size)
+            'clustering_ids': np.random.RandomState(0).choice(range(10), id_data.size)
         },
         integration=Integration('product', 3),
         rho=[0.1, 0.2],
@@ -309,7 +309,7 @@ def large_nested_blp_simulation():
             'market_ids': id_data.market_ids,
             'firm_ids': id_data.firm_ids,
             'nesting_ids': np.random.RandomState(2).choice(['f', 'g', 'h'], id_data.size),
-            'clustering_ids': np.random.RandomState(2).choice(['a', 'b', 'c', 'd'], id_data.size)
+            'clustering_ids': np.random.RandomState(2).choice(range(30), id_data.size)
         },
         agent_formulation=Formulation('0 + f + g'),
         pi=[
