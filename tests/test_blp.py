@@ -2,6 +2,7 @@
 
 import pytest
 import numpy as np
+import linearmodels
 import scipy.optimize
 
 from pyblp import parallel, build_matrix, Problem, Iteration, Optimization, Formulation
@@ -13,8 +14,8 @@ from pyblp import parallel, build_matrix, Problem, Iteration, Optimization, Form
     pytest.param({'fp_type': 'nonlinear'}, id="nonlinear fixed point"),
     pytest.param({'delta_behavior': 'first'}, id="conservative starting delta values"),
     pytest.param({'error_behavior': 'punish', 'error_punishment': 100}, id="error punishment"),
-    pytest.param({'center_moments': False, 'se_type': 'unadjusted'}, id="simple covariance matrices"),
-    pytest.param({'se_type': 'clustered'}, id="clustered covariance matrices")
+    pytest.param({'center_moments': False, 'covariance_type': 'unadjusted'}, id="simple covariance matrices"),
+    pytest.param({'covariance_type': 'clustered'}, id="clustered covariance matrices")
 ])
 def test_accuracy(simulated_problem, solve_options_update):
     """Test that starting parameters that are half their true values give rise to errors of less than 10%. Use loose
@@ -615,3 +616,45 @@ def test_objective_gradient(simulated_problem, solve_options_update):
         **solve_options_update
     })
     problem.solve(**updated_solve_options)
+
+
+@pytest.mark.usefixtures('simulated_problem')
+@pytest.mark.parametrize('steps', [pytest.param(1, id="one-step"), pytest.param(2, id="two-step")])
+@pytest.mark.parametrize('covariance_type', [
+    pytest.param('robust', id="robust SEs"),
+    pytest.param('unadjusted', id="unadjusted SEs"),
+    pytest.param('clustered', id="clustered SEs")
+])
+@pytest.mark.parametrize('center_moments', [pytest.param(True, id="centered"), pytest.param(False, id="uncentered")])
+def test_logit(simulated_problem, steps, covariance_type, center_moments):
+    """Test that Logit estimates are the same as those from the the linearmodels package."""
+    _, product_data, problem, _, _ = simulated_problem
+
+    # skip more complicated simulations
+    if problem.K2 > 0 or problem.K3 > 0 or problem.H > 0:
+        return
+
+    # solve the problem
+    results1 = problem.solve(steps=steps, covariance_type=covariance_type, center_moments=center_moments)
+
+    # compute delta
+    delta = np.log(product_data['shares'])
+    for t in problem.unique_market_ids:
+        shares_t = product_data['shares'][product_data['market_ids'] == t]
+        delta[product_data['market_ids'] == t] -= np.log(1 - shares_t.sum())
+
+    # configure covariance options
+    covariance_options = {'clusters': product_data.clustering_ids} if covariance_type == 'clustered' else {}
+
+    # solve the problem with linearmodels
+    model = linearmodels.IVGMM(
+        delta, exog=None, endog=problem.products.X1, instruments=problem.products.ZD, weight_type=covariance_type,
+        center=center_moments, **covariance_options
+    )
+    results2 = model.fit(iter_limit=steps, cov_type=covariance_type, **covariance_options)
+
+    # test that results are essentially identical
+    for key1, key2 in [('beta', 'params'), ('beta_se', 'std_errors'), ('xi', 'resids'), ('WD', 'weight_matrix')]:
+        values1 = getattr(results1, key1)
+        values2 = np.c_[getattr(results2, key2)]
+        np.testing.assert_allclose(values1, values2, atol=1e-10, rtol=1e-6, err_msg=key1)

@@ -15,7 +15,7 @@ setup(
     python_requires='>=3.6',
     install_requires=read('requirements.txt').splitlines(),
     extras_require={
-        'tests': ['pytest', 'pytest-xdist'],
+        'tests': ['pytest', 'pytest-xdist', 'linearmodels'],
         'docs': ['sphinx', 'pandas', 'ipython', 'matplotlib', 'sphinx_rtd_theme'],
     },
     include_package_data=True,
