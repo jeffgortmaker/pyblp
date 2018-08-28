@@ -547,8 +547,8 @@ class Problem(Economy):
 
         # initialize Jacobians of xi and omega with respect to theta as all zeros, which will only be used if there are
         #   computation errors during the first objective evaluation
-        true_xi_jacobian = np.zeros((self.N, nonlinear_parameters.P), options.dtype)
-        true_omega_jacobian = np.full_like(true_xi_jacobian, 0 if self.K3 > 0 else np.nan, options.dtype)
+        xi_jacobian = np.zeros((self.N, nonlinear_parameters.P), options.dtype)
+        omega_jacobian = np.full_like(xi_jacobian, 0 if self.K3 > 0 else np.nan, options.dtype)
 
         # initialize the objective as a large number and its gradient as all zeros, which will only be used if there are
         #   computation errors during the first objective evaluation
@@ -590,7 +590,7 @@ class Problem(Economy):
             wrapper.smallest_objective = wrapper.smallest_gradient_norm = np.inf
             wrapper.cache = ObjectiveInfo(
                 self, nonlinear_parameters, WD, WS, theta, objective, gradient, true_delta, true_delta,
-                true_tilde_costs, true_xi_jacobian, true_omega_jacobian
+                true_tilde_costs, xi_jacobian, omega_jacobian
             )
 
             # optimize theta
@@ -630,8 +630,8 @@ class Problem(Economy):
             # update vectors and matrices
             true_delta = step_info.true_delta
             true_tilde_costs = step_info.true_tilde_costs
-            true_xi_jacobian = step_info.true_xi_jacobian
-            true_omega_jacobian = step_info.true_omega_jacobian
+            xi_jacobian = step_info.xi_jacobian
+            omega_jacobian = step_info.omega_jacobian
             WD = results.updated_WD
             WS = results.updated_WS
             step_start_time = time.time()
@@ -645,7 +645,7 @@ class Problem(Economy):
         sigma, pi, rho = nonlinear_parameters.expand(theta)
 
         # compute demand-side contributions
-        true_delta, true_xi_jacobian, delta, xi_jacobian, beta, true_xi, iterations, evaluations, demand_errors = (
+        true_delta, xi_jacobian, delta, beta, true_xi, iterations, evaluations, demand_errors = (
             self._compute_demand_contributions(
                 nonlinear_parameters, demand_iv, iteration, fp_type, sigma, pi, rho, last_objective_info,
                 compute_gradient
@@ -654,14 +654,14 @@ class Problem(Economy):
 
         # compute supply-side contributions
         supply_errors = []
-        gamma = np.full((self.K3, 1), np.nan, options.dtype)
         true_tilde_costs = tilde_costs = true_omega = np.full((self.N, 0), np.nan, options.dtype)
-        true_omega_jacobian = omega_jacobian = np.full((self.N, nonlinear_parameters.P), np.nan, options.dtype)
+        omega_jacobian = np.full((self.N, nonlinear_parameters.P), np.nan, options.dtype)
+        gamma = np.full((self.K3, 1), np.nan, options.dtype)
         if self.K3 > 0:
-            true_tilde_costs, true_omega_jacobian, tilde_costs, omega_jacobian, gamma, true_omega, supply_errors = (
+            true_tilde_costs, omega_jacobian, tilde_costs, gamma, true_omega, supply_errors = (
                 self._compute_supply_contributions(
                     nonlinear_parameters, demand_iv, supply_iv, costs_type, costs_bounds, beta, sigma, pi, rho,
-                    true_delta, true_xi_jacobian, xi_jacobian, last_objective_info, compute_gradient
+                    true_delta, xi_jacobian, last_objective_info, compute_gradient
                 )
             )
 
@@ -714,8 +714,8 @@ class Problem(Economy):
         # structure objective information
         return ObjectiveInfo(
             self, nonlinear_parameters, WD, WS, theta, objective, gradient, next_delta, true_delta, true_tilde_costs,
-            true_xi_jacobian, true_omega_jacobian, delta, tilde_costs, xi_jacobian, omega_jacobian, true_xi, true_omega,
-            beta, gamma, iterations, evaluations, errors
+            xi_jacobian, omega_jacobian, delta, tilde_costs, true_xi, true_omega, beta, gamma, iterations,
+            evaluations, errors
         )
 
     def _compute_demand_contributions(self, nonlinear_parameters, demand_iv, iteration, fp_type, sigma, pi, rho,
@@ -729,7 +729,7 @@ class Problem(Economy):
         iterations = {}
         evaluations = {}
         true_delta = np.zeros((self.N, 1), options.dtype)
-        true_xi_jacobian = np.full((self.N, nonlinear_parameters.P), np.nan, options.dtype)
+        xi_jacobian = np.full((self.N, nonlinear_parameters.P), np.nan, options.dtype)
 
         # when possible and when a gradient isn't needed, compute delta with a closed-form solution
         if self.K2 == 0 and (nonlinear_parameters.P == 0 or not compute_gradient):
@@ -743,9 +743,9 @@ class Problem(Economy):
 
             # compute delta and its Jacobian market-by-market
             generator = generate_items(self.unique_market_ids, market_factory, DemandProblemMarket.solve)
-            for t, (true_delta_t, true_xi_jacobian_t, errors_t, iterations[t], evaluations[t]) in generator:
+            for t, (true_delta_t, xi_jacobian_t, errors_t, iterations[t], evaluations[t]) in generator:
                 true_delta[self._product_market_indices[t]] = true_delta_t
-                true_xi_jacobian[self._product_market_indices[t]] = true_xi_jacobian_t
+                xi_jacobian[self._product_market_indices[t]] = xi_jacobian_t
                 errors.extend(errors_t)
 
         # replace invalid elements in delta with their last values
@@ -756,27 +756,23 @@ class Problem(Economy):
 
         # replace invalid elements in its Jacobian with their last values
         if compute_gradient:
-            bad_indices = ~np.isfinite(true_xi_jacobian)
+            bad_indices = ~np.isfinite(xi_jacobian)
             if np.any(bad_indices):
-                true_xi_jacobian[bad_indices] = last_objective_info.true_xi_jacobian[bad_indices]
+                xi_jacobian[bad_indices] = last_objective_info.xi_jacobian[bad_indices]
                 errors.append(exceptions.XiJacobianReversionError(bad_indices))
 
         # absorb any demand-side fixed effects
         delta = true_delta
-        xi_jacobian = true_xi_jacobian
         if self.ED > 0:
             delta, delta_errors = self._absorb_demand_ids(delta)
             errors.extend(delta_errors)
-            if compute_gradient:
-                xi_jacobian, jacobian_errors = self._absorb_demand_ids(xi_jacobian)
-                errors.extend(jacobian_errors)
 
         # recover beta and compute xi
         beta, true_xi = demand_iv.estimate(delta)
-        return true_delta, true_xi_jacobian, delta, xi_jacobian, beta, true_xi, iterations, evaluations, errors
+        return true_delta, xi_jacobian, delta, beta, true_xi, iterations, evaluations, errors
 
     def _compute_supply_contributions(self, nonlinear_parameters, demand_iv, supply_iv, costs_type, costs_bounds, beta,
-                                      sigma, pi, rho, true_delta, true_xi_jacobian, xi_jacobian, last_objective_info,
+                                      sigma, pi, rho, true_delta, xi_jacobian, last_objective_info,
                                       compute_gradient):
         """Compute transformed marginal costs and the Jacobian of omega (equivalently, of transformed marginal costs)
         with respect to theta market-by-market. If necessary, revert problematic elements to their last values. Lastly,
@@ -791,24 +787,24 @@ class Problem(Economy):
 
         # initialize transformed marginal costs and their Jacobian so that they can be filled
         true_tilde_costs = np.zeros((self.N, 1), options.dtype)
-        true_omega_jacobian = np.full((self.N, nonlinear_parameters.P), np.nan, options.dtype)
+        omega_jacobian = np.full((self.N, nonlinear_parameters.P), np.nan, options.dtype)
 
         # define a function that builds a market along with arguments used to compute transformed marginal costs and
         #   their Jacobian
         def market_factory(s):
             market_s = SupplyProblemMarket(self, s, sigma, pi, rho, beta, true_delta)
             last_true_tilde_costs_s = last_objective_info.true_tilde_costs[self._product_market_indices[s]]
-            true_xi_jacobian_s = true_xi_jacobian[self._product_market_indices[s]]
+            xi_jacobian_s = xi_jacobian[self._product_market_indices[s]]
             return (
-                market_s, last_true_tilde_costs_s, true_xi_jacobian_s, beta_jacobian, nonlinear_parameters,
+                market_s, last_true_tilde_costs_s, xi_jacobian_s, beta_jacobian, nonlinear_parameters,
                 costs_type, costs_bounds, compute_gradient
             )
 
         # compute transformed marginal costs and their Jacobian market-by-market
         generator = generate_items(self.unique_market_ids, market_factory, SupplyProblemMarket.solve)
-        for t, (true_tilde_costs_t, true_omega_jacobian_t, errors_t) in generator:
+        for t, (true_tilde_costs_t, omega_jacobian_t, errors_t) in generator:
             true_tilde_costs[self._product_market_indices[t]] = true_tilde_costs_t
-            true_omega_jacobian[self._product_market_indices[t]] = true_omega_jacobian_t
+            omega_jacobian[self._product_market_indices[t]] = omega_jacobian_t
             errors.extend(errors_t)
 
         # replace invalid transformed marginal costs with their last values
@@ -819,24 +815,20 @@ class Problem(Economy):
 
         # replace invalid elements in their Jacobian with their last values
         if compute_gradient:
-            bad_indices = ~np.isfinite(true_omega_jacobian)
+            bad_indices = ~np.isfinite(omega_jacobian)
             if np.any(bad_indices):
-                true_omega_jacobian[bad_indices] = last_objective_info.true_omega_jacobian[bad_indices]
+                omega_jacobian[bad_indices] = last_objective_info.omega_jacobian[bad_indices]
                 errors.append(exceptions.OmegaJacobianReversionError(bad_indices))
 
         # absorb any supply-side fixed effects
         tilde_costs = true_tilde_costs
-        omega_jacobian = true_omega_jacobian
         if self.ES > 0:
             tilde_costs, tilde_costs_errors = self._absorb_supply_ids(tilde_costs)
             errors.extend(tilde_costs_errors)
-            if compute_gradient:
-                omega_jacobian, jacobian_errors = self._absorb_supply_ids(omega_jacobian)
-                errors.extend(jacobian_errors)
 
         # recover gamma and compute omega
         gamma, true_omega = supply_iv.estimate(tilde_costs)
-        return true_tilde_costs, true_omega_jacobian, tilde_costs, omega_jacobian, gamma, true_omega, errors
+        return true_tilde_costs, omega_jacobian, tilde_costs, gamma, true_omega, errors
 
     def _compute_logit_delta(self, rho):
         """Compute the delta that solves the simple Logit (or nested Logit) model."""
@@ -870,9 +862,8 @@ class ObjectiveInfo(object):
     """Structured information about a completed iteration of the optimization routine."""
 
     def __init__(self, problem, nonlinear_parameters, WD, WS, theta, objective, gradient, next_delta, true_delta,
-                 true_tilde_costs, true_xi_jacobian, true_omega_jacobian, delta=None, tilde_costs=None,
-                 xi_jacobian=None, omega_jacobian=None, true_xi=None, true_omega=None, beta=None, gamma=None,
-                 iteration_mapping=None, evaluation_mapping=None, errors=None):
+                 true_tilde_costs, xi_jacobian, omega_jacobian, delta=None, tilde_costs=None, true_xi=None,
+                 true_omega=None, beta=None, gamma=None, iteration_mapping=None, evaluation_mapping=None, errors=None):
         """Initialize objective information. Optional parameters will not be specified when preparing for the first
         objective evaluation.
         """
@@ -886,12 +877,10 @@ class ObjectiveInfo(object):
         self.next_delta = next_delta
         self.true_delta = true_delta
         self.true_tilde_costs = true_tilde_costs
-        self.true_xi_jacobian = true_xi_jacobian
-        self.true_omega_jacobian = true_omega_jacobian
-        self.delta = delta
-        self.tilde_costs = tilde_costs
         self.xi_jacobian = xi_jacobian
         self.omega_jacobian = omega_jacobian
+        self.delta = delta
+        self.tilde_costs = tilde_costs
         self.true_xi = true_xi
         self.true_omega = true_omega
         self.beta = beta

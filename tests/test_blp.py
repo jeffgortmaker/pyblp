@@ -118,7 +118,7 @@ def test_fixed_effects(simulated_problem, ED, ES, absorb_method):
     simulation, product_data, problem, solve_options, results = simulated_problem
 
     # test that results that should be equal when there aren't any fixed effects are indeed equal
-    for key in ['delta', 'tilde_costs', 'xi', 'omega', 'xi_jacobian', 'omega_jacobian']:
+    for key in ['delta', 'tilde_costs', 'xi', 'omega']:
         result = getattr(results, key)
         true_result = getattr(results, f'true_{key}')
         np.testing.assert_allclose(result, true_result, atol=1e-14, rtol=0, err_msg=key)
@@ -200,8 +200,8 @@ def test_fixed_effects(simulated_problem, ED, ES, absorb_method):
     # test that all arrays expected to be identical are identical
     keys = [
         'theta', 'sigma', 'pi', 'rho', 'beta', 'gamma', 'sigma_se', 'pi_se', 'rho_se', 'beta_se', 'gamma_se',
-        'true_delta', 'true_tilde_costs', 'true_xi', 'true_omega', 'true_xi_jacobian', 'true_omega_jacobian',
-        'objective', 'gradient', 'sigma_gradient', 'pi_gradient', 'rho_gradient'
+        'true_delta', 'true_tilde_costs', 'true_xi', 'true_omega', 'xi_jacobian', 'omega_jacobian', 'objective',
+        'gradient', 'sigma_gradient', 'pi_gradient', 'rho_gradient'
     ]
     for key in keys:
         result1 = getattr(results1, key)

@@ -120,14 +120,8 @@ class Results(object):
     objective : `float`
         GMM objective value.
     xi_jacobian : `ndarray`
-        Estimated :math:`\partial\xi / \partial\theta = \partial\delta / \partial\theta`, which may have been
-        residualized to absorb any demand-side fixed effects.
-    true_xi_jacobian : `ndarray`
         Estimated :math:`\partial\xi / \partial\theta = \partial\delta / \partial\theta`.
     omega_jacobian : `ndarray`
-        Estimated :math:`\partial\omega / \partial\theta = \partial\tilde{c} / \partial\theta`, which may have been
-        residualized to absorb any supply-side fixed effects.
-    true_omega_jacobian : `ndarray`
         Estimated :math:`\partial\omega / \partial\theta = \partial\tilde{c} / \partial\theta`.
     gradient : `ndarray`
         Estimated gradient of the GMM objective with respect to :math:`\theta`. This is still computed once at the end
@@ -172,12 +166,10 @@ class Results(object):
         self.theta = objective_info.theta
         self.true_delta = objective_info.true_delta
         self.true_tilde_costs = objective_info.true_tilde_costs
-        self.true_xi_jacobian = objective_info.true_xi_jacobian
-        self.true_omega_jacobian = objective_info.true_omega_jacobian
-        self.delta = objective_info.delta
-        self.tilde_costs = objective_info.tilde_costs
         self.xi_jacobian = objective_info.xi_jacobian
         self.omega_jacobian = objective_info.omega_jacobian
+        self.delta = objective_info.delta
+        self.tilde_costs = objective_info.tilde_costs
         self.true_xi = objective_info.true_xi
         self.true_omega = objective_info.true_omega
         self.beta = objective_info.beta
