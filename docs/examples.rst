@@ -145,7 +145,7 @@ To solve the problem, we'll use a non-default unbounded optimization routine tha
    )
    nevo_results
 
-Results are similar to those in the original paper.
+Results are similar to those in the original paper. Note that one of the estimated terms on the diagonal of :math:`\Sigma` is negative. Since the diagonal consists of standard deviations, negative values do not make much sense. When using another optimization routine (like the default L-BFGS-B routine) that supports bounds, these diagonal elements are by default bounded from below by zero. In the next example we'll use the default routine.
 
 
 The Automobile Problem
