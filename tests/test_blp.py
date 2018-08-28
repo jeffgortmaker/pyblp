@@ -657,7 +657,7 @@ def test_logit(simulated_problem, steps, covariance_type, center_moments):
     results2 = model.fit(iter_limit=steps, cov_type=covariance_type, **covariance_options)
 
     # test that results are essentially identical
-    for key1, key2 in [('beta', 'params'), ('beta_se', 'std_errors'), ('xi', 'resids'), ('WD', 'weight_matrix')]:
+    for key1, key2 in [('beta', 'params'), ('beta_se', 'std_errors'), ('xi', 'resids')]:
         values1 = getattr(results1, key1)
         values2 = np.c_[getattr(results2, key2)]
         np.testing.assert_allclose(values1, values2, atol=1e-10, rtol=1e-6, err_msg=key1)

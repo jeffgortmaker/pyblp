@@ -145,9 +145,11 @@ class Results(object):
     WS : `ndarray`
         Supply-side weighting matrix, :math:`W_S`, used to compute these results.
     updated_WD : `ndarray`
-        Updated demand-side weighting matrix.
+        Updated demand-side weighting matrix. If :attr:`Results.step` is ``1`` and :attr:`Results.covariance_type` is
+        ``'unadjusted'``, this is used to compute standard errors because :attr:`Results.WD` is not scaled correctly.
     updated_WS : `ndarray`
-        Updated supply-side weighting matrix.
+        Updated supply-side weighting matrix. If :attr:`Results.step` is ``1`` and :attr:`Results.covariance_type` is
+        ``'unadjusted'``, this is used to compute standard errors because :attr:`Results.WS` is not scaled correctly.
     unique_market_ids : `ndarray`
         Unique market IDs, which are in the same order as post-estimation outputs returned by methods that compute a
         single value for each market.
@@ -184,13 +186,6 @@ class Results(object):
         self.gradient = objective_info.gradient
         self.gradient_norm = objective_info.gradient_norm
 
-        # store parameter information
-        self._linear_parameters = LinearParameters(self.problem, self.beta, self.gamma)
-        self._nonlinear_parameters = objective_info.nonlinear_parameters
-        self.sigma_bounds = self._nonlinear_parameters.sigma_bounds
-        self.pi_bounds = self._nonlinear_parameters.pi_bounds
-        self.rho_bounds = self._nonlinear_parameters.rho_bounds
-
         # initialize counts and times
         self.step = 1
         self.total_time = self.cumulative_total_time = time.time() - step_start_time
@@ -221,6 +216,13 @@ class Results(object):
             self.cumulative_contraction_evaluations = np.c_[
                 last_results.cumulative_contraction_evaluations, self.cumulative_contraction_evaluations
             ]
+
+        # store parameter information
+        self._linear_parameters = LinearParameters(self.problem, self.beta, self.gamma)
+        self._nonlinear_parameters = objective_info.nonlinear_parameters
+        self.sigma_bounds = self._nonlinear_parameters.sigma_bounds
+        self.pi_bounds = self._nonlinear_parameters.pi_bounds
+        self.rho_bounds = self._nonlinear_parameters.rho_bounds
 
         # expand the nonlinear parameters and their gradient
         self.sigma, self.pi, self.rho = self._nonlinear_parameters.expand(self.theta)
@@ -253,17 +255,22 @@ class Results(object):
         )
         self._errors.extend(WD_errors + WS_errors)
 
-        # stack errors, weights, instruments, Jacobian of the errors with respect to parameters, and clustering IDs
+        # stack errors, weights, instruments, Jacobian of the errors with respect to parameters, and clustering IDs (if
+        #   this is the first step, the weighting matrices need to be updated before computing standard errors because
+        #   they are not scaled properly)
         if self.problem.K3 == 0:
             u = self.true_xi
-            W = self.WD
             Z = self.problem.products.ZD
+            W = self.updated_WD if covariance_type == 'unadjusted' and self.step == 1 else self.WD
             jacobian = np.c_[self.xi_jacobian, self.problem.products.X1]
             stacked_clustering_ids = self.problem.products.clustering_ids
         else:
             u = np.r_[self.true_xi, self.true_omega]
-            W = scipy.linalg.block_diag(self.WD, self.WS)
             Z = scipy.linalg.block_diag(self.problem.products.ZD, self.problem.products.ZS)
+            W = scipy.linalg.block_diag(
+                self.updated_WD if covariance_type == 'unadjusted' and self.step == 1 else self.WD,
+                self.updated_WS if covariance_type == 'unadjusted' and self.step == 1 else self.WS
+            )
             jacobian = np.c_[
                 np.r_[self.xi_jacobian, self.omega_jacobian],
                 scipy.linalg.block_diag(self.problem.products.X1, self.problem.products.X3)
@@ -271,7 +278,7 @@ class Results(object):
             stacked_clustering_ids = np.r_[self.problem.products.clustering_ids, self.problem.products.clustering_ids]
 
         # compute standard errors
-        se, se_errors = compute_gmm_se(u, Z, W, jacobian, self.step, covariance_type, stacked_clustering_ids)
+        se, se_errors = compute_gmm_se(u, Z, W, jacobian, covariance_type, stacked_clustering_ids)
         self.sigma_se, self.pi_se, self.rho_se = self._nonlinear_parameters.expand(
             se[:self._nonlinear_parameters.P], nullify=True
         )

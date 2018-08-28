@@ -33,7 +33,7 @@ class IV(object):
         return parameters
 
 
-def compute_gmm_se(u, Z, W, jacobian, step, covariance_type, clustering_ids):
+def compute_gmm_se(u, Z, W, jacobian, covariance_type, clustering_ids):
     """Use an error term, instruments, a weighting matrix, and the Jacobian of the error term with respect to parameters
     to estimate GMM standard errors.
     """
@@ -48,12 +48,6 @@ def compute_gmm_se(u, Z, W, jacobian, step, covariance_type, clustering_ids):
     covariances, replacement = approximately_invert(covariances_inverse)
     if replacement:
         errors.append(exceptions.GMMParameterCovariancesInversionError(covariances_inverse, replacement))
-
-    # if this is the first step, the covariances need to be scaled by the estimated variance of the error term when
-    #   computing unadjusted standard errors
-    if step == 1 and covariance_type == 'unadjusted':
-        with np.errstate(invalid='ignore'):
-            covariances *= compute_gmm_error_variance(u)
 
     # compute the robust covariance matrix
     if covariance_type != 'unadjusted':
@@ -75,7 +69,7 @@ def compute_2sls_weights(Z):
     errors = []
 
     # attempt to compute the weighting matrix
-    S = compute_gmm_moment_covariances(Z)
+    S = Z.T @ Z
     W, replacement = approximately_invert(S)
     if replacement:
         errors.append(exceptions.GMMMomentCovariancesInversionError(S, replacement))
