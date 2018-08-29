@@ -131,7 +131,7 @@ which is assumed to have an inverse that is a consistant estimate of :math:`\mat
 
 If only the demand side is considered, :math:`u = \xi`, :math:`Z = Z_D`, and :math:`W = W_D`.
 
-Conventionally, the 2SLS weighting matrix, :math:`W = (Z'Z)^{-1}`, is used in the first stage. With two-step or iterated GMM, the weighting matrix is updated before each subsequent stage according to :math:`W = S^{-1}`. For robust covariance estimates, :math:`S = N^{-1}g'g`. For clustered covariance estimates, which account for arbitrary correlation within :math:`c = 1, 2, \dotsc, C` clusters,
+Conventionally, the 2SLS weighting matrix, :math:`W = (Z'Z)^{-1}`, is used in the first stage. With two-step or iterated GMM, the weighting matrix is updated before each subsequent stage according to :math:`W = S^{-1}`. For robust weighting matrices, :math:`S = N^{-1}g'g`. For clustered weighting matrices, which account for arbitrary correlation within :math:`c = 1, 2, \dotsc, C` clusters,
 
 .. math:: S = N^{-1}\sum_{c=1}^C q_cq_c'.
 
@@ -141,7 +141,7 @@ where, letting the set :math:`\mathscr{J}_c \subset \{1, 2, \ldots, N\}` denote 
 
 Before being used to update the weighting matrix, the sample moments are often centered. That is, :math:`g - \bar{g}` is often used instead.
 
-On the other hand, for unadjusted covariance estimates, the instruments are simply scaled by the estimated variance of the error term:
+On the other hand, for unadjusted weighting matrices, the instruments are simply scaled by the estimated variance of the error term:
 
 .. math:: S = N^{-1} \hat{\sigma}_u^2 Z'Z \quad\text{where}\quad \hat{\sigma}_u^2 = N^{-1}(u - \bar{u})'(u - \bar{u})
 
@@ -239,7 +239,7 @@ If the weighting matrix was chosen such that :math:`W = S^{-1}`, then
 
 .. math:: \hat{\text{Var}}\begin{pmatrix} \hat{\theta} \\ \hat{\beta} \\ \hat{\gamma} \end{pmatrix} = (G'WG)^{-1}.
 
-Standard errors extracted from an estimate of this last expression are called unadjusted. One caveat is that after only one GMM step, the above expression for the unadjusted covariance matrix is missing the estimated variance of the error term. In this one case, :math:`W` is updated before computing standard errors instead of after. Doing so properly scales the expression.
+Standard errors extracted from an estimate of this last expression are called unadjusted. One caveat is that after only one GMM step, the above expression for the unadjusted covariance matrix is missing the estimated variance of the error term. In this one case, :math:`W` is replaced with an updated unadjusted weighting matrix. Doing so properly scales the expression.
 
 
 Fixed Effect Absorption

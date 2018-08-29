@@ -73,8 +73,6 @@ class Results(object):
         Estimated demand-side linear parameters, :math:`\hat{\beta}`.
     gamma : `ndarray`
         Estimated supply-side linear parameters, :math:`\hat{\gamma}`.
-    covariance_type : `str`
-        The type of computed standard errors, which was specified by `covariance_type` in :meth:`Problem.solve`.
     sigma_se : `ndarray`
         Estimated standard errors for unknown :math:`\hat{\Sigma}` elements in :math:`\hat{\theta}`.
     pi_se : `ndarray`
@@ -139,11 +137,9 @@ class Results(object):
     WS : `ndarray`
         Supply-side weighting matrix, :math:`W_S`, used to compute these results.
     updated_WD : `ndarray`
-        Updated demand-side weighting matrix. If :attr:`Results.step` is ``1`` and :attr:`Results.covariance_type` is
-        ``'unadjusted'``, this is used to compute standard errors because :attr:`Results.WD` is not scaled correctly.
+        Updated demand-side weighting matrix.
     updated_WS : `ndarray`
-        Updated supply-side weighting matrix. If :attr:`Results.step` is ``1`` and :attr:`Results.covariance_type` is
-        ``'unadjusted'``, this is used to compute standard errors because :attr:`Results.WS` is not scaled correctly.
+        Updated supply-side weighting matrix.
     unique_market_ids : `ndarray`
         Unique market IDs, which are in the same order as post-estimation outputs returned by methods that compute a
         single value for each market.
@@ -155,7 +151,7 @@ class Results(object):
     """
 
     def __init__(self, objective_info, last_results, step_start_time, optimization_start_time, optimization_end_time,
-                 iterations, evaluations, iteration_mappings, evaluation_mappings, center_moments, covariance_type):
+                 iterations, evaluations, iteration_mappings, evaluation_mappings, center_moments, W_type, se_type):
         """Update weighting matrices, estimate standard errors, and compute cumulative progress statistics."""
 
         # initialize values from the objective information
@@ -238,31 +234,24 @@ class Results(object):
 
         # update the weighting matrices
         self.updated_WD, WD_errors = compute_gmm_weights(
-            self.true_xi, self.problem.products.ZD, center_moments, covariance_type,
-            self.problem.products.clustering_ids
+            self.true_xi, self.problem.products.ZD, W_type, center_moments, self.problem.products.clustering_ids
         )
         self.updated_WS, WS_errors = compute_gmm_weights(
-            self.true_omega, self.problem.products.ZS, center_moments, covariance_type,
-            self.problem.products.clustering_ids
+            self.true_omega, self.problem.products.ZS, W_type, center_moments, self.problem.products.clustering_ids
         )
         self._errors.extend(WD_errors + WS_errors)
 
-        # stack errors, weights, instruments, Jacobian of the errors with respect to parameters, and clustering IDs (if
-        #   this is the first step, the weighting matrices need to be updated before computing standard errors because
-        #   they are not scaled properly)
+        # stack errors, weights, instruments, Jacobian of the errors with respect to parameters, and clustering IDs
         if self.problem.K3 == 0:
             u = self.true_xi
             Z = self.problem.products.ZD
-            W = self.updated_WD if covariance_type == 'unadjusted' and self.step == 1 else self.WD
+            W = self.WD
             jacobian = np.c_[self.xi_jacobian, self.problem.products.X1]
             stacked_clustering_ids = self.problem.products.clustering_ids
         else:
             u = np.r_[self.true_xi, self.true_omega]
             Z = scipy.linalg.block_diag(self.problem.products.ZD, self.problem.products.ZS)
-            W = scipy.linalg.block_diag(
-                self.updated_WD if covariance_type == 'unadjusted' and self.step == 1 else self.WD,
-                self.updated_WS if covariance_type == 'unadjusted' and self.step == 1 else self.WS
-            )
+            W = scipy.linalg.block_diag(self.WD, self.WS)
             jacobian = np.c_[
                 np.r_[self.xi_jacobian, self.omega_jacobian],
                 scipy.linalg.block_diag(self.problem.products.X1, self.problem.products.X3)
@@ -270,14 +259,14 @@ class Results(object):
             stacked_clustering_ids = np.r_[self.problem.products.clustering_ids, self.problem.products.clustering_ids]
 
         # compute standard errors
-        se, se_errors = compute_gmm_se(u, Z, W, jacobian, covariance_type, stacked_clustering_ids)
+        se, se_errors = compute_gmm_se(u, Z, W, jacobian, se_type, self.step, stacked_clustering_ids)
         self.sigma_se, self.pi_se, self.rho_se = self._nonlinear_parameters.expand(
             se[:self._nonlinear_parameters.P], nullify=True
         )
         self.beta_se = se[self._nonlinear_parameters.P:self._nonlinear_parameters.P + self.problem.K1]
         self.gamma_se = se[self._nonlinear_parameters.P + self.problem.K1:]
         self._errors.extend(se_errors)
-        self.covariance_type = covariance_type
+        self._se_type = se_type
 
     def __str__(self):
         """Format full results as a string."""
@@ -310,12 +299,12 @@ class Results(object):
         ]]
 
         # construct a standard error description
-        if self.covariance_type == 'unadjusted':
+        if self._se_type == 'unadjusted':
             se_description = "Unadjusted SEs"
-        elif self.covariance_type == 'robust':
+        elif self._se_type == 'robust':
             se_description = "Robust SEs"
         else:
-            assert self.covariance_type == 'clustered'
+            assert self._se_type == 'clustered'
             se_description = f'Robust SEs Adjusted for {np.unique(self.problem.products.clustering_ids).size} Clusters'
 
         # construct a section containing linear estimates

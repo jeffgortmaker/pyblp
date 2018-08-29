@@ -14,8 +14,7 @@ from pyblp import parallel, build_matrix, Problem, Iteration, Optimization, Form
     pytest.param({'fp_type': 'nonlinear'}, id="nonlinear fixed point"),
     pytest.param({'delta_behavior': 'first'}, id="conservative starting delta values"),
     pytest.param({'error_behavior': 'punish', 'error_punishment': 1e5}, id="error punishment"),
-    pytest.param({'center_moments': False, 'covariance_type': 'unadjusted'}, id="simple covariance matrices"),
-    pytest.param({'covariance_type': 'clustered'}, id="clustered covariance matrices")
+    pytest.param({'center_moments': False, 'W_type': 'unadjusted', 'se_type': 'clustered'}, id="complex covariances")
 ])
 def test_accuracy(simulated_problem, solve_options_update):
     """Test that starting parameters that are half their true values give rise to errors of less than 10%. Use loose
@@ -620,13 +619,18 @@ def test_objective_gradient(simulated_problem, solve_options_update):
 
 @pytest.mark.usefixtures('simulated_problem')
 @pytest.mark.parametrize('steps', [pytest.param(1, id="one-step"), pytest.param(2, id="two-step")])
-@pytest.mark.parametrize('covariance_type', [
+@pytest.mark.parametrize('center_moments', [pytest.param(True, id="centered"), pytest.param(False, id="uncentered")])
+@pytest.mark.parametrize('W_type', [
+    pytest.param('robust', id="robust W"),
+    pytest.param('unadjusted', id="unadjusted W"),
+    pytest.param('clustered', id="clustered W")
+])
+@pytest.mark.parametrize('se_type', [
     pytest.param('robust', id="robust SEs"),
     pytest.param('unadjusted', id="unadjusted SEs"),
     pytest.param('clustered', id="clustered SEs")
 ])
-@pytest.mark.parametrize('center_moments', [pytest.param(True, id="centered"), pytest.param(False, id="uncentered")])
-def test_logit(simulated_problem, steps, covariance_type, center_moments):
+def test_logit(simulated_problem, steps, center_moments, W_type, se_type):
     """Test that Logit estimates are the same as those from the the linearmodels package."""
     _, product_data, problem, _, _ = simulated_problem
 
@@ -635,7 +639,7 @@ def test_logit(simulated_problem, steps, covariance_type, center_moments):
         return
 
     # solve the problem
-    results1 = problem.solve(steps=steps, covariance_type=covariance_type, center_moments=center_moments)
+    results1 = problem.solve(steps=steps, center_moments=center_moments, W_type=W_type, se_type=se_type)
 
     # compute delta
     delta = np.log(product_data['shares'])
@@ -644,20 +648,25 @@ def test_logit(simulated_problem, steps, covariance_type, center_moments):
         delta[product_data['market_ids'] == t] -= np.log(1 - shares_t.sum())
 
     # configure covariance options
-    covariance_options = {'clusters': product_data.clustering_ids} if covariance_type == 'clustered' else {}
+    W_options = {'clusters': product_data.clustering_ids} if W_type == 'clustered' else {}
+    se_options = {'clusters': product_data.clustering_ids} if se_type == 'clustered' else {}
 
     # monkey-patch a problematic linearmodels method that shouldn't be called but is anyways
     linearmodels.IVLIML._estimate_kappa = lambda _: 1
 
     # solve the problem with linearmodels
     model = linearmodels.IVGMM(
-        delta, exog=None, endog=problem.products.X1, instruments=problem.products.ZD, weight_type=covariance_type,
-        center=center_moments, **covariance_options
+        delta, exog=None, endog=problem.products.X1, instruments=problem.products.ZD, center=center_moments,
+        weight_type=W_type, **W_options
     )
-    results2 = model.fit(iter_limit=steps, cov_type=covariance_type, **covariance_options)
+    results2 = model.fit(iter_limit=steps, cov_type=se_type, **se_options)
 
-    # test that results are essentially identical
-    for key1, key2 in [('beta', 'params'), ('beta_se', 'std_errors'), ('xi', 'resids')]:
+    # test that results are essentially identical (the packages are expected to get different unadjusted standard errors
+    #   in the second stage because linearmodels uses a unadjusted sandwich in the robust expression, whereas here the
+    #   more common "optimal" GMM estimator is used)
+    for key1, key2 in [('beta', 'params'), ('xi', 'resids'), ('beta_se', 'std_errors')]:
+        if se_type == 'unadjusted' and steps == 2 and key1 == 'beta_se':
+            continue
         values1 = getattr(results1, key1)
         values2 = np.c_[getattr(results2, key2)]
         np.testing.assert_allclose(values1, values2, atol=1e-10, rtol=1e-6, err_msg=key1)

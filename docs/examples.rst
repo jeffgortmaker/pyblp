@@ -188,7 +188,7 @@ Similar to :ref:`Andrews, Gentzkow, and Shapiro (2017) <ags17>`, who replicated 
 
 A linear marginal cost specification is the default, so we'll need to use the `costs_type` argument to employ the log-linear specification used by :ref:`Berry, Levinsohn, and Pakes (1995) <blp95>`. A downside of this specification is that nonpositive estimated marginal costs can create problems for the optimization routine when computing :math:`\tilde{c}(\hat{\theta}) = \log c(\hat{\theta})`. Since this specification of the automobile problem suffers from such problems, we'll use the `costs_bounds` argument to bound marginal costs from below by a small number. 
 
-Finally, as in the original paper, we'll use the `covariance_type` argument to cluster by product IDs, which were specified as ``clustering_ids`` in product data. Again, to speed up this example, we'll stop after one GMM step.
+Finally, as in the original paper, we'll use the `W_type` and `se_type` argument to cluster by product IDs, which were specified as ``clustering_ids`` in product data. Again, to speed up this example, we'll stop after one GMM step.
 
 .. ipython:: python
 
@@ -198,7 +198,8 @@ Finally, as in the original paper, we'll use the `covariance_type` argument to c
        steps=1,
        costs_type='log',
        costs_bounds=(0.001, None),
-       covariance_type='clustered'
+       W_type='clustered',
+       se_type='clustered'
    )
    blp_results
 

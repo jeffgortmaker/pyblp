@@ -186,7 +186,7 @@ class Problem(Economy):
     def solve(self, sigma=None, pi=None, rho=None, sigma_bounds=None, pi_bounds=None, rho_bounds=None, delta=None,
               WD=None, WS=None, steps=2, optimization=None, error_behavior='revert', error_punishment=1,
               delta_behavior='last', iteration=None, fp_type='linear', costs_type='linear', costs_bounds=None,
-              covariance_type='robust', center_moments=True):
+              center_moments=True, W_type='robust', se_type='robust'):
         r"""Solve the problem.
 
         The problem is solved in one or more GMM steps. During each step, any unfixed nonlinear parameters in
@@ -391,22 +391,31 @@ class Problem(Economy):
             values can create problems when computing :math:`\tilde{c}(\hat{\theta}) = \log c(\hat{\theta})`. One
             solution is to set ``lb`` to a small number. Both ``None`` and ``numpy.nan`` are converted to ``-numpy.inf``
             in ``lb`` and to ``numpy.inf`` in ``ub``.
-        covariance_type : `str, optional`
-            How to update weighting matrices and compute standard errors. The following types are supported:
-
-                - ``'robust'`` (default) - Heteroscedasticity robust weighting matrices and standard errors.
-
-                - ``'unadjusted'`` - Homoskedastic weighting matrices and standard errors. Unadjusted standard errors
-                  are computed under the assumption that weighting matrices are optimal. Errors are always centered when
-                  computing this type of weighting matrix, so `center_moments` has no effect.
-
-                - ``'clustered'`` - Clustered weighting matrices and standard errors, which account for arbitrary
-                  within-group correlation. Clusters must be defined by the `clustering_ids` field of `product_data` in
-                  :class:`Problem`.
-
         center_moments : `bool, optional`
             Whether to center the sample moments before using them to update weighting matrices. By default, sample
-            moments are centered. This has no effect if `covariance_type` is ``'unadjusted'``.
+            moments are centered. This has no effect if `W_type` is ``'unadjusted'``.
+        W_type : `str, optional`
+            How to update weighting matrices. This has no effect if `steps` is ``1``. Often, `se_type` should be the
+            same. The following types are supported:
+
+                - ``'robust'`` (default) - Heteroscedasticity robust weighting matrices.
+
+                - ``'unadjusted'`` - Homoskedastic weighting matrices. Errors are always centered when computing this
+                  type of weighting matrix, so `center_moments` has no effect.
+
+                - ``'clustered'`` - Clustered weighting matrices, which account for arbitrary within-group correlation.
+                  Clusters must be defined by the `clustering_ids` field of `product_data` in :class:`Problem`.
+
+        se_type : ``str, optional`
+            How to compute standard errors. Often, `W_type` should be the same. The following types are supported:
+
+                - ``'robust'`` (default) - Heteroscedasticity robust standard errors.
+
+                - ``'unadjusted'`` - Homoskedastic standard errors. Unadjusted standard errors are computed under the
+                  assumption that weighting matrices are optimal.
+
+                - ``'clustered'`` - Clustered standard errors, which account for arbitrary within-group correlation.
+                  Clusters must be defined by the `clustering_ids` field of `product_data` in :class:`Problem`.
 
         Returns
         -------
@@ -472,10 +481,12 @@ class Problem(Economy):
             raise ValueError("fp_type must be 'linear' or 'nonlinear'.")
         if costs_type not in {'linear', 'log'}:
             raise ValueError("costs_type must be 'linear' or 'log'.")
-        if covariance_type not in {'robust', 'unadjusted', 'clustered'}:
-            raise ValueError("covariance_type must be 'robust', 'unadjusted', or 'clustered'.")
-        if covariance_type == 'clustered' and 'clustering_ids' not in self.products.dtype.names:
-            raise ValueError("covariance_type can only be 'clustered' if clustering_ids were specified in product_data.")
+        if W_type not in {'robust', 'unadjusted', 'clustered'}:
+            raise ValueError("W_type must be 'robust', 'unadjusted', or 'clustered'.")
+        if se_type not in {'robust', 'unadjusted', 'clustered'}:
+            raise ValueError("se_type must be 'robust', 'unadjusted', or 'clustered'.")
+        if 'clustered' in {W_type, se_type} and 'clustering_ids' not in self.products.dtype.names:
+            raise ValueError("W_type or se_type is 'clustered' but clustering_ids were not specified in product_data.")
 
         # configure or validate costs bounds
         if costs_bounds is None:
@@ -615,7 +626,8 @@ class Problem(Economy):
             step_info = compute_step_info(theta, wrapper.cache, compute_gradient=nonlinear_parameters.P > 0)
             results = step_info.to_results(
                 last_results, step_start_time, optimization_start_time, optimization_end_time, iterations,
-                evaluations + 1, wrapper.iteration_mappings, wrapper.evaluation_mappings, center_moments, covariance_type
+                evaluations + 1, wrapper.iteration_mappings, wrapper.evaluation_mappings, center_moments, W_type,
+                se_type
             )
             self._handle_errors(error_behavior, results._errors)
             output(f"Computed results after {format_seconds(results.total_time - results.optimization_time)}.")
