@@ -308,6 +308,10 @@ class Problem(Economy):
 
                 - ``'2s'`` (default) - Two-step GMM.
 
+            Iterated GMM can be manually implemented by executing single GMM steps in a loop, in which after the first
+            iteration, nonlinear parameters and weighting matrices from the last :class:`Results` are passed as
+            arguments.
+
         optimization : `Optimization, optional`
             :class:`Optimization` configuration for how to solve the optimization problem in each GMM step, which is
             only used if there are unfixed nonlinear parameters over which to optimize. By default,
