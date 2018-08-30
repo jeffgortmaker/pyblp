@@ -273,11 +273,11 @@ class Results(object):
 
         # construct section containing summary information
         header = [
-            ("GMM", "Step"), ("Optimization", "Iterations"), ("Objective", "Evaluations"),
-            ("Total Fixed Point", "Iterations"), ("Total Contraction", "Evaluations"), ("Optimization", "Time"),
-            ("Total Step", "Time"), ("Objective", "Value"), ("Gradient", "Infinity Norm")
+            ("Cumulative", "Total Time"), ("GMM", "Step"), ("Optimization", "Iterations"),
+            ("Objective", "Evaluations"), ("Total Fixed Point", "Iterations"), ("Total Contraction", "Evaluations"),
+            ("Objective", "Value"), ("Gradient", "Infinity Norm"),
         ]
-        widths = [max(len(k1), len(k2), options.digits + 6 if i > 6 else 0) for i, (k1, k2) in enumerate(header)]
+        widths = [max(len(k1), len(k2), options.digits + 6 if i > 5 else 0) for i, (k1, k2) in enumerate(header)]
         formatter = TableFormatter(widths)
         sections = [[
             "Results Summary:",
@@ -285,13 +285,12 @@ class Results(object):
             formatter([k[0] for k in header]),
             formatter([k[1] for k in header], underline=True),
             formatter([
+                format_seconds(self.cumulative_total_time),
                 self.step,
                 self.optimization_iterations,
                 self.objective_evaluations,
                 self.fp_iterations.sum(),
                 self.contraction_evaluations.sum(),
-                format_seconds(self.optimization_time),
-                format_seconds(self.total_time),
                 format_number(self.objective),
                 format_number(self.gradient_norm)
             ]),
