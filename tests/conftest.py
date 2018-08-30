@@ -361,7 +361,7 @@ def simulated_problem(request):
         'rho': simulation.rho,
         'rho_bounds': (np.zeros_like(simulation.rho), np.minimum(0.9, 2 * simulation.rho)),
         'costs_type': simulation.costs_type,
-        'steps': 1
+        'method': '1s'
     }
     results = problem.solve(**solve_options)
     return simulation, product_data, problem, solve_options, results

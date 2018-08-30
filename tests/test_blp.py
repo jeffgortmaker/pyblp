@@ -10,7 +10,7 @@ from pyblp import parallel, build_matrix, Problem, Iteration, Optimization, Form
 
 @pytest.mark.usefixtures('simulated_problem')
 @pytest.mark.parametrize('solve_options_update', [
-    pytest.param({'steps': 1}, id="one step"),
+    pytest.param({'method': '1s'}, id="one-step"),
     pytest.param({'fp_type': 'nonlinear'}, id="nonlinear fixed point"),
     pytest.param({'delta_behavior': 'first'}, id="conservative starting delta values"),
     pytest.param({'error_behavior': 'punish', 'error_punishment': 1e5}, id="error punishment"),
@@ -371,7 +371,7 @@ def test_second_step(simulated_problem):
     # use two steps and remove sigma bounds so that it can't get stuck at zero
     updated_solve_options = solve_options.copy()
     updated_solve_options.update({
-        'steps': 2,
+        'method': '2s',
         'sigma_bounds': (np.full_like(simulation.sigma, -np.inf), np.full_like(simulation.sigma, +np.inf))
     })
 
@@ -381,7 +381,7 @@ def test_second_step(simulated_problem):
 
     # get results from the first step
     updated_solve_options1 = updated_solve_options.copy()
-    updated_solve_options1['steps'] = 1
+    updated_solve_options1['method'] = '1s'
     results1 = problem.solve(**updated_solve_options1)
 
     # get results from the second step
@@ -609,7 +609,7 @@ def test_objective_gradient(simulated_problem, solve_options_update):
         'sigma': 0.9 * simulation.sigma,
         'pi': 0.9 * simulation.pi,
         'rho': 0.9 * simulation.rho,
-        'steps': 1,
+        'method': '1s',
         'optimization': Optimization(test_finite_differences),
         'iteration': Iteration('squarem', {'tol': 1e-15 if solve_options.get('fp_type') == 'nonlinear' else 1e-14}),
         **solve_options_update
@@ -618,7 +618,7 @@ def test_objective_gradient(simulated_problem, solve_options_update):
 
 
 @pytest.mark.usefixtures('simulated_problem')
-@pytest.mark.parametrize('steps', [pytest.param(1, id="one-step"), pytest.param(2, id="two-step")])
+@pytest.mark.parametrize('method', [pytest.param('1s', id="one-step"), pytest.param('2s', id="two-step")])
 @pytest.mark.parametrize('center_moments', [pytest.param(True, id="centered"), pytest.param(False, id="uncentered")])
 @pytest.mark.parametrize('W_type', [
     pytest.param('robust', id="robust W"),
@@ -630,7 +630,7 @@ def test_objective_gradient(simulated_problem, solve_options_update):
     pytest.param('unadjusted', id="unadjusted SEs"),
     pytest.param('clustered', id="clustered SEs")
 ])
-def test_logit(simulated_problem, steps, center_moments, W_type, se_type):
+def test_logit(simulated_problem, method, center_moments, W_type, se_type):
     """Test that Logit estimates are the same as those from the the linearmodels package."""
     _, product_data, problem, _, _ = simulated_problem
 
@@ -639,7 +639,7 @@ def test_logit(simulated_problem, steps, center_moments, W_type, se_type):
         return
 
     # solve the problem
-    results1 = problem.solve(steps=steps, center_moments=center_moments, W_type=W_type, se_type=se_type)
+    results1 = problem.solve(method=method, center_moments=center_moments, W_type=W_type, se_type=se_type)
 
     # compute delta
     delta = np.log(product_data['shares'])
@@ -659,13 +659,13 @@ def test_logit(simulated_problem, steps, center_moments, W_type, se_type):
         delta, exog=None, endog=problem.products.X1, instruments=problem.products.ZD, center=center_moments,
         weight_type=W_type, **W_options
     )
-    results2 = model.fit(iter_limit=steps, cov_type=se_type, **se_options)
+    results2 = model.fit(iter_limit=1 if method == '1s' else 2, cov_type=se_type, **se_options)
 
     # test that results are essentially identical (the packages are expected to get different unadjusted standard errors
     #   in the second stage because linearmodels uses a unadjusted sandwich in the robust expression, whereas here the
     #   more common "optimal" GMM estimator is used)
     for key1, key2 in [('beta', 'params'), ('xi', 'resids'), ('beta_se', 'std_errors')]:
-        if se_type == 'unadjusted' and steps == 2 and key1 == 'beta_se':
+        if se_type == 'unadjusted' and method == '2s' and key1 == 'beta_se':
             continue
         values1 = getattr(results1, key1)
         values2 = np.c_[getattr(results2, key2)]

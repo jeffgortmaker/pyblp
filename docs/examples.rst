@@ -140,7 +140,7 @@ To solve the problem, we'll use a non-default unbounded optimization routine tha
    nevo_results = nevo_problem.solve(
        nevo_sigma,
        nevo_pi,
-       steps=1,
+       method='1s',
        optimization=pyblp.Optimization('bfgs')
    )
    nevo_results
@@ -195,7 +195,7 @@ Finally, as in the original paper, we'll use the `W_type` and `se_type` argument
    blp_results = blp_problem.solve(
        blp_sigma,
        blp_pi,
-       steps=1,
+       method='1s',
        costs_type='log',
        costs_bounds=(0.001, None),
        W_type='clustered',
@@ -554,7 +554,7 @@ Now, we can try to recover the true parameters by creating and solving a :class:
    simulated_results = simulated_problem.solve(
        0.5 * simulation.sigma, 
        0.5 * simulation.pi, 
-       steps=1
+       method='1s'
    )
    simulated_results
    simulation.beta

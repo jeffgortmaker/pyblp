@@ -184,7 +184,7 @@ class Problem(Economy):
         super().__init__(product_formulations, agent_formulation, products, agents)
 
     def solve(self, sigma=None, pi=None, rho=None, sigma_bounds=None, pi_bounds=None, rho_bounds=None, delta=None,
-              WD=None, WS=None, steps=2, optimization=None, error_behavior='revert', error_punishment=1,
+              WD=None, WS=None, method='2s', optimization=None, error_behavior='revert', error_punishment=1,
               delta_behavior='last', iteration=None, fp_type='linear', costs_type='linear', costs_bounds=None,
               center_moments=True, W_type='robust', se_type='robust'):
         r"""Solve the problem.
@@ -301,8 +301,13 @@ class Problem(Economy):
             Starting values for the supply-side weighting matrix, :math:`W_S`, which is only used if :math:`X_3` was
             formulated by `product_formulations` in :class:`Problem`. By default, the 2SLS weighting matrix,
             :math:`W_S = (Z_S'Z_S)^{-1}`, is used.
-        steps : `int, optional`
-            Number of GMM steps. By default, two-step GMM is used.
+        method : `str, optional`
+            The estimation routine that will be used. The following methods are supported:
+
+                - ``'1s'`` - One-step GMM.
+
+                - ``'2s'`` (default) - Two-step GMM.
+
         optimization : `Optimization, optional`
             :class:`Optimization` configuration for how to solve the optimization problem in each GMM step, which is
             only used if there are unfixed nonlinear parameters over which to optimize. By default,
@@ -395,7 +400,7 @@ class Problem(Economy):
             Whether to center the sample moments before using them to update weighting matrices. By default, sample
             moments are centered. This has no effect if `W_type` is ``'unadjusted'``.
         W_type : `str, optional`
-            How to update weighting matrices. This has no effect if `steps` is ``1``. Often, `se_type` should be the
+            How to update weighting matrices. This has no effect if `method` is ``'1s'``. Often, `se_type` should be the
             same. The following types are supported:
 
                 - ``'robust'`` (default) - Heteroscedasticity robust weighting matrices.
@@ -406,7 +411,7 @@ class Problem(Economy):
                 - ``'clustered'`` - Clustered weighting matrices, which account for arbitrary within-group correlation.
                   Clusters must be defined by the `clustering_ids` field of `product_data` in :class:`Problem`.
 
-        se_type : ``str, optional`
+        se_type : `str, optional`
             How to compute standard errors. Often, `W_type` should be the same. The following types are supported:
 
                 - ``'robust'`` (default) - Heteroscedasticity robust standard errors.
@@ -452,7 +457,7 @@ class Problem(Economy):
               [-0.2506,  0,      0.0511,  0     ],
               [ 1.2650,  0,     -0.8091,  0     ]
            ]
-           results = problem.solve(sigma, pi, steps=1, optimization=pyblp.Optimization('bfgs'))
+           results = problem.solve(sigma, pi, method='1s', optimization=pyblp.Optimization('bfgs'))
            results
 
         For more examples, refer to the :doc:`Examples </examples>` section.
@@ -461,6 +466,10 @@ class Problem(Economy):
 
         # record the amount of time it takes to solve the problem
         step_start_time = time.time()
+
+        # validate the estimation method
+        if method not in {'1s', '2s'}:
+            raise TypeError("method must be '1s' or '2s'.")
 
         # configure or validate configurations
         if optimization is None:
@@ -567,8 +576,9 @@ class Problem(Economy):
         gradient = np.zeros((nonlinear_parameters.P, 1), options.dtype)
 
         # iterate over each GMM step
+        step = 1
         last_results = None
-        for step in range(1, steps + 1):
+        while True:
             # initialize IV models for demand- and supply-side linear parameter estimation
             demand_iv = IV(self.products.X1, self.products.ZD, WD)
             supply_iv = IV(self.products.X3, self.products.ZS, WS)
@@ -609,7 +619,7 @@ class Problem(Economy):
             optimization_start_time = optimization_end_time = time.time()
             if nonlinear_parameters.P > 0:
                 output("")
-                output(f"Starting optimization for step {step} out of {steps} ...")
+                output(f"Starting optimization for step {step} ...")
                 output("")
                 theta, converged, iterations, evaluations = optimization._optimize(theta, theta_bounds, wrapper)
                 status = "completed" if converged else "failed"
@@ -636,7 +646,7 @@ class Problem(Economy):
 
             # store the last results and return results from the final step
             last_results = results
-            if step == steps:
+            if method != '2s' or step == 2:
                 return results
 
             # update vectors and matrices
@@ -646,6 +656,7 @@ class Problem(Economy):
             omega_jacobian = step_info.omega_jacobian
             WD = results.updated_WD
             WS = results.updated_WS
+            step += 1
             step_start_time = time.time()
 
     def _compute_objective_info(self, nonlinear_parameters, demand_iv, supply_iv, WD, WS, error_behavior,
