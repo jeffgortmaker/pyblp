@@ -44,9 +44,9 @@ def test_hasselblad(scheme):
         'scheme': scheme
     }
 
-    # define the frequency data and the contraction mapping
-    y = np.array([162, 267, 271, 185, 111, 61, 27, 8, 3, 1])
+    # define the contraction mapping
     def contraction(x):
+        y = np.array([162, 267, 271, 185, 111, 61, 27, 8, 3, 1])
         i = np.arange(y.size)
         z = np.divide(
             x[0] * np.exp(-x[1]) * x[1]**i,

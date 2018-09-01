@@ -39,7 +39,7 @@ def compute_gmm_se(u, Z, W, jacobian, se_type, step, clustering_ids=None):
     """
     errors = []
     N = u.size
-    
+
     # if this is the first step, an unadjusted weighting matrix needs to be computed in order to properly scale
     #   unadjusted standard errors (other standard error types will be scaled properly)
     if se_type == 'unadjusted' and step == 1:

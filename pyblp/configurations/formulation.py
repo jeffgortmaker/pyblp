@@ -12,8 +12,9 @@ import patsy.builtins
 from sympy.parsing import sympy_parser
 
 from .. import exceptions
-from ..configurations import Iteration
-from ..utilities import precisely_invert, extract_size, Groups
+from .iteration import Iteration
+from ..utilities.algebra import precisely_invert
+from ..utilities.basics import extract_size, Groups
 
 
 class Formulation(object):
@@ -283,14 +284,18 @@ class Formulation(object):
             if method == 'simple':
                 return lambda m: (demean(m), [])
 
-            # otherwise, use iterated de-meaning
+            # otherwise, the method should be an iteration configuration
             assert isinstance(method, Iteration)
+
+            # define an iterated de-meaning routine
             def absorb(matrix):
                 errors = []
                 matrix, converged = method._iterate(matrix, demean)[:2]
                 if not converged:
                     errors.append(exceptions.AbsorptionConvergenceError())
                 return matrix, errors
+
+            # return the routine
             return absorb
 
         # validate that the method is a variation of the algorithm of Somaini and Wolak (2016)
@@ -603,5 +608,5 @@ def get_symbol_data(symbol, data, data_override=None):
     """Fetch data corresponding to a symbol from data mapping variable names to arrays."""
     try:
         return data_override[symbol.name]
-    except:
+    except Exception:
         return data[symbol.name]

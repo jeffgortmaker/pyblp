@@ -191,7 +191,7 @@ def medium_blp_simulation():
         beta=[2, 1],
         sigma=[
             [0.5, 0],
-            [0,   0],
+            [0.0, 0],
         ],
         gamma=[1, 1, 2],
         product_data={
@@ -202,7 +202,7 @@ def medium_blp_simulation():
         },
         agent_formulation=Formulation('0 + f'),
         pi=[
-            [ 0],
+            [+0],
             [-3]
         ],
         integration=Integration('product', 4),
@@ -231,7 +231,7 @@ def large_blp_simulation():
         beta=[1, -6, 1, 2, 3],
         sigma=[
             [1, -0.1],
-            [0,  2  ]
+            [0, +2.0]
         ],
         gamma=[0.1, 0.2, 0.3, 0.5],
         product_data={
@@ -302,7 +302,7 @@ def large_nested_blp_simulation():
         beta=[1, -6, 1, 2, 3],
         sigma=[
             [1, -0.1],
-            [0,  2  ]
+            [0, +2.0]
         ],
         gamma=[0.1, 0.2, 0.3, 0.5],
         product_data={

@@ -8,10 +8,11 @@ import numpy as np
 import numpy.lib.recfunctions
 
 from . import options, exceptions
-from .configurations import Formulation, Integration
-from .utilities import (
-    approximately_solve, extract_matrix, output, format_seconds, format_number, format_se, TableFormatter, Matrices,
-    Groups
+from .utilities.algebra import approximately_solve
+from .configurations.integration import Integration
+from .configurations.formulation import Formulation
+from .utilities.basics import (
+    extract_matrix, output, format_seconds, format_number, format_se, TableFormatter, Matrices, Groups
 )
 
 
@@ -410,11 +411,11 @@ class Market(object):
         """Store or compute information about formulations, data, parameters, and utility."""
 
         # store data
-        self.products = np.lib.recfunctions.rec_drop_fields(
+        self.products = numpy.lib.recfunctions.rec_drop_fields(
             economy.products[economy._product_market_indices[t]],
             self.get_unneeded_product_fields(set(economy.products.dtype.names))
         )
-        self.agents = np.lib.recfunctions.rec_drop_fields(
+        self.agents = numpy.lib.recfunctions.rec_drop_fields(
             economy.agents[economy._agent_market_indices[t]], 'market_ids'
         )
 

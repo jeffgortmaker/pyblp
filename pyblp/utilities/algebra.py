@@ -8,7 +8,7 @@ import scipy.linalg
 
 def multiply_tensor_and_matrix(a, b):
     """Multiply a 3D tensor with a 2D matrix in a loop to exploit speed gains from optimized 2D multiplication."""
-    (n1, n2, _), (_, n3) = a.shape, b.shape
+    n1, n2, n3 = a.shape[0], a.shape[1], b.shape[1]
     multiplied = np.zeros((n1, n2, n3), a.dtype)
     for i in range(n1):
         multiplied[i] = a[i] @ b
@@ -17,7 +17,7 @@ def multiply_tensor_and_matrix(a, b):
 
 def multiply_matrix_and_tensor(a, b):
     """Multiply a 2D matrix with a 3D tensor in a loop to exploit speed gains from optimized 2D multiplication."""
-    (n2, _), (n1, _, n3) = a.shape, b.shape
+    n1, n2, n3 = b.shape[0], a.shape[0], b.shape[2]
     multiplied = np.zeros((n1, n2, n3), a.dtype)
     for i in range(n1):
         multiplied[i] = a @ b[i]
@@ -57,7 +57,7 @@ def approximately_solve(a, b):
             warnings.filterwarnings('error')
             solved = scipy.linalg.solve(a, b) if b.size > 0 else b
             replacement = None
-    except:
+    except Exception:
         inverse, replacement = approximately_invert(a)
         solved = inverse @ b
     return solved, replacement

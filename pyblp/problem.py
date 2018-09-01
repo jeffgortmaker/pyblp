@@ -6,11 +6,14 @@ import functools
 import numpy as np
 
 from . import options, exceptions
-from .configurations import Iteration, Optimization, Formulation
+from .configurations.iteration import Iteration
+from .configurations.formulation import Formulation
+from .configurations.optimization import Optimization
+from .utilities.statistics import IV, compute_2sls_weights
 from .primitives import Products, Agents, Economy, Market, NonlinearParameters, RhoParameter
-from .utilities import (
-    multiply_tensor_and_matrix, multiply_matrix_and_tensor, approximately_solve, approximately_invert,
-    compute_2sls_weights, generate_items, output, format_seconds, format_number, TableFormatter, Groups, IV
+from .utilities.basics import generate_items, output, format_seconds, format_number, TableFormatter, Groups
+from .utilities.algebra import (
+    multiply_tensor_and_matrix, multiply_matrix_and_tensor, approximately_solve, approximately_invert
 )
 
 

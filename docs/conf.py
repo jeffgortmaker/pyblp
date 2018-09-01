@@ -41,7 +41,7 @@ intersphinx_mapping = {
     'python': ('https://docs.python.org/3.6/', None),
     'sympy': ('https://docs.sympy.org/latest/', None),
     'numpy': ('https://docs.scipy.org/doc/numpy/', None),
-    'patsy' : ('https://patsy.readthedocs.io/en/stable/', None),
+    'patsy': ('https://patsy.readthedocs.io/en/stable/', None),
     'scipy': ('https://docs.scipy.org/doc/scipy/reference/', None),
     'pandas': ('http://pandas.pydata.org/pandas-docs/stable/', None),
 
@@ -57,6 +57,9 @@ ipython_execlines.append(f'source_path = \'{source_path.as_posix()}\'')
 
 # configure theme information
 html_theme = 'sphinx_rtd_theme'
+
+
 def setup(app):
+    """Configure extra resources."""
     app.add_javascript('override.js')
     app.add_stylesheet('override.css')

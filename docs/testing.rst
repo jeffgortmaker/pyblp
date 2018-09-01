@@ -7,7 +7,7 @@ Testing is done with the `tox <https://tox.readthedocs.io/en/latest/>`_ automati
 Testing Requirements
 --------------------
 
-In addition to the installation requirements for the package itself, running tests and building documentation requires additional packages specified by the ``tests`` and ``docs`` extras in ``setup.py``.
+In addition to the installation requirements for the package itself, running tests and building documentation requires additional packages specified by the ``tests`` and ``docs`` extras in ``setup.py``, along with any other explicitly specified ``deps`` in ``tox.ini``.
 
 The full suite of tests also requires installation of the following software:
 
@@ -20,7 +20,7 @@ If software is not installed, its associated tests will be skipped. Additionally
 Running Tests
 -------------
 
-Defined in ``tox.ini`` are environments that test the package under different python versions, verify the integrity of the documentation, and release the package. The following command can be run in the top-level pyblp directory to run all testing environments::
+Defined in ``tox.ini`` are environments that test the package under different python versions, enforce style guidelines, verify the integrity of the documentation, and release the package. The following command can be run in the top-level pyblp directory to run all testing environments::
 
     tox
 

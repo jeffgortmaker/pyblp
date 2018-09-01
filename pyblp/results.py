@@ -6,11 +6,10 @@ import numpy as np
 import scipy.linalg
 
 from . import options, exceptions
-from .configurations import Iteration
+from .configurations.iteration import Iteration
 from .primitives import Market, LinearParameters
-from .utilities import (
-    compute_gmm_se, compute_gmm_weights, generate_items, output, format_seconds, format_number, TableFormatter
-)
+from .utilities.statistics import compute_gmm_se, compute_gmm_weights
+from .utilities.basics import generate_items, output, format_seconds, format_number, TableFormatter
 
 
 class Results(object):

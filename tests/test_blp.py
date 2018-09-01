@@ -49,7 +49,7 @@ def test_trivial_changes(simulated_problem, solve_options_update):
     to any differences.
     """
     simulation, _, problem, solve_options, results = simulated_problem
-    
+
     # solve the problem with the updated options
     updated_solve_options = solve_options.copy()
     updated_solve_options.update(solve_options_update)

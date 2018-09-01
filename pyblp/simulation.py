@@ -5,9 +5,11 @@ import time
 import numpy as np
 
 from . import options, exceptions
+from .configurations.iteration import Iteration
+from .configurations.integration import Integration
+from .configurations.formulation import Formulation
 from .construction import build_blp_instruments, build_matrix
-from .configurations import Formulation, Iteration, Integration
-from .utilities import extract_matrix, generate_items, output, format_seconds, Matrices
+from .utilities.basics import extract_matrix, generate_items, output, format_seconds, Matrices
 from .primitives import Products, Agents, Economy, Market, NonlinearParameters, LinearParameters
 
 

@@ -6,7 +6,7 @@ import collections
 
 import numpy as np
 
-from .utilities import format_number
+from .utilities.basics import format_number
 
 
 class _Error(Exception):

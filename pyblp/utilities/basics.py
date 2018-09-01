@@ -106,13 +106,13 @@ def extract_matrix(structured_array_like, key):
     try:
         matrix = np.c_[structured_array_like[key]]
         return matrix if matrix.size > 0 else None
-    except:
+    except Exception:
         index = 0
         parts = []
         while True:
             try:
                 part = np.c_[structured_array_like[f'{key}{index}']]
-            except:
+            except Exception:
                 break
             index += 1
             if part.size > 0:
@@ -133,7 +133,7 @@ def extract_size(structured_array_like):
         try:
             size = get(structured_array_like)
             break
-        except:
+        except Exception:
             pass
     if size > 0:
         return size

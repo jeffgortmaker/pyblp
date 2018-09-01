@@ -64,9 +64,9 @@ def test_entropy(lb, ub, method, method_options, compute_gradient, universal_dis
         return pytest.skip(f"Failed to use the {method} method in this environment: {exception}.")
 
     # define the objective function
-    K = np.array([1, 0.3, 0.5])
-    F = np.array([[1, 1, 1], [1, 1, 0], [1, 0, 1], [1, 0, 0], [1, 0, 0]])
     def objective_function(x):
+        K = np.array([1, 0.3, 0.5])
+        F = np.array([[1, 1, 1], [1, 1, 0], [1, 0, 1], [1, 0, 0], [1, 0, 0]])
         log_Z = np.log(np.exp(F @ x).sum())
         p = np.exp(F @ x - log_Z)
         objective = log_Z - K @ x

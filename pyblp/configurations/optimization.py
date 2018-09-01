@@ -269,10 +269,8 @@ class Optimization(object):
         return final_values, converged, iteration_callback.iterations, objective_wrapper.evaluations
 
 
-def return_optimizer(initial_values, *args, **kwargs):
+def return_optimizer(initial_values, *_, **__):
     """Assume the initial values are the optimal ones."""
-    del args
-    del kwargs
     success = True
     return initial_values, success
 
@@ -409,5 +407,5 @@ def knitro_optimizer(initial_values, bounds, objective_function, iteration_callb
     finally:
         try:
             knitro.KTR_free(knitro_context)
-        except:
+        except Exception:
             pass
