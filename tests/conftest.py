@@ -1,16 +1,23 @@
 """Fixtures used by tests."""
 
 import os
+from typing import Iterator, Any, Tuple
 
 import patsy
 import pytest
 import numpy as np
 
-from pyblp import Problem, Simulation, Formulation, Integration, options, build_id_data, build_ownership
+from pyblp.utilities.basics import Data, RecArray, Options
+from pyblp import Simulation, Problem, Results, Formulation, Integration, options, build_id_data, build_ownership
+
+
+# define common types
+SimulationFixture = Tuple[Simulation, RecArray]
+SimulatedProblemFixture = Tuple[Simulation, RecArray, Problem, Options, Results]
 
 
 @pytest.fixture(scope='session', autouse=True)
-def configure():
+def configure() -> Iterator[None]:
     """Configure NumPy so that it raises all warnings as exceptions, and, if a DTYPE environment variable is set in this
     testing environment that is different from the default data type, use it for all numeric calculations.
     """
@@ -27,7 +34,7 @@ def configure():
 
 
 @pytest.fixture(scope='session')
-def small_logit_simulation():
+def small_logit_simulation() -> SimulationFixture:
     """Solve a simulation with two markets, linear prices, a linear characteristic, a cost characteristic, and an
     acquisition.
     """
@@ -55,7 +62,7 @@ def small_logit_simulation():
 
 
 @pytest.fixture(scope='session')
-def large_logit_simulation():
+def large_logit_simulation() -> SimulationFixture:
     """Solve a simulation with ten markets, linear prices, a linear constant, a cost/linear characteristic, another
     three cost characteristics, another two linear characteristics, an acquisition, a triple acquisition, and a
     log-linear cost specification.
@@ -85,7 +92,7 @@ def large_logit_simulation():
 
 
 @pytest.fixture(scope='session')
-def small_nested_logit_simulation():
+def small_nested_logit_simulation() -> SimulationFixture:
     """Solve a simulation with four markets, linear prices, a linear characteristic, two cost characteristics, two
     nesting groups with different nesting parameters, and an acquisition.
     """
@@ -115,7 +122,7 @@ def small_nested_logit_simulation():
 
 
 @pytest.fixture(scope='session')
-def large_nested_logit_simulation():
+def large_nested_logit_simulation() -> SimulationFixture:
     """Solve a simulation with ten markets, linear prices, a linear constant, a cost/linear characteristic, another
     three cost characteristics, another two linear characteristics, three nesting groups with the same nesting
     parameter, an acquisition, a triple acquisition, and a log-linear cost specification.
@@ -147,7 +154,7 @@ def large_nested_logit_simulation():
 
 
 @pytest.fixture(scope='session')
-def small_blp_simulation():
+def small_blp_simulation() -> SimulationFixture:
     """Solve a simulation with two markets, linear prices, a nonlinear characteristic, a cost characteristic, and an
     acquisition.
     """
@@ -176,7 +183,7 @@ def small_blp_simulation():
 
 
 @pytest.fixture(scope='session')
-def medium_blp_simulation():
+def medium_blp_simulation() -> SimulationFixture:
     """Solve a simulation with four markets, a nonlinear/cost constant, two linear characteristics, two cost
     characteristics, a demographic interacted with second-degree prices, a double acquisition, and a non-standard
     ownership structure.
@@ -215,7 +222,7 @@ def medium_blp_simulation():
 
 
 @pytest.fixture(scope='session')
-def large_blp_simulation():
+def large_blp_simulation() -> SimulationFixture:
     """Solve a simulation with ten markets, linear/nonlinear prices, a linear constant, a cost/linear/nonlinear
     characteristic, another three cost characteristics, another two linear characteristics, demographics interacted with
     prices and the cost/linear/nonlinear characteristic, dense parameter matrices, an acquisition, a triple acquisition,
@@ -255,7 +262,7 @@ def large_blp_simulation():
 
 
 @pytest.fixture(scope='session')
-def small_nested_blp_simulation():
+def small_nested_blp_simulation() -> SimulationFixture:
     """Solve a simulation with four markets, linear prices, a nonlinear characteristic, two cost characteristics, two
     nesting groups with different nesting parameters, and an acquisition.
     """
@@ -286,7 +293,7 @@ def small_nested_blp_simulation():
 
 
 @pytest.fixture(scope='session')
-def large_nested_blp_simulation():
+def large_nested_blp_simulation() -> SimulationFixture:
     """Solve a simulation with ten markets, linear/nonlinear prices, a linear constant, a cost/linear/nonlinear
     characteristic, another three cost characteristics, another two linear characteristics, demographics interacted with
     prices and the cost/linear/nonlinear characteristic, dense parameter matrices, three nesting groups with the same
@@ -347,7 +354,7 @@ def large_nested_blp_simulation():
     pytest.param(['large_nested_blp', False], id="large nested BLP simulation without supply"),
     pytest.param(['large_nested_blp', True], id="large nested BLP simulation with supply")
 ])
-def simulated_problem(request):
+def simulated_problem(request: Any) -> SimulatedProblemFixture:
     """Configure and solve a simulated problem, either with or without supply-side data. Preclude overflow with rho
     bounds that are more conservative than the default ones.
     """
@@ -368,7 +375,7 @@ def simulated_problem(request):
 
 
 @pytest.fixture(scope='session', params=[pytest.param(1, id="1 observation"), pytest.param(10, id="10 observations")])
-def formula_data(request):
+def formula_data(request: Any) -> Data:
     """Simulate patsy demo data with two-level categorical variables and varying numbers of observations."""
     raw_data = patsy.user_util.demo_data('a', 'b', 'c', 'x', 'y', 'z', nlevels=2, min_rows=request.param)
     return {k: np.array(v) if isinstance(v[0], str) else np.abs(v) for k, v in raw_data.items()}

@@ -5,10 +5,13 @@ import sys
 import warnings
 import functools
 from pathlib import Path
+from typing import Any, Iterable, Optional, Tuple, Callable, Union
 
 import numpy as np
+import scipy.optimize
 
 from .. import options
+from ..utilities.basics import format_options, Array, Options
 
 
 class Optimization(object):
@@ -142,23 +145,32 @@ class Optimization(object):
 
     """
 
-    def __init__(self, method, method_options=None, compute_gradient=True, universal_display=True):
+    _optimizer: functools.partial
+    _description: str
+    _method_options: Options
+    _supports_bounds: bool
+    _compute_gradient: bool
+    _universal_display: bool
+
+    def __init__(
+            self, method: Union[str, Callable], method_options: Optional[Options] = None, compute_gradient: bool = True,
+            universal_display: bool = True) -> None:
         """Validate the method and set default options."""
         simple_methods = {
-            'nelder-mead': (scipy_optimizer, "the Nelder-Mead algorithm implemented in SciPy"),
-            'powell': (scipy_optimizer, "the modified Powell algorithm implemented in SciPy")
+            'nelder-mead': (functools.partial(scipy_optimizer), "the Nelder-Mead algorithm implemented in SciPy"),
+            'powell': (functools.partial(scipy_optimizer), "the modified Powell algorithm implemented in SciPy")
         }
         unbounded_methods = {
-            'cg': (scipy_optimizer, "the conjugate gradient algorithm implemented in SciPy"),
-            'bfgs': (scipy_optimizer, "the BFGS algorithm implemented in SciPy"),
-            'newton-cg': (scipy_optimizer, "the Newton-CG algorithm implemented in SciPy")
+            'cg': (functools.partial(scipy_optimizer), "the conjugate gradient algorithm implemented in SciPy"),
+            'bfgs': (functools.partial(scipy_optimizer), "the BFGS algorithm implemented in SciPy"),
+            'newton-cg': (functools.partial(scipy_optimizer), "the Newton-CG algorithm implemented in SciPy")
         }
         bounded_methods = {
-            'l-bfgs-b': (scipy_optimizer, "the L-BFGS-B algorithm implemented in SciPy"),
-            'tnc': (scipy_optimizer, "the truncated Newton algorithm implemented in SciPy"),
-            'slsqp': (scipy_optimizer, "Sequential Least SQuares Programming implemented in SciPy"),
-            'knitro': (knitro_optimizer, "an installed version of Artleys Knitro"),
-            'return': (return_optimizer, "a trivial routine that returns the initial parameter values")
+            'l-bfgs-b': (functools.partial(scipy_optimizer), "the L-BFGS-B algorithm implemented in SciPy"),
+            'tnc': (functools.partial(scipy_optimizer), "the truncated Newton algorithm implemented in SciPy"),
+            'slsqp': (functools.partial(scipy_optimizer), "Sequential Least SQuares Programming implemented in SciPy"),
+            'knitro': (functools.partial(knitro_optimizer), "an installed version of Artleys Knitro"),
+            'return': (functools.partial(return_optimizer), "a trivial routine that returns the initial parameters")
         }
         methods = {**simple_methods, **unbounded_methods, **bounded_methods}
 
@@ -177,21 +189,22 @@ class Optimization(object):
         self._universal_display = universal_display
         self._supports_bounds = callable(method) or method in bounded_methods
 
-        # replace missing options with a dict
-        method_options = method_options or {}
+        # options are by default empty
+        if method_options is None:
+            method_options = {}
 
         # options are simply passed along to custom methods
         if callable(method):
-            self._optimizer = method
-            self._method_options = method_options
+            self._optimizer = functools.partial(method)
             self._description = "a custom method"
+            self._method_options = method_options
             return
 
         # identify the non-custom optimizer, configure arguments, and set default options
-        self._method_options = {}
-        unwrapped_optimizer, self._description = methods[method]
-        self._optimizer = functools.partial(unwrapped_optimizer, compute_gradient=compute_gradient)
-        if unwrapped_optimizer == knitro_optimizer:
+        self._method_options: Options = {}
+        self._optimizer, self._description = methods[method]
+        self._optimizer = functools.partial(self._optimizer, compute_gradient=compute_gradient)
+        if method == 'knitro':
             self._method_options.update({
                 'hessopt': 2,
                 'algorithm': 1,
@@ -200,18 +213,16 @@ class Optimization(object):
                 'knitro_dir': os.environ.get('KNITRODIR'),
                 'outlev': 4 if not universal_display and options.verbose else 0
             })
-        elif unwrapped_optimizer == scipy_optimizer:
+        elif method != 'return':
             self._optimizer = functools.partial(self._optimizer, method=method)
             if not universal_display and options.verbose:
                 self._method_options['disp'] = True
                 if method in {'l-bfgs-b', 'slsqp'}:
                     self._method_options['iprint'] = 2
-        else:
-            assert unwrapped_optimizer == return_optimizer
 
         # validate options for non-custom methods
         self._method_options.update(method_options)
-        if unwrapped_optimizer == knitro_optimizer:
+        if method == 'knitro':
             knitro_dir = self._method_options.pop('knitro_dir')
             if not isinstance(knitro_dir, (Path, str)):
                 raise ValueError(
@@ -228,57 +239,66 @@ class Optimization(object):
                     )
                 sys.path.append(str(full_path))
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Format the configuration as a string."""
-        gradients = "with analytic gradients" if self._compute_gradient else "without analytic gradients"
-        return f"Configured to optimize using {self._description} with options {self._method_options} and {gradients}."
+        description = f"{self._description} {'with' if self._compute_gradient else 'without'} analytic gradients"
+        return f"Configured to optimize using {description} and options {format_options(self._method_options)}."
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         """Defer to the string representation."""
         return str(self)
 
-    def _optimize(self, initial_values, bounds, verbose_objective_function):
+    def _optimize(
+            self, initial: Array, bounds: Optional[Iterable[Tuple[float, float]]],
+            verbose_objective_function: Callable[[Array, int, int], Union[Tuple[float, Array], float]]) -> (
+            Tuple[Array, bool, int, int]):
         """Optimize parameters to minimize a scalar objective."""
 
+        # initialize counters
+        iterations = evaluations = 0
+
         # define a callback that counts the number of major iterations
-        def iteration_callback():
-            iteration_callback.iterations += 1
+        def iteration_callback() -> None:
+            nonlocal iterations
+            iterations += 1
 
         # define a wrapper for the objective function that normalizes arrays so they work with all types of routines,
         #   and also counts the number of evaluations
-        def objective_wrapper(raw_values):
-            objective_wrapper.evaluations += 1
+        def objective_wrapper(raw_values: Any) -> Union[Tuple[float, Array], float]:
+            nonlocal evaluations
+            evaluations += 1
             raw_values = np.asanyarray(raw_values)
-            values = raw_values.reshape(initial_values.shape).astype(initial_values.dtype, copy=False)
-            returned = verbose_objective_function(values, iteration_callback.iterations, objective_wrapper.evaluations)
-            if self._compute_gradient:
-                objective, gradient = returned
+            values = raw_values.reshape(initial.shape).astype(initial.dtype, copy=False)
+            result = verbose_objective_function(values, iterations, evaluations)
+            if isinstance(result, tuple):
+                objective, gradient = result
                 return float(objective), gradient.astype(raw_values.dtype, copy=False).flatten()
-            return float(returned)
+            return float(result)
 
-        # initialize the counters and normalize values
-        iteration_callback.iterations = objective_wrapper.evaluations = 0
-        raw_initial_values = initial_values.astype(np.float64, copy=False).flatten()
+        # normalize values
+        raw_initial = initial.astype(np.float64, copy=False).flatten()
         raw_bounds = None if bounds is None or not self._supports_bounds else [(float(l), float(u)) for l, u in bounds]
 
         # solve the problem and convert the raw final values to the same data type and shape as the initial values
-        raw_final_values, converged = self._optimizer(
-            raw_initial_values, raw_bounds, objective_wrapper, iteration_callback, **self._method_options
+        raw_final, converged = self._optimizer(
+            raw_initial, raw_bounds, objective_wrapper, iteration_callback, **self._method_options
         )
-        final_values = np.asanyarray(raw_final_values).astype(initial_values.dtype).reshape(initial_values.shape)
-        return final_values, converged, iteration_callback.iterations, objective_wrapper.evaluations
+        final_values = np.asanyarray(raw_final).astype(initial.dtype).reshape(initial.shape)
+        return final_values, converged, iterations, evaluations
 
 
-def return_optimizer(initial_values, *_, **__):
+def return_optimizer(initial_values: Array, *_: Any, **__: Any) -> Tuple[Array, bool]:
     """Assume the initial values are the optimal ones."""
     success = True
     return initial_values, success
 
 
-def scipy_optimizer(initial_values, bounds, objective_function, iteration_callback, method, compute_gradient,
-                    **scipy_options):
+def scipy_optimizer(
+        initial_values: Array, bounds: Optional[Iterable[Tuple[float, float]]],
+        objective_function: Callable[[Array], Union[Tuple[float, Array], float]],
+        iteration_callback: Callable[[], None], method: str, compute_gradient: bool, **scipy_options: dict) -> (
+        Tuple[Array, bool]):
     """Optimize with a SciPy method."""
-    import scipy.optimize
     results = scipy.optimize.minimize(
         objective_function, initial_values, method=method, jac=compute_gradient, bounds=bounds,
         callback=lambda *_: iteration_callback(), options=scipy_options
@@ -286,8 +306,11 @@ def scipy_optimizer(initial_values, bounds, objective_function, iteration_callba
     return results.x, results.success
 
 
-def knitro_optimizer(initial_values, bounds, objective_function, iteration_callback, compute_gradient,
-                     **knitro_options):
+def knitro_optimizer(
+        initial_values: Array, bounds: Optional[Iterable[Tuple[float, float]]],
+        objective_function: Callable[[Array], Union[Tuple[float, Array], float]],
+        iteration_callback: Callable[[], None], compute_gradient: bool, **knitro_options: dict) -> (
+        Tuple[Array, bool]):
     """Optimize with Knitro."""
     try:
         import knitro
@@ -315,26 +338,38 @@ def knitro_optimizer(initial_values, bounds, objective_function, iteration_callb
                 "file."
             )
 
+        # initialize an empty cache and an iteration counter
+        cache = None
+        iterations = 0
+
         # define a function that handles requests to compute either the objective or its gradient (which are cached for
         #   when the next request is for the same values) and calls the iteration callback when there's a new iteration
-        def combined_callback(*args):
-            request_code, values, objective_store, gradient_store = (args[i] for i in [0, 5, 7, 9])
+        def combined_callback(
+                request_code: int, _: Any, __: Any, ___: Any, ____: Any, values: Array, _____: Any,
+                objective_store: Array, ______: Any, gradient_store: Array, *_______: Any) -> int:
+            nonlocal iterations, cache
 
             # call the iteration callback if this is a new iteration
-            iterations = knitro.KTR_get_number_iters(knitro_context)
-            while combined_callback.iterations < iterations:
+            current_iterations = knitro.KTR_get_number_iters(knitro_context)
+            while iterations < current_iterations:
                 iteration_callback()
-                combined_callback.iterations += 1
+                iterations += 1
 
             # compute the objective or used cached values
-            if combined_callback.cache is not None and np.array_equal(values, combined_callback.cache[0]):
-                combined = combined_callback.cache[1]
+            if cache is not None and np.array_equal(values, cache[0]):
+                result = cache[1]
             else:
-                combined = objective_function(values)
-                combined_callback.cache = (values.copy(), combined)
+                result = objective_function(values)
+                cache = (values.copy(), result)
 
             # extract the objective and its gradient
-            objective, gradient = combined if compute_gradient else (combined, None)
+            if compute_gradient:
+                assert isinstance(result, tuple)
+                objective, gradient = result
+            else:
+                assert isinstance(result, float)
+                objective = result
+                gradient = None
 
             # handle request codes
             if request_code == knitro.KTR_RC_EVALFC:
@@ -344,10 +379,6 @@ def knitro_optimizer(initial_values, bounds, objective_function, iteration_callb
                 gradient_store[:] = gradient
                 return knitro.KTR_RC_BEGINEND
             return knitro.KTR_RC_CALLBACK_ERR
-
-        # initialize an empty cache and the counter
-        combined_callback.cache = None
-        combined_callback.iterations = 0
 
         # configure Knitro callbacks
         callback_mapping = {
@@ -369,7 +400,7 @@ def knitro_optimizer(initial_values, bounds, objective_function, iteration_callb
                 raise RuntimeError(f"Encountered error code {code} when configuring '{key}'.")
 
         # initialize the problem
-        bounds = bounds or [None] * initial_values.size
+        bounds = bounds or [(-np.inf, +np.inf)] * initial_values.size
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
             code = knitro.KTR_init_problem(

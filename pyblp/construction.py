@@ -1,13 +1,15 @@
 """Construction of commonly-used product data."""
 
+from typing import Iterable, Dict, Callable, Any, Optional, Hashable, Mapping, List
+
 import numpy as np
 
 from . import options
 from .configurations.formulation import Formulation
-from .utilities.basics import extract_matrix, Matrices, Groups
+from .utilities.basics import structure_matrices, extract_matrix, Groups, Array, RecArray
 
 
-def build_id_data(T, J, F, mergers=()):
+def build_id_data(T: int, J: int, F: int, mergers: Iterable[Dict[Hashable, Hashable]] = ()) -> RecArray:
     """Build a balanced panel of market and firm IDs.
 
     This function can be used to build `id_data` for :class:`Simulation` initialization.
@@ -74,13 +76,13 @@ def build_id_data(T, J, F, mergers=()):
         firm_ids_list.append(changed_firm_ids)
 
     # build market IDs and structure both sets of IDs
-    return Matrices({
+    return structure_matrices({
         'market_ids': (np.repeat(np.arange(T), J).astype(np.int), np.object),
         'firm_ids': (np.stack(firm_ids_list, axis=1).astype(np.int), np.object)
     })
 
 
-def build_ownership(product_data, kappa_specification=None):
+def build_ownership(product_data: Mapping, kappa_specification: Optional[Callable[[Any, Any], float]] = None) -> Array:
     r"""Build ownership matrices, :math:`O`.
 
     Ownership matrices are defined by their cooperation matrix counterparts, :math:`\kappa`. For each market :math:`t`,
@@ -176,16 +178,16 @@ def build_ownership(product_data, kappa_specification=None):
         kappa_specification = lambda f, g: np.where(f == g, 1, 0).astype(options.dtype)
     elif callable(kappa_specification):
         kappa_specification = np.vectorize(kappa_specification, [options.dtype])
-    else:
+    if not callable(kappa_specification):
         raise ValueError("kappa_specification must be None or callable.")
 
     # determine the maximum number of products in a market
     J = np.unique(market_ids, return_counts=True)[1].max()
 
     # stack ownership matrices vertically for each market and horizontally for each set of firm IDs
-    stacks = []
+    stacks: List[np.ndarray] = []
     for ids in firm_ids.T:
-        matrices = []
+        matrices: List[np.ndarray] = []
         for t in np.unique(market_ids):
             ids_t = ids[market_ids.flat == t]
             tiled_ids_t = np.tile(np.c_[ids_t], ids_t.size)
@@ -196,7 +198,7 @@ def build_ownership(product_data, kappa_specification=None):
     return np.hstack(stacks)
 
 
-def build_blp_instruments(formulation, product_data, firms_index=0):
+def build_blp_instruments(formulation: Formulation, product_data: Mapping, firms_index: int = 0) -> Array:
     r"""Construct traditional BLP instruments.
 
     Traditional BLP instruments are
@@ -284,7 +286,7 @@ def build_blp_instruments(formulation, product_data, firms_index=0):
     return np.ascontiguousarray(np.c_[X, other, rival])
 
 
-def build_matrix(formulation, data):
+def build_matrix(formulation: Formulation, data: Mapping) -> Array:
     """Construct a matrix according to a formulation.
 
     Parameters

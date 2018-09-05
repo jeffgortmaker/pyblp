@@ -1,10 +1,13 @@
 """Tests of optimization routines."""
 
+from typing import Union, Callable, Tuple
+
 import pytest
 import numpy as np
 import scipy.optimize
 
 from pyblp import options, Optimization
+from pyblp.utilities.basics import Array, Options
 
 
 @pytest.mark.parametrize(['lb', 'ub'], [
@@ -40,7 +43,9 @@ from pyblp import options, Optimization
     pytest.param(True, id="universal display"),
     pytest.param(False, id="default display")
 ])
-def test_entropy(lb, ub, method, method_options, compute_gradient, universal_display):
+def test_entropy(
+        lb: float, ub: float, method: Union[str, Callable], method_options: Options, compute_gradient: bool,
+        universal_display: bool) -> None:
     """Test that solutions to the entropy maximization problem from Berger, Pietra, and Pietra (1996) are reasonably
     close to the exact solution. Based on a subset of testing methods from scipy.optimize.tests.test_optimize.
     """
@@ -55,6 +60,7 @@ def test_entropy(lb, ub, method, method_options, compute_gradient, universal_dis
 
     # the custom method needs to know if an analytic gradient will be computed
     if callable(method):
+        method_options = method_options.copy()
         method_options['jac'] = compute_gradient
 
     # skip optimization methods that haven't been configured properly
@@ -64,7 +70,7 @@ def test_entropy(lb, ub, method, method_options, compute_gradient, universal_dis
         return pytest.skip(f"Failed to use the {method} method in this environment: {exception}.")
 
     # define the objective function
-    def objective_function(x):
+    def objective_function(x: Array) -> Union[Array, Tuple[Array, Array]]:
         K = np.array([1, 0.3, 0.5])
         F = np.array([[1, 1, 1], [1, 1, 0], [1, 0, 1], [1, 0, 0], [1, 0, 0]])
         log_Z = np.log(np.exp(F @ x).sum())

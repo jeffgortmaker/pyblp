@@ -1,12 +1,15 @@
 """Algebraic routines."""
 
 import warnings
+from typing import Tuple, Optional
 
 import numpy as np
 import scipy.linalg
 
+from .basics import Array
 
-def multiply_tensor_and_matrix(a, b):
+
+def multiply_tensor_and_matrix(a: Array, b: Array) -> Array:
     """Multiply a 3D tensor with a 2D matrix in a loop to exploit speed gains from optimized 2D multiplication."""
     n1, n2, n3 = a.shape[0], a.shape[1], b.shape[1]
     multiplied = np.zeros((n1, n2, n3), a.dtype)
@@ -15,7 +18,7 @@ def multiply_tensor_and_matrix(a, b):
     return multiplied
 
 
-def multiply_matrix_and_tensor(a, b):
+def multiply_matrix_and_tensor(a: Array, b: Array) -> Array:
     """Multiply a 2D matrix with a 3D tensor in a loop to exploit speed gains from optimized 2D multiplication."""
     n1, n2, n3 = b.shape[0], a.shape[0], b.shape[2]
     multiplied = np.zeros((n1, n2, n3), a.dtype)
@@ -24,7 +27,7 @@ def multiply_matrix_and_tensor(a, b):
     return multiplied
 
 
-def precisely_solve(a, b):
+def precisely_solve(a: Array, b: Array) -> Tuple[Array, bool]:
     """Attempt to precisely solve a system of equations."""
     try:
         with warnings.catch_warnings():
@@ -37,7 +40,7 @@ def precisely_solve(a, b):
     return solved, successful
 
 
-def precisely_invert(x):
+def precisely_invert(x: Array) -> Tuple[Array, bool]:
     """Attempt to precisely invert a matrix."""
     try:
         with warnings.catch_warnings():
@@ -50,7 +53,7 @@ def precisely_invert(x):
     return inverted, successful
 
 
-def approximately_solve(a, b):
+def approximately_solve(a: Array, b: Array) -> Tuple[Array, Optional[str]]:
     """Attempt to solve a system of equations with decreasingly precise replacements for the inverse."""
     try:
         with warnings.catch_warnings():
@@ -63,7 +66,7 @@ def approximately_solve(a, b):
     return solved, replacement
 
 
-def approximately_invert(x):
+def approximately_invert(x: Array) -> Tuple[Array, Optional[str]]:
     """Attempt to invert a matrix with decreasingly precise replacements for the inverse."""
     try:
         with warnings.catch_warnings():

@@ -1,16 +1,24 @@
 """Standard statistical routines."""
 
+from typing import Union, Tuple, Optional, List
+
 import numpy as np
 
 from .. import exceptions
-from .basics import Groups
+from .basics import Groups, Error, Array
 from .algebra import approximately_invert
 
 
 class IV(object):
     """Simple model for generalized instrumental variables estimation."""
 
-    def __init__(self, X, Z, W):
+    X: Array
+    Z: Array
+    W: Array
+    covariances: Array
+    errors: List[Error]
+
+    def __init__(self, X: Array, Z: Array, W: Array) -> None:
         """Store data and pre-compute covariances."""
         self.X = X
         self.Z = Z
@@ -21,24 +29,25 @@ class IV(object):
         self.covariances, replacement = approximately_invert(covariances_inverse)
 
         # store any errors
-        self.errors = []
+        self.errors: List[Error] = []
         if replacement:
             self.errors.append(exceptions.LinearParameterCovariancesInversionError(covariances_inverse, replacement))
 
-    def estimate(self, y, compute_residuals=True):
+    def estimate(self, y: Array, residuals: bool = True) -> Union[Tuple[Array, Array], Array]:
         """Estimate parameters and optionally compute residuals."""
         parameters = self.covariances @ (self.X.T @ self.Z) @ self.W @ (self.Z.T @ y)
-        if compute_residuals:
+        if residuals:
             return parameters, y - self.X @ parameters
         return parameters
 
 
-def compute_gmm_se(u, Z, W, jacobian, se_type, step, clustering_ids=None):
+def compute_gmm_se(
+        u: Array, Z: Array, W: Array, jacobian: Array, se_type: str, step: int,
+        clustering_ids: Optional[Array] = None) -> Tuple[Array, List[Error]]:
     """Use an error term, instruments, a weighting matrix, and the Jacobian of the error term with respect to parameters
     to estimate GMM standard errors.
     """
-    errors = []
-    N = u.size
+    errors: List[Error] = []
 
     # if this is the first step, an unadjusted weighting matrix needs to be computed in order to properly scale
     #   unadjusted standard errors (other standard error types will be scaled properly)
@@ -47,6 +56,7 @@ def compute_gmm_se(u, Z, W, jacobian, se_type, step, clustering_ids=None):
         errors.extend(W_errors)
 
     # compute the Jacobian of the sample moments with respect to all parameters
+    N = u.size
     G = Z.T @ jacobian / N
 
     # attempt to compute the covariance matrix
@@ -70,11 +80,9 @@ def compute_gmm_se(u, Z, W, jacobian, se_type, step, clustering_ids=None):
     return se, errors
 
 
-def compute_2sls_weights(Z):
+def compute_2sls_weights(Z: Array) -> Tuple[Array, List[Error]]:
     """Use instruments to compute a 2SLS weighting matrix."""
-    errors = []
-
-    # attempt to compute the weighting matrix
+    errors: List[Error] = []
     S = Z.T @ Z
     W, replacement = approximately_invert(S)
     if replacement:
@@ -82,9 +90,11 @@ def compute_2sls_weights(Z):
     return W, errors
 
 
-def compute_gmm_weights(u, Z, W_type, center_moments=True, clustering_ids=None):
+def compute_gmm_weights(
+        u: Array, Z: Array, W_type: str, center_moments: bool = True,
+        clustering_ids: Optional[Array] = None) -> Tuple[Array, List[Error]]:
     """Use an error term and instruments to compute a GMM weighting matrix."""
-    errors = []
+    errors: List[Error] = []
 
     # compute moment conditions or their analogues for the given covariance type
     if u.size == 0:
@@ -108,12 +118,12 @@ def compute_gmm_weights(u, Z, W_type, center_moments=True, clustering_ids=None):
     return W, errors
 
 
-def compute_gmm_error_variance(u):
+def compute_gmm_error_variance(u: Array) -> Array:
     """Compute the variance of an error term."""
     return np.cov(u.flatten(), bias=True)
 
 
-def compute_gmm_moment_covariances(g, covariance_type, clustering_ids=None):
+def compute_gmm_moment_covariances(g: Array, covariance_type: str, clustering_ids: Optional[Array] = None) -> Array:
     """Compute covariances between moment conditions."""
     N, M = g.shape
     if covariance_type != 'clustered':

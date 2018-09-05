@@ -1,15 +1,18 @@
 """Structuring of BLP problem results and computation of post-estimation outputs."""
 
 import time
+from typing import TYPE_CHECKING, Callable, Sequence, Any, Optional, Tuple, Dict, Hashable, List
 
 import numpy as np
 import scipy.linalg
 
 from . import options, exceptions
 from .configurations.iteration import Iteration
-from .primitives import Market, LinearParameters
+from .primitives import Market, LinearParameters, NonlinearParameters
 from .utilities.statistics import compute_gmm_se, compute_gmm_weights
-from .utilities.basics import generate_items, output, format_seconds, format_number, TableFormatter
+from .utilities.basics import generate_items, output, format_seconds, format_number, TableFormatter, Error, Array
+if TYPE_CHECKING:
+    from .problem import Problem, Progress  # noqa
 
 
 class Results(object):
@@ -149,29 +152,88 @@ class Results(object):
 
     """
 
-    def __init__(self, objective_info, last_results, step_start_time, optimization_start_time, optimization_end_time,
-                 iterations, evaluations, iteration_mappings, evaluation_mappings, center_moments, W_type, se_type):
+    problem: 'Problem'
+    last_results: Optional['Results']
+    step: int
+    optimization_time: float
+    cumulative_optimization_time: float
+    total_time: float
+    cumulative_total_time: float
+    optimization_iterations: int
+    cumulative_optimization_iterations: int
+    objective_evaluations: int
+    cumulative_objective_evaluations: int
+    fp_iterations: Array
+    cumulative_fp_iterations: Array
+    contraction_evaluations: Array
+    cumulative_contraction_evaluations: Array
+    theta: Array
+    sigma: Array
+    pi: Array
+    rho: Array
+    beta: Array
+    gamma: Array
+    sigma_se: Array
+    pi_se: Array
+    rho_se: Array
+    beta_se: Array
+    gamma_se: Array
+    sigma_bounds: tuple
+    pi_bounds: tuple
+    rho_bounds: tuple
+    delta: Array
+    true_delta: Array
+    tilde_costs: Array
+    true_tilde_costs: Array
+    xi: Array
+    true_xi: Array
+    omega: Array
+    true_omega: Array
+    objective: Array
+    xi_jacobian: Array
+    omega_jacobian: Array
+    gradient: Array
+    gradient_norm: Array
+    sigma_gradient: Array
+    pi_gradient: Array
+    rho_gradient: Array
+    WD: Array
+    WS: Array
+    updated_WD: Array
+    updated_WS: Array
+    unique_market_ids: Array
+
+    _se_type: str
+    _errors: List[Error]
+    _linear_parameters: LinearParameters
+    _nonlinear_parameters: NonlinearParameters
+
+    def __init__(
+            self, progress: 'Progress', last_results: Optional['Results'], step_start_time: float,
+            optimization_start_time: float, optimization_end_time: float, iterations: int, evaluations: int,
+            iteration_mappings: Sequence[Dict[Hashable, int]], evaluation_mappings: Sequence[Dict[Hashable, int]],
+            center_moments: bool, W_type: str, se_type: str) -> None:
         """Update weighting matrices, estimate standard errors, and compute cumulative progress statistics."""
 
-        # initialize values from the objective information
-        self._errors = objective_info.errors
-        self.problem = objective_info.problem
-        self.WD = objective_info.WD
-        self.WS = objective_info.WS
-        self.theta = objective_info.theta
-        self.true_delta = objective_info.true_delta
-        self.true_tilde_costs = objective_info.true_tilde_costs
-        self.xi_jacobian = objective_info.xi_jacobian
-        self.omega_jacobian = objective_info.omega_jacobian
-        self.delta = objective_info.delta
-        self.tilde_costs = objective_info.tilde_costs
-        self.true_xi = objective_info.true_xi
-        self.true_omega = objective_info.true_omega
-        self.beta = objective_info.beta
-        self.gamma = objective_info.gamma
-        self.objective = objective_info.objective
-        self.gradient = objective_info.gradient
-        self.gradient_norm = objective_info.gradient_norm
+        # initialize values from the progress structure
+        self._errors = progress.errors
+        self.problem = progress.problem
+        self.WD = progress.WD
+        self.WS = progress.WS
+        self.theta = progress.theta
+        self.true_delta = progress.true_delta
+        self.true_tilde_costs = progress.true_tilde_costs
+        self.xi_jacobian = progress.xi_jacobian
+        self.omega_jacobian = progress.omega_jacobian
+        self.delta = progress.delta
+        self.tilde_costs = progress.tilde_costs
+        self.true_xi = progress.true_xi
+        self.true_omega = progress.true_omega
+        self.beta = progress.beta
+        self.gamma = progress.gamma
+        self.objective = progress.objective
+        self.gradient = progress.gradient
+        self.gradient_norm = progress.gradient_norm
 
         # initialize counts and times
         self.step = 1
@@ -206,7 +268,7 @@ class Results(object):
 
         # store parameter information
         self._linear_parameters = LinearParameters(self.problem, self.beta, self.gamma)
-        self._nonlinear_parameters = objective_info.nonlinear_parameters
+        self._nonlinear_parameters = progress.nonlinear_parameters
         self.sigma_bounds = self._nonlinear_parameters.sigma_bounds
         self.pi_bounds = self._nonlinear_parameters.pi_bounds
         self.rho_bounds = self._nonlinear_parameters.rho_bounds
@@ -267,7 +329,7 @@ class Results(object):
         self._errors.extend(se_errors)
         self._se_type = se_type
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Format full results as a string."""
 
         # construct section containing summary information
@@ -290,8 +352,8 @@ class Results(object):
                 self.objective_evaluations,
                 self.fp_iterations.sum(),
                 self.contraction_evaluations.sum(),
-                format_number(self.objective),
-                format_number(self.gradient_norm)
+                format_number(float(self.objective)),
+                format_number(float(self.gradient_norm))
             ]),
             formatter.line()
         ]]
@@ -323,18 +385,18 @@ class Results(object):
         # combine the sections into one string
         return "\n\n".join("\n".join(s) for s in sections)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         """Defer to the string representation."""
         return str(self)
 
-    def _validate_name(self, name):
+    def _validate_name(self, name: str) -> None:
         """Validate that a name corresponds to a variable in X1, X2, or X3."""
         formulations = self.problem._X1_formulations + self.problem._X2_formulations + self.problem._X3_formulations
         names = {n for f in formulations for n in f.names}
         if name not in names:
             raise NameError(f"The name '{name}' is not one of the underlying variables, {list(sorted(names))}.")
 
-    def _combine_results(self, compute_market_results, fixed_args, market_args):
+    def _combine_results(self, compute_market_results: Callable, fixed_args: Sequence, market_args: Sequence) -> Array:
         """Compute post-estimation outputs for each market and stack them into a single matrix
 
         An output for a single market is computed by passing fixed_args (identical for all markets) and market_args
@@ -342,20 +404,20 @@ class Results(object):
         a ResultsMarket method that returns the output for the market and a set of any errors encountered during
         computation.
         """
+        errors: List[Error] = []
 
         # keep track of how long it takes to compute results
         start_time = time.time()
 
         # define a function that builds a market along with arguments used to compute results
-        def market_factory(s):
+        def market_factory(s: Hashable) -> tuple:
             market_s = ResultsMarket(self.problem, s, self.sigma, self.pi, self.rho, self.beta, self.true_delta)
             args_s = [None if a is None else a[self.problem._product_market_indices[s]] for a in market_args]
-            return [market_s] + list(fixed_args) + args_s
+            return (market_s, *fixed_args, *args_s)
 
         # construct a mapping from market IDs to market-specific results and compute the full results matrix size
-        errors = []
         rows = columns = 0
-        matrix_mapping = {}
+        matrix_mapping: Dict[Hashable, Array] = {}
         for t, (array_t, errors_t) in generate_items(self.unique_market_ids, market_factory, compute_market_results):
             errors.extend(errors_t)
             matrix_mapping[t] = np.c_[array_t]
@@ -382,7 +444,7 @@ class Results(object):
         output("")
         return combined
 
-    def compute_aggregate_elasticities(self, factor=0.1, name='prices'):
+    def compute_aggregate_elasticities(self, factor: float = 0.1, name: str = 'prices') -> Array:
         r"""Estimate aggregate elasticities of demand, :math:`E`, with respect to a variable, :math:`x`.
 
         In market :math:`t`, the aggregate elasticity of demand is
@@ -410,7 +472,7 @@ class Results(object):
         self._validate_name(name)
         return self._combine_results(ResultsMarket.compute_aggregate_elasticity, [factor, name], [])
 
-    def compute_elasticities(self, name='prices'):
+    def compute_elasticities(self, name: str = 'prices') -> Array:
         r"""Estimate matrices of elasticities of demand, :math:`\varepsilon`, with respect to a variable, :math:`x`.
 
         For each market, the value in row :math:`j` and column :math:`k` of :math:`\varepsilon` is
@@ -434,7 +496,7 @@ class Results(object):
         self._validate_name(name)
         return self._combine_results(ResultsMarket.compute_elasticities, [name], [])
 
-    def compute_diversion_ratios(self, name='prices'):
+    def compute_diversion_ratios(self, name: str = 'prices') -> Array:
         r"""Estimate matrices of diversion ratios, :math:`\mathscr{D}`, with respect to a variable, :math:`x`.
 
         Diversion ratios to the outside good are reported on diagonals. For each market, the value in row :math:`j` and
@@ -461,7 +523,7 @@ class Results(object):
         self._validate_name(name)
         return self._combine_results(ResultsMarket.compute_diversion_ratios, [name], [])
 
-    def compute_long_run_diversion_ratios(self):
+    def compute_long_run_diversion_ratios(self) -> Array:
         r"""Estimate matrices of long-run diversion ratios, :math:`\bar{\mathscr{D}}`.
 
         Long-run diversion ratios to the outside good are reported on diagonals. For each market, the value in row
@@ -486,7 +548,7 @@ class Results(object):
         output("Computing long run mean diversion ratios ...")
         return self._combine_results(ResultsMarket.compute_long_run_diversion_ratios, [], [])
 
-    def extract_diagonals(self, matrices):
+    def extract_diagonals(self, matrices: Any) -> Array:
         r"""Extract diagonals from stacked :math:`J_t \times J_t` matrices for each market :math:`t`.
 
         Parameters
@@ -508,7 +570,7 @@ class Results(object):
         output("Computing own elasticities ...")
         return self._combine_results(ResultsMarket.extract_diagonal, [], [matrices])
 
-    def extract_diagonal_means(self, matrices):
+    def extract_diagonal_means(self, matrices: Any) -> Array:
         r"""Extract means of diagonals from stacked :math:`J_t \times J_t` matrices for each market :math:`t`.
 
         Parameters
@@ -531,7 +593,7 @@ class Results(object):
         output("Computing mean own elasticities ...")
         return self._combine_results(ResultsMarket.extract_diagonal_mean, [], [matrices])
 
-    def compute_costs(self):
+    def compute_costs(self) -> Array:
         r"""Estimate marginal costs, :math:`c`.
 
         Marginal costs are computed with the BLP-markup equation,
@@ -550,7 +612,7 @@ class Results(object):
         output("Computing marginal costs ...")
         return self._combine_results(ResultsMarket.compute_costs, [], [])
 
-    def compute_approximate_prices(self, firms_index=1, costs=None):
+    def compute_approximate_prices(self, firms_index: int = 1, costs: Optional[Any] = None) -> Array:
         r"""Estimate approximate Bertrand-Nash prices after firm ID changes, :math:`p^a`, under the assumption that
         shares and their price derivatives are unaffected by such changes.
 
@@ -583,7 +645,9 @@ class Results(object):
         output("Solving for approximate Bertrand-Nash prices ...")
         return self._combine_results(ResultsMarket.compute_approximate_prices, [firms_index], [costs])
 
-    def compute_prices(self, iteration=None, firms_index=1, prices=None, costs=None):
+    def compute_prices(
+            self, iteration: Optional[Iteration] = None, firms_index: int = 1, prices: Optional[Any] = None,
+            costs: Optional[Any] = None) -> Array:
         r"""Estimate Bertrand-Nash prices after firm ID changes, :math:`p^*`.
 
         Prices are computed in each market by iterating over the :math:`\zeta`-markup equation from
@@ -626,7 +690,7 @@ class Results(object):
             raise ValueError("iteration must an Iteration instance.")
         return self._combine_results(ResultsMarket.compute_prices, [iteration, firms_index], [prices, costs])
 
-    def compute_shares(self, prices=None):
+    def compute_shares(self, prices: Optional[Any] = None) -> Array:
         r"""Estimate shares evaluated at specified prices.
 
         Parameters
@@ -645,7 +709,7 @@ class Results(object):
         output("Computing shares ...")
         return self._combine_results(ResultsMarket.compute_shares, [], [prices])
 
-    def compute_hhi(self, firms_index=0, shares=None):
+    def compute_hhi(self, firms_index: int = 0, shares: Optional[Any] = None) -> Array:
         r"""Estimate Herfindahl-Hirschman Indices, :math:`\text{HHI}`.
 
         The index in market :math:`t` is
@@ -673,7 +737,7 @@ class Results(object):
         output("Computing HHI ...")
         return self._combine_results(ResultsMarket.compute_hhi, [firms_index], [shares])
 
-    def compute_markups(self, prices=None, costs=None):
+    def compute_markups(self, prices: Optional[Any] = None, costs: Optional[Any] = None) -> Array:
         r"""Estimate markups, :math:`\mathscr{M}`.
 
         The markup of product :math:`j` in market :math:`t` is
@@ -699,7 +763,8 @@ class Results(object):
         output("Computing markups ...")
         return self._combine_results(ResultsMarket.compute_markups, [], [prices, costs])
 
-    def compute_profits(self, prices=None, shares=None, costs=None):
+    def compute_profits(
+            self, prices: Optional[Any] = None, shares: Optional[Any] = None, costs: Optional[Any] = None) -> Array:
         r"""Estimate population-normalized gross expected profits, :math:`\pi`.
 
         The profit of product :math:`j` in market :math:`t` is
@@ -728,7 +793,7 @@ class Results(object):
         output("Computing profits ...")
         return self._combine_results(ResultsMarket.compute_profits, [], [prices, shares, costs])
 
-    def compute_consumer_surpluses(self, prices=None):
+    def compute_consumer_surpluses(self, prices: Optional[Any] = None) -> Array:
         r"""Estimate population-normalized consumer surpluses, :math:`\text{CS}`.
 
         Assuming away nonlinear income effects, the surplus in market :math:`t` is
@@ -780,7 +845,7 @@ class ResultsMarket(Market):
     method returns a matrix and a list of any errors that were encountered.
     """
 
-    def compute_aggregate_elasticity(self, factor, name):
+    def compute_aggregate_elasticity(self, factor: float, name: str) -> Tuple[Array, List[Error]]:
         """Estimate the aggregate elasticity of demand with respect to a variable."""
         scaled_variable = (1 + factor) * self.products[name]
         delta = self.update_delta_with_variable(name, scaled_variable)
@@ -789,14 +854,14 @@ class ResultsMarket(Market):
         aggregate_elasticities = (shares - self.products.shares).sum() / factor
         return aggregate_elasticities, []
 
-    def compute_elasticities(self, name):
+    def compute_elasticities(self, name: str) -> Tuple[Array, List[Error]]:
         """Estimate a matrix of elasticities of demand with respect to a variable."""
         derivatives = self.compute_utility_derivatives(name)
         jacobian = self.compute_shares_by_variable_jacobian(derivatives)
         elasticities = jacobian * self.products[name].T / self.products.shares
         return elasticities, []
 
-    def compute_diversion_ratios(self, name):
+    def compute_diversion_ratios(self, name: str) -> Tuple[Array, List[Error]]:
         """Estimate a matrix of diversion ratios with respect to a variable."""
         derivatives = self.compute_utility_derivatives(name)
         jacobian = self.compute_shares_by_variable_jacobian(derivatives)
@@ -809,7 +874,7 @@ class ResultsMarket(Market):
         ratios = -jacobian / np.tile(jacobian_diagonal, self.J)
         return ratios, []
 
-    def compute_long_run_diversion_ratios(self):
+    def compute_long_run_diversion_ratios(self) -> Tuple[Array, List[Error]]:
         """Estimate a matrix of long-run diversion ratios."""
 
         # compute share differences when products are excluded and store outside share differences on the diagonal
@@ -823,27 +888,28 @@ class ResultsMarket(Market):
         ratios = changes / np.tile(self.products.shares, self.J)
         return ratios, []
 
-    def extract_diagonal(self, matrix):
+    def extract_diagonal(self, matrix: Array) -> Tuple[Array, List[Error]]:
         """Extract the diagonal from a matrix."""
         diagonal = matrix[:, :self.J].diagonal()
         return diagonal, []
 
-    def extract_diagonal_mean(self, matrix):
+    def extract_diagonal_mean(self, matrix: Array) -> Tuple[Array, List[Error]]:
         """Extract the mean of the diagonal from a matrix."""
         diagonal_mean = matrix[:, :self.J].diagonal().mean()
         return diagonal_mean, []
 
-    def compute_costs(self):
+    def compute_costs(self) -> Tuple[Array, List[Error]]:
         """Estimate marginal costs."""
         eta, errors = self.compute_eta()
         costs = self.products.prices - eta
         return costs, errors
 
-    def compute_approximate_prices(self, firms_index=0, costs=None):
+    def compute_approximate_prices(
+            self, firms_index: int = 0, costs: Optional[Array] = None) -> Tuple[Array, List[Error]]:
         """Estimate approximate Bertrand-Nash prices under the assumption that shares and their price derivatives are
         unaffected by firm ID changes. By default, use unchanged firm IDs and compute marginal costs.
         """
-        errors = []
+        errors: List[Error] = []
         if costs is None:
             costs, errors = self.compute_costs()
         ownership_matrix = self.get_ownership_matrix(firms_index)
@@ -852,11 +918,13 @@ class ResultsMarket(Market):
         prices = costs + eta
         return prices, errors
 
-    def compute_prices(self, iteration, firms_index=0, prices=None, costs=None):
+    def compute_prices(
+            self, iteration: Iteration, firms_index: int = 0, prices: Optional[Array] = None,
+            costs: Optional[Array] = None) -> Tuple[Array, List[Error]]:
         """Estimate Bertrand-Nash prices. By default, use unchanged firm IDs, use unchanged prices as starting values,
         and compute marginal costs.
         """
-        errors = []
+        errors: List[Error] = []
         if costs is None:
             costs, errors = self.compute_costs()
 
@@ -870,7 +938,7 @@ class ResultsMarket(Market):
             errors.append(exceptions.BertrandNashPricesConvergenceError())
         return prices, errors
 
-    def compute_shares(self, prices=None):
+    def compute_shares(self, prices: Optional[Array] = None) -> Tuple[Array, List[Error]]:
         """Estimate shares evaluated at specified prices. By default, use unchanged prices."""
         if prices is None:
             prices = self.products.prices
@@ -879,7 +947,7 @@ class ResultsMarket(Market):
         shares = self.compute_probabilities(delta, mu) @ self.agents.weights
         return shares, []
 
-    def compute_hhi(self, firms_index=0, shares=None):
+    def compute_hhi(self, firms_index: int = 0, shares: Optional[Array] = None) -> Tuple[Array, List[Error]]:
         """Estimate HHI. By default, use unchanged firm IDs and shares."""
         if shares is None:
             shares = self.products.shares
@@ -887,9 +955,10 @@ class ResultsMarket(Market):
         hhi = 1e4 * sum((shares[firm_ids == f].sum() / shares.sum())**2 for f in np.unique(firm_ids))
         return hhi, []
 
-    def compute_markups(self, prices=None, costs=None):
+    def compute_markups(
+            self, prices: Optional[Array] = None, costs: Optional[Array] = None) -> Tuple[Array, List[Error]]:
         """Estimate markups. By default, use unchanged prices and compute marginal costs."""
-        errors = []
+        errors: List[Error] = []
         if prices is None:
             prices = self.products.prices
         if costs is None:
@@ -897,11 +966,13 @@ class ResultsMarket(Market):
         markups = (prices - costs) / prices
         return markups, errors
 
-    def compute_profits(self, prices=None, shares=None, costs=None):
+    def compute_profits(
+            self, prices: Optional[Array] = None, shares: Optional[Array] = None, costs: Optional[Array] = None) -> (
+            Tuple[Array, List[Error]]):
         """Estimate population-normalized gross expected profits. By default, use unchanged prices, use unchanged
         shares, and compute marginal costs.
         """
-        errors = []
+        errors: List[Error] = []
         if prices is None:
             prices = self.products.prices
         if shares is None:
@@ -911,7 +982,7 @@ class ResultsMarket(Market):
         profits = (prices - costs) * shares
         return profits, errors
 
-    def compute_consumer_surplus(self, prices=None):
+    def compute_consumer_surplus(self, prices: Optional[Array] = None) -> Tuple[Array, List[Error]]:
         """Estimate population-normalized consumer surplus. By default, use unchanged prices."""
         if prices is None:
             delta = self.delta

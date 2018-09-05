@@ -2,18 +2,23 @@
 
 import time
 import functools
+from typing import Sequence, Union, Optional, Any, Tuple, List, Set, Mapping, Hashable, Dict
 
 import numpy as np
 
+from .results import Results
 from . import options, exceptions
 from .configurations.iteration import Iteration
+from .configurations.integration import Integration
 from .configurations.formulation import Formulation
 from .configurations.optimization import Optimization
 from .utilities.statistics import IV, compute_2sls_weights
-from .primitives import Products, Agents, Economy, Market, NonlinearParameters, RhoParameter
-from .utilities.basics import generate_items, output, format_seconds, format_number, TableFormatter, Groups
+from .primitives import Products, Agents, Economy, Market, NonlinearParameter, NonlinearParameters, RhoParameter
 from .utilities.algebra import (
     multiply_tensor_and_matrix, multiply_matrix_and_tensor, approximately_solve, approximately_invert
+)
+from .utilities.basics import (
+    generate_items, output, format_seconds, format_number, TableFormatter, Groups, Error, Array, Bounds
 )
 
 
@@ -175,21 +180,31 @@ class Problem(Economy):
 
     """
 
-    def __init__(self, product_formulations, product_data, agent_formulation=None, agent_data=None, integration=None):
+    def __init__(
+            self, product_formulations: Union[Formulation, Sequence[Optional[Formulation]]], product_data: Mapping,
+            agent_formulation: Optional[Formulation] = None, agent_data: Optional[Mapping] = None,
+            integration: Optional[Integration] = None) -> None:
         """Initialize the underlying economy with structured product and agent data."""
         if isinstance(product_formulations, Formulation):
             product_formulations = [product_formulations]
-        elif not isinstance(product_formulations, (list, tuple)) or len(product_formulations) > 3:
+        elif isinstance(product_formulations, (list, tuple)) and len(product_formulations) <= 3:
+            product_formulations = list(product_formulations)
+        else:
             raise TypeError("product_formulations must be a Formulation instance or a tuple of up to three instances.")
-        product_formulations = list(product_formulations) + [None] * (3 - len(product_formulations))
+        product_formulations.extend([None] * (3 - len(product_formulations)))
         products = Products(product_formulations, product_data)
         agents = Agents(products, agent_formulation, agent_data, integration)
         super().__init__(product_formulations, agent_formulation, products, agents)
 
-    def solve(self, sigma=None, pi=None, rho=None, sigma_bounds=None, pi_bounds=None, rho_bounds=None, delta=None,
-              WD=None, WS=None, method='2s', optimization=None, error_behavior='revert', error_punishment=1,
-              delta_behavior='last', iteration=None, fp_type='linear', costs_type='linear', costs_bounds=None,
-              center_moments=True, W_type='robust', se_type='robust'):
+    def solve(
+            self, sigma: Optional[Any] = None, pi: Optional[Any] = None, rho: Optional[Any] = None,
+            sigma_bounds: Optional[Tuple[Any, Any]] = None, pi_bounds: Optional[Tuple[Any, Any]] = None,
+            rho_bounds: Optional[Tuple[Any, Any]] = None, delta: Optional[Any] = None, WD: Optional[Any] = None,
+            WS: Optional[Any] = None, method: str = '2s', optimization: Optional[Optimization] = None,
+            error_behavior: str = 'revert', error_punishment: float = 1, delta_behavior: str = 'last',
+            iteration: Optional[Iteration] = None, fp_type: str = 'linear', costs_type: str = 'linear',
+            costs_bounds: Optional[Tuple[Any, Any]] = None, center_moments: bool = True, W_type: str = 'robust',
+            se_type: str = 'robust') -> Results:
         r"""Solve the problem.
 
         The problem is solved in one or more GMM steps. During each step, any unfixed nonlinear parameters in
@@ -508,13 +523,17 @@ class Problem(Economy):
         if costs_bounds is None:
             costs_bounds = (-np.inf, +np.inf)
         else:
-            costs_bounds = list(np.asarray(costs_bounds, options.dtype).flatten())
-            if len(costs_bounds) != 2 or costs_bounds[0] > costs_bounds[1]:
+            if len(costs_bounds) != 2:
                 raise ValueError("costs_bounds must be a tuple of the form (lb, ub).")
-            if not np.isfinite(costs_bounds[0]):
-                costs_bounds[0] = -np.inf
-            if not np.isfinite(costs_bounds[1]):
-                costs_bounds[1] = +np.inf
+            costs_bounds = (np.asarray(costs_bounds[0], options.dtype), np.asarray(costs_bounds[1], options.dtype))
+            costs_bounds[0][np.isnan(costs_bounds[0])] = -np.inf
+            costs_bounds[1][np.isnan(costs_bounds[1])] = +np.inf
+            if costs_bounds[0].size != 1:
+                raise ValueError(f"The lower bound in costs_bounds is not a float.")
+            if costs_bounds[1].size != 1:
+                raise ValueError(f"The upper bound in costs_bounds is not a float.")
+            if costs_bounds[0] > costs_bounds[1]:
+                raise ValueError("The lower bound in costs_bounds cannot be larger than the upper bound.")
 
         # compress sigma, pi, and rho into theta
         nonlinear_parameters = NonlinearParameters(
@@ -591,35 +610,41 @@ class Problem(Economy):
             supply_iv = IV(self.products.X3, self.products.ZS, WS)
             self._handle_errors(error_behavior, demand_iv.errors + supply_iv.errors)
 
-            # wrap computation of objective information with step-specific information
-            compute_step_info = functools.partial(
-                self._compute_objective_info, nonlinear_parameters, demand_iv, supply_iv, WD, WS, error_behavior,
+            # wrap computation of progress information with step-specific information
+            compute_step_progress = functools.partial(
+                self._compute_progress, nonlinear_parameters, demand_iv, supply_iv, WD, WS, error_behavior,
                 error_punishment, delta_behavior, iteration, fp_type, costs_type, costs_bounds
             )
 
-            # define the objective function for the optimization routine, which also outputs progress updates
-            def wrapper(new_theta, current_iterations, current_evaluations):
-                info = wrapper.cache = compute_step_info(new_theta, wrapper.cache, optimization._compute_gradient)
-                wrapper.iteration_mappings.append(info.iteration_mapping)
-                wrapper.evaluation_mappings.append(info.evaluation_mapping)
-                update = info.format_progress(
-                    optimization, step, current_iterations, current_evaluations, wrapper.smallest_objective,
-                    wrapper.smallest_gradient_norm
-                )
-                if update:
-                    output(update)
-                wrapper.smallest_objective = min(wrapper.smallest_objective, info.objective)
-                wrapper.smallest_gradient_norm = min(wrapper.smallest_gradient_norm, info.gradient_norm)
-                return (info.objective, info.gradient) if optimization._compute_gradient else info.objective
-
             # initialize optimization progress
-            wrapper.iteration_mappings = []
-            wrapper.evaluation_mappings = []
-            wrapper.smallest_objective = wrapper.smallest_gradient_norm = np.inf
-            wrapper.cache = ObjectiveInfo(
+            iteration_mappings: List[Dict[Hashable, int]] = []
+            evaluation_mappings: List[Dict[Hashable, int]] = []
+            smallest_objective = smallest_gradient = np.inf
+            last_progress = Progress(
                 self, nonlinear_parameters, WD, WS, theta, objective, gradient, true_delta, true_delta,
                 true_tilde_costs, xi_jacobian, omega_jacobian
             )
+
+            # define the objective function for the optimization routine, which also outputs progress updates
+            def wrapper(
+                    new_theta: Array, current_iterations: int, current_evaluations: int) -> (
+                    Union[float, Tuple[float, Array]]):
+                nonlocal iteration_mappings, evaluation_mappings, smallest_objective, smallest_gradient, last_progress
+                assert optimization is not None
+                progress = last_progress = compute_step_progress(
+                    new_theta, last_progress, optimization._compute_gradient
+                )
+                iteration_mappings.append(progress.iteration_mapping)
+                evaluation_mappings.append(progress.evaluation_mapping)
+                formatted_progress = progress.format(
+                    optimization, step, current_iterations, current_evaluations, smallest_objective,
+                    smallest_gradient
+                )
+                if formatted_progress:
+                    output(formatted_progress)
+                smallest_objective = min(smallest_objective, progress.objective)
+                smallest_gradient = min(smallest_gradient, progress.gradient_norm)
+                return (progress.objective, progress.gradient) if optimization._compute_gradient else progress.objective
 
             # optimize theta
             iterations = evaluations = 0
@@ -637,14 +662,13 @@ class Problem(Economy):
                 output("")
                 output(f"Optimization {status} after {format_seconds(optimization_time)}.")
 
-            # use objective information computed at the optimal theta to compute results for the step
+            # use progress information computed at the optimal theta to compute results for the step
             output("")
             output(f"Computing results for step {step} ...")
-            step_info = compute_step_info(theta, wrapper.cache, compute_gradient=nonlinear_parameters.P > 0)
-            results = step_info.to_results(
-                last_results, step_start_time, optimization_start_time, optimization_end_time, iterations,
-                evaluations + 1, wrapper.iteration_mappings, wrapper.evaluation_mappings, center_moments, W_type,
-                se_type
+            final_progress = compute_step_progress(theta, last_progress, compute_gradient=nonlinear_parameters.P > 0)
+            results = Results(
+                final_progress, last_results, step_start_time, optimization_start_time, optimization_end_time,
+                iterations, evaluations + 1, iteration_mappings, evaluation_mappings, center_moments, W_type, se_type
             )
             self._handle_errors(error_behavior, results._errors)
             output(f"Computed results after {format_seconds(results.total_time - results.optimization_time)}.")
@@ -657,41 +681,44 @@ class Problem(Economy):
                 return results
 
             # update vectors and matrices
-            true_delta = step_info.true_delta
-            true_tilde_costs = step_info.true_tilde_costs
-            xi_jacobian = step_info.xi_jacobian
-            omega_jacobian = step_info.omega_jacobian
+            true_delta = results.true_delta
+            true_tilde_costs = results.true_tilde_costs
+            xi_jacobian = results.xi_jacobian
+            omega_jacobian = results.omega_jacobian
             WD = results.updated_WD
             WS = results.updated_WS
             step += 1
             step_start_time = time.time()
 
-    def _compute_objective_info(self, nonlinear_parameters, demand_iv, supply_iv, WD, WS, error_behavior,
-                                error_punishment, delta_behavior, iteration, fp_type, costs_type, costs_bounds, theta,
-                                last_objective_info, compute_gradient):
+    def _compute_progress(
+            self, nonlinear_parameters: NonlinearParameters, demand_iv: IV, supply_iv: IV, WD: Array, WS: Array,
+            error_behavior: str, error_punishment: float, delta_behavior: str, iteration: Iteration, fp_type: str,
+            costs_type: str, costs_bounds: Bounds, theta: Array, last_progress: 'Progress', compute_gradient: bool) -> (
+            'Progress'):
         """Compute demand- and supply-side contributions. Then, form the GMM objective value and its gradient. Finally,
-        handle any errors that were encountered before structuring relevant objective information.
+        handle any errors that were encountered before structuring relevant progress information.
         """
+
+        # expand the nonlinear parameters
         sigma, pi, rho = nonlinear_parameters.expand(theta)
 
         # compute demand-side contributions
         true_delta, xi_jacobian, delta, beta, true_xi, iterations, evaluations, demand_errors = (
             self._compute_demand_contributions(
-                nonlinear_parameters, demand_iv, iteration, fp_type, sigma, pi, rho, last_objective_info,
-                compute_gradient
+                nonlinear_parameters, demand_iv, iteration, fp_type, sigma, pi, rho, last_progress, compute_gradient
             )
         )
 
         # compute supply-side contributions
-        supply_errors = []
         true_tilde_costs = tilde_costs = true_omega = np.full((self.N, 0), np.nan, options.dtype)
         omega_jacobian = np.full((self.N, nonlinear_parameters.P), np.nan, options.dtype)
         gamma = np.full((self.K3, 1), np.nan, options.dtype)
+        supply_errors: List[Error] = []
         if self.K3 > 0:
             true_tilde_costs, omega_jacobian, tilde_costs, gamma, true_omega, supply_errors = (
                 self._compute_supply_contributions(
                     nonlinear_parameters, demand_iv, supply_iv, costs_type, costs_bounds, beta, sigma, pi, rho,
-                    true_delta, xi_jacobian, last_objective_info, compute_gradient
+                    true_delta, xi_jacobian, last_progress, compute_gradient
                 )
             )
 
@@ -705,7 +732,7 @@ class Problem(Economy):
 
         # replace the objective with its last value if its computation failed, which is unlikely but possible
         if not np.isfinite(np.squeeze(objective)):
-            objective = last_objective_info.objective
+            objective = last_progress.objective
             errors.append(exceptions.ObjectiveReversionError())
 
         # compute the gradient
@@ -719,7 +746,7 @@ class Problem(Economy):
         if compute_gradient:
             bad_indices = ~np.isfinite(gradient)
             if np.any(bad_indices):
-                gradient[bad_indices] = last_objective_info.gradient[bad_indices]
+                gradient[bad_indices] = last_progress.gradient[bad_indices]
                 errors.append(exceptions.GradientReversionError(bad_indices))
 
         # handle any errors
@@ -739,25 +766,27 @@ class Problem(Economy):
             next_delta = true_delta
         else:
             assert delta_behavior == 'first'
-            next_delta = last_objective_info.next_delta
+            next_delta = last_progress.next_delta
 
-        # structure objective information
-        return ObjectiveInfo(
+        # structure progress
+        return Progress(
             self, nonlinear_parameters, WD, WS, theta, objective, gradient, next_delta, true_delta, true_tilde_costs,
             xi_jacobian, omega_jacobian, delta, tilde_costs, true_xi, true_omega, beta, gamma, iterations,
             evaluations, errors
         )
 
-    def _compute_demand_contributions(self, nonlinear_parameters, demand_iv, iteration, fp_type, sigma, pi, rho,
-                                      last_objective_info, compute_gradient):
+    def _compute_demand_contributions(
+            self, nonlinear_parameters: NonlinearParameters, demand_iv: IV, iteration: Iteration, fp_type: str,
+            sigma: Array, pi: Array, rho: Array, last_progress: 'Progress', compute_gradient: bool) -> (
+            Tuple[Array, Array, Array, Array, Array, Dict[Hashable, int], Dict[Hashable, int], List[Error]]):
         """Compute delta and the Jacobian of xi (equivalently, of delta) with respect to theta market-by-market. If
         necessary, revert problematic elements to their last values. Lastly, recover beta and compute xi.
         """
-        errors = []
+        errors: List[Error] = []
 
         # initialize delta and its Jacobian along with fixed point information so that they can be filled
-        iterations = {}
-        evaluations = {}
+        iterations: Dict[Hashable, int] = {}
+        evaluations: Dict[Hashable, int] = {}
         true_delta = np.zeros((self.N, 1), options.dtype)
         xi_jacobian = np.full((self.N, nonlinear_parameters.P), np.nan, options.dtype)
 
@@ -766,9 +795,10 @@ class Problem(Economy):
             true_delta = self._compute_logit_delta(rho)
         else:
             # define a function that builds a market along with arguments used to compute delta and its Jacobian
-            def market_factory(s):
+            def market_factory(
+                    s: Hashable) -> Tuple[DemandProblemMarket, Array, NonlinearParameters, Iteration, str, bool]:
                 market_s = DemandProblemMarket(self, s, sigma, pi, rho)
-                initial_delta_s = last_objective_info.next_delta[self._product_market_indices[s]]
+                initial_delta_s = last_progress.next_delta[self._product_market_indices[s]]
                 return market_s, initial_delta_s, nonlinear_parameters, iteration, fp_type, compute_gradient
 
             # compute delta and its Jacobian market-by-market
@@ -781,19 +811,19 @@ class Problem(Economy):
         # replace invalid elements in delta with their last values
         bad_indices = ~np.isfinite(true_delta)
         if np.any(bad_indices):
-            true_delta[bad_indices] = last_objective_info.true_delta[bad_indices]
+            true_delta[bad_indices] = last_progress.true_delta[bad_indices]
             errors.append(exceptions.DeltaReversionError(bad_indices))
 
         # replace invalid elements in its Jacobian with their last values
         if compute_gradient:
             bad_indices = ~np.isfinite(xi_jacobian)
             if np.any(bad_indices):
-                xi_jacobian[bad_indices] = last_objective_info.xi_jacobian[bad_indices]
+                xi_jacobian[bad_indices] = last_progress.xi_jacobian[bad_indices]
                 errors.append(exceptions.XiJacobianReversionError(bad_indices))
 
         # absorb any demand-side fixed effects
         delta = true_delta
-        if self.ED > 0:
+        if self._absorb_demand_ids is not None:
             delta, delta_errors = self._absorb_demand_ids(delta)
             errors.extend(delta_errors)
 
@@ -801,19 +831,21 @@ class Problem(Economy):
         beta, true_xi = demand_iv.estimate(delta)
         return true_delta, xi_jacobian, delta, beta, true_xi, iterations, evaluations, errors
 
-    def _compute_supply_contributions(self, nonlinear_parameters, demand_iv, supply_iv, costs_type, costs_bounds, beta,
-                                      sigma, pi, rho, true_delta, xi_jacobian, last_objective_info,
-                                      compute_gradient):
+    def _compute_supply_contributions(
+            self, nonlinear_parameters: NonlinearParameters, demand_iv: IV, supply_iv: IV, costs_type: str,
+            costs_bounds: Bounds, beta: Array, sigma: Array, pi: Array, rho: Array, true_delta: Array,
+            xi_jacobian: Array, last_progress: 'Progress', compute_gradient: bool) -> (
+            Tuple[Array, Array, Array, Array, Array, List[Error]]):
         """Compute transformed marginal costs and the Jacobian of omega (equivalently, of transformed marginal costs)
         with respect to theta market-by-market. If necessary, revert problematic elements to their last values. Lastly,
         recover gamma and compute omega.
         """
-        errors = []
+        errors: List[Error] = []
 
         # compute the Jacobian of beta with respect to theta, which is needed to compute other Jacobians
         beta_jacobian = np.full((self.K1, nonlinear_parameters.P), np.nan, options.dtype)
         if compute_gradient:
-            beta_jacobian = demand_iv.estimate(xi_jacobian, compute_residuals=False)
+            beta_jacobian = demand_iv.estimate(xi_jacobian, residuals=False)
 
         # initialize transformed marginal costs and their Jacobian so that they can be filled
         true_tilde_costs = np.zeros((self.N, 1), options.dtype)
@@ -821,9 +853,10 @@ class Problem(Economy):
 
         # define a function that builds a market along with arguments used to compute transformed marginal costs and
         #   their Jacobian
-        def market_factory(s):
+        def market_factory(
+                s: Hashable) -> Tuple[SupplyProblemMarket, Array, Array, Array, NonlinearParameters, str, Bounds, bool]:
             market_s = SupplyProblemMarket(self, s, sigma, pi, rho, beta, true_delta)
-            last_true_tilde_costs_s = last_objective_info.true_tilde_costs[self._product_market_indices[s]]
+            last_true_tilde_costs_s = last_progress.true_tilde_costs[self._product_market_indices[s]]
             xi_jacobian_s = xi_jacobian[self._product_market_indices[s]]
             return (
                 market_s, last_true_tilde_costs_s, xi_jacobian_s, beta_jacobian, nonlinear_parameters,
@@ -840,19 +873,19 @@ class Problem(Economy):
         # replace invalid transformed marginal costs with their last values
         bad_indices = ~np.isfinite(true_tilde_costs)
         if np.any(bad_indices):
-            true_tilde_costs[bad_indices] = last_objective_info.true_tilde_costs[bad_indices]
+            true_tilde_costs[bad_indices] = last_progress.true_tilde_costs[bad_indices]
             errors.append(exceptions.CostsReversionError(bad_indices))
 
         # replace invalid elements in their Jacobian with their last values
         if compute_gradient:
             bad_indices = ~np.isfinite(omega_jacobian)
             if np.any(bad_indices):
-                omega_jacobian[bad_indices] = last_objective_info.omega_jacobian[bad_indices]
+                omega_jacobian[bad_indices] = last_progress.omega_jacobian[bad_indices]
                 errors.append(exceptions.OmegaJacobianReversionError(bad_indices))
 
         # absorb any supply-side fixed effects
         tilde_costs = true_tilde_costs
-        if self.ES > 0:
+        if self._absorb_supply_ids is not None:
             tilde_costs, tilde_costs_errors = self._absorb_supply_ids(tilde_costs)
             errors.extend(tilde_costs_errors)
 
@@ -860,7 +893,7 @@ class Problem(Economy):
         gamma, true_omega = supply_iv.estimate(tilde_costs)
         return true_tilde_costs, omega_jacobian, tilde_costs, gamma, true_omega, errors
 
-    def _compute_logit_delta(self, rho):
+    def _compute_logit_delta(self, rho: Array) -> Array:
         """Compute the delta that solves the simple Logit (or nested Logit) model."""
         delta = np.log(self.products.shares)
         for t in self.unique_market_ids:
@@ -871,14 +904,14 @@ class Problem(Economy):
                 groups_t = Groups(self.products.nesting_ids[self._product_market_indices[t]])
                 group_shares_t = shares_t / groups_t.expand(groups_t.sum(shares_t))
                 if rho.size == 1:
-                    rho_t = np.full_like(shares_t, rho)
+                    rho_t = np.full_like(shares_t, float(rho))
                 else:
                     rho_t = groups_t.expand(rho[np.searchsorted(self.unique_nesting_ids, groups_t.unique)])
                 delta[self._product_market_indices[t]] -= rho_t * np.log(group_shares_t)
         return delta
 
     @staticmethod
-    def _handle_errors(error_behavior, errors):
+    def _handle_errors(error_behavior: str, errors: List[Error]) -> None:
         """Either raise or output information about any errors."""
         if errors:
             if error_behavior == 'raise':
@@ -888,13 +921,41 @@ class Problem(Economy):
             output("")
 
 
-class ObjectiveInfo(object):
-    """Structured information about a completed iteration of the optimization routine."""
+class Progress(object):
+    """Structured information about estimation progress."""
 
-    def __init__(self, problem, nonlinear_parameters, WD, WS, theta, objective, gradient, next_delta, true_delta,
-                 true_tilde_costs, xi_jacobian, omega_jacobian, delta=None, tilde_costs=None, true_xi=None,
-                 true_omega=None, beta=None, gamma=None, iteration_mapping=None, evaluation_mapping=None, errors=None):
-        """Initialize objective information. Optional parameters will not be specified when preparing for the first
+    problem: Problem
+    nonlinear_parameters: NonlinearParameters
+    WD: Array
+    WS: Array
+    theta: Array
+    objective: Array
+    gradient: Array
+    next_delta: Array
+    true_delta: Array
+    true_tilde_costs: Array
+    xi_jacobian: Array
+    omega_jacobian: Array
+    delta: Optional[Array]
+    tilde_costs: Optional[Array]
+    true_xi: Optional[Array]
+    true_omega: Optional[Array]
+    beta: Optional[Array]
+    gamma: Optional[Array]
+    iteration_mapping: Dict[Hashable, int]
+    evaluation_mapping: Dict[Hashable, int]
+    errors: List[Error]
+    gradient_norm: Array
+
+    def __init__(
+            self, problem: Problem, nonlinear_parameters: NonlinearParameters, WD: Array, WS: Array, theta: Array,
+            objective: Array, gradient: Array, next_delta: Array, true_delta: Array, true_tilde_costs: Array,
+            xi_jacobian: Array, omega_jacobian: Array, delta: Optional[Array] = None,
+            tilde_costs: Optional[Array] = None, true_xi: Optional[Array] = None, true_omega: Optional[Array] = None,
+            beta: Optional[Array] = None, gamma: Optional[Array] = None,
+            iteration_mapping: Optional[Dict[Hashable, int]] = None,
+            evaluation_mapping: Optional[Dict[Hashable, int]] = None, errors: Optional[List[Error]] = None) -> None:
+        """Initialize progress information. Optional parameters will not be specified when preparing for the first
         objective evaluation.
         """
         self.problem = problem
@@ -915,20 +976,20 @@ class ObjectiveInfo(object):
         self.true_omega = true_omega
         self.beta = beta
         self.gamma = gamma
-        self.iteration_mapping = iteration_mapping
-        self.evaluation_mapping = evaluation_mapping
-        self.errors = errors
+        self.iteration_mapping = iteration_mapping or {}
+        self.evaluation_mapping = evaluation_mapping or {}
+        self.errors = errors or []
         with np.errstate(invalid='ignore'):
-            self.gradient_norm = None if gradient.size == 0 else np.abs(gradient).max()
+            self.gradient_norm = np.array(np.nan, options.dtype) if gradient.size == 0 else np.abs(gradient).max()
 
-    def format_progress(self, optimization, step, current_iterations, current_evaluations, smallest_objective,
-                        smallest_gradient_norm):
+    def format(
+            self, optimization: Optimization, step: int, current_iterations: int, current_evaluations: int,
+            smallest_objective: Array, smallest_gradient: Array) -> str:
         """Format a universal display of optimization progress as a string. The first iteration will include the
         progress table header. If there are any errors, information about them will be formatted as well, regardless of
         whether or not a universal display is to be used. The smallest_objective is the smallest objective value
         encountered so far during optimization.
         """
-        lines = []
 
         # build the header of the universal display
         header = [
@@ -946,6 +1007,7 @@ class ObjectiveInfo(object):
         formatter = TableFormatter(widths)
 
         # if this is the first iteration, include the header
+        lines: List[str] = []
         if optimization._universal_display and current_evaluations == 1:
             lines.extend([formatter([k[0] for k in header]), formatter([k[1] for k in header], underline=True)])
 
@@ -962,20 +1024,20 @@ class ObjectiveInfo(object):
         # include the progress update
         if optimization._universal_display:
             objective_improved = np.isfinite(smallest_objective) and self.objective < smallest_objective
-            gradient_improved = np.isfinite(smallest_gradient_norm) and self.gradient_norm < smallest_gradient_norm
+            gradient_improved = np.isfinite(smallest_gradient) and self.gradient_norm < smallest_gradient
             values = [
                 step,
                 current_iterations,
                 current_evaluations,
                 sum(self.iteration_mapping.values()),
                 sum(self.evaluation_mapping.values()),
-                format_number(self.objective),
-                format_number(smallest_objective - self.objective) if objective_improved else "",
+                format_number(float(self.objective)),
+                format_number(float(smallest_objective - self.objective)) if objective_improved else "",
             ]
             if optimization._compute_gradient:
                 values.extend([
-                    format_number(self.gradient_norm),
-                    format_number(smallest_gradient_norm - self.gradient_norm) if gradient_improved else "",
+                    format_number(float(self.gradient_norm)),
+                    format_number(float(smallest_gradient - self.gradient_norm)) if gradient_improved else "",
                 ])
             values.append(", ".join(format_number(x) for x in self.theta))
             lines.append(formatter(values))
@@ -983,26 +1045,23 @@ class ObjectiveInfo(object):
         # combine the lines into one string
         return "\n".join(lines)
 
-    def to_results(self, *args):
-        """Convert this information about an iteration of the optimization routine into full results."""
-        from .results import Results
-        return Results(self, *args)
-
 
 class DemandProblemMarket(Market):
     """A single market in a problem, which can be solved to compute delta-related information."""
 
-    def get_unneeded_product_fields(self, fields):
+    def get_unneeded_product_fields(self, fields: Set[str]) -> Set[str]:
         """Collect fields that will be dropped from product data."""
         return fields - {'nesting_ids', 'shares', 'X2'}
 
-    def solve(self, initial_delta, nonlinear_parameters, iteration, fp_type, compute_gradient):
+    def solve(
+            self, initial_delta: Array, nonlinear_parameters: NonlinearParameters, iteration: Iteration, fp_type: str,
+            compute_gradient: bool) -> Tuple[Array, Array, List[Error], int, int]:
         """Compute the mean utility for this market that equates market shares to observed values by solving a fixed
         point problem. Then, if compute_gradient is True, compute the Jacobian of xi (equivalently, of delta) with
         respect to theta. If necessary, replace null elements in delta with their last values before computing its
         Jacobian.
         """
-        errors = []
+        errors: List[Error] = []
 
         # configure NumPy to identify floating point errors
         with np.errstate(divide='call', over='call', under='ignore', invalid='call'):
@@ -1047,11 +1106,12 @@ class DemandProblemMarket(Market):
             errors.append(exceptions.DeltaConvergenceError())
         return delta, xi_jacobian, errors, iterations, evaluations
 
-    def compute_xi_by_theta_jacobian(self, nonlinear_parameters, delta):
+    def compute_xi_by_theta_jacobian(
+            self, nonlinear_parameters: NonlinearParameters, delta: Array) -> Tuple[Array, List[Error]]:
         """Use the Implicit Function Theorem to compute the Jacobian of xi (equivalently, of delta) with respect to
         theta.
         """
-        errors = []
+        errors: List[Error] = []
         probabilities, conditionals = self.compute_probabilities(delta, keep_conditionals=True)
         shares_by_xi_jacobian = self.compute_shares_by_xi_jacobian(probabilities, conditionals)
         shares_by_theta_jacobian = self.compute_shares_by_theta_jacobian(
@@ -1062,7 +1122,7 @@ class DemandProblemMarket(Market):
             errors.append(exceptions.SharesByXiJacobianInversionError(shares_by_xi_jacobian, replacement))
         return xi_by_theta_jacobian, errors
 
-    def compute_shares_by_xi_jacobian(self, probabilities, conditionals):
+    def compute_shares_by_xi_jacobian(self, probabilities: Array, conditionals: Optional[Array]) -> Array:
         """Compute the Jacobian of shares with respect to xi (equivalently, to delta)."""
         diagonal_shares = np.diagflat(self.products.shares)
         weighted_probabilities = self.agents.weights * probabilities.T
@@ -1074,7 +1134,9 @@ class DemandProblemMarket(Market):
             )
         return jacobian
 
-    def compute_shares_by_theta_jacobian(self, nonlinear_parameters, delta, probabilities, conditionals):
+    def compute_shares_by_theta_jacobian(
+            self, nonlinear_parameters: NonlinearParameters, delta: Array, probabilities: Array,
+            conditionals: Optional[Array]) -> Array:
         """Compute the Jacobian of shares with respect to theta."""
         jacobian = np.zeros((self.J, nonlinear_parameters.P), options.dtype)
         for p, parameter in enumerate(nonlinear_parameters.unfixed):
@@ -1086,13 +1148,15 @@ class DemandProblemMarket(Market):
 class SupplyProblemMarket(Market):
     """A single market in a problem, which can be solved to compute marginal cost-related information."""
 
-    def solve(self, initial_tilde_costs, xi_jacobian, beta_jacobian, nonlinear_parameters, costs_type, costs_bounds,
-              compute_gradient):
+    def solve(
+            self, initial_tilde_costs: Array, xi_jacobian: Array, beta_jacobian: Array,
+            nonlinear_parameters: NonlinearParameters, costs_type: str, costs_bounds: Bounds,
+            compute_gradient: bool) -> Tuple[Array, Array, List[Error]]:
         """Compute transformed marginal costs for this market. Then, if compute_gradient is True, compute the Jacobian
         of omega (equivalently, of transformed marginal costs) with respect to theta. If necessary, replace null
         elements in transformed marginal costs with their last values before computing their Jacobian.
         """
-        errors = []
+        errors: List[Error] = []
 
         # configure NumPy to identify floating point errors
         with np.errstate(divide='call', over='call', under='ignore', invalid='call'):
@@ -1131,8 +1195,9 @@ class SupplyProblemMarket(Market):
                 omega_jacobian[clipped_indices.flat] = 0
             return tilde_costs, omega_jacobian, errors
 
-    def compute_omega_by_theta_jacobian(self, tilde_costs, xi_jacobian, beta_jacobian, nonlinear_parameters,
-                                        costs_type):
+    def compute_omega_by_theta_jacobian(
+            self, tilde_costs: Array, xi_jacobian: Array, beta_jacobian: Array,
+            nonlinear_parameters: NonlinearParameters, costs_type: str) -> Tuple[Array, List[Error]]:
         """Compute the Jacobian of omega (equivalently, of transformed marginal costs) with respect to theta."""
         eta_jacobian, errors = self.compute_eta_by_theta_jacobian(xi_jacobian, beta_jacobian, nonlinear_parameters)
         if costs_type == 'linear':
@@ -1142,9 +1207,11 @@ class SupplyProblemMarket(Market):
             omega_jacobian = -eta_jacobian / np.exp(tilde_costs)
         return omega_jacobian, errors
 
-    def compute_eta_by_theta_jacobian(self, xi_jacobian, beta_jacobian, nonlinear_parameters):
+    def compute_eta_by_theta_jacobian(
+            self, xi_jacobian: Array, beta_jacobian: Array, nonlinear_parameters: NonlinearParameters) -> (
+            Tuple[Array, List[Error]]):
         """Compute the Jacobian of the markup term in the BLP-markup equation with respect to theta."""
-        errors = []
+        errors: List[Error] = []
 
         # compute derivatives of aggregate inclusive values with respect to prices
         probabilities, conditionals = self.compute_probabilities(keep_conditionals=True)
@@ -1215,7 +1282,8 @@ class SupplyProblemMarket(Market):
         # return the filled Jacobian
         return eta_jacobian, errors
 
-    def compute_probabilities_by_xi_tensor(self, probabilities, conditionals):
+    def compute_probabilities_by_xi_tensor(
+            self, probabilities: Array, conditionals: Optional[Array]) -> Tuple[Array, Optional[Array]]:
         """Use choice probabilities to compute their tensor derivatives with respect to xi (equivalently, to delta),
         indexed with the first axis.
         """
@@ -1223,6 +1291,7 @@ class SupplyProblemMarket(Market):
         probabilities_tensor[np.diag_indices(self.J)] += probabilities
         conditionals_tensor = None
         if self.H > 0:
+            assert conditionals is not None
             membership = self.get_membership_matrix()
             multiplied_probabilities = self.rho / (1 - self.rho) * probabilities
             multiplied_conditionals = 1 / (1 - self.rho) * conditionals
@@ -1236,7 +1305,7 @@ class SupplyProblemMarket(Market):
             conditionals_tensor[np.diag_indices(self.J)] += multiplied_conditionals
         return probabilities_tensor, conditionals_tensor
 
-    def compute_capital_lamda_by_xi_tensor(self, value_derivatives_tensor):
+    def compute_capital_lamda_by_xi_tensor(self, value_derivatives_tensor: Array) -> Array:
         """Use the tensor derivative with respect to xi (equivalently, to delta), indexed with the first axis, of
         derivatives of aggregate inclusive values with respect to prices to compute the tensor derivative of the
         diagonal capital lambda matrix with respect to xi.
@@ -1248,8 +1317,9 @@ class SupplyProblemMarket(Market):
         tensor[:, np.arange(self.J), np.arange(self.J)] = diagonal
         return tensor
 
-    def compute_capital_gamma_by_xi_tensor(self, value_derivatives, value_derivatives_tensor, probabilities,
-                                           probabilities_tensor, conditionals, conditionals_tensor):
+    def compute_capital_gamma_by_xi_tensor(
+            self, value_derivatives: Array, value_derivatives_tensor: Array, probabilities: Array,
+            probabilities_tensor: Array, conditionals: Optional[Array], conditionals_tensor: Optional[Array]) -> Array:
         """Use derivatives of aggregate inclusive values with respect to prices, choice probabilities, and their tensor
         derivatives with respect to xi (equivalently, to delta), indexed with the first axis, to compute the tensor
         derivative of the dense capital gamma matrix with respect to xi.
@@ -1261,6 +1331,7 @@ class SupplyProblemMarket(Market):
             multiply_matrix_and_tensor(weighted_probabilities, value_derivatives_tensor.swapaxes(1, 2))
         )
         if self.H > 0:
+            assert conditionals is not None and conditionals_tensor is not None
             membership = self.get_membership_matrix()
             weighted_conditionals = self.agents.weights.T * conditionals
             tensor += membership[None] * self.rho[None] / (1 - self.rho[None]) * (
@@ -1269,7 +1340,8 @@ class SupplyProblemMarket(Market):
             )
         return tensor
 
-    def compute_capital_lamda_by_parameter_tangent(self, parameter, value_derivatives, value_derivatives_tangent):
+    def compute_capital_lamda_by_parameter_tangent(
+            self, parameter: NonlinearParameter, value_derivatives: Array, value_derivatives_tangent: Array) -> Array:
         """Use the tangent with respect to a nonlinear parameter of derivatives of aggregate inclusive values with
         respect to prices to compute the tangent of the diagonal capital lambda matrix with respect to the parameter.
         """
@@ -1281,9 +1353,10 @@ class SupplyProblemMarket(Market):
                 diagonal += associations / (1 - self.rho)**2 * (value_derivatives @ self.agents.weights)
         return np.diagflat(diagonal)
 
-    def compute_capital_gamma_by_parameter_tangent(self, parameter, value_derivatives, value_derivatives_tangent,
-                                                   probabilities, probabilities_tangent, conditionals,
-                                                   conditionals_tangent):
+    def compute_capital_gamma_by_parameter_tangent(
+            self, parameter: NonlinearParameter, value_derivatives: Array, value_derivatives_tangent: Array,
+            probabilities: Array, probabilities_tangent: Array, conditionals: Optional[Array],
+            conditionals_tangent: Optional[Array]) -> Array:
         """Use derivatives of aggregate inclusive values with respect to prices, choice probabilities, and their
         tangents with respect to a nonlinear parameter to compute the tangent of the dense capital gamma matrix with
         respect to the parameter.
@@ -1295,6 +1368,7 @@ class SupplyProblemMarket(Market):
             probabilities @ weighted_value_derivatives_tangent
         )
         if self.H > 0:
+            assert conditionals is not None and conditionals_tangent is not None
             membership = self.get_membership_matrix()
             tangent += membership * self.rho / (1 - self.rho) * (
                 conditionals_tangent @ weighted_value_derivatives +

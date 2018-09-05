@@ -1,10 +1,13 @@
 """Tests of fixed point iteration routines."""
 
+from typing import Union, Callable
+
 import pytest
 import numpy as np
 import scipy.optimize
 
 from pyblp import Iteration
+from pyblp.utilities.basics import Array, Options
 
 
 @pytest.mark.parametrize(['method', 'method_options'], [
@@ -20,7 +23,7 @@ from pyblp import Iteration
     pytest.param(1e-4, id="medium"),
     pytest.param(1e-8, id="small")
 ])
-def test_scipy(method, method_options, tol):
+def test_scipy(method: Union[str, Callable], method_options: Options, tol: float) -> None:
     """Test that the solution to the example fixed point problem from scipy.optimize.fixed_point is reasonably close to
     the exact solution.
     """
@@ -32,7 +35,7 @@ def test_scipy(method, method_options, tol):
 
 
 @pytest.mark.parametrize('scheme', [pytest.param(1, id="S1"), pytest.param(2, id="S2"), pytest.param(3, id="S3")])
-def test_hasselblad(scheme):
+def test_hasselblad(scheme: int) -> None:
     """Test that the solution to the fixed point problem from Hasselblad (1969) is reasonably close to the exact
     solution and that SQUAREM takes at least an order of magnitude fewer fixed point evaluations than does simple
     iteration. This same problem is used in an original SQUAREM unit test and is the first one discussed in Varadhan and
@@ -45,7 +48,7 @@ def test_hasselblad(scheme):
     }
 
     # define the contraction mapping
-    def contraction(x):
+    def contraction(x: Array) -> Array:
         y = np.array([162, 267, 271, 185, 111, 61, 27, 8, 3, 1])
         i = np.arange(y.size)
         z = np.divide(

@@ -2,28 +2,30 @@
 
 import itertools
 import traceback
+from typing import Mapping, Iterable, Callable, Sequence, Any, Type
 
 import patsy
 import pytest
 import numpy as np
 
 from pyblp import Formulation
+from pyblp.utilities.basics import Array, Data
 
 
 @pytest.mark.usefixtures('formula_data')
 @pytest.mark.parametrize(['formulas', 'build_columns', 'build_derivatives'], [
-    pytest.param(
-        ['', '1', '0 + I(1)', '-1 + I(1)', 'I(1) - 1'],
-        lambda d: [d['1']],
-        lambda d: [d['0']],
-        id="intercept"
-    ),
-    pytest.param(
-        ['0 + x', 'I(x) - 1'],
-        lambda d: [d['x']],
-        lambda d: [d['1']],
-        id="continuous variable"
-    ),
+    # pytest.param(
+    #     ['', '1', '0 + I(1)', '-1 + I(1)', 'I(1) - 1'],
+    #     lambda d: [d['1']],
+    #     lambda d: [d['0']],
+    #     id="intercept"
+    # ),
+    # pytest.param(
+    #     ['0 + x', 'I(x) - 1'],
+    #     lambda d: [d['x']],
+    #     lambda d: [d['1']],
+    #     id="continuous variable"
+    # ),
     pytest.param(
         ['0 + x + I(1)', 'x + I(1) - 1'],
         lambda d: [d['x'], d['1']],
@@ -76,7 +78,9 @@ from pyblp import Formulation
         id="interactions"
     )
 ])
-def test_matrices(formula_data, formulas, build_columns, build_derivatives):
+def test_matrices(
+        formula_data: Data, formulas: Iterable[str], build_columns: Callable[[Mapping[str, Array]], Sequence[Array]],
+        build_derivatives: Callable[[Mapping[str, Array]], Sequence[Array]]) -> None:
     """Test that equivalent formulas build columns and derivatives as expected. Take derivatives with respect to x."""
 
     # construct convenience columns of ones and zeros
@@ -128,7 +132,9 @@ def test_matrices(formula_data, formulas, build_columns, build_derivatives):
         id="interactions"
     )
 ])
-def test_ids(formula_data, formulas, build_columns):
+def test_ids(
+        formula_data: Data, formulas: Iterable[str],
+        build_columns: Callable[[Mapping[str, Array]], Sequence[Array]]) -> None:
     """Test that equivalent formulas build IDs as expected."""
 
     # create convenience columns of tuples of categorical variables
@@ -181,7 +187,7 @@ def test_ids(formula_data, formulas, build_columns):
     pytest.param(patsy.PatsyError, 'Q("a")', None, id="unsupported patsy quoting"),
     pytest.param(patsy.PatsyError, '', 'Q("a")', id="absorbed unsupported patsy quoting")
 ])
-def test_invalid_formulas(formula_data, exception, formula, absorb):
+def test_invalid_formulas(formula_data: Data, exception: Type[Exception], formula: Any, absorb: Any) -> None:
     """Test that an invalid formula gives rise to an exception."""
     try:
         formulation = Formulation(formula, absorb)

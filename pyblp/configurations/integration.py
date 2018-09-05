@@ -2,10 +2,13 @@
 
 import functools
 import itertools
+from typing import Iterable, Tuple, Optional, List
 
 import numpy as np
 import scipy.stats
 import scipy.special
+
+from ..utilities.basics import Array
 
 
 class Integration(object):
@@ -62,12 +65,21 @@ class Integration(object):
 
     """
 
-    def __init__(self, specification, size, seed=None):
+    _size: int
+    _seed: Optional[int]
+    _specification: str
+    _description: str
+    _builder: functools.partial
+
+    def __init__(self, specification: str, size: int, seed: Optional[int] = None) -> None:
         """Validate the specification and identify the builder."""
         specifications = {
-            'monte_carlo': (monte_carlo, "with Monte Carlo simulation"),
-            'product': (product_rule, f"according to the level-{size} Gauss-Hermite product rule"),
-            'grid': (sparse_grid, f"in a sparse grid according to the level-{size} Gauss-Hermite rule"),
+            'monte_carlo': (functools.partial(monte_carlo), "with Monte Carlo simulation"),
+            'product': (functools.partial(product_rule), f"according to the level-{size} Gauss-Hermite product rule"),
+            'grid': (
+                functools.partial(sparse_grid),
+                f"in a sparse grid according to the level-{size} Gauss-Hermite rule"
+            ),
             'nested_product': (
                 functools.partial(product_rule, nested=True),
                 f"according to the level-{size} nested Gauss-Hermite product rule"
@@ -87,41 +99,48 @@ class Integration(object):
         # initialize class attributes
         self._size = size
         self._seed = seed
+        self._specification = specification
         self._builder, self._description = specifications[specification]
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Format the configuration as a string."""
         return f"Configured to construct nodes and weights {self._description}."
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         """Defer to the string representation."""
         return str(self)
 
-    def _build_many(self, dimensions, ids):
+    def _build_many(self, dimensions: int, ids: Iterable) -> Tuple[Array, Array, Array]:
         """Build concatenated IDs, nodes, and weights for each ID."""
-        state = np.random.RandomState(self._seed)
-        builder = functools.partial(self._builder, state) if self._builder == monte_carlo else self._builder
-        built = []
+        builder = self._builder
+        if self._specification == 'monte_carlo':
+            builder = functools.partial(builder, state=np.random.RandomState(self._seed))
+        ids_list: List[Array] = []
+        nodes_list: List[Array] = []
+        weights_list: List[Array] = []
         for i in ids:
             nodes, weights = builder(dimensions, self._size)
-            built.append((np.repeat(i, weights.size), nodes, weights))
-        return tuple(map(np.concatenate, zip(*built)))
+            ids_list.append(np.repeat(i, weights.size))
+            nodes_list.append(nodes)
+            weights_list.append(weights)
+        return np.concatenate(ids_list), np.concatenate(nodes_list), np.concatenate(weights_list)
 
-    def _build(self, dimensions):
+    def _build(self, dimensions: int) -> Tuple[Array, Array]:
         """Build nodes and weights."""
-        state = np.random.RandomState(self._seed)
-        builder = functools.partial(self._builder, state) if self._builder == monte_carlo else self._builder
+        builder = self._builder
+        if self._specification == 'monte_carlo':
+            builder = functools.partial(builder, state=np.random.RandomState(self._seed))
         return builder(dimensions, self._size)
 
 
-def monte_carlo(state, dimensions, ns):
+def monte_carlo(dimensions: int, ns: int, state: np.random.RandomState) -> Tuple[Array, Array]:
     """Draw from a pseudo-random standard multivariate normal distribution."""
     nodes = state.normal(size=(ns, dimensions))
     weights = np.repeat(1 / ns, ns)
     return nodes, weights
 
 
-def product_rule(dimensions, level, nested=False):
+def product_rule(dimensions: int, level: int, nested: bool = False) -> Tuple[Array, Array]:
     """Generate nodes and weights for integration according to the Gauss-Hermite product rule or its nested analog."""
     base_nodes, base_weights = quadrature_rule(level, nested)
     nodes = np.array(list(itertools.product(base_nodes, repeat=dimensions)))
@@ -129,16 +148,15 @@ def product_rule(dimensions, level, nested=False):
     return nodes, weights
 
 
-def sparse_grid(dimensions, level, nested=False):
+def sparse_grid(dimensions: int, level: int, nested: bool = False) -> Tuple[Array, Array]:
     """Generate a sparse grid of nodes and weights according to the univariate Gauss-Hermite quadrature rule or its
     nested analog.
     """
 
     # construct nodes and weights
-    nodes_list = []
-    weights_list = []
+    nodes_list: List[Array] = []
+    weights_list: List[Array] = []
     for q in range(max(0, level - dimensions), level):
-
         # compute the combinatorial coefficient applied to the component product rules
         coefficient = (-1)**(level - q - 1) * scipy.special.binom(dimensions - 1, dimensions + q - level)
 
@@ -174,7 +192,7 @@ def sparse_grid(dimensions, level, nested=False):
     return nodes, weights
 
 
-def same_size_sequences(size, summation):
+def same_size_sequences(size: int, summation: int) -> Array:
     """Compute all sequences of positive integers with a fixed size that sum to a fixed number. The algorithm was
     written to allow for with vectors that can take on zero, so we subtract the fixed size from the fixed summation at
     the beginning and then increment the sequences by one at the end.
@@ -199,7 +217,7 @@ def same_size_sequences(size, summation):
     return np.vstack(sequences) + 1
 
 
-def quadrature_rule(level, nested):
+def quadrature_rule(level: int, nested: bool) -> Tuple[Array, Array]:
     """Compute nodes and weights for the univariate Gauss-Hermite quadrature rule or its nested analog."""
     if not nested:
         raw_nodes, raw_weights = np.polynomial.hermite.hermgauss(level)
@@ -208,7 +226,7 @@ def quadrature_rule(level, nested):
     return np.r_[-node_data[::-1], 0, node_data], np.r_[weight_data[::-1], weight_data[1:]]
 
 
-def nested_data(level):
+def nested_data(level: int) -> Tuple[Array, Array]:
     """Return node and weight data used to construct the nested Gauss-Hermite rule."""
     node_data_list = [
         [],

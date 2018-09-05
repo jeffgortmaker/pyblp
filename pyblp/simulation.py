@@ -1,6 +1,7 @@
 """Simulation of synthetic BLP problem data."""
 
 import time
+from typing import Sequence, Any, Mapping, Optional, Tuple, Hashable, List
 
 import numpy as np
 
@@ -9,8 +10,10 @@ from .configurations.iteration import Iteration
 from .configurations.integration import Integration
 from .configurations.formulation import Formulation
 from .construction import build_blp_instruments, build_matrix
-from .utilities.basics import extract_matrix, generate_items, output, format_seconds, Matrices
 from .primitives import Products, Agents, Economy, Market, NonlinearParameters, LinearParameters
+from .utilities.basics import (
+    structure_matrices, extract_matrix, generate_items, output, format_seconds, Error, Array, RecArray, Data
+)
 
 
 class Simulation(Economy):
@@ -194,7 +197,7 @@ class Simulation(Economy):
         Unobserved supply-side product characteristics, :math:`\omega`, that were simulated during initialization.
     costs : `ndarray`
         Marginal costs, :math:`c`, that were simulated during initialization.
-    costs_type : `bool`
+    costs_type : `str`
         The specification according to which :attr:`Simulation.costs` were simulated during initialization.
     N : `int`
         Number of products across all markets, :math:`N`.
@@ -259,9 +262,27 @@ class Simulation(Economy):
 
     """
 
-    def __init__(self, product_formulations, beta, sigma, gamma, product_data, agent_formulation=None, pi=None,
-                 agent_data=None, integration=None, rho=None, xi_variance=1, omega_variance=1, correlation=0.9,
-                 costs_type='linear', seed=None):
+    beta: Array
+    sigma: Array
+    gamma: Array
+    pi: Array
+    rho: Array
+    product_data: RecArray
+    agent_data: Optional[RecArray]
+    integration: Optional[Integration]
+    xi: Array
+    omega: Array
+    costs: Array
+    costs_type: str
+    _linear_parameters: LinearParameters
+    _nonlinear_parameters: NonlinearParameters
+
+    def __init__(
+            self, product_formulations: Sequence[Optional[Formulation]], beta: Any, sigma: Any, gamma: Any,
+            product_data: Mapping, agent_formulation: Optional[Formulation] = None, pi: Optional[Any] = None,
+            agent_data: Optional[Mapping] = None, integration: Optional[Integration] = None, rho: Optional[Any] = None,
+            xi_variance: float = 1, omega_variance: float = 1, correlation: float = 0.9, costs_type: str = 'linear',
+            seed: Optional[int] = None) -> None:
         """Load or simulate all data except for Bertrand-Nash prices and shares."""
 
         # validate the formulations
@@ -297,8 +318,8 @@ class Simulation(Economy):
         state = np.random.RandomState(seed)
 
         # load or simulate exogenous product variables in sorted order so that a seed always furnishes the same draws
-        numerical_mapping = {}
-        categorical_mapping = {}
+        numerical_mapping: Data = {}
+        categorical_mapping: Data = {}
         for formulation in product_formulations:
             if formulation is not None:
                 for name in sorted(formulation._names - set(numerical_mapping) - set(categorical_mapping) - {'prices'}):
@@ -360,12 +381,11 @@ class Simulation(Economy):
             product_data_mapping['ownership'] = (ownership, options.dtype)
 
         # supplement the mapping with exogenous product variables
-        variable_mapping = {**numerical_mapping, **categorical_mapping}
+        variable_mapping = {k: (v, options.dtype) for k, v in {**numerical_mapping, **categorical_mapping}.items()}
         invalid_names = set(variable_mapping) & set(product_data_mapping)
         if invalid_names:
             raise NameError(f"These names in product_formulations are invalid: {list(invalid_names)}.")
-        product_data_mapping.update({k: (v, options.dtype) for k, v in variable_mapping.items()})
-        self.product_data = Matrices(product_data_mapping)
+        self.product_data = structure_matrices({**product_data_mapping, **variable_mapping})
 
         # structure product data
         products = Products(product_formulations, self.product_data)
@@ -392,13 +412,13 @@ class Simulation(Economy):
                 raise ValueError("At least one of agent_data and integration must be specified.")
 
             # load or simulate agent variables (in sorted order so that seeds give rise to the same draws)
-            agent_variable_mapping = {}
+            agent_numerical_mapping: Data = {}
             if agent_formulation is not None:
-                for name in sorted(agent_formulation._names - set(agent_variable_mapping)):
+                for name in sorted(agent_formulation._names - set(agent_numerical_mapping)):
                     variable = extract_matrix(agent_data, name) if agent_data is not None else None
                     if variable is None:
                         variable = state.uniform(size=agent_market_ids.size).astype(options.dtype)
-                    agent_variable_mapping[name] = variable
+                    agent_numerical_mapping[name] = variable
 
             # structure agent data fields as a mapping
             agent_data_mapping = {'market_ids': (agent_market_ids, np.object)}
@@ -408,12 +428,12 @@ class Simulation(Economy):
                 agent_data_mapping['weights'] = (weights, options.dtype)
 
             # supplement the mapping with agent variables
+            agent_variable_mapping = {k: (v, options.dtype) for k, v in agent_numerical_mapping.items()}
             invalid_names = set(agent_variable_mapping) & set(agent_data_mapping)
             if invalid_names:
                 raise NameError(f"These names in agent_formulation are invalid: {list(invalid_names)}.")
-            agent_data_mapping.update({k: (v, options.dtype) for k, v in agent_variable_mapping.items()})
             self.integration = integration
-            self.agent_data = Matrices(agent_data_mapping)
+            self.agent_data = structure_matrices({**agent_data_mapping, **agent_variable_mapping})
 
         # structure agent data
         agents = Agents(products, agent_formulation, self.agent_data, integration)
@@ -448,14 +468,16 @@ class Simulation(Economy):
         if costs_type == 'log':
             self.costs = np.exp(self.costs)
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Supplement general formatted information with other information about parameters."""
         sections = [[super().__str__()], ["Linear Parameters:", self._linear_parameters.format()]]
         if self.K2 > 0 or self.H > 0:
             sections.append(["Nonlinear Parameters:", self._nonlinear_parameters.format()])
         return "\n\n".join("\n".join(s) for s in sections)
 
-    def solve(self, firms_index=0, prices=None, iteration=None, error_behavior='raise'):
+    def solve(
+            self, firms_index: int = 0, prices: Optional[Any] = None, iteration: Optional[Iteration] = None,
+            error_behavior: str = 'raise') -> RecArray:
         r"""Compute Bertrand-Nash prices and shares.
 
         Prices and shares are computed by iterating market-by-market over the :math:`\zeta`-markup equation from
@@ -538,7 +560,7 @@ class Simulation(Economy):
         For more examples, refer to the :doc:`Examples </examples>` section.
 
         """
-        errors = []
+        errors: List[Error] = []
 
         # choose or validate initial prices
         if prices is None:
@@ -566,7 +588,8 @@ class Simulation(Economy):
         delta = self.products.X1 @ self.beta + self.xi
 
         # define a function that builds a market along with arguments used to compute prices and shares
-        def market_factory(s):
+        def market_factory(s: Hashable) -> Tuple[SimulationMarket, Array, Array, Iteration, int]:
+            assert prices is not None and iteration is not None
             market_s = SimulationMarket(self, s, self.sigma, self.pi, self.rho, self.beta, delta)
             costs_s = self.costs[self._product_market_indices[s]]
             prices_s = prices[self._product_market_indices[s]]
@@ -605,11 +628,13 @@ class Simulation(Economy):
 class SimulationMarket(Market):
     """A single market in a simulation, which can be used to solve for prices and shares."""
 
-    def solve(self, costs, prices, iteration, firms_index=0):
+    def solve(
+            self, costs: Array, prices: Array, iteration: Iteration, firms_index: int = 0) -> (
+            Tuple[Array, Array, List[Error], int, int]):
         """Use marginal costs, initial prices, and an iteration configuration to solve for Bertrand-Nash prices and
         shares. By default, use unchanged firm IDs.
         """
-        errors = []
+        errors: List[Error] = []
 
         # configure NumPy to identify floating point errors
         with np.errstate(divide='call', over='call', under='ignore', invalid='call'):

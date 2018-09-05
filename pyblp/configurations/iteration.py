@@ -1,6 +1,11 @@
 """Fixed-point iteration routines."""
 
+import functools
+from typing import Union, Callable, Tuple, Any, Optional
+
 import numpy as np
+
+from ..utilities.basics import format_options, Array, Options
 
 
 class Iteration(object):
@@ -92,11 +97,15 @@ class Iteration(object):
 
     """
 
-    def __init__(self, method, method_options=None):
+    _iterator: functools.partial
+    _description: str
+    _method_options: Options
+
+    def __init__(self, method: Union[str, Callable], method_options: Optional[Options] = None) -> None:
         """Validate the method and configure default options."""
         methods = {
-            'squarem': (squarem_iterator, "the SQUAREM acceleration method"),
-            'simple': (simple_iterator, "no acceleration")
+            'squarem': (functools.partial(squarem_iterator), "the SQUAREM acceleration method"),
+            'simple': (functools.partial(simple_iterator), "no acceleration")
         }
 
         # validate the configuration
@@ -105,14 +114,15 @@ class Iteration(object):
         if method_options is not None and not isinstance(method_options, dict):
             raise ValueError("method_options must be None or a dict.")
 
-        # replace missing options with a dict
-        method_options = method_options or {}
+        # options are by default empty
+        if method_options is None:
+            method_options = {}
 
         # options are simply passed along to custom methods
         if callable(method):
-            self._iterator = method
-            self._method_options = method_options
+            self._iterator = functools.partial(method)
             self._description = "a custom method"
+            self._method_options = method_options
             return
 
         # identify the non-custom iterator and set default options
@@ -122,7 +132,7 @@ class Iteration(object):
             'max_evaluations': 5000,
             'norm': infinity_norm
         }
-        if self._iterator == squarem_iterator:
+        if method == 'squarem':
             self._method_options.update({
                 'scheme': 3,
                 'step_min': 1.0,
@@ -141,7 +151,7 @@ class Iteration(object):
             raise ValueError("The iteration option max_evaluations must be a positive integer.")
         if not callable(self._method_options['norm']):
             raise ValueError("The iteration option norm must be callable.")
-        if self._iterator == squarem_iterator:
+        if method == 'squarem':
             if self._method_options['scheme'] not in {1, 2, 3}:
                 raise ValueError("The iteration option scheme must be 1, 2, or 3.")
             if not isinstance(self._method_options['step_min'], float):
@@ -153,52 +163,57 @@ class Iteration(object):
             if not isinstance(self._method_options['step_factor'], float) or self._method_options['step_factor'] <= 0:
                 raise ValueError("The iteration option step_factor must be a positive float.")
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Format the configuration as a string."""
-        strings = {k: f'{v.__module__}.{v.__qualname__}' if callable(v) else v for k, v in self._method_options.items()}
-        return f"Configured to iterate using {self._description} with options {strings}."
+        return f"Configured to iterate using {self._description} with options {format_options(self._method_options)}."
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         """Defer to the string representation."""
         return str(self)
 
-    def _iterate(self, initial_values, contraction):
+    def _iterate(self, initial: Array, contraction: Callable[[Array], Any]) -> Tuple[Array, bool, int, int]:
         """Solve a fixed point iteration problem."""
 
-        # define a callback, which counts the number of major iterations
-        def iteration_callback():
-            iteration_callback.iterations += 1
+        # initialize counters
+        iterations = evaluations = 0
+
+        # define a callback that counts the number of major iterations
+        def iteration_callback() -> None:
+            nonlocal iterations
+            iterations += 1
 
         # define a wrapper for the contraction, which normalizes arrays so they work with all types of routines, and
         #   also counts the total number of contraction evaluations
-        def contraction_wrapper(raw_values):
-            contraction_wrapper.evaluations += 1
+        def contraction_wrapper(raw_values: Any) -> Array:
+            nonlocal evaluations
+            evaluations += 1
             if not isinstance(raw_values, np.ndarray):
                 raw_values = np.asarray(raw_values)
-            values = raw_values.reshape(initial_values.shape).astype(initial_values.dtype, copy=False)
+            values = raw_values.reshape(initial.shape).astype(initial.dtype, copy=False)
             return contraction(values).astype(np.float64, copy=False).reshape(raw_values.shape)
 
-        # initialize the counters and normalize the starting values
-        iteration_callback.iterations = contraction_wrapper.evaluations = 0
-        raw_initial_values = initial_values.astype(np.float64, copy=False).flatten()
+        # normalize the starting values
+        raw_initial = initial.astype(np.float64, copy=False).flatten()
 
         # solve the problem and convert the raw final values to the same data type and shape as the initial values
-        raw_final_values, converged = self._iterator(
-            raw_initial_values, contraction_wrapper, iteration_callback, **self._method_options
+        raw_final, converged = self._iterator(
+            raw_initial, contraction_wrapper, iteration_callback, **self._method_options
         )
-        if not isinstance(raw_final_values, np.ndarray):
-            raw_final_values = np.asarray(raw_final_values)
-        final_values = raw_final_values.reshape(initial_values.shape).astype(initial_values.dtype, copy=False)
-        return final_values, converged, iteration_callback.iterations, contraction_wrapper.evaluations
+        if not isinstance(raw_final, np.ndarray):
+            raw_final = np.asarray(raw_final)
+        final = raw_final.reshape(initial.shape).astype(initial.dtype, copy=False)
+        return final, converged, iterations, evaluations
 
 
-def infinity_norm(x):
+def infinity_norm(x: Array) -> float:
     """Compute the infinity norm of a vector."""
     return np.abs(x).max()
 
 
-def squarem_iterator(initial, contraction, iteration_callback, max_evaluations, tol, norm, scheme, step_min, step_max,
-                     step_factor):
+def squarem_iterator(
+        initial: Array, contraction: Callable[[Array], Array], iteration_callback: Callable[[], None],
+        max_evaluations: int, tol: float, norm: Callable[[Array], float], scheme: int, step_min: float, step_max: float,
+        step_factor: float) -> Tuple[Array, bool]:
     """Apply the SQUAREM acceleration method for fixed point iteration."""
     x = initial
     evaluations = 0
@@ -256,7 +271,9 @@ def squarem_iterator(initial, contraction, iteration_callback, max_evaluations, 
     return x, evaluations < max_evaluations and np.isfinite(x).all()
 
 
-def simple_iterator(initial, contraction, iteration_callback, max_evaluations, tol, norm):
+def simple_iterator(
+        initial: Array, contraction: Callable[[Array], Array], iteration_callback: Callable[[], None],
+        max_evaluations: int, tol: float, norm: Callable[[Array], float]) -> Tuple[Array, bool]:
     """Apply simple fixed point iteration with no acceleration."""
     x = initial
     evaluations = 0
@@ -272,7 +289,7 @@ def simple_iterator(initial, contraction, iteration_callback, max_evaluations, t
     return x, evaluations < max_evaluations and np.isfinite(x).all()
 
 
-def safe_norm(norm, x):
+def safe_norm(norm: Callable[[Array], float], x: Array) -> float:
     """Compute the norm of an array. Return zero if the norm is not finite."""
     with np.errstate(all='ignore'):
         value = norm(x)

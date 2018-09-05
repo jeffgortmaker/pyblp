@@ -1,110 +1,79 @@
 """Exceptions that are specific to the BLP problem."""
 
-import re
-import inspect
 import collections
+from typing import Sequence, List
 
 import numpy as np
 
-from .utilities.basics import format_number
+from .utilities.basics import format_number, Error, Array
 
 
-class _Error(Exception):
-    """Common error functionality."""
-
-    def __eq__(self, other):
-        """Defer to hashes."""
-        return hash(self) == hash(other)
-
-    def __hash__(self):
-        """Hash this instance such that in collections it is indistinguishable from others with the same message."""
-        return hash((type(self).__name__, str(self)))
-
-    def __repr__(self):
-        """Defer to the string representation."""
-        return str(self)
-
-    def __str__(self):
-        """Replace docstring markdown with simple text."""
-        doc = inspect.getdoc(self)
-
-        # normalize LaTeX
-        while True:
-            match = re.search(r':math:`([^`]+)`', doc)
-            if not match:
-                break
-            start, end = match.span()
-            doc = doc[:start] + re.sub(r'\s+', ' ', re.sub(r'[\\{}]', ' ', match.group(1))).lower() + doc[end:]
-
-        # normalize references
-        while True:
-            match = re.search(r':ref:`([^`]+)`', doc)
-            if not match:
-                break
-            start, end = match.span()
-            doc = doc[:start] + re.sub(r'<[^>]+>', '', match.group(1)) + doc[end:]
-
-        # remove all remaining domains and compress whitespace
-        return re.sub(r'[\s\n]+', ' ', re.sub(r':[a-z\-]+:|`', '', doc))
-
-
-class _MultipleReversionError(_Error):
+class _MultipleReversionError(Error):
     """Reversion of problematic elements."""
 
-    def __init__(self, bad_indices):
+    _bad: int
+    _total: int
+
+    def __init__(self, bad_indices: Array) -> None:
         """Store element counts."""
-        self.bad = bad_indices.sum()
-        self.total = bad_indices.size
+        self._bad = bad_indices.sum()
+        self._total = bad_indices.size
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Supplement the error with the counts."""
-        return f"{super().__str__()} Number of reverted elements: {self.bad} out of {self.total}."
+        return f"{super().__str__()} Number of reverted elements: {self._bad} out of {self._total}."
 
 
-class _InversionError(_Error):
+class _InversionError(Error):
     """Problems with inverting a matrix."""
 
-    def __init__(self, matrix):
-        """Compute condition number of the matrix."""
-        self.condition = np.nan if not np.isfinite(matrix).all() else np.linalg.cond(matrix.astype(np.float64))
+    _condition: float
 
-    def __str__(self):
+    def __init__(self, matrix: Array) -> None:
+        """Compute condition number of the matrix."""
+        self._condition = np.nan if not np.isfinite(matrix).all() else np.linalg.cond(matrix.astype(np.float64))
+
+    def __str__(self) -> str:
         """Supplement the error with the condition number."""
-        return f"{super().__str__()} Condition number: {format_number(self.condition)}."
+        return f"{super().__str__()} Condition number: {format_number(self._condition)}."
 
 
 class _InversionReplacementError(_InversionError):
     """Problems with inverting a matrix led to the use of a replacement such as an approximation."""
 
-    def __init__(self, matrix, replacement):
+    _replacement: str
+
+    def __init__(self, matrix: Array, replacement: str) -> None:
         """Store the replacement description."""
         super().__init__(matrix)
-        self.replacement = replacement
+        self._replacement = replacement
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Supplement the error with the description."""
-        return f"{super().__str__()} The inverse was replaced with {self.replacement}."
+        return f"{super().__str__()} The inverse was replaced with {self._replacement}."
 
 
-class MultipleErrors(_Error):
+class MultipleErrors(Error):
     """Multiple errors that occurred around the same time."""
 
-    def __new__(cls, errors):
+    _errors: List[Error]
+
+    def __new__(cls, errors: Sequence[Error]) -> Exception:
         """Defer to the class of a singular error."""
         if len(errors) == 1:
             return next(iter(errors))
         return super().__new__(cls)
 
-    def __init__(self, errors):
+    def __init__(self, errors: Sequence[Error]) -> None:
         """Store distinct errors."""
-        self.errors = list(collections.OrderedDict.fromkeys(errors))
+        self._errors = list(collections.OrderedDict.fromkeys(errors))
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Combine all the error messages."""
-        return "\n".join(str(e) for e in self.errors)
+        return "\n".join(str(e) for e in self._errors)
 
 
-class LargeInitialParametersError(_Error):
+class LargeInitialParametersError(Error):
     """Specified initial nonlinear parameters are likely to give rise to overflow during choice probability computation.
 
     Consider choosing smaller initial values, rescaling data, removing outliers, or changing the floating point
@@ -113,7 +82,7 @@ class LargeInitialParametersError(_Error):
     """
 
 
-class NonpositiveCostsError(_Error):
+class NonpositiveCostsError(Error):
     """Encountered nonpositive marginal costs in a log-linear specification.
 
     This problem can sometimes be mitigated by bounding costs from below, choosing more reasonable initial parameter
@@ -122,15 +91,15 @@ class NonpositiveCostsError(_Error):
     """
 
 
-class InvalidParameterCovariancesError(_Error):
+class InvalidParameterCovariancesError(Error):
     """Failed to compute standard errors because of invalid estimated covariances of GMM parameters."""
 
 
-class InvalidMomentCovariancesError(_Error):
+class InvalidMomentCovariancesError(Error):
     """Failed to compute a weighting matrix because of invalid estimated covariances of GMM moments."""
 
 
-class DeltaFloatingPointError(_Error):
+class DeltaFloatingPointError(Error):
     r"""Encountered floating point issues when computing :math:`\delta` or its Jacobian with respect to :math:`\theta`.
 
     This problem is often due to prior problems, overflow, or nonpositive shares, and can sometimes be mitigated by
@@ -141,7 +110,7 @@ class DeltaFloatingPointError(_Error):
     """
 
 
-class CostsFloatingPointError(_Error):
+class CostsFloatingPointError(Error):
     r"""Encountered floating point issues when computing marginal costs or their Jacobian with respect to
     :math:`\theta`.
 
@@ -152,7 +121,7 @@ class CostsFloatingPointError(_Error):
     """
 
 
-class SyntheticPricesFloatingPointError(_Error):
+class SyntheticPricesFloatingPointError(Error):
     """Encountered floating point issues when computing synthetic prices.
 
     This problem is often due to prior problems or overflow and can sometimes be mitigated by making sure that the
@@ -162,7 +131,7 @@ class SyntheticPricesFloatingPointError(_Error):
     """
 
 
-class BertrandNashPricesFloatingPointError(_Error):
+class BertrandNashPricesFloatingPointError(Error):
     """Encountered floating point issues when computing Bertrand-Nash prices.
 
     This problem is often due to prior problems or overflow and can sometimes be mitigated by rescaling data, removing
@@ -171,7 +140,7 @@ class BertrandNashPricesFloatingPointError(_Error):
     """
 
 
-class AbsorptionConvergenceError(_Error):
+class AbsorptionConvergenceError(Error):
     """An iterative de-meaning procedure failed to converge when absorbing fixed effects.
 
     This problem can sometimes be mitigated by increasing the maximum number of fixed point iterations, increasing the
@@ -180,7 +149,7 @@ class AbsorptionConvergenceError(_Error):
     """
 
 
-class ThetaConvergenceError(_Error):
+class ThetaConvergenceError(Error):
     """The optimization routine failed to converge.
 
     This problem can sometimes be mitigated by choosing more reasonable initial parameter values, setting more
@@ -189,7 +158,7 @@ class ThetaConvergenceError(_Error):
     """
 
 
-class DeltaConvergenceError(_Error):
+class DeltaConvergenceError(Error):
     r"""The fixed point computation of :math:`\delta` failed to converge.
 
     This problem can sometimes be mitigated by increasing the maximum number of fixed point iterations, increasing the
@@ -198,7 +167,7 @@ class DeltaConvergenceError(_Error):
     """
 
 
-class SyntheticPricesConvergenceError(_Error):
+class SyntheticPricesConvergenceError(Error):
     """The fixed point computation of synthetic prices failed to converge.
 
     This problem can sometimes be mitigated by increasing the maximum number of fixed point iterations, increasing the
@@ -208,7 +177,7 @@ class SyntheticPricesConvergenceError(_Error):
     """
 
 
-class BertrandNashPricesConvergenceError(_Error):
+class BertrandNashPricesConvergenceError(Error):
     """The fixed point computation of Bertrand-Nash prices failed to converge.
 
     This problem can sometimes be mitigated by increasing the maximum number of fixed point iterations, increasing the
@@ -217,7 +186,7 @@ class BertrandNashPricesConvergenceError(_Error):
     """
 
 
-class ObjectiveReversionError(_Error):
+class ObjectiveReversionError(Error):
     """Reverted a problematic GMM objective value."""
 
 

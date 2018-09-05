@@ -1,10 +1,14 @@
 """Primary tests."""
 
+from typing import Tuple, Dict, Union, Optional, List, Any, Callable
+
 import pytest
 import numpy as np
 import linearmodels
 import scipy.optimize
 
+from .conftest import SimulatedProblemFixture
+from pyblp.utilities.basics import Array, Options
 from pyblp import parallel, build_matrix, Problem, Iteration, Optimization, Formulation
 
 
@@ -16,7 +20,7 @@ from pyblp import parallel, build_matrix, Problem, Iteration, Optimization, Form
     pytest.param({'error_behavior': 'punish', 'error_punishment': 1e5}, id="error punishment"),
     pytest.param({'center_moments': False, 'W_type': 'unadjusted', 'se_type': 'clustered'}, id="complex covariances")
 ])
-def test_accuracy(simulated_problem, solve_options_update):
+def test_accuracy(simulated_problem: SimulatedProblemFixture, solve_options_update: Options) -> None:
     """Test that starting parameters that are half their true values give rise to errors of less than 10%. Use loose
     bounds to avoid overflow.
     """
@@ -44,7 +48,7 @@ def test_accuracy(simulated_problem, solve_options_update):
 @pytest.mark.parametrize('solve_options_update', [
     pytest.param({'costs_bounds': (-1e10, 1e10)}, id="non-binding costs bounds")
 ])
-def test_trivial_changes(simulated_problem, solve_options_update):
+def test_trivial_changes(simulated_problem: SimulatedProblemFixture, solve_options_update: Dict) -> None:
     """Test that solving a problem with arguments that shouldn't give rise to meaningful differences doesn't give rise
     to any differences.
     """
@@ -62,7 +66,7 @@ def test_trivial_changes(simulated_problem, solve_options_update):
 
 
 @pytest.mark.usefixtures('simulated_problem')
-def test_parallel(simulated_problem):
+def test_parallel(simulated_problem: SimulatedProblemFixture) -> None:
     """Test that solving simulations, solving problems, and computing results with parallelization gives rise to the
     same results as when using serial processing.
     """
@@ -108,7 +112,9 @@ def test_parallel(simulated_problem):
     pytest.param(2, 1, None, id="2 demand- and 1 supply-side FEs, default method"),
     pytest.param(1, 2, Iteration('simple', {'tol': 1e-12}), id="1 demand- and 2 supply-side FEs, iteration")
 ])
-def test_fixed_effects(simulated_problem, ED, ES, absorb_method):
+def test_fixed_effects(
+        simulated_problem: SimulatedProblemFixture, ED: int, ES: int,
+        absorb_method: Optional[Union[str, Iteration]]) -> None:
     """Test that absorbing different numbers of demand- and supply-side fixed effects gives rise to essentially
     identical first-stage results as does including indicator variables. Also test that results that should be equal
     when there aren't any fixed effects are indeed equal, and that marginal costs are equal as well (this is a check
@@ -130,22 +136,24 @@ def test_fixed_effects(simulated_problem, ED, ES, absorb_method):
 
     # add fixed effect IDs to the data
     np.random.seed(0)
-    demand_names = []
-    supply_names = []
+    demand_names: List[str] = []
+    supply_names: List[str] = []
     product_data = {k: product_data[k] for k in product_data.dtype.names}
     for side, count, names in [('demand', ED, demand_names), ('supply', ES, supply_names)]:
         for index in range(count):
             name = f'{side}_ids{index}'
-            ids = np.random.choice(['a', 'b', 'c'], product_data['market_ids'].size, [0.7, 0.2, 0.1])
+            ids = np.random.choice(['a', 'b', 'c'], product_data['market_ids'].size, p=[0.7, 0.2, 0.1])
             product_data[name] = ids
             names.append(name)
 
     # remove constants
     product_formulations = list(problem.product_formulations).copy()
     if ED > 0:
+        assert product_formulations[0] is not None
         product_formulations[0] = Formulation(f'{product_formulations[0]._formula} - 1')
         product_data['demand_instruments'] = product_data['demand_instruments'][:, 1:]
     if ES > 0:
+        assert product_formulations[2] is not None
         product_formulations[2] = Formulation(f'{product_formulations[2]._formula} - 1')
         product_data['supply_instruments'] = product_data['supply_instruments'][:, 1:]
 
@@ -156,8 +164,10 @@ def test_fixed_effects(simulated_problem, ED, ES, absorb_method):
     # solve the first stage of a problem in which the fixed effects are absorbed
     product_formulations1 = product_formulations.copy()
     if ED > 0:
+        assert product_formulations[0] is not None
         product_formulations1[0] = Formulation(product_formulations[0]._formula, demand_formula, absorb_method)
     if ES > 0:
+        assert product_formulations[2] is not None
         product_formulations1[2] = Formulation(product_formulations[2]._formula, supply_formula, absorb_method)
     problem1 = Problem(product_formulations1, product_data, problem.agent_formulation, simulation.agent_data)
     results1 = problem1.solve(**solve_options)
@@ -166,10 +176,12 @@ def test_fixed_effects(simulated_problem, ED, ES, absorb_method):
     product_data2 = product_data.copy()
     product_formulations2 = product_formulations.copy()
     if ED > 0:
+        assert product_formulations[0] is not None
         demand_indicators2 = build_matrix(Formulation(demand_formula), product_data)
         product_data2['demand_instruments'] = np.c_[product_data['demand_instruments'], demand_indicators2]
         product_formulations2[0] = Formulation(f'{product_formulations[0]._formula} + {demand_formula}')
     if ES > 0:
+        assert product_formulations[2] is not None
         supply_indicators2 = build_matrix(Formulation(supply_formula), product_data)
         product_data2['supply_instruments'] = np.c_[product_data['supply_instruments'], supply_indicators2]
         product_formulations2[2] = Formulation(f'{product_formulations[2]._formula} + {supply_formula}')
@@ -182,12 +194,14 @@ def test_fixed_effects(simulated_problem, ED, ES, absorb_method):
         product_data3 = product_data.copy()
         product_formulations3 = product_formulations.copy()
         if ED > 0:
+            assert product_formulations[0] is not None
             demand_indicators3 = build_matrix(Formulation(demand_names[0]), product_data)[:, int(ED > 1):]
             product_data3['demand_instruments'] = np.c_[product_data['demand_instruments'], demand_indicators3]
             product_formulations3[0] = Formulation(
                 f'{product_formulations[0]._formula} + {demand_names[0]}', ' + '.join(demand_names[1:]) or None
             )
         if ES > 0:
+            assert product_formulations[2] is not None
             supply_indicators3 = build_matrix(Formulation(supply_names[0]), product_data)[:, int(ES > 1):]
             product_data3['supply_instruments'] = np.c_[product_data['supply_instruments'], supply_indicators3]
             product_formulations3[2] = Formulation(
@@ -226,7 +240,7 @@ def test_fixed_effects(simulated_problem, ED, ES, absorb_method):
     pytest.param({}, id="defaults"),
     pytest.param({'iteration': Iteration('simple')}, id="configured iteration")
 ])
-def test_merger(simulated_problem, compute_prices_options):
+def test_merger(simulated_problem: SimulatedProblemFixture, compute_prices_options: Options) -> None:
     """Test that prices and shares simulated under changed firm IDs are reasonably close to prices and shares computed
     from the results of a solved problem. In particular, test that unchanged prices and shares are farther from their
     simulated counterparts than those computed by approximating a merger, which in turn are farther from their simulated
@@ -261,7 +275,7 @@ def test_merger(simulated_problem, compute_prices_options):
 
 
 @pytest.mark.usefixtures('simulated_problem')
-def test_shares(simulated_problem):
+def test_shares(simulated_problem: SimulatedProblemFixture) -> None:
     """Test that shares computed from estimated parameters are essentially equal to actual shares."""
     _, product_data, _, _, results = simulated_problem
     shares = results.compute_shares()
@@ -269,7 +283,7 @@ def test_shares(simulated_problem):
 
 
 @pytest.mark.usefixtures('simulated_problem')
-def test_shares_by_prices_jacobian(simulated_problem):
+def test_shares_by_prices_jacobian(simulated_problem: SimulatedProblemFixture) -> None:
     """Use central finite differences to test that analytic values in the Jacobian of shares with respect to prices are
     essentially within 0.1% of estimated values.
     """
@@ -304,7 +318,7 @@ def test_shares_by_prices_jacobian(simulated_problem):
 
 @pytest.mark.usefixtures('simulated_problem')
 @pytest.mark.parametrize('factor', [pytest.param(0.01, id="large"), pytest.param(0.0001, id="small")])
-def test_elasticity_aggregates_and_means(simulated_problem, factor):
+def test_elasticity_aggregates_and_means(simulated_problem: SimulatedProblemFixture, factor: float) -> None:
     """Test that the magnitude of simulated aggregate elasticities is less than the magnitude of mean elasticities, both
     for prices and for other characteristics.
     """
@@ -328,14 +342,15 @@ def test_elasticity_aggregates_and_means(simulated_problem, factor):
 
 
 @pytest.mark.usefixtures('simulated_problem')
-def test_diversion_ratios(simulated_problem):
+def test_diversion_ratios(simulated_problem: SimulatedProblemFixture) -> None:
     """Test simulated diversion ratio rows sum to one."""
     simulation, _, _, _, results = simulated_problem
 
     # test price-based ratios
-    for compute in [results.compute_diversion_ratios, results.compute_long_run_diversion_ratios]:
-        ratios = compute()
-        np.testing.assert_allclose(ratios.sum(axis=1), 1, atol=1e-14, rtol=0, err_msg=compute.__name__)
+    ratios = results.compute_diversion_ratios()
+    long_run_ratios = results.compute_long_run_diversion_ratios()
+    np.testing.assert_allclose(ratios.sum(axis=1), 1, atol=1e-14, rtol=0)
+    np.testing.assert_allclose(long_run_ratios.sum(axis=1), 1, atol=1e-14, rtol=0)
 
     # test ratios based on other variables
     for name in {n for f in simulation._X1_formulations + simulation._X2_formulations for n in f.names} - {'prices'}:
@@ -344,7 +359,7 @@ def test_diversion_ratios(simulated_problem):
 
 
 @pytest.mark.usefixtures('simulated_problem')
-def test_result_positivity(simulated_problem):
+def test_result_positivity(simulated_problem: SimulatedProblemFixture) -> None:
     """Test that simulated markups, profits, consumer surpluses are positive, both before and after a merger."""
     _, _, _, _, results = simulated_problem
 
@@ -362,7 +377,7 @@ def test_result_positivity(simulated_problem):
 
 
 @pytest.mark.usefixtures('simulated_problem')
-def test_second_step(simulated_problem):
+def test_second_step(simulated_problem: SimulatedProblemFixture) -> None:
     """Test that results from two-step GMM on simulated data are identical to results from one-step GMM configured with
     results from a first step.
     """
@@ -377,7 +392,8 @@ def test_second_step(simulated_problem):
 
     # get two-step GMM results
     results12 = problem.solve(**updated_solve_options)
-    assert results12.step == 2 and results12.last_results.step == 1 and results12.last_results.last_results is None
+    assert results12.last_results is not None and results12.last_results.last_results is None
+    assert results12.step == 2 and results12.last_results.step == 1
 
     # get results from the first step
     updated_solve_options1 = updated_solve_options.copy()
@@ -395,7 +411,8 @@ def test_second_step(simulated_problem):
         'WS': results1.updated_WS
     })
     results2 = problem.solve(**updated_solve_options2)
-    assert results1.step == results2.step == 1 and results1.last_results is None and results2.last_results is None
+    assert results1.last_results is None and results2.last_results is None
+    assert results1.step == results2.step == 1
 
     # test that results are essentially identical
     for key, result12 in results12.__dict__.items():
@@ -408,7 +425,8 @@ def test_second_step(simulated_problem):
     pytest.param('l-bfgs-b', id="L-BFGS-B"),
     pytest.param('slsqp', id="SLSQP")
 ])
-def test_gradient_optionality(simulated_problem, scipy_method):
+def test_gradient_optionality(
+        simulated_problem: SimulatedProblemFixture, scipy_method: str) -> None:
     """Test that the option of not computing the gradient for simulated data does not affect estimates when the gradient
     isn't used.
     """
@@ -419,7 +437,9 @@ def test_gradient_optionality(simulated_problem, scipy_method):
         return
 
     # define a custom optimization method that doesn't use gradients
-    def custom_method(initial, bounds, objective_function, _):
+    def custom_method(
+            initial: Array, bounds: List[Tuple[float, float]], objective_function: Callable, _: Any) -> (
+            Tuple[Array, bool]):
         wrapper = lambda x: objective_function(x)[0]
         results = scipy.optimize.minimize(wrapper, initial, method=scipy_method, bounds=bounds)
         return results.x, results.success
@@ -445,7 +465,7 @@ def test_gradient_optionality(simulated_problem, scipy_method):
     pytest.param('slsqp', id="SLSQP"),
     pytest.param('knitro', id="Knitro")
 ])
-def test_bounds(simulated_problem, method):
+def test_bounds(simulated_problem: SimulatedProblemFixture, method: str) -> None:
     """Test that non-binding bounds on parameters in simulated problems do not affect estimates and that binding bounds
     are respected.
     """
@@ -528,7 +548,7 @@ def test_bounds(simulated_problem, method):
 
 
 @pytest.mark.usefixtures('simulated_problem')
-def test_extra_nodes(simulated_problem):
+def test_extra_nodes(simulated_problem: SimulatedProblemFixture) -> None:
     """Test that agents in a simulated problem are identical to agents in a problem created with agent data built
     according to the same integration specification but containing unnecessary columns of nodes.
     """
@@ -539,6 +559,7 @@ def test_extra_nodes(simulated_problem):
         return
 
     # reconstruct the problem with unnecessary columns of nodes
+    assert simulation.agent_data is not None
     extra_agent_data = {k: simulation.agent_data[k] for k in simulation.agent_data.dtype.names}
     extra_agent_data['nodes'] = np.c_[extra_agent_data['nodes'], extra_agent_data['nodes']]
     extra_problem = Problem(problem.product_formulations, product_data, problem.agent_formulation, extra_agent_data)
@@ -550,7 +571,8 @@ def test_extra_nodes(simulated_problem):
 
 
 @pytest.mark.usefixtures('simulated_problem')
-def test_extra_demographics(simulated_problem):
+def test_extra_demographics(
+        simulated_problem: SimulatedProblemFixture) -> None:
     """Test that agents in a simulated problem are identical to agents in a problem created with agent data built
     according to the same integration specification and but containing unnecessary rows of demographics.
     """
@@ -561,6 +583,7 @@ def test_extra_demographics(simulated_problem):
         return
 
     # reconstruct the problem with unnecessary rows of demographics
+    assert simulation.agent_data is not None
     agent_data = simulation.agent_data
     extra_agent_data = {k: np.r_[agent_data[k], agent_data[k]] for k in agent_data.dtype.names}
     extra_problem = Problem(
@@ -578,7 +601,7 @@ def test_extra_demographics(simulated_problem):
     pytest.param({}, id="default"),
     pytest.param({'fp_type': 'nonlinear'}, id="nonlinear fixed point")
 ])
-def test_objective_gradient(simulated_problem, solve_options_update):
+def test_objective_gradient(simulated_problem: SimulatedProblemFixture, solve_options_update: Options) -> None:
     """Implement central finite differences in a custom optimization routine to test that analytic gradient values
     are within 0.1% of estimated values.
     """
@@ -589,8 +612,7 @@ def test_objective_gradient(simulated_problem, solve_options_update):
         return
 
     # define a custom optimization routine that tests central finite differences around starting parameter values
-    def test_finite_differences(*args):
-        theta, _, objective_function, _ = args
+    def test_finite_differences(theta: Array, _: Any, objective_function: Callable, __: Any) -> Tuple[Array, bool]:
         exact = objective_function(theta)[1]
         estimated = np.zeros_like(exact)
         change = np.sqrt(np.finfo(np.float64).eps)
@@ -630,7 +652,9 @@ def test_objective_gradient(simulated_problem, solve_options_update):
     pytest.param('unadjusted', id="unadjusted SEs"),
     pytest.param('clustered', id="clustered SEs")
 ])
-def test_logit(simulated_problem, method, center_moments, W_type, se_type):
+def test_logit(
+        simulated_problem: SimulatedProblemFixture, method: str, center_moments: bool, W_type: str, se_type: str) -> (
+        None):
     """Test that Logit estimates are the same as those from the the linearmodels package."""
     _, product_data, problem, _, _ = simulated_problem
 

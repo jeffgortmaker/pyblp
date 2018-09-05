@@ -8,6 +8,10 @@ from setuptools import setup, find_packages
 # define a function that reads a file in this directory
 read = lambda p: Path(Path(__file__).resolve().parent / p).read_text()
 
+# parse the current version
+version_match = re.search(r'^__version__ = \'([^\']*)\'', read('pyblp/version.py'), re.M)
+assert version_match is not None
+
 # set up the package
 setup(
     name='pyblp',
@@ -21,7 +25,7 @@ setup(
     include_package_data=True,
     description="BLP demand estimation with Python 3",
     long_description=read('README.rst').split('description-start')[1].strip(),
-    version=re.search(r'^__version__ = \'([^\']*)\'', read('pyblp/version.py'), re.M).group(1),
+    version=version_match.group(1),
     author="Jeff Gortmaker",
     author_email="jeff@jeffgortmaker.com",
     license="MIT",

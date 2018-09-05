@@ -23,7 +23,7 @@ from pyblp import Integration
     pytest.param(1, 'nested_grid', 3, 'monte_carlo', id="1D nested sparse grid and Monte Carlo"),
     pytest.param(4, 'nested_grid', 9, 'monte_carlo', id="4D nested sparse grid and Monte Carlo")
 ])
-def test_hermite_integral(dimensions, specification, size, naive_specification):
+def test_hermite_integral(dimensions: int, specification: str, size: int, naive_specification: str) -> None:
     """Test if approximations of a simple Gauss-Hermite integral (product of squared variables of integration with
     respect to the standard normal density) are reasonably correct. Then, if a naive specification is given, tests that
     it performs worse, even with an order of magnitude more nodes.
@@ -50,7 +50,7 @@ def test_hermite_integral(dimensions, specification, size, naive_specification):
     pytest.param('nested_grid', 1, id="small nested sparse grid"),
     pytest.param('nested_grid', 6, id="large nested sparse grid")
 ])
-def test_weight_sums(dimensions, specification, size):
+def test_weight_sums(dimensions: int, specification: str, size: int) -> None:
     """Test that weights sum to one."""
     weights = Integration(specification, size)._build(dimensions)[1]
     np.testing.assert_allclose(weights.sum(), 1, rtol=0, atol=1e-12)
@@ -59,7 +59,7 @@ def test_weight_sums(dimensions, specification, size):
 @pytest.mark.parametrize('dimensions', [pytest.param(1, id="1D"), pytest.param(3, id="3D")])
 @pytest.mark.parametrize('level', [pytest.param(1, id="L1"), pytest.param(4, id="L4")])
 @pytest.mark.parametrize('nested', [pytest.param(True, id="nested"), pytest.param(False, id="not nested")])
-def test_nwspgr(dimensions, level, nested):
+def test_nwspgr(dimensions: int, level: int, nested: bool) -> None:
     """Compare with output from the Matlab function nwspgr by Florian Heiss and Viktor Winschel."""
     if shutil.which('matlab') is None:
         return pytest.skip("Failed to find a MATLAB executable in this environment.")
