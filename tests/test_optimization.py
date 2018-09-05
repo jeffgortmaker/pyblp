@@ -1,12 +1,12 @@
 """Tests of optimization routines."""
 
-from typing import Union, Callable, Tuple
+from typing import Callable, Tuple, Union
 
-import pytest
 import numpy as np
+import pytest
 import scipy.optimize
 
-from pyblp import options, Optimization
+from pyblp import Optimization, options
 from pyblp.utilities.basics import Array, Options
 
 

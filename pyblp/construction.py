@@ -1,12 +1,12 @@
 """Construction of commonly-used product data."""
 
-from typing import Iterable, Dict, Callable, Any, Optional, Hashable, Mapping, List
+from typing import Any, Callable, Dict, Hashable, Iterable, List, Mapping, Optional
 
 import numpy as np
 
 from . import options
 from .configurations.formulation import Formulation
-from .utilities.basics import structure_matrices, extract_matrix, Groups, Array, RecArray
+from .utilities.basics import Array, Groups, RecArray, extract_matrix, structure_matrices
 
 
 def build_id_data(T: int, J: int, F: int, mergers: Iterable[Dict[Hashable, Hashable]] = ()) -> RecArray:

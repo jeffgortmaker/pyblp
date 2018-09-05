@@ -1,9 +1,9 @@
 """Tests of fixed point iteration routines."""
 
-from typing import Union, Callable
+from typing import Callable, Union
 
-import pytest
 import numpy as np
+import pytest
 import scipy.optimize
 
 from pyblp import Iteration

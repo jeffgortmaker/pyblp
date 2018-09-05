@@ -1,15 +1,15 @@
 """Primary tests."""
 
-from typing import Tuple, Dict, Union, Optional, List, Any, Callable
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
-import pytest
-import numpy as np
 import linearmodels
+import numpy as np
+import pytest
 import scipy.optimize
 
-from .conftest import SimulatedProblemFixture
+from pyblp import Formulation, Iteration, Optimization, Problem, build_matrix, parallel
 from pyblp.utilities.basics import Array, Options
-from pyblp import parallel, build_matrix, Problem, Iteration, Optimization, Formulation
+from .conftest import SimulatedProblemFixture
 
 
 @pytest.mark.usefixtures('simulated_problem')

@@ -1,13 +1,13 @@
 """Basic functionality."""
 
+import contextlib
+import datetime
+import inspect
+import multiprocessing.pool
 import re
 import time
-import inspect
-import datetime
-import contextlib
-import multiprocessing.pool
 from typing import (
-    Any, Tuple, Iterable, Iterator, Callable, Optional, Sequence, Container, Mapping, Union, List, Hashable, Dict
+    Any, Callable, Container, Dict, Hashable, Iterable, Iterator, List, Mapping, Optional, Sequence, Tuple, Union
 )
 
 import numpy as np

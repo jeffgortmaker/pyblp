@@ -1,14 +1,14 @@
 """Fixtures used by tests."""
 
 import os
-from typing import Iterator, Any, Tuple
+from typing import Any, Iterator, Tuple
 
+import numpy as np
 import patsy
 import pytest
-import numpy as np
 
-from pyblp.utilities.basics import Data, RecArray, Options
-from pyblp import Simulation, Problem, Results, Formulation, Integration, options, build_id_data, build_ownership
+from pyblp import Formulation, Integration, Problem, Results, Simulation, build_id_data, build_ownership, options
+from pyblp.utilities.basics import Data, Options, RecArray
 
 
 # define common types

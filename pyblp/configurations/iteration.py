@@ -1,11 +1,11 @@
 """Fixed-point iteration routines."""
 
 import functools
-from typing import Union, Callable, Tuple, Any, Optional
+from typing import Any, Callable, Optional, Tuple, Union
 
 import numpy as np
 
-from ..utilities.basics import format_options, Array, Options
+from ..utilities.basics import Array, Options, format_options
 
 
 class Iteration(object):

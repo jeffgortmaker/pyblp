@@ -2,11 +2,11 @@
 
 import functools
 import itertools
-from typing import Iterable, Tuple, Optional, List
+from typing import Iterable, List, Optional, Tuple
 
 import numpy as np
-import scipy.stats
 import scipy.special
+import scipy.stats
 
 from ..utilities.basics import Array
 

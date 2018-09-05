@@ -1,12 +1,12 @@
 """Tests of construction of nodes and weights for integration."""
 
 import shutil
-import tempfile
 import subprocess
+import tempfile
 
+import numpy as np
 import pytest
 import scipy.io
-import numpy as np
 
 from pyblp import Integration
 

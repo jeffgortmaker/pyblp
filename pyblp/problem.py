@@ -1,25 +1,25 @@
 """Configuration of the BLP problem and routines used to solve it."""
 
-import time
 import functools
-from typing import Sequence, Union, Optional, Any, Tuple, List, Set, Mapping, Hashable, Dict
+import time
+from typing import Any, Dict, Hashable, List, Mapping, Optional, Sequence, Set, Tuple, Union
 
 import numpy as np
 
-from .results import Results
-from . import options, exceptions
-from .configurations.iteration import Iteration
-from .configurations.integration import Integration
+from . import exceptions, options
 from .configurations.formulation import Formulation
+from .configurations.integration import Integration
+from .configurations.iteration import Iteration
 from .configurations.optimization import Optimization
-from .utilities.statistics import IV, compute_2sls_weights
-from .primitives import Products, Agents, Economy, Market, NonlinearParameter, NonlinearParameters, RhoParameter
+from .primitives import Agents, Economy, Market, NonlinearParameter, NonlinearParameters, Products, RhoParameter
+from .results import Results
 from .utilities.algebra import (
-    multiply_tensor_and_matrix, multiply_matrix_and_tensor, approximately_solve, approximately_invert
+    approximately_invert, approximately_solve, multiply_matrix_and_tensor, multiply_tensor_and_matrix
 )
 from .utilities.basics import (
-    generate_items, output, format_seconds, format_number, TableFormatter, Groups, Error, Array, Bounds
+    Array, Bounds, Error, Groups, TableFormatter, format_number, format_seconds, generate_items, output
 )
+from .utilities.statistics import IV, compute_2sls_weights
 
 
 class Problem(Economy):

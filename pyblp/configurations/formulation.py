@@ -1,24 +1,24 @@
 """Formulation of data matrices and absorption of fixed effects."""
 
-import token
 import functools
-from typing import Mapping, Tuple, List, Dict, Callable, Any, Sequence, Optional, Union, Set
+import token
+from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Set, Tuple, Union
 
-import patsy
-import patsy.desc
 import numpy as np
-import sympy as sp
-import scipy.sparse
-import patsy.origin
+import patsy
 import patsy.builtins
 import patsy.contrasts
+import patsy.desc
 import patsy.design_info
+import patsy.origin
+import scipy.sparse
+import sympy as sp
 import sympy.parsing.sympy_parser
 
 from .iteration import Iteration
 from .. import exceptions, options
 from ..utilities.algebra import precisely_invert
-from ..utilities.basics import extract_size, Groups, Error, Array, Data
+from ..utilities.basics import Array, Data, Error, Groups, extract_size
 
 
 class Formulation(object):

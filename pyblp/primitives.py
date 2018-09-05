@@ -1,22 +1,22 @@
 """Primitive structures that constitute the foundation of the BLP model."""
 
-import time
+import collections
 import functools
 import itertools
-import collections
-from typing import Sequence, Mapping, Any, Tuple, Union, Optional, List, Set, Dict, Hashable
+import time
+from typing import Any, Dict, Hashable, List, Mapping, Optional, Sequence, Set, Tuple, Union
 
 import numpy as np
 import numpy.lib.recfunctions
 
-from . import options, exceptions
+from . import exceptions, options
+from .configurations.formulation import ColumnFormulation, Formulation
+from .configurations.integration import Integration
 from .configurations.iteration import Iteration
 from .utilities.algebra import approximately_solve
-from .configurations.integration import Integration
-from .configurations.formulation import Formulation, ColumnFormulation
 from .utilities.basics import (
-    structure_matrices, extract_matrix, output, format_seconds, format_number, format_se, TableFormatter, Groups, Error,
-    Array, RecArray, Data, Bounds
+    Array, Bounds, Data, Error, Groups, RecArray, TableFormatter, extract_matrix, format_number, format_se,
+    format_seconds, output, structure_matrices
 )
 
 

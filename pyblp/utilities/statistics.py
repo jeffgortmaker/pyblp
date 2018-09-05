@@ -1,12 +1,12 @@
 """Standard statistical routines."""
 
-from typing import Union, Tuple, Optional, List
+from typing import List, Optional, Tuple, Union
 
 import numpy as np
 
-from .. import exceptions
-from .basics import Groups, Error, Array
 from .algebra import approximately_invert
+from .basics import Array, Error, Groups
+from .. import exceptions
 
 
 class IV(object):

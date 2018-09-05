@@ -1,16 +1,19 @@
 """Structuring of BLP problem results and computation of post-estimation outputs."""
 
 import time
-from typing import TYPE_CHECKING, Callable, Sequence, Any, Optional, Tuple, Dict, Hashable, List
+from typing import Any, Callable, Dict, Hashable, List, Optional, Sequence, TYPE_CHECKING, Tuple
 
 import numpy as np
 import scipy.linalg
 
-from . import options, exceptions
+from . import exceptions, options
 from .configurations.iteration import Iteration
-from .primitives import Market, LinearParameters, NonlinearParameters
+from .primitives import LinearParameters, Market, NonlinearParameters
+from .utilities.basics import Array, Error, TableFormatter, format_number, format_seconds, generate_items, output
 from .utilities.statistics import compute_gmm_se, compute_gmm_weights
-from .utilities.basics import generate_items, output, format_seconds, format_number, TableFormatter, Error, Array
+
+
+# import additional classes that create import cycles only when checking types
 if TYPE_CHECKING:
     from .problem import Problem, Progress  # noqa
 

@@ -1,11 +1,11 @@
 """Exceptions that are specific to the BLP problem."""
 
 import collections
-from typing import Sequence, List
+from typing import List, Sequence
 
 import numpy as np
 
-from .utilities.basics import format_number, Error, Array
+from .utilities.basics import Array, Error, format_number
 
 
 class _MultipleReversionError(Error):

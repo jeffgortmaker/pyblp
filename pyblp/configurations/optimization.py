@@ -1,17 +1,17 @@
 """Optimization routines."""
 
+import functools
 import os
 import sys
 import warnings
-import functools
 from pathlib import Path
-from typing import Any, Iterable, Optional, Tuple, Callable, Union
+from typing import Any, Callable, Iterable, Optional, Tuple, Union
 
 import numpy as np
 import scipy.optimize
 
 from .. import options
-from ..utilities.basics import format_options, Array, Options
+from ..utilities.basics import Array, Options, format_options
 
 
 class Optimization(object):

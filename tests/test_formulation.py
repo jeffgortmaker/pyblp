@@ -2,11 +2,11 @@
 
 import itertools
 import traceback
-from typing import Mapping, Iterable, Callable, Sequence, Any, Type
+from typing import Any, Callable, Iterable, Mapping, Sequence, Type
 
+import numpy as np
 import patsy
 import pytest
-import numpy as np
 
 from pyblp import Formulation
 from pyblp.utilities.basics import Array, Data

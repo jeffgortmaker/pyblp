@@ -1,18 +1,18 @@
 """Simulation of synthetic BLP problem data."""
 
 import time
-from typing import Sequence, Any, Mapping, Optional, Tuple, Hashable, List
+from typing import Any, Hashable, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
-from . import options, exceptions
-from .configurations.iteration import Iteration
-from .configurations.integration import Integration
+from . import exceptions, options
 from .configurations.formulation import Formulation
+from .configurations.integration import Integration
+from .configurations.iteration import Iteration
 from .construction import build_blp_instruments, build_matrix
-from .primitives import Products, Agents, Economy, Market, NonlinearParameters, LinearParameters
+from .primitives import Agents, Economy, LinearParameters, Market, NonlinearParameters, Products
 from .utilities.basics import (
-    structure_matrices, extract_matrix, generate_items, output, format_seconds, Error, Array, RecArray, Data
+    Array, Data, Error, RecArray, extract_matrix, format_seconds, generate_items, output, structure_matrices
 )
 
 

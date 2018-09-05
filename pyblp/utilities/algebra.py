@@ -1,7 +1,7 @@
 """Algebraic routines."""
 
 import warnings
-from typing import Tuple, Optional
+from typing import Optional, Tuple
 
 import numpy as np
 import scipy.linalg
