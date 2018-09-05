@@ -50,9 +50,11 @@ def test_hermite_integral(dimensions: int, specification: str, size: int, naive_
     pytest.param('nested_grid', 1, id="small nested sparse grid"),
     pytest.param('nested_grid', 6, id="large nested sparse grid")
 ])
-def test_weight_sums(dimensions: int, specification: str, size: int) -> None:
-    """Test that weights sum to one."""
-    weights = Integration(specification, size)._build(dimensions)[1]
+def test_weights_and_formatting(dimensions: int, specification: str, size: int) -> None:
+    """Test that weights sum to one and that the configurations can be formatted."""
+    integration = Integration(specification, size)
+    assert str(integration)
+    weights = integration._build(dimensions)[1]
     np.testing.assert_allclose(weights.sum(), 1, rtol=0, atol=1e-12)
 
 

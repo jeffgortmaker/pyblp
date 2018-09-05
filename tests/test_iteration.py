@@ -25,12 +25,18 @@ from pyblp.utilities.basics import Array, Options
 ])
 def test_scipy(method: Union[str, Callable], method_options: Options, tol: float) -> None:
     """Test that the solution to the example fixed point problem from scipy.optimize.fixed_point is reasonably close to
-    the exact solution.
+    the exact solution. Also verify that the configuration can be formatted.
     """
+
+    # test that the configuration can be formatted
     method_options['tol'] = tol
+    iteration = Iteration(method, method_options)
+    assert str(iteration)
+
+    # test that the solution is reasonably close
     contraction = lambda x: np.sqrt(np.array([10, 12]) / (x + np.array([3, 5])))
     exact_values = [1.4920333, 1.37228132]
-    computed_values = Iteration(method, method_options)._iterate(np.ones(2), contraction)[0]
+    computed_values = iteration._iterate(np.ones(2), contraction)[0]
     np.testing.assert_allclose(exact_values, computed_values, rtol=0, atol=10 * tol)
 
 

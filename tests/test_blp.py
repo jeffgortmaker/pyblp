@@ -694,3 +694,12 @@ def test_logit(
         values1 = getattr(results1, key1)
         values2 = np.c_[getattr(results2, key2)]
         np.testing.assert_allclose(values1, values2, atol=1e-10, rtol=1e-6, err_msg=key1)
+
+
+@pytest.mark.usefixtures('simulated_problem')
+def test_formatting(simulated_problem: SimulatedProblemFixture) -> None:
+    """Test that the basic objects can be formatted."""
+    simulation, _, problem, _, results = simulated_problem
+    assert str(simulation)
+    assert str(problem)
+    assert str(results)

@@ -14,18 +14,18 @@ from pyblp.utilities.basics import Array, Data
 
 @pytest.mark.usefixtures('formula_data')
 @pytest.mark.parametrize(['formulas', 'build_columns', 'build_derivatives'], [
-    # pytest.param(
-    #     ['', '1', '0 + I(1)', '-1 + I(1)', 'I(1) - 1'],
-    #     lambda d: [d['1']],
-    #     lambda d: [d['0']],
-    #     id="intercept"
-    # ),
-    # pytest.param(
-    #     ['0 + x', 'I(x) - 1'],
-    #     lambda d: [d['x']],
-    #     lambda d: [d['1']],
-    #     id="continuous variable"
-    # ),
+    pytest.param(
+        ['', '1', '0 + I(1)', '-1 + I(1)', 'I(1) - 1'],
+        lambda d: [d['1']],
+        lambda d: [d['0']],
+        id="intercept"
+    ),
+    pytest.param(
+        ['0 + x', 'I(x) - 1'],
+        lambda d: [d['x']],
+        lambda d: [d['1']],
+        id="continuous variable"
+    ),
     pytest.param(
         ['0 + x + I(1)', 'x + I(1) - 1'],
         lambda d: [d['x'], d['1']],
@@ -87,9 +87,11 @@ def test_matrices(
     ones = np.ones_like(formula_data['x'])
     zeros = np.zeros_like(formula_data['x'])
 
-    # build columns and derivatives for each formula
+    # build columns and derivatives for each formula, making sure that it can be formatted
     for formula in formulas:
-        matrix, column_formulations, underlying_data = Formulation(formula)._build_matrix(formula_data)
+        formulation = Formulation(formula)
+        assert str(formulation)
+        matrix, column_formulations, underlying_data = formulation._build_matrix(formula_data)
         evaluated_matrix = np.column_stack([ones * f.evaluate(underlying_data) for f in column_formulations])
         derivatives = np.column_stack([ones * f.evaluate_derivative('x', underlying_data) for f in column_formulations])
 
@@ -151,9 +153,11 @@ def test_ids(
             values123[:] = list(zip(values1, values2, values3))
             formula_data[key123] = values123
 
-    # build and compare columns for each formula
+    # build and compare columns for each formula, making sure that it can be formatted
     for absorb in formulas:
-        ids = Formulation('x', absorb)._build_ids(formula_data)
+        formulation = Formulation('x', absorb)
+        assert str(formulation)
+        ids = formulation._build_ids(formula_data)
         expected_ids = np.column_stack(build_columns(formula_data))
         np.testing.assert_array_equal(ids, expected_ids, err_msg=absorb)
 

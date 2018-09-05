@@ -47,7 +47,7 @@ def test_entropy(
         lb: float, ub: float, method: Union[str, Callable], method_options: Options, compute_gradient: bool,
         universal_display: bool) -> None:
     """Test that solutions to the entropy maximization problem from Berger, Pietra, and Pietra (1996) are reasonably
-    close to the exact solution. Based on a subset of testing methods from scipy.optimize.tests.test_optimize.
+    close to the exact solution (this is based on a subset of testing methods from scipy.optimize.tests.test_optimize).
     """
 
     # simple methods do not accept an analytic gradient
@@ -68,6 +68,9 @@ def test_entropy(
         optimization = Optimization(method, method_options, compute_gradient, universal_display)
     except OSError as exception:
         return pytest.skip(f"Failed to use the {method} method in this environment: {exception}.")
+
+    # test that the configuration can be formatted
+    assert str(optimization)
 
     # define the objective function
     def objective_function(x: Array) -> Union[Array, Tuple[Array, Array]]:
