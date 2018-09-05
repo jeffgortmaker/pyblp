@@ -625,10 +625,11 @@ class Problem(Economy):
                 true_tilde_costs, xi_jacobian, omega_jacobian
             )
 
-            # define the objective function for the optimization routine, which also outputs progress updates
+            # define the objective function
             def wrapper(
                     new_theta: Array, current_iterations: int, current_evaluations: int) -> (
                     Union[float, Tuple[float, Array]]):
+                """Compute and output progress associated with a single objective evaluation."""
                 nonlocal iteration_mappings, evaluation_mappings, smallest_objective, smallest_gradient, last_progress
                 assert optimization is not None
                 progress = last_progress = compute_step_progress(
@@ -794,9 +795,10 @@ class Problem(Economy):
         if self.K2 == 0 and (nonlinear_parameters.P == 0 or not compute_gradient):
             true_delta = self._compute_logit_delta(rho)
         else:
-            # define a function that builds a market along with arguments used to compute delta and its Jacobian
+            # define a factory for markets
             def market_factory(
                     s: Hashable) -> Tuple[DemandProblemMarket, Array, NonlinearParameters, Iteration, str, bool]:
+                """Build a market along with arguments used to compute delta and its Jacobian."""
                 market_s = DemandProblemMarket(self, s, sigma, pi, rho)
                 initial_delta_s = last_progress.next_delta[self._product_market_indices[s]]
                 return market_s, initial_delta_s, nonlinear_parameters, iteration, fp_type, compute_gradient
@@ -851,10 +853,10 @@ class Problem(Economy):
         true_tilde_costs = np.zeros((self.N, 1), options.dtype)
         omega_jacobian = np.full((self.N, nonlinear_parameters.P), np.nan, options.dtype)
 
-        # define a function that builds a market along with arguments used to compute transformed marginal costs and
-        #   their Jacobian
+        # define a factory for markets
         def market_factory(
                 s: Hashable) -> Tuple[SupplyProblemMarket, Array, Array, Array, NonlinearParameters, str, Bounds, bool]:
+            """Build a market along with arguments used to compute transformed marginal costs and their Jacobian."""
             market_s = SupplyProblemMarket(self, s, sigma, pi, rho, beta, true_delta)
             last_true_tilde_costs_s = last_progress.true_tilde_costs[self._product_market_indices[s]]
             xi_jacobian_s = xi_jacobian[self._product_market_indices[s]]

@@ -47,14 +47,8 @@ def test_hasselblad(scheme: int) -> None:
     iteration. This same problem is used in an original SQUAREM unit test and is the first one discussed in Varadhan and
     Roland (2008).
     """
-    method_options = {
-        'tol': 1e-8,
-        'max_evaluations': 100,
-        'scheme': scheme
-    }
-
-    # define the contraction mapping
     def contraction(x: Array) -> Array:
+        """Evaluate the contraction."""
         y = np.array([162, 267, 271, 185, 111, 61, 27, 8, 3, 1])
         i = np.arange(y.size)
         z = np.divide(
@@ -68,6 +62,11 @@ def test_hasselblad(scheme: int) -> None:
         ])
 
     # solve the problem with SQUAREM and verify that the solution is reasonably close to the true solution
+    method_options = {
+        'tol': 1e-8,
+        'max_evaluations': 100,
+        'scheme': scheme
+    }
     initial_values = np.array([0.2, 2.5, 1.5])
     exact_values = np.array([0.6401146029910, 2.6634043566619, 1.2560951012662])
     computed_values = Iteration('squarem', method_options)._iterate(initial_values, contraction)[0]

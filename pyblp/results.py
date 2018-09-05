@@ -409,8 +409,9 @@ class Results(object):
         # keep track of how long it takes to compute results
         start_time = time.time()
 
-        # define a function that builds a market along with arguments used to compute results
+        # define a factory for markets
         def market_factory(s: Hashable) -> tuple:
+            """Build a market along with arguments used to compute results."""
             market_s = ResultsMarket(self.problem, s, self.sigma, self.pi, self.rho, self.beta, self.true_delta)
             args_s = [None if a is None else a[self.problem._product_market_indices[s]] for a in market_args]
             return (market_s, *fixed_args, *args_s)

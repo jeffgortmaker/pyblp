@@ -257,14 +257,17 @@ class Optimization(object):
         # initialize counters
         iterations = evaluations = 0
 
-        # define a callback that counts the number of major iterations
+        # define a callback
         def iteration_callback() -> None:
+            """Count the number of major iterations."""
             nonlocal iterations
             iterations += 1
 
-        # define a wrapper for the objective function that normalizes arrays so they work with all types of routines,
-        #   and also counts the number of evaluations
+        # define a contraction wrapper
         def objective_wrapper(raw_values: Any) -> Union[Tuple[float, Array], float]:
+            """Normalize arrays so they work with all types of routines. Also count the total number of contraction
+            evaluations.
+            """
             nonlocal evaluations
             evaluations += 1
             raw_values = np.asanyarray(raw_values)
@@ -342,11 +345,13 @@ def knitro_optimizer(
         cache = None
         iterations = 0
 
-        # define a function that handles requests to compute either the objective or its gradient (which are cached for
-        #   when the next request is for the same values) and calls the iteration callback when there's a new iteration
+        # define a callback for objective and gradient computation
         def combined_callback(
                 request_code: int, _: Any, __: Any, ___: Any, ____: Any, values: Array, _____: Any,
                 objective_store: Array, ______: Any, gradient_store: Array, *_______: Any) -> int:
+            """Handle requests to compute either the objective or its gradient (which are cached for when the next
+            request is for the same values) and call the iteration callback when there's a new major iteration.
+            """
             nonlocal iterations, cache
 
             # call the iteration callback if this is a new iteration

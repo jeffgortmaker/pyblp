@@ -291,6 +291,7 @@ class Formulation(object):
 
             # define a single de-meaning pass
             def demean(matrix: Array) -> Array:
+                """De-mean a matrix within each set of groups."""
                 matrix = matrix.copy()
                 for groups in groups_list:
                     matrix -= groups.expand(groups.mean(matrix))
@@ -300,8 +301,9 @@ class Formulation(object):
             if method == 'simple':
                 return lambda m: (demean(m), [])
 
-            # otherwise, define an iterated de-meaning routine
+            # otherwise, use iterative de-meaning
             def iterated_absorb(matrix: Array) -> Tuple[Array, List[Error]]:
+                """Iteratively de-mean a matrix until convergence."""
                 assert isinstance(method, Iteration)
                 errors: List[Error] = []
                 matrix, converged = method._iterate(matrix, demean)[:2]
@@ -347,6 +349,7 @@ class Formulation(object):
 
         # define the absorption function, which returns an empty list of errors
         def two_way_absorb(matrix: Array) -> Tuple[Array, List[Error]]:
+            """Absorb two-way fixed effects."""
             Dx = D.T @ matrix
             Hx = H.T @ matrix
             delta_hat = compute_ADx(Dx) + B @ Hx
@@ -564,9 +567,9 @@ def parse_expression(string: str, mark_categorical: bool = False) -> sp.Expr:
     mapping = {n: sp.Function(n) for n in patsy_function_names}
     mapping.update({n: getattr(sp, n) for n in sympy_function_names | sympy_class_names})
 
-    # define a function that validates a list of tokens into which the string is broken, and that also adds any
-    #   unrecognized names as new SymPy symbols
+    # define a function that validates a list of tokens into which the string is broken and adds new symbols
     def transform_tokens(tokens: List[Tuple[int, str]], *_: Any) -> List[Tuple[int, str]]:
+        """Validate a list of tokens and add any unrecognized names as new SymPy symbols."""
         transformed: List[Tuple[int, str]] = []
         symbol_candidate = None
         for code, value in tokens:
@@ -586,9 +589,11 @@ def parse_expression(string: str, mark_categorical: bool = False) -> sp.Expr:
             symbol_candidate = value
         return transformed
 
-    # define a function that recursively validates that all categorical marker functions in an expression accept only a
-    #   single variable argument, and that they are not arguments to other functions
+    # define a function that validates the appearance of categorical marker functions
     def validate_categorical(candidate: sp.Expr, depth: int = 0, categorical: bool = False) -> None:
+        """Recursively validate that all categorical marker functions in an expression accept only a single variable
+        argument and that they are not arguments to other functions.
+        """
         if categorical and depth > 1:
             raise ValueError("The C function must not be an argument to another function.")
         for arg in candidate.args:

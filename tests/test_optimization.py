@@ -49,6 +49,15 @@ def test_entropy(
     """Test that solutions to the entropy maximization problem from Berger, Pietra, and Pietra (1996) are reasonably
     close to the exact solution (this is based on a subset of testing methods from scipy.optimize.tests.test_optimize).
     """
+    def objective_function(x: Array) -> Union[Array, Tuple[Array, Array]]:
+        """Evaluate the objective."""
+        K = np.array([1, 0.3, 0.5])
+        F = np.array([[1, 1, 1], [1, 1, 0], [1, 0, 1], [1, 0, 0], [1, 0, 0]])
+        log_Z = np.log(np.exp(F @ x).sum())
+        p = np.exp(F @ x - log_Z)
+        objective = log_Z - K @ x
+        gradient = F.T @ p - K
+        return (objective, gradient) if compute_gradient else objective
 
     # simple methods do not accept an analytic gradient
     if compute_gradient is True and method in {'nelder-mead', 'powell'}:
@@ -71,16 +80,6 @@ def test_entropy(
 
     # test that the configuration can be formatted
     assert str(optimization)
-
-    # define the objective function
-    def objective_function(x: Array) -> Union[Array, Tuple[Array, Array]]:
-        K = np.array([1, 0.3, 0.5])
-        F = np.array([[1, 1, 1], [1, 1, 0], [1, 0, 1], [1, 0, 0], [1, 0, 0]])
-        log_Z = np.log(np.exp(F @ x).sum())
-        p = np.exp(F @ x - log_Z)
-        objective = log_Z - K @ x
-        gradient = F.T @ p - K
-        return (objective, gradient) if compute_gradient else objective
 
     # define the exact solution
     exact_values = np.array([0, -0.524869316, 0.487525860], options.dtype)

@@ -440,6 +440,7 @@ def test_gradient_optionality(
     def custom_method(
             initial: Array, bounds: List[Tuple[float, float]], objective_function: Callable, _: Any) -> (
             Tuple[Array, bool]):
+        """Optimize without gradients."""
         wrapper = lambda x: objective_function(x)[0]
         results = scipy.optimize.minimize(wrapper, initial, method=scipy_method, bounds=bounds)
         return results.x, results.success

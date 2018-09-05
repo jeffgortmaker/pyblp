@@ -177,14 +177,17 @@ class Iteration(object):
         # initialize counters
         iterations = evaluations = 0
 
-        # define a callback that counts the number of major iterations
+        # define an iteration callback
         def iteration_callback() -> None:
+            """Count the number of major iterations."""
             nonlocal iterations
             iterations += 1
 
-        # define a wrapper for the contraction, which normalizes arrays so they work with all types of routines, and
-        #   also counts the total number of contraction evaluations
+        # define a contraction wrapper
         def contraction_wrapper(raw_values: Any) -> Array:
+            """Normalize arrays so they work with all types of routines. Also count the total number of contraction
+            evaluations.
+            """
             nonlocal evaluations
             evaluations += 1
             if not isinstance(raw_values, np.ndarray):
