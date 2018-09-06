@@ -4,6 +4,22 @@ Version Notes
 These notes will only include major changes.
 
 
+0.5
+---
+
+- Estimation of nesting parameters.
+- Performance improvements for matrix algebra and matrix construction.
+- Support for Python 3.7.
+- Computation of reasonable default bounds on nonlinear parameters.
+- Additional information in progress updates.
+- Improved error handling and documentation.
+- Simplified multiprocessing interface.
+- Cancelled out delta in the nonlinear contraction to improve performance.
+- Additional example data and improvements to the example problems.
+- Cleaned up covariance estimation.
+- Added type annotations and overhauled the testing suite.
+
+
 0.4
 ---
 
