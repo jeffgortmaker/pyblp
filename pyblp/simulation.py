@@ -293,6 +293,8 @@ class Simulation(Economy):
             raise TypeError("Each formulation in product_formulations must be None or a Formulation instance.")
         if product_formulations[0] is None:
             raise ValueError("The formulation for X1 must be specified.")
+        if product_formulations[2] is None:
+            raise ValueError("The formulation for X3 must be specified.")
         if any(f._absorbed_terms for f in product_formulations if f is not None):
             raise ValueError("product_formulations do not support fixed effect absorption in simulations.")
         if agent_formulation is not None and not isinstance(agent_formulation, Formulation):
