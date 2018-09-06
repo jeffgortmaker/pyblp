@@ -53,7 +53,7 @@ The `product_data` argument of :class:`Problem` should be a structured array-lik
    nevo_product_data.dtype.names
    blp_product_data.dtype.names
 
-Both sets of product data contain market IDs, product IDs, two sets of firm IDs (the second are IDs after a simple merger, which are used later), shares, prices, a number of product characteristics, and pre-computed instruments. The fake cereal product IDs will be used to construct fixed effects and the automobile product IDs are called clustering IDs because they will be used to compute clustered standard errors.
+Both sets of product data contain market IDs, product IDs, two sets of firm IDs (the second are IDs after a simple merger, which are used later), shares, prices, a number of product characteristics, and some basic pre-computed instruments. The fake cereal product IDs will be used to construct fixed effects and the automobile product IDs are called clustering IDs because they will be used to compute clustered standard errors.
 
 
 Agent Data

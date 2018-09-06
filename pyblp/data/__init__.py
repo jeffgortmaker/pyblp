@@ -6,7 +6,8 @@ BLP_PRODUCTS_LOCATION : `str`
     Location of a CSV file containing the automobile product data extracted by
     :ref:`Andrews, Gentzkow, and Shapiro (2017) <ags17>` from the original GAUSS code for
     :ref:`Berry, Levinsohn, and Pakes (1999) <blp99>`, which is commonly assumed to be the same data used in
-    :ref:`Berry, Levinsohn, and Pakes (1995) <blp95>`. The file includes pre-computed instruments.
+    :ref:`Berry, Levinsohn, and Pakes (1995) <blp95>`. The file includes some basic pre-computed instruments, which are
+    the instruments used in the original paper, excluding a few that give rise to collinearity issues.
 BLP_AGENTS_LOCATION : `str`
     Location of a CSV file containing the automobile agent data, which are also extracted from the original GAUSS code.
     Included in the file are importance sampling weights, nodes for integration, and income.
@@ -48,7 +49,7 @@ BLP_AGENTS_LOCATION : `str`
 
 NEVO_PRODUCTS_LOCATION : `str`
     Location of a CSV file containing the fake cereal product data from :ref:`Nevo (2000) <n00>`. The file includes
-    pre-computed instruments.
+    the same pre-computed instruments used in the original paper.
 NEVO_AGENTS_LOCATION : `str`
     Location of a CSV file containing the fake cereal agent data. Included in the file Monte Carlo weights and draws,
     along with demographics, which collectively are used by :ref:`Nevo (2000) <n00>` to solve the fake cereal problem.
