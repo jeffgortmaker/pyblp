@@ -1,6 +1,7 @@
 """Construction of commonly-used product data."""
 
-from typing import Any, Callable, Dict, Hashable, Iterable, List, Mapping, Optional
+import collections
+from typing import Any, Callable, Dict, Sequence, List, Mapping, Optional
 
 import numpy as np
 
@@ -9,7 +10,7 @@ from .configurations.formulation import Formulation
 from .utilities.basics import Array, Groups, RecArray, extract_matrix, structure_matrices
 
 
-def build_id_data(T: int, J: int, F: int, mergers: Iterable[Dict[Hashable, Hashable]] = ()) -> RecArray:
+def build_id_data(T: int, J: int, F: int, mergers: Sequence[Dict[int, int]] = ()) -> RecArray:
     """Build a balanced panel of market and firm IDs.
 
     This function can be used to build `id_data` for :class:`Simulation` initialization.
@@ -60,9 +61,11 @@ def build_id_data(T: int, J: int, F: int, mergers: Iterable[Dict[Hashable, Hasha
         raise ValueError("Both T and F must be at least 1.")
     if J < F:
         raise ValueError("J must be at least F.")
+    if not isinstance(mergers, collections.Sequence):
+        raise TypeError("mergers must be a tuple.")
     for mapping in mergers:
         if not isinstance(mapping, dict):
-            raise TypeError("mergers must be a list of dicts.")
+            raise TypeError("Each element in mergers must be a dict.")
         for f1, f2 in mapping.items():
             if not isinstance(f1, int) or not isinstance(f2, int) or not 0 <= f1 <= F - 1 or not 0 <= f2 <= F - 1:
                 raise ValueError("dicts in mergers must map from and to firm IDs, which are ints between 0 and F - 1.")

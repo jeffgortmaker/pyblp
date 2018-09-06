@@ -1,6 +1,7 @@
 """Formulation of data matrices and absorption of fixed effects."""
 
 import functools
+import numbers
 import token
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Set, Tuple, Union
 
@@ -133,9 +134,9 @@ class Formulation(object):
 
         # validate the formulas
         if not isinstance(formula, str):
-            raise TypeError("formula must be a string.")
+            raise TypeError("formula must be a str.")
         if absorb is not None and not isinstance(absorb, str):
-            raise TypeError("absorb must be a None or a string.")
+            raise TypeError("absorb must be a None or a str.")
 
         # parse the formulas into patsy terms
         self._formula = formula
@@ -450,7 +451,7 @@ class EvaluationEnvironment(patsy.eval.EvalEnvironment):
         })
 
         # if the evaluated expression is a scalar, it is a constant that needs to be repeated
-        if isinstance(evaluated, (int, float, np.ndarray)) and np.asarray(evaluated).size == 1:
+        if isinstance(evaluated, (numbers.Number, np.ndarray)) and np.asarray(evaluated).size == 1:
             size = next(iter(data.values())).shape[0]
             evaluated = np.ones(size) * evaluated
         return evaluated

@@ -1,5 +1,6 @@
 """Simulation of synthetic BLP problem data."""
 
+import collections
 import time
 from typing import Any, Hashable, List, Mapping, Optional, Sequence, Tuple
 
@@ -286,16 +287,16 @@ class Simulation(Economy):
         """Load or simulate all data except for Bertrand-Nash prices and shares."""
 
         # validate the formulations
-        if not isinstance(product_formulations, (list, tuple)) or len(product_formulations) != 3:
+        if not isinstance(product_formulations, collections.Sequence) or len(product_formulations) != 3:
             raise TypeError("product_formulations must be a tuple of three formulations.")
-        if not all(isinstance(f, Formulation) or f is None for f in product_formulations):
-            raise TypeError("Each formulation in product_formulations must be a Formulation instance or None.")
+        if not all(f is None or isinstance(f, Formulation) for f in product_formulations):
+            raise TypeError("Each formulation in product_formulations must be None or a Formulation instance.")
         if product_formulations[0] is None:
             raise ValueError("The formulation for X1 must be specified.")
         if any(f._absorbed_terms for f in product_formulations if f is not None):
             raise ValueError("product_formulations do not support fixed effect absorption in simulations.")
         if agent_formulation is not None and not isinstance(agent_formulation, Formulation):
-            raise TypeError("agent_formulation must be a Formulation instance or None.")
+            raise TypeError("agent_formulation must be None or a Formulation instance.")
         if agent_formulation is not None and agent_formulation._absorbed_terms:
             raise ValueError("agent_formulation does not support fixed effect absorption.")
 
@@ -403,7 +404,7 @@ class Simulation(Economy):
             # determine the number of agents by loading market IDs or by building them along with nodes and weights
             if integration is not None:
                 if not isinstance(integration, Integration):
-                    raise ValueError("integration must be an Integration instance or None.")
+                    raise ValueError("integration must be None or an Integration instance.")
                 agent_market_ids, nodes, weights = integration._build_many(K2, np.unique(market_ids))
             elif agent_data is not None:
                 agent_market_ids = extract_matrix(agent_data, 'market_ids')
@@ -574,7 +575,7 @@ class Simulation(Economy):
         if iteration is None:
             iteration = Iteration('simple', {'tol': 1e-12})
         elif not isinstance(iteration, Iteration):
-            raise ValueError("iteration must be an Iteration instance.")
+            raise ValueError("iteration must be None or an Iteration.")
 
         # validate error behavior
         if error_behavior not in {'raise', 'warn'}:

@@ -239,7 +239,7 @@ class Agents(object):
             # validate the formulation and build demographics
             if agent_formulation is not None:
                 if not isinstance(agent_formulation, Formulation):
-                    raise TypeError("agent_formulation must be a Formulation instance.")
+                    raise TypeError("agent_formulation must be None or a Formulation instance.")
                 if agent_data is None:
                     raise ValueError("Since agent_formulation is specified, agent_data must be specified as well.")
                 if agent_formulation._absorbed_terms:
@@ -259,7 +259,7 @@ class Agents(object):
             # build nodes and weights
             if integration is not None:
                 if not isinstance(integration, Integration):
-                    raise ValueError("integration must be an Integration instance.")
+                    raise ValueError("integration must be None or an Integration instance.")
                 loaded_market_ids = market_ids
                 market_ids, nodes, weights = integration._build_many(K2, np.unique(products.market_ids))
 

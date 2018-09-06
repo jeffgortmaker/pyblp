@@ -1,5 +1,6 @@
 """Configuration of the BLP problem and routines used to solve it."""
 
+import collections
 import functools
 import time
 from typing import Any, Dict, Hashable, List, Mapping, Optional, Sequence, Set, Tuple, Union
@@ -187,7 +188,7 @@ class Problem(Economy):
         """Initialize the underlying economy with structured product and agent data."""
         if isinstance(product_formulations, Formulation):
             product_formulations = [product_formulations]
-        elif isinstance(product_formulations, (list, tuple)) and len(product_formulations) <= 3:
+        elif isinstance(product_formulations, collections.Sequence) and len(product_formulations) <= 3:
             product_formulations = list(product_formulations)
         else:
             raise TypeError("product_formulations must be a Formulation instance or a tuple of up to three instances.")

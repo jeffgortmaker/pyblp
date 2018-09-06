@@ -148,7 +148,7 @@ class Iteration(object):
         if not isinstance(self._method_options['tol'], float) or self._method_options['tol'] <= 0:
             raise ValueError("The iteration option tol must be a positive float.")
         if not isinstance(self._method_options['max_evaluations'], int) or self._method_options['max_evaluations'] < 1:
-            raise ValueError("The iteration option max_evaluations must be a positive integer.")
+            raise ValueError("The iteration option max_evaluations must be a positive int.")
         if not callable(self._method_options['norm']):
             raise ValueError("The iteration option norm must be callable.")
         if method == 'squarem':
