@@ -135,14 +135,14 @@ def test_fixed_effects(
         return
 
     # add fixed effect IDs to the data
-    np.random.seed(0)
+    state = np.random.RandomState(seed=0)
     demand_names: List[str] = []
     supply_names: List[str] = []
     product_data = {k: product_data[k] for k in product_data.dtype.names}
     for side, count, names in [('demand', ED, demand_names), ('supply', ES, supply_names)]:
         for index in range(count):
             name = f'{side}_ids{index}'
-            ids = np.random.choice(['a', 'b', 'c'], product_data['market_ids'].size, p=[0.7, 0.2, 0.1])
+            ids = state.choice(['a', 'b', 'c'], problem.N)
             product_data[name] = ids
             names.append(name)
 
