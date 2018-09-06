@@ -210,6 +210,13 @@ def test_fixed_effects(
         problem3 = Problem(product_formulations3, product_data3, problem.agent_formulation, simulation.agent_data)
         results3 = problem3.solve(**solve_options)
 
+    # choose tolerances (give more leeway when using iterative de-meaning)
+    atol = 1e-8
+    rtol = 1e-5
+    if ED > 2 or ES > 2 or isinstance(absorb_method, Iteration):
+        atol *= 10
+        rtol *= 10
+
     # test that all arrays expected to be identical are identical
     keys = [
         'theta', 'sigma', 'pi', 'rho', 'beta', 'gamma', 'sigma_se', 'pi_se', 'rho_se', 'beta_se', 'gamma_se',
@@ -223,16 +230,16 @@ def test_fixed_effects(
         if 'beta' in key or 'gamma' in key:
             result2 = result2[:result1.size]
             result3 = result3[:result1.size]
-        np.testing.assert_allclose(result1, result2, atol=1e-8, rtol=1e-5, err_msg=key)
-        np.testing.assert_allclose(result1, result3, atol=1e-8, rtol=1e-5, err_msg=key)
+        np.testing.assert_allclose(result1, result2, atol=atol, rtol=rtol, err_msg=key)
+        np.testing.assert_allclose(result1, result3, atol=atol, rtol=rtol, err_msg=key)
 
     # test that post-estimation results are identical (just check marginal costs, since they encompass a lot of
     #   post-estimation machinery)
     costs1 = results1.compute_costs()
     costs2 = results2.compute_costs()
     costs3 = results3.compute_costs()
-    np.testing.assert_allclose(costs1, costs2, atol=1e-8, rtol=1e-5)
-    np.testing.assert_allclose(costs1, costs3, atol=1e-8, rtol=1e-5)
+    np.testing.assert_allclose(costs1, costs2, atol=atol, rtol=rtol)
+    np.testing.assert_allclose(costs1, costs3, atol=atol, rtol=rtol)
 
 
 @pytest.mark.usefixtures('simulated_problem')
