@@ -140,6 +140,7 @@ def monte_carlo(dimensions: int, ns: int, state: np.random.RandomState) -> Tuple
     return nodes, weights
 
 
+@functools.lru_cache()
 def product_rule(dimensions: int, level: int, nested: bool = False) -> Tuple[Array, Array]:
     """Generate nodes and weights for integration according to the Gauss-Hermite product rule or its nested analog."""
     base_nodes, base_weights = quadrature_rule(level, nested)
@@ -148,6 +149,7 @@ def product_rule(dimensions: int, level: int, nested: bool = False) -> Tuple[Arr
     return nodes, weights
 
 
+@functools.lru_cache()
 def sparse_grid(dimensions: int, level: int, nested: bool = False) -> Tuple[Array, Array]:
     """Generate a sparse grid of nodes and weights according to the univariate Gauss-Hermite quadrature rule or its
     nested analog.
