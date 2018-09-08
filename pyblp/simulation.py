@@ -455,13 +455,13 @@ class Simulation(Economy):
 
         # simulate xi and omega
         covariance = correlation * np.sqrt(xi_variance * omega_variance)
-        variances = [[xi_variance, covariance], [covariance, omega_variance]]
+        covariances = [[xi_variance, covariance], [covariance, omega_variance]]
         try:
-            shocks = state.multivariate_normal([0, 0], variances, self.N, check_valid='raise').astype(options.dtype)
+            errors = state.multivariate_normal([0, 0], covariances, self.N, check_valid='raise').astype(options.dtype)
         except ValueError:
             raise ValueError("xi_variance, omega_variance, and correlation must give a positive-semidefinite matrix.")
-        self.xi = shocks[:, [0]]
-        self.omega = shocks[:, [1]]
+        self.xi = errors[:, [0]]
+        self.omega = errors[:, [1]]
 
         # compute marginal costs
         if costs_type not in {'linear', 'log'}:
