@@ -86,6 +86,8 @@ Symbol                     Dimensions                                  Descripti
 :math:`g`                  :math:`2N \times (M_D + M_S)`               Sample moments.
 :math:`q`                  :math:`C \times (M_D + M_S)`                Within clustering group sample moment sums.
 :math:`G`                  :math:`(M_D + M_S) \times (P + K_1 + K_2)`  Sample mean of the Jacobian of the moments with respect to all parameters.
+:math:`\mathscr{Z}_D`      :math:`N \times (P + K_1 + K_2)`            Optimal or efficient demand-side instruments.
+:math:`\mathscr{Z}_S`      :math:`N \times (P + K_1 + K_2)`            Optimal or efficient supply-side instruments.
 :math:`E`                  :math:`1 \times 1`                          Aggregate elasticity of demand of a market.
 :math:`\varepsilon`        :math:`J_t \times J_t`                      Elasticities of demand in market :math:`t`.
 :math:`\mathscr{D}`        :math:`J_t \times J_t`                      Diversion ratios in market :math:`t`.

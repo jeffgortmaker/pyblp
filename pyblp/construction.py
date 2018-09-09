@@ -5,9 +5,10 @@ from typing import Any, Callable, Dict, Sequence, List, Mapping, Optional
 
 import numpy as np
 
-from . import options
+from . import exceptions, options
 from .configurations.formulation import Formulation
 from .utilities.basics import Array, Groups, RecArray, extract_matrix, structure_matrices
+from .utilities.algebra import precisely_solve
 
 
 def build_id_data(T: int, J: int, F: int, mergers: Sequence[Dict[int, int]] = ()) -> RecArray:
@@ -312,8 +313,8 @@ def build_matrix(formulation: Formulation, data: Mapping) -> Array:
 
     .. ipython:: python
 
-       instruments_string = ' + '.join(f'demand_instruments{i}' for i in range(20))
-       formulation = pyblp.Formulation(f'0 + C(product_ids) + {instruments_string}')
+       instruments_formula = ' + '.join(f'demand_instruments{i}' for i in range(20))
+       formulation = pyblp.Formulation(f'0 + C(product_ids) + {instruments_formula}')
        formulation
        product_data = np.recfromcsv(pyblp.data.NEVO_PRODUCTS_LOCATION, encoding='utf-8')
        product_data.dtype.names
@@ -326,3 +327,67 @@ def build_matrix(formulation: Formulation, data: Mapping) -> Array:
     if not isinstance(formulation, Formulation):
         raise TypeError("formulation must be a Formulation instance.")
     return formulation._build_matrix(data)[0]
+
+
+def compute_fitted_values(variable: Any, formulation: Formulation, data: Mapping) -> Array:
+    """Compute the fitted values from a regression.
+
+    Parameters
+    ----------
+    variable : `array-like`
+        The variable that will be regressed onto the formulated set of regressors.
+    formulation : `Formulation`
+        :class:`Formulation` configuration for the regressors. The `absorb` argument of :class:`Formulation` can be used
+        to absorb fixed effects.
+    data : `structured array-like`
+        Fields can be used as variables in `formulation`.
+
+    Returns
+    -------
+    `ndarray`
+        The fitted values.
+
+    Example
+    -------
+    In this example, we'll load the fake cereal data from :ref:`Nevo (2000) <n00>` and compute the fitted values from a
+    reduced form regression of prices on all exogenous variables: instruments and product fixed effects, which we'll
+    absorb to reduce memory usage.
+
+    .. ipython:: python
+
+       instruments_formula = ' + '.join(f'demand_instruments{i}' for i in range(20))
+       formulation = pyblp.Formulation(instruments_formula, absorb='C(product_ids)')
+       formulation
+       product_data = np.recfromcsv(pyblp.data.NEVO_PRODUCTS_LOCATION, encoding='utf-8')
+       product_data.dtype.names
+       conditional_prices = pyblp.compute_fitted_values(product_data.prices, formulation, product_data)
+       conditional_prices
+
+    These fitted values could be passed to `conditional_prices` in :meth:`Results.compute_optimal_instruments` because
+    they are a reasonable reduced form estimate of expected prices conditional on all exogenous variables.
+
+    """
+    if not isinstance(formulation, Formulation):
+        raise TypeError("formulation must be a Formulation instance.")
+
+    # formulate the regressors and compare sizes
+    true_y = np.c_[np.asarray(variable, options.dtype)]
+    X = formulation._build_matrix(data)[0]
+    if true_y.shape != (X.shape[0], 1):
+        raise ValueError(f"variable must be a vector with as many elements as regressor rows, {X.shape[0]}.")
+
+    # absorb any fixed effects
+    y = true_y
+    if formulation._absorbed_terms:
+        absorb = formulation._build_absorb(formulation._build_ids(data))
+        y, y_errors = absorb(y)
+        X, X_errors = absorb(X)
+        if y_errors or X_errors:
+            raise exceptions.MultipleErrors(y_errors + X_errors)
+
+    # compute the fitted values
+    covariances = X.T @ X
+    parameters, successful = precisely_solve(covariances, X.T @ y)
+    if not successful:
+        raise exceptions.FittedValuesInversionError(covariances)
+    return X @ parameters + true_y - y

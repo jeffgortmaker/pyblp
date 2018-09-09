@@ -1,7 +1,7 @@
 """Structuring of BLP problem results and computation of post-estimation outputs."""
 
 import time
-from typing import Any, Callable, Dict, Hashable, List, Optional, Sequence, TYPE_CHECKING, Tuple
+from typing import Any, Callable, Dict, Hashable, List, Optional, Sequence, TYPE_CHECKING, Tuple, Union
 
 import numpy as np
 import scipy.linalg
@@ -9,8 +9,9 @@ import scipy.linalg
 from . import exceptions, options
 from .configurations.iteration import Iteration
 from .primitives import LinearParameters, Market, NonlinearParameters
+from .utilities.algebra import multiply_matrix_and_tensor
 from .utilities.basics import Array, Error, TableFormatter, format_number, format_seconds, generate_items, output
-from .utilities.statistics import compute_gmm_se, compute_gmm_weights
+from .utilities.statistics import IV, compute_gmm_se, compute_gmm_weights
 
 
 # import additional classes that create import cycles only when checking types
@@ -206,6 +207,7 @@ class Results(object):
     updated_WS: Array
     unique_market_ids: Array
 
+    _costs_type: str
     _se_type: str
     _errors: List[Error]
     _linear_parameters: LinearParameters
@@ -215,7 +217,7 @@ class Results(object):
             self, progress: 'Progress', last_results: Optional['Results'], step_start_time: float,
             optimization_start_time: float, optimization_end_time: float, iterations: int, evaluations: int,
             iteration_mappings: Sequence[Dict[Hashable, int]], evaluation_mappings: Sequence[Dict[Hashable, int]],
-            center_moments: bool, W_type: str, se_type: str) -> None:
+            costs_type: str, center_moments: bool, W_type: str, se_type: str) -> None:
         """Update weighting matrices, estimate standard errors, and compute cumulative progress statistics."""
 
         # initialize values from the progress structure
@@ -285,16 +287,12 @@ class Results(object):
         # compute a version of xi that includes the contribution of any demand-side fixed effects
         self.xi = self.true_xi
         if self.problem.ED > 0:
-            ones = np.ones_like(self.xi)
-            true_X1 = np.column_stack((ones * f.evaluate(self.problem.products) for f in self.problem._X1_formulations))
-            self.xi = self.true_delta - true_X1 @ self.beta
+            self.xi = self.true_delta - self._get_true_X1() @ self.beta
 
         # compute a version of omega that includes the contribution of any supply-side fixed effects
         self.omega = self.true_omega
         if self.problem.ES > 0:
-            ones = np.ones_like(self.xi)
-            true_X3 = np.column_stack((ones * f.evaluate(self.problem.products) for f in self.problem._X3_formulations))
-            self.omega = self.true_tilde_costs - true_X3 @ self.gamma
+            self.omega = self.true_tilde_costs - self._get_true_X3() @ self.gamma
 
         # update the weighting matrices
         self.updated_WD, WD_errors = compute_gmm_weights(
@@ -310,7 +308,7 @@ class Results(object):
             u = self.true_xi
             Z = self.problem.products.ZD
             W = self.WD
-            jacobian = np.c_[self.xi_jacobian, self.problem.products.X1]
+            jacobian = np.c_[self.xi_jacobian, -self.problem.products.X1]
             stacked_clustering_ids = self.problem.products.clustering_ids
         else:
             u = np.r_[self.true_xi, self.true_omega]
@@ -318,7 +316,7 @@ class Results(object):
             W = scipy.linalg.block_diag(self.WD, self.WS)
             jacobian = np.c_[
                 np.r_[self.xi_jacobian, self.omega_jacobian],
-                scipy.linalg.block_diag(self.problem.products.X1, self.problem.products.X3)
+                scipy.linalg.block_diag(-self.problem.products.X1, -self.problem.products.X3)
             ]
             stacked_clustering_ids = np.r_[self.problem.products.clustering_ids, self.problem.products.clustering_ids]
 
@@ -330,6 +328,9 @@ class Results(object):
         self.beta_se = se[self._nonlinear_parameters.P:self._nonlinear_parameters.P + self.problem.K1]
         self.gamma_se = se[self._nonlinear_parameters.P + self.problem.K1:]
         self._errors.extend(se_errors)
+
+        # store types that are used in other methods
+        self._costs_type = costs_type
         self._se_type = se_type
 
     def __str__(self) -> str:
@@ -392,6 +393,23 @@ class Results(object):
         """Defer to the string representation."""
         return str(self)
 
+    def _get_true_X1(self) -> Array:
+        """Re-compute X1 without any absorbed demand-side fixed effects."""
+        if self.problem.ED == 0:
+            return self.problem.products.X1
+        ones = np.ones((self.problem.N, 1), options.dtype)
+        return np.column_stack((ones * f.evaluate(self.problem.products) for f in self.problem._X1_formulations))
+
+    def _get_true_X3(self) -> Array:
+        """Re-compute X3 without any absorbed supply-side fixed effects."""
+        if self.problem.ES == 0:
+            return self.problem.products.X3
+        ones = np.ones((self.problem.N, 1), options.dtype)
+        return np.column_stack((ones * f.evaluate(self.problem.products) for f in self.problem._X3_formulations))
+
+    def _get_exogenous_variables(self) -> Array:
+        """Get all exogenous variables in X1, X2, X3, ZD, and ZS."""
+
     def _validate_name(self, name: str) -> None:
         """Validate that a name corresponds to a variable in X1, X2, or X3."""
         formulations = self.problem._X1_formulations + self.problem._X2_formulations + self.problem._X3_formulations
@@ -399,27 +417,324 @@ class Results(object):
         if name not in names:
             raise NameError(f"The name '{name}' is not one of the underlying variables, {list(sorted(names))}.")
 
-    def _combine_results(self, compute_market_results: Callable, fixed_args: Sequence, market_args: Sequence) -> Array:
-        """Compute post-estimation outputs for each market and stack them into a single matrix
+    def compute_optimal_instruments(
+            self, method: str = 'normal', draws: int = 100, seed: Optional[int] = None,
+            conditional_prices: Optional[Union[Any, Iteration]] = None, normalization_type: str = 'upper') -> Array:
+        r"""Estimate the set of optimal or efficient instruments, :math:`\mathscr{Z}_D` and :math:`\mathscr{Z}_S`.
 
-        An output for a single market is computed by passing fixed_args (identical for all markets) and market_args
-        (matrices with as many rows as there are products that are restricted to the market) to compute_market_results,
-        a ResultsMarket method that returns the output for the market and a set of any errors encountered during
-        computation.
+        The optimal instruments in the spirit of :ref:`Chamberlain (1987) <c87>` are
+
+        .. math::
+
+           \begin{bmatrix}
+               \mathscr{Z}_D \\
+               \mathscr{Z}_S
+           \end{bmatrix}_{jt}
+           = T\operatorname{\mathbb{E}}\left[
+           \begin{matrix}
+               \frac{\partial\xi_{jt}}{\partial\theta} & \frac{\partial\xi_{jt}}{\partial\beta} & 0 \\
+               \frac{\partial\omega_{jt}}{\partial\theta} & 0 & \frac{\partial\omega_{jt}}{\partial\gamma}
+           \end{matrix}
+           \mathrel{\Bigg|} Z \right],
+
+        in which :math:`T` is either the inverse of the covariance matrix of the error terms or its Cholesky root.
+
+        The expectation is taken by integrating over the joint density of :math:`\xi` and :math:`\omega`. The
+        normalizing matrix :math:`T` is estimated with the sample covariance matrix of the error terms.
+
+        Parameters
+        ----------
+        method : `str, optional`
+            The method by which the integral over the joint density of :math:`\xi` and :math:`\omega` is computed. The
+            following methods are supported:
+
+                - ``'normal'`` (default) - Draw from the normal approximation to the joint distribution of the error
+                  terms and take the average over the computed Jacobians (`draws` determines the number of draws).
+
+                - ``'empirical'`` - Draw with replacement from the empirical joint distribution of the error terms and
+                  take the average over the computed Jacobians (`draws` determines the number of draws).
+
+                - ``'approximate'`` - Evaluate the Jacobians at the expected value of the error terms: zero (`draws`
+                  will be ignored).
+
+        draws : `int, optional`
+            The number of draws that will be taken from the joint distribution of the error terms. This is ignored if
+            `method` is ``'approximate'``. The default is ``100``.
+        seed : `int, optional`
+            Passed to :class:`numpy.random.RandomState` to seed the random number generator before any draws are taken.
+            By default, a seed is not passed to the random number generator.
+        conditional_prices : `array-like or Iteration, optional`
+            Vector of prices conditional on all exogenous variables, :math:`\operatorname{\mathbb{E}}[p \mid Z]`, or an
+            :class:`Iteration` configuration used to estimate these prices by iterating over the :math:`\zeta`-markup
+            equation from :ref:`Morrow and Skerlos (2011) <ms11>`.
+
+            By default, if a supply side was estimated, this is ``Iteration('simple', {'tol': 1e-12})``. If a supply
+            side was not estimated, an estimate of :math:`\operatorname{\mathbb{E}}[p \mid Z]` is required. A common way
+            to estimate this vector is with the fitted values from a reduced form regression of endogenous prices onto
+            all exogenous variables, including instruments. An example is given in the documentation for the convenience
+            function :func:`compute_fitted_values`.
+
+        normalization_type : `str, optional`
+            How to normalize :math:`\xi` and :math:`\omega` covariances with the :math:`T` matrix, which is a fuction of
+            the sample covariance matrix of the error terms. This is only relevant if a supply side was estimated. The
+            following types are supported:
+
+                - ``'upper'`` (default) - Upper Cholesky root of the inverted sample covariance matrix.
+
+                - ``'lower'`` - Lower Cholesky root.
+
+                - ``'full'`` - Full inverted sample covariance matrix.
+
+        Returns
+        -------
+        `ndarray`
+            Horizontally stacked estimates of the optimal or efficient instruments,
+            :math:`[\mathscr{Z}_D, \mathscr{Z}_S]`, which are each :math:`N \times (P + K_1 + K_3)` matrices. If a
+            supply side was not estimated, this is simply :math:`\mathscr{Z}_D`.
+
+            .. note::
+
+               There may be columns of zeros that should be removed before :math:`\mathscr{Z}_D` and
+               :math:`\mathscr{Z}_S` are used in estimation.
+
         """
         errors: List[Error] = []
 
-        # keep track of how long it takes to compute results
+        # keep track of long it takes to compute optimal instruments
+        output("Computing optimal instruments ...")
         start_time = time.time()
 
-        # define a factory for markets
+        # validate the method
+        if method not in {'approximate', 'normal', 'empirical'}:
+            raise ValueError("method must be 'approximate', 'normal', or 'empirical'.")
+
+        # validate the method and create a function that samples from the error distribution
+        if method == 'approximate':
+            sample = lambda: (np.zeros_like(self.xi), np.zeros_like(self.omega))
+        else:
+            state = np.random.RandomState(seed)
+            if method == 'normal':
+                if self.problem.K3 == 0:
+                    variance = np.var(self.true_xi)
+                    sample = lambda: (np.c_[state.normal(0, variance, self.problem.N)], self.omega)
+                else:
+                    covariances = np.cov(self.true_xi, self.true_omega, rowvar=False)
+                    sample = lambda: np.hsplit(state.multivariate_normal([0, 0], covariances, self.problem.N), 2)
+            elif method == 'empirical':
+                if self.problem.K3 == 0:
+                    sample = lambda: (self.true_xi[state.choice(self.problem.N, self.problem.N)], self.omega)
+                else:
+                    joint = np.c_[self.true_xi, self.true_omega]
+                    sample = lambda: np.hsplit(joint[state.choice(self.problem.N, self.problem.N)], 2)
+            else:
+                raise ValueError("method must be 'approximate', 'normal', or 'empirical'.")
+
+        # validate the number of draws (there will be only one for the approximate method)
+        if method == 'approximate':
+            draws = 1
+        if not isinstance(draws, int) or draws < 1:
+            raise ValueError("draws must be a positive int.")
+
+        # validate the conditional prices or their iteration configuration
+        prices = iteration = None
+        if conditional_prices is None:
+            conditional_prices = Iteration('simple', {'tol': 1e-12})
+        if isinstance(conditional_prices, Iteration):
+            iteration = conditional_prices
+            if self.problem.K3 == 0:
+                raise TypeError("A supply side was not estimated, so conditional_prices must be a vector.")
+        else:
+            prices = np.c_[np.asarray(conditional_prices, options.dtype)]
+            if prices.shape != (self.problem.N, 1):
+                raise ValueError(f"conditional_prices must be a {self.problem.N}-vector.")
+
+        # average over Jacobian realizations
+        iterations = evaluations = 0
+        xi_jacobian = np.zeros_like(self.xi_jacobian)
+        omega_jacobian = np.zeros_like(self.omega_jacobian)
+        if self._nonlinear_parameters.P > 0:
+            for _ in range(draws):
+                xi_jacobian_i, omega_jacobian_i, iterations_i, evaluations_i, errors_i = (
+                    self._compute_jacobian_realizations(prices, iteration, *sample())
+                )
+                xi_jacobian += xi_jacobian_i / draws
+                omega_jacobian += omega_jacobian_i / draws
+                iterations += iterations_i
+                evaluations += evaluations_i
+                errors.extend(errors_i)
+
+        # output a warning about any errors
+        if errors:
+            output("")
+            output(exceptions.MultipleErrors(errors))
+            output("")
+
+        # rows only need to be normalized by the covariance of the error terms with supply
+        if self.problem.K3 == 0:
+            instruments = np.c_[xi_jacobian, -self._get_true_X1()] / np.std(self.true_xi)
+        else:
+            normalizer = np.c_[scipy.linalg.inv(np.cov(self.true_xi, self.true_omega, rowvar=False))]
+            if normalization_type == 'upper':
+                normalizer = scipy.linalg.cholesky(normalizer)
+            elif normalization_type == 'lower':
+                normalizer = scipy.linalg.cholesky(normalizer).T
+            elif normalization_type != 'full':
+                raise ValueError("normalization_type must be 'upper', 'lower', or 'full'.")
+            jacobian = np.c_[
+                np.r_[xi_jacobian, omega_jacobian],
+                scipy.linalg.block_diag(-self._get_true_X1(), -self._get_true_X3())
+            ]
+            tensor = multiply_matrix_and_tensor(normalizer, np.stack(np.split(jacobian, 2), axis=1))
+            instruments = tensor.reshape((self.problem.N, -1))
+
+        # output a message about computation
+        end_time = time.time()
+        output(f"Finished computing optimal instruments after {format_seconds(end_time - start_time)}.")
+        if iteration is not None:
+            output(
+                f"Computation required a total of {iterations} major iterations and a total of {evaluations} "
+                f"contraction evaluations."
+            )
+        output("")
+        return instruments
+
+    def _compute_jacobian_realizations(
+            self, prices: Optional[Array], iteration: Optional[Iteration], xi: Array, omega: Array) -> (
+            Tuple[Array, Array, int, int, List[Error]]):
+        """If they have not already been estimated, compute the Bertrand-Nash prices associated with a realization of xi
+        and omega. Next, compute associated shares and delta. Finally, compute realizations of the the Jacobians of xi
+        and omega with respect to theta.
+        """
+        errors: List[Error] = []
+
+        # compute delta and marginal costs
+        delta = self.true_delta - self.true_xi + xi
+        costs = tilde_costs = self.true_tilde_costs - self.true_omega + omega
+        if self._costs_type == 'log':
+            costs = np.exp(costs)
+
+        # define a factory for computing price, share, and delta realizations in markets
+        def market_factory(s: Hashable) -> Tuple[ResultsMarket, Array, Optional[Array], Optional[Iteration]]:
+            """Build a market along with arguments used to compute Bertrand-Nash prices and shares along with delta."""
+            market_s = ResultsMarket(self.problem, s, self.sigma, self.pi, self.rho, self.beta, delta)
+            costs_s = costs[self.problem._product_market_indices[s]]
+            prices_s = prices[self.problem._product_market_indices[s]] if prices is not None else None
+            return market_s, costs_s, prices_s, iteration
+
+        # compute prices, shares, and delta market-by-market
+        iterations = evaluations = 0
+        prices = np.full_like(self.problem.products.prices, np.nan)
+        shares = np.full_like(self.problem.products.shares, np.nan)
+        generator = generate_items(self.unique_market_ids, market_factory, ResultsMarket.solve_equilibrium)
+        for t, (prices_t, shares_t, delta_t, errors_t, iterations_t, evaluations_t) in generator:
+            prices[self.problem._product_market_indices[t]] = prices_t
+            shares[self.problem._product_market_indices[t]] = shares_t
+            delta[self.problem._product_market_indices[t]] = delta_t
+            errors.extend(errors_t)
+            iterations += iterations_t
+            evaluations += evaluations_t
+
+        # compute the Jacobian of xi with respect to theta
+        xi_jacobian, demand_errors = self._compute_xi_jacobian_realization(prices, shares, delta)
+        errors.extend(demand_errors)
+
+        # compute the Jacobian of omega with respect to theta
+        omega_jacobian = np.full((self.problem.N, self._nonlinear_parameters.P), np.nan, options.dtype)
+        if self.problem.K3 > 0:
+            omega_jacobian, supply_errors = self._compute_omega_jacobian_realization(
+                prices, shares, delta, tilde_costs, xi_jacobian
+            )
+            errors.extend(supply_errors)
+
+        # return all of the information associated with this realization
+        return xi_jacobian, omega_jacobian, iterations, evaluations, errors
+
+    def _compute_xi_jacobian_realization(self, prices: Array, shares: Array, delta: Array) -> Tuple[Array, List[Error]]:
+        """Compute a realization of the Jacobian of xi with respect to theta market-by-market. If necessary, revert
+        problematic elements to their actual values.
+        """
+        errors: List[Error] = []
+
+        # define a factory for computing the Jacobian of xi with respect to theta in markets
+        def market_factory(s: Hashable) -> Tuple[Market, NonlinearParameters]:
+            """Build a market with Bertrand-Nash prices and shares along with arguments used to compute the Jacobian."""
+            market_s = Market(self.problem, s, self.sigma, self.pi, self.rho, self.beta, delta, {
+                'prices': prices[self.problem._product_market_indices[s]],
+                'shares': shares[self.problem._product_market_indices[s]]
+            })
+            return market_s, self._nonlinear_parameters
+
+        # compute the Jacobian market-by-market
+        xi_jacobian = np.full((self.problem.N, self._nonlinear_parameters.P), np.nan, options.dtype)
+        generator = generate_items(self.unique_market_ids, market_factory, Market.compute_xi_by_theta_jacobian)
+        for t, (xi_jacobian_t, errors_t) in generator:
+            xi_jacobian[self.problem._product_market_indices[t]] = xi_jacobian_t
+            errors.extend(errors_t)
+
+        # replace invalid elements
+        bad_indices = ~np.isfinite(xi_jacobian)
+        if np.any(bad_indices):
+            xi_jacobian[bad_indices] = self.xi_jacobian[bad_indices]
+            errors.append(exceptions.XiJacobianReversionError(bad_indices))
+        return xi_jacobian, errors
+
+    def _compute_omega_jacobian_realization(
+            self, prices: Array, shares: Array, delta: Array, tilde_costs: Array, xi_jacobian: Array) -> (
+            Tuple[Array, List[Error]]):
+        """Compute a realization of the Jacobian of omega with respect to theta market-by-market. If necessary, revert
+        problematic elements to their actual values.
+        """
+        errors: List[Error] = []
+
+        # compute the Jacobian of beta with respect to theta, which is needed to compute other Jacobians
+        demand_iv = IV(self.problem.products.X1, self.problem.products.ZD, self.WD)
+        beta_jacobian = demand_iv.estimate(xi_jacobian, residuals=False)
+        errors.extend(demand_iv.errors)
+
+        # define a factory for computing the Jacobian of omega with respect to theta in markets
+        def market_factory(s: Hashable) -> Tuple[Market, Array, Array, Array, NonlinearParameters, str]:
+            """Build a market with Bertrand-Nash prices and shares along with arguments used to compute the Jacobian."""
+            market_s = Market(self.problem, s, self.sigma, self.pi, self.rho, self.beta, delta, {
+                'prices': prices[self.problem._product_market_indices[s]],
+                'shares': shares[self.problem._product_market_indices[s]]
+            })
+            tilde_costs_s = tilde_costs[self.problem._product_market_indices[s]]
+            xi_jacobian_s = xi_jacobian[self.problem._product_market_indices[s]]
+            return market_s, tilde_costs_s, xi_jacobian_s, beta_jacobian, self._nonlinear_parameters, self._costs_type
+
+        # compute the Jacobian market-by-market
+        omega_jacobian = np.full((self.problem.N, self._nonlinear_parameters.P), np.nan, options.dtype)
+        generator = generate_items(self.unique_market_ids, market_factory, Market.compute_omega_by_theta_jacobian)
+        for t, (omega_jacobian_t, errors_t) in generator:
+            omega_jacobian[self.problem._product_market_indices[t]] = omega_jacobian_t
+            errors.extend(errors_t)
+
+        # replace invalid elements
+        bad_indices = ~np.isfinite(omega_jacobian)
+        if np.any(bad_indices):
+            omega_jacobian[bad_indices] = self.omega_jacobian[bad_indices]
+            errors.append(exceptions.XiJacobianReversionError(bad_indices))
+        return omega_jacobian, errors
+
+    def _combine_arrays(self, compute_market_results: Callable, fixed_args: Sequence, market_args: Sequence) -> Array:
+        """Compute an array for each market and stack them into a single matrix. An array for a single market is
+        computed by passing fixed_args (identical for all markets) and market_args (matrices with as many rows as there
+        are products that are restricted to the market) to compute_market_results, a ResultsMarket method that returns
+        the output for the market and a set of any errors encountered during computation.
+        """
+        errors: List[Error] = []
+
+        # keep track of how long it takes to compute the arrays
+        start_time = time.time()
+
+        # define a factory for computing arrays in markets
         def market_factory(s: Hashable) -> tuple:
-            """Build a market along with arguments used to compute results."""
+            """Build a market along with arguments used to compute arrays."""
             market_s = ResultsMarket(self.problem, s, self.sigma, self.pi, self.rho, self.beta, self.true_delta)
             args_s = [None if a is None else a[self.problem._product_market_indices[s]] for a in market_args]
             return (market_s, *fixed_args, *args_s)
 
-        # construct a mapping from market IDs to market-specific results and compute the full results matrix size
+        # construct a mapping from market IDs to market-specific arrays and compute the full matrix size
         rows = columns = 0
         matrix_mapping: Dict[Hashable, Array] = {}
         for t, (array_t, errors_t) in generate_items(self.unique_market_ids, market_factory, compute_market_results):
@@ -434,7 +749,7 @@ class Results(object):
             output(exceptions.MultipleErrors(errors))
             output("")
 
-        # preserve the original product order or the sorted market order when stacking the matrices
+        # preserve the original product order or the sorted market order when stacking the arrays
         combined = np.full((rows, columns), np.nan, options.dtype)
         for t, matrix_t in matrix_mapping.items():
             if rows == self.problem.N:
@@ -442,7 +757,7 @@ class Results(object):
             else:
                 combined[self.unique_market_ids == t, :matrix_t.shape[1]] = matrix_t
 
-        # output how long it took to compute results
+        # output how long it took to compute the arrays
         end_time = time.time()
         output(f"Finished after {format_seconds(end_time - start_time)}.")
         output("")
@@ -474,7 +789,7 @@ class Results(object):
         """
         output(f"Computing aggregate elasticities with respect to {name} ...")
         self._validate_name(name)
-        return self._combine_results(ResultsMarket.compute_aggregate_elasticity, [factor, name], [])
+        return self._combine_arrays(ResultsMarket.compute_aggregate_elasticity, [factor, name], [])
 
     def compute_elasticities(self, name: str = 'prices') -> Array:
         r"""Estimate matrices of elasticities of demand, :math:`\varepsilon`, with respect to a variable, :math:`x`.
@@ -498,7 +813,7 @@ class Results(object):
         """
         output(f"Computing elasticities with respect to {name} ...")
         self._validate_name(name)
-        return self._combine_results(ResultsMarket.compute_elasticities, [name], [])
+        return self._combine_arrays(ResultsMarket.compute_elasticities, [name], [])
 
     def compute_diversion_ratios(self, name: str = 'prices') -> Array:
         r"""Estimate matrices of diversion ratios, :math:`\mathscr{D}`, with respect to a variable, :math:`x`.
@@ -525,7 +840,7 @@ class Results(object):
         """
         output(f"Computing diversion ratios with respect to {name} ...")
         self._validate_name(name)
-        return self._combine_results(ResultsMarket.compute_diversion_ratios, [name], [])
+        return self._combine_arrays(ResultsMarket.compute_diversion_ratios, [name], [])
 
     def compute_long_run_diversion_ratios(self) -> Array:
         r"""Estimate matrices of long-run diversion ratios, :math:`\bar{\mathscr{D}}`.
@@ -550,7 +865,7 @@ class Results(object):
 
         """
         output("Computing long run mean diversion ratios ...")
-        return self._combine_results(ResultsMarket.compute_long_run_diversion_ratios, [], [])
+        return self._combine_arrays(ResultsMarket.compute_long_run_diversion_ratios, [], [])
 
     def extract_diagonals(self, matrices: Any) -> Array:
         r"""Extract diagonals from stacked :math:`J_t \times J_t` matrices for each market :math:`t`.
@@ -572,7 +887,7 @@ class Results(object):
 
         """
         output("Computing own elasticities ...")
-        return self._combine_results(ResultsMarket.extract_diagonal, [], [matrices])
+        return self._combine_arrays(ResultsMarket.extract_diagonal, [], [matrices])
 
     def extract_diagonal_means(self, matrices: Any) -> Array:
         r"""Extract means of diagonals from stacked :math:`J_t \times J_t` matrices for each market :math:`t`.
@@ -595,7 +910,7 @@ class Results(object):
 
         """
         output("Computing mean own elasticities ...")
-        return self._combine_results(ResultsMarket.extract_diagonal_mean, [], [matrices])
+        return self._combine_arrays(ResultsMarket.extract_diagonal_mean, [], [matrices])
 
     def compute_costs(self) -> Array:
         r"""Estimate marginal costs, :math:`c`.
@@ -614,7 +929,7 @@ class Results(object):
 
         """
         output("Computing marginal costs ...")
-        return self._combine_results(ResultsMarket.compute_costs, [], [])
+        return self._combine_arrays(ResultsMarket.compute_costs, [], [])
 
     def compute_approximate_prices(self, firms_index: int = 1, costs: Optional[Any] = None) -> Array:
         r"""Estimate approximate Bertrand-Nash prices after firm ID changes, :math:`p^a`, under the assumption that
@@ -647,7 +962,7 @@ class Results(object):
 
         """
         output("Solving for approximate Bertrand-Nash prices ...")
-        return self._combine_results(ResultsMarket.compute_approximate_prices, [firms_index], [costs])
+        return self._combine_arrays(ResultsMarket.compute_approximate_prices, [firms_index], [costs])
 
     def compute_prices(
             self, iteration: Optional[Iteration] = None, firms_index: int = 1, prices: Optional[Any] = None,
@@ -691,8 +1006,8 @@ class Results(object):
         if iteration is None:
             iteration = Iteration('simple', {'tol': 1e-12})
         elif not isinstance(iteration, Iteration):
-            raise ValueError("iteration must an Iteration instance.")
-        return self._combine_results(ResultsMarket.compute_prices, [iteration, firms_index], [prices, costs])
+            raise ValueError("iteration must None or an Iteration instance.")
+        return self._combine_arrays(ResultsMarket.compute_prices, [iteration, firms_index], [prices, costs])
 
     def compute_shares(self, prices: Optional[Any] = None) -> Array:
         r"""Estimate shares evaluated at specified prices.
@@ -711,7 +1026,7 @@ class Results(object):
 
         """
         output("Computing shares ...")
-        return self._combine_results(ResultsMarket.compute_shares, [], [prices])
+        return self._combine_arrays(ResultsMarket.compute_shares, [], [prices])
 
     def compute_hhi(self, firms_index: int = 0, shares: Optional[Any] = None) -> Array:
         r"""Estimate Herfindahl-Hirschman Indices, :math:`\text{HHI}`.
@@ -739,7 +1054,7 @@ class Results(object):
 
         """
         output("Computing HHI ...")
-        return self._combine_results(ResultsMarket.compute_hhi, [firms_index], [shares])
+        return self._combine_arrays(ResultsMarket.compute_hhi, [firms_index], [shares])
 
     def compute_markups(self, prices: Optional[Any] = None, costs: Optional[Any] = None) -> Array:
         r"""Estimate markups, :math:`\mathscr{M}`.
@@ -765,7 +1080,7 @@ class Results(object):
 
         """
         output("Computing markups ...")
-        return self._combine_results(ResultsMarket.compute_markups, [], [prices, costs])
+        return self._combine_arrays(ResultsMarket.compute_markups, [], [prices, costs])
 
     def compute_profits(
             self, prices: Optional[Any] = None, shares: Optional[Any] = None, costs: Optional[Any] = None) -> Array:
@@ -795,7 +1110,7 @@ class Results(object):
 
         """
         output("Computing profits ...")
-        return self._combine_results(ResultsMarket.compute_profits, [], [prices, shares, costs])
+        return self._combine_arrays(ResultsMarket.compute_profits, [], [prices, shares, costs])
 
     def compute_consumer_surpluses(self, prices: Optional[Any] = None) -> Array:
         r"""Estimate population-normalized consumer surpluses, :math:`\text{CS}`.
@@ -841,13 +1156,36 @@ class Results(object):
 
         """
         output("Computing consumer surpluses with the equation that assumes away nonlinear income effects ...")
-        return self._combine_results(ResultsMarket.compute_consumer_surplus, [], [prices])
+        return self._combine_arrays(ResultsMarket.compute_consumer_surplus, [], [prices])
 
 
 class ResultsMarket(Market):
-    """Results for a single market of a solved BLP problem, which can be used to compute post-estimation outputs. Each
-    method returns a matrix and a list of any errors that were encountered.
-    """
+    """A single market of a solved problem."""
+
+    def solve_equilibrium(
+            self, costs: Array, prices: Optional[Array], iteration: Optional[Iteration]) -> (
+            Tuple[Array, Array, Array, List[Error], int, int]):
+        """If not already estimated, compute Bertrand-Nash prices, which will be used to compute optimal instruments.
+        Also compute the associated delta and shares.
+        """
+        errors: List[Error] = []
+
+        # configure NumPy to identify floating point errors
+        with np.errstate(divide='call', over='call', under='ignore', invalid='call'):
+            np.seterrcall(lambda *_: errors.append(exceptions.BertrandNashPricesFloatingPointError()))
+
+            # solve the fixed point problem if prices haven't already been estimated
+            iterations = evaluations = 0
+            if iteration is not None:
+                prices, converged, iterations, evaluations = self.compute_bertrand_nash_prices(costs, iteration)
+                if not converged:
+                    errors.append(exceptions.BertrandNashPricesConvergenceError())
+
+            # compute the associated shares
+            delta = self.update_delta_with_variable('prices', prices)
+            mu = self.update_mu_with_variable('prices', prices)
+            shares = self.compute_probabilities(delta, mu) @ self.agents.weights
+            return prices, shares, delta, errors, iterations, evaluations
 
     def compute_aggregate_elasticity(self, factor: float, name: str) -> Tuple[Array, List[Error]]:
         """Estimate the aggregate elasticity of demand with respect to a variable."""
@@ -936,11 +1274,9 @@ class ResultsMarket(Market):
         with np.errstate(divide='call', over='call', under='ignore', invalid='call'):
             np.seterrcall(lambda *_: errors.append(exceptions.BertrandNashPricesFloatingPointError()))
             prices, converged = self.compute_bertrand_nash_prices(costs, iteration, firms_index, prices)[:2]
-
-        # determine whether the fixed point converged
-        if not converged:
-            errors.append(exceptions.BertrandNashPricesConvergenceError())
-        return prices, errors
+            if not converged:
+                errors.append(exceptions.BertrandNashPricesConvergenceError())
+            return prices, errors
 
     def compute_shares(self, prices: Optional[Array] = None) -> Tuple[Array, List[Error]]:
         """Estimate shares evaluated at specified prices. By default, use unchanged prices."""

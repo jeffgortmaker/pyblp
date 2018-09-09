@@ -224,6 +224,14 @@ class AbsorptionInversionError(_InversionError):
     """
 
 
+class FittedValuesInversionError(_InversionError):
+    """Failed to invert an estimated covariance when computing fitted values.
+
+    There are probably collinearity issues.
+
+    """
+
+
 class SharesByXiJacobianInversionError(_InversionReplacementError):
     r"""Failed to invert a Jacobian of shares with respect to :math:`\xi` when computing the Jacobian of :math:`\xi`
     (equivalently, of :math:`\delta`) with respect to :math:`\theta`.

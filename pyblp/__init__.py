@@ -5,7 +5,7 @@ from .configurations.formulation import Formulation
 from .configurations.integration import Integration
 from .configurations.iteration import Iteration
 from .configurations.optimization import Optimization
-from .construction import build_blp_instruments, build_id_data, build_matrix, build_ownership
+from .construction import build_blp_instruments, build_id_data, build_matrix, build_ownership, compute_fitted_values
 from .primitives import Agents, Products
 from .problem import Problem
 from .results import Results
@@ -19,7 +19,7 @@ __all__ = [
     'Integration',
     'Iteration',
     'Optimization',
-    'build_blp_instruments', 'build_id_data', 'build_matrix', 'build_ownership',
+    'build_blp_instruments', 'build_id_data', 'build_matrix', 'build_ownership', 'compute_fitted_values',
     'Agents', 'Products',
     'Problem',
     'Results',

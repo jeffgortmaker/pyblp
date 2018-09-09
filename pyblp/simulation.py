@@ -565,6 +565,10 @@ class Simulation(Economy):
         """
         errors: List[Error] = []
 
+        # keep track of long it takes to solve for prices and shares
+        output("Solving for prices and shares ...")
+        start_time = time.time()
+
         # choose or validate initial prices
         if prices is None:
             prices = self.costs
@@ -583,14 +587,10 @@ class Simulation(Economy):
         if error_behavior not in {'raise', 'warn'}:
             raise ValueError("error_behavior must be 'raise' or 'warn'.")
 
-        # time how long it takes to solve for prices and shares
-        output("Solving for prices and shares ...")
-        start_time = time.time()
-
         # compute a baseline delta that will be updated when shares and prices are changed
         delta = self.products.X1 @ self.beta + self.xi
 
-        # define a factory for markets
+        # define a factory for solving simulation markets
         def market_factory(s: Hashable) -> Tuple[SimulationMarket, Array, Array, Iteration, int]:
             """Build a market along with arguments used to compute prices and shares."""
             assert prices is not None and iteration is not None
@@ -621,16 +621,17 @@ class Simulation(Economy):
 
         # output a message about computation
         end_time = time.time()
-        run_time = end_time - start_time
+        output(f"Finished computing prices and shares after {format_seconds(end_time - start_time)}.")
         output(
-            f"Finished computing prices and shares after {format_seconds(run_time)}, a total of {iterations} major "
-            f"iterations, and a total of {evaluations} contraction evaluations."
+            f"Computation required a total of {iterations} major iterations and a total of {evaluations} contraction "
+            f"evaluations."
         )
+        output("")
         return updated_product_data
 
 
 class SimulationMarket(Market):
-    """A single market in a simulation, which can be used to solve for prices and shares."""
+    """A single market in a simulation."""
 
     def solve(
             self, costs: Array, prices: Array, iteration: Iteration, firms_index: int = 0) -> (
@@ -648,13 +649,11 @@ class SimulationMarket(Market):
             prices, converged, iterations, evaluations = self.compute_bertrand_nash_prices(
                 costs, iteration, firms_index, prices
             )
+            if not converged:
+                errors.append(exceptions.SyntheticPricesConvergenceError())
 
             # compute the associated shares
             delta = self.update_delta_with_variable('prices', prices)
             mu = self.update_mu_with_variable('prices', prices)
             shares = self.compute_probabilities(delta, mu) @ self.agents.weights
-
-        # determine whether the fixed point converged
-        if not converged:
-            errors.append(exceptions.SyntheticPricesConvergenceError())
-        return prices, shares, errors, iterations, evaluations
+            return prices, shares, errors, iterations, evaluations

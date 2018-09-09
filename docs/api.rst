@@ -39,6 +39,7 @@ There are also a number of convenience functions that can be used to construct c
    build_ownership
    build_blp_instruments
    build_matrix
+   compute_fitted_values
 
 
 Simulation Class
@@ -96,6 +97,7 @@ In addition to class attributes, other post-estimation outputs can be computed w
 .. autosummary::
    :toctree: api
 
+   Results.compute_optimal_instruments
    Results.compute_aggregate_elasticities
    Results.compute_elasticities
    Results.compute_diversion_ratios
@@ -180,6 +182,7 @@ When errors occur, they will either be displayed as warnings or raised as except
    exceptions.XiJacobianReversionError
    exceptions.OmegaJacobianReversionError
    exceptions.AbsorptionInversionError
+   exceptions.FittedValuesInversionError
    exceptions.SharesByXiJacobianInversionError
    exceptions.IntraFirmJacobianInversionError
    exceptions.LinearParameterCovariancesInversionError

@@ -3,7 +3,7 @@
 import collections
 import functools
 import time
-from typing import Any, Dict, Hashable, List, Mapping, Optional, Sequence, Set, Tuple, Union
+from typing import Any, Dict, Hashable, List, Mapping, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
@@ -12,11 +12,8 @@ from .configurations.formulation import Formulation
 from .configurations.integration import Integration
 from .configurations.iteration import Iteration
 from .configurations.optimization import Optimization
-from .primitives import Agents, Economy, Market, NonlinearParameter, NonlinearParameters, Products, RhoParameter
+from .primitives import Agents, Economy, Market, NonlinearParameters, Products
 from .results import Results
-from .utilities.algebra import (
-    approximately_invert, approximately_solve, multiply_matrix_and_tensor, multiply_tensor_and_matrix
-)
 from .utilities.basics import (
     Array, Bounds, Error, Groups, TableFormatter, format_number, format_seconds, generate_items, output
 )
@@ -670,7 +667,8 @@ class Problem(Economy):
             final_progress = compute_step_progress(theta, last_progress, compute_gradient=nonlinear_parameters.P > 0)
             results = Results(
                 final_progress, last_results, step_start_time, optimization_start_time, optimization_end_time,
-                iterations, evaluations + 1, iteration_mappings, evaluation_mappings, center_moments, W_type, se_type
+                iterations, evaluations + 1, iteration_mappings, evaluation_mappings, costs_type, center_moments,
+                W_type, se_type
             )
             self._handle_errors(error_behavior, results._errors)
             output(f"Computed results after {format_seconds(results.total_time - results.optimization_time)}.")
@@ -700,6 +698,7 @@ class Problem(Economy):
         """Compute demand- and supply-side contributions. Then, form the GMM objective value and its gradient. Finally,
         handle any errors that were encountered before structuring relevant progress information.
         """
+        errors: List[Error] = []
 
         # expand the nonlinear parameters
         sigma, pi, rho = nonlinear_parameters.expand(theta)
@@ -710,12 +709,12 @@ class Problem(Economy):
                 nonlinear_parameters, demand_iv, iteration, fp_type, sigma, pi, rho, last_progress, compute_gradient
             )
         )
+        errors.extend(demand_errors)
 
         # compute supply-side contributions
         true_tilde_costs = tilde_costs = true_omega = np.full((self.N, 0), np.nan, options.dtype)
         omega_jacobian = np.full((self.N, nonlinear_parameters.P), np.nan, options.dtype)
         gamma = np.full((self.K3, 1), np.nan, options.dtype)
-        supply_errors: List[Error] = []
         if self.K3 > 0:
             true_tilde_costs, omega_jacobian, tilde_costs, gamma, true_omega, supply_errors = (
                 self._compute_supply_contributions(
@@ -723,9 +722,7 @@ class Problem(Economy):
                     true_delta, xi_jacobian, last_progress, compute_gradient
                 )
             )
-
-        # combine both sets of errors
-        errors = demand_errors + supply_errors
+            errors.extend(supply_errors)
 
         # compute the objective value
         objective = (true_xi.T @ self.products.ZD) @ WD @ (self.products.ZD.T @ true_xi)
@@ -796,16 +793,15 @@ class Problem(Economy):
         if self.K2 == 0 and (nonlinear_parameters.P == 0 or not compute_gradient):
             true_delta = self._compute_logit_delta(rho)
         else:
-            # define a factory for markets
-            def market_factory(
-                    s: Hashable) -> Tuple[DemandProblemMarket, Array, NonlinearParameters, Iteration, str, bool]:
+            # define a factory for solving the demand side of problem markets
+            def market_factory(s: Hashable) -> Tuple[ProblemMarket, Array, NonlinearParameters, Iteration, str, bool]:
                 """Build a market along with arguments used to compute delta and its Jacobian."""
-                market_s = DemandProblemMarket(self, s, sigma, pi, rho)
+                market_s = ProblemMarket(self, s, sigma, pi, rho)
                 initial_delta_s = last_progress.next_delta[self._product_market_indices[s]]
                 return market_s, initial_delta_s, nonlinear_parameters, iteration, fp_type, compute_gradient
 
             # compute delta and its Jacobian market-by-market
-            generator = generate_items(self.unique_market_ids, market_factory, DemandProblemMarket.solve)
+            generator = generate_items(self.unique_market_ids, market_factory, ProblemMarket.solve_demand)
             for t, (true_delta_t, xi_jacobian_t, errors_t, iterations[t], evaluations[t]) in generator:
                 true_delta[self._product_market_indices[t]] = true_delta_t
                 xi_jacobian[self._product_market_indices[t]] = xi_jacobian_t
@@ -854,11 +850,11 @@ class Problem(Economy):
         true_tilde_costs = np.zeros((self.N, 1), options.dtype)
         omega_jacobian = np.full((self.N, nonlinear_parameters.P), np.nan, options.dtype)
 
-        # define a factory for markets
+        # define a factory for solving the supply side of problem markets
         def market_factory(
-                s: Hashable) -> Tuple[SupplyProblemMarket, Array, Array, Array, NonlinearParameters, str, Bounds, bool]:
+                s: Hashable) -> Tuple[ProblemMarket, Array, Array, Array, NonlinearParameters, str, Bounds, bool]:
             """Build a market along with arguments used to compute transformed marginal costs and their Jacobian."""
-            market_s = SupplyProblemMarket(self, s, sigma, pi, rho, beta, true_delta)
+            market_s = ProblemMarket(self, s, sigma, pi, rho, beta, true_delta)
             last_true_tilde_costs_s = last_progress.true_tilde_costs[self._product_market_indices[s]]
             xi_jacobian_s = xi_jacobian[self._product_market_indices[s]]
             return (
@@ -867,7 +863,7 @@ class Problem(Economy):
             )
 
         # compute transformed marginal costs and their Jacobian market-by-market
-        generator = generate_items(self.unique_market_ids, market_factory, SupplyProblemMarket.solve)
+        generator = generate_items(self.unique_market_ids, market_factory, ProblemMarket.solve_supply)
         for t, (true_tilde_costs_t, omega_jacobian_t, errors_t) in generator:
             true_tilde_costs[self._product_market_indices[t]] = true_tilde_costs_t
             omega_jacobian[self._product_market_indices[t]] = omega_jacobian_t
@@ -1049,14 +1045,10 @@ class Progress(object):
         return "\n".join(lines)
 
 
-class DemandProblemMarket(Market):
-    """A single market in a problem, which can be solved to compute delta-related information."""
+class ProblemMarket(Market):
+    """A single market in a problem."""
 
-    def get_unneeded_product_fields(self, fields: Set[str]) -> Set[str]:
-        """Collect fields that will be dropped from product data."""
-        return fields - {'nesting_ids', 'shares', 'X2'}
-
-    def solve(
+    def solve_demand(
             self, initial_delta: Array, nonlinear_parameters: NonlinearParameters, iteration: Iteration, fp_type: str,
             compute_gradient: bool) -> Tuple[Array, Array, List[Error], int, int]:
         """Compute the mean utility for this market that equates market shares to observed values by solving a fixed
@@ -1093,6 +1085,8 @@ class DemandProblemMarket(Market):
                     contraction = lambda d: self.products.shares / (compute_quotient(d) @ self.agents.weights)
                 exp_delta, converged, iterations, evaluations = iteration._iterate(np.exp(initial_delta), contraction)
                 delta = np.log(exp_delta)
+            if not converged:
+                errors.append(exceptions.DeltaConvergenceError())
 
             # if the gradient is to be computed, replace invalid values in delta with the last computed values before
             #   computing its Jacobian
@@ -1103,55 +1097,9 @@ class DemandProblemMarket(Market):
                 valid_delta[bad_delta_indices] = initial_delta[bad_delta_indices]
                 xi_jacobian, jacobian_errors = self.compute_xi_by_theta_jacobian(nonlinear_parameters, valid_delta)
                 errors.extend(jacobian_errors)
+            return delta, xi_jacobian, errors, iterations, evaluations
 
-        # determine whether the fixed point routine converged
-        if not converged:
-            errors.append(exceptions.DeltaConvergenceError())
-        return delta, xi_jacobian, errors, iterations, evaluations
-
-    def compute_xi_by_theta_jacobian(
-            self, nonlinear_parameters: NonlinearParameters, delta: Array) -> Tuple[Array, List[Error]]:
-        """Use the Implicit Function Theorem to compute the Jacobian of xi (equivalently, of delta) with respect to
-        theta.
-        """
-        errors: List[Error] = []
-        probabilities, conditionals = self.compute_probabilities(delta, keep_conditionals=True)
-        shares_by_xi_jacobian = self.compute_shares_by_xi_jacobian(probabilities, conditionals)
-        shares_by_theta_jacobian = self.compute_shares_by_theta_jacobian(
-            nonlinear_parameters, delta, probabilities, conditionals
-        )
-        xi_by_theta_jacobian, replacement = approximately_solve(shares_by_xi_jacobian, -shares_by_theta_jacobian)
-        if replacement:
-            errors.append(exceptions.SharesByXiJacobianInversionError(shares_by_xi_jacobian, replacement))
-        return xi_by_theta_jacobian, errors
-
-    def compute_shares_by_xi_jacobian(self, probabilities: Array, conditionals: Optional[Array]) -> Array:
-        """Compute the Jacobian of shares with respect to xi (equivalently, to delta)."""
-        diagonal_shares = np.diagflat(self.products.shares)
-        weighted_probabilities = self.agents.weights * probabilities.T
-        jacobian = diagonal_shares - probabilities @ weighted_probabilities
-        if self.H > 0:
-            membership = self.get_membership_matrix()
-            jacobian += self.rho / (1 - self.rho) * (
-                diagonal_shares - membership * (conditionals @ weighted_probabilities)
-            )
-        return jacobian
-
-    def compute_shares_by_theta_jacobian(
-            self, nonlinear_parameters: NonlinearParameters, delta: Array, probabilities: Array,
-            conditionals: Optional[Array]) -> Array:
-        """Compute the Jacobian of shares with respect to theta."""
-        jacobian = np.zeros((self.J, nonlinear_parameters.P), options.dtype)
-        for p, parameter in enumerate(nonlinear_parameters.unfixed):
-            tangent = self.compute_probabilities_by_parameter_tangent(parameter, probabilities, conditionals, delta)[0]
-            jacobian[:, [p]] = tangent @ self.agents.weights
-        return jacobian
-
-
-class SupplyProblemMarket(Market):
-    """A single market in a problem, which can be solved to compute marginal cost-related information."""
-
-    def solve(
+    def solve_supply(
             self, initial_tilde_costs: Array, xi_jacobian: Array, beta_jacobian: Array,
             nonlinear_parameters: NonlinearParameters, costs_type: str, costs_bounds: Bounds,
             compute_gradient: bool) -> Tuple[Array, Array, List[Error]]:
@@ -1197,187 +1145,3 @@ class SupplyProblemMarket(Market):
                 errors.extend(jacobian_errors)
                 omega_jacobian[clipped_indices.flat] = 0
             return tilde_costs, omega_jacobian, errors
-
-    def compute_omega_by_theta_jacobian(
-            self, tilde_costs: Array, xi_jacobian: Array, beta_jacobian: Array,
-            nonlinear_parameters: NonlinearParameters, costs_type: str) -> Tuple[Array, List[Error]]:
-        """Compute the Jacobian of omega (equivalently, of transformed marginal costs) with respect to theta."""
-        eta_jacobian, errors = self.compute_eta_by_theta_jacobian(xi_jacobian, beta_jacobian, nonlinear_parameters)
-        if costs_type == 'linear':
-            omega_jacobian = -eta_jacobian
-        else:
-            assert costs_type == 'log'
-            omega_jacobian = -eta_jacobian / np.exp(tilde_costs)
-        return omega_jacobian, errors
-
-    def compute_eta_by_theta_jacobian(
-            self, xi_jacobian: Array, beta_jacobian: Array, nonlinear_parameters: NonlinearParameters) -> (
-            Tuple[Array, List[Error]]):
-        """Compute the Jacobian of the markup term in the BLP-markup equation with respect to theta."""
-        errors: List[Error] = []
-
-        # compute derivatives of aggregate inclusive values with respect to prices
-        probabilities, conditionals = self.compute_probabilities(keep_conditionals=True)
-        utility_derivatives = self.compute_utility_derivatives('prices')
-        value_derivatives = probabilities * utility_derivatives
-
-        # compute the matrix A, which, when inverted and multiplied by shares, gives eta (negative the intra-firm
-        #   Jacobian of shares with respect to prices)
-        ownership = self.get_ownership_matrix()
-        capital_lamda = self.compute_capital_lamda(value_derivatives)
-        capital_gamma = self.compute_capital_gamma(value_derivatives, probabilities, conditionals)
-        A = -ownership * (capital_lamda - capital_gamma)
-
-        # compute the inverse of A and use it to compute eta
-        A_inverse, replacement = approximately_invert(A)
-        if replacement:
-            errors.append(exceptions.IntraFirmJacobianInversionError(A, replacement))
-        eta = A_inverse @ self.products.shares
-
-        # compute the tensor derivative with respect to xi (equivalently, to delta), indexed with the first axis, of
-        #   derivatives of aggregate inclusive values
-        probabilities_tensor, conditionals_tensor = self.compute_probabilities_by_xi_tensor(probabilities, conditionals)
-        value_derivatives_tensor = probabilities_tensor * utility_derivatives
-
-        # compute the tensor derivative of A with respect to xi (equivalently, to delta)
-        capital_lamda_tensor = self.compute_capital_lamda_by_xi_tensor(value_derivatives_tensor)
-        capital_gamma_tensor = self.compute_capital_gamma_by_xi_tensor(
-            value_derivatives, value_derivatives_tensor, probabilities, probabilities_tensor, conditionals,
-            conditionals_tensor
-        )
-        A_tensor = -ownership[None] * (capital_lamda_tensor - capital_gamma_tensor)
-
-        # compute the product of the tensor and eta
-        A_tensor_times_eta = np.squeeze(multiply_tensor_and_matrix(A_tensor, eta))
-
-        # compute derivatives of X1 and X2 with respect to prices
-        X1_derivatives = self.compute_X1_derivatives('prices')
-        X2_derivatives = self.compute_X2_derivatives('prices')
-
-        # fill the Jacobian of eta with respect to theta parameter-by-parameter
-        eta_jacobian = np.zeros((self.J, nonlinear_parameters.P), options.dtype)
-        for p, parameter in enumerate(nonlinear_parameters.unfixed):
-            # compute the tangent with respect to the parameter of derivatives of aggregate inclusive values
-            probabilities_tangent, conditionals_tangent = self.compute_probabilities_by_parameter_tangent(
-                parameter, probabilities, conditionals
-            )
-            utility_derivatives_tangent = self.compute_utility_derivatives_by_parameter_tangent(
-                parameter, X1_derivatives, X2_derivatives, beta_jacobian[:, [p]]
-            )
-            value_derivatives_tangent = (
-                probabilities_tangent * utility_derivatives +
-                probabilities * utility_derivatives_tangent
-            )
-
-            # compute the tangent of A with respect to the parameter
-            capital_lamda_tangent = self.compute_capital_lamda_by_parameter_tangent(
-                parameter, value_derivatives, value_derivatives_tangent
-            )
-            capital_gamma_tangent = self.compute_capital_gamma_by_parameter_tangent(
-                parameter, value_derivatives, value_derivatives_tangent, probabilities, probabilities_tangent,
-                conditionals, conditionals_tangent
-            )
-            A_tangent = -ownership * (capital_lamda_tangent - capital_gamma_tangent)
-
-            # extract the tangent of xi with respect to the parameter and compute the associated tangent of eta
-            eta_jacobian[:, [p]] = -A_inverse @ (A_tangent @ eta + A_tensor_times_eta.T @ xi_jacobian[:, [p]])
-
-        # return the filled Jacobian
-        return eta_jacobian, errors
-
-    def compute_probabilities_by_xi_tensor(
-            self, probabilities: Array, conditionals: Optional[Array]) -> Tuple[Array, Optional[Array]]:
-        """Use choice probabilities to compute their tensor derivatives with respect to xi (equivalently, to delta),
-        indexed with the first axis.
-        """
-        probabilities_tensor = -probabilities[None] * probabilities[None].swapaxes(0, 1)
-        probabilities_tensor[np.diag_indices(self.J)] += probabilities
-        conditionals_tensor = None
-        if self.H > 0:
-            assert conditionals is not None
-            membership = self.get_membership_matrix()
-            multiplied_probabilities = self.rho / (1 - self.rho) * probabilities
-            multiplied_conditionals = 1 / (1 - self.rho) * conditionals
-            probabilities_tensor -= membership[..., None] * (
-                conditionals[None] * multiplied_probabilities[None].swapaxes(0, 1)
-            )
-            conditionals_tensor = -membership[..., None] * (
-                conditionals[None] * multiplied_conditionals[None].swapaxes(0, 1)
-            )
-            probabilities_tensor[np.diag_indices(self.J)] += multiplied_probabilities
-            conditionals_tensor[np.diag_indices(self.J)] += multiplied_conditionals
-        return probabilities_tensor, conditionals_tensor
-
-    def compute_capital_lamda_by_xi_tensor(self, value_derivatives_tensor: Array) -> Array:
-        """Use the tensor derivative with respect to xi (equivalently, to delta), indexed with the first axis, of
-        derivatives of aggregate inclusive values with respect to prices to compute the tensor derivative of the
-        diagonal capital lambda matrix with respect to xi.
-        """
-        diagonal = np.squeeze(multiply_tensor_and_matrix(value_derivatives_tensor, self.agents.weights))
-        if self.H > 0:
-            diagonal /= 1 - self.rho
-        tensor = np.zeros((self.J, self.J, self.J), options.dtype)
-        tensor[:, np.arange(self.J), np.arange(self.J)] = diagonal
-        return tensor
-
-    def compute_capital_gamma_by_xi_tensor(
-            self, value_derivatives: Array, value_derivatives_tensor: Array, probabilities: Array,
-            probabilities_tensor: Array, conditionals: Optional[Array], conditionals_tensor: Optional[Array]) -> Array:
-        """Use derivatives of aggregate inclusive values with respect to prices, choice probabilities, and their tensor
-        derivatives with respect to xi (equivalently, to delta), indexed with the first axis, to compute the tensor
-        derivative of the dense capital gamma matrix with respect to xi.
-        """
-        weighted_value_derivatives = self.agents.weights * value_derivatives.T
-        weighted_probabilities = self.agents.weights.T * probabilities
-        tensor = (
-            multiply_tensor_and_matrix(probabilities_tensor, weighted_value_derivatives) +
-            multiply_matrix_and_tensor(weighted_probabilities, value_derivatives_tensor.swapaxes(1, 2))
-        )
-        if self.H > 0:
-            assert conditionals is not None and conditionals_tensor is not None
-            membership = self.get_membership_matrix()
-            weighted_conditionals = self.agents.weights.T * conditionals
-            tensor += membership[None] * self.rho[None] / (1 - self.rho[None]) * (
-                multiply_tensor_and_matrix(conditionals_tensor, weighted_value_derivatives) +
-                multiply_matrix_and_tensor(weighted_conditionals, value_derivatives_tensor.swapaxes(1, 2))
-            )
-        return tensor
-
-    def compute_capital_lamda_by_parameter_tangent(
-            self, parameter: NonlinearParameter, value_derivatives: Array, value_derivatives_tangent: Array) -> Array:
-        """Use the tangent with respect to a nonlinear parameter of derivatives of aggregate inclusive values with
-        respect to prices to compute the tangent of the diagonal capital lambda matrix with respect to the parameter.
-        """
-        diagonal = value_derivatives_tangent @ self.agents.weights
-        if self.H > 0:
-            diagonal /= 1 - self.rho
-            if isinstance(parameter, RhoParameter):
-                associations = self.groups.expand(parameter.get_group_associations(self.groups))
-                diagonal += associations / (1 - self.rho)**2 * (value_derivatives @ self.agents.weights)
-        return np.diagflat(diagonal)
-
-    def compute_capital_gamma_by_parameter_tangent(
-            self, parameter: NonlinearParameter, value_derivatives: Array, value_derivatives_tangent: Array,
-            probabilities: Array, probabilities_tangent: Array, conditionals: Optional[Array],
-            conditionals_tangent: Optional[Array]) -> Array:
-        """Use derivatives of aggregate inclusive values with respect to prices, choice probabilities, and their
-        tangents with respect to a nonlinear parameter to compute the tangent of the dense capital gamma matrix with
-        respect to the parameter.
-        """
-        weighted_value_derivatives = self.agents.weights * value_derivatives.T
-        weighted_value_derivatives_tangent = self.agents.weights * value_derivatives_tangent.T
-        tangent = (
-            probabilities_tangent @ weighted_value_derivatives +
-            probabilities @ weighted_value_derivatives_tangent
-        )
-        if self.H > 0:
-            assert conditionals is not None and conditionals_tangent is not None
-            membership = self.get_membership_matrix()
-            tangent += membership * self.rho / (1 - self.rho) * (
-                conditionals_tangent @ weighted_value_derivatives +
-                conditionals @ weighted_value_derivatives_tangent
-            )
-            if isinstance(parameter, RhoParameter):
-                associations = self.groups.expand(parameter.get_group_associations(self.groups))
-                tangent += associations * membership / (1 - self.rho)**2 * (conditionals @ weighted_value_derivatives)
-        return tangent
