@@ -623,33 +623,36 @@ class Results(object):
 
         # compute prices, shares, and delta market-by-market
         iterations = evaluations = 0
-        prices = np.full_like(self.problem.products.prices, np.nan)
-        shares = np.full_like(self.problem.products.shares, np.nan)
+        equilibrium_prices = np.full_like(self.problem.products.prices, np.nan)
+        equilibrium_shares = np.full_like(self.problem.products.shares, np.nan)
         generator = generate_items(self.unique_market_ids, market_factory, ResultsMarket.solve_equilibrium)
         for t, (prices_t, shares_t, delta_t, errors_t, iterations_t, evaluations_t) in generator:
-            prices[self.problem._product_market_indices[t]] = prices_t
-            shares[self.problem._product_market_indices[t]] = shares_t
+            equilibrium_prices[self.problem._product_market_indices[t]] = prices_t
+            equilibrium_shares[self.problem._product_market_indices[t]] = shares_t
             delta[self.problem._product_market_indices[t]] = delta_t
             errors.extend(errors_t)
             iterations += iterations_t
             evaluations += evaluations_t
 
         # compute the Jacobian of xi with respect to theta
-        xi_jacobian, demand_errors = self._compute_xi_jacobian_realization(prices, shares, delta)
+        xi_jacobian, demand_errors = self._compute_xi_jacobian_realization(
+            equilibrium_prices, equilibrium_shares, delta
+        )
         errors.extend(demand_errors)
 
         # compute the Jacobian of omega with respect to theta
         omega_jacobian = np.full((self.problem.N, self._nonlinear_parameters.P), np.nan, options.dtype)
         if self.problem.K3 > 0:
             omega_jacobian, supply_errors = self._compute_omega_jacobian_realization(
-                prices, shares, delta, tilde_costs, xi_jacobian
+                equilibrium_prices, equilibrium_shares, delta, tilde_costs, xi_jacobian
             )
             errors.extend(supply_errors)
 
         # return all of the information associated with this realization
         return xi_jacobian, omega_jacobian, iterations, evaluations, errors
 
-    def _compute_xi_jacobian_realization(self, prices: Array, shares: Array, delta: Array) -> Tuple[Array, List[Error]]:
+    def _compute_xi_jacobian_realization(
+            self, equilibrium_prices: Array, equilibrium_shares: Array, delta: Array) -> Tuple[Array, List[Error]]:
         """Compute a realization of the Jacobian of xi with respect to theta market-by-market. If necessary, revert
         problematic elements to their actual values.
         """
@@ -659,8 +662,8 @@ class Results(object):
         def market_factory(s: Hashable) -> Tuple[Market, NonlinearParameters]:
             """Build a market with Bertrand-Nash prices and shares along with arguments used to compute the Jacobian."""
             market_s = Market(self.problem, s, self.sigma, self.pi, self.rho, self.beta, delta, {
-                'prices': prices[self.problem._product_market_indices[s]],
-                'shares': shares[self.problem._product_market_indices[s]]
+                'prices': equilibrium_prices[self.problem._product_market_indices[s]],
+                'shares': equilibrium_shares[self.problem._product_market_indices[s]]
             })
             return market_s, self._nonlinear_parameters
 
@@ -679,8 +682,8 @@ class Results(object):
         return xi_jacobian, errors
 
     def _compute_omega_jacobian_realization(
-            self, prices: Array, shares: Array, delta: Array, tilde_costs: Array, xi_jacobian: Array) -> (
-            Tuple[Array, List[Error]]):
+            self, equilibrium_prices: Array, equilibrium_shares: Array, delta: Array, tilde_costs: Array,
+            xi_jacobian: Array) -> Tuple[Array, List[Error]]:
         """Compute a realization of the Jacobian of omega with respect to theta market-by-market. If necessary, revert
         problematic elements to their actual values.
         """
@@ -695,8 +698,8 @@ class Results(object):
         def market_factory(s: Hashable) -> Tuple[Market, Array, Array, Array, NonlinearParameters, str]:
             """Build a market with Bertrand-Nash prices and shares along with arguments used to compute the Jacobian."""
             market_s = Market(self.problem, s, self.sigma, self.pi, self.rho, self.beta, delta, {
-                'prices': prices[self.problem._product_market_indices[s]],
-                'shares': shares[self.problem._product_market_indices[s]]
+                'prices': equilibrium_prices[self.problem._product_market_indices[s]],
+                'shares': equilibrium_shares[self.problem._product_market_indices[s]]
             })
             tilde_costs_s = tilde_costs[self.problem._product_market_indices[s]]
             xi_jacobian_s = xi_jacobian[self.problem._product_market_indices[s]]
