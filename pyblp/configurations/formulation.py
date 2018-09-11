@@ -51,6 +51,13 @@ class Formulation(object):
     Internally, mathematical operations are parsed and evaluated by the :mod:`sympy` package, which is also used to
     symbolically differentiate terms when their derivatives are required.
 
+    .. warning::
+
+       There is no explicit checking for collinearity. For example, if two variables in included in the formulation but
+       are collinear, or if absorbed fixed effects make one or more variables redundant, no errors will be immediately
+       raised. However, formulated collinearity often gives rise to matrix inversion errors during estimation if the
+       formulated matrix is used in a regression.
+
     Parameters
     ----------
     formula : `str`
@@ -60,8 +67,7 @@ class Formulation(object):
     absorb : `str, optional`
         R-style formula used to design a matrix of categorical variables representing fixed effects, which will be
         absorbed into the matrix designed by `formula`. Fixed effect absorption is only supported for some matrices.
-        Unlike `formula`, intercepts are ignored. Only categorical variables are supported. There are no checks for
-        multicollinearity.
+        Unlike `formula`, intercepts are ignored. Only categorical variables are supported.
     absorb_method : `str or Iteration, optional`
         The method with which fixed effects will be absorbed. One of the following:
 
