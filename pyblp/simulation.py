@@ -638,9 +638,7 @@ class SimulationMarket(Market):
     def solve(
             self, costs: Array, prices: Array, iteration: Iteration, firms_index: int = 0) -> (
             Tuple[Array, Array, List[Error], int, int]):
-        """Use marginal costs, initial prices, and an iteration configuration to solve for Bertrand-Nash prices and
-        shares. By default, use unchanged firm IDs.
-        """
+        """Solve for Bertrand-Nash prices and shares. By default, use unchanged firm IDs."""
         errors: List[Error] = []
 
         # configure NumPy to identify floating point errors

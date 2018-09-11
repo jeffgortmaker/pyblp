@@ -351,8 +351,8 @@ class Market(object):
             numerator: Optional[Array] = None, eliminate_product: Optional[int] = None,
             keep_conditionals: bool = False) -> Union[Tuple[Array, Optional[Array]], Array]:
         """Compute choice probabilities. By default, use unchanged delta and mu values. If linear is False, delta and mu
-        must be specified and already be exponentiated. If numerator is specified, it will be used as the numerator in
-        the non-nested Logit expression. If eliminate_product is specified, eliminate the product associated with the
+        must be specified and already be exponentiated. If the numerator is specified, it will be used as the numerator
+        in the non-nested Logit expression. If eliminate_product is specified, eliminate the product associated with the
         specified index from the choice set. If keep_conditionals is True, return a tuple in which if there is nesting,
         the second element are conditional probabilities given that an alternative in a nest is chosen.
         """
@@ -387,9 +387,7 @@ class Market(object):
         return (probabilities, conditionals) if keep_conditionals else probabilities
 
     def compute_capital_lamda(self, value_derivatives: Array) -> Array:
-        """Use derivatives of aggregate inclusive values with respect to a variable to compute the diagonal capital
-        lambda matrix used to decompose markups.
-        """
+        """Compute the diagonal capital lambda matrix used to decompose markups."""
         diagonal = value_derivatives @ self.agents.weights
         if self.H > 0:
             diagonal /= 1 - self.rho
@@ -397,9 +395,7 @@ class Market(object):
 
     def compute_capital_gamma(
             self, value_derivatives: Array, probabilities: Array, conditionals: Optional[Array]) -> Array:
-        """Use derivatives of aggregate inclusive values with respect to a variable and choice probabilities to compute
-        the dense capital gamma matrix used to decompose markups.
-        """
+        """Compute  the dense capital gamma matrix used to decompose markups."""
         weighted_value_derivatives = self.agents.weights * value_derivatives.T
         capital_gamma = probabilities @ weighted_value_derivatives
         if self.H > 0:
@@ -436,8 +432,8 @@ class Market(object):
     def compute_zeta(
             self, costs: Array, ownership_matrix: Optional[Array] = None, utility_derivatives: Optional[Array] = None,
             prices: Optional[Array] = None) -> Tuple[Array, List[Error]]:
-        """Use marginal costs to compute the markup term in the zeta-markup equation. By default, get an unchanged
-        ownership matrix, compute derivatives of utilities with respect to prices and use unchanged prices.
+        """Compute the markup term in the zeta-markup equation. By default, get an unchanged ownership matrix, compute
+        derivatives of utilities with respect to prices, and use unchanged prices.
         """
         if ownership_matrix is None:
             ownership_matrix = self.get_ownership_matrix()
@@ -460,8 +456,8 @@ class Market(object):
     def compute_bertrand_nash_prices(
             self, costs: Array, iteration: Iteration, firms_index: int = 0, prices: Optional[Array] = None) -> (
             Tuple[Array, bool, int, int]):
-        """Use marginal costs and an integration configuration to compute Bertrand-Nash prices by iterating over the
-        zeta-markup equation. By default, use unchanged firm IDs and use unchanged prices as initial values.
+        """Compute Bertrand-Nash prices by iterating over the zeta-markup equation. By default, use unchanged firm IDs
+        and use unchanged prices as initial values.
         """
         if prices is None:
             prices = self.products.prices
@@ -483,8 +479,7 @@ class Market(object):
     def compute_utility_derivatives_by_parameter_tangent(
             self, parameter: NonlinearParameter, X1_derivatives: Array, X2_derivatives: Array, beta_tangent: Array) -> (
             Array):
-        """Use derivatives of X1 and X2 with respect to a variable and the tangent of beta with respect to a nonlinear
-        parameter to compute the tangent with respect to the parameter of derivatives of utility with respect to the
+        """Compute the tangent with respect to a nonlinear parameter of derivatives of utility with respect to a
         variable.
         """
         tangent = np.tile(X1_derivatives @ beta_tangent, self.I)
@@ -496,8 +491,8 @@ class Market(object):
     def compute_probabilities_by_parameter_tangent(
             self, parameter: NonlinearParameter, probabilities: Array, conditionals: Optional[Array],
             delta: Optional[Array] = None, mu: Optional[Array] = None) -> Tuple[Array, Optional[Array]]:
-        """Use probabilities to compute their tangent with respect to a nonlinear parameter. By default, use unchanged
-        delta and mu.
+        """Compute the tangent of probabilities with respect to a nonlinear parameter. By default, use unchanged delta
+        and mu.
         """
         if delta is None:
             assert self.delta is not None
@@ -556,8 +551,8 @@ class Market(object):
     def compute_shares_by_variable_jacobian(
             self, utility_derivatives: Array, probabilities: Optional[Array] = None,
             conditionals: Optional[Array] = None) -> Array:
-        """Use derivatives of utility with respect to a variable to compute the Jacobian of market shares with respect
-        to the same variable. By default, compute unchanged choice probabilities.
+        """Compute the Jacobian of market shares with respect to a variable. By default, compute unchanged choice
+        probabilities.
         """
         if probabilities is None or conditionals is None:
             probabilities, conditionals = self.compute_probabilities(keep_conditionals=True)
@@ -632,9 +627,8 @@ class Market(object):
         return probabilities_tensor, conditionals_tensor
 
     def compute_capital_lamda_by_xi_tensor(self, value_derivatives_tensor: Array) -> Array:
-        """Use the tensor derivative with respect to xi (equivalently, to delta), indexed with the first axis, of
-        derivatives of aggregate inclusive values with respect to prices to compute the tensor derivative of the
-        diagonal capital lambda matrix with respect to xi.
+        """Compute the tensor derivative of the diagonal capital lambda matrix with respect to xi, indexed by the first
+        axis.
         """
         diagonal = np.squeeze(multiply_tensor_and_matrix(value_derivatives_tensor, self.agents.weights))
         if self.H > 0:
@@ -646,9 +640,8 @@ class Market(object):
     def compute_capital_gamma_by_xi_tensor(
             self, value_derivatives: Array, value_derivatives_tensor: Array, probabilities: Array,
             probabilities_tensor: Array, conditionals: Optional[Array], conditionals_tensor: Optional[Array]) -> Array:
-        """Use derivatives of aggregate inclusive values with respect to prices, choice probabilities, and their tensor
-        derivatives with respect to xi (equivalently, to delta), indexed with the first axis, to compute the tensor
-        derivative of the dense capital gamma matrix with respect to xi.
+        """Compute the tensor derivative of the dense capital gamma matrix with respect to xi, indexed with the first
+        axis.
         """
         weighted_value_derivatives = self.agents.weights * value_derivatives.T
         weighted_probabilities = self.agents.weights.T * probabilities
