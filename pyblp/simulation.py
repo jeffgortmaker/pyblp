@@ -11,7 +11,9 @@ from .configurations.formulation import Formulation
 from .configurations.integration import Integration
 from .configurations.iteration import Iteration
 from .construction import build_blp_instruments, build_matrix
-from .primitives import Agents, Economy, LinearParameters, Market, NonlinearParameters, Products
+from .economy import Economy, Market
+from .parameters import LinearParameters, NonlinearParameters
+from .primitives import Agents, Products
 from .utilities.basics import (
     Array, Data, Error, RecArray, extract_matrix, format_seconds, generate_items, output, structure_matrices
 )

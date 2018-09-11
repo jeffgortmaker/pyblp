@@ -12,7 +12,9 @@ from .configurations.formulation import Formulation
 from .configurations.integration import Integration
 from .configurations.iteration import Iteration
 from .configurations.optimization import Optimization
-from .primitives import Agents, Economy, Market, NonlinearParameters, Products
+from .economy import Economy, Market
+from .parameters import NonlinearParameters
+from .primitives import Agents, Products
 from .results import Results
 from .utilities.basics import (
     Array, Bounds, Error, Groups, TableFormatter, format_number, format_seconds, generate_items, output

@@ -8,13 +8,14 @@ import scipy.linalg
 
 from . import exceptions, options
 from .configurations.iteration import Iteration
-from .primitives import LinearParameters, Market, NonlinearParameters
+from .economy import Market
+from .parameters import LinearParameters, NonlinearParameters
 from .utilities.algebra import multiply_matrix_and_tensor
 from .utilities.basics import Array, Error, TableFormatter, format_number, format_seconds, generate_items, output
 from .utilities.statistics import IV, compute_gmm_se, compute_gmm_weights
 
 
-# import additional classes that create import cycles only when checking types
+# only import objects that create import cycles when checking types
 if TYPE_CHECKING:
     from .problem import Problem, Progress  # noqa
 
