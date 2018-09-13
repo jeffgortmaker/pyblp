@@ -685,8 +685,8 @@ class Problem(Economy):
             # update vectors and matrices
             true_delta = results.true_delta
             true_tilde_costs = results.true_tilde_costs
-            xi_jacobian = results.xi_jacobian
-            omega_jacobian = results.omega_jacobian
+            xi_jacobian = results.xi_by_theta_jacobian
+            omega_jacobian = results.omega_by_theta_jacobian
             WD = results.updated_WD
             WS = results.updated_WS
             step += 1
@@ -716,9 +716,10 @@ class Problem(Economy):
         # compute supply-side contributions
         true_tilde_costs = tilde_costs = true_omega = np.full((self.N, 0), np.nan, options.dtype)
         omega_jacobian = np.full((self.N, nonlinear_parameters.P), np.nan, options.dtype)
+        clipped_costs_indices = np.zeros((self.N, 1), np.bool)
         gamma = np.full((self.K3, 1), np.nan, options.dtype)
         if self.K3 > 0:
-            true_tilde_costs, omega_jacobian, tilde_costs, gamma, true_omega, supply_errors = (
+            true_tilde_costs, omega_jacobian, tilde_costs, gamma, true_omega, clipped_costs_indices, supply_errors = (
                 self._compute_supply_contributions(
                     nonlinear_parameters, demand_iv, supply_iv, costs_type, costs_bounds, beta, sigma, pi, rho,
                     true_delta, xi_jacobian, last_progress, compute_gradient
@@ -773,7 +774,7 @@ class Problem(Economy):
         return Progress(
             self, nonlinear_parameters, WD, WS, theta, objective, gradient, next_delta, true_delta, true_tilde_costs,
             xi_jacobian, omega_jacobian, delta, tilde_costs, true_xi, true_omega, beta, gamma, iterations,
-            evaluations, errors
+            evaluations, clipped_costs_indices, errors
         )
 
     def _compute_demand_contributions(
@@ -836,7 +837,7 @@ class Problem(Economy):
             self, nonlinear_parameters: NonlinearParameters, demand_iv: IV, supply_iv: IV, costs_type: str,
             costs_bounds: Bounds, beta: Array, sigma: Array, pi: Array, rho: Array, true_delta: Array,
             xi_jacobian: Array, last_progress: 'Progress', compute_gradient: bool) -> (
-            Tuple[Array, Array, Array, Array, Array, List[Error]]):
+            Tuple[Array, Array, Array, Array, Array, Array, List[Error]]):
         """Compute transformed marginal costs and the Jacobian of omega (equivalently, of transformed marginal costs)
         with respect to theta market-by-market. If necessary, revert problematic elements to their last values. Lastly,
         recover gamma and compute omega.
@@ -848,9 +849,10 @@ class Problem(Economy):
         if compute_gradient:
             beta_jacobian = demand_iv.estimate(xi_jacobian, residuals=False)
 
-        # initialize transformed marginal costs and their Jacobian so that they can be filled
+        # initialize transformed marginal costs, their Jacobian, and indices of clipped costs so that they can be filled
         true_tilde_costs = np.zeros((self.N, 1), options.dtype)
         omega_jacobian = np.full((self.N, nonlinear_parameters.P), np.nan, options.dtype)
+        clipped_costs_indices = np.zeros((self.N, 1), np.bool)
 
         # define a factory for solving the supply side of problem markets
         def market_factory(
@@ -866,9 +868,10 @@ class Problem(Economy):
 
         # compute transformed marginal costs and their Jacobian market-by-market
         generator = generate_items(self.unique_market_ids, market_factory, ProblemMarket.solve_supply)
-        for t, (true_tilde_costs_t, omega_jacobian_t, errors_t) in generator:
+        for t, (true_tilde_costs_t, omega_jacobian_t, clipped_costs_indices_t, errors_t) in generator:
             true_tilde_costs[self._product_market_indices[t]] = true_tilde_costs_t
             omega_jacobian[self._product_market_indices[t]] = omega_jacobian_t
+            clipped_costs_indices[self._product_market_indices[t]] = clipped_costs_indices_t
             errors.extend(errors_t)
 
         # replace invalid transformed marginal costs with their last values
@@ -892,7 +895,7 @@ class Problem(Economy):
 
         # recover gamma and compute omega
         gamma, true_omega = supply_iv.estimate(tilde_costs)
-        return true_tilde_costs, omega_jacobian, tilde_costs, gamma, true_omega, errors
+        return true_tilde_costs, omega_jacobian, tilde_costs, gamma, true_omega, clipped_costs_indices, errors
 
     def _compute_logit_delta(self, rho: Array) -> Array:
         """Compute the delta that solves the simple Logit (or nested Logit) model."""
@@ -955,7 +958,8 @@ class Progress(object):
             tilde_costs: Optional[Array] = None, true_xi: Optional[Array] = None, true_omega: Optional[Array] = None,
             beta: Optional[Array] = None, gamma: Optional[Array] = None,
             iteration_mapping: Optional[Dict[Hashable, int]] = None,
-            evaluation_mapping: Optional[Dict[Hashable, int]] = None, errors: Optional[List[Error]] = None) -> None:
+            evaluation_mapping: Optional[Dict[Hashable, int]] = None, clipped_costs_indices: Optional[Array] = None,
+            errors: Optional[List[Error]] = None) -> None:
         """Initialize progress information. Optional parameters will not be specified when preparing for the first
         objective evaluation.
         """
@@ -979,6 +983,7 @@ class Progress(object):
         self.gamma = gamma
         self.iteration_mapping = iteration_mapping or {}
         self.evaluation_mapping = evaluation_mapping or {}
+        self.clipped_costs_indices = clipped_costs_indices
         self.errors = errors or []
         with np.errstate(invalid='ignore'):
             self.gradient_norm = np.array(np.nan, options.dtype) if gradient.size == 0 else np.abs(gradient).max()
@@ -1104,7 +1109,7 @@ class ProblemMarket(Market):
     def solve_supply(
             self, initial_tilde_costs: Array, xi_jacobian: Array, beta_jacobian: Array,
             nonlinear_parameters: NonlinearParameters, costs_type: str, costs_bounds: Bounds,
-            compute_gradient: bool) -> Tuple[Array, Array, List[Error]]:
+            compute_gradient: bool) -> Tuple[Array, Array, Array, List[Error]]:
         """Compute transformed marginal costs for this market. Then, if compute_gradient is True, compute the Jacobian
         of omega (equivalently, of transformed marginal costs) with respect to theta. If necessary, replace null
         elements in transformed marginal costs with their last values before computing their Jacobian.
@@ -1121,7 +1126,7 @@ class ProblemMarket(Market):
             costs = self.products.prices - eta
 
             # clip marginal costs that are outside of acceptable bounds
-            clipped_indices = (costs < costs_bounds[0]) | (costs > costs_bounds[1])
+            clipped_costs_indices = (costs < costs_bounds[0]) | (costs > costs_bounds[1])
             costs = np.clip(costs, *costs_bounds)
 
             # take the log of marginal costs under a log-linear specification
@@ -1145,5 +1150,5 @@ class ProblemMarket(Market):
                     valid_tilde_costs, xi_jacobian, beta_jacobian, nonlinear_parameters, costs_type
                 )
                 errors.extend(jacobian_errors)
-                omega_jacobian[clipped_indices.flat] = 0
-            return tilde_costs, omega_jacobian, errors
+                omega_jacobian[clipped_costs_indices.flat] = 0
+            return tilde_costs, omega_jacobian, clipped_costs_indices, errors

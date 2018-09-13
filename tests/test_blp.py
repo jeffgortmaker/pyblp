@@ -332,16 +332,19 @@ def test_fixed_effects(
     # test that all arrays expected to be identical are identical
     keys = [
         'theta', 'sigma', 'pi', 'rho', 'beta', 'gamma', 'sigma_se', 'pi_se', 'rho_se', 'beta_se', 'gamma_se',
-        'true_delta', 'true_tilde_costs', 'true_xi', 'true_omega', 'xi_jacobian', 'omega_jacobian', 'objective',
-        'gradient', 'sigma_gradient', 'pi_gradient', 'rho_gradient'
+        'true_delta', 'true_tilde_costs', 'true_xi', 'true_omega', 'xi_by_theta_jacobian', 'omega_by_theta_jacobian',
+        'omega_by_beta_jacobian', 'objective', 'gradient', 'sigma_gradient', 'pi_gradient', 'rho_gradient'
     ]
     for key in keys:
         result1 = getattr(results1, key)
         result2 = getattr(results2, key)
         result3 = getattr(results3, key)
-        if 'beta' in key or 'gamma' in key:
+        if key in {'beta', 'gamma', 'beta_se', 'gamma_se'}:
             result2 = result2[:result1.size]
             result3 = result3[:result1.size]
+        elif key == 'omega_by_beta_jacobian':
+            result2 = np.c_[result2[:, :result1.shape[1]]]
+            result3 = np.c_[result3[:, :result1.shape[1]]]
         np.testing.assert_allclose(result1, result2, atol=atol, rtol=rtol, err_msg=key)
         np.testing.assert_allclose(result1, result3, atol=atol, rtol=rtol, err_msg=key)
 
@@ -421,7 +424,7 @@ def test_shares(simulated_problem: SimulatedProblemFixture) -> None:
 @pytest.mark.usefixtures('simulated_problem')
 def test_shares_by_prices_jacobian(simulated_problem: SimulatedProblemFixture) -> None:
     """Use central finite differences to test that analytic values in the Jacobian of shares with respect to prices are
-    essentially within 0.1% of estimated values.
+    essentially equal..
     """
     simulation, product_data, _, _, results = simulated_problem
 
@@ -450,6 +453,42 @@ def test_shares_by_prices_jacobian(simulated_problem: SimulatedProblemFixture) -
 
     # compare the two sets of elasticity matrices
     np.testing.assert_allclose(exact, estimated, atol=1e-8, rtol=0)
+
+
+@pytest.mark.usefixtures('simulated_problem')
+def test_omega_by_beta_jacobian(simulated_problem: SimulatedProblemFixture) -> None:
+    """Use central finite differences to test that analytic values in the Jacobian of omega (equivalently, of
+    transformed marginal costs) with respect to prices are essentially equal.
+    """
+    _, _, problem, solve_options, results = simulated_problem
+
+    # skip problems without a demand side
+    if problem.K3 == 0:
+        return
+
+    # define a function that computes transformed marginal costs under a given beta
+    def compute_tilde_costs(beta):
+        """Update beta, compute marginal costs, and apply any transformation."""
+        old_beta = results.beta.copy()
+        results.beta = beta
+        costs = results.compute_costs()
+        results.beta = old_beta
+        if solve_options.get('costs_type', 'linear') == 'log':
+            return np.log(costs)
+        return costs
+
+    # estimate the Jacobian with finite differences
+    estimated = np.zeros_like(results.omega_by_beta_jacobian)
+    change = np.sqrt(np.finfo(np.float64).eps)
+    for index in range(estimated.shape[1]):
+        beta1 = results.beta.copy()
+        beta2 = results.beta.copy()
+        beta1[index] += change / 2
+        beta2[index] -= change / 2
+        estimated[:, [index]] = (compute_tilde_costs(beta1) - compute_tilde_costs(beta2)) / change
+
+    # compare the two Jacobians
+    np.testing.assert_allclose(results.omega_by_beta_jacobian, estimated, atol=1e-8, rtol=1e-6)
 
 
 @pytest.mark.usefixtures('simulated_problem')

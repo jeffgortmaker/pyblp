@@ -124,10 +124,12 @@ class Results(object):
         supply-side structural error term.
     objective : `float`
         GMM objective value.
-    xi_jacobian : `ndarray`
+    xi_by_theta_jacobian : `ndarray`
         Estimated :math:`\partial\xi / \partial\theta = \partial\delta / \partial\theta`.
-    omega_jacobian : `ndarray`
+    omega_by_theta_jacobian : `ndarray`
         Estimated :math:`\partial\omega / \partial\theta = \partial\tilde{c} / \partial\theta`.
+    omega_by_beta_jacobian : `ndarray`
+        Estimated :math:`\partial\omega / \partial\beta = \partial\tilde{c} / \partial\beta`.
     gradient : `ndarray`
         Estimated gradient of the GMM objective with respect to :math:`\theta`. This is still computed once at the end
         of an optimization routine that was configured to not use analytic gradients.
@@ -195,8 +197,9 @@ class Results(object):
     omega: Array
     true_omega: Array
     objective: Array
-    xi_jacobian: Array
-    omega_jacobian: Array
+    xi_by_theta_jacobian: Array
+    omega_by_theta_jacobian: Array
+    omega_by_beta_jacobian: Array
     gradient: Array
     gradient_norm: Array
     sigma_gradient: Array
@@ -219,7 +222,7 @@ class Results(object):
             optimization_start_time: float, optimization_end_time: float, iterations: int, evaluations: int,
             iteration_mappings: Sequence[Dict[Hashable, int]], evaluation_mappings: Sequence[Dict[Hashable, int]],
             costs_type: str, center_moments: bool, W_type: str, se_type: str) -> None:
-        """Update weighting matrices, estimate standard errors, and compute cumulative progress statistics."""
+        """Compute cumulative progress statistics, update weighting matrices, and estimate standard errors."""
 
         # initialize values from the progress structure
         self._errors = progress.errors
@@ -229,8 +232,8 @@ class Results(object):
         self.theta = progress.theta
         self.true_delta = progress.true_delta
         self.true_tilde_costs = progress.true_tilde_costs
-        self.xi_jacobian = progress.xi_jacobian
-        self.omega_jacobian = progress.omega_jacobian
+        self.xi_by_theta_jacobian = progress.xi_jacobian
+        self.omega_by_theta_jacobian = progress.omega_jacobian
         self.delta = progress.delta
         self.tilde_costs = progress.tilde_costs
         self.true_xi = progress.true_xi
@@ -304,20 +307,39 @@ class Results(object):
         )
         self._errors.extend(WD_errors + WS_errors)
 
+        # compute the Jacobian of omega with respect to beta, which will be used for computing standard errors
+        self.omega_by_beta_jacobian = np.full((self.problem.N, self.problem.K1), np.nan, options.dtype)
+        if self.problem.K3 > 0:
+            # define a factory for computing the Jacobian of omega with respect to beta in markets
+            def market_factory(s: Hashable) -> Tuple[Market, Array, str]:
+                """Build a market along with arguments used to compute the Jacobian."""
+                market_s = Market(self.problem, s, self.sigma, self.pi, self.rho, self.beta, self.true_delta)
+                true_tilde_costs_s = self.true_tilde_costs[self.problem._product_market_indices[s]]
+                return market_s, true_tilde_costs_s, costs_type
+
+            # compute the Jacobian market-by-market
+            generator = generate_items(self.unique_market_ids, market_factory, Market.compute_omega_by_beta_jacobian)
+            for t, (omega_by_beta_jacobian_t, errors_t) in generator:
+                self.omega_by_beta_jacobian[self.problem._product_market_indices[t]] = omega_by_beta_jacobian_t
+                self._errors.extend(errors_t)
+
+            # the Jacobian should be zero for any clipped marginal costs
+            self.omega_by_beta_jacobian[progress.clipped_costs_indices.flat] = 0
+
         # stack errors, weights, instruments, Jacobian of the errors with respect to parameters, and clustering IDs
         if self.problem.K3 == 0:
             u = self.true_xi
             Z = self.problem.products.ZD
             W = self.WD
-            jacobian = np.c_[self.xi_jacobian, -self.problem.products.X1]
+            jacobian = np.c_[self.xi_by_theta_jacobian, -self.problem.products.X1]
             stacked_clustering_ids = self.problem.products.clustering_ids
         else:
             u = np.r_[self.true_xi, self.true_omega]
             Z = scipy.linalg.block_diag(self.problem.products.ZD, self.problem.products.ZS)
             W = scipy.linalg.block_diag(self.WD, self.WS)
-            jacobian = np.c_[
-                np.r_[self.xi_jacobian, self.omega_jacobian],
-                scipy.linalg.block_diag(-self.problem.products.X1, -self.problem.products.X3)
+            jacobian = np.r_[
+                np.c_[self.xi_by_theta_jacobian, -self.problem.products.X1, np.zeros_like(self.problem.products.X3)],
+                np.c_[self.omega_by_theta_jacobian, self.omega_by_beta_jacobian, -self.problem.products.X3]
             ]
             stacked_clustering_ids = np.r_[self.problem.products.clustering_ids, self.problem.products.clustering_ids]
 
@@ -408,9 +430,6 @@ class Results(object):
         ones = np.ones((self.problem.N, 1), options.dtype)
         return np.column_stack((ones * f.evaluate(self.problem.products) for f in self.problem._X3_formulations))
 
-    def _get_exogenous_variables(self) -> Array:
-        """Get all exogenous variables in X1, X2, X3, ZD, and ZS."""
-
     def _validate_name(self, name: str) -> None:
         """Validate that a name corresponds to a variable in X1, X2, or X3."""
         formulations = self.problem._X1_formulations + self.problem._X2_formulations + self.problem._X3_formulations
@@ -433,8 +452,12 @@ class Results(object):
            \end{bmatrix}_{jt}
            = T\operatorname{\mathbb{E}}\left[
            \begin{matrix}
-               \frac{\partial\xi_{jt}}{\partial\theta} & \frac{\partial\xi_{jt}}{\partial\beta} & 0 \\
-               \frac{\partial\omega_{jt}}{\partial\theta} & 0 & \frac{\partial\omega_{jt}}{\partial\gamma}
+               \frac{\partial\xi_{jt}}{\partial\theta} &
+               \frac{\partial\xi_{jt}}{\partial\beta} &
+               0 \\
+               \frac{\partial\omega_{jt}}{\partial\theta} &
+               \frac{\partial\omega_{jt}}{\partial\beta} &
+               \frac{\partial\omega_{jt}}{\partial\gamma}
            \end{matrix}
            \mathrel{\Bigg|} Z \right],
 
@@ -551,15 +574,17 @@ class Results(object):
 
         # average over Jacobian realizations
         iterations = evaluations = 0
-        xi_jacobian = np.zeros_like(self.xi_jacobian)
-        omega_jacobian = np.zeros_like(self.omega_jacobian)
+        xi_by_theta_jacobian = np.zeros_like(self.xi_by_theta_jacobian)
+        omega_by_theta_jacobian = np.zeros_like(self.omega_by_theta_jacobian)
+        omega_by_beta_jacobian = np.zeros_like(self.omega_by_beta_jacobian)
         if self._nonlinear_parameters.P > 0:
             for _ in range(draws):
-                xi_jacobian_i, omega_jacobian_i, iterations_i, evaluations_i, errors_i = (
-                    self._compute_jacobian_realizations(prices, iteration, *sample())
-                )
-                xi_jacobian += xi_jacobian_i / draws
-                omega_jacobian += omega_jacobian_i / draws
+                results_i = self._compute_realizations(prices, iteration, *sample())
+                xi_by_theta_jacobian_i, omega_by_theta_jacobian_i, omega_by_beta_jacobian_i = results_i[:3]
+                iterations_i, evaluations_i, errors_i = results_i[3:]
+                xi_by_theta_jacobian += xi_by_theta_jacobian_i / draws
+                omega_by_theta_jacobian += omega_by_theta_jacobian_i / draws
+                omega_by_beta_jacobian += omega_by_beta_jacobian_i / draws
                 iterations += iterations_i
                 evaluations += evaluations_i
                 errors.extend(errors_i)
@@ -572,7 +597,7 @@ class Results(object):
 
         # rows only need to be normalized by the covariance of the error terms with supply
         if self.problem.K3 == 0:
-            instruments = np.c_[xi_jacobian, -self._get_true_X1()] / np.std(self.true_xi)
+            instruments = np.c_[xi_by_theta_jacobian, -self._get_true_X1()] / np.std(self.true_xi)
         else:
             normalizer = np.c_[scipy.linalg.inv(np.cov(self.true_xi, self.true_omega, rowvar=False))]
             if normalization_type == 'upper':
@@ -581,9 +606,9 @@ class Results(object):
                 normalizer = scipy.linalg.cholesky(normalizer).T
             elif normalization_type != 'full':
                 raise ValueError("normalization_type must be 'upper', 'lower', or 'full'.")
-            jacobian = np.c_[
-                np.r_[xi_jacobian, omega_jacobian],
-                scipy.linalg.block_diag(-self._get_true_X1(), -self._get_true_X3())
+            jacobian = np.r_[
+                np.c_[xi_by_theta_jacobian, -self._get_true_X1(), np.zeros_like(self.problem.products.X3)],
+                np.c_[omega_by_theta_jacobian, omega_by_beta_jacobian, -self._get_true_X3()]
             ]
             tensor = multiply_matrix_and_tensor(normalizer, np.stack(np.split(jacobian, 2), axis=1))
             instruments = tensor.reshape((self.problem.N, -1))
@@ -599,12 +624,12 @@ class Results(object):
         output("")
         return instruments
 
-    def _compute_jacobian_realizations(
+    def _compute_realizations(
             self, prices: Optional[Array], iteration: Optional[Iteration], xi: Array, omega: Array) -> (
-            Tuple[Array, Array, int, int, List[Error]]):
+            Tuple[Array, Array, Array, int, int, List[Error]]):
         """If they have not already been estimated, compute the Bertrand-Nash prices associated with a realization of xi
-        and omega. Next, compute associated shares and delta. Finally, compute realizations of the the Jacobians of xi
-        and omega with respect to theta.
+        and omega. Next, compute associated shares and delta. Finally, compute realizations of the the Jacobian of xi
+        and omega with respect to theta, as well as the Jacobian of omega with respect to beta.
         """
         errors: List[Error] = []
 
@@ -636,26 +661,27 @@ class Results(object):
             evaluations += evaluations_t
 
         # compute the Jacobian of xi with respect to theta
-        xi_jacobian, demand_errors = self._compute_xi_jacobian_realization(
+        xi_by_theta_jacobian, demand_errors = self._compute_demand_realizations(
             equilibrium_prices, equilibrium_shares, delta
         )
         errors.extend(demand_errors)
 
         # compute the Jacobian of omega with respect to theta
-        omega_jacobian = np.full((self.problem.N, self._nonlinear_parameters.P), np.nan, options.dtype)
+        omega_by_theta_jacobian = np.full((self.problem.N, self._nonlinear_parameters.P), np.nan, options.dtype)
+        omega_by_beta_jacobian = np.full((self.problem.N, self.problem.K1), np.nan, options.dtype)
         if self.problem.K3 > 0:
-            omega_jacobian, supply_errors = self._compute_omega_jacobian_realization(
-                equilibrium_prices, equilibrium_shares, delta, tilde_costs, xi_jacobian
+            omega_by_theta_jacobian, omega_by_beta_jacobian, supply_errors = self._compute_supply_realizations(
+                equilibrium_prices, equilibrium_shares, delta, tilde_costs, xi_by_theta_jacobian
             )
             errors.extend(supply_errors)
 
         # return all of the information associated with this realization
-        return xi_jacobian, omega_jacobian, iterations, evaluations, errors
+        return xi_by_theta_jacobian, omega_by_theta_jacobian, omega_by_beta_jacobian, iterations, evaluations, errors
 
-    def _compute_xi_jacobian_realization(
+    def _compute_demand_realizations(
             self, equilibrium_prices: Array, equilibrium_shares: Array, delta: Array) -> Tuple[Array, List[Error]]:
         """Compute a realization of the Jacobian of xi with respect to theta market-by-market. If necessary, revert
-        problematic elements to their actual values.
+        problematic elements to their estimated values.
         """
         errors: List[Error] = []
 
@@ -669,36 +695,39 @@ class Results(object):
             return market_s, self._nonlinear_parameters
 
         # compute the Jacobian market-by-market
-        xi_jacobian = np.full((self.problem.N, self._nonlinear_parameters.P), np.nan, options.dtype)
+        xi_by_theta_jacobian = np.full((self.problem.N, self._nonlinear_parameters.P), np.nan, options.dtype)
         generator = generate_items(self.unique_market_ids, market_factory, Market.compute_xi_by_theta_jacobian)
-        for t, (xi_jacobian_t, errors_t) in generator:
-            xi_jacobian[self.problem._product_market_indices[t]] = xi_jacobian_t
+        for t, (xi_by_theta_jacobian_t, errors_t) in generator:
+            xi_by_theta_jacobian[self.problem._product_market_indices[t]] = xi_by_theta_jacobian_t
             errors.extend(errors_t)
 
         # replace invalid elements
-        bad_indices = ~np.isfinite(xi_jacobian)
+        bad_indices = ~np.isfinite(xi_by_theta_jacobian)
         if np.any(bad_indices):
-            xi_jacobian[bad_indices] = self.xi_jacobian[bad_indices]
+            xi_by_theta_jacobian[bad_indices] = self.xi_by_theta_jacobian[bad_indices]
             errors.append(exceptions.XiJacobianReversionError(bad_indices))
-        return xi_jacobian, errors
+        return xi_by_theta_jacobian, errors
 
-    def _compute_omega_jacobian_realization(
+    def _compute_supply_realizations(
             self, equilibrium_prices: Array, equilibrium_shares: Array, delta: Array, tilde_costs: Array,
-            xi_jacobian: Array) -> Tuple[Array, List[Error]]:
-        """Compute a realization of the Jacobian of omega with respect to theta market-by-market. If necessary, revert
-        problematic elements to their actual values.
+            xi_jacobian: Array) -> Tuple[Array, Array, List[Error]]:
+        """Compute realizations of the Jacobians of omega with respect to theta and beta market-by-market. If necessary,
+        revert problematic elements to their estimated values.
         """
         errors: List[Error] = []
 
-        # compute the Jacobian of beta with respect to theta, which is needed to compute other Jacobians
+        # compute the Jacobian of beta with respect to theta, which is needed to compute the Jacobian of omega with
+        #   respect to theta
         demand_iv = IV(self.problem.products.X1, self.problem.products.ZD, self.WD)
         beta_jacobian = demand_iv.estimate(xi_jacobian, residuals=False)
         errors.extend(demand_iv.errors)
 
-        # define a factory for computing the Jacobian of omega with respect to theta in markets
-        def market_factory(s: Hashable) -> Tuple[Market, Array, Array, Array, NonlinearParameters, str]:
-            """Build a market with Bertrand-Nash prices and shares along with arguments used to compute the Jacobian."""
-            market_s = Market(self.problem, s, self.sigma, self.pi, self.rho, self.beta, delta, {
+        # define a factory for computing the Jacobians of omega with respect to theta and beta in markets
+        def market_factory(s: Hashable) -> Tuple[ResultsMarket, Array, Array, Array, NonlinearParameters, str]:
+            """Build a market with Bertrand-Nash prices and shares along with arguments used to compute the
+            Jacobians.
+            """
+            market_s = ResultsMarket(self.problem, s, self.sigma, self.pi, self.rho, self.beta, delta, {
                 'prices': equilibrium_prices[self.problem._product_market_indices[s]],
                 'shares': equilibrium_shares[self.problem._product_market_indices[s]]
             })
@@ -706,19 +735,27 @@ class Results(object):
             xi_jacobian_s = xi_jacobian[self.problem._product_market_indices[s]]
             return market_s, tilde_costs_s, xi_jacobian_s, beta_jacobian, self._nonlinear_parameters, self._costs_type
 
-        # compute the Jacobian market-by-market
-        omega_jacobian = np.full((self.problem.N, self._nonlinear_parameters.P), np.nan, options.dtype)
-        generator = generate_items(self.unique_market_ids, market_factory, Market.compute_omega_by_theta_jacobian)
-        for t, (omega_jacobian_t, errors_t) in generator:
-            omega_jacobian[self.problem._product_market_indices[t]] = omega_jacobian_t
+        # compute the Jacobians market-by-market
+        omega_by_theta_jacobian = np.full((self.problem.N, self._nonlinear_parameters.P), np.nan, options.dtype)
+        omega_by_beta_jacobian = np.full((self.problem.N, self.problem.K1), np.nan, options.dtype)
+        generator = generate_items(self.unique_market_ids, market_factory, ResultsMarket.compute_omega_jacobians)
+        for t, (omega_by_theta_jacobian_t, omega_by_beta_jacobian_t, errors_t) in generator:
+            omega_by_theta_jacobian[self.problem._product_market_indices[t]] = omega_by_theta_jacobian_t
+            omega_by_beta_jacobian[self.problem._product_market_indices[t]] = omega_by_beta_jacobian_t
             errors.extend(errors_t)
 
-        # replace invalid elements
-        bad_indices = ~np.isfinite(omega_jacobian)
+        # replace invalid elements in the Jacobian of omega with respect to theta
+        bad_indices = ~np.isfinite(omega_by_theta_jacobian)
         if np.any(bad_indices):
-            omega_jacobian[bad_indices] = self.omega_jacobian[bad_indices]
+            omega_by_theta_jacobian[bad_indices] = self.omega_by_theta_jacobian[bad_indices]
             errors.append(exceptions.XiJacobianReversionError(bad_indices))
-        return omega_jacobian, errors
+
+        # replace invalid elements in the Jacobian of omega with respect to beta
+        bad_indices = ~np.isfinite(omega_by_theta_jacobian)
+        if np.any(bad_indices):
+            omega_by_beta_jacobian[bad_indices] = self.omega_by_beta_jacobian[bad_indices]
+            errors.append(exceptions.XiJacobianReversionError(bad_indices))
+        return omega_by_theta_jacobian, omega_by_beta_jacobian, errors
 
     def _combine_arrays(self, compute_market_results: Callable, fixed_args: Sequence, market_args: Sequence) -> Array:
         """Compute an array for each market and stack them into a single matrix. An array for a single market is
@@ -1190,6 +1227,18 @@ class ResultsMarket(Market):
             mu = self.update_mu_with_variable('prices', prices)
             shares = self.compute_probabilities(delta, mu) @ self.agents.weights
             return prices, shares, delta, errors, iterations, evaluations
+
+    def compute_omega_jacobians(
+            self, tilde_costs: Array, xi_jacobian: Array, beta_jacobian: Array,
+            nonlinear_parameters: NonlinearParameters, costs_type: str) -> Tuple[Array, Array, List[Error]]:
+        """Compute the Jacobians of omega (equivalently, of transformed marginal costs) with respect to theta and
+        beta (but first check if the latter is all zeros).
+        """
+        omega_by_theta_jacobian, theta_errors = self.compute_omega_by_theta_jacobian(
+            tilde_costs, xi_jacobian, beta_jacobian, nonlinear_parameters, costs_type
+        )
+        omega_by_beta_jacobian, beta_errors = self.compute_omega_by_beta_jacobian(tilde_costs, costs_type)
+        return omega_by_theta_jacobian, omega_by_beta_jacobian, theta_errors + beta_errors
 
     def compute_aggregate_elasticity(self, factor: float, name: str) -> Tuple[Array, List[Error]]:
         """Estimate the aggregate elasticity of demand with respect to a variable."""
