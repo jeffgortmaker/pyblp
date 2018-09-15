@@ -8,7 +8,7 @@ from .configurations.optimization import Optimization
 from .construction import build_blp_instruments, build_id_data, build_matrix, build_ownership, compute_fitted_values
 from .primitives import Agents, Products
 from .problem import Problem
-from .results import ProblemResults
+from .results import ProblemResults, SimulationResults
 from .simulation import Simulation
 from .utilities.basics import parallel
 from .version import __version__
@@ -22,7 +22,7 @@ __all__ = [
     'build_blp_instruments', 'build_id_data', 'build_matrix', 'build_ownership', 'compute_fitted_values',
     'Agents', 'Products',
     'Problem',
-    'ProblemResults',
+    'ProblemResults', 'SimulationResults',
     'Simulation',
     'parallel',
     '__version__'

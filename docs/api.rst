@@ -45,7 +45,7 @@ There are also a number of convenience functions that can be used to construct c
 Simulation Class
 ----------------
 
-In addition to reading from data files, product data can be simulated by initializing the following class.
+In addition to reading from data files, data can be simulated by initializing the following class.
 
 .. autosummary::
    :toctree: api
@@ -59,6 +59,26 @@ Once initialized, the following method computes equilibrium prices and shares.
    :toctree: api
 
    Simulation.solve
+
+
+Simulation Results Class
+------------------------
+
+Solved simulations return the following results class.
+
+.. autosummary::
+   :nosignatures:
+   :toctree: api
+   :template: class_without_signature.rst
+
+   SimulationResults
+
+The simulation results can be converted into a :class:`Problem` with the following method.
+
+.. autosummary::
+   :toctree: api
+
+   SimulationResults.to_problem
 
 
 Problem Class
@@ -83,7 +103,7 @@ Once initialized, the following method solves the problem.
 Problem Results Class
 ---------------------
 
-Solved BLP problems return the following results class.
+Solved problems return the following results class.
 
 .. autosummary::
    :nosignatures:

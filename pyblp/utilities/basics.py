@@ -35,7 +35,7 @@ def parallel(processes: int) -> Iterator[None]:
 
         - :meth:`Simulation.solve`
         - :meth:`Problem.solve`
-        - Any method in :class:`Results`.
+        - Any method in :class:`ProblemResults`.
 
     These methods, which perform market-by-market computation, will distribute their work among the processes.
     After the context created by the ``with`` statement ends, all worker processes in the pool will be terminated.
@@ -70,8 +70,8 @@ def parallel(processes: int) -> Iterator[None]:
     estimation procedure. Although elasticity computation does happen market-by-market, this problem is very small, so
     there are no gains from parallelization in this example.
 
-    If the problem were much larger, running :meth:`Problem.solve` and :meth:`Results.compute_elasticities` under the
-    ``with`` statement could substantially speed up estimation and elasticity computation.
+    If the problem were much larger, running :meth:`Problem.solve` and :meth:`ProblemResults.compute_elasticities` under
+    the ``with`` statement could substantially speed up estimation and elasticity computation.
 
     For more examples, refer to the :doc:`Examples </examples>` section.
 

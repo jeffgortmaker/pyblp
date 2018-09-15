@@ -14,6 +14,7 @@ from .construction import build_blp_instruments, build_matrix
 from .economy import Economy, Market
 from .parameters import LinearParameters, NonlinearParameters
 from .primitives import Agents, Products
+from .results import SimulationResults
 from .utilities.basics import (
     Array, Data, Error, RecArray, extract_matrix, format_seconds, generate_items, output, structure_matrices
 )
@@ -482,7 +483,7 @@ class Simulation(Economy):
 
     def solve(
             self, firms_index: int = 0, prices: Optional[Any] = None, iteration: Optional[Iteration] = None,
-            error_behavior: str = 'raise') -> RecArray:
+            error_behavior: str = 'raise') -> SimulationResults:
         r"""Compute synthetic prices and shares.
 
         Prices and shares are computed by iterating market-by-market over the :math:`\zeta`-markup equation from
@@ -520,9 +521,8 @@ class Simulation(Economy):
 
         Returns
         -------
-        `recarray`
-            Simulated :attr:`Simulation.product_data` that are updated with synthetic prices and shares, which can
-            be passed to `product_data` in :class:`Problem`.
+        `SimulationResults`
+            :class:`SimulationResults` of the solved simulation.
 
         Example
         -------
@@ -559,8 +559,8 @@ class Simulation(Economy):
 
         .. ipython:: python
 
-           product_data = simulation.solve()
-           product_data
+           results = simulation.solve()
+           results
 
         For more examples, refer to the :doc:`Examples </examples>` section.
 
@@ -568,7 +568,7 @@ class Simulation(Economy):
         errors: List[Error] = []
 
         # keep track of long it takes to solve for prices and shares
-        output("Solving for prices and shares ...")
+        output("Computing synthetic prices and shares ...")
         start_time = time.time()
 
         # choose or validate initial prices
@@ -601,16 +601,18 @@ class Simulation(Economy):
             prices_s = prices[self._product_market_indices[s]]
             return market_s, costs_s, prices_s, iteration, firms_index
 
-        # update prices and shares market-by-market
-        iterations = evaluations = 0
-        updated_product_data = self.product_data.copy()
+        # compute prices and shares market-by-market
+        iteration_mapping = {}
+        evaluation_mapping = {}
+        synthetic_prices = np.full_like(self.products.prices, np.nan)
+        synthetic_shares = np.full_like(self.products.shares, np.nan)
         generator = generate_items(self.unique_market_ids, market_factory, SimulationMarket.solve)
         for t, (prices_t, shares_t, errors_t, iterations_t, evaluations_t) in generator:
-            updated_product_data.prices[self._product_market_indices[t]] = prices_t
-            updated_product_data.shares[self._product_market_indices[t]] = shares_t
+            synthetic_prices[self._product_market_indices[t]] = prices_t
+            synthetic_shares[self._product_market_indices[t]] = shares_t
             errors.extend(errors_t)
-            iterations += iterations_t
-            evaluations += evaluations_t
+            iteration_mapping[t] = iterations_t
+            evaluation_mapping[t] = evaluations_t
 
         # handle any errors
         if errors:
@@ -621,15 +623,15 @@ class Simulation(Economy):
             output(exceptions.MultipleErrors(errors))
             output("")
 
-        # output a message about computation
-        end_time = time.time()
-        output(f"Finished computing prices and shares after {format_seconds(end_time - start_time)}.")
-        output(
-            f"Computation required a total of {iterations} major iterations and a total of {evaluations} contraction "
-            f"evaluations."
+        # structure the results
+        results = SimulationResults(
+            self, firms_index, synthetic_prices, synthetic_shares, start_time, time.time(), iteration_mapping,
+            evaluation_mapping
         )
+        output(f"Computed synthetic prices and shares after {format_seconds(results.computation_time)}.")
         output("")
-        return updated_product_data
+        output(results)
+        return results
 
 
 class SimulationMarket(Market):

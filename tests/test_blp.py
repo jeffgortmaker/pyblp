@@ -137,11 +137,9 @@ def test_parallel(simulated_problem: SimulatedProblemFixture) -> None:
 
     # solve the simulation, solve the problem, and compute costs in parallel
     with parallel(2):
-        parallel_product_data = simulation.solve()
-        parallel_problem = Problem(
-            problem.product_formulations, parallel_product_data, problem.agent_formulation, simulation.agent_data
-        )
-        parallel_results = parallel_problem.solve(**solve_options)
+        parallel_simulation_results = simulation.solve()
+        parallel_product_data = parallel_simulation_results.product_data
+        parallel_results = parallel_simulation_results.to_problem(problem.product_formulations).solve(**solve_options)
         parallel_costs = parallel_results.compute_costs()
 
     # test that product data are essentially identical
@@ -384,7 +382,7 @@ def test_merger(simulated_problem: SimulatedProblemFixture, compute_prices_optio
     simulation, _, _, _, results = simulated_problem
 
     # get changed prices and shares
-    changed_product_data = simulation.solve(firms_index=1)
+    changed_product_data = simulation.solve(firms_index=1).product_data
 
     # solve for approximate and actual changed prices and shares
     approximated_prices = results.compute_approximate_prices()
@@ -869,8 +867,9 @@ def test_logit(
 
 @pytest.mark.usefixtures('simulated_problem')
 def test_formatting(simulated_problem: SimulatedProblemFixture) -> None:
-    """Test that the basic objects can be formatted."""
+    """Test that basic objects can be formatted."""
     simulation, _, problem, _, results = simulated_problem
     assert str(simulation)
+    assert str(simulation.solve())
     assert str(problem)
     assert str(results)

@@ -218,7 +218,7 @@ The default bounds were chosen to reduce the risk of numerical overflow. Without
 Problem Results
 ---------------
 
-The :meth:`Problem.solve` method returns an instance of the :class:`ProblemResults` class, which, when printed, displays basic estimation results. The results that are displayed are simply formatted information extracted from various class attributes such as :attr:`Results.sigma` and :attr:`Results.sigma_se`.
+The :meth:`Problem.solve` method returns an instance of the :class:`ProblemResults` class, which, when printed, displays basic estimation results. The results that are displayed are simply formatted information extracted from various class attributes such as :attr:`ProblemResults.sigma` and :attr:`ProblemResults.sigma_se`.
 
 Additional post-estimation outputs can be computed with :class:`ProblemResults` methods.
 
@@ -534,29 +534,24 @@ The instruments in :attr:`Simulation.product_data` are basic ones computed with 
 
 The :class:`Simulation` can be further configured with other arguments that determine how unobserved product characteristics are simulated and how marginal costs are specified.
 
-Since at this stage, prices and shares are all zeros, we still need to solve the simulation with :meth:`Simulation.solve`. This method computes Bertrand-Nash prices and shares. Just like :meth:`ProblemResults.compute_prices`, it iterates over the :math:`\zeta`-markup equation from :ref:`Morrow and Skerlos (2011) <ms11>` to do so.
+Since at this stage, prices and shares are all zeros, we still need to solve the simulation with :meth:`Simulation.solve`. This method computes synthetic prices and shares. Just like :meth:`ProblemResults.compute_prices`, it iterates over the :math:`\zeta`-markup equation from :ref:`Morrow and Skerlos (2011) <ms11>` to do so.
 
 .. ipython:: python
 
-   simulated_products = simulation.solve()
-   simulated_products
+   simulation_results = simulation.solve()
+   simulation_results
 
-Now, we can try to recover the true parameters by creating and solving a :class:`Problem`. To make estimation easy, we'll use the same formulations and the same unobserved agent data. However, we'll choose starting values that are half the true parameters so that the optimization routine has to do some work.
+Now, we can try to recover the true parameters by creating and solving a :class:`Problem`. By default, the convenience method :meth:`SimulationResults.to_problem` uses the same formulations and unobserved agent data as the simulation, so estimation is relatively easy. However, we'll choose starting values that are half the true parameters so that the optimization routine has to do some work.
 
 .. ipython:: python
 
-   simulated_problem = pyblp.Problem(
-       simulation.product_formulations,
-       simulated_products,
-       simulation.agent_formulation,
-       simulation.agent_data
-   )
-   simulated_results = simulated_problem.solve(
+   simulated_problem = simulation_results.to_problem()
+   simulated_problem_results = simulated_problem.solve(
        0.5 * simulation.sigma, 
        0.5 * simulation.pi, 
        method='1s'
    )
-   simulated_results
+   simulated_problem_results
    simulation.beta
    simulation.gamma
    simulation.sigma
@@ -577,7 +572,7 @@ Although the problems in this example are small enough that there are no gains f
 .. ipython:: python
   
    with pyblp.parallel(2):
-       elasticities = simulated_results.compute_elasticities()
+       elasticities = simulated_problem_results.compute_elasticities()
    elasticities.shape
 
 Similarly, if we executed :meth:`Problem.solve` or :meth:`Simulation.solve` within a :func:`parallel` context, all of their market-by-market computation would be distributed among the processes in the pool.

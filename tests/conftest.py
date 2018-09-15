@@ -7,12 +7,15 @@ import numpy as np
 import patsy
 import pytest
 
-from pyblp import Formulation, Integration, Problem, ProblemResults, Simulation, build_id_data, build_ownership, options
+from pyblp import (
+    Formulation, Integration, Problem, ProblemResults, Simulation, SimulationResults, build_id_data, build_ownership,
+    options
+)
 from pyblp.utilities.basics import Data, Options, RecArray
 
 
 # define common types
-SimulationFixture = Tuple[Simulation, RecArray]
+SimulationFixture = Tuple[Simulation, SimulationResults]
 SimulatedProblemFixture = Tuple[Simulation, RecArray, Problem, Options, ProblemResults]
 
 
@@ -359,9 +362,8 @@ def simulated_problem(request: Any) -> SimulatedProblemFixture:
     bounds that are more conservative than the default ones.
     """
     name, supply = request.param
-    simulation, product_data = request.getfixturevalue(f'{name}_simulation')
-    product_formulations = simulation.product_formulations[:2 + int(supply)]
-    problem = Problem(product_formulations, product_data, simulation.agent_formulation, simulation.agent_data)
+    simulation, simulation_results = request.getfixturevalue(f'{name}_simulation')
+    problem = simulation_results.to_problem(simulation.product_formulations[:2 + int(supply)])
     solve_options = {
         'sigma': simulation.sigma,
         'pi': simulation.pi,
@@ -370,8 +372,8 @@ def simulated_problem(request: Any) -> SimulatedProblemFixture:
         'costs_type': simulation.costs_type,
         'method': '1s'
     }
-    results = problem.solve(**solve_options)
-    return simulation, product_data, problem, solve_options, results
+    problem_results = problem.solve(**solve_options)
+    return simulation, simulation_results.product_data, problem, solve_options, problem_results
 
 
 @pytest.fixture(scope='session', params=[pytest.param(1, id="1 observation"), pytest.param(10, id="10 observations")])
