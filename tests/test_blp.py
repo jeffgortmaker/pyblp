@@ -275,10 +275,8 @@ def test_fixed_effects(
         problem3 = Problem(product_formulations3, product_data3, problem.agent_formulation, simulation.agent_data)
         problem_results3 = problem3.solve(**solve_options)
 
-    # use only two draws for speed when computing optimal instruments
-    compute_options1 = compute_options2 = compute_options3 = {'draws': 2, 'seed': 0}
-
     # without a supply side, compute expected prices with a reduced form regression on all exogenous variables
+    expected_prices1 = expected_prices2 = expected_prices3 = None
     if problem.K3 == 0:
         assert product_formulations[0] is not None
         assert product_formulations1[0] is not None
@@ -299,14 +297,11 @@ def test_fixed_effects(
         expected_prices1 = compute_fitted_values(product_data['prices'], ZD_formulation1, product_data1)
         expected_prices2 = compute_fitted_values(product_data['prices'], ZD_formulation2, product_data2)
         expected_prices3 = compute_fitted_values(product_data['prices'], ZD_formulation3, product_data3)
-        compute_options1 = {'expected_prices': expected_prices1, **compute_options1}
-        compute_options2 = {'expected_prices': expected_prices2, **compute_options2}
-        compute_options3 = {'expected_prices': expected_prices3, **compute_options3}
 
-    # compute optimal instruments
-    instrument_results1 = problem_results1.compute_optimal_instruments(**compute_options1)
-    instrument_results2 = problem_results2.compute_optimal_instruments(**compute_options2)
-    instrument_results3 = problem_results3.compute_optimal_instruments(**compute_options3)
+    # compute optimal instruments (use only two draws for speed; accuracy is not a concern here)
+    Z_results1 = problem_results1.compute_optimal_instruments(draws=2, seed=0, expected_prices=expected_prices1)
+    Z_results2 = problem_results2.compute_optimal_instruments(draws=2, seed=0, expected_prices=expected_prices2)
+    Z_results3 = problem_results3.compute_optimal_instruments(draws=2, seed=0, expected_prices=expected_prices3)
 
     # compute marginal costs
     costs1 = problem_results1.compute_costs()
@@ -340,14 +335,14 @@ def test_fixed_effects(
         np.testing.assert_allclose(result1, result3, atol=atol, rtol=rtol, err_msg=key)
 
     # test that all optimal instrument results expected to be identical are essentially identical
-    instrument_results_keys = [
+    Z_results_keys = [
         'demand_instruments', 'supply_instruments', 'inverse_covariance_matrix', 'expected_xi_by_theta_jacobian',
         'expected_omega_by_theta_jacobian', 'expected_omega_by_beta_jacobian'
     ]
-    for key in instrument_results_keys:
-        result1 = getattr(instrument_results1, key)
-        result2 = getattr(instrument_results2, key)
-        result3 = getattr(instrument_results3, key)
+    for key in Z_results_keys:
+        result1 = getattr(Z_results1, key)
+        result2 = getattr(Z_results2, key)
+        result3 = getattr(Z_results3, key)
         if key in {'demand_instruments', 'supply_instruments'}:
             result2 = np.delete(result2, [i for i, x in enumerate(result2.T) if np.any(x == 0)], axis=1)
             result3 = np.delete(result3, [i for i, x in enumerate(result3.T) if np.any(x == 0)], axis=1)
