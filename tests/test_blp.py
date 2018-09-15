@@ -467,7 +467,7 @@ def test_omega_by_beta_jacobian(simulated_problem: SimulatedProblemFixture) -> N
         return
 
     # define a function that computes transformed marginal costs under a given beta
-    def compute_tilde_costs(beta):
+    def compute_tilde_costs(beta: Array) -> Array:
         """Update beta, compute marginal costs, and apply any transformation."""
         old_beta = results.beta.copy()
         results.beta = beta
