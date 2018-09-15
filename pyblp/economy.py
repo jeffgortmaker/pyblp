@@ -51,8 +51,10 @@ class Economy(StringRepresentation):
 
     def __init__(
             self, product_formulations: Sequence[Optional[Formulation]], agent_formulation: Optional[Formulation],
-            products: RecArray, agents: RecArray) -> None:
-        """Store information about formulations and data before absorbing any fixed effects."""
+            products: RecArray, agents: RecArray, updating_instruments: bool = False) -> None:
+        """Store information about formulations and data before absorbing any fixed effects. Fixed effects will only be
+        absorbed into instruments if updating_instruments is True.
+        """
 
         # store formulations and data
         self.product_formulations = product_formulations
@@ -87,33 +89,42 @@ class Economy(StringRepresentation):
         self._X3_formulations = self.products.dtype.fields['X3'][2]
         self._demographics_formulations = self.agents.dtype.fields['demographics'][2]
 
-        # absorb any demand-side fixed effects
-        self._absorb_demand_ids = None
+        # construct fixed effect absorption functions
+        self._absorb_demand_ids = self._absorb_supply_ids = None
         if self.ED > 0:
             assert product_formulations[0] is not None
+            self._absorb_demand_ids = functools.partial(product_formulations[0]._build_absorb(self.products.demand_ids))
+        if self.ES > 0:
+            assert product_formulations[2] is not None
+            self._absorb_supply_ids = functools.partial(product_formulations[2]._build_absorb(self.products.supply_ids))
+
+        # absorb any demand-side fixed effects
+        if self._absorb_demand_ids is not None:
             start_time = time.time()
             output("")
             output("Absorbing demand-side fixed effects ...")
-            self._absorb_demand_ids = functools.partial(product_formulations[0]._build_absorb(self.products.demand_ids))
-            self.products.X1, X1_errors = self._absorb_demand_ids(self.products.X1)
             self.products.ZD, ZD_errors = self._absorb_demand_ids(self.products.ZD)
-            if X1_errors or ZD_errors:
-                raise exceptions.MultipleErrors(X1_errors + ZD_errors)
+            if ZD_errors:
+                raise exceptions.MultipleErrors(ZD_errors)
+            if not updating_instruments:
+                self.products.X1, X1_errors = self._absorb_demand_ids(self.products.X1)
+                if X1_errors:
+                    raise exceptions.MultipleErrors(X1_errors)
             end_time = time.time()
             output(f"Absorbed demand-side fixed effects after {format_seconds(end_time - start_time)}.")
 
         # absorb any supply-side fixed effects
-        self._absorb_supply_ids = None
-        if self.ES > 0:
-            assert product_formulations[2] is not None
+        if self._absorb_supply_ids is not None:
             start_time = time.time()
             output("")
             output("Absorbing supply-side fixed effects ...")
-            self._absorb_supply_ids = functools.partial(product_formulations[2]._build_absorb(self.products.supply_ids))
-            self.products.X3, X3_errors = self._absorb_supply_ids(self.products.X3)
             self.products.ZS, ZS_errors = self._absorb_supply_ids(self.products.ZS)
-            if X3_errors or ZS_errors:
-                raise exceptions.MultipleErrors(X3_errors + ZS_errors)
+            if ZS_errors:
+                raise exceptions.MultipleErrors(ZS_errors)
+            if not updating_instruments:
+                self.products.X3, X3_errors = self._absorb_supply_ids(self.products.X3)
+                if X3_errors:
+                    raise exceptions.MultipleErrors(X3_errors)
             end_time = time.time()
             output(f"Absorbed supply-side fixed effects after {format_seconds(end_time - start_time)}.")
 

@@ -22,179 +22,8 @@ from .utilities.basics import (
 from .utilities.statistics import IV, compute_2sls_weights
 
 
-class Problem(Economy):
-    r"""A BLP problem.
-
-    This class is initialized with relevant data and solved with :meth:`Problem.solve`.
-
-    In both `product_data` and `agent_data`, fields with multiple columns can be either matrices or can be broken up
-    into multiple one-dimensional fields with column index suffixes that start at zero. For example, if there are three
-    columns of demand-side instruments, the `demand_instruments` field in `product_data`, which in this case should be a
-    matrix with three columns, can be replaced by three one-dimensional fields: `demand_instruments0`,
-    `demand_instruments1`, and `demand_instruments2`.
-
-    Parameters
-    ----------
-    product_formulations : `Formulation or tuple of Formulation`
-        :class:`Formulation` configuration or tuple of up to three :class:`Formulation` configurations for the matrix
-        of linear product characteristics, :math:`X_1`, for the matrix of nonlinear product characteristics,
-        :math:`X_2`, and for the matrix of cost characteristics, :math:`X_3`, respectively. If the formulation for
-        :math:`X_3` is not specified or is ``None``, a supply side will not be estimated. Similarly, if the formulation
-        for :math:`X_2` is not specified or is ``None``, the Logit model will be estimated.
-
-        Variable names should correspond to fields in `product_data`. The ``shares`` variable should not be included in
-        any of the formulations and ``prices`` should be included in the formulation for :math:`X_1` or :math:`X_2` (or
-        both). The `absorb` argument of :class:`Formulation` can be used to absorb fixed effects into :math:`X_1` and
-        :math:`X_3`, but not :math:`X_2`.
-
-    product_data : `structured array-like`
-        Each row corresponds to a product. Markets can have differing numbers of products. The following fields are
-        required:
-
-            - **market_ids** : (`object`) - IDs that associate products with markets.
-
-            - **shares** : (`numeric`) - Market shares, :math:`s`.
-
-            - **prices** : (`numeric`) - Product prices, :math:`p`.
-
-            - **demand_instruments** : (`numeric`) - Demand-side instruments, :math:`Z_D`.
-
-        If a formulation for :math:`X_3` is specified in `product_formulations`, the following fields are also required,
-        since they will be used to estimate the supply side of the problem:
-
-            - **firm_ids** : (`object, optional`) - IDs that associate products with firms. Any columns after the first
-              can be used to compute post-estimation outputs for firm changes, such as mergers.
-
-            - **supply_instruments** : (`numeric, optional`) - Supply-side instruments, :math:`Z_S`.
-
-        In addition to supply-side estimation, the `firm_ids` field is also needed to compute some post-estimation
-        outputs. If `firm_ids` are specified, custom ownership matrices can be specified as well:
-
-            - **ownership** : (`numeric, optional`) - Custom stacked :math:`J_t \times J_t` ownership matrices,
-              :math:`O`, for each market :math:`t`, which can be built with :func:`build_ownership`. By default,
-              standard ownership matrices are built only when they are needed. If specified, each stack is associated
-              with a `firm_ids` column and must have as many columns as there are products in the market with the most
-              products.
-
-        To estimate a nested Logit or random coefficients nested Logit (RCNL) model, nesting groups must be specified:
-
-            - **nesting_ids** (`object, optional`) - IDs that associate products with nesting groups. When these IDs are
-              specified, `rho` in :meth:`Problem.solve`, the vector of parameters that measure within nesting group
-              correlation, must be specified as well.
-
-        Finally, clustering groups can be specified to account for arbitrary within-group correlation while computing
-        standard errors and weighting matrices:
-
-            - **clustering_ids** (`object, optional`) - Cluster group IDs, which will be used when estimating standard
-              errors and updating weighting matrices if `covariance_type` in :meth:`Problem.solve` is ``'clustered'``.
-
-        Along with `market_ids`, `firm_ids`, `nesting_ids`, `clustering_ids`, and `prices`, the names of any additional
-        fields can be used as variables in `product_formulations`.
-
-    agent_formulation : `Formulation, optional`
-        :class:`Formulation` configuration for the matrix of observed agent characteristics called demographics,
-        :math:`d`, which will only be included in the model if this formulation is specified. Since demographics are
-        only used if there are nonlinear product characteristics, this formulation should only be specified if
-        :math:`X_2` is formulated in `product_formulations`. Variable names should correspond to fields in `agent_data`.
-    agent_data : `structured array-like, optional`
-        Each row corresponds to an agent. Markets can have differing numbers of agents. Since simulated agents are only
-        used if there are nonlinear product characteristics, agent data should only be specified if :math:`X_2` is
-        formulated in `product_formulations`. If agent data are specified, market IDs are required:
-
-            - **market_ids** : (`object`) - IDs that associate agents with markets. The set of distinct IDs should be
-              the same as the set of IDs in `product_data`. If `integration` is specified, there must be at least as
-              many rows in each market as the number of nodes and weights that are built for each market.
-
-        If `integration` is not specified, the following fields are required:
-
-            - **weights** : (`numeric, optional`) - Integration weights, :math:`w`.
-
-            - **nodes** : (`numeric, optional`) - Unobserved agent characteristics called integration nodes,
-              :math:`\nu`. If there are more than :math:`K_2` columns, only the first :math:`K_2` will be used.
-
-        Along with `market_ids`, the names of any additional fields can be used as variables in `agent_formulation`.
-
-    integration : `Integration, optional`
-        :class:`Integration` configuration for how to build nodes and weights for integration over agent utilities,
-        which will replace any `nodes` and `weights` fields in `agent_data`. This configuration is required if `nodes`
-        and `weights` in `agent_data` are not specified. It should not be specified if :math:`X_2` is not formulated
-        in `product_formulations`.
-
-    Attributes
-    ----------
-    product_formulations : `Formulation or tuple of Formulation`
-        :class:`Formulation` configurations for :math:`X_1`, :math:`X_2`, and :math:`X_3`, respectively.
-    agent_formulation : `Formulation`
-        :class:`Formulation` configuration for :math:`d`.
-    products : `Products`
-        Product data structured as :class:`Products`, which consists of data taken from `product_data` along with
-        matrices build according to :attr:`Problem.product_formulations`.
-    agents : `Agents`
-        Agent data structured as :class:`Agents`, which consists of data taken from `agent_data` or built by
-        `integration` along with any demographics formulated by `agent_formulation`.
-    unique_market_ids : `ndarray`
-        Unique market IDs in product and agent data.
-    unique_nesting_ids : `ndarray`
-        Unique nesting IDs in product data.
-    N : `int`
-        Number of products across all markets, :math:`N`.
-    T : `int`
-        Number of markets, :math:`T`.
-    K1 : `int`
-        Number of linear product characteristics, :math:`K_1`.
-    K2 : `int`
-        Number of nonlinear product characteristics, :math:`K_2`.
-    K3 : `int`
-        Number of cost product characteristics, :math:`K_3`.
-    D : `int`
-        Number of demographic variables, :math:`D`.
-    MD : `int`
-        Number of demand-side instruments, :math:`M_D`.
-    MS : `int`
-        Number of supply-side instruments, :math:`M_S`.
-    ED : `int`
-        Number of absorbed demand-side fixed effects, :math:`E_D`.
-    ES : `int`
-        Number of absorbed supply-side fixed effects, :math:`E_S`.
-    H : `int`
-        Number of nesting groups, :math:`H`.
-
-    Example
-    -------
-    In this example, we'll set up the fake cereal problem from :ref:`Nevo (2000) <n00>`.
-
-    .. ipython:: python
-
-       product_data = np.recfromcsv(pyblp.data.NEVO_PRODUCTS_LOCATION, encoding='utf-8')
-       agent_data = np.recfromcsv(pyblp.data.NEVO_AGENTS_LOCATION, encoding='utf-8')
-       product_formulations = (
-           pyblp.Formulation('0 + prices', absorb='C(product_ids)'),
-           pyblp.Formulation('1 + prices + sugar + mushy')
-       )
-       agent_formulation = pyblp.Formulation('0 + income + income_squared + age + child')
-       problem = pyblp.Problem(product_formulations, product_data, agent_formulation, agent_data)
-       problem
-
-    We'll solve this example problem in :meth:`Problem.solve`. For more examples, refer to the
-    :doc:`Examples </examples>` section.
-
-    """
-
-    def __init__(
-            self, product_formulations: Union[Formulation, Sequence[Optional[Formulation]]], product_data: Mapping,
-            agent_formulation: Optional[Formulation] = None, agent_data: Optional[Mapping] = None,
-            integration: Optional[Integration] = None) -> None:
-        """Initialize the underlying economy with structured product and agent data."""
-        if isinstance(product_formulations, Formulation):
-            product_formulations = [product_formulations]
-        elif isinstance(product_formulations, collections.Sequence) and len(product_formulations) <= 3:
-            product_formulations = list(product_formulations)
-        else:
-            raise TypeError("product_formulations must be a Formulation instance or a tuple of up to three instances.")
-        product_formulations.extend([None] * (3 - len(product_formulations)))
-        products = Products(product_formulations, product_data)
-        agents = Agents(products, agent_formulation, agent_data, integration)
-        super().__init__(product_formulations, agent_formulation, products, agents)
+class PrimitiveProblem(Economy):
+    """A BLP problem initialized with structured product and agent data."""
 
     def solve(
             self, sigma: Optional[Any] = None, pi: Optional[Any] = None, rho: Optional[Any] = None,
@@ -925,10 +754,189 @@ class Problem(Economy):
             output("")
 
 
+class Problem(PrimitiveProblem):
+    r"""A BLP problem.
+
+    This class is initialized with relevant data and solved with :meth:`Problem.solve`.
+
+    In both `product_data` and `agent_data`, fields with multiple columns can be either matrices or can be broken up
+    into multiple one-dimensional fields with column index suffixes that start at zero. For example, if there are three
+    columns of demand-side instruments, the `demand_instruments` field in `product_data`, which in this case should be a
+    matrix with three columns, can be replaced by three one-dimensional fields: `demand_instruments0`,
+    `demand_instruments1`, and `demand_instruments2`.
+
+    Parameters
+    ----------
+    product_formulations : `Formulation or tuple of Formulation`
+        :class:`Formulation` configuration or tuple of up to three :class:`Formulation` configurations for the matrix
+        of linear product characteristics, :math:`X_1`, for the matrix of nonlinear product characteristics,
+        :math:`X_2`, and for the matrix of cost characteristics, :math:`X_3`, respectively. If the formulation for
+        :math:`X_3` is not specified or is ``None``, a supply side will not be estimated. Similarly, if the formulation
+        for :math:`X_2` is not specified or is ``None``, the Logit model will be estimated.
+
+        Variable names should correspond to fields in `product_data`. The ``shares`` variable should not be included in
+        any of the formulations and ``prices`` should be included in the formulation for :math:`X_1` or :math:`X_2` (or
+        both). The `absorb` argument of :class:`Formulation` can be used to absorb fixed effects into :math:`X_1` and
+        :math:`X_3`, but not :math:`X_2`.
+
+    product_data : `structured array-like`
+        Each row corresponds to a product. Markets can have differing numbers of products. The following fields are
+        required:
+
+            - **market_ids** : (`object`) - IDs that associate products with markets.
+
+            - **shares** : (`numeric`) - Market shares, :math:`s`.
+
+            - **prices** : (`numeric`) - Product prices, :math:`p`.
+
+            - **demand_instruments** : (`numeric`) - Demand-side instruments, :math:`Z_D`.
+
+        If a formulation for :math:`X_3` is specified in `product_formulations`, the following fields are also required,
+        since they will be used to estimate the supply side of the problem:
+
+            - **firm_ids** : (`object, optional`) - IDs that associate products with firms. Any columns after the first
+              can be used to compute post-estimation outputs for firm changes, such as mergers.
+
+            - **supply_instruments** : (`numeric, optional`) - Supply-side instruments, :math:`Z_S`.
+
+        In addition to supply-side estimation, the `firm_ids` field is also needed to compute some post-estimation
+        outputs. If `firm_ids` are specified, custom ownership matrices can be specified as well:
+
+            - **ownership** : (`numeric, optional`) - Custom stacked :math:`J_t \times J_t` ownership matrices,
+              :math:`O`, for each market :math:`t`, which can be built with :func:`build_ownership`. By default,
+              standard ownership matrices are built only when they are needed. If specified, each stack is associated
+              with a `firm_ids` column and must have as many columns as there are products in the market with the most
+              products.
+
+        To estimate a nested Logit or random coefficients nested Logit (RCNL) model, nesting groups must be specified:
+
+            - **nesting_ids** (`object, optional`) - IDs that associate products with nesting groups. When these IDs are
+              specified, `rho` in :meth:`Problem.solve`, the vector of parameters that measure within nesting group
+              correlation, must be specified as well.
+
+        Finally, clustering groups can be specified to account for arbitrary within-group correlation while computing
+        standard errors and weighting matrices:
+
+            - **clustering_ids** (`object, optional`) - Cluster group IDs, which will be used when estimating standard
+              errors and updating weighting matrices if `covariance_type` in :meth:`Problem.solve` is ``'clustered'``.
+
+        Along with `market_ids`, `firm_ids`, `nesting_ids`, `clustering_ids`, and `prices`, the names of any additional
+        fields can be used as variables in `product_formulations`.
+
+    agent_formulation : `Formulation, optional`
+        :class:`Formulation` configuration for the matrix of observed agent characteristics called demographics,
+        :math:`d`, which will only be included in the model if this formulation is specified. Since demographics are
+        only used if there are nonlinear product characteristics, this formulation should only be specified if
+        :math:`X_2` is formulated in `product_formulations`. Variable names should correspond to fields in `agent_data`.
+    agent_data : `structured array-like, optional`
+        Each row corresponds to an agent. Markets can have differing numbers of agents. Since simulated agents are only
+        used if there are nonlinear product characteristics, agent data should only be specified if :math:`X_2` is
+        formulated in `product_formulations`. If agent data are specified, market IDs are required:
+
+            - **market_ids** : (`object`) - IDs that associate agents with markets. The set of distinct IDs should be
+              the same as the set of IDs in `product_data`. If `integration` is specified, there must be at least as
+              many rows in each market as the number of nodes and weights that are built for each market.
+
+        If `integration` is not specified, the following fields are required:
+
+            - **weights** : (`numeric, optional`) - Integration weights, :math:`w`.
+
+            - **nodes** : (`numeric, optional`) - Unobserved agent characteristics called integration nodes,
+              :math:`\nu`. If there are more than :math:`K_2` columns, only the first :math:`K_2` will be used.
+
+        Along with `market_ids`, the names of any additional fields can be used as variables in `agent_formulation`.
+
+    integration : `Integration, optional`
+        :class:`Integration` configuration for how to build nodes and weights for integration over agent utilities,
+        which will replace any `nodes` and `weights` fields in `agent_data`. This configuration is required if `nodes`
+        and `weights` in `agent_data` are not specified. It should not be specified if :math:`X_2` is not formulated
+        in `product_formulations`.
+
+    Attributes
+    ----------
+    product_formulations : `Formulation or tuple of Formulation`
+        :class:`Formulation` configurations for :math:`X_1`, :math:`X_2`, and :math:`X_3`, respectively.
+    agent_formulation : `Formulation`
+        :class:`Formulation` configuration for :math:`d`.
+    products : `Products`
+        Product data structured as :class:`Products`, which consists of data taken from `product_data` along with
+        matrices build according to :attr:`Problem.product_formulations`.
+    agents : `Agents`
+        Agent data structured as :class:`Agents`, which consists of data taken from `agent_data` or built by
+        `integration` along with any demographics formulated by `agent_formulation`.
+    unique_market_ids : `ndarray`
+        Unique market IDs in product and agent data.
+    unique_nesting_ids : `ndarray`
+        Unique nesting IDs in product data.
+    N : `int`
+        Number of products across all markets, :math:`N`.
+    T : `int`
+        Number of markets, :math:`T`.
+    K1 : `int`
+        Number of linear product characteristics, :math:`K_1`.
+    K2 : `int`
+        Number of nonlinear product characteristics, :math:`K_2`.
+    K3 : `int`
+        Number of cost product characteristics, :math:`K_3`.
+    D : `int`
+        Number of demographic variables, :math:`D`.
+    MD : `int`
+        Number of demand-side instruments, :math:`M_D`.
+    MS : `int`
+        Number of supply-side instruments, :math:`M_S`.
+    ED : `int`
+        Number of absorbed demand-side fixed effects, :math:`E_D`.
+    ES : `int`
+        Number of absorbed supply-side fixed effects, :math:`E_S`.
+    H : `int`
+        Number of nesting groups, :math:`H`.
+
+    Example
+    -------
+    In this example, we'll set up the fake cereal problem from :ref:`Nevo (2000) <n00>`.
+
+    .. ipython:: python
+
+       product_data = np.recfromcsv(pyblp.data.NEVO_PRODUCTS_LOCATION, encoding='utf-8')
+       agent_data = np.recfromcsv(pyblp.data.NEVO_AGENTS_LOCATION, encoding='utf-8')
+       product_formulations = (
+           pyblp.Formulation('0 + prices', absorb='C(product_ids)'),
+           pyblp.Formulation('1 + prices + sugar + mushy')
+       )
+       agent_formulation = pyblp.Formulation('0 + income + income_squared + age + child')
+       problem = pyblp.Problem(product_formulations, product_data, agent_formulation, agent_data)
+       problem
+
+    We'll solve this example problem in :meth:`Problem.solve`. For more examples, refer to the
+    :doc:`Examples </examples>` section.
+
+    """
+
+    def __init__(
+            self, product_formulations: Union[Formulation, Sequence[Optional[Formulation]]], product_data: Mapping,
+            agent_formulation: Optional[Formulation] = None, agent_data: Optional[Mapping] = None,
+            integration: Optional[Integration] = None) -> None:
+        """Initialize the underlying economy with product and agent data."""
+
+        # validate and normalize product formulations
+        if isinstance(product_formulations, Formulation):
+            product_formulations = [product_formulations]
+        elif isinstance(product_formulations, collections.Sequence) and len(product_formulations) <= 3:
+            product_formulations = list(product_formulations)
+        else:
+            raise TypeError("product_formulations must be a Formulation instance or a tuple of up to three instances.")
+        product_formulations.extend([None] * (3 - len(product_formulations)))
+
+        # initialize the underlying economy with structured product and agent data
+        products = Products(product_formulations, product_data)
+        agents = Agents(products, agent_formulation, agent_data, integration)
+        super().__init__(product_formulations, agent_formulation, products, agents)
+
+
 class Progress(object):
     """Structured information about estimation progress."""
 
-    problem: Problem
+    problem: PrimitiveProblem
     nonlinear_parameters: NonlinearParameters
     WD: Array
     WS: Array
@@ -952,9 +960,9 @@ class Progress(object):
     gradient_norm: Array
 
     def __init__(
-            self, problem: Problem, nonlinear_parameters: NonlinearParameters, WD: Array, WS: Array, theta: Array,
-            objective: Array, gradient: Array, next_delta: Array, true_delta: Array, true_tilde_costs: Array,
-            xi_jacobian: Array, omega_jacobian: Array, delta: Optional[Array] = None,
+            self, problem: PrimitiveProblem, nonlinear_parameters: NonlinearParameters, WD: Array, WS: Array,
+            theta: Array, objective: Array, gradient: Array, next_delta: Array, true_delta: Array,
+            true_tilde_costs: Array, xi_jacobian: Array, omega_jacobian: Array, delta: Optional[Array] = None,
             tilde_costs: Optional[Array] = None, true_xi: Optional[Array] = None, true_omega: Optional[Array] = None,
             beta: Optional[Array] = None, gamma: Optional[Array] = None,
             iteration_mapping: Optional[Dict[Hashable, int]] = None,

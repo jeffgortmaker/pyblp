@@ -2,7 +2,7 @@
 
 import collections
 import time
-from typing import Any, Hashable, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, Hashable, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -602,8 +602,8 @@ class Simulation(Economy):
             return market_s, costs_s, prices_s, iteration, firms_index
 
         # compute prices and shares market-by-market
-        iteration_mapping = {}
-        evaluation_mapping = {}
+        iteration_mapping: Dict[Hashable, int] = {}
+        evaluation_mapping: Dict[Hashable, int] = {}
         synthetic_prices = np.full_like(self.products.prices, np.nan)
         synthetic_shares = np.full_like(self.products.shares, np.nan)
         generator = generate_items(self.unique_market_ids, market_factory, SimulationMarket.solve)

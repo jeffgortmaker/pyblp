@@ -139,6 +139,18 @@ def structure_matrices(mapping: Mapping) -> RecArray:
     return structured
 
 
+def update_matrices(matrices: RecArray, update_mapping: Dict) -> RecArray:
+    """Update fields in a record array created by structure_matrices by re-structuring the matrices."""
+    mapping = update_mapping.copy()
+    for key in matrices.dtype.names:
+        if key not in mapping:
+            if len(matrices.dtype.fields[key]) > 2:
+                mapping[(matrices.dtype.fields[key][2], key)] = (matrices[key], matrices[key].dtype)
+            else:
+                mapping[key] = (matrices[key], matrices[key].dtype)
+    return structure_matrices(mapping)
+
+
 def extract_matrix(structured_array_like: Mapping, key: Any) -> Optional[Array]:
     """Attempt to extract a field from a structured array-like object or horizontally stack field0, field1, and so on,
     into a full matrix. The extracted array will have at least two dimensions.

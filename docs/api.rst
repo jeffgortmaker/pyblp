@@ -112,12 +112,11 @@ Solved problems return the following results class.
 
    ProblemResults
 
-In addition to class attributes, other post-estimation outputs can be computed with the following methods.
+In addition to class attributes, other post-estimation outputs can be estimated with the following methods, which each return an array.
 
 .. autosummary::
    :toctree: api
 
-   ProblemResults.compute_optimal_instruments
    ProblemResults.compute_aggregate_elasticities
    ProblemResults.compute_elasticities
    ProblemResults.compute_diversion_ratios
@@ -132,6 +131,33 @@ In addition to class attributes, other post-estimation outputs can be computed w
    ProblemResults.compute_markups
    ProblemResults.compute_profits
    ProblemResults.compute_consumer_surpluses
+
+Optimal instruments, which return a results class instead of an array, can be estimated with the following method.
+
+.. autosummary::
+   :toctree: api
+
+   ProblemResults.compute_optimal_instruments
+
+
+Optimal Instrument Results Class
+--------------------------------
+
+Optimal instrument computation returns the following results class.
+
+.. autosummary::
+   :nosignatures:
+   :toctree: api
+   :template: class_without_signature.rst
+
+   OptimalInstrumentResults
+
+The optimal instrument results can be converted into a :class:`Problem` with the following method.
+
+.. autosummary::
+   :toctree: api
+
+   OptimalInstrumentResults.to_problem
 
 
 Structured Data Classes
