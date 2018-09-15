@@ -638,7 +638,7 @@ class SimulationMarket(Market):
     def solve(
             self, costs: Array, prices: Array, iteration: Iteration, firms_index: int = 0) -> (
             Tuple[Array, Array, List[Error], int, int]):
-        """Solve for Bertrand-Nash prices and shares. By default, use unchanged firm IDs."""
+        """Solve for synthetic prices and shares. By default, use unchanged firm IDs."""
         errors: List[Error] = []
 
         # configure NumPy to identify floating point errors
@@ -651,6 +651,9 @@ class SimulationMarket(Market):
             )
             if not converged:
                 errors.append(exceptions.SyntheticPricesConvergenceError())
+
+            # switch to identifying floating point errors with synthetic share computation
+            np.seterrcall(lambda *_: errors.append(exceptions.SyntheticSharesFloatingPointError()))
 
             # compute the associated shares
             delta = self.update_delta_with_variable('prices', prices)

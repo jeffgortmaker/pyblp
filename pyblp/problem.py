@@ -821,7 +821,7 @@ class Problem(Economy):
             bad_indices = ~np.isfinite(xi_jacobian)
             if np.any(bad_indices):
                 xi_jacobian[bad_indices] = last_progress.xi_jacobian[bad_indices]
-                errors.append(exceptions.XiJacobianReversionError(bad_indices))
+                errors.append(exceptions.XiByThetaJacobianReversionError(bad_indices))
 
         # absorb any demand-side fixed effects
         delta = true_delta
@@ -885,7 +885,7 @@ class Problem(Economy):
             bad_indices = ~np.isfinite(omega_jacobian)
             if np.any(bad_indices):
                 omega_jacobian[bad_indices] = last_progress.omega_jacobian[bad_indices]
-                errors.append(exceptions.OmegaJacobianReversionError(bad_indices))
+                errors.append(exceptions.OmegaByThetaJacobianReversionError(bad_indices))
 
         # absorb any supply-side fixed effects
         tilde_costs = true_tilde_costs
@@ -1095,16 +1095,16 @@ class ProblemMarket(Market):
             if not converged:
                 errors.append(exceptions.DeltaConvergenceError())
 
-            # if the gradient is to be computed, replace invalid values in delta with the last computed values before
-            #   computing its Jacobian
-            xi_jacobian = np.full((self.J, nonlinear_parameters.P), np.nan, options.dtype)
-            if compute_gradient:
-                valid_delta = delta.copy()
-                bad_delta_indices = ~np.isfinite(delta)
-                valid_delta[bad_delta_indices] = initial_delta[bad_delta_indices]
-                xi_jacobian, jacobian_errors = self.compute_xi_by_theta_jacobian(nonlinear_parameters, valid_delta)
-                errors.extend(jacobian_errors)
-            return delta, xi_jacobian, errors, iterations, evaluations
+        # if the gradient is to be computed, replace invalid values in delta with the last computed values before
+        #   computing its Jacobian
+        xi_jacobian = np.full((self.J, nonlinear_parameters.P), np.nan, options.dtype)
+        if compute_gradient:
+            valid_delta = delta.copy()
+            bad_delta_indices = ~np.isfinite(delta)
+            valid_delta[bad_delta_indices] = initial_delta[bad_delta_indices]
+            xi_jacobian, jacobian_errors = self.compute_xi_by_theta_jacobian(nonlinear_parameters, valid_delta)
+            errors.extend(jacobian_errors)
+        return delta, xi_jacobian, errors, iterations, evaluations
 
     def solve_supply(
             self, initial_tilde_costs: Array, xi_jacobian: Array, beta_jacobian: Array,
@@ -1139,16 +1139,16 @@ class ProblemMarket(Market):
                 with np.errstate(all='ignore'):
                     tilde_costs = np.log(costs)
 
-            # if the gradient is to be computed, replace invalid transformed marginal costs with their last computed
-            #   values before computing their Jacobian, which is zero for clipped marginal costs
-            omega_jacobian = np.full((self.J, nonlinear_parameters.P), np.nan, options.dtype)
-            if compute_gradient:
-                valid_tilde_costs = tilde_costs.copy()
-                bad_costs_indices = ~np.isfinite(tilde_costs)
-                valid_tilde_costs[bad_costs_indices] = initial_tilde_costs[bad_costs_indices]
-                omega_jacobian, jacobian_errors = self.compute_omega_by_theta_jacobian(
-                    valid_tilde_costs, xi_jacobian, beta_jacobian, nonlinear_parameters, costs_type
-                )
-                errors.extend(jacobian_errors)
-                omega_jacobian[clipped_costs_indices.flat] = 0
-            return tilde_costs, omega_jacobian, clipped_costs_indices, errors
+        # if the gradient is to be computed, replace invalid transformed marginal costs with their last computed
+        #   values before computing their Jacobian, which is zero for clipped marginal costs
+        omega_jacobian = np.full((self.J, nonlinear_parameters.P), np.nan, options.dtype)
+        if compute_gradient:
+            valid_tilde_costs = tilde_costs.copy()
+            bad_costs_indices = ~np.isfinite(tilde_costs)
+            valid_tilde_costs[bad_costs_indices] = initial_tilde_costs[bad_costs_indices]
+            omega_jacobian, jacobian_errors = self.compute_omega_by_theta_jacobian(
+                valid_tilde_costs, xi_jacobian, beta_jacobian, nonlinear_parameters, costs_type
+            )
+            errors.extend(jacobian_errors)
+            omega_jacobian[clipped_costs_indices.flat] = 0
+        return tilde_costs, omega_jacobian, clipped_costs_indices, errors

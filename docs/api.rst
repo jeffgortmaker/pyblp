@@ -53,7 +53,7 @@ In addition to reading from data files, product data can be simulated by initial
 
    Simulation
 
-Once initialized, the following method computes Bertrand-Nash prices and shares.
+Once initialized, the following method computes equilibrium prices and shares.
 
 .. autosummary::
    :toctree: api
@@ -167,20 +167,26 @@ When errors occur, they will either be displayed as warnings or raised as except
    exceptions.InvalidParameterCovariancesError
    exceptions.InvalidMomentCovariancesError
    exceptions.DeltaFloatingPointError
+   exceptions.XiByThetaJacobianFloatingPointError
    exceptions.CostsFloatingPointError
+   exceptions.OmegaByThetaJacobianFloatingPointError
+   exceptions.OmegaByBetaJacobianFloatingPointError
    exceptions.SyntheticPricesFloatingPointError
-   exceptions.BertrandNashPricesFloatingPointError
+   exceptions.SyntheticSharesFloatingPointError
+   exceptions.EquilibriumPricesFloatingPointError
+   exceptions.EquilibriumSharesFloatingPointError
    exceptions.AbsorptionConvergenceError
    exceptions.ThetaConvergenceError
    exceptions.DeltaConvergenceError
    exceptions.SyntheticPricesConvergenceError
-   exceptions.BertrandNashPricesConvergenceError
+   exceptions.EquilibriumPricesConvergenceError
    exceptions.ObjectiveReversionError
    exceptions.GradientReversionError
    exceptions.DeltaReversionError
    exceptions.CostsReversionError
-   exceptions.XiJacobianReversionError
-   exceptions.OmegaJacobianReversionError
+   exceptions.XiByThetaJacobianReversionError
+   exceptions.OmegaByThetaJacobianReversionError
+   exceptions.OmegaByBetaJacobianReversionError
    exceptions.AbsorptionInversionError
    exceptions.FittedValuesInversionError
    exceptions.SharesByXiJacobianInversionError

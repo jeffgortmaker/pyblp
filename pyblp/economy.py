@@ -804,38 +804,62 @@ class Market(object):
         """Use the Implicit Function Theorem to compute the Jacobian of xi (equivalently, of delta) with respect to
         theta. By default, use unchanged delta values.
         """
+        errors: List[Error] = []
         if delta is None:
             assert self.delta is not None
             delta = self.delta
-        errors: List[Error] = []
-        probabilities, conditionals = self.compute_probabilities(delta, keep_conditionals=True)
-        shares_by_xi_jacobian = self.compute_shares_by_xi_jacobian(probabilities, conditionals)
-        shares_by_theta_jacobian = self.compute_shares_by_theta_jacobian(
-            nonlinear_parameters, delta, probabilities, conditionals
-        )
-        xi_by_theta_jacobian, replacement = approximately_solve(shares_by_xi_jacobian, -shares_by_theta_jacobian)
-        if replacement:
-            errors.append(exceptions.SharesByXiJacobianInversionError(shares_by_xi_jacobian, replacement))
-        return xi_by_theta_jacobian, errors
+
+        # configure NumPy to identify floating point errors
+        with np.errstate(divide='call', over='call', under='ignore', invalid='call'):
+            np.seterrcall(lambda *_: errors.append(exceptions.XiByThetaJacobianFloatingPointError()))
+
+            # compute the Jacobian
+            probabilities, conditionals = self.compute_probabilities(delta, keep_conditionals=True)
+            shares_by_xi_jacobian = self.compute_shares_by_xi_jacobian(probabilities, conditionals)
+            shares_by_theta_jacobian = self.compute_shares_by_theta_jacobian(
+                nonlinear_parameters, delta, probabilities, conditionals
+            )
+            xi_by_theta_jacobian, replacement = approximately_solve(shares_by_xi_jacobian, -shares_by_theta_jacobian)
+            if replacement:
+                errors.append(exceptions.SharesByXiJacobianInversionError(shares_by_xi_jacobian, replacement))
+            return xi_by_theta_jacobian, errors
 
     def compute_omega_by_theta_jacobian(
             self, tilde_costs: Array, xi_jacobian: Array, beta_jacobian: Array,
             nonlinear_parameters: NonlinearParameters, costs_type: str) -> Tuple[Array, List[Error]]:
         """Compute the Jacobian of omega (equivalently, of transformed marginal costs) with respect to theta."""
-        eta_jacobian, errors = self.compute_eta_by_theta_jacobian(xi_jacobian, beta_jacobian, nonlinear_parameters)
-        if costs_type == 'linear':
-            omega_jacobian = -eta_jacobian
-        else:
-            assert costs_type == 'log'
-            omega_jacobian = -eta_jacobian / np.exp(tilde_costs)
-        return omega_jacobian, errors
+        errors: List[Error] = []
+
+        # configure NumPy to identify floating point errors
+        with np.errstate(divide='call', over='call', under='ignore', invalid='call'):
+            np.seterrcall(lambda *_: errors.append(exceptions.OmegaByThetaJacobianFloatingPointError()))
+
+            # compute the Jacobian
+            eta_jacobian, eta_jacobian_errors = self.compute_eta_by_theta_jacobian(
+                xi_jacobian, beta_jacobian, nonlinear_parameters
+            )
+            errors.extend(eta_jacobian_errors)
+            if costs_type == 'linear':
+                omega_jacobian = -eta_jacobian
+            else:
+                assert costs_type == 'log'
+                omega_jacobian = -eta_jacobian / np.exp(tilde_costs)
+            return omega_jacobian, errors
 
     def compute_omega_by_beta_jacobian(self, tilde_costs: Array, costs_type: str) -> Tuple[Array, List[Error]]:
         """Compute the Jacobian of omega (equivalently, of transformed marginal costs) with respect to beta."""
-        eta_jacobian, errors = self.compute_eta_by_beta_jacobian()
-        if costs_type == 'linear':
-            omega_jacobian = -eta_jacobian
-        else:
-            assert costs_type == 'log'
-            omega_jacobian = -eta_jacobian / np.exp(tilde_costs)
-        return omega_jacobian, errors
+        errors: List[Error] = []
+
+        # configure NumPy to identify floating point errors
+        with np.errstate(divide='call', over='call', under='ignore', invalid='call'):
+            np.seterrcall(lambda *_: errors.append(exceptions.OmegaByBetaJacobianFloatingPointError()))
+
+            # compute the Jacobian
+            eta_jacobian, eta_jacobian_errors = self.compute_eta_by_beta_jacobian()
+            errors.extend(eta_jacobian_errors)
+            if costs_type == 'linear':
+                omega_jacobian = -eta_jacobian
+            else:
+                assert costs_type == 'log'
+                omega_jacobian = -eta_jacobian / np.exp(tilde_costs)
+            return omega_jacobian, errors

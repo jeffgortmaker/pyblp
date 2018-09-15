@@ -110,11 +110,43 @@ class DeltaFloatingPointError(Error):
     """
 
 
+class XiByThetaJacobianFloatingPointError(Error):
+    r"""Encountered floating point issues when computing the Jacobian of :math:`\xi` (equivalently, of :math:`\delta`)
+    with respect to :math:`\theta`.
+
+    This problem is often due to prior problems, overflow, or nonpositive shares, and can sometimes be mitigated by
+    choosing smaller initial parameter values, setting more conservative bounds, rescaling data, removing outliers, or
+    changing the floating point precision.
+
+    """
+
+
 class CostsFloatingPointError(Error):
-    r"""Encountered floating point issues when computing marginal costs or their Jacobian with respect to
-    :math:`\theta`.
+    """Encountered floating point issues when computing marginal costs.
 
     This problem is often due to prior problems or overflow and can sometimes be mitigated by choosing smaller initial
+    parameter values, setting more conservative bounds, rescaling data, removing outliers, or changing the floating
+    point precision.
+
+    """
+
+
+class OmegaByThetaJacobianFloatingPointError(Error):
+    r"""Encountered floating point issues when computing the Jacobian of :math:`\omega` (equivalently, of transformed
+    marginal costs) with respect to :math:`\theta`.
+
+    This problem is often due to prior problems or overflow, and can sometimes be mitigated by  choosing smaller initial
+    parameter values, setting more conservative bounds, rescaling data, removing outliers, or changing the floating
+    point precision.
+
+    """
+
+
+class OmegaByBetaJacobianFloatingPointError(Error):
+    r"""Encountered floating point issues when computing the Jacobian of :math:`\omega` (equivalently, of transformed
+    marginal costs) with respect to :math:`\beta`.
+
+    This problem is often due to prior problems or overflow, and can sometimes be mitigated by choosing smaller initial
     parameter values, setting more conservative bounds, rescaling data, removing outliers, or changing the floating
     point precision.
 
@@ -131,8 +163,27 @@ class SyntheticPricesFloatingPointError(Error):
     """
 
 
-class BertrandNashPricesFloatingPointError(Error):
-    """Encountered floating point issues when computing Bertrand-Nash prices.
+class SyntheticSharesFloatingPointError(Error):
+    """Encountered floating point issues when computing synthetic shares.
+
+    This problem is often due to prior problems or overflow and can sometimes be mitigated by making sure that the
+    specified parameters are reasonable. For example, the parameters on prices should generally imply a downward sloping
+    demand curve.
+
+    """
+
+
+class EquilibriumPricesFloatingPointError(Error):
+    """Encountered floating point issues when computing equilibrium prices.
+
+    This problem is often due to prior problems or overflow and can sometimes be mitigated by rescaling data, removing
+    outliers, or changing the floating point precision.
+
+    """
+
+
+class EquilibriumSharesFloatingPointError(Error):
+    """Encountered floating point issues when computing equilibrium shares.
 
     This problem is often due to prior problems or overflow and can sometimes be mitigated by rescaling data, removing
     outliers, or changing the floating point precision.
@@ -177,8 +228,8 @@ class SyntheticPricesConvergenceError(Error):
     """
 
 
-class BertrandNashPricesConvergenceError(Error):
-    """The fixed point computation of Bertrand-Nash prices failed to converge.
+class EquilibriumPricesConvergenceError(Error):
+    """The fixed point computation of equilibrium prices failed to converge.
 
     This problem can sometimes be mitigated by increasing the maximum number of fixed point iterations, increasing the
     fixed point tolerance, or configuring other iteration settings.
@@ -202,16 +253,23 @@ class CostsReversionError(_MultipleReversionError):
     """Reverted problematic marginal costs."""
 
 
-class XiJacobianReversionError(_MultipleReversionError):
+class XiByThetaJacobianReversionError(_MultipleReversionError):
     r"""Reverted problematic elements in the Jacobian of :math:`\xi` (equivalently, of :math:`\delta`) with respect to
     :math:`\theta`.
 
     """
 
 
-class OmegaJacobianReversionError(_MultipleReversionError):
+class OmegaByThetaJacobianReversionError(_MultipleReversionError):
     r"""Reverted problematic elements in the Jacobian of :math:`\omega` (equivalently, of transformed marginal costs)
     with respect to :math:`\theta`.
+
+    """
+
+
+class OmegaByBetaJacobianReversionError(_MultipleReversionError):
+    r"""Reverted problematic elements in the Jacobian of :math:`\omega` (equivalently, of transformed marginal costs)
+    with respect to :math:`\beta`.
 
     """
 

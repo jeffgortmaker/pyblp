@@ -311,19 +311,22 @@ class Results(object):
         self.omega_by_beta_jacobian = np.full((self.problem.N, self.problem.K1), np.nan, options.dtype)
         if self.problem.K3 > 0:
             # define a factory for computing the Jacobian of omega with respect to beta in markets
-            def market_factory(s: Hashable) -> Tuple[Market, Array, str]:
+            def market_factory(s: Hashable) -> Tuple[ResultsMarket, Array, str]:
                 """Build a market along with arguments used to compute the Jacobian."""
-                market_s = Market(self.problem, s, self.sigma, self.pi, self.rho, self.beta, self.true_delta)
+                market_s = ResultsMarket(self.problem, s, self.sigma, self.pi, self.rho, self.beta, self.true_delta)
                 true_tilde_costs_s = self.true_tilde_costs[self.problem._product_market_indices[s]]
                 return market_s, true_tilde_costs_s, costs_type
 
             # compute the Jacobian market-by-market
-            generator = generate_items(self.unique_market_ids, market_factory, Market.compute_omega_by_beta_jacobian)
+            generator = generate_items(
+                self.unique_market_ids, market_factory, ResultsMarket.compute_omega_by_beta_jacobian
+            )
             for t, (omega_by_beta_jacobian_t, errors_t) in generator:
                 self.omega_by_beta_jacobian[self.problem._product_market_indices[t]] = omega_by_beta_jacobian_t
                 self._errors.extend(errors_t)
 
             # the Jacobian should be zero for any clipped marginal costs
+            assert progress.clipped_costs_indices is not None
             self.omega_by_beta_jacobian[progress.clipped_costs_indices.flat] = 0
 
         # stack errors, weights, instruments, Jacobian of the errors with respect to parameters, and clustering IDs
@@ -627,7 +630,7 @@ class Results(object):
     def _compute_realizations(
             self, prices: Optional[Array], iteration: Optional[Iteration], xi: Array, omega: Array) -> (
             Tuple[Array, Array, Array, int, int, List[Error]]):
-        """If they have not already been estimated, compute the Bertrand-Nash prices associated with a realization of xi
+        """If they have not already been estimated, compute the equilibrium prices associated with a realization of xi
         and omega. Next, compute associated shares and delta. Finally, compute realizations of the the Jacobian of xi
         and omega with respect to theta, as well as the Jacobian of omega with respect to beta.
         """
@@ -641,7 +644,7 @@ class Results(object):
 
         # define a factory for computing price, share, and delta realizations in markets
         def market_factory(s: Hashable) -> Tuple[ResultsMarket, Array, Optional[Array], Optional[Iteration]]:
-            """Build a market along with arguments used to compute Bertrand-Nash prices and shares along with delta."""
+            """Build a market along with arguments used to compute equilibrium prices and shares along with delta."""
             market_s = ResultsMarket(self.problem, s, self.sigma, self.pi, self.rho, self.beta, delta)
             costs_s = costs[self.problem._product_market_indices[s]]
             prices_s = prices[self.problem._product_market_indices[s]] if prices is not None else None
@@ -686,9 +689,9 @@ class Results(object):
         errors: List[Error] = []
 
         # define a factory for computing the Jacobian of xi with respect to theta in markets
-        def market_factory(s: Hashable) -> Tuple[Market, NonlinearParameters]:
-            """Build a market with Bertrand-Nash prices and shares along with arguments used to compute the Jacobian."""
-            market_s = Market(self.problem, s, self.sigma, self.pi, self.rho, self.beta, delta, {
+        def market_factory(s: Hashable) -> Tuple[ResultsMarket, NonlinearParameters]:
+            """Build a market with equilibrium prices and shares along with arguments used to compute the Jacobian."""
+            market_s = ResultsMarket(self.problem, s, self.sigma, self.pi, self.rho, self.beta, delta, {
                 'prices': equilibrium_prices[self.problem._product_market_indices[s]],
                 'shares': equilibrium_shares[self.problem._product_market_indices[s]]
             })
@@ -696,7 +699,7 @@ class Results(object):
 
         # compute the Jacobian market-by-market
         xi_by_theta_jacobian = np.full((self.problem.N, self._nonlinear_parameters.P), np.nan, options.dtype)
-        generator = generate_items(self.unique_market_ids, market_factory, Market.compute_xi_by_theta_jacobian)
+        generator = generate_items(self.unique_market_ids, market_factory, ResultsMarket.compute_xi_by_theta_jacobian)
         for t, (xi_by_theta_jacobian_t, errors_t) in generator:
             xi_by_theta_jacobian[self.problem._product_market_indices[t]] = xi_by_theta_jacobian_t
             errors.extend(errors_t)
@@ -705,7 +708,7 @@ class Results(object):
         bad_indices = ~np.isfinite(xi_by_theta_jacobian)
         if np.any(bad_indices):
             xi_by_theta_jacobian[bad_indices] = self.xi_by_theta_jacobian[bad_indices]
-            errors.append(exceptions.XiJacobianReversionError(bad_indices))
+            errors.append(exceptions.XiByThetaJacobianReversionError(bad_indices))
         return xi_by_theta_jacobian, errors
 
     def _compute_supply_realizations(
@@ -724,9 +727,7 @@ class Results(object):
 
         # define a factory for computing the Jacobians of omega with respect to theta and beta in markets
         def market_factory(s: Hashable) -> Tuple[ResultsMarket, Array, Array, Array, NonlinearParameters, str]:
-            """Build a market with Bertrand-Nash prices and shares along with arguments used to compute the
-            Jacobians.
-            """
+            """Build a market with equilibrium prices and shares along with arguments used to compute the Jacobians."""
             market_s = ResultsMarket(self.problem, s, self.sigma, self.pi, self.rho, self.beta, delta, {
                 'prices': equilibrium_prices[self.problem._product_market_indices[s]],
                 'shares': equilibrium_shares[self.problem._product_market_indices[s]]
@@ -748,13 +749,13 @@ class Results(object):
         bad_indices = ~np.isfinite(omega_by_theta_jacobian)
         if np.any(bad_indices):
             omega_by_theta_jacobian[bad_indices] = self.omega_by_theta_jacobian[bad_indices]
-            errors.append(exceptions.XiJacobianReversionError(bad_indices))
+            errors.append(exceptions.OmegaByThetaJacobianReversionError(bad_indices))
 
         # replace invalid elements in the Jacobian of omega with respect to beta
         bad_indices = ~np.isfinite(omega_by_theta_jacobian)
         if np.any(bad_indices):
             omega_by_beta_jacobian[bad_indices] = self.omega_by_beta_jacobian[bad_indices]
-            errors.append(exceptions.XiJacobianReversionError(bad_indices))
+            errors.append(exceptions.OmegaByBetaJacobianReversionError(bad_indices))
         return omega_by_theta_jacobian, omega_by_beta_jacobian, errors
 
     def _combine_arrays(self, compute_market_results: Callable, fixed_args: Sequence, market_args: Sequence) -> Array:
@@ -973,7 +974,7 @@ class Results(object):
         return self._combine_arrays(ResultsMarket.compute_costs, [], [])
 
     def compute_approximate_prices(self, firms_index: int = 1, costs: Optional[Any] = None) -> Array:
-        r"""Estimate approximate Bertrand-Nash prices after firm ID changes, :math:`p^a`, under the assumption that
+        r"""Estimate approximate equilibrium prices after firm ID changes, :math:`p^a`, under the assumption that
         shares and their price derivatives are unaffected by such changes.
 
         This approximation is discussed in, for example, :ref:`Nevo (1997) <n97>`. Prices in each market are computed
@@ -999,16 +1000,16 @@ class Results(object):
         Returns
         -------
         `ndarray`
-            Estimates of approximate Bertrand-Nash prices after any firm ID changes, :math:`p^a`.
+            Estimates of approximate equilibrium prices after any firm ID changes, :math:`p^a`.
 
         """
-        output("Solving for approximate Bertrand-Nash prices ...")
+        output("Solving for approximate equilibrium prices ...")
         return self._combine_arrays(ResultsMarket.compute_approximate_prices, [firms_index], [costs])
 
     def compute_prices(
             self, iteration: Optional[Iteration] = None, firms_index: int = 1, prices: Optional[Any] = None,
             costs: Optional[Any] = None) -> Array:
-        r"""Estimate Bertrand-Nash prices after firm ID changes, :math:`p^*`.
+        r"""Estimate equilibrium prices after firm ID changes, :math:`p^*`.
 
         Prices are computed in each market by iterating over the :math:`\zeta`-markup equation from
         :ref:`Morrow and Skerlos (2011) <ms11>`,
@@ -1040,10 +1041,10 @@ class Results(object):
         Returns
         -------
         `ndarray`
-            Estimates of Bertrand-Nash prices after any firm ID changes, :math:`p^*`.
+            Estimates of equilibrium prices after any firm ID changes, :math:`p^*`.
 
         """
-        output("Solving for Bertrand-Nash prices ...")
+        output("Solving for equilibrium prices ...")
         if iteration is None:
             iteration = Iteration('simple', {'tol': 1e-12})
         elif not isinstance(iteration, Iteration):
@@ -1056,8 +1057,8 @@ class Results(object):
         Parameters
         ----------
         prices : `array-like`
-            Prices at which to evaluate shares, such as Bertrand-Nash prices, :math:`p^*`, computed by
-            :meth:`Results.compute_prices`, or approximate Bertrand-Nash prices, :math:`p^a`, computed by
+            Prices at which to evaluate shares, such as equilibrium prices, :math:`p^*`, computed by
+            :meth:`Results.compute_prices`, or approximate equilibrium prices, :math:`p^a`, computed by
             :meth:`Results.compute_approximate_prices`. By default, unchanged prices are used.
 
         Returns
@@ -1107,8 +1108,8 @@ class Results(object):
         Parameters
         ----------
         prices : `array-like, optional`
-            Prices, :math:`p`, such as Bertrand-Nash prices, :math:`p^*`, computed by :meth:`Results.compute_prices`, or
-            approximate Bertrand-Nash prices, :math:`p^a`, computed by :meth:`Results.compute_approximate_prices`. By
+            Prices, :math:`p`, such as equilibrium prices, :math:`p^*`, computed by :meth:`Results.compute_prices`, or
+            approximate equilibrium prices, :math:`p^a`, computed by :meth:`Results.compute_approximate_prices`. By
             default, unchanged prices are used.
         costs : `array-like`
             Marginal costs, :math:`c`, computed by :meth:`Results.compute_costs`. By default, marginal costs are
@@ -1134,8 +1135,8 @@ class Results(object):
         Parameters
         ----------
         prices : `array-like, optional`
-            Prices, :math:`p`, such as Bertrand-Nash prices, :math:`p^*`, computed by :meth:`Results.compute_prices`, or
-            approximate Bertrand-Nash prices, :math:`p^a`, computed by :meth:`Results.compute_approximate_prices`. By
+            Prices, :math:`p`, such as equilibrium prices, :math:`p^*`, computed by :meth:`Results.compute_prices`, or
+            approximate equilibrium prices, :math:`p^a`, computed by :meth:`Results.compute_approximate_prices`. By
             default, unchanged prices are used.
         shares : `array-like, optional`
             Shares, :math:`s`, such as those computed by :meth:`Results.compute_shares`. By default, unchanged shares
@@ -1185,8 +1186,8 @@ class Results(object):
         ----------
         prices : `array-like, optional`
             Prices at which utilities, :math:`u`, and price derivatives, :math:`\alpha` and :math:`\alpha_i`, will be
-            evaluated, such as Bertrand-Nash prices, :math:`p^*`, computed by :meth:`Results.compute_prices`, or
-            approximate Bertrand-Nash prices, :math:`p^a`, computed by :meth:`Results.compute_approximate_prices`. By
+            evaluated, such as equilibrium prices, :math:`p^*`, computed by :meth:`Results.compute_prices`, or
+            approximate equilibrium prices, :math:`p^a`, computed by :meth:`Results.compute_approximate_prices`. By
             default, unchanged prices are used.
 
         Returns
@@ -1206,21 +1207,24 @@ class ResultsMarket(Market):
     def solve_equilibrium(
             self, costs: Array, prices: Optional[Array], iteration: Optional[Iteration]) -> (
             Tuple[Array, Array, Array, List[Error], int, int]):
-        """If not already estimated, compute Bertrand-Nash prices, which will be used to compute optimal instruments.
+        """If not already estimated, compute equilibrium prices, which will be used to compute optimal instruments.
         Also compute the associated delta and shares.
         """
         errors: List[Error] = []
 
         # configure NumPy to identify floating point errors
         with np.errstate(divide='call', over='call', under='ignore', invalid='call'):
-            np.seterrcall(lambda *_: errors.append(exceptions.BertrandNashPricesFloatingPointError()))
+            np.seterrcall(lambda *_: errors.append(exceptions.EquilibriumPricesFloatingPointError()))
 
             # solve the fixed point problem if prices haven't already been estimated
             iterations = evaluations = 0
             if iteration is not None:
                 prices, converged, iterations, evaluations = self.compute_bertrand_nash_prices(costs, iteration)
                 if not converged:
-                    errors.append(exceptions.BertrandNashPricesConvergenceError())
+                    errors.append(exceptions.EquilibriumPricesConvergenceError())
+
+            # switch to identifying floating point errors with equilibrium share computation
+            np.seterrcall(lambda *_: errors.append(exceptions.EquilibriumSharesFloatingPointError()))
 
             # compute the associated shares
             delta = self.update_delta_with_variable('prices', prices)
@@ -1301,7 +1305,7 @@ class ResultsMarket(Market):
 
     def compute_approximate_prices(
             self, firms_index: int = 0, costs: Optional[Array] = None) -> Tuple[Array, List[Error]]:
-        """Estimate approximate Bertrand-Nash prices under the assumption that shares and their price derivatives are
+        """Estimate approximate equilibrium prices under the assumption that shares and their price derivatives are
         unaffected by firm ID changes. By default, use unchanged firm IDs and compute marginal costs.
         """
         errors: List[Error] = []
@@ -1316,7 +1320,7 @@ class ResultsMarket(Market):
     def compute_prices(
             self, iteration: Iteration, firms_index: int = 0, prices: Optional[Array] = None,
             costs: Optional[Array] = None) -> Tuple[Array, List[Error]]:
-        """Estimate Bertrand-Nash prices. By default, use unchanged firm IDs, use unchanged prices as starting values,
+        """Estimate equilibrium prices. By default, use unchanged firm IDs, use unchanged prices as starting values,
         and compute marginal costs.
         """
         errors: List[Error] = []
@@ -1325,10 +1329,12 @@ class ResultsMarket(Market):
 
         # configure NumPy to identify floating point errors
         with np.errstate(divide='call', over='call', under='ignore', invalid='call'):
-            np.seterrcall(lambda *_: errors.append(exceptions.BertrandNashPricesFloatingPointError()))
+            np.seterrcall(lambda *_: errors.append(exceptions.EquilibriumPricesFloatingPointError()))
+
+            # compute equilibrium prices
             prices, converged = self.compute_bertrand_nash_prices(costs, iteration, firms_index, prices)[:2]
             if not converged:
-                errors.append(exceptions.BertrandNashPricesConvergenceError())
+                errors.append(exceptions.EquilibriumPricesConvergenceError())
             return prices, errors
 
     def compute_shares(self, prices: Optional[Array] = None) -> Tuple[Array, List[Error]]:
