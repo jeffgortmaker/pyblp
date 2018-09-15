@@ -20,8 +20,8 @@ if TYPE_CHECKING:
     from .problem import Problem, Progress  # noqa
 
 
-class Results(object):
-    r"""Results of a solved BLP problem.
+class ProblemResults(object):
+    r"""ProblemResults of a solved BLP problem.
 
     Many results are class attributes. Other post-estimation outputs be computed by calling class methods.
 
@@ -34,39 +34,39 @@ class Results(object):
     ----------
     problem : `Problem`
         :class:`Problem` that created these results.
-    last_results : `Results`
-        :class:`Results` from the last GMM step.
+    last_results : `ProblemResults`
+        :class:`ProblemResults` from the last GMM step.
     step : `int`
         GMM step that created these results.
     optimization_time : `float`
         Number of seconds it took the optimization routine to finish.
     cumulative_optimization_time : `float`
-        Sum of :attr:`Results.optimization_time` for this step and all prior steps.
+        Sum of :attr:`ProblemResults.optimization_time` for this step and all prior steps.
     total_time : `float`
-        Sum of :attr:`Results.optimization_time` and the number of seconds it took to set up the GMM step and compute
-        results after optimization had finished.
+        Sum of :attr:`ProblemResults.optimization_time` and the number of seconds it took to set up the GMM step and
+        compute results after optimization had finished.
     cumulative_total_time : `float`
-        Sum of :attr:`Results.total_time` for this step and all prior steps.
+        Sum of :attr:`ProblemResults.total_time` for this step and all prior steps.
     optimization_iterations : `int`
         Number of major iterations completed by the optimization routine.
     cumulative_optimization_iterations : `int`
-        Sum of :attr:`Results.optimization_iterations` for this step and all prior steps.
+        Sum of :attr:`ProblemResults.optimization_iterations` for this step and all prior steps.
     objective_evaluations : `int`
         Number of GMM objective evaluations.
     cumulative_objective_evaluations : `int`
-        Sum of :attr:`Results.objective_evaluations` for this step and all prior steps.
+        Sum of :attr:`ProblemResults.objective_evaluations` for this step and all prior steps.
     fp_iterations : `ndarray`
         Number of major iterations completed by the iteration routine used to compute :math:`\delta(\hat{\theta})` in
-        each market during each objective evaluation. Rows are in the same order as :attr:`Results.unique_market_ids`
-        and column indices correspond to objective evaluations.
+        each market during each objective evaluation. Rows are in the same order as
+        :attr:`ProblemResults.unique_market_ids` and column indices correspond to objective evaluations.
     cumulative_fp_iterations : `ndarray`
-        Concatenation of :attr:`Results.fp_iterations` for this step and all prior steps.
+        Concatenation of :attr:`ProblemResults.fp_iterations` for this step and all prior steps.
     contraction_evaluations : `ndarray`
         Number of times the contraction used to compute :math:`\delta(\hat{\theta})` was evaluated in each market during
-        each objective evaluation. Rows are in the same order as :attr:`Results.unique_market_ids` and column indices
-        correspond to objective evaluations.
+        each objective evaluation. Rows are in the same order as :attr:`ProblemResults.unique_market_ids` and column
+        indices correspond to objective evaluations.
     cumulative_contraction_evaluations : `ndarray`
-        Concatenation of :attr:`Results.contraction_evaluations` for this step and all prior steps.
+        Concatenation of :attr:`ProblemResults.contraction_evaluations` for this step and all prior steps.
     theta : `ndarray`
         Estimated unfixed nonlinear parameters, :math:`\hat{\theta}`.
     sigma : `ndarray`
@@ -134,7 +134,7 @@ class Results(object):
         Estimated gradient of the GMM objective with respect to :math:`\theta`. This is still computed once at the end
         of an optimization routine that was configured to not use analytic gradients.
     gradient_norm : `ndarray`
-        Infinity norm of :attr:`Results.gradient`.
+        Infinity norm of :attr:`ProblemResults.gradient`.
     sigma_gradient : `ndarray`
         Estimated gradient of the GMM objective with respect to unknown :math:`\Sigma` elements in :math:`\theta`.
     pi_gradient : `ndarray`
@@ -160,7 +160,7 @@ class Results(object):
     """
 
     problem: 'Problem'
-    last_results: Optional['Results']
+    last_results: Optional['ProblemResults']
     step: int
     optimization_time: float
     cumulative_optimization_time: float
@@ -218,7 +218,7 @@ class Results(object):
     _nonlinear_parameters: NonlinearParameters
 
     def __init__(
-            self, progress: 'Progress', last_results: Optional['Results'], step_start_time: float,
+            self, progress: 'Progress', last_results: Optional['ProblemResults'], step_start_time: float,
             optimization_start_time: float, optimization_end_time: float, iterations: int, evaluations: int,
             iteration_mappings: Sequence[Dict[Hashable, int]], evaluation_mappings: Sequence[Dict[Hashable, int]],
             costs_type: str, center_moments: bool, W_type: str, se_type: str) -> None:
@@ -371,7 +371,7 @@ class Results(object):
         widths = [max(len(k1), len(k2), options.digits + 6 if i > 5 else 0) for i, (k1, k2) in enumerate(header)]
         formatter = TableFormatter(widths)
         sections = [[
-            "Results Summary:",
+            "ProblemResults Summary:",
             formatter.line(),
             formatter([k[0] for k in header]),
             formatter([k[1] for k in header], underline=True),
@@ -804,7 +804,7 @@ class Results(object):
         -------
         `ndarray`
             Estimates of aggregate elasticities of demand, :math:`E`, for all markets. Rows are in the same order as
-            :attr:`Results.unique_market_ids`.
+            :attr:`ProblemResults.unique_market_ids`.
 
         """
         output(f"Computing aggregate elasticities with respect to {name} ...")
@@ -894,9 +894,9 @@ class Results(object):
         ----------
         matrices : `array-like`
             Stacked matrices, such as estimates of :math:`\varepsilon`, computed by
-            :meth:`Results.compute_elasticities`; :math:`\mathscr{D}`, computed by
-            :meth:`Results.compute_diversion_ratios`; or :math:`\bar{\mathscr{D}}`, computed by
-            :meth:`Results.compute_long_run_diversion_ratios`.
+            :meth:`ProblemResults.compute_elasticities`; :math:`\mathscr{D}`, computed by
+            :meth:`ProblemResults.compute_diversion_ratios`; or :math:`\bar{\mathscr{D}}`, computed by
+            :meth:`ProblemResults.compute_long_run_diversion_ratios`.
 
         Returns
         -------
@@ -916,9 +916,9 @@ class Results(object):
         ----------
         matrices : `array-like`
             Stacked matrices, such as estimates of :math:`\varepsilon`, computed by
-            :meth:`Results.compute_elasticities`; :math:`\mathscr{D}`, computed by
-            :meth:`Results.compute_diversion_ratios`; or :math:`\bar{\mathscr{D}}`, computed by
-            :meth:`Results.compute_long_run_diversion_ratios`.
+            :meth:`ProblemResults.compute_elasticities`; :math:`\mathscr{D}`, computed by
+            :meth:`ProblemResults.compute_diversion_ratios`; or :math:`\bar{\mathscr{D}}`, computed by
+            :meth:`ProblemResults.compute_long_run_diversion_ratios`.
 
         Returns
         -------
@@ -926,7 +926,7 @@ class Results(object):
             Stacked means of diagonals for all markets. If the matrices are estimates of :math:`\varepsilon`, the mean
             of a diagonal is a market's mean own elasticity of demand; if they are estimates of :math:`\mathscr{D}` or
             :math:`\bar{\mathscr{D}}`, the mean of a diagonal is a market's mean diversion ratio to the outside good.
-            Rows are in the same order as :attr:`Results.unique_market_ids`.
+            Rows are in the same order as :attr:`ProblemResults.unique_market_ids`.
 
         """
         output("Computing mean own elasticities ...")
@@ -972,7 +972,7 @@ class Results(object):
             Column index of the firm IDs in the `firm_ids` field of `product_data` in :class:`Problem`. If an
             `ownership` field was specified, the corresponding stack of ownership matrices will be used.
         costs : `array-like, optional`
-            Marginal costs, :math:`c`, computed by :meth:`Results.compute_costs`. By default, marginal costs are
+            Marginal costs, :math:`c`, computed by :meth:`ProblemResults.compute_costs`. By default, marginal costs are
             computed.
 
         Returns
@@ -1011,9 +1011,9 @@ class Results(object):
         prices : `array-like, optional`
             Prices at which the fixed point iteration routine will start. By default, unchanged prices, :math:`p`, are
             used as starting values. Other reasonable starting prices include :math:`p^a`, computed by
-            :meth:`Results.compute_approximate_prices`.
+            :meth:`ProblemResults.compute_approximate_prices`.
         costs : `array-like`
-            Marginal costs, :math:`c`, computed by :meth:`Results.compute_costs`. By default, marginal costs are
+            Marginal costs, :math:`c`, computed by :meth:`ProblemResults.compute_costs`. By default, marginal costs are
             computed.
 
         Returns
@@ -1036,8 +1036,8 @@ class Results(object):
         ----------
         prices : `array-like`
             Prices at which to evaluate shares, such as equilibrium prices, :math:`p^*`, computed by
-            :meth:`Results.compute_prices`, or approximate equilibrium prices, :math:`p^a`, computed by
-            :meth:`Results.compute_approximate_prices`. By default, unchanged prices are used.
+            :meth:`ProblemResults.compute_prices`, or approximate equilibrium prices, :math:`p^a`, computed by
+            :meth:`ProblemResults.compute_approximate_prices`. By default, unchanged prices are used.
 
         Returns
         -------
@@ -1063,14 +1063,14 @@ class Results(object):
             Column index of the firm IDs in the `firm_ids` field of `product_data` in :class:`Problem`. By default,
             unchanged firm IDs are used.
         shares : `array-like, optional`
-            Shares, :math:`s`, such as those computed by :meth:`Results.compute_shares`. By default, unchanged shares
-            are used.
+            Shares, :math:`s`, such as those computed by :meth:`ProblemResults.compute_shares`. By default, unchanged
+            shares are used.
 
         Returns
         -------
         `ndarray`
             Estimated Herfindahl-Hirschman Indices, :math:`\text{HHI}`, for all markets. Rows are in the same order as
-            :attr:`Results.unique_market_ids`.
+            :attr:`ProblemResults.unique_market_ids`.
 
         """
         output("Computing HHI ...")
@@ -1086,11 +1086,11 @@ class Results(object):
         Parameters
         ----------
         prices : `array-like, optional`
-            Prices, :math:`p`, such as equilibrium prices, :math:`p^*`, computed by :meth:`Results.compute_prices`, or
-            approximate equilibrium prices, :math:`p^a`, computed by :meth:`Results.compute_approximate_prices`. By
-            default, unchanged prices are used.
+            Prices, :math:`p`, such as equilibrium prices, :math:`p^*`, computed by
+            :meth:`ProblemResults.compute_prices`, or approximate equilibrium prices, :math:`p^a`, computed by
+            :meth:`ProblemResults.compute_approximate_prices`. By default, unchanged prices are used.
         costs : `array-like`
-            Marginal costs, :math:`c`, computed by :meth:`Results.compute_costs`. By default, marginal costs are
+            Marginal costs, :math:`c`, computed by :meth:`ProblemResults.compute_costs`. By default, marginal costs are
             computed.
 
         Returns
@@ -1113,14 +1113,14 @@ class Results(object):
         Parameters
         ----------
         prices : `array-like, optional`
-            Prices, :math:`p`, such as equilibrium prices, :math:`p^*`, computed by :meth:`Results.compute_prices`, or
-            approximate equilibrium prices, :math:`p^a`, computed by :meth:`Results.compute_approximate_prices`. By
-            default, unchanged prices are used.
+            Prices, :math:`p`, such as equilibrium prices, :math:`p^*`, computed by
+            :meth:`ProblemResults.compute_prices`, or approximate equilibrium prices, :math:`p^a`, computed by
+            :meth:`ProblemResults.compute_approximate_prices`. By default, unchanged prices are used.
         shares : `array-like, optional`
-            Shares, :math:`s`, such as those computed by :meth:`Results.compute_shares`. By default, unchanged shares
-            are used.
+            Shares, :math:`s`, such as those computed by :meth:`ProblemResults.compute_shares`. By default, unchanged
+            shares are used.
         costs : `array-like`
-            Marginal costs, :math:`c`, computed by :meth:`Results.compute_costs`. By default, marginal costs are
+            Marginal costs, :math:`c`, computed by :meth:`ProblemResults.compute_costs`. By default, marginal costs are
             computed.
 
         Returns
@@ -1164,15 +1164,15 @@ class Results(object):
         ----------
         prices : `array-like, optional`
             Prices at which utilities, :math:`u`, and price derivatives, :math:`\alpha` and :math:`\alpha_i`, will be
-            evaluated, such as equilibrium prices, :math:`p^*`, computed by :meth:`Results.compute_prices`, or
-            approximate equilibrium prices, :math:`p^a`, computed by :meth:`Results.compute_approximate_prices`. By
-            default, unchanged prices are used.
+            evaluated, such as equilibrium prices, :math:`p^*`, computed by :meth:`ProblemResults.compute_prices`, or
+            approximate equilibrium prices, :math:`p^a`, computed by :meth:`ProblemResults.compute_approximate_prices`.
+            By default, unchanged prices are used.
 
         Returns
         -------
         `ndarray`
             Estimated population-normalized consumer surpluses, :math:`\text{CS}`, for all markets. Rows are in the same
-            order as :attr:`Results.unique_market_ids`.
+            order as :attr:`ProblemResults.unique_market_ids`.
 
         """
         output("Computing consumer surpluses with the equation that assumes away nonlinear income effects ...")

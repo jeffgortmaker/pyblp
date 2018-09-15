@@ -90,28 +90,28 @@ Solved BLP problems return the following results class.
    :toctree: api
    :template: class_without_signature.rst
 
-   Results
+   ProblemResults
 
 In addition to class attributes, other post-estimation outputs can be computed with the following methods.
 
 .. autosummary::
    :toctree: api
 
-   Results.compute_optimal_instruments
-   Results.compute_aggregate_elasticities
-   Results.compute_elasticities
-   Results.compute_diversion_ratios
-   Results.compute_long_run_diversion_ratios
-   Results.extract_diagonals
-   Results.extract_diagonal_means
-   Results.compute_costs
-   Results.compute_approximate_prices
-   Results.compute_prices
-   Results.compute_shares
-   Results.compute_hhi
-   Results.compute_markups
-   Results.compute_profits
-   Results.compute_consumer_surpluses
+   ProblemResults.compute_optimal_instruments
+   ProblemResults.compute_aggregate_elasticities
+   ProblemResults.compute_elasticities
+   ProblemResults.compute_diversion_ratios
+   ProblemResults.compute_long_run_diversion_ratios
+   ProblemResults.extract_diagonals
+   ProblemResults.extract_diagonal_means
+   ProblemResults.compute_costs
+   ProblemResults.compute_approximate_prices
+   ProblemResults.compute_prices
+   ProblemResults.compute_shares
+   ProblemResults.compute_hhi
+   ProblemResults.compute_markups
+   ProblemResults.compute_profits
+   ProblemResults.compute_consumer_surpluses
 
 
 Structured Data Classes

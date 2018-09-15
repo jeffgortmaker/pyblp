@@ -7,13 +7,13 @@ import numpy as np
 import patsy
 import pytest
 
-from pyblp import Formulation, Integration, Problem, Results, Simulation, build_id_data, build_ownership, options
+from pyblp import Formulation, Integration, Problem, ProblemResults, Simulation, build_id_data, build_ownership, options
 from pyblp.utilities.basics import Data, Options, RecArray
 
 
 # define common types
 SimulationFixture = Tuple[Simulation, RecArray]
-SimulatedProblemFixture = Tuple[Simulation, RecArray, Problem, Options, Results]
+SimulatedProblemFixture = Tuple[Simulation, RecArray, Problem, Options, ProblemResults]
 
 
 @pytest.fixture(scope='session', autouse=True)

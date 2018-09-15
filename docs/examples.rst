@@ -205,7 +205,7 @@ Finally, as in the original paper, we'll use the `W_type` and `se_type` argument
 
 Again, results are similar to those in the original paper.
 
-One thing to note is that unlike our estimation procedure for the fake cereal problem, for which we used the non-default BFGS routine, here we used the default optimization routine, which supports parameter bounds. These bounds are displayed along with other optimization information when verbosity is not turned off. We can also look at them by inspecting their :class:`Results` attributes.
+One thing to note is that unlike our estimation procedure for the fake cereal problem, for which we used the non-default BFGS routine, here we used the default optimization routine, which supports parameter bounds. These bounds are displayed along with other optimization information when verbosity is not turned off. We can also look at them by inspecting their :class:`ProblemResults` attributes.
 
 .. ipython::
 
@@ -218,15 +218,15 @@ The default bounds were chosen to reduce the risk of numerical overflow. Without
 Problem Results
 ---------------
 
-The :meth:`Problem.solve` method returns an instance of the :class:`Results` class, which, when printed, displays basic estimation results. The results that are displayed are simply formatted information extracted from various class attributes such as :attr:`Results.sigma` and :attr:`Results.sigma_se`.
+The :meth:`Problem.solve` method returns an instance of the :class:`ProblemResults` class, which, when printed, displays basic estimation results. The results that are displayed are simply formatted information extracted from various class attributes such as :attr:`Results.sigma` and :attr:`Results.sigma_se`.
 
-Additional post-estimation outputs can be computed with :class:`Results` methods.
+Additional post-estimation outputs can be computed with :class:`ProblemResults` methods.
 
 
 Elasticities and Diversion Ratios
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-We can estimate elasticities, :math:`\varepsilon`, and diversion ratios, :math:`\mathscr{D}`, with :meth:`Results.compute_elasticities` and :meth:`Results.compute_diversion_ratios`.
+We can estimate elasticities, :math:`\varepsilon`, and diversion ratios, :math:`\mathscr{D}`, with :meth:`ProblemResults.compute_elasticities` and :meth:`ProblemResults.compute_diversion_ratios`.
 
 .. ipython:: python
 
@@ -277,16 +277,16 @@ Post-estimation outputs are computed for each market and stacked. We'll use :fun
 
 Diagonals in the first two images consist of own elasticities, and diagonals in the last two are diversion ratios to the outside good. The second and fourth images have empty columns because the selected market in the automobile problem has fewer products than other markets, and the extra columns are filled with ``numpy.nan``.
 
-Elasticities and diversion ratios can be computed with respect to variables other than ``prices`` with the `name` argument of :meth:`Results.compute_elasticities` and :meth:`Results.compute_diversion_ratios`. Additionally, the :meth:`Results.compute_long_run_diversion_ratios` can be used to used to understand substitution when products are eliminated from the choice set.
+Elasticities and diversion ratios can be computed with respect to variables other than ``prices`` with the `name` argument of :meth:`ProblemResults.compute_elasticities` and :meth:`ProblemResults.compute_diversion_ratios`. Additionally, the :meth:`ProblemResults.compute_long_run_diversion_ratios` can be used to used to understand substitution when products are eliminated from the choice set.
 
-The convenience methods :meth:`Results.extract_diagonals` and :meth:`Results.extract_diagonal_means` can be used to extract information about own elasticities of demand from elasticity matrices.
+The convenience methods :meth:`ProblemResults.extract_diagonals` and :meth:`ProblemResults.extract_diagonal_means` can be used to extract information about own elasticities of demand from elasticity matrices.
 
 .. ipython:: python
 
    nevo_means = nevo_results.extract_diagonal_means(nevo_elasticities)
    blp_means = blp_results.extract_diagonal_means(blp_elasticities)
 
-An alternative to summarizing full elasticity matrices is to use :meth:`Results.compute_aggregate_elasticities` to estimate aggregate elasticities of demand, :math:`E`, in each market, which reflect the change in total sales under a proportional sales tax of some factor.
+An alternative to summarizing full elasticity matrices is to use :meth:`ProblemResults.compute_aggregate_elasticities` to estimate aggregate elasticities of demand, :math:`E`, in each market, which reflect the change in total sales under a proportional sales tax of some factor.
 
 .. ipython:: python
 
@@ -318,14 +318,14 @@ Since demand for an entire product category is generally less elastic than the a
 Marginal Costs and Markups
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-To compute marginal costs, :math:`c`, the `product_data` passed to :class:`Problem` must have had a `firm_ids` field. Since we included firm IDs in both problems, we can use :meth:`Results.compute_costs`.
+To compute marginal costs, :math:`c`, the `product_data` passed to :class:`Problem` must have had a `firm_ids` field. Since we included firm IDs in both problems, we can use :meth:`ProblemResults.compute_costs`.
 
 .. ipython:: python
 
    nevo_costs = nevo_results.compute_costs()
    blp_costs = blp_results.compute_costs()
 
-Other methods that compute supply-side outputs often compute marginal costs themselves. For example, :meth:`Results.compute_markups` will compute marginal costs when estimating markups, :math:`\mathscr{M}`, but computation can be sped up if we just use our pre-computed values.
+Other methods that compute supply-side outputs often compute marginal costs themselves. For example, :meth:`ProblemResults.compute_markups` will compute marginal costs when estimating markups, :math:`\mathscr{M}`, but computation can be sped up if we just use our pre-computed values.
 
 .. ipython:: python
 
@@ -342,7 +342,7 @@ Other methods that compute supply-side outputs often compute marginal costs them
 Mergers
 ~~~~~~~
 
-Before computing post-merger outputs, we'll supplement our pre-merger markups with some other outputs. We'll compute Herfindahl-Hirschman Indices, :math:`\text{HHI}`, with :meth:`Results.compute_hhi`; population-normalized gross expected profits, :math:`\pi`, with :meth:`Results.compute_profits`; and population-normalized consumer surpluses, :math:`\text{CS}`, with :meth:`Results.compute_consumer_surpluses`.
+Before computing post-merger outputs, we'll supplement our pre-merger markups with some other outputs. We'll compute Herfindahl-Hirschman Indices, :math:`\text{HHI}`, with :meth:`ProblemResults.compute_hhi`; population-normalized gross expected profits, :math:`\pi`, with :meth:`ProblemResults.compute_profits`; and population-normalized consumer surpluses, :math:`\text{CS}`, with :meth:`ProblemResults.compute_consumer_surpluses`.
 
 .. ipython:: python
 
@@ -355,7 +355,7 @@ Before computing post-merger outputs, we'll supplement our pre-merger markups wi
 
 To compute post-merger outputs, the `firm_ids` field in the `product_data` passed to :class:`Problem` must have had at least two columns. Columns after the first represent changes, such as mergers. Although mergers are commonly what firm ID changes represent, these additional columns can represent any type of change.
 
-Since we included two columns of firm IDs in both problems, we can use :meth:`Results.compute_approximate_prices` or :meth:`Results.compute_prices` to estimate post-merger prices. The first method, which is discussed, for example, in :ref:`Nevo (1997) <n97>`, assumes that shares and their price derivatives are unaffected by the merger. The second method does not make these assumptions and iterates over the :math:`\zeta`-markup equation from :ref:`Morrow and Skerlos (2011) <ms11>` to solve the full system of :math:`J_t` equations and :math:`J_t` unknowns in each market :math:`t`. We'll use the latter, since it is fast enough for the two example problems.
+Since we included two columns of firm IDs in both problems, we can use :meth:`ProblemResults.compute_approximate_prices` or :meth:`ProblemResults.compute_prices` to estimate post-merger prices. The first method, which is discussed, for example, in :ref:`Nevo (1997) <n97>`, assumes that shares and their price derivatives are unaffected by the merger. The second method does not make these assumptions and iterates over the :math:`\zeta`-markup equation from :ref:`Morrow and Skerlos (2011) <ms11>` to solve the full system of :math:`J_t` equations and :math:`J_t` unknowns in each market :math:`t`. We'll use the latter, since it is fast enough for the two example problems.
 
 .. ipython:: python
 
@@ -364,7 +364,7 @@ Since we included two columns of firm IDs in both problems, we can use :meth:`Re
 
 If the problems were configured with more than two columns of firm IDs, we could estimate post-merger prices for the other mergers with the `firms_index` argument, which is by default ``1``.
 
-We'll compute post-merger shares with :meth:`Results.compute_shares`.
+We'll compute post-merger shares with :meth:`ProblemResults.compute_shares`.
 
 .. ipython:: python
 
@@ -457,7 +457,7 @@ Comparing results from the full BLP model with results from the simpler Logit mo
    nevo_logit_results = nevo_logit_problem.solve()
    nevo_logit_results
 
-Logit :class:`Results` can be to compute the same types of post-estimation outputs as :class:`Results` created by a full BLP problem.
+Logit :class:`ProblemResults` can be to compute the same types of post-estimation outputs as :class:`ProblemResults` created by a full BLP problem.
 
 
 Nesting Parameters
@@ -534,7 +534,7 @@ The instruments in :attr:`Simulation.product_data` are basic ones computed with 
 
 The :class:`Simulation` can be further configured with other arguments that determine how unobserved product characteristics are simulated and how marginal costs are specified.
 
-Since at this stage, prices and shares are all zeros, we still need to solve the simulation with :meth:`Simulation.solve`. This method computes Bertrand-Nash prices and shares. Just like :meth:`Results.compute_prices`, it iterates over the :math:`\zeta`-markup equation from :ref:`Morrow and Skerlos (2011) <ms11>` to do so.
+Since at this stage, prices and shares are all zeros, we still need to solve the simulation with :meth:`Simulation.solve`. This method computes Bertrand-Nash prices and shares. Just like :meth:`ProblemResults.compute_prices`, it iterates over the :math:`\zeta`-markup equation from :ref:`Morrow and Skerlos (2011) <ms11>` to do so.
 
 .. ipython:: python
 

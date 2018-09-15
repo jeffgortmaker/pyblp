@@ -363,8 +363,8 @@ def compute_fitted_values(variable: Any, formulation: Formulation, data: Mapping
        conditional_prices = pyblp.compute_fitted_values(product_data.prices, formulation, product_data)
        conditional_prices
 
-    These fitted values could be passed to `expected_prices` in :meth:`Results.compute_optimal_instruments` because
-    they are a reasonable reduced form estimate of expected prices conditional on all exogenous variables.
+    These fitted values could be passed to `expected_prices` in :meth:`ProblemResults.compute_optimal_instruments`
+    because they are a reasonable reduced form estimate of expected prices conditional on all exogenous variables.
 
     """
     if not isinstance(formulation, Formulation):

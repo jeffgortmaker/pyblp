@@ -15,7 +15,7 @@ from .configurations.optimization import Optimization
 from .economy import Economy, Market
 from .parameters import NonlinearParameters
 from .primitives import Agents, Products
-from .results import Results
+from .results import ProblemResults
 from .utilities.basics import (
     Array, Bounds, Error, Groups, TableFormatter, format_number, format_seconds, generate_items, output
 )
@@ -204,7 +204,7 @@ class Problem(Economy):
             error_behavior: str = 'revert', error_punishment: float = 1, delta_behavior: str = 'last',
             iteration: Optional[Iteration] = None, fp_type: str = 'linear', costs_type: str = 'linear',
             costs_bounds: Optional[Tuple[Any, Any]] = None, center_moments: bool = True, W_type: str = 'robust',
-            se_type: str = 'robust') -> Results:
+            se_type: str = 'robust') -> ProblemResults:
         r"""Solve the problem.
 
         The problem is solved in one or more GMM steps. During each step, any unfixed nonlinear parameters in
@@ -327,7 +327,7 @@ class Problem(Economy):
                 - ``'2s'`` (default) - Two-step GMM.
 
             Iterated GMM can be manually implemented by executing single GMM steps in a loop, in which after the first
-            iteration, nonlinear parameters and weighting matrices from the last :class:`Results` are passed as
+            iteration, nonlinear parameters and weighting matrices from the last :class:`ProblemResults` are passed as
             arguments.
 
         optimization : `Optimization, optional`
@@ -446,8 +446,8 @@ class Problem(Economy):
 
         Returns
         -------
-        `Results`
-            :class:`Results` of the solved problem.
+        `ProblemResults`
+            :class:`ProblemResults` of the solved problem.
 
         Examples
         --------
@@ -667,7 +667,7 @@ class Problem(Economy):
             output("")
             output(f"Computing results for step {step} ...")
             final_progress = compute_step_progress(theta, last_progress, compute_gradient=nonlinear_parameters.P > 0)
-            results = Results(
+            results = ProblemResults(
                 final_progress, last_results, step_start_time, optimization_start_time, optimization_end_time,
                 iterations, evaluations + 1, iteration_mappings, evaluation_mappings, costs_type, center_moments,
                 W_type, se_type
