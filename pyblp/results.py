@@ -1197,7 +1197,7 @@ class ResultsMarket(Market):
             # solve the fixed point problem if prices haven't already been estimated
             iterations = evaluations = 0
             if iteration is not None:
-                prices, converged, iterations, evaluations = self.compute_bertrand_nash_prices(costs, iteration)
+                prices, converged, iterations, evaluations = self.compute_equilibrium_prices(costs, iteration)
                 if not converged:
                     errors.append(exceptions.EquilibriumPricesConvergenceError())
 
@@ -1310,7 +1310,7 @@ class ResultsMarket(Market):
             np.seterrcall(lambda *_: errors.append(exceptions.EquilibriumPricesFloatingPointError()))
 
             # compute equilibrium prices
-            prices, converged = self.compute_bertrand_nash_prices(costs, iteration, firms_index, prices)[:2]
+            prices, converged = self.compute_equilibrium_prices(costs, iteration, firms_index, prices)[:2]
             if not converged:
                 errors.append(exceptions.EquilibriumPricesConvergenceError())
             return prices, errors

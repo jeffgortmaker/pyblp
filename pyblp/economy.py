@@ -453,10 +453,10 @@ class Market(object):
         tilde_capital_omega = capital_lamda_inverse @ (ownership_matrix * capital_gamma).T
         return tilde_capital_omega @ (prices - costs) - capital_lamda_inverse @ shares
 
-    def compute_bertrand_nash_prices(
+    def compute_equilibrium_prices(
             self, costs: Array, iteration: Iteration, firms_index: int = 0, prices: Optional[Array] = None) -> (
             Tuple[Array, bool, int, int]):
-        """Compute Bertrand-Nash prices by iterating over the zeta-markup equation. By default, use unchanged firm IDs
+        """Compute equilibrium prices by iterating over the zeta-markup equation. By default, use unchanged firm IDs
         and use unchanged prices as initial values.
         """
         if prices is None:

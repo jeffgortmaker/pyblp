@@ -22,7 +22,7 @@ from .utilities.basics import (
 class Simulation(Economy):
     r"""Simulation of synthetic BLP data.
 
-    All data are either loaded or simulated during initialization, except for Bertrand-Nash prices and shares, which are
+    All data are either loaded or simulated during initialization, except for synthetic prices and shares, which are
     computed by :meth:`Simulation.solve`.
 
     Unspecified exogenous variables that are used to formulate product characteristics in :math:`X_1`, :math:`X_2`, and
@@ -88,7 +88,7 @@ class Simulation(Economy):
             - **market_ids** : (`object`) - IDs that associate products with markets.
 
             - **firm_ids** : (`object`) - IDs that associate products with firms. Any columns after the first can be
-              used in :meth:`Simulation.solve` to compute Bertrand-Nash prices and shares after firm changes, such as
+              used in :meth:`Simulation.solve` to compute synthetic prices and shares after firm changes, such as
               mergers.
 
         Custom ownership matrices can be specified as well:
@@ -177,7 +177,7 @@ class Simulation(Economy):
     rho : `ndarray`
         Parameters that measure within nesting group correlation, :math:`\rho`.
     product_data : `recarray`
-        Synthetic product data that were loaded or simulated during initialization, except for Bertrand-Nash prices and
+        Synthetic product data that were loaded or simulated during initialization, except for synthetic prices and
         shares, which are computed by :meth:`Simulation.solve`.
     agent_data : `recarray`
         Synthetic agent data that were loaded or simulated during initialization.
@@ -286,7 +286,7 @@ class Simulation(Economy):
             agent_data: Optional[Mapping] = None, integration: Optional[Integration] = None, rho: Optional[Any] = None,
             xi_variance: float = 1, omega_variance: float = 1, correlation: float = 0.9, costs_type: str = 'linear',
             seed: Optional[int] = None) -> None:
-        """Load or simulate all data except for Bertrand-Nash prices and shares."""
+        """Load or simulate all data except for synthetic prices and shares."""
 
         # validate the formulations
         if not isinstance(product_formulations, collections.Sequence) or len(product_formulations) != 3:
@@ -483,7 +483,7 @@ class Simulation(Economy):
     def solve(
             self, firms_index: int = 0, prices: Optional[Any] = None, iteration: Optional[Iteration] = None,
             error_behavior: str = 'raise') -> RecArray:
-        r"""Compute Bertrand-Nash prices and shares.
+        r"""Compute synthetic prices and shares.
 
         Prices and shares are computed by iterating market-by-market over the :math:`\zeta`-markup equation from
         :ref:`Morrow and Skerlos (2011) <ms11>`,
@@ -521,7 +521,7 @@ class Simulation(Economy):
         Returns
         -------
         `recarray`
-            Simulated :attr:`Simulation.product_data` that are updated with Bertrand-Nash prices and shares, which can
+            Simulated :attr:`Simulation.product_data` that are updated with synthetic prices and shares, which can
             be passed to `product_data` in :class:`Problem`.
 
         Example
@@ -555,7 +555,7 @@ class Simulation(Economy):
            simulation.agent_data
            simulation.product_data
 
-        We'll compute Bertrand-Nash prices and shares, which are initialized as zero above, by solving the simulation.
+        We'll compute synthetic prices and shares, which are initialized as zero above, by solving the simulation.
 
         .. ipython:: python
 
@@ -646,7 +646,7 @@ class SimulationMarket(Market):
             np.seterrcall(lambda *_: errors.append(exceptions.SyntheticPricesFloatingPointError()))
 
             # solve the fixed point problem
-            prices, converged, iterations, evaluations = self.compute_bertrand_nash_prices(
+            prices, converged, iterations, evaluations = self.compute_equilibrium_prices(
                 costs, iteration, firms_index, prices
             )
             if not converged:
