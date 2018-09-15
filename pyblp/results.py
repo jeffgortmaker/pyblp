@@ -14,7 +14,8 @@ from .economy import Market
 from .parameters import LinearParameters, NonlinearParameters
 from .utilities.algebra import multiply_matrix_and_tensor
 from .utilities.basics import (
-    Array, Error, Mapping, RecArray, TableFormatter, format_number, format_seconds, generate_items, output
+    Array, Error, Mapping, RecArray, StringRepresentation, TableFormatter, format_number, format_seconds,
+    generate_items, output
 )
 from .utilities.statistics import IV, compute_gmm_se, compute_gmm_weights
 
@@ -25,7 +26,7 @@ if TYPE_CHECKING:
     from .simulation import Simulation  # noqa
 
 
-class ProblemResults(object):
+class ProblemResults(StringRepresentation):
     r"""Results of a solved BLP problem.
 
     Many results are class attributes. Other post-estimation outputs be computed by calling class methods.
@@ -419,10 +420,6 @@ class ProblemResults(object):
 
         # combine the sections into one string
         return "\n\n".join("\n".join(s) for s in sections)
-
-    def __repr__(self) -> str:
-        """Defer to the string representation."""
-        return str(self)
 
     def _get_true_X1(self) -> Array:
         """Re-compute X1 without any absorbed demand-side fixed effects."""
@@ -1184,7 +1181,7 @@ class ProblemResults(object):
         return self._combine_arrays(ResultsMarket.compute_consumer_surplus, [], [prices])
 
 
-class SimulationResults(object):
+class SimulationResults(StringRepresentation):
     """Results of a solved simulation of synthetic BLP data.
 
     Synthetic prices and shares are class attributes. The full set of simulated data and configured information can be
@@ -1252,10 +1249,6 @@ class SimulationResults(object):
             ]),
             formatter.line()
         ])
-
-    def __repr__(self) -> str:
-        """Defer to the string representation."""
-        return str(self)
 
     def to_problem(
             self, product_formulations: Optional[Union[Formulation, Sequence[Optional[Formulation]]]] = None,

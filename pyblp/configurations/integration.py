@@ -8,10 +8,10 @@ import numpy as np
 import scipy.special
 import scipy.stats
 
-from ..utilities.basics import Array
+from ..utilities.basics import Array, StringRepresentation
 
 
-class Integration(object):
+class Integration(StringRepresentation):
     """Configuration for building integration nodes and weights.
 
     For more information pertaining to the supported quadrature rules, refer to :ref:`Heiss and Winschel (2008) <hw08>`
@@ -105,10 +105,6 @@ class Integration(object):
     def __str__(self) -> str:
         """Format the configuration as a string."""
         return f"Configured to construct nodes and weights {self._description}."
-
-    def __repr__(self) -> str:
-        """Defer to the string representation."""
-        return str(self)
 
     def _build_many(self, dimensions: int, ids: Iterable) -> Tuple[Array, Array, Array]:
         """Build concatenated IDs, nodes, and weights for each ID."""

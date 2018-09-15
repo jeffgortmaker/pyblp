@@ -5,10 +5,10 @@ from typing import Any, Callable, Optional, Tuple, Union
 
 import numpy as np
 
-from ..utilities.basics import Array, Options, format_options
+from ..utilities.basics import Array, Options, StringRepresentation, format_options
 
 
-class Iteration(object):
+class Iteration(StringRepresentation):
     r"""Configuration for solving fixed point problems.
 
     Parameters
@@ -166,10 +166,6 @@ class Iteration(object):
     def __str__(self) -> str:
         """Format the configuration as a string."""
         return f"Configured to iterate using {self._description} with options {format_options(self._method_options)}."
-
-    def __repr__(self) -> str:
-        """Defer to the string representation."""
-        return str(self)
 
     def _iterate(self, initial: Array, contraction: Callable[[Array], Any]) -> Tuple[Array, bool, int, int]:
         """Solve a fixed point iteration problem."""

@@ -252,6 +252,14 @@ class TableFormatter(object):
         return "=" * len(self.blank())
 
 
+class StringRepresentation(object):
+    """Object that defers to its string representation."""
+
+    def __repr__(self) -> str:
+        """Defer to the string representation."""
+        return str(self)
+
+
 class Groups(object):
     """Computation of grouped statistics."""
 

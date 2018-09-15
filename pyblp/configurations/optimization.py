@@ -11,10 +11,10 @@ import numpy as np
 import scipy.optimize
 
 from .. import options
-from ..utilities.basics import Array, Options, format_options
+from ..utilities.basics import Array, Options, StringRepresentation, format_options
 
 
-class Optimization(object):
+class Optimization(StringRepresentation):
     """Configuration for solving optimization problems.
 
     Parameters
@@ -243,10 +243,6 @@ class Optimization(object):
         """Format the configuration as a string."""
         description = f"{self._description} {'with' if self._compute_gradient else 'without'} analytic gradients"
         return f"Configured to optimize using {description} and options {format_options(self._method_options)}."
-
-    def __repr__(self) -> str:
-        """Defer to the string representation."""
-        return str(self)
 
     def _optimize(
             self, initial: Array, bounds: Optional[Iterable[Tuple[float, float]]],

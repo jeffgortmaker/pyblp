@@ -15,10 +15,12 @@ from .parameters import NonlinearParameter, NonlinearParameters, RandomCoefficie
 from .utilities.algebra import (
     approximately_invert, approximately_solve, multiply_matrix_and_tensor, multiply_tensor_and_matrix
 )
-from .utilities.basics import Array, Error, Groups, RecArray, TableFormatter, format_seconds, output
+from .utilities.basics import (
+    Array, Error, Groups, RecArray, StringRepresentation, TableFormatter, format_seconds, output
+)
 
 
-class Economy(object):
+class Economy(StringRepresentation):
     """An economy, which is initialized with product and agent data."""
 
     product_formulations: Sequence[Optional[Formulation]]
@@ -173,10 +175,6 @@ class Economy(object):
 
         # combine the sections into one string
         return "\n\n".join("\n".join(s) for s in [dimension_section, formulation_section])
-
-    def __repr__(self) -> str:
-        """Defer to the string representation."""
-        return str(self)
 
 
 class Market(object):

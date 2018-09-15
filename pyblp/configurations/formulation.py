@@ -19,10 +19,10 @@ import sympy.parsing.sympy_parser
 from .iteration import Iteration
 from .. import exceptions, options
 from ..utilities.algebra import precisely_invert
-from ..utilities.basics import Array, Data, Error, Groups, extract_size
+from ..utilities.basics import Array, Data, Error, Groups, StringRepresentation, extract_size
 
 
-class Formulation(object):
+class Formulation(StringRepresentation):
     """Configuration for designing matrices and absorbing fixed effects.
 
     Internally, the :mod:`patsy` package is used to convert data and R-style formulas into matrices. All of the standard
@@ -184,10 +184,6 @@ class Formulation(object):
         for absorbed_term in self._absorbed_terms:
             names.append(f'Absorb[{absorbed_term.name()}]')
         return ' + '.join(names)
-
-    def __repr__(self) -> str:
-        """Defer to the string representation."""
-        return str(self)
 
     def _build_matrix(self, data: Mapping) -> Tuple[Array, List['ColumnFormulation'], Data]:
         """Convert a mapping from variable names to arrays into the designed matrix, a list of column formulations that
