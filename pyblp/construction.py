@@ -350,8 +350,8 @@ def compute_fitted_values(variable: Any, formulation: Formulation, data: Mapping
     Example
     -------
     In this example, we'll load the fake cereal data from :ref:`Nevo (2000) <n00>` and compute the fitted values from a
-    reduced form regression of prices on all exogenous variables: instruments and product fixed effects, which we'll
-    absorb to reduce memory usage.
+    reduced form regression of endogenous prices onto all exogenous variables: instruments and product fixed effects,
+    which we'll absorb to reduce memory usage.
 
     .. ipython:: python
 
@@ -363,7 +363,7 @@ def compute_fitted_values(variable: Any, formulation: Formulation, data: Mapping
        conditional_prices = pyblp.compute_fitted_values(product_data.prices, formulation, product_data)
        conditional_prices
 
-    These fitted values could be passed to `conditional_prices` in :meth:`Results.compute_optimal_instruments` because
+    These fitted values could be passed to `expected_prices` in :meth:`Results.compute_optimal_instruments` because
     they are a reasonable reduced form estimate of expected prices conditional on all exogenous variables.
 
     """

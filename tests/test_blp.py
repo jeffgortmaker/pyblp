@@ -44,9 +44,9 @@ def test_accuracy(simulated_problem: SimulatedProblemFixture, solve_options_upda
 
 @pytest.mark.usefixtures('simulated_problem')
 @pytest.mark.parametrize('compute_options', [
-    pytest.param({'method': 'approximate', 'normalization_type': 'upper'}, id="approximation, upper Cholesky root"),
-    pytest.param({'method': 'normal', 'normalization_type': 'lower'}, id="normal distribution, lower Cholesky root"),
-    pytest.param({'method': 'empirical', 'normalization_type': 'full'}, id="empirical distribution, full matrix")
+    pytest.param({'method': 'approximate'}, id="approximation"),
+    pytest.param({'method': 'normal'}, id="normal distribution"),
+    pytest.param({'method': 'empirical'}, id="empirical distribution")
 ])
 def test_optimal_instruments(simulated_problem: SimulatedProblemFixture, compute_options: Options) -> None:
     """Test that starting parameters that are half their true values also give rise to errors of less than 10% under
@@ -64,30 +64,25 @@ def test_optimal_instruments(simulated_problem: SimulatedProblemFixture, compute
         product_data[name] = instrument
         ZD_names.append(name)
 
-    # without a supply side, compute conditional prices with a reduced form regression on all exogenous variables
-    conditional_prices = None
+    # without a supply side, compute expected prices with a reduced form regression on all exogenous variables
+    expected_prices = None
     if problem.K3 == 0:
         ZD_formula = ' + '.join(ZD_names)
         exogenous_formulation = Formulation(f'0 + {ZD_formula}')
-        conditional_prices = compute_fitted_values(product_data['prices'], exogenous_formulation, product_data)
+        expected_prices = compute_fitted_values(product_data['prices'], exogenous_formulation, product_data)
 
     # compute optimal instruments and update the data (only use a few draws to speed up the test)
     compute_options = compute_options.copy()
     compute_options.update({
         'draws': 5,
         'seed': 0,
-        'conditional_prices': conditional_prices
+        'expected_prices': expected_prices
     })
     instruments = results.compute_optimal_instruments(**compute_options)
     if problem.K3 == 0:
         product_data['demand_instruments'] = instruments
     else:
         product_data['demand_instruments'], product_data['supply_instruments'] = np.split(instruments, 2, axis=1)
-
-    # drop any instrument columns containing all zeros
-    for key in ['demand_instruments', 'supply_instruments']:
-        indices = [i for i, c in enumerate(product_data[key].T) if np.all(c == 0)]
-        product_data[key] = np.delete(product_data[key], indices, axis=1)
 
     # initialize a problem with the optimal instruments
     new_problem = Problem(problem.product_formulations, product_data, problem.agent_formulation, simulation.agent_data)
@@ -294,8 +289,8 @@ def test_fixed_effects(
     costs2 = results2.compute_costs()
     costs3 = results3.compute_costs()
 
-    # without a supply side, compute conditional prices with a reduced form regression on all exogenous variables
-    conditional_prices1 = conditional_prices2 = conditional_prices3 = None
+    # without a supply side, compute expected prices with a reduced form regression on all exogenous variables
+    expected_prices1 = expected_prices2 = expected_prices3 = None
     if problem.K3 == 0:
         assert product_formulations[0] is not None
         assert product_formulations1[0] is not None
@@ -313,14 +308,14 @@ def test_fixed_effects(
             f'{ZD_formula} + {product_formulations3[0]._formula} - ({product_formulations[0]._formula}) - 1',
             product_formulations3[0]._absorb, product_formulations3[0]._absorb_method
         )
-        conditional_prices1 = compute_fitted_values(product_data['prices'], exogenous_formulation1, product_data1)
-        conditional_prices2 = compute_fitted_values(product_data['prices'], exogenous_formulation2, product_data2)
-        conditional_prices3 = compute_fitted_values(product_data['prices'], exogenous_formulation3, product_data3)
+        expected_prices1 = compute_fitted_values(product_data['prices'], exogenous_formulation1, product_data1)
+        expected_prices2 = compute_fitted_values(product_data['prices'], exogenous_formulation2, product_data2)
+        expected_prices3 = compute_fitted_values(product_data['prices'], exogenous_formulation3, product_data3)
 
     # compute optimal instruments (use only two draws for speed; accuracy isn't a concern here)
-    optimal_instruments1 = results1.compute_optimal_instruments(draws=2, seed=0, conditional_prices=conditional_prices1)
-    optimal_instruments2 = results2.compute_optimal_instruments(draws=2, seed=0, conditional_prices=conditional_prices2)
-    optimal_instruments3 = results3.compute_optimal_instruments(draws=2, seed=0, conditional_prices=conditional_prices3)
+    optimal_instruments1 = results1.compute_optimal_instruments(draws=2, seed=0, expected_prices=expected_prices1)
+    optimal_instruments2 = results2.compute_optimal_instruments(draws=2, seed=0, expected_prices=expected_prices2)
+    optimal_instruments3 = results3.compute_optimal_instruments(draws=2, seed=0, expected_prices=expected_prices3)
 
     # choose tolerances (give more leeway when using iterative de-meaning)
     atol = 1e-8

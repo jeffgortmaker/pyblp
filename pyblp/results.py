@@ -442,7 +442,7 @@ class Results(object):
 
     def compute_optimal_instruments(
             self, method: str = 'normal', draws: int = 100, seed: Optional[int] = None,
-            conditional_prices: Optional[Union[Any, Iteration]] = None, normalization_type: str = 'upper') -> Array:
+            expected_prices: Optional[Union[Any, Iteration]] = None) -> Array:
         r"""Estimate the set of optimal or efficient instruments, :math:`\mathscr{Z}_D` and :math:`\mathscr{Z}_S`.
 
         The optimal instruments in the spirit of :ref:`Chamberlain (1987) <c87>` are
@@ -453,7 +453,7 @@ class Results(object):
                \mathscr{Z}_D \\
                \mathscr{Z}_S
            \end{bmatrix}_{jt}
-           = T\operatorname{\mathbb{E}}\left[
+           = \text{Var}(\xi, \omega)^{-1}\operatorname{\mathbb{E}}\left[
            \begin{matrix}
                \frac{\partial\xi_{jt}}{\partial\theta} &
                \frac{\partial\xi_{jt}}{\partial\beta} &
@@ -464,10 +464,9 @@ class Results(object):
            \end{matrix}
            \mathrel{\Bigg|} Z \right],
 
-        in which :math:`T` is either the inverse of the covariance matrix of the error terms or its Cholesky root.
-
         The expectation is taken by integrating over the joint density of :math:`\xi` and :math:`\omega`. The
-        normalizing matrix :math:`T` is estimated with the sample covariance matrix of the error terms.
+        normalizing matrix :math:`\text{Var}(\xi, \omega)^{-1}` is estimated with the sample covariance matrix of the
+        error terms.
 
         Parameters
         ----------
@@ -490,10 +489,11 @@ class Results(object):
         seed : `int, optional`
             Passed to :class:`numpy.random.RandomState` to seed the random number generator before any draws are taken.
             By default, a seed is not passed to the random number generator.
-        conditional_prices : `array-like or Iteration, optional`
-            Vector of prices conditional on all exogenous variables, :math:`\operatorname{\mathbb{E}}[p \mid Z]`, or an
-            :class:`Iteration` configuration used to estimate these prices by iterating over the :math:`\zeta`-markup
-            equation from :ref:`Morrow and Skerlos (2011) <ms11>`.
+        expected_prices : `array-like or Iteration, optional`
+            Vector of expected prices conditional on all exogenous variables,
+            :math:`\operatorname{\mathbb{E}}[p \mid Z]`, or an :class:`Iteration` configuration used to estimate these
+            expected prices by iterating over the :math:`\zeta`-markup equation from
+            :ref:`Morrow and Skerlos (2011) <ms11>`.
 
             By default, if a supply side was estimated, this is ``Iteration('simple', {'tol': 1e-12})``. If a supply
             side was not estimated, an estimate of :math:`\operatorname{\mathbb{E}}[p \mid Z]` is required. A common way
@@ -501,28 +501,12 @@ class Results(object):
             all exogenous variables, including instruments. An example is given in the documentation for the convenience
             function :func:`compute_fitted_values`.
 
-        normalization_type : `str, optional`
-            How to normalize :math:`\xi` and :math:`\omega` covariances with the :math:`T` matrix, which is a fuction of
-            the sample covariance matrix of the error terms. This is only relevant if a supply side was estimated. The
-            following types are supported:
-
-                - ``'upper'`` (default) - Upper Cholesky root of the inverted sample covariance matrix.
-
-                - ``'lower'`` - Lower Cholesky root.
-
-                - ``'full'`` - Full inverted sample covariance matrix.
-
         Returns
         -------
         `ndarray`
             Horizontally stacked estimates of the optimal or efficient instruments,
             :math:`[\mathscr{Z}_D, \mathscr{Z}_S]`, which are each :math:`N \times (P + K_1 + K_3)` matrices. If a
             supply side was not estimated, this is simply :math:`\mathscr{Z}_D`.
-
-            .. note::
-
-               There may be columns of zeros that should be removed before :math:`\mathscr{Z}_D` and
-               :math:`\mathscr{Z}_S` are used in estimation.
 
         """
         errors: List[Error] = []
@@ -564,16 +548,16 @@ class Results(object):
 
         # validate the conditional prices or their iteration configuration
         prices = iteration = None
-        if conditional_prices is None:
-            conditional_prices = Iteration('simple', {'tol': 1e-12})
-        if isinstance(conditional_prices, Iteration):
-            iteration = conditional_prices
+        if expected_prices is None:
+            expected_prices = Iteration('simple', {'tol': 1e-12})
+        if isinstance(expected_prices, Iteration):
+            iteration = expected_prices
             if self.problem.K3 == 0:
-                raise TypeError("A supply side was not estimated, so conditional_prices must be a vector.")
+                raise TypeError("A supply side was not estimated, so expected_prices must be a vector.")
         else:
-            prices = np.c_[np.asarray(conditional_prices, options.dtype)]
+            prices = np.c_[np.asarray(expected_prices, options.dtype)]
             if prices.shape != (self.problem.N, 1):
-                raise ValueError(f"conditional_prices must be a {self.problem.N}-vector.")
+                raise ValueError(f"expected_prices must be a {self.problem.N}-vector.")
 
         # average over Jacobian realizations
         iterations = evaluations = 0
@@ -600,15 +584,9 @@ class Results(object):
 
         # rows only need to be normalized by the covariance of the error terms with supply
         if self.problem.K3 == 0:
-            instruments = np.c_[xi_by_theta_jacobian, -self._get_true_X1()] / np.std(self.true_xi)
+            instruments = np.c_[xi_by_theta_jacobian, -self._get_true_X1()] / np.var(self.true_xi)
         else:
             normalizer = np.c_[scipy.linalg.inv(np.cov(self.true_xi, self.true_omega, rowvar=False))]
-            if normalization_type == 'upper':
-                normalizer = scipy.linalg.cholesky(normalizer)
-            elif normalization_type == 'lower':
-                normalizer = scipy.linalg.cholesky(normalizer).T
-            elif normalization_type != 'full':
-                raise ValueError("normalization_type must be 'upper', 'lower', or 'full'.")
             jacobian = np.r_[
                 np.c_[xi_by_theta_jacobian, -self._get_true_X1(), np.zeros_like(self.problem.products.X3)],
                 np.c_[omega_by_theta_jacobian, omega_by_beta_jacobian, -self._get_true_X3()]
