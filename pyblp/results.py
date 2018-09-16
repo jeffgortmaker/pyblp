@@ -1287,7 +1287,6 @@ class OptimalInstrumentResults(StringRepresentation):
            slightly different. This is because optimal instruments for the fixed effects can only be computed when they
            are included as indicators.
 
-
         Returns
         -------
         `Problem`

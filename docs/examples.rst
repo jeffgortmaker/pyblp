@@ -6,7 +6,7 @@ Examples
 
 This section explains how pyblp can be used to solve standard BLP example problems, compute post-estimation outputs, and simulate problems.
 
-To start, we'll import the package, as well as :mod:`numpy`, since we'll be using it to manipulate data. The following lines of code, which are executed before each section of examle code in the documentation, import both packages and limit verbosity. Status updates can be informative, so you'll probably want to keep your own verbosity turned on.
+To start, we'll import the package, as well as :mod:`numpy`, since we'll be using it to manipulate data. The following lines of code, which are executed before each section of example code in the documentation, import both packages and limit verbosity. Status updates can be informative, so you'll probably want to keep your own verbosity turned on.
 
 .. literalinclude:: include.py
   :language: ipython
