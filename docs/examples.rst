@@ -38,7 +38,7 @@ Two sets of example data are included in the package:
 - Fake cereal data from :ref:`Nevo (2000) <n00>`.
 - Automobile data from :ref:`Berry, Levinsohn, and Pakes (1995) <blp95>`.
 
-Locations of CSV files that contain the data are in the :mod:`pyblp.data` module.
+Locations of CSV files that contain the data are in the :mod:`~pyblp.data` module.
 
 
 Product Data
@@ -441,6 +441,47 @@ On the other hand, consumer surpluses, :math:`\text{CS}`, generally decrease.
    savefig('images/cs_changes.png')
 
 .. image:: images/cs_changes.png
+
+
+Optimal Instruments
+-------------------
+
+Given a consistent estimate of :math:`\theta`, we may want to compute optimal instruments in the spirit of :ref:`Chamberlain (1987) <c87>` and then re-solve the problem. Optimal instruments have been shown, for example, by :ref:`Reynaert and Verboven (2014) <rv14>`, to not only reduce bias in the BLP problem, but also to improve efficiency and stability.
+
+Since the instruments provided in the automobile example data are already an estimate of the optimal instruments for the problem (see :mod:`~pyblp.data` for an explanation of how the instruments were constructed), we'll estimate the set of optimal instruments for the fake cereal problem.
+
+The :meth:`ProblemResults.compute_optimal_instruments` method computes the expected Jacobians that comprise the optimal instruments by integrating over the density of :math:`\xi` (and :math:`\omega` if a supply side was estimated). Since we didn't specify a supply side in the fake cereal problem, we need to supply an estimate of :math:`\operatorname{\mathbb{E}}[p \mid Z]`. We'll use the convenience function :func:`compute_fitted_values` to estimate this vector with a reduced form regression of endogenous prices onto all exogenous variables.
+
+.. ipython:: python
+
+   instrument_formula = ' + '.join(f'demand_instruments{i}' for i in range(20))
+   exogenous_formulation = pyblp.Formulation(instrument_formula, absorb='C(product_ids)')
+   expected_prices = pyblp.compute_fitted_values(
+       nevo_product_data['prices'], 
+       exogenous_formulation, 
+       nevo_product_data
+   )
+
+By default, :meth:`ProblemResults.compute_optimal_instruments` approximates the integral over the density of the error terms by averaging over Jacobian realizations computed under draws from the asymptotic normal distribution of the error terms. For speed in this example, we'll use ``method='approximate'`` to simply evaluate the Jacobians at the expected value of :math:`\xi`, zero.
+
+.. ipython:: python
+   
+   instrument_results = nevo_results.compute_optimal_instruments(
+       method='approximate',
+       expected_prices=expected_prices
+   )
+   instrument_results
+
+Fixed point iterations and contraction evaluation counts are both zero because we had to supply an estimate of :math:`\operatorname{\mathbb{E}}[p \mid Z]`. These counts woul be positive if a supply side was estimated and we didn't supply such an estimate because equilibrium prices under each draw of :math:`\xi` and :math:`\omega` would be computed via iteration over the :math:`\zeta`-markup equation from :ref:`Morrow and Skerlos (2011) <ms11>`.
+
+We can use the :meth:`OptimalInstrumentResults.to_problem` method to re-create the fake cereal problem with the estimated optimal instruments.
+
+.. ipython:: python
+
+   updated_nevo_problem = instrument_results.to_problem()
+   updated_nevo_problem
+
+This updated problem could be solved just like the original one.
 
 
 Logit Benchmark

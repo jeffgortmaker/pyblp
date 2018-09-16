@@ -139,32 +139,33 @@ class Economy(StringRepresentation):
 
         # associate dimensions and formulations with names
         dimension_mapping = collections.OrderedDict([
-            ("Products (N)", self.N),
-            ("Markets (T)", self.T),
-            ("Linear Characteristics (K1)", self.K1),
-            ("Nonlinear Characteristics (K2)", self.K2),
-            ("Cost Characteristics (K3)", self.K3),
-            ("Demographics (D)", self.D),
-            ("Demand Instruments (MD)", self.MD),
-            ("Supply Instruments (MS)", self.MS),
-            ("Demand FEs (ED)", self.ED),
-            ("Supply FEs (ES)", self.ES),
-            ("Nesting Groups (H)", self.H)
+            (("N:", "Products"), self.N),
+            (("T:", "Markets"), self.T),
+            (("K1:", "Linear Characteristics"), self.K1),
+            (("K2:", "Nonlinear Characteristics"), self.K2),
+            (("K3:", "Cost Characteristics"), self.K3),
+            (("D:", "Demographics"), self.D),
+            (("MD:", "Demand Instruments"), self.MD),
+            (("MS:", "Supply Instruments"), self.MS),
+            (("ED:", "Demand FEs"), self.ED),
+            (("ES:", "Supply FEs"), self.ES),
+            (("H:", "Nesting Groups"), self.H)
         ])
         formulation_mapping = collections.OrderedDict([
-            ("Linear Characteristics (X1)", self._X1_formulations),
-            ("Nonlinear Characteristics (X2)", self._X2_formulations),
-            ("Cost Characteristics (X3)", self._X3_formulations),
-            ("Demographics (d)", self._demographics_formulations)
+            ("X1: Linear Characteristics", self._X1_formulations),
+            ("X2: Nonlinear Characteristics", self._X2_formulations),
+            ("X3: Cost Characteristics", self._X3_formulations),
+            ("d: Demographics", self._demographics_formulations)
         ])
 
         # build a dimensions section
-        dimension_widths = [max(len(n), len(str(d))) for n, d in dimension_mapping.items()]
+        dimension_widths = [max(len(k1), len(k2), len(str(d))) for (k1, k2), d in dimension_mapping.items()]
         dimension_formatter = TableFormatter(dimension_widths)
         dimension_section = [
             "Dimensions:",
             dimension_formatter.line(),
-            dimension_formatter(list(dimension_mapping.keys()), underline=True),
+            dimension_formatter([k[0] for k in dimension_mapping]),
+            dimension_formatter([k[1] for k in dimension_mapping], underline=True),
             dimension_formatter(list(dimension_mapping.values())),
             dimension_formatter.line()
         ]

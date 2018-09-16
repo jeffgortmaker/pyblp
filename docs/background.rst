@@ -221,7 +221,9 @@ Standard Errors
 
 Computing standard errors requires an estimate of the Jacobian of the moments with respect to :math:`\theta`, :math:`\beta`, and :math:`\gamma`, which is
 
-.. math:: G = N^{-1}Z'\begin{bmatrix} \frac{\partial\xi}{\partial\theta} & -X_1 & 0 \\ \frac{\partial\omega}{\partial\theta} & \frac{\partial\omega}{\partial\beta} & -X_3 \end{bmatrix}.
+.. math:: G = N^{-1}Z'\begin{bmatrix} \frac{\partial\xi}{\partial\theta} & \frac{\partial\xi}{\partial\beta} & 0 \\ \frac{\partial\omega}{\partial\theta} & \frac{\partial\omega}{\partial\beta} & \frac{\partial\omega}{\partial\gamma} \end{bmatrix}.
+
+Note that :math:`\partial\xi / \partial\beta = -X_1` and :math:`\partial\omega / \partial\gamma = -X_3`.
 
 Before updating the weighting matrix, standard errors are extracted from
 

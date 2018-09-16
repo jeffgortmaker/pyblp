@@ -446,6 +446,9 @@ class ProblemResults(StringRepresentation):
             expected_prices: Optional[Union[Any, Iteration]] = None) -> 'OptimalInstrumentResults':
         r"""Estimate the set of optimal or efficient instruments, :math:`\mathscr{Z}_D` and :math:`\mathscr{Z}_S`.
 
+        Optimal instruments have been shown, for example, by :ref:`Reynaert and Verboven (2014) <rv14>`, to not only
+        reduce bias in the BLP problem, but also to improve efficiency and stability.
+
         The optimal instruments in the spirit of :ref:`Chamberlain (1987) <c87>` are
 
         .. math::
@@ -465,12 +468,14 @@ class ProblemResults(StringRepresentation):
            \end{matrix}
            \mathrel{\Bigg|} Z \right],
 
-        The expectation is taken by integrating over the joint density of :math:`\xi` and :math:`\omega`. The
-        normalizing matrix :math:`\text{Var}(\xi, \omega)^{-1}` is estimated with the sample covariance matrix of the
-        error terms.
+        The expectation is taken by integrating over the joint density of :math:`\xi` and :math:`\omega`. For each error
+        term realization, if not already estimated, equilibrium prices are computed via iteration over the
+        :math:`\zeta`-markup equation from :ref:`Morrow and Skerlos (2011) <ms11>`. Associated shares and :math:`\delta`
+        are then computed before each Jacobian is evaluated. Note that :math:`\partial\xi / \partial\beta = -X_1` and
+        :math:`\partial\omega / \partial\gamma = -X_3`.
 
-        Optimal instruments have been shown, for example, by :ref:`Reynaert and Verboven (2014) <rv14>`, to not only
-        reduce bias in the BLP problem, but also improve efficiency and stability.
+        The expected Jacobians are estimated with the average over all computed Jacobian realizations. The normalizing
+        matrix :math:`\text{Var}(\xi, \omega)^{-1}` is estimated with the sample covariance matrix of the error terms.
 
         Parameters
         ----------
@@ -603,7 +608,7 @@ class ProblemResults(StringRepresentation):
         # structure the results
         results = OptimalInstrumentResults(
             self, demand_instruments, supply_instruments, inverse_covariance_matrix, expected_xi_by_theta,
-            expected_xi_by_beta, expected_omega_by_theta, expected_omega_by_beta, start_time, time.time(),
+            expected_xi_by_beta, expected_omega_by_theta, expected_omega_by_beta, start_time, time.time(), draws,
             iteration_mappings, evaluation_mappings
         )
         output(f"Computed optimal instruments after {format_seconds(results.computation_time)}.")
@@ -1277,14 +1282,20 @@ class OptimalInstrumentResults(StringRepresentation):
         Estimated :math:`\operatorname{\mathbb{E}}[\partial\omega / \partial\beta \mid Z]`.
     computation_time : `float`
         Number of seconds it took to compute optimal instruments.
+    draws : `int`
+        Number of draws used to approximate the integral over the error term density.
     fp_iterations : `ndarray`
-        Number of major iterations completed by the iteration routine used to compute
-        :math:`\operatorname{\mathbb{E}}[p \mid Z]` in each market for each error term draw. Rows are in the same order
-        as :attr:`ProblemResults.unique_market_ids` and column indices correspond to draws.
+        Number of major iterations completed by the iteration routine used to compute equilibrium prices in each market
+        for each error term draw. Rows are in the same order as :attr:`ProblemResults.unique_market_ids` and column
+        indices correspond to draws.
     contraction_evaluations : `ndarray`
-        Number of times the contraction used to compute :math:`\operatorname{\mathbb{E}}[p \mid Z]` was evaluated in
-        each market for each error term draw. Rows are in the same order as :attr:`ProblemResults.unique_market_ids` and
-        column indices correspond to draws.
+        Number of times the contraction used to compute equilibrium prices was evaluated in each market for each error
+        term draw. Rows are in the same order as :attr:`ProblemResults.unique_market_ids` and column indices correspond
+        to draws.
+
+    Examples
+    --------
+    For an example of how to use this class, refer to the :doc:`Examples </examples>` section.
 
     """
 
@@ -1297,6 +1308,7 @@ class OptimalInstrumentResults(StringRepresentation):
     expected_omega_by_theta_jacobian: Array
     expected_omega_by_beta_jacobian: Array
     computation_time: float
+    draws: int
     fp_iterations: Array
     contraction_evaluations: Array
 
@@ -1304,7 +1316,7 @@ class OptimalInstrumentResults(StringRepresentation):
             self, problem_results: ProblemResults, demand_instruments: Array, supply_instruments: Array,
             inverse_covariance_matrix: Array, expected_xi_by_theta_jacobian: Array,
             expected_xi_by_beta_jacobian: Array, expected_omega_by_theta_jacobian: Array,
-            expected_omega_by_beta_jacobian: Array, start_time: float, end_time: float,
+            expected_omega_by_beta_jacobian: Array, start_time: float, end_time: float, draws: int,
             iteration_mappings: Sequence[Mapping[Hashable, int]],
             evaluation_mappings: Sequence[Mapping[Hashable, int]]) -> None:
         """Structure optimal instrument computation results."""
@@ -1317,6 +1329,7 @@ class OptimalInstrumentResults(StringRepresentation):
         self.expected_omega_by_theta_jacobian = expected_omega_by_theta_jacobian
         self.expected_omega_by_beta_jacobian = expected_omega_by_beta_jacobian
         self.computation_time = end_time - start_time
+        self.draws = draws
         self.fp_iterations = self.cumulative_fp_iterations = np.array(
             [[m[t] if m else 0 for m in iteration_mappings] for t in problem_results.unique_market_ids]
         )
@@ -1326,7 +1339,10 @@ class OptimalInstrumentResults(StringRepresentation):
 
     def __str__(self) -> str:
         """Format optimal instrument computation results as a string."""
-        header = [("Computation", "Time"), ("Total Fixed Point", "Iterations"), ("Total Contraction", "Evaluations")]
+        header = [
+            ("Computation", "Time"), ("Error Term", "Draws"), ("Total Fixed Point", "Iterations"),
+            ("Total Contraction", "Evaluations"), ("ZD:", "Demand Instruments"), ("ZS:", "Supply Instruments")
+        ]
         widths = [max(len(k1), len(k2)) for k1, k2 in header]
         formatter = TableFormatter(widths)
         return "\n".join([
@@ -1336,8 +1352,11 @@ class OptimalInstrumentResults(StringRepresentation):
             formatter([k[1] for k in header], underline=True),
             formatter([
                 format_seconds(self.computation_time),
+                self.draws,
                 self.fp_iterations.sum(),
-                self.contraction_evaluations.sum()
+                self.contraction_evaluations.sum(),
+                self.demand_instruments.shape[1],
+                self.supply_instruments.shape[1]
             ]),
             formatter.line()
         ])
@@ -1359,6 +1378,11 @@ class OptimalInstrumentResults(StringRepresentation):
         -------
         `Problem`
             :class:`Problem` updated to use the estimated optimal instruments.
+
+        Examples
+        --------
+        For an example of turning these results into a :class:`Problem`, refer to the :doc:`Examples </examples>`
+        section.
 
         """
         from .problem import PrimitiveProblem  # noqa

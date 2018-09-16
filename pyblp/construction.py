@@ -361,13 +361,13 @@ def compute_fitted_values(variable: Any, formulation: Formulation, data: Mapping
 
     .. ipython:: python
 
-       instruments_formula = ' + '.join(f'demand_instruments{i}' for i in range(20))
-       formulation = pyblp.Formulation(instruments_formula, absorb='C(product_ids)')
-       formulation
+       instrument_formula = ' + '.join(f'demand_instruments{i}' for i in range(20))
+       exogenous_formulation = pyblp.Formulation(instrument_formula, absorb='C(product_ids)')
+       exogenous_formulation
        product_data = np.recfromcsv(pyblp.data.NEVO_PRODUCTS_LOCATION, encoding='utf-8')
        product_data.dtype.names
-       conditional_prices = pyblp.compute_fitted_values(product_data.prices, formulation, product_data)
-       conditional_prices
+       expected_prices = pyblp.compute_fitted_values(product_data.prices, exogenous_formulation, product_data)
+       expected_prices
 
     These fitted values could be passed to `expected_prices` in :meth:`ProblemResults.compute_optimal_instruments`
     because they are a reasonable reduced form estimate of expected prices conditional on all exogenous variables.

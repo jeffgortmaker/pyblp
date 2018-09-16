@@ -57,6 +57,7 @@ Features
 - Customizable parameter matrices and bounds.
 - Support for nesting parameters that can vary between groups in a full random coefficients nested Logit (RCNL) model.
 - Estimation of Logit and nested Logit benchmark models.
+- Support for different methods used to estimate optimal instruments.
 - Post-estimation computation of elasticities, diversion ratios, marginal costs, markups, profits, HHI, and consumer surplus.
 - Post-estimation merger (or any type of firm ID changes) simulation.
 - Flexible interface for simulating synthetic data under Bertrand-Nash competition.
