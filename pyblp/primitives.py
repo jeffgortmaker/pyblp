@@ -1,6 +1,6 @@
 """Primitive data structures that constitute the foundation of the BLP model."""
 
-from typing import List, Mapping, Optional, Sequence
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
@@ -156,8 +156,9 @@ class Products(object):
         if shares.shape[1] > 1:
             raise ValueError("The shares field of product_data must be one-dimensional.")
 
-        # structure product fields as mappings
-        product_mapping = {
+        # structure product fields as a mapping
+        product_mapping: Dict[Union[str, tuple], Tuple[Optional[Array], Any]] = {}
+        product_mapping.update({
             'market_ids': (market_ids, np.object),
             'firm_ids': (firm_ids, np.object),
             'demand_ids': (demand_ids, np.object),
@@ -168,21 +169,21 @@ class Products(object):
             'shares': (shares, options.dtype),
             'ZD': (ZD, options.dtype),
             'ZS': (ZS, options.dtype)
-        }
-        formulated_product_mapping = {
+        })
+        product_mapping.update({
             (tuple(X1_formulations), 'X1'): (X1, options.dtype),
             (tuple(X2_formulations), 'X2'): (X2, options.dtype),
             (tuple(X3_formulations), 'X3'): (X3, options.dtype)
-        }
+        })
 
         # structure and validate variables underlying X1, X2, and X3
         underlying_data = {k: (v, options.dtype) for k, v in {**X1_data, **X2_data, **X3_data}.items()}
-        invalid_names = set(underlying_data) & (set(product_mapping) | {k for _, k in formulated_product_mapping})
+        invalid_names = set(underlying_data) & {k if isinstance(k, str) else k[1] for k in product_mapping}
         if invalid_names:
             raise NameError(f"These reserved names in product_formulations are invalid: {list(invalid_names)}.")
 
         # structure products
-        return structure_matrices({**product_mapping, **formulated_product_mapping, **underlying_data})
+        return structure_matrices({**product_mapping, **underlying_data})
 
 
 class Agents(object):
