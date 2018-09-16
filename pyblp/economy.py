@@ -42,6 +42,8 @@ class Economy(StringRepresentation):
     H: int
     _product_market_indices: Dict[Hashable, Array]
     _agent_market_indices: Dict[Hashable, Array]
+    _max_J: int
+    _max_I: int
     _X1_formulations: Tuple[ColumnFormulation, ...]
     _X2_formulations: Tuple[ColumnFormulation, ...]
     _X3_formulations: Tuple[ColumnFormulation, ...]
@@ -82,6 +84,10 @@ class Economy(StringRepresentation):
         # identify market indices
         self._product_market_indices = {t: np.where(self.products.market_ids.flat == t) for t in self.unique_market_ids}
         self._agent_market_indices = {t: np.where(self.agents.market_ids.flat == t) for t in self.unique_market_ids}
+
+        # identify the largest number of products and agents in a market
+        self._max_J = max(v[0].size for v in self._product_market_indices.values())
+        self._max_I = max(v[0].size for v in self._agent_market_indices.values())
 
         # identify column formulations
         self._X1_formulations = self.products.dtype.fields['X1'][2]
@@ -186,6 +192,19 @@ class Economy(StringRepresentation):
 
         # combine the sections into one string
         return "\n\n".join("\n".join(s) for s in [dimension_section, formulation_section])
+
+    def _validate_name(self, name: str) -> None:
+        """Validate that a name corresponds to a variable in X1, X2, or X3."""
+        formulations = self._X1_formulations + self._X2_formulations + self._X3_formulations
+        names = {n for f in formulations for n in f.names}
+        if name not in names:
+            raise NameError(f"The name '{name}' is not one of the underlying variables, {list(sorted(names))}.")
+
+    def _validate_firms_index(self, firms_index: int) -> None:
+        """Validate a firm IDs index."""
+        max_firms_index = self.products.firm_ids.shape[1]
+        if not isinstance(firms_index, int) or not 0 <= firms_index <= max_firms_index:
+            raise ValueError(f"firms_index must be an int between 0 and {firms_index}.")
 
 
 class Market(object):

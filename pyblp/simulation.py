@@ -571,13 +571,16 @@ class Simulation(Economy):
         output("Computing synthetic prices and shares ...")
         start_time = time.time()
 
+        # validate the firms index
+        self._validate_firms_index(firms_index)
+
         # choose or validate initial prices
         if prices is None:
             prices = self.costs
         else:
             prices = np.c_[np.asarray(prices, options.dtype)]
             if prices.shape != (self.N, 1):
-                raise ValueError(f"prices must be a vector with {self.N} elements.")
+                raise ValueError(f"prices must None or a {self.N}-vector.")
 
         # configure or validate integration
         if iteration is None:

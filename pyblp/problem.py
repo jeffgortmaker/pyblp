@@ -243,10 +243,14 @@ class PrimitiveProblem(Economy):
         costs_bounds : `tuple, optional`
             Configuration for :math:`c` bounds of the form ``(lb, ub)``, in which both ``lb`` and ``ub`` are floats.
             This is only relevant if :math:`X_3` was formulated by `product_formulations` in :class:`Problem`. By
-            default, marginal costs are unbounded. When `costs_type` is ``'log'``, nonpositive :math:`c(\hat{\theta})`
-            values can create problems when computing :math:`\tilde{c}(\hat{\theta}) = \log c(\hat{\theta})`. One
-            solution is to set ``lb`` to a small number. Both ``None`` and ``numpy.nan`` are converted to ``-numpy.inf``
-            in ``lb`` and to ``numpy.inf`` in ``ub``.
+            default, marginal costs are unbounded.
+
+            When `costs_type` is ``'log'``, nonpositive :math:`c(\hat{\theta})` values can create problems when
+            computing :math:`\tilde{c}(\hat{\theta}) = \log c(\hat{\theta})`. One solution is to set ``lb`` to a small
+            number. Rows in Jacobians associated with clipped marginal costs will be zero.
+
+            Both ``None`` and ``numpy.nan`` are converted to ``-numpy.inf`` in ``lb`` and to ``numpy.inf`` in ``ub``.
+
         center_moments : `bool, optional`
             Whether to center the sample moments before using them to update weighting matrices. By default, sample
             moments are centered. This has no effect if `W_type` is ``'unadjusted'``.

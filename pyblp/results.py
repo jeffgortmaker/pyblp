@@ -220,6 +220,7 @@ class ProblemResults(StringRepresentation):
     _costs_type: str
     _se_type: str
     _errors: List[Error]
+    _clipped_costs_indices: Array
     _linear_parameters: LinearParameters
     _nonlinear_parameters: NonlinearParameters
 
@@ -249,6 +250,10 @@ class ProblemResults(StringRepresentation):
         self.objective = progress.objective
         self.gradient = progress.gradient
         self.gradient_norm = progress.gradient_norm
+
+        # store the indices of any clipped costs so that Jacobian rows can be properly zeroed-out
+        assert progress.clipped_costs_indices is not None
+        self._clipped_costs_indices = progress.clipped_costs_indices
 
         # store unique market IDs
         self.unique_market_ids = self.problem.unique_market_ids
@@ -332,8 +337,7 @@ class ProblemResults(StringRepresentation):
                 self._errors.extend(errors_t)
 
             # the Jacobian should be zero for any clipped marginal costs
-            assert progress.clipped_costs_indices is not None
-            self.omega_by_beta_jacobian[progress.clipped_costs_indices.flat] = 0
+            self.omega_by_beta_jacobian[self._clipped_costs_indices.flat] = 0
 
         # stack errors, weights, instruments, Jacobian of the errors with respect to parameters, and clustering IDs
         if self.problem.K3 == 0:
@@ -434,13 +438,6 @@ class ProblemResults(StringRepresentation):
             return self.problem.products.X3
         ones = np.ones((self.problem.N, 1), options.dtype)
         return np.column_stack((ones * f.evaluate(self.problem.products) for f in self.problem._X3_formulations))
-
-    def _validate_name(self, name: str) -> None:
-        """Validate that a name corresponds to a variable in X1, X2, or X3."""
-        formulations = self.problem._X1_formulations + self.problem._X2_formulations + self.problem._X3_formulations
-        names = {n for f in formulations for n in f.names}
-        if name not in names:
-            raise NameError(f"The name '{name}' is not one of the underlying variables, {list(sorted(names))}.")
 
     def compute_optimal_instruments(
             self, method: str = 'normal', draws: int = 100, seed: Optional[int] = None,
@@ -730,6 +727,10 @@ class ProblemResults(StringRepresentation):
             omega_by_beta_jacobian[self.problem._product_market_indices[t]] = omega_by_beta_jacobian_t
             errors.extend(errors_t)
 
+        # the Jacobians should be zero for any clipped marginal costs
+        omega_by_theta_jacobian[self._clipped_costs_indices.flat] = 0
+        omega_by_beta_jacobian[self._clipped_costs_indices.flat] = 0
+
         # replace invalid elements in the Jacobian of omega with respect to theta
         bad_indices = ~np.isfinite(omega_by_theta_jacobian)
         if np.any(bad_indices):
@@ -742,6 +743,37 @@ class ProblemResults(StringRepresentation):
             omega_by_beta_jacobian[bad_indices] = self.omega_by_beta_jacobian[bad_indices]
             errors.append(exceptions.OmegaByBetaJacobianReversionError(bad_indices))
         return omega_by_theta_jacobian, omega_by_beta_jacobian, errors
+
+    def _coerce_matrices(self, matrices: Any) -> Array:
+        """Coerce array-like stacked matrices into a stacked matrix and validate it."""
+        matrices = np.c_[np.asarray(matrices, options.dtype)]
+        if matrices.shape != (self.problem.N, self.problem._max_J):
+            raise ValueError(f"matrices must be {self.problem.N} by {self.problem._max_J}.")
+        return matrices
+
+    def _coerce_optional_costs(self, costs: Optional[Any]) -> Array:
+        """Coerce optional array-like costs into a column vector and validate it."""
+        if costs is not None:
+            costs = np.c_[np.asarray(costs, options.dtype)]
+            if costs.shape != (self.problem.N, 1):
+                raise ValueError(f"costs must be None or a {self.problem.N}-vector.")
+        return costs
+
+    def _coerce_optional_prices(self, prices: Optional[Any]) -> Array:
+        """Coerce optional array-like prices into a column vector and validate it."""
+        if prices is not None:
+            prices = np.c_[np.asarray(prices, options.dtype)]
+            if prices.shape != (self.problem.N, 1):
+                raise ValueError(f"prices must be None or a {self.problem.N}-vector.")
+        return prices
+
+    def _coerce_optional_shares(self, shares: Optional[Any]) -> Array:
+        """Coerce optional array-like shares into a column vector and validate it."""
+        if shares is not None:
+            shares = np.c_[np.asarray(shares, options.dtype)]
+            if shares.shape != (self.problem.N, 1):
+                raise ValueError(f"shares must be None or a {self.problem.N}-vector.")
+        return shares
 
     def _combine_arrays(self, compute_market_results: Callable, fixed_args: Sequence, market_args: Sequence) -> Array:
         """Compute an array for each market and stack them into a single matrix. An array for a single market is
@@ -815,7 +847,9 @@ class ProblemResults(StringRepresentation):
 
         """
         output(f"Computing aggregate elasticities with respect to {name} ...")
-        self._validate_name(name)
+        if not isinstance(factor, float):
+            raise ValueError("factor must be a float.")
+        self.problem._validate_name(name)
         return self._combine_arrays(ResultsMarket.compute_aggregate_elasticity, [factor, name], [])
 
     def compute_elasticities(self, name: str = 'prices') -> Array:
@@ -839,7 +873,7 @@ class ProblemResults(StringRepresentation):
 
         """
         output(f"Computing elasticities with respect to {name} ...")
-        self._validate_name(name)
+        self.problem._validate_name(name)
         return self._combine_arrays(ResultsMarket.compute_elasticities, [name], [])
 
     def compute_diversion_ratios(self, name: str = 'prices') -> Array:
@@ -866,7 +900,7 @@ class ProblemResults(StringRepresentation):
 
         """
         output(f"Computing diversion ratios with respect to {name} ...")
-        self._validate_name(name)
+        self.problem._validate_name(name)
         return self._combine_arrays(ResultsMarket.compute_diversion_ratios, [name], [])
 
     def compute_long_run_diversion_ratios(self) -> Array:
@@ -914,6 +948,7 @@ class ProblemResults(StringRepresentation):
 
         """
         output("Computing own elasticities ...")
+        matrices = self._coerce_matrices(matrices)
         return self._combine_arrays(ResultsMarket.extract_diagonal, [], [matrices])
 
     def extract_diagonal_means(self, matrices: Any) -> Array:
@@ -937,6 +972,7 @@ class ProblemResults(StringRepresentation):
 
         """
         output("Computing mean own elasticities ...")
+        matrices = self._coerce_matrices(matrices)
         return self._combine_arrays(ResultsMarket.extract_diagonal_mean, [], [matrices])
 
     def compute_costs(self) -> Array:
@@ -989,6 +1025,8 @@ class ProblemResults(StringRepresentation):
 
         """
         output("Solving for approximate equilibrium prices ...")
+        self.problem._validate_firms_index(firms_index)
+        costs = self._coerce_optional_costs(costs)
         return self._combine_arrays(ResultsMarket.compute_approximate_prices, [firms_index], [costs])
 
     def compute_prices(
@@ -1034,6 +1072,9 @@ class ProblemResults(StringRepresentation):
             iteration = Iteration('simple', {'tol': 1e-12})
         elif not isinstance(iteration, Iteration):
             raise ValueError("iteration must None or an Iteration instance.")
+        self.problem._validate_firms_index(firms_index)
+        prices = self._coerce_optional_prices(prices)
+        costs = self._coerce_optional_costs(costs)
         return self._combine_arrays(ResultsMarket.compute_prices, [iteration, firms_index], [prices, costs])
 
     def compute_shares(self, prices: Optional[Any] = None) -> Array:
@@ -1053,6 +1094,7 @@ class ProblemResults(StringRepresentation):
 
         """
         output("Computing shares ...")
+        prices = self._coerce_optional_prices(prices)
         return self._combine_arrays(ResultsMarket.compute_shares, [], [prices])
 
     def compute_hhi(self, firms_index: int = 0, shares: Optional[Any] = None) -> Array:
@@ -1081,6 +1123,8 @@ class ProblemResults(StringRepresentation):
 
         """
         output("Computing HHI ...")
+        self.problem._validate_firms_index(firms_index)
+        shares = self._coerce_optional_shares(shares)
         return self._combine_arrays(ResultsMarket.compute_hhi, [firms_index], [shares])
 
     def compute_markups(self, prices: Optional[Any] = None, costs: Optional[Any] = None) -> Array:
@@ -1107,6 +1151,8 @@ class ProblemResults(StringRepresentation):
 
         """
         output("Computing markups ...")
+        prices = self._coerce_optional_prices(prices)
+        costs = self._coerce_optional_costs(costs)
         return self._combine_arrays(ResultsMarket.compute_markups, [], [prices, costs])
 
     def compute_profits(
@@ -1137,6 +1183,9 @@ class ProblemResults(StringRepresentation):
 
         """
         output("Computing profits ...")
+        prices = self._coerce_optional_prices(prices)
+        shares = self._coerce_optional_shares(shares)
+        costs = self._coerce_optional_costs(costs)
         return self._combine_arrays(ResultsMarket.compute_profits, [], [prices, shares, costs])
 
     def compute_consumer_surpluses(self, prices: Optional[Any] = None) -> Array:
@@ -1183,6 +1232,7 @@ class ProblemResults(StringRepresentation):
 
         """
         output("Computing consumer surpluses with the equation that assumes away nonlinear income effects ...")
+        prices = self._coerce_optional_prices(prices)
         return self._combine_arrays(ResultsMarket.compute_consumer_surplus, [], [prices])
 
 

@@ -57,11 +57,13 @@ def build_id_data(T: int, J: int, F: int, mergers: Sequence[Dict[int, int]] = ()
 
     """
 
-    # validate the arguments
-    if T < 1 or F < 1:
-        raise ValueError("Both T and F must be at least 1.")
-    if J < F:
-        raise ValueError("J must be at least F.")
+    # validate the counts
+    if not isinstance(T, int) or not isinstance(F, int) or T < 1 or F < 1:
+        raise ValueError("Both T and F must be positive ints.")
+    if not isinstance(J, int) or J < F:
+        raise ValueError("J must be an int that is at least F.")
+
+    # validate the mergers mappings
     if not isinstance(mergers, collections.Sequence):
         raise TypeError("mergers must be a tuple.")
     for mapping in mergers:
@@ -273,6 +275,8 @@ def build_blp_instruments(formulation: Formulation, product_data: Mapping, firms
         raise ValueError("The market_ids field of product_data must be one-dimensional.")
 
     # use only one column of firm IDs
+    if not isinstance(firms_index, int) or not 0 <= firms_index <= firm_ids.shape[1]:
+        raise ValueError(f"firms_index must be an int between 0 and {firm_ids.shape[1]}.")
     firm_ids = firm_ids[:, [firms_index]]
 
     # construct a set of market-firm pair IDs
@@ -326,6 +330,8 @@ def build_matrix(formulation: Formulation, data: Mapping) -> Array:
     """
     if not isinstance(formulation, Formulation):
         raise TypeError("formulation must be a Formulation instance.")
+    if formulation._absorbed_terms:
+        raise ValueError("formulation does not support fixed effect absorption.")
     return formulation._build_matrix(data)[0]
 
 
@@ -367,12 +373,12 @@ def compute_fitted_values(variable: Any, formulation: Formulation, data: Mapping
     because they are a reasonable reduced form estimate of expected prices conditional on all exogenous variables.
 
     """
-    if not isinstance(formulation, Formulation):
-        raise TypeError("formulation must be a Formulation instance.")
 
     # formulate the regressors and compare sizes
-    true_y = np.c_[np.asarray(variable, options.dtype)]
+    if not isinstance(formulation, Formulation):
+        raise TypeError("formulation must be a Formulation instance.")
     X = formulation._build_matrix(data)[0]
+    true_y = np.c_[np.asarray(variable, options.dtype)]
     if true_y.shape != (X.shape[0], 1):
         raise ValueError(f"variable must be a vector with as many elements as regressor rows, {X.shape[0]}.")
 
