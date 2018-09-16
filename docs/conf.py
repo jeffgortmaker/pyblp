@@ -1,8 +1,12 @@
 """Sphinx configuration."""
 
+import ast
 from pathlib import Path
+from typing import Any, Optional, Tuple
 
+import astunparse
 import pyblp
+import sphinx.application
 
 
 # get the location of the source directory
@@ -59,7 +63,23 @@ ipython_execlines.append(f'source_path = \'{source_path.as_posix()}\'')
 html_theme = 'sphinx_rtd_theme'
 
 
-def setup(app):
-    """Configure extra resources."""
+def process_signature(*args: Any) -> Optional[Tuple[str, str]]:
+    """Strip type hints from signatures."""
+    signature = args[5]
+    if signature is None:
+        return None
+    assert isinstance(signature, str)
+    node = ast.parse(f'def f{signature}: pass').body[0]
+    assert isinstance(node, ast.FunctionDef)
+    node.returns = None
+    if node.args.args:
+        for arg in node.args.args:
+            arg.annotation = None
+    return astunparse.unparse(node).splitlines()[2][5:-1], ''
+
+
+def setup(app: sphinx.application.Sphinx) -> None:
+    """Configure extra resources and type hint stripping."""
     app.add_javascript('override.js')
     app.add_stylesheet('override.css')
+    app.connect('autodoc-process-signature', process_signature)

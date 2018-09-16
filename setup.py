@@ -21,7 +21,7 @@ setup(
     install_requires=read('requirements.txt').splitlines(),
     extras_require={
         'tests': ['pytest', 'pytest-xdist', 'linearmodels'],
-        'docs': ['sphinx', 'pandas', 'ipython', 'matplotlib', 'sphinx_rtd_theme'],
+        'docs': ['sphinx<=1.7.9', 'pandas', 'ipython', 'matplotlib', 'astunparse', 'sphinx-rtd-theme'],
     },
     include_package_data=True,
     description="BLP demand estimation with Python 3",
