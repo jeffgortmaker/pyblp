@@ -11,39 +11,41 @@ from .utilities.basics import Array, Data, RecArray, extract_matrix, structure_m
 
 
 class Products(object):
-    r"""Structured product data, which contains the following fields:
+    r"""Product data structured as a record array.
 
-        - **market_ids** : (`object`) - IDs that associate products with markets.
+    Attributes in addition to the ones below are the variables underlying :math:`X_1`, :math:`X_2`, and :math:`X_3`.
 
-        - **firm_ids** : (`object`) - IDs that associate products with firms. Any columns after the first represent
-          changes such as mergers.
-
-        - **demand_ids** : (`object`) - IDs used to create demand-side fixed effects.
-
-        - **supply_ids** : (`object`) - IDs used to create supply-side fixed effects.
-
-        - **nesting_ids** : (`object`) - IDs that associate products with nesting groups.
-
-        - **clustering_ids** (`object`) - IDs used to compute clustered standard errors.
-
-        - **ownership** : (`object`) - Stacked :math:`J_t \times J_t` ownership matrices, :math:`O`, for each market
-          :math:`t`. Each stack is associated with a `firm_ids` column.
-
-        - **shares** : (`numeric`) - Market shares, :math:`s`.
-
-        - **ZD** : (`numeric`) - Demand-side instruments, :math:`Z_D`.
-
-        - **ZS** : (`numeric`) - Supply-side instruments, :math:`Z_S`.
-
-        - **X1** : (`numeric`) - Linear product characteristics, :math:`X_1`.
-
-        - **X2** : (`numeric`) - Nonlinear product characteristics, :math:`X_2`.
-
-        - **X3** : (`numeric`) - Cost product characteristics, :math:`X_3`.
-
-        - **prices** : (`numeric`) - Product prices, :math:`p`.
-
-    Any additional fields are the variables underlying `X1`, `X2`, and `X3`.
+    Attributes
+    ----------
+    market_ids : `ndarray`
+        IDs that associate products with markets.
+    firm_ids : `ndarray`
+        IDs that associate products with firms. Any columns after the first represent changes such as mergers.
+    demand_ids : `ndarray`
+        IDs used to create demand-side fixed effects.
+    supply_ids : `ndarray`
+        IDs used to create supply-side fixed effects.
+    nesting_ids : `ndarray`
+        IDs that associate products with nesting groups.
+    clustering_ids : `ndarray`
+        IDs used to compute clustered standard errors.
+    ownership : `ndarray`
+        Stacked :math:`J_t \times J_t` ownership matrices, :math:`O`, for each market :math:`t`. Each stack is
+        associated with a `firm_ids` column.
+    shares : `ndarray`
+        Market shares, :math:`s`.
+    ZD : `ndarray`
+        Demand-side instruments, :math:`Z_D`.
+    ZS : `ndarray`
+        Supply-side instruments, :math:`Z_S`.
+    X1 : `ndarray`
+        Linear product characteristics, :math:`X_1`.
+    X2 : `ndarray`
+        Nonlinear product characteristics, :math:`X_2`.
+    X3 : `ndarray`
+        Cost product characteristics, :math:`X_3`.
+    prices : `ndarray`
+        Product prices, :math:`p`.
 
     """
 
@@ -187,15 +189,18 @@ class Products(object):
 
 
 class Agents(object):
-    r"""Structured agent data, which contains the following fields:
+    r"""Agent data structured as a record array.
 
-        - **market_ids** : (`object`) - IDs that associate agents with markets.
-
-        - **weights** : (`numeric`) - Integration weights, :math:`w`.
-
-        - **nodes** : (`numeric`) - Unobserved agent characteristics called integration nodes, :math:`\nu`.
-
-        - **demographics** : (`numeric`) - Observed agent characteristics, :math:`d`.
+    Attributes
+    ----------
+    market_ids : `ndarray`
+        IDs that associate agents with markets.
+    weights : `ndarray`
+        Integration weights, :math:`w`.
+    nodes : `ndarray`
+        Unobserved agent characteristics called integration nodes, :math:`\nu`.
+    demographics : `ndarray`
+        Observed agent characteristics, :math:`d`.
 
     """
 
