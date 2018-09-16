@@ -302,12 +302,12 @@ class ProblemResults(StringRepresentation):
         # compute a version of xi that includes the contribution of any demand-side fixed effects
         self.xi = self.true_xi
         if self.problem.ED > 0:
-            self.xi = self.true_delta - self._get_true_X1() @ self.beta
+            self.xi = self.true_delta - self._compute_true_X1() @ self.beta
 
         # compute a version of omega that includes the contribution of any supply-side fixed effects
         self.omega = self.true_omega
         if self.problem.ES > 0:
-            self.omega = self.true_tilde_costs - self._get_true_X3() @ self.gamma
+            self.omega = self.true_tilde_costs - self._compute_true_X3() @ self.gamma
 
         # update the weighting matrices
         self.updated_WD, WD_errors = compute_gmm_weights(
@@ -425,19 +425,21 @@ class ProblemResults(StringRepresentation):
         # combine the sections into one string
         return "\n\n".join("\n".join(s) for s in sections)
 
-    def _get_true_X1(self) -> Array:
-        """Re-compute X1 without any absorbed demand-side fixed effects."""
-        if self.problem.ED == 0:
+    def _compute_true_X1(self, data_override: Optional[Mapping] = None) -> Array:
+        """Compute X1 without any absorbed demand-side fixed effects."""
+        if self.problem.ED == 0 and not data_override:
             return self.problem.products.X1
         ones = np.ones((self.problem.N, 1), options.dtype)
-        return np.column_stack((ones * f.evaluate(self.problem.products) for f in self.problem._X1_formulations))
+        columns = (ones * f.evaluate(self.problem.products, data_override) for f in self.problem._X1_formulations)
+        return np.column_stack(columns)
 
-    def _get_true_X3(self) -> Array:
-        """Re-compute X3 without any absorbed supply-side fixed effects."""
-        if self.problem.ES == 0:
+    def _compute_true_X3(self, data_override: Optional[Mapping] = None) -> Array:
+        """Compute X3 without any absorbed supply-side fixed effects."""
+        if self.problem.ES == 0 and not data_override:
             return self.problem.products.X3
         ones = np.ones((self.problem.N, 1), options.dtype)
-        return np.column_stack((ones * f.evaluate(self.problem.products) for f in self.problem._X3_formulations))
+        columns = (ones * f.evaluate(self.problem.products, data_override) for f in self.problem._X3_formulations)
+        return np.column_stack(columns)
 
     def compute_optimal_instruments(
             self, method: str = 'normal', draws: int = 100, seed: Optional[int] = None,
@@ -466,6 +468,9 @@ class ProblemResults(StringRepresentation):
         The expectation is taken by integrating over the joint density of :math:`\xi` and :math:`\omega`. The
         normalizing matrix :math:`\text{Var}(\xi, \omega)^{-1}` is estimated with the sample covariance matrix of the
         error terms.
+
+        Optimal instruments have been shown, for example, by :ref:`Reynaert and Verboven (2014) <rv14>`, to not only
+        reduce bias in the BLP problem, but also improve efficiency and stability.
 
         Parameters
         ----------
@@ -559,20 +564,21 @@ class ProblemResults(StringRepresentation):
         # average over Jacobian realizations
         iteration_mappings: List[Dict[Hashable, int]] = []
         evaluation_mappings: List[Dict[Hashable, int]] = []
-        expected_xi_by_theta_jacobian = np.zeros_like(self.xi_by_theta_jacobian)
-        expected_omega_by_theta_jacobian = np.zeros_like(self.omega_by_theta_jacobian)
-        expected_omega_by_beta_jacobian = np.zeros_like(self.omega_by_beta_jacobian)
-        if self._nonlinear_parameters.P > 0:
-            for _ in range(draws):
-                results_i = self._compute_realizations(prices, iteration, *sample())
-                xi_by_theta_jacobian_i, omega_by_theta_jacobian_i, omega_by_beta_jacobian_i = results_i[:3]
-                iteration_mapping_i, evaluation_mapping_i, errors_i = results_i[3:]
-                expected_xi_by_theta_jacobian += xi_by_theta_jacobian_i / draws
-                expected_omega_by_theta_jacobian += omega_by_theta_jacobian_i / draws
-                expected_omega_by_beta_jacobian += omega_by_beta_jacobian_i / draws
-                iteration_mappings.append(iteration_mapping_i)
-                evaluation_mappings.append(evaluation_mapping_i)
-                errors.extend(errors_i)
+        expected_xi_by_theta = np.zeros_like(self.xi_by_theta_jacobian)
+        expected_xi_by_beta = np.zeros_like(self.problem.products.X1)
+        expected_omega_by_theta = np.zeros_like(self.omega_by_theta_jacobian)
+        expected_omega_by_beta = np.zeros_like(self.omega_by_beta_jacobian)
+        for _ in range(draws):
+            xi_by_theta_i, xi_by_beta_i, omega_by_theta_i, omega_by_beta_i, iterations_i, evaluations_i, errors_i = (
+                self._compute_realizations(prices, iteration, *sample())
+            )
+            expected_xi_by_theta += xi_by_theta_i / draws
+            expected_xi_by_beta += xi_by_beta_i / draws
+            expected_omega_by_theta += omega_by_theta_i / draws
+            expected_omega_by_beta += omega_by_beta_i / draws
+            iteration_mappings.append(iterations_i)
+            evaluation_mappings.append(evaluations_i)
+            errors.extend(errors_i)
 
         # output a warning about any errors
         if errors:
@@ -583,21 +589,21 @@ class ProblemResults(StringRepresentation):
         # compute the optimal instruments
         if self.problem.K3 == 0:
             inverse_covariance_matrix = np.c_[1 / np.var(self.true_xi)]
-            demand_instruments = inverse_covariance_matrix * np.c_[expected_xi_by_theta_jacobian, -self._get_true_X1()]
+            demand_instruments = inverse_covariance_matrix * np.c_[expected_xi_by_theta, expected_xi_by_beta]
             supply_instruments = np.full((self.problem.N, 0), np.nan, options.dtype)
         else:
             inverse_covariance_matrix = np.c_[scipy.linalg.inv(np.cov(self.true_xi, self.true_omega, rowvar=False))]
             jacobian = np.r_[
-                np.c_[expected_xi_by_theta_jacobian, -self._get_true_X1(), np.zeros_like(self.problem.products.X3)],
-                np.c_[expected_omega_by_theta_jacobian, expected_omega_by_beta_jacobian, -self._get_true_X3()]
+                np.c_[expected_xi_by_theta, expected_xi_by_beta, np.zeros_like(self.problem.products.X3)],
+                np.c_[expected_omega_by_theta, expected_omega_by_beta, -self._compute_true_X3()]
             ]
             tensor = multiply_matrix_and_tensor(inverse_covariance_matrix, np.stack(np.split(jacobian, 2), axis=1))
             demand_instruments, supply_instruments = np.split(tensor.reshape((self.problem.N, -1)), 2, axis=1)
 
         # structure the results
         results = OptimalInstrumentResults(
-            self, demand_instruments, supply_instruments, inverse_covariance_matrix, expected_xi_by_theta_jacobian,
-            expected_omega_by_theta_jacobian, expected_omega_by_beta_jacobian, start_time, time.time(),
+            self, demand_instruments, supply_instruments, inverse_covariance_matrix, expected_xi_by_theta,
+            expected_xi_by_beta, expected_omega_by_theta, expected_omega_by_beta, start_time, time.time(),
             iteration_mappings, evaluation_mappings
         )
         output(f"Computed optimal instruments after {format_seconds(results.computation_time)}.")
@@ -607,10 +613,10 @@ class ProblemResults(StringRepresentation):
 
     def _compute_realizations(
             self, prices: Optional[Array], iteration: Optional[Iteration], xi: Array, omega: Array) -> (
-            Tuple[Array, Array, Array, Dict[Hashable, int], Dict[Hashable, int], List[Error]]):
+            Tuple[Array, Array, Array, Array, Dict[Hashable, int], Dict[Hashable, int], List[Error]]):
         """If they have not already been estimated, compute the equilibrium prices, shares, and delta associated with a
         realization of xi and omega market-by-market. Then, compute realizations of Jacobians of xi and omega with
-        respect to theta, as well as the Jacobian of omega with respect to beta.
+        respect to theta and beta.
         """
         errors: List[Error] = []
 
@@ -648,7 +654,10 @@ class ProblemResults(StringRepresentation):
         )
         errors.extend(demand_errors)
 
-        # compute the Jacobian of omega with respect to theta
+        # compute the Jacobian of xi with respect to beta (prices just need to be replaced in X1)
+        xi_by_beta_jacobian = -self._compute_true_X1({'prices': equilibrium_prices})
+
+        # compute the Jacobians of omega with respect to theta and beta
         omega_by_theta_jacobian = np.full((self.problem.N, self._nonlinear_parameters.P), np.nan, options.dtype)
         omega_by_beta_jacobian = np.full((self.problem.N, self.problem.K1), np.nan, options.dtype)
         if self.problem.K3 > 0:
@@ -659,8 +668,8 @@ class ProblemResults(StringRepresentation):
 
         # return all of the information associated with this realization
         return (
-            xi_by_theta_jacobian, omega_by_theta_jacobian, omega_by_beta_jacobian, iteration_mapping,
-            evaluation_mapping, errors
+            xi_by_theta_jacobian, xi_by_beta_jacobian, omega_by_theta_jacobian, omega_by_beta_jacobian,
+            iteration_mapping, evaluation_mapping, errors
         )
 
     def _compute_demand_realizations(
@@ -669,6 +678,11 @@ class ProblemResults(StringRepresentation):
         problematic elements to their estimated values.
         """
         errors: List[Error] = []
+
+        # check if the Jacobian does not need to be computed
+        xi_by_theta_jacobian = np.full((self.problem.N, self._nonlinear_parameters.P), np.nan, options.dtype)
+        if self._nonlinear_parameters.P == 0:
+            return xi_by_theta_jacobian, errors
 
         # define a factory for computing the Jacobian of xi with respect to theta in markets
         def market_factory(s: Hashable) -> Tuple[ResultsMarket, NonlinearParameters]:
@@ -680,7 +694,6 @@ class ProblemResults(StringRepresentation):
             return market_s, self._nonlinear_parameters
 
         # compute the Jacobian market-by-market
-        xi_by_theta_jacobian = np.full((self.problem.N, self._nonlinear_parameters.P), np.nan, options.dtype)
         generator = generate_items(self.unique_market_ids, market_factory, ResultsMarket.compute_xi_by_theta_jacobian)
         for t, (xi_by_theta_jacobian_t, errors_t) in generator:
             xi_by_theta_jacobian[self.problem._product_market_indices[t]] = xi_by_theta_jacobian_t
@@ -1256,6 +1269,8 @@ class OptimalInstrumentResults(StringRepresentation):
         :math:`1 / \text{Var}(\xi)`.
     expected_xi_by_theta_jacobian: `ndarray`
         Estimated :math:`\operatorname{\mathbb{E}}[\partial\xi / \partial\theta \mid Z]`.
+    expected_xi_by_beta_jacobian: `ndarray`
+        Estimated :math:`\operatorname{\mathbb{E}}[\partial\xi / \partial\beta \mid Z]`.
     expected_omega_by_theta_jacobian: `ndarray`
         Estimated :math:`\operatorname{\mathbb{E}}[\partial\omega / \partial\theta \mid Z]`.
     expected_omega_by_beta_jacobian: `ndarray`
@@ -1278,6 +1293,7 @@ class OptimalInstrumentResults(StringRepresentation):
     supply_instruments: Array
     inverse_covariance_matrix: Array
     expected_xi_by_theta_jacobian: Array
+    expected_xi_by_beta_jacobian: Array
     expected_omega_by_theta_jacobian: Array
     expected_omega_by_beta_jacobian: Array
     computation_time: float
@@ -1287,8 +1303,9 @@ class OptimalInstrumentResults(StringRepresentation):
     def __init__(
             self, problem_results: ProblemResults, demand_instruments: Array, supply_instruments: Array,
             inverse_covariance_matrix: Array, expected_xi_by_theta_jacobian: Array,
-            expected_omega_by_theta_jacobian: Array, expected_omega_by_beta_jacobian: Array, start_time: float,
-            end_time: float, iteration_mappings: Sequence[Mapping[Hashable, int]],
+            expected_xi_by_beta_jacobian: Array, expected_omega_by_theta_jacobian: Array,
+            expected_omega_by_beta_jacobian: Array, start_time: float, end_time: float,
+            iteration_mappings: Sequence[Mapping[Hashable, int]],
             evaluation_mappings: Sequence[Mapping[Hashable, int]]) -> None:
         """Structure optimal instrument computation results."""
         self.problem_results = problem_results
@@ -1296,6 +1313,7 @@ class OptimalInstrumentResults(StringRepresentation):
         self.supply_instruments = supply_instruments
         self.inverse_covariance_matrix = inverse_covariance_matrix
         self.expected_xi_by_theta_jacobian = expected_xi_by_theta_jacobian
+        self.expected_xi_by_beta_jacobian = expected_xi_by_beta_jacobian
         self.expected_omega_by_theta_jacobian = expected_omega_by_theta_jacobian
         self.expected_omega_by_beta_jacobian = expected_omega_by_beta_jacobian
         self.computation_time = end_time - start_time

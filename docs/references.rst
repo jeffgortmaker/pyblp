@@ -57,6 +57,10 @@ Nevo, A. (1997). `Mergers with differentiated products: The case of the ready-to
 
 Nevo, A. (2000). `A practitioner's guide to estimation of random‐coefficients logit models of demand <https://ideas.repec.org/a/bla/jemstr/v9y2000i4p513-548.html>`_. *Journal of Economics & Management Strategy, 9* (4), 513-548.
 
+.. _rv14:
+
+Reynaert, M., & Verboven, F. (2014). `Improving the performance of random coefficients demand models: The role of optimal instruments <https://ideas.repec.org/a/eee/econom/v179y2014i1p83-98.html>`_. *Journal of Econometrics, 179* (1), 83-98.
+
 .. _rvn12:
 
 Reynaerts, J., Varadhan, R., & Nash, J. C. (2012). `Enhancing the convergence properties of the BLP (1995) contraction mapping <https://ideas.repec.org/p/ete/vivwps/35.html>`_. VIVES discussion paper.

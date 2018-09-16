@@ -337,7 +337,7 @@ def test_fixed_effects(
     # test that all optimal instrument results expected to be identical are essentially identical
     Z_results_keys = [
         'demand_instruments', 'supply_instruments', 'inverse_covariance_matrix', 'expected_xi_by_theta_jacobian',
-        'expected_omega_by_theta_jacobian', 'expected_omega_by_beta_jacobian'
+        'expected_xi_by_beta_jacobian', 'expected_omega_by_theta_jacobian', 'expected_omega_by_beta_jacobian'
     ]
     for key in Z_results_keys:
         result1 = getattr(Z_results1, key)
@@ -346,7 +346,7 @@ def test_fixed_effects(
         if key in {'demand_instruments', 'supply_instruments'}:
             result2 = np.delete(result2, [i for i, x in enumerate(result2.T) if np.any(x == 0)], axis=1)
             result3 = np.delete(result3, [i for i, x in enumerate(result3.T) if np.any(x == 0)], axis=1)
-        elif key == 'expected_omega_by_beta_jacobian':
+        elif key in {'expected_xi_by_beta_jacobian', 'expected_omega_by_beta_jacobian'}:
             result2 = np.c_[result2[:, :result1.shape[1]]]
             result3 = np.c_[result3[:, :result1.shape[1]]]
         np.testing.assert_allclose(result1, result2, atol=atol, rtol=rtol, err_msg=key)
