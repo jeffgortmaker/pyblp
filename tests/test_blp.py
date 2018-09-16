@@ -860,6 +860,5 @@ def test_formatting(simulated_problem: SimulatedProblemFixture) -> None:
     """Test that basic objects can be formatted."""
     simulation, _, problem, _, results = simulated_problem
     assert str(simulation)
-    assert str(simulation.solve())
     assert str(problem)
     assert str(results)
