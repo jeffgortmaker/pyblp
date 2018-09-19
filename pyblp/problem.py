@@ -561,9 +561,11 @@ class PrimitiveProblem(Economy):
             errors.extend(supply_errors)
 
         # compute the objective value
-        objective = (true_xi.T @ self.products.ZD) @ WD @ (self.products.ZD.T @ true_xi)
+        demand_moments = self.products.ZD.T @ true_xi
+        supply_moments = self.products.ZS.T @ true_omega
+        objective = demand_moments.T @ WD @ demand_moments
         if self.K3 > 0:
-            objective += (true_omega.T @ self.products.ZS) @ WS @ (self.products.ZS.T @ true_omega)
+            objective += supply_moments.T @ WS @ supply_moments
 
         # replace the objective with its last value if its computation failed, which is unlikely but possible
         if not np.isfinite(np.squeeze(objective)):
@@ -573,11 +575,11 @@ class PrimitiveProblem(Economy):
         # compute the gradient
         gradient = np.full_like(theta, np.nan, options.dtype)
         if compute_gradient:
-            gradient = 2 * ((xi_jacobian.T @ self.products.ZD) @ WD @ (self.products.ZD.T @ true_xi))
+            gradient = 2 * ((xi_jacobian.T @ self.products.ZD) @ WD @ demand_moments)
             if self.K3 > 0:
-                gradient += 2 * ((omega_jacobian.T @ self.products.ZS) @ WS @ (self.products.ZS.T @ true_omega))
+                gradient += 2 * ((omega_jacobian.T @ self.products.ZS) @ WS @ supply_moments)
 
-        # replace invalid elements in the gradient with their last values
+        # replace any invalid elements in the gradient with their last values
         if compute_gradient:
             bad_indices = ~np.isfinite(gradient)
             if np.any(bad_indices):

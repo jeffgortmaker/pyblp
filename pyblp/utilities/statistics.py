@@ -25,7 +25,8 @@ class IV(object):
         self.W = W
 
         # attempt to pre-compute covariances
-        covariances_inverse = (self.X.T @ self.Z) @ self.W @ (self.Z.T @ self.X)
+        product = self.Z.T @ self.X
+        covariances_inverse = product.T @ self.W @ product
         self.covariances, replacement = approximately_invert(covariances_inverse)
 
         # store any errors
