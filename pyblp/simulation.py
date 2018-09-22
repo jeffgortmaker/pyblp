@@ -16,7 +16,8 @@ from .parameters import LinearParameters, NonlinearParameters
 from .primitives import Agents, Products
 from .results import SimulationResults
 from .utilities.basics import (
-    Array, Data, Error, RecArray, extract_matrix, format_seconds, generate_items, output, structure_matrices
+    Array, Data, Error, RecArray, extract_matrix, format_seconds, generate_items, output, output_progress,
+    structure_matrices
 )
 
 
@@ -618,7 +619,9 @@ class Simulation(Economy):
         evaluation_mapping: Dict[Hashable, int] = {}
         synthetic_prices = np.full_like(self.products.prices, np.nan)
         synthetic_shares = np.full_like(self.products.shares, np.nan)
-        generator = generate_items(self.unique_market_ids, market_factory, SimulationMarket.solve)
+        generator = output_progress(
+            generate_items(self.unique_market_ids, market_factory, SimulationMarket.solve), self.T, start_time
+        )
         for t, (prices_t, shares_t, errors_t, iterations_t, evaluations_t) in generator:
             synthetic_prices[self._product_market_indices[t]] = prices_t
             synthetic_shares[self._product_market_indices[t]] = shares_t

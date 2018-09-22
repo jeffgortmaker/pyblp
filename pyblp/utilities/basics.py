@@ -203,6 +203,18 @@ def output(message: Any) -> None:
         options.verbose_output(str(message))
 
 
+def output_progress(generator: Iterator, length: int, start_time: float):
+    """Yield results from a generator while outputting progress updates at most every minute."""
+    elapsed = time.time() - start_time
+    next_minute = int(elapsed / 60) + 1
+    for index, generated in enumerate(generator):
+        yield generated
+        elapsed = time.time() - start_time
+        if elapsed > 60 * next_minute:
+            output(f"Finished {index + 1} out of {length} after {format_seconds(elapsed)}.")
+            next_minute = int(elapsed / 60) + 1
+
+
 def format_seconds(seconds: float) -> str:
     """Prepare a number of seconds to be displayed as a string."""
     return str(datetime.timedelta(seconds=int(round(seconds))))

@@ -16,7 +16,7 @@ from .parameters import LinearParameters, NonlinearParameters, PiParameter, RhoP
 from .utilities.algebra import multiply_matrix_and_tensor
 from .utilities.basics import (
     Array, Bounds, Error, Mapping, RecArray, StringRepresentation, TableFormatter, format_number, format_seconds,
-    generate_items, output, update_matrices
+    generate_items, output, output_progress, update_matrices
 )
 from .utilities.statistics import IV, compute_gmm_se, compute_gmm_weights
 
@@ -221,7 +221,6 @@ class ProblemResults(StringRepresentation):
     updated_WD: Array
     updated_WS: Array
     unique_market_ids: Array
-
     _costs_type: str
     _se_type: str
     _errors: List[Error]
@@ -577,14 +576,13 @@ class ProblemResults(StringRepresentation):
                 raise ValueError(f"expected_prices must be a {self.problem.N}-vector.")
 
         # average over Jacobian realizations
-        next_minute = 1
         iteration_mappings: List[Dict[Hashable, int]] = []
         evaluation_mappings: List[Dict[Hashable, int]] = []
         expected_xi_by_theta = np.zeros_like(self.xi_by_theta_jacobian)
         expected_xi_by_beta = np.zeros_like(self.problem.products.X1)
         expected_omega_by_theta = np.zeros_like(self.omega_by_theta_jacobian)
         expected_omega_by_beta = np.zeros_like(self.omega_by_beta_jacobian)
-        for draw in range(1, draws + 1):
+        for _ in output_progress(range(draws), draws, start_time):
             xi_by_theta_i, xi_by_beta_i, omega_by_theta_i, omega_by_beta_i, iterations_i, evaluations_i, errors_i = (
                 self._compute_realizations(prices, iteration, *sample())
             )
@@ -595,12 +593,6 @@ class ProblemResults(StringRepresentation):
             iteration_mappings.append(iterations_i)
             evaluation_mappings.append(evaluations_i)
             errors.extend(errors_i)
-
-            # output progress updates at most every minute
-            elapsed = time.time() - start_time
-            if elapsed > 60 * next_minute:
-                output(f"Finished {draw} out of {draws} after {format_seconds(elapsed)}.")
-                next_minute = int(elapsed / 60) + 1
 
         # output a warning about any errors
         if errors:
@@ -831,7 +823,10 @@ class ProblemResults(StringRepresentation):
         # construct a mapping from market IDs to market-specific arrays and compute the full matrix size
         rows = columns = 0
         matrix_mapping: Dict[Hashable, Array] = {}
-        for t, (array_t, errors_t) in generate_items(self.unique_market_ids, market_factory, compute_market_results):
+        generator = output_progress(
+            generate_items(self.unique_market_ids, market_factory, compute_market_results), self.problem.T, start_time
+        )
+        for t, (array_t, errors_t) in generator:
             errors.extend(errors_t)
             matrix_mapping[t] = np.c_[array_t]
             rows += matrix_mapping[t].shape[0]
@@ -1432,8 +1427,8 @@ class OptimalInstrumentResults(StringRepresentation):
         return "\n\n".join("\n".join(s) for s in [summary_section, formulation_section])
 
     def to_problem(
-            self, delete_demand_instruments: Sequence[int] = (), delete_supply_instruments: Sequence[int] = ()) -> (
-            '_Problem'):
+            self, delete_demand_instruments: Sequence[int] = (),
+            delete_supply_instruments: Sequence[int] = ()) -> '_Problem':
         """Re-create the problem with estimated optimal instruments.
 
         The re-created problem will be exactly the same, except that instruments will be replaced with the estimated
