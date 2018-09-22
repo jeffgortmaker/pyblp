@@ -465,9 +465,11 @@ def test_omega_by_beta_jacobian(simulated_problem: SimulatedProblemFixture) -> N
     def compute_tilde_costs(beta: Array) -> Array:
         """Update beta, compute marginal costs, and apply any transformation."""
         old_beta = results.beta.copy()
-        results.beta = beta
-        costs = results.compute_costs()
-        results.beta = old_beta
+        try:
+            results.beta = beta
+            costs = results.compute_costs()
+        finally:
+            results.beta = old_beta
         if solve_options.get('costs_type', 'linear') == 'log':
             return np.log(costs)
         return costs
