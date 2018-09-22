@@ -23,7 +23,7 @@ from .utilities.statistics import IV, compute_gmm_se, compute_gmm_weights
 
 # only import objects that create import cycles when checking types
 if TYPE_CHECKING:
-    from .problem import PrimitiveProblem, Problem, Progress  # noqa
+    from .problem import _Problem, Problem, Progress  # noqa
     from .simulation import Simulation  # noqa
 
 
@@ -166,7 +166,7 @@ class ProblemResults(StringRepresentation):
 
     """
 
-    problem: 'PrimitiveProblem'
+    problem: '_Problem'
     last_results: Optional['ProblemResults']
     step: int
     optimization_time: float
@@ -568,13 +568,14 @@ class ProblemResults(StringRepresentation):
                 raise ValueError(f"expected_prices must be a {self.problem.N}-vector.")
 
         # average over Jacobian realizations
+        next_minute = 1
         iteration_mappings: List[Dict[Hashable, int]] = []
         evaluation_mappings: List[Dict[Hashable, int]] = []
         expected_xi_by_theta = np.zeros_like(self.xi_by_theta_jacobian)
         expected_xi_by_beta = np.zeros_like(self.problem.products.X1)
         expected_omega_by_theta = np.zeros_like(self.omega_by_theta_jacobian)
         expected_omega_by_beta = np.zeros_like(self.omega_by_beta_jacobian)
-        for _ in range(draws):
+        for draw in range(1, draws + 1):
             xi_by_theta_i, xi_by_beta_i, omega_by_theta_i, omega_by_beta_i, iterations_i, evaluations_i, errors_i = (
                 self._compute_realizations(prices, iteration, *sample())
             )
@@ -585,6 +586,12 @@ class ProblemResults(StringRepresentation):
             iteration_mappings.append(iterations_i)
             evaluation_mappings.append(evaluations_i)
             errors.extend(errors_i)
+
+            # output progress updates at most every minute
+            elapsed = time.time() - start_time
+            if elapsed > 60 * next_minute:
+                output(f"Finished {draw} out of {draws} after {format_seconds(elapsed)}.")
+                next_minute = int(elapsed / 60) + 1
 
         # output a warning about any errors
         if errors:
@@ -1417,7 +1424,7 @@ class OptimalInstrumentResults(StringRepresentation):
 
     def to_problem(
             self, delete_demand_instruments: Sequence[int] = (), delete_supply_instruments: Sequence[int] = ()) -> (
-            'PrimitiveProblem'):
+            '_Problem'):
         """Re-create the problem with estimated optimal instruments.
 
         The re-created problem will be exactly the same, except that instruments will be replaced with the estimated
@@ -1462,6 +1469,10 @@ class OptimalInstrumentResults(StringRepresentation):
 
         """
 
+        # keep track of long it takes to re-create the problem
+        output("Re-creating the problem ...")
+        start_time = time.time()
+
         # validate the indices
         if not isinstance(delete_demand_instruments, collections.Sequence):
             raise TypeError("delete_demand_instruments must be a tuple.")
@@ -1481,11 +1492,15 @@ class OptimalInstrumentResults(StringRepresentation):
         })
 
         # re-create the problem
-        from .problem import PrimitiveProblem  # noqa
-        return PrimitiveProblem(
+        from .problem import _Problem  # noqa
+        problem = _Problem(
             self.problem_results.problem.product_formulations, self.problem_results.problem.agent_formulation,
             updated_products, self.problem_results.problem.agents, updating_instruments=True
         )
+        output(f"Re-created the problem after {format_seconds(time.time() - start_time)}.")
+        output("")
+        output(problem)
+        return problem
 
 
 class SimulationResults(StringRepresentation):

@@ -289,6 +289,10 @@ class Simulation(Economy):
             seed: Optional[int] = None) -> None:
         """Load or simulate all data except for synthetic prices and shares."""
 
+        # keep track of long it takes to initialize the simulation
+        output("Initializing the simulation ...")
+        start_time = time.time()
+
         # validate the formulations
         if not isinstance(product_formulations, collections.Sequence) or len(product_formulations) != 3:
             raise TypeError("product_formulations must be a tuple of three formulations.")
@@ -473,6 +477,11 @@ class Simulation(Economy):
         self.costs = self.products.X3 @ self.gamma + self.omega
         if costs_type == 'log':
             self.costs = np.exp(self.costs)
+
+        # output information about the initialized simulation
+        output(f"Initialized the simulation after {format_seconds(time.time() - start_time)}.")
+        output("")
+        output(self)
 
     def __str__(self) -> str:
         """Supplement general formatted information with other information about parameters."""

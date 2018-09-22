@@ -22,7 +22,7 @@ from .utilities.basics import (
 from .utilities.statistics import IV, compute_2sls_weights
 
 
-class PrimitiveProblem(Economy):
+class _Problem(Economy):
     """A BLP problem initialized with structured product and agent data."""
 
     def solve(
@@ -319,7 +319,8 @@ class PrimitiveProblem(Economy):
 
         """
 
-        # record the amount of time it takes to solve the problem
+        # keep track of how long it takes to solve the problem
+        output("Solving the problem ...")
         step_start_time = time.time()
 
         # validate the estimation method
@@ -760,7 +761,7 @@ class PrimitiveProblem(Economy):
             output("")
 
 
-class Problem(PrimitiveProblem):
+class Problem(_Problem):
     r"""A BLP problem.
 
     This class is initialized with relevant data and solved with :meth:`Problem.solve`.
@@ -924,6 +925,10 @@ class Problem(PrimitiveProblem):
             integration: Optional[Integration] = None) -> None:
         """Initialize the underlying economy with product and agent data."""
 
+        # keep track of long it takes to initialize the problem
+        output("Initializing the problem ...")
+        start_time = time.time()
+
         # validate and normalize product formulations
         if isinstance(product_formulations, Formulation):
             product_formulations = [product_formulations]
@@ -938,11 +943,16 @@ class Problem(PrimitiveProblem):
         agents = Agents(products, agent_formulation, agent_data, integration)
         super().__init__(product_formulations, agent_formulation, products, agents)
 
+        # output information about the initialized problem
+        output(f"Initialized the problem after {format_seconds(time.time() - start_time)}.")
+        output("")
+        output(self)
+
 
 class Progress(object):
     """Structured information about estimation progress."""
 
-    problem: PrimitiveProblem
+    problem: _Problem
     nonlinear_parameters: NonlinearParameters
     WD: Array
     WS: Array
@@ -966,7 +976,7 @@ class Progress(object):
     gradient_norm: Array
 
     def __init__(
-            self, problem: PrimitiveProblem, nonlinear_parameters: NonlinearParameters, WD: Array, WS: Array,
+            self, problem: _Problem, nonlinear_parameters: NonlinearParameters, WD: Array, WS: Array,
             theta: Array, objective: Array, gradient: Array, next_delta: Array, true_delta: Array,
             true_tilde_costs: Array, xi_jacobian: Array, omega_jacobian: Array, delta: Optional[Array] = None,
             tilde_costs: Optional[Array] = None, true_xi: Optional[Array] = None, true_omega: Optional[Array] = None,
