@@ -465,7 +465,7 @@ class _Problem(Economy):
                     Union[float, Tuple[float, Array]]):
                 """Compute and output progress associated with a single objective evaluation."""
                 nonlocal iteration_mappings, evaluation_mappings, smallest_objective, smallest_gradient, last_progress
-                assert optimization is not None
+                assert optimization is not None and costs_bounds is not None
                 progress = last_progress = compute_step_progress(
                     new_theta, last_progress, optimization._compute_gradient
                 )
@@ -972,6 +972,7 @@ class Progress(object):
     gamma: Optional[Array]
     iteration_mapping: Dict[Hashable, int]
     evaluation_mapping: Dict[Hashable, int]
+    clipped_costs: Optional[Array]
     errors: List[Error]
     gradient_norm: Array
 
@@ -1072,6 +1073,7 @@ class Progress(object):
                     format_number(float(smallest_gradient - self.gradient_norm)) if gradient_improved else "",
                 ])
             if np.isfinite(costs_bounds).any():
+                assert self.clipped_costs is not None
                 values.append(self.clipped_costs.sum())
             values.append(", ".join(format_number(x) for x in self.theta))
             lines.append(formatter(values))

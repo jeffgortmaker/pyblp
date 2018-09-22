@@ -258,6 +258,7 @@ class ProblemResults(StringRepresentation):
         # store information about cost bounds
         self._costs_bounds = costs_bounds
         self.clipped_costs = progress.clipped_costs
+        assert self.clipped_costs is not None
 
         # store unique market IDs
         self.unique_market_ids = self.problem.unique_market_ids
