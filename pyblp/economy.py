@@ -171,7 +171,7 @@ class Economy(StringRepresentation):
         ]
 
         # build a formulations section
-        formulation_header = ["Matrix Columns:"]
+        formulation_header = ["Column Indices:"]
         formulation_widths = [max(len(formulation_header[0]), max(map(len, formulation_mapping.keys())))]
         for index in range(max(map(len, formulation_mapping.values()))):
             formulation_header.append(str(index))

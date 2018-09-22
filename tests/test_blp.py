@@ -71,6 +71,17 @@ def test_optimal_instruments(simulated_problem: SimulatedProblemFixture, compute
         exogenous_formulation = Formulation(f'0 + {ZD_formula}')
         expected_prices = compute_fitted_values(product_data['prices'], exogenous_formulation, product_data)
 
+    # identify which optimal instruments will be dropped because of collinearity
+    delete_demand_instruments: List[int] = []
+    delete_supply_instruments: List[int] = []
+    if problem.K3 > 0:
+        for index, formulation in enumerate(problem._X3_formulations):
+            if any(formulation.names & f.names for f in problem._X1_formulations):
+                delete_demand_instruments.append(problem_results.theta.size + problem_results.beta.size + index)
+        for index, formulation in enumerate(problem._X1_formulations):
+            if any(formulation.names & f.names for f in problem._X3_formulations):
+                delete_supply_instruments.append(problem_results.theta.size + index)
+
     # compute optimal instruments and update the problem (only use a few draws to speed up the test)
     compute_options = compute_options.copy()
     compute_options.update({
@@ -78,7 +89,8 @@ def test_optimal_instruments(simulated_problem: SimulatedProblemFixture, compute
         'seed': 0,
         'expected_prices': expected_prices
     })
-    new_problem = problem_results.compute_optimal_instruments(**compute_options).to_problem()
+    instrument_results = problem_results.compute_optimal_instruments(**compute_options)
+    new_problem = instrument_results.to_problem(delete_demand_instruments, delete_supply_instruments)
 
     # update the default options and solve the problem
     updated_solve_options = solve_options.copy()
