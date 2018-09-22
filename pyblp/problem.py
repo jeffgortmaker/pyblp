@@ -472,7 +472,7 @@ class _Problem(Economy):
                 iteration_mappings.append(progress.iteration_mapping)
                 evaluation_mappings.append(progress.evaluation_mapping)
                 formatted_progress = progress.format(
-                    optimization, step, current_iterations, current_evaluations, smallest_objective,
+                    optimization, costs_bounds, step, current_iterations, current_evaluations, smallest_objective,
                     smallest_gradient
                 )
                 if formatted_progress:
@@ -503,8 +503,8 @@ class _Problem(Economy):
             final_progress = compute_step_progress(theta, last_progress, compute_gradient=nonlinear_parameters.P > 0)
             results = ProblemResults(
                 final_progress, last_results, step_start_time, optimization_start_time, optimization_end_time,
-                iterations, evaluations + 1, iteration_mappings, evaluation_mappings, costs_type, center_moments,
-                W_type, se_type
+                iterations, evaluations + 1, iteration_mappings, evaluation_mappings, costs_type, costs_bounds,
+                center_moments, W_type, se_type
             )
             self._handle_errors(error_behavior, results._errors)
             output(f"Computed results after {format_seconds(results.total_time - results.optimization_time)}.")
@@ -550,10 +550,10 @@ class _Problem(Economy):
         # compute supply-side contributions
         true_tilde_costs = tilde_costs = true_omega = np.full((self.N, 0), np.nan, options.dtype)
         omega_jacobian = np.full((self.N, nonlinear_parameters.P), np.nan, options.dtype)
-        clipped_costs_indices = np.zeros((self.N, 1), np.bool)
+        clipped_costs = np.zeros((self.N, 1), np.bool)
         gamma = np.full((self.K3, 1), np.nan, options.dtype)
         if self.K3 > 0:
-            true_tilde_costs, omega_jacobian, tilde_costs, gamma, true_omega, clipped_costs_indices, supply_errors = (
+            true_tilde_costs, omega_jacobian, tilde_costs, gamma, true_omega, clipped_costs, supply_errors = (
                 self._compute_supply_contributions(
                     nonlinear_parameters, demand_iv, supply_iv, costs_type, costs_bounds, beta, sigma, pi, rho,
                     true_delta, xi_jacobian, last_progress, compute_gradient
@@ -610,7 +610,7 @@ class _Problem(Economy):
         return Progress(
             self, nonlinear_parameters, WD, WS, theta, objective, gradient, next_delta, true_delta, true_tilde_costs,
             xi_jacobian, omega_jacobian, delta, tilde_costs, true_xi, true_omega, beta, gamma, iterations,
-            evaluations, clipped_costs_indices, errors
+            evaluations, clipped_costs, errors
         )
 
     def _compute_demand_contributions(
@@ -688,7 +688,7 @@ class _Problem(Economy):
         # initialize transformed marginal costs, their Jacobian, and indices of clipped costs so that they can be filled
         true_tilde_costs = np.zeros((self.N, 1), options.dtype)
         omega_jacobian = np.full((self.N, nonlinear_parameters.P), np.nan, options.dtype)
-        clipped_costs_indices = np.zeros((self.N, 1), np.bool)
+        clipped_costs = np.zeros((self.N, 1), np.bool)
 
         # define a factory for solving the supply side of problem markets
         def market_factory(
@@ -704,10 +704,10 @@ class _Problem(Economy):
 
         # compute transformed marginal costs and their Jacobian market-by-market
         generator = generate_items(self.unique_market_ids, market_factory, ProblemMarket.solve_supply)
-        for t, (true_tilde_costs_t, omega_jacobian_t, clipped_costs_indices_t, errors_t) in generator:
+        for t, (true_tilde_costs_t, omega_jacobian_t, clipped_costs_t, errors_t) in generator:
             true_tilde_costs[self._product_market_indices[t]] = true_tilde_costs_t
             omega_jacobian[self._product_market_indices[t]] = omega_jacobian_t
-            clipped_costs_indices[self._product_market_indices[t]] = clipped_costs_indices_t
+            clipped_costs[self._product_market_indices[t]] = clipped_costs_t
             errors.extend(errors_t)
 
         # replace invalid transformed marginal costs with their last values
@@ -731,7 +731,7 @@ class _Problem(Economy):
 
         # recover gamma and compute omega
         gamma, true_omega = supply_iv.estimate(tilde_costs)
-        return true_tilde_costs, omega_jacobian, tilde_costs, gamma, true_omega, clipped_costs_indices, errors
+        return true_tilde_costs, omega_jacobian, tilde_costs, gamma, true_omega, clipped_costs, errors
 
     def _compute_logit_delta(self, rho: Array) -> Array:
         """Compute the delta that solves the simple Logit (or nested Logit) model."""
@@ -982,7 +982,7 @@ class Progress(object):
             tilde_costs: Optional[Array] = None, true_xi: Optional[Array] = None, true_omega: Optional[Array] = None,
             beta: Optional[Array] = None, gamma: Optional[Array] = None,
             iteration_mapping: Optional[Dict[Hashable, int]] = None,
-            evaluation_mapping: Optional[Dict[Hashable, int]] = None, clipped_costs_indices: Optional[Array] = None,
+            evaluation_mapping: Optional[Dict[Hashable, int]] = None, clipped_costs: Optional[Array] = None,
             errors: Optional[List[Error]] = None) -> None:
         """Initialize progress information. Optional parameters will not be specified when preparing for the first
         objective evaluation.
@@ -1007,14 +1007,14 @@ class Progress(object):
         self.gamma = gamma
         self.iteration_mapping = iteration_mapping or {}
         self.evaluation_mapping = evaluation_mapping or {}
-        self.clipped_costs_indices = clipped_costs_indices
+        self.clipped_costs = clipped_costs
         self.errors = errors or []
         with np.errstate(invalid='ignore'):
             self.gradient_norm = np.array(np.nan, options.dtype) if gradient.size == 0 else np.abs(gradient).max()
 
     def format(
-            self, optimization: Optimization, step: int, current_iterations: int, current_evaluations: int,
-            smallest_objective: Array, smallest_gradient: Array) -> str:
+            self, optimization: Optimization, costs_bounds: Bounds, step: int, current_iterations: int,
+            current_evaluations: int, smallest_objective: Array, smallest_gradient: Array) -> str:
         """Format a universal display of optimization progress as a string. The first iteration will include the
         progress table header. If there are any errors, information about them will be formatted as well, regardless of
         whether or not a universal display is to be used. The smallest_objective is the smallest objective value
@@ -1029,6 +1029,8 @@ class Progress(object):
         ]
         if optimization._compute_gradient:
             header.extend([("Gradient", "Infinity Norm"), ("Gradient", "Improvement")])
+        if np.isfinite(costs_bounds).any():
+            header.append(("Clipped", "Marginal Costs"))
         header.append(("", "Theta"))
 
         # build the formatter of the universal display
@@ -1069,6 +1071,8 @@ class Progress(object):
                     format_number(float(self.gradient_norm)),
                     format_number(float(smallest_gradient - self.gradient_norm)) if gradient_improved else "",
                 ])
+            if np.isfinite(costs_bounds).any():
+                values.append(self.clipped_costs.sum())
             values.append(", ".join(format_number(x) for x in self.theta))
             lines.append(formatter(values))
 
@@ -1150,7 +1154,7 @@ class ProblemMarket(Market):
             costs = self.products.prices - eta
 
             # clip marginal costs that are outside of acceptable bounds
-            clipped_costs_indices = (costs < costs_bounds[0]) | (costs > costs_bounds[1])
+            clipped_costs = (costs < costs_bounds[0]) | (costs > costs_bounds[1])
             costs = np.clip(costs, *costs_bounds)
 
             # take the log of marginal costs under a log-linear specification
@@ -1174,5 +1178,5 @@ class ProblemMarket(Market):
                 valid_tilde_costs, xi_jacobian, beta_jacobian, nonlinear_parameters, costs_type
             )
             errors.extend(jacobian_errors)
-            omega_jacobian[clipped_costs_indices.flat] = 0
-        return tilde_costs, omega_jacobian, clipped_costs_indices, errors
+            omega_jacobian[clipped_costs.flat] = 0
+        return tilde_costs, omega_jacobian, clipped_costs, errors

@@ -15,7 +15,7 @@ from .economy import Market
 from .parameters import LinearParameters, NonlinearParameters, PiParameter, RhoParameter, SigmaParameter
 from .utilities.algebra import multiply_matrix_and_tensor
 from .utilities.basics import (
-    Array, Error, Mapping, RecArray, StringRepresentation, TableFormatter, format_number, format_seconds,
+    Array, Bounds, Error, Mapping, RecArray, StringRepresentation, TableFormatter, format_number, format_seconds,
     generate_items, output, update_matrices
 )
 from .utilities.statistics import IV, compute_gmm_se, compute_gmm_weights
@@ -118,6 +118,9 @@ class ProblemResults(StringRepresentation):
         :math:`\tilde{c} = c`, marginal costs, under a linear cost specification, and are :math:`\tilde{c} = \log c`
         under a log-linear specification. If `costs_bounds` were specified in :meth:`Problem.solve`, :math:`c` may have
         been clipped.
+    clipped_costs : `ndarray`
+        Vector of booleans indicating whether the associated marginal costs were clipped. All elements will be ``False``
+        if `costs_bounds` in :meth:`Problem.solve` was not specified.
     xi : `ndarray`
         Estimated unobserved demand-side product characteristics, :math:`\xi(\hat{\theta})`, or equivalently, the
         demand-side structural error term, which includes the contribution of any absorbed demand-side fixed effects.
@@ -199,6 +202,7 @@ class ProblemResults(StringRepresentation):
     true_delta: Array
     tilde_costs: Array
     true_tilde_costs: Array
+    clipped_costs: Array
     xi: Array
     true_xi: Array
     omega: Array
@@ -221,7 +225,6 @@ class ProblemResults(StringRepresentation):
     _costs_type: str
     _se_type: str
     _errors: List[Error]
-    _clipped_costs_indices: Array
     _linear_parameters: LinearParameters
     _nonlinear_parameters: NonlinearParameters
 
@@ -229,7 +232,7 @@ class ProblemResults(StringRepresentation):
             self, progress: 'Progress', last_results: Optional['ProblemResults'], step_start_time: float,
             optimization_start_time: float, optimization_end_time: float, iterations: int, evaluations: int,
             iteration_mappings: Sequence[Dict[Hashable, int]], evaluation_mappings: Sequence[Dict[Hashable, int]],
-            costs_type: str, center_moments: bool, W_type: str, se_type: str) -> None:
+            costs_type: str, costs_bounds: Bounds, center_moments: bool, W_type: str, se_type: str) -> None:
         """Compute cumulative progress statistics, update weighting matrices, and estimate standard errors."""
 
         # initialize values from the progress structure
@@ -252,9 +255,9 @@ class ProblemResults(StringRepresentation):
         self.gradient = progress.gradient
         self.gradient_norm = progress.gradient_norm
 
-        # store the indices of any clipped costs so that Jacobian rows can be properly zeroed-out
-        assert progress.clipped_costs_indices is not None
-        self._clipped_costs_indices = progress.clipped_costs_indices
+        # store information about cost bounds
+        self._costs_bounds = costs_bounds
+        self.clipped_costs = progress.clipped_costs
 
         # store unique market IDs
         self.unique_market_ids = self.problem.unique_market_ids
@@ -338,7 +341,7 @@ class ProblemResults(StringRepresentation):
                 self._errors.extend(errors_t)
 
             # the Jacobian should be zero for any clipped marginal costs
-            self.omega_by_beta_jacobian[self._clipped_costs_indices.flat] = 0
+            self.omega_by_beta_jacobian[self.clipped_costs.flat] = 0
 
         # stack errors, weights, instruments, Jacobian of the errors with respect to parameters, and clustering IDs
         if self.problem.K3 == 0:
@@ -379,23 +382,28 @@ class ProblemResults(StringRepresentation):
             ("Objective", "Evaluations"), ("Total Fixed Point", "Iterations"), ("Total Contraction", "Evaluations"),
             ("Objective", "Value"), ("Gradient", "Infinity Norm"),
         ]
+        if np.isfinite(self._costs_bounds).any():
+            header.append(("Clipped", "Marginal Costs"))
         widths = [max(len(k1), len(k2), options.digits + 6 if i > 5 else 0) for i, (k1, k2) in enumerate(header)]
         formatter = TableFormatter(widths)
+        values = [
+            format_seconds(self.cumulative_total_time),
+            self.step,
+            self.optimization_iterations,
+            self.objective_evaluations,
+            self.fp_iterations.sum(),
+            self.contraction_evaluations.sum(),
+            format_number(float(self.objective)),
+            format_number(float(self.gradient_norm))
+        ]
+        if np.isfinite(self._costs_bounds).any():
+            values.append(self.clipped_costs.sum())
         sections = [[
             "Problem Results Summary:",
             formatter.line(),
             formatter([k[0] for k in header]),
             formatter([k[1] for k in header], underline=True),
-            formatter([
-                format_seconds(self.cumulative_total_time),
-                self.step,
-                self.optimization_iterations,
-                self.objective_evaluations,
-                self.fp_iterations.sum(),
-                self.contraction_evaluations.sum(),
-                format_number(float(self.objective)),
-                format_number(float(self.gradient_norm))
-            ]),
+            formatter(values),
             formatter.line()
         ]]
 
@@ -754,8 +762,8 @@ class ProblemResults(StringRepresentation):
             errors.extend(errors_t)
 
         # the Jacobians should be zero for any clipped marginal costs
-        omega_by_theta_jacobian[self._clipped_costs_indices.flat] = 0
-        omega_by_beta_jacobian[self._clipped_costs_indices.flat] = 0
+        omega_by_theta_jacobian[self.clipped_costs.flat] = 0
+        omega_by_beta_jacobian[self.clipped_costs.flat] = 0
 
         # replace invalid elements in the Jacobian of omega with respect to theta
         bad_indices = ~np.isfinite(omega_by_theta_jacobian)
