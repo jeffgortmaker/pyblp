@@ -1021,18 +1021,37 @@ class Progress(object):
         whether or not a universal display is to be used. The smallest_objective is the smallest objective value
         encountered so far during optimization.
         """
+        lines: List[str] = []
 
-        # build the header of the universal display
+        # build the header of the universal display and structure values
         header = [
             ("GMM", "Step"), ("Optimization", "Iterations"), ("Objective", "Evaluations"),
             ("Fixed Point", "Iterations"), ("Contraction", "Evaluations"), ("Objective", "Value"),
             ("Objective", "Improvement")
         ]
+        objective_improved = np.isfinite(smallest_objective) and self.objective < smallest_objective
+        gradient_improved = np.isfinite(smallest_gradient) and self.gradient_norm < smallest_gradient
+        values = [
+            step,
+            current_iterations,
+            current_evaluations,
+            sum(self.iteration_mapping.values()),
+            sum(self.evaluation_mapping.values()),
+            format_number(float(self.objective)),
+            format_number(float(smallest_objective - self.objective)) if objective_improved else "",
+        ]
         if optimization._compute_gradient:
             header.extend([("Gradient", "Infinity Norm"), ("Gradient", "Improvement")])
+            values.extend([
+                format_number(float(self.gradient_norm)),
+                format_number(float(smallest_gradient - self.gradient_norm)) if gradient_improved else "",
+            ])
         if np.isfinite(costs_bounds).any():
+            assert self.clipped_costs is not None
             header.append(("Clipped", "Marginal Costs"))
+            values.append(self.clipped_costs.sum())
         header.append(("", "Theta"))
+        values.append(", ".join(format_number(x) for x in self.theta))
 
         # build the formatter of the universal display
         widths = [max(len(k1), len(k2), options.digits + 6 if i > 4 else 0) for i, (k1, k2) in enumerate(header[:-1])]
@@ -1040,7 +1059,6 @@ class Progress(object):
         formatter = TableFormatter(widths)
 
         # if this is the first iteration, include the header
-        lines: List[str] = []
         if optimization._universal_display and current_evaluations == 1:
             lines.extend([formatter([k[0] for k in header]), formatter([k[1] for k in header], underline=True)])
 
@@ -1054,31 +1072,9 @@ class Progress(object):
             )
             lines.extend(["", preamble, str(exceptions.MultipleErrors(self.errors)), ""])
 
-        # include the progress update
+        # format the values and combine the lines into one string
         if optimization._universal_display:
-            objective_improved = np.isfinite(smallest_objective) and self.objective < smallest_objective
-            gradient_improved = np.isfinite(smallest_gradient) and self.gradient_norm < smallest_gradient
-            values = [
-                step,
-                current_iterations,
-                current_evaluations,
-                sum(self.iteration_mapping.values()),
-                sum(self.evaluation_mapping.values()),
-                format_number(float(self.objective)),
-                format_number(float(smallest_objective - self.objective)) if objective_improved else "",
-            ]
-            if optimization._compute_gradient:
-                values.extend([
-                    format_number(float(self.gradient_norm)),
-                    format_number(float(smallest_gradient - self.gradient_norm)) if gradient_improved else "",
-                ])
-            if np.isfinite(costs_bounds).any():
-                assert self.clipped_costs is not None
-                values.append(self.clipped_costs.sum())
-            values.append(", ".join(format_number(x) for x in self.theta))
             lines.append(formatter(values))
-
-        # combine the lines into one string
         return "\n".join(lines)
 
 

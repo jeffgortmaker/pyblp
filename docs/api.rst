@@ -132,12 +132,34 @@ In addition to class attributes, other post-estimation outputs can be estimated 
    ProblemResults.compute_profits
    ProblemResults.compute_consumer_surpluses
 
-Optimal instruments, which return a results class instead of an array, can be estimated with the following method.
+A parametric bootstrap can be used, for example, to compute standard errors for the above post-estimation outputs. The following method returns a results class with all of the above methods, which returns a distribution of post-estimation outputs corresponding to different bootstrapped samples.
+
+.. autosummary::
+   :toctree: api
+
+   ProblemResults.bootstrap
+
+Optimal instruments, which also return a results class instead of an array, can be estimated with the following method.
 
 .. autosummary::
    :toctree: api
 
    ProblemResults.compute_optimal_instruments
+
+
+Boostrapped Problem Results Class
+---------------------------------
+
+Parametric bootstrap computation returns the following class.
+
+.. autosummary::
+   :nosignatures:
+   :toctree: api
+   :template: class_without_methods.rst
+
+   BootstrappedProblemResults
+
+This class has all of the same methods as :class:`ProblemResults`, except for :meth:`ProblemResults.bootstrap` and :meth:`ProblemResults.compute_optimal_instruments`.
 
 
 Optimal Instrument Results Class

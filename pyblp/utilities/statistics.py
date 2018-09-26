@@ -42,11 +42,11 @@ class IV(object):
         return parameters
 
 
-def compute_gmm_se(
+def compute_gmm_parameter_covariances(
         u: Array, Z: Array, W: Array, jacobian: Array, se_type: str, step: int,
         clustering_ids: Optional[Array] = None) -> Tuple[Array, List[Error]]:
     """Use an error term, instruments, a weighting matrix, and the Jacobian of the error term with respect to parameters
-    to estimate GMM standard errors.
+    to estimate GMM parameter covariances.
     """
     errors: List[Error] = []
 
@@ -67,18 +67,13 @@ def compute_gmm_se(
         errors.append(exceptions.GMMParameterCovariancesInversionError(covariances_inverse, replacement))
 
     # compute the robust covariance matrix
-    if se_type != 'unadjusted':
-        with np.errstate(invalid='ignore'):
-            g = u * Z
-            S = compute_gmm_moment_covariances(g, se_type, clustering_ids)
-            covariances = covariances @ G.T @ W @ S @ W @ G @ covariances
-
-    # compute standard errors and handle null values
     with np.errstate(invalid='ignore'):
-        se = np.sqrt(np.c_[covariances.diagonal()] / N)
-    if np.isnan(se).any():
-        errors.append(exceptions.InvalidParameterCovariancesError())
-    return se, errors
+        g = u * Z
+        S = compute_gmm_moment_covariances(g, se_type, clustering_ids)
+        covariances = covariances @ G.T @ W @ S @ W @ G @ covariances
+
+    # force the matrix to be symmetric
+    return (covariances + covariances.T) / 2, errors
 
 
 def compute_2sls_weights(Z: Array) -> Tuple[Array, List[Error]]:
@@ -135,4 +130,4 @@ def compute_gmm_moment_covariances(g: Array, covariance_type: str, clustering_id
         for q_c in Groups(clustering_ids).sum(g):
             q_c = np.c_[q_c]
             S += q_c @ q_c.T / N
-    return S
+    return (S + S.T) / 2

@@ -203,12 +203,12 @@ def output(message: Any) -> None:
         options.verbose_output(str(message))
 
 
-def output_progress(generator: Iterator, length: int, start_time: float):
-    """Yield results from a generator while outputting progress updates at most every minute."""
+def output_progress(iterable: Iterable, length: int, start_time: float) -> Iterator:
+    """Yield results from an iterable while outputting progress updates at most every minute."""
     elapsed = time.time() - start_time
     next_minute = int(elapsed / 60) + 1
-    for index, generated in enumerate(generator):
-        yield generated
+    for index, iterated in enumerate(iterable):
+        yield iterated
         elapsed = time.time() - start_time
         if elapsed > 60 * next_minute:
             output(f"Finished {index + 1} out of {length} after {format_seconds(elapsed)}.")
@@ -337,7 +337,7 @@ class Error(Exception):
         # normalize LaTeX
         while True:
             match = re.search(r':math:`([^`]+)`', doc)
-            if not match:
+            if match is None:
                 break
             start, end = match.span()
             doc = doc[:start] + re.sub(r'\s+', ' ', re.sub(r'[\\{}]', ' ', match.group(1))).lower() + doc[end:]
@@ -345,7 +345,7 @@ class Error(Exception):
         # normalize references
         while True:
             match = re.search(r':ref:`([^`]+)`', doc)
-            if not match:
+            if match is None:
                 break
             start, end = match.span()
             doc = doc[:start] + re.sub(r'<[^>]+>', '', match.group(1)) + doc[end:]

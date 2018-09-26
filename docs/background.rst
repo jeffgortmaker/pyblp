@@ -227,7 +227,7 @@ Note that :math:`\partial\xi / \partial\beta = -X_1` and :math:`\partial\omega /
 
 Before updating the weighting matrix, standard errors are extracted from
 
-.. math:: \hat{\text{Var}}\begin{pmatrix} \hat{\theta} \\ \hat{\beta} \\ \hat{\gamma} \end{pmatrix} = (G'WG)^{-1}G'WSWG(G'WG)^{-1},
+.. math:: \hat{\text{Var}}\begin{pmatrix} \theta \\ \beta \\ \gamma \end{pmatrix} = (G'WG)^{-1}G'WSWG(G'WG)^{-1},
 
 For robust standard errors, :math:`S = N^{-1}g'g`. For clustered standard errors, which account for arbitrary correlation within :math:`c = 1, 2, \dotsc, C` clusters,
 

@@ -110,6 +110,32 @@ def test_optimal_instruments(simulated_problem: SimulatedProblemFixture, compute
 
 
 @pytest.mark.usefixtures('simulated_problem')
+def test_bootstrap(simulated_problem: SimulatedProblemFixture) -> None:
+    """Test that post-estimation output medians are within 95% parametric bootstrap confidence intervals."""
+    _, _, _, _, results = simulated_problem
+
+    # create bootstrapped results (use only a few draws for speed)
+    bootstrapped_results = results.bootstrap(draws=100, seed=0)
+
+    # test that post-estimation outputs are within 95% confidence intervals
+    method_mapping = {
+        'aggregate_elasticities': lambda r: r.compute_aggregate_elasticities(),
+        'own_elasticity_means': lambda r: r.extract_diagonal_means(r.compute_elasticities()),
+        'own_long_run_diversion_ratios': lambda r: r.extract_diagonals(r.compute_long_run_diversion_ratios()),
+        'approximate_prices': lambda r: r.compute_approximate_prices(firms_index=1),
+        'consumer_surpluses': lambda r: r.compute_consumer_surpluses()
+    }
+    for name, method in method_mapping.items():
+        values = method(results)
+        bootstrapped_values = method(bootstrapped_results)
+        median = np.median(values)
+        bootstrapped_medians = np.median(bootstrapped_values, axis=range(1, bootstrapped_values.ndim))
+        lb, ub = np.percentile(bootstrapped_medians, [5, 95])
+        np.testing.assert_array_less(np.squeeze(lb), np.squeeze(median), err_msg=name)
+        np.testing.assert_array_less(np.squeeze(median), np.squeeze(ub), err_msg=name)
+
+
+@pytest.mark.usefixtures('simulated_problem')
 @pytest.mark.parametrize('solve_options_update', [
     pytest.param({'costs_bounds': (-1e10, 1e10)}, id="non-binding costs bounds")
 ])
