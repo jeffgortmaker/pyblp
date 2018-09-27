@@ -443,10 +443,47 @@ On the other hand, consumer surpluses, :math:`\text{CS}`, generally decrease.
 .. image:: images/cs_changes.png
 
 
+Bootstrapping Results
+---------------------
+
+Post-estimation outputs can be informative, but they don't mean much without a sense sample-to-sample variability. One way to estimate confidence intervals for post-estimation outputs is with a standard bootstrap procedure:
+
+    1. Construct a large number of bootstrap samples by sampling with replacement from the original product data.
+    2. Initialize and solve a :class:`Problem` for each bootstrap sample.
+    3. Compute the desired post-estimation output for each bootstrapped :class:`ProblemResults` and from the resulting empirical distribution, construct boostrap confidence intervals.
+
+Althogugh appealing because of its simplicity, the computational resources required for this procedure are often prohibatively expensive. Furthermore, human oversight of the optimization routine is often required to determine whether the routine ran into any problems and if it successfully converged. Human oversight of estimation for each bootstrapped problem is usually not feasible.
+
+A more reasonable alternative is a parametric bootstrap procedure:
+
+    1. Construct a large number of draws from the estimated joint distribution of parameters.
+    2. Compute the implied mean utility, :math:`\delta`, and shares, :math:`s`, for each draw. If a supply side was estimated, also computed the implied marginal costs, :math:`c`, and prices, :math:`p`.
+    3. Compute the desired post-estimation output under each of these parametric bootstrap samples. Again, from the resulting empirical distribution, construct boostrap confidence intervals.
+
+Compared to the standard bootstrap procedure, the parametric bootstrap requires far fewer computational resources, and is simple enough to not require human oversight of each bootstrap iteration. The primary complication to this procedure is that when supply is estimated, equilibrium prices and shares need to be computed for each parametric bootstrap sample by iterating over the :math:`\zeta`-markup equation from :ref:`Morrow and Skerlos (2011) <ms11>`. Although nontrivial, this fixed point iteration problem is much less demanding than the full optimization routine required to solve the BLP problem from the start.
+
+An empirical distribution of results computed according to this parametric bootstrap procedure can be created with the :meth:`ProblemResults.bootstrap` method, which returns a :class:`BootstrappedProblemResults` class that can be used just like :class:`ProblemResults` to compute various post-estimation outputs. The difference is that :class:`BootstrappedProblemResults` methods return arrays with an extra first dimension, along which bootstrapped results are stacked.
+
+We'll construct 90% parametric bootstrap confidence intervals for estimated consumer surpluses in each market of the fake cereal problem. Usually, bootstrapped confidence intervals should be based on thousands of draws, but we'll only use a few for the sake of speed in this example.
+
+.. ipython:: python
+
+   nevo_bootstrap = nevo_results.bootstrap(draws=50, seed=0)
+   nevo_bootstrap
+   nevo_cs_ci = np.percentile(
+       nevo_bootstrap.compute_consumer_surpluses(), 
+       q=[10, 90],
+       axis=0
+   )
+   np.c_[nevo_cs_ci[0], nevo_cs, nevo_cs_ci[1]]
+
+Constructing bootstrap confidence intervals for the automobile problem could be done in exactly the same way. The only difference is that it would take longer to construct confidence intervals for such problems in which a supply side was estimated because fixed point iteration would be used to compute equilibrium prices and shares.
+
+
 Optimal Instruments
 -------------------
 
-Given a consistent estimate of :math:`\theta`, we may want to compute optimal instruments in the spirit of :ref:`Chamberlain (1987) <c87>` and then re-solve the problem. Optimal instruments have been shown, for example, by :ref:`Reynaert and Verboven (2014) <rv14>`, to not only reduce bias in the BLP problem, but also to improve efficiency and stability.
+Given a consistent estimate of :math:`\theta`, we may want to compute :ref:`Chamberlain's (1987) <c87>` optimal instruments and then re-solve the problem. Optimal instruments have been shown, for example, by :ref:`Reynaert and Verboven (2014) <rv14>`, to not only reduce bias in the BLP problem, but also to improve efficiency and stability.
 
 Since the instruments provided in the automobile example data are already an estimate of the optimal instruments for the problem (see :mod:`~pyblp.data` for an explanation of how the instruments were constructed), we'll estimate the set of optimal instruments for the fake cereal problem.
 

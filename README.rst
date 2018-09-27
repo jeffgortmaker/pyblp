@@ -60,6 +60,7 @@ Features
 - Support for different methods used to estimate optimal instruments.
 - Post-estimation computation of elasticities, diversion ratios, marginal costs, markups, profits, HHI, and consumer surplus.
 - Post-estimation merger (or any type of firm ID changes) simulation.
+- Parametric bootstrapping of post-estimation outputs.
 - Flexible interface for simulating synthetic data under Bertrand-Nash competition.
 - Optimization with Artleys Knitro, SciPy, or custom routines.
 - Fixed point iteration with SQUAREM acceleration or custom routines.
@@ -83,7 +84,6 @@ Features Slated for Future Versions
 - Hessian computation.
 - Mathematical Program with Equilibrium Constraints (MPEC) formulation of the GMM objective function.
 - Generalized Empirical Likelihood (GEL) formulation of the problem.
-- Parametric bootstrap computation of post-estimation standard errors.
 - Support for micro moments.
 - Built-in IPOPT support.
 - Built-in support for more fixed point routines.

@@ -907,7 +907,7 @@ class ProblemResults(_ProblemResults):
     def bootstrap(
             self, draws: int = 1000, seed: Optional[int] = None, iteration: Optional[Iteration] = None) -> (
             'BootstrappedProblemResults'):
-        """Use a parametric bootstrap to create a distribution of results.
+        """Use a parametric bootstrap to create an empirical distribution of results.
 
         The constructed :class:`BootstrappedProblemResults` can be used just like :class:`ProblemResults` to compute
         various post-estimation outputs. The only difference is that :class:`BootstrappedProblemResults` methods return
@@ -1073,7 +1073,7 @@ class ProblemResults(_ProblemResults):
         Optimal instruments have been shown, for example, by :ref:`Reynaert and Verboven (2014) <rv14>`, to not only
         reduce bias in the BLP problem, but also to improve efficiency and stability.
 
-        The optimal instruments in the spirit of :ref:`Chamberlain (1987) <c87>` are
+        :ref:`Chamberlain's (1987) <c87>` optimal instruments are
 
         .. math::
 
