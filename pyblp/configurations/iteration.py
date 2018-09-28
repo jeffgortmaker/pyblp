@@ -23,6 +23,10 @@ class Iteration(StringRepresentation):
               uses a first-order squared non-monotone extrapolation scheme. If there are any errors during the
               acceleration step, it uses the last values for the next iteration of the algorithm.
 
+        The following trivial routine can be used to simply return the initial values:
+
+            - ``'return'`` - Assume that the initial values are the optimal ones.
+
         Also accepted is a custom callable method with the following form::
 
             method(initial, contraction, callback, **options) -> (final, converged)
@@ -33,7 +37,8 @@ class Iteration(StringRepresentation):
         flag for whether the routine converged.
 
     method_options : `dict, optional`
-        Options for the fixed point iteration routine. Both non-custom routines support the following options:
+        Options for the fixed point iteration routine. Non-custom routines other than ``'return'`` support the following
+        options:
 
             - **max_evaluations** : (`int`) - Maximum number of contraction mapping evaluations. The default value is
               ``5000``.
@@ -105,7 +110,8 @@ class Iteration(StringRepresentation):
         """Validate the method and configure default options."""
         methods = {
             'squarem': (functools.partial(squarem_iterator), "the SQUAREM acceleration method"),
-            'simple': (functools.partial(simple_iterator), "no acceleration")
+            'simple': (functools.partial(simple_iterator), "no acceleration"),
+            'return': (functools.partial(return_iterator), "a trivial routine that returns the initial values")
         }
 
         # validate the configuration
@@ -127,11 +133,13 @@ class Iteration(StringRepresentation):
 
         # identify the non-custom iterator and set default options
         self._iterator, self._description = methods[method]
-        self._method_options = {
-            'tol': 1e-14,
-            'max_evaluations': 5000,
-            'norm': infinity_norm
-        }
+        self._method_options: Options = {}
+        if method != 'return':
+            self._method_options.update({
+                'tol': 1e-14,
+                'max_evaluations': 5000,
+                'norm': infinity_norm
+            })
         if method == 'squarem':
             self._method_options.update({
                 'scheme': 3,
@@ -144,6 +152,8 @@ class Iteration(StringRepresentation):
         invalid = [k for k in method_options if k not in self._method_options]
         if invalid:
             raise KeyError(f"The following are not valid iteration options: {invalid}.")
+        if method == 'return':
+            return
         self._method_options.update(method_options)
         if not isinstance(self._method_options['tol'], float) or self._method_options['tol'] <= 0:
             raise ValueError("The iteration option tol must be a positive float.")
@@ -207,6 +217,12 @@ class Iteration(StringRepresentation):
 def infinity_norm(x: Array) -> float:
     """Compute the infinity norm of a vector."""
     return np.abs(x).max()
+
+
+def return_iterator(initial: Array, *_: Any, **__: Any) -> Tuple[Array, bool]:
+    """Assume the initial values are the optimal ones."""
+    success = True
+    return initial, success
 
 
 def squarem_iterator(
