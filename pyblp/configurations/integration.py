@@ -15,7 +15,7 @@ class Integration(StringRepresentation):
     """Configuration for building integration nodes and weights.
 
     For more information pertaining to the supported quadrature rules, refer to :ref:`Heiss and Winschel (2008) <hw08>`
-    and :ref:`Skrainka and Judd (2011) <sj11>`. Sparse grids are constructed in analogously to the Matlab function
+    and :ref:`Judd and Skrainka (2011) <js11>`. Sparse grids are constructed in analogously to the Matlab function
     `nwspgr <http://www.sparse-grids.de/>`_ created by Florian Heiss and Viktor Winschel.
 
     Parameters
