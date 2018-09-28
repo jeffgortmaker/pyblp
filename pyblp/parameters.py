@@ -1,5 +1,6 @@
 """Parameters underlying the BLP model."""
 
+import abc
 import itertools
 from typing import Any, List, Optional, Sequence, Set, TYPE_CHECKING, Tuple
 
@@ -14,7 +15,7 @@ if TYPE_CHECKING:
     from .economy import Economy  # noqa
 
 
-class NonlinearParameter(object):
+class NonlinearParameter(abc.ABC):
     """Information about a single nonlinear parameter."""
 
     unbounded: bool
@@ -35,9 +36,10 @@ class RandomCoefficientParameter(NonlinearParameter):
         """Get the product characteristic associated with the parameter."""
         return products.X2[:, [self.location[0]]]
 
+    @abc.abstractmethod
     def get_agent_characteristic(self, agents: RecArray) -> Array:
         """Get the agent characteristic associated with the parameter."""
-        raise NotImplementedError
+        pass
 
 
 class SigmaParameter(RandomCoefficientParameter):

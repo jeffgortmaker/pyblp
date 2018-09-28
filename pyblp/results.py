@@ -1,5 +1,6 @@
 """Structuring of BLP results and computation of post-estimation outputs."""
 
+import abc
 import collections
 import itertools
 import time
@@ -24,41 +25,46 @@ from .utilities.statistics import IV, compute_gmm_parameter_covariances, compute
 
 # only import objects that create import cycles when checking types
 if TYPE_CHECKING:
-    from .problem import _Problem, Problem, Progress  # noqa
+    from .problem import StructuredProblem, Problem, Progress  # noqa
     from .simulation import Simulation  # noqa
 
 
-class _ProblemResults(StringRepresentation):
+class AbstractProblemResults(abc.ABC, StringRepresentation):
     """Results of a solved BLP problem."""
 
-    problem: '_Problem'
+    problem: 'StructuredProblem'
 
-    def __init__(self, problem: '_Problem') -> None:
+    def __init__(self, problem: 'StructuredProblem') -> None:
         """Store the underlying problem."""
         self.problem = problem
 
+    @abc.abstractmethod
     def _coerce_matrices(self, matrices: Any) -> Array:
         """Coerce array-like stacked arrays into a stacked array and validate it."""
-        raise NotImplementedError
+        pass
 
+    @abc.abstractmethod
     def _coerce_optional_costs(self, costs: Optional[Any]) -> Array:
         """Coerce optional array-like costs into an array and validate it."""
-        raise NotImplementedError
+        pass
 
+    @abc.abstractmethod
     def _coerce_optional_prices(self, prices: Optional[Any]) -> Array:
         """Coerce optional array-like prices into an array and validate it."""
-        raise NotImplementedError
+        pass
 
+    @abc.abstractmethod
     def _coerce_optional_shares(self, shares: Optional[Any]) -> Array:
         """Coerce optional array-like shares into an array and validate it."""
-        raise NotImplementedError
+        pass
 
+    @abc.abstractmethod
     def _combine_arrays(self, compute_market_results: Callable, fixed_args: Sequence, market_args: Sequence) -> Array:
         """Combine arrays for each market, which are computed by passing fixed_args (identical for all markets) and
         market_args (arrays that need to be restricted to markets) to compute_market_results, a ResultsMarket method
         that returns the output for the market and a set of any errors encountered during computation.
         """
-        raise NotImplementedError
+        pass
 
     def _compute_true_X1(self, data_override: Optional[Mapping] = None) -> Array:
         """Compute X1 without any absorbed demand-side fixed effects."""
@@ -490,7 +496,7 @@ class _ProblemResults(StringRepresentation):
         return self._combine_arrays(ResultsMarket.compute_consumer_surplus, [], [prices])
 
 
-class ProblemResults(_ProblemResults):
+class ProblemResults(AbstractProblemResults):
     r"""Results of a solved BLP problem.
 
     Many results are class attributes. Other post-estimation outputs be computed by calling class methods.
@@ -1472,7 +1478,7 @@ class ProblemResults(_ProblemResults):
         return combined
 
 
-class BootstrappedProblemResults(_ProblemResults):
+class BootstrappedProblemResults(AbstractProblemResults):
     r"""Bootstrapped results of a solved BLP problem.
 
     This class has all of the same methods as :class:`ProblemResults`, for except :meth:`ProblemResults.bootstrap` and
@@ -1834,7 +1840,7 @@ class OptimalInstrumentResults(StringRepresentation):
 
     def to_problem(
             self, delete_demand_instruments: Sequence[int] = (),
-            delete_supply_instruments: Sequence[int] = ()) -> '_Problem':
+            delete_supply_instruments: Sequence[int] = ()) -> 'StructuredProblem':
         """Re-create the problem with estimated optimal instruments.
 
         The re-created problem will be exactly the same, except that instruments will be replaced with the estimated
@@ -1902,8 +1908,8 @@ class OptimalInstrumentResults(StringRepresentation):
         })
 
         # re-create the problem
-        from .problem import _Problem  # noqa
-        problem = _Problem(
+        from .problem import StructuredProblem  # noqa
+        problem = StructuredProblem(
             self.problem_results.problem.product_formulations, self.problem_results.problem.agent_formulation,
             updated_products, self.problem_results.problem.agents, updating_instruments=True
         )

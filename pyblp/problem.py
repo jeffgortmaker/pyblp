@@ -22,7 +22,7 @@ from .utilities.basics import (
 from .utilities.statistics import IV, compute_2sls_weights
 
 
-class _Problem(Economy):
+class StructuredProblem(Economy):
     """A BLP problem initialized with structured product and agent data."""
 
     def solve(
@@ -761,7 +761,7 @@ class _Problem(Economy):
             output("")
 
 
-class Problem(_Problem):
+class Problem(StructuredProblem):
     r"""A BLP problem.
 
     This class is initialized with relevant data and solved with :meth:`Problem.solve`.
@@ -952,7 +952,7 @@ class Problem(_Problem):
 class Progress(object):
     """Structured information about estimation progress."""
 
-    problem: _Problem
+    problem: StructuredProblem
     nonlinear_parameters: NonlinearParameters
     WD: Array
     WS: Array
@@ -977,7 +977,7 @@ class Progress(object):
     gradient_norm: Array
 
     def __init__(
-            self, problem: _Problem, nonlinear_parameters: NonlinearParameters, WD: Array, WS: Array,
+            self, problem: StructuredProblem, nonlinear_parameters: NonlinearParameters, WD: Array, WS: Array,
             theta: Array, objective: Array, gradient: Array, next_delta: Array, true_delta: Array,
             true_tilde_costs: Array, xi_jacobian: Array, omega_jacobian: Array, delta: Optional[Array] = None,
             tilde_costs: Optional[Array] = None, true_xi: Optional[Array] = None, true_omega: Optional[Array] = None,
