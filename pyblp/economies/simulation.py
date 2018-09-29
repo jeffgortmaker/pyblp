@@ -1,4 +1,4 @@
-"""Simulation of synthetic BLP problem data."""
+"""Economy-level simulation of synthetic BLP data."""
 
 import collections
 import time
@@ -6,16 +6,17 @@ from typing import Any, Dict, Hashable, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
-from . import exceptions, options
-from .configurations.formulation import Formulation
-from .configurations.integration import Integration
-from .configurations.iteration import Iteration
-from .construction import build_blp_instruments, build_matrix
-from .economy import Economy, Market
-from .parameters import LinearParameters, NonlinearParameters
-from .primitives import Agents, Products
-from .results import SimulationResults
-from .utilities.basics import (
+from .economy import Economy
+from .results.simulation_results import SimulationResults
+from .. import exceptions, options
+from ..configurations.formulation import Formulation
+from ..configurations.integration import Integration
+from ..configurations.iteration import Iteration
+from ..construction import build_blp_instruments, build_matrix
+from ..markets.simulation_market import SimulationMarket
+from ..parameters import LinearParameters, NonlinearParameters
+from ..primitives import Agents, Products
+from ..utilities.basics import (
     Array, Data, Error, RecArray, extract_matrix, format_seconds, generate_items, output, output_progress,
     structure_matrices
 )
@@ -647,33 +648,3 @@ class Simulation(Economy):
         output("")
         output(results)
         return results
-
-
-class SimulationMarket(Market):
-    """A single market in a simulation."""
-
-    def solve(
-            self, costs: Array, prices: Array, iteration: Iteration, firms_index: int = 0) -> (
-            Tuple[Array, Array, List[Error], int, int]):
-        """Solve for synthetic prices and shares. By default, use unchanged firm IDs."""
-        errors: List[Error] = []
-
-        # configure NumPy to identify floating point errors
-        with np.errstate(divide='call', over='call', under='ignore', invalid='call'):
-            np.seterrcall(lambda *_: errors.append(exceptions.SyntheticPricesFloatingPointError()))
-
-            # solve the fixed point problem
-            prices, converged, iterations, evaluations = self.compute_equilibrium_prices(
-                costs, iteration, firms_index, prices
-            )
-            if not converged:
-                errors.append(exceptions.SyntheticPricesConvergenceError())
-
-            # switch to identifying floating point errors with synthetic share computation
-            np.seterrcall(lambda *_: errors.append(exceptions.SyntheticSharesFloatingPointError()))
-
-            # compute the associated shares
-            delta = self.update_delta_with_variable('prices', prices)
-            mu = self.update_mu_with_variable('prices', prices)
-            shares = self.compute_probabilities(delta, mu) @ self.agents.weights
-            return prices, shares, errors, iterations, evaluations

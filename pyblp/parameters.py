@@ -12,7 +12,7 @@ from .utilities.basics import Array, Bounds, Error, Groups, RecArray, TableForma
 
 # only import objects that create import cycles when checking types
 if TYPE_CHECKING:
-    from .economy import Economy  # noqa
+    from .economies.economy import Economy  # noqa
 
 
 class NonlinearParameter(abc.ABC):

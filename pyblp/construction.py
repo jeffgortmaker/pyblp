@@ -1,4 +1,4 @@
-"""Construction of commonly-used product data."""
+"""Data construction."""
 
 import collections
 from typing import Any, Callable, Dict, Sequence, List, Mapping, Optional

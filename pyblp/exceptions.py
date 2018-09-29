@@ -1,4 +1,4 @@
-"""Exceptions that are specific to the BLP problem."""
+"""BLP-specific exceptions."""
 
 import collections
 from typing import List, Sequence

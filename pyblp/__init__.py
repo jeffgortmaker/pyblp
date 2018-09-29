@@ -6,10 +6,13 @@ from .configurations.integration import Integration
 from .configurations.iteration import Iteration
 from .configurations.optimization import Optimization
 from .construction import build_blp_instruments, build_id_data, build_matrix, build_ownership, compute_fitted_values
+from .economies.problem import Problem
+from .economies.results.bootstrapped_problem_results import BootstrappedProblemResults
+from .economies.results.optimal_instrument_results import OptimalInstrumentResults
+from .economies.results.problem_results import ProblemResults
+from .economies.results.simulation_results import SimulationResults
+from .economies.simulation import Simulation
 from .primitives import Agents, Products
-from .problem import Problem
-from .results import BootstrappedProblemResults, ProblemResults, OptimalInstrumentResults, SimulationResults
-from .simulation import Simulation
 from .utilities.basics import parallel
 from .version import __version__
 
@@ -20,10 +23,13 @@ __all__ = [
     'Iteration',
     'Optimization',
     'build_blp_instruments', 'build_id_data', 'build_matrix', 'build_ownership', 'compute_fitted_values',
-    'Agents', 'Products',
     'Problem',
-    'BootstrappedProblemResults', 'ProblemResults', 'OptimalInstrumentResults', 'SimulationResults',
+    'BootstrappedProblemResults',
+    'OptimalInstrumentResults',
+    'ProblemResults',
+    'SimulationResults',
     'Simulation',
+    'Agents', 'Products',
     'parallel',
     '__version__'
 ]
