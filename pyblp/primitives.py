@@ -34,18 +34,19 @@ class Products(object):
         associated with a `firm_ids` column.
     shares : `ndarray`
         Market shares, :math:`s`.
+    prices : `ndarray`
+        Product prices, :math:`p`.
     ZD : `ndarray`
-        Demand-side instruments, :math:`Z_D`.
+        Full set of demand-side instruments, :math:`Z_D`: excluded demand-side instruments and :math:`X_1`, except for
+        :math:`X_1^p`.
     ZS : `ndarray`
-        Supply-side instruments, :math:`Z_S`.
+        Full set of supply-side instruments, :math:`Z_S`: excluded supply-side instruments and :math:`X_3`.
     X1 : `ndarray`
         Linear product characteristics, :math:`X_1`.
     X2 : `ndarray`
         Nonlinear product characteristics, :math:`X_2`.
     X3 : `ndarray`
         Cost product characteristics, :math:`X_3`.
-    prices : `ndarray`
-        Product prices, :math:`p`.
 
     """
 
@@ -103,17 +104,21 @@ class Products(object):
             if 'prices' in X3_data:
                 raise NameError("prices cannot be included in the formulation for X3.")
 
-        # load demand-side instruments
+        # load excluded demand-side instruments and supplement them with exogenous characteristics in X1
         ZD = extract_matrix(product_data, 'demand_instruments')
         if ZD is None:
             raise KeyError("product_data must have a demand_instruments field.")
+        for index, formulation in enumerate(X1_formulations):
+            if 'prices' not in formulation.names:
+                ZD = np.c_[ZD, X1[:, [index]]]
 
-        # load supply-side instruments
+        # load excluded supply-side instruments and supplement them with all characteristics in X3
         ZS = None
         if X3 is not None:
             ZS = extract_matrix(product_data, 'supply_instruments')
             if ZS is None:
                 raise KeyError("Since X3 is formulated, product_data must have a supply_instruments field.")
+            ZS = np.c_[ZS, X3]
 
         # load fixed effect IDs
         demand_ids = None
@@ -240,7 +245,7 @@ class Agents(object):
                     raise ValueError("Since agent_formulation is specified, agent_data must be specified as well.")
                 if agent_formulation._absorbed_terms:
                     raise ValueError("agent_formulation does not support fixed effect absorption.")
-                demographics, demographics_formulations = agent_formulation._build_matrix(agent_data)[:2]
+                demographics, demographics_formulations, _ = agent_formulation._build_matrix(agent_data)
 
             # load market IDs
             if agent_data is not None:
@@ -266,9 +271,9 @@ class Agents(object):
                     for t in np.unique(market_ids):
                         built_rows = (market_ids == t).sum()
                         loaded_rows = (loaded_market_ids == t).sum()
-                        demographics_t = demographics[loaded_market_ids.flat == t]
                         if built_rows > loaded_rows:
                             raise ValueError(f"Market '{t}' in agent_data must have at least {built_rows} rows.")
+                        demographics_t = demographics[loaded_market_ids.flat == t]
                         if built_rows < loaded_rows:
                             demographics_t = demographics_t[:built_rows]
                         demographics_list.append(demographics_t)

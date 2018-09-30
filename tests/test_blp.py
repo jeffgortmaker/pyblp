@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 import scipy.optimize
 
-from pyblp import Formulation, Iteration, Optimization, Problem, build_matrix, compute_fitted_values, parallel
+from pyblp import Formulation, Iteration, Optimization, Problem, compute_fitted_values, parallel
 from pyblp.utilities.basics import Array, Options
 from .conftest import SimulatedProblemFixture
 
@@ -57,30 +57,18 @@ def test_optimal_instruments(simulated_problem: SimulatedProblemFixture, compute
     # make product data mutable
     product_data = {k: product_data[k] for k in product_data.dtype.names}
 
-    # separate demand-side instruments so they can be included in formulations
+    # split apart the full set of demand-side instruments so they can be included in formulations
     ZD_names: List[str] = []
-    for index, instrument in enumerate(product_data['demand_instruments'].T):
-        name = f'demand_instrument{index}'
+    for index, instrument in enumerate(problem.products.ZD.T):
+        name = f'ZD{index}'
         product_data[name] = instrument
         ZD_names.append(name)
 
-    # without a supply side, compute expected prices with a reduced form regression on all exogenous variables
+    # without a supply side, compute expected prices with a reduced form regression on all instruments
     expected_prices = None
     if problem.K3 == 0:
         ZD_formula = ' + '.join(ZD_names)
-        exogenous_formulation = Formulation(f'0 + {ZD_formula}')
-        expected_prices = compute_fitted_values(product_data['prices'], exogenous_formulation, product_data)
-
-    # identify which optimal instruments will be dropped because of collinearity
-    delete_demand_instruments: List[int] = []
-    delete_supply_instruments: List[int] = []
-    if problem.K3 > 0:
-        for index, formulation in enumerate(problem._X3_formulations):
-            if any(formulation.names & f.names for f in problem._X1_formulations):
-                delete_demand_instruments.append(problem_results.theta.size + problem_results.beta.size + index)
-        for index, formulation in enumerate(problem._X1_formulations):
-            if any(formulation.names & f.names for f in problem._X3_formulations):
-                delete_supply_instruments.append(problem_results.theta.size + index)
+        expected_prices = compute_fitted_values(product_data['prices'], Formulation(f'0 + {ZD_formula}'), product_data)
 
     # compute optimal instruments and update the problem (only use a few draws to speed up the test)
     compute_options = compute_options.copy()
@@ -89,8 +77,7 @@ def test_optimal_instruments(simulated_problem: SimulatedProblemFixture, compute
         'seed': 0,
         'expected_prices': expected_prices
     })
-    instrument_results = problem_results.compute_optimal_instruments(**compute_options)
-    new_problem = instrument_results.to_problem(delete_demand_instruments, delete_supply_instruments)
+    new_problem = problem_results.compute_optimal_instruments(**compute_options).to_problem()
 
     # update the default options and solve the problem
     updated_solve_options = solve_options.copy()
@@ -231,18 +218,9 @@ def test_fixed_effects(
     if ED > 0:
         assert product_formulations[0] is not None
         product_formulations[0] = Formulation(f'{product_formulations[0]._formula} - 1')
-        product_data['demand_instruments'] = product_data['demand_instruments'][:, 1:]
     if ES > 0:
         assert product_formulations[2] is not None
         product_formulations[2] = Formulation(f'{product_formulations[2]._formula} - 1')
-        product_data['supply_instruments'] = product_data['supply_instruments'][:, 1:]
-
-    # separate demand-side instruments so they can be included in formulations during optimal instrument computation
-    ZD_names: List[str] = []
-    for index, instrument in enumerate(product_data['demand_instruments'].T):
-        name = f'demand_instrument{index}'
-        product_data[name] = instrument
-        ZD_names.append(name)
 
     # add fixed effect IDs to the data
     demand_id_names: List[str] = []
@@ -255,13 +233,19 @@ def test_fixed_effects(
             product_data[name] = ids
             names.append(name)
 
-    # build formulas for the instruments and IDs
-    ZD_formula = ' + '.join(ZD_names)
+    # split apart excluded demand-side instruments so they can be included in formulations
+    instrument_names: List[str] = []
+    for index, instrument in enumerate(product_data['demand_instruments'].T):
+        name = f'demand_instrument{index}'
+        product_data[name] = instrument
+        instrument_names.append(name)
+
+    # build formulas for the IDs and excluded demand-side instruments
     demand_id_formula = ' + '.join(demand_id_names)
     supply_id_formula = ' + '.join(supply_id_names)
+    instrument_formula = ' + '.join(instrument_names)
 
     # solve the first stage of a problem in which the fixed effects are absorbed
-    product_data1 = product_data.copy()
     product_formulations1 = product_formulations.copy()
     if ED > 0:
         assert product_formulations[0] is not None
@@ -269,48 +253,37 @@ def test_fixed_effects(
     if ES > 0:
         assert product_formulations[2] is not None
         product_formulations1[2] = Formulation(product_formulations[2]._formula, supply_id_formula, absorb_method)
-    problem1 = Problem(product_formulations1, product_data1, problem.agent_formulation, simulation.agent_data)
+    problem1 = Problem(product_formulations1, product_data, problem.agent_formulation, simulation.agent_data)
     problem_results1 = problem1.solve(**solve_options)
 
     # solve the first stage of a problem in which fixed effects are included as indicator variables
-    product_data2 = product_data.copy()
     product_formulations2 = product_formulations.copy()
     if ED > 0:
         assert product_formulations[0] is not None
-        demand_indicators2 = build_matrix(Formulation(demand_id_formula), product_data)
-        product_data2['demand_instruments'] = np.c_[product_data['demand_instruments'], demand_indicators2]
         product_formulations2[0] = Formulation(f'{product_formulations[0]._formula} + {demand_id_formula}')
     if ES > 0:
         assert product_formulations[2] is not None
-        supply_indicators2 = build_matrix(Formulation(supply_id_formula), product_data)
-        product_data2['supply_instruments'] = np.c_[product_data['supply_instruments'], supply_indicators2]
         product_formulations2[2] = Formulation(f'{product_formulations[2]._formula} + {supply_id_formula}')
-    problem2 = Problem(product_formulations2, product_data2, problem.agent_formulation, simulation.agent_data)
+    problem2 = Problem(product_formulations2, product_data, problem.agent_formulation, simulation.agent_data)
     problem_results2 = problem2.solve(**solve_options)
 
     # solve the first stage of a problem in which some fixed effects are absorbed and some are included as indicators
     if ED == ES == 0:
         problem_results3 = problem_results2
-        product_data3 = product_data2.copy()
         product_formulations3 = product_formulations2.copy()
     else:
-        product_data3 = product_data.copy()
         product_formulations3 = product_formulations.copy()
         if ED > 0:
             assert product_formulations[0] is not None
-            demand_indicators3 = build_matrix(Formulation(demand_id_names[0]), product_data)[:, int(ED > 1):]
-            product_data3['demand_instruments'] = np.c_[product_data['demand_instruments'], demand_indicators3]
             product_formulations3[0] = Formulation(
                 f'{product_formulations[0]._formula} + {demand_id_names[0]}', ' + '.join(demand_id_names[1:]) or None
             )
         if ES > 0:
             assert product_formulations[2] is not None
-            supply_indicators3 = build_matrix(Formulation(supply_id_names[0]), product_data)[:, int(ES > 1):]
-            product_data3['supply_instruments'] = np.c_[product_data['supply_instruments'], supply_indicators3]
             product_formulations3[2] = Formulation(
                 f'{product_formulations[2]._formula} + {supply_id_names[0]}', ' + '.join(supply_id_names[1:]) or None
             )
-        problem3 = Problem(product_formulations3, product_data3, problem.agent_formulation, simulation.agent_data)
+        problem3 = Problem(product_formulations3, product_data, problem.agent_formulation, simulation.agent_data)
         problem_results3 = problem3.solve(**solve_options)
 
     # without a supply side, compute expected prices with a reduced form regression on all exogenous variables
@@ -321,20 +294,20 @@ def test_fixed_effects(
         assert product_formulations2[0] is not None
         assert product_formulations3[0] is not None
         ZD_formulation1 = Formulation(
-            f'{ZD_formula} + {product_formulations1[0]._formula} - ({product_formulations[0]._formula}) - 1',
+            f'{instrument_formula} + {product_formulations1[0]._formula} - ({product_formulations[0]._formula}) - 1',
             product_formulations1[0]._absorb, product_formulations1[0]._absorb_method
         )
         ZD_formulation2 = Formulation(
-            f'{ZD_formula} + {product_formulations2[0]._formula} - ({product_formulations[0]._formula}) - 1',
+            f'{instrument_formula} + {product_formulations2[0]._formula} - ({product_formulations[0]._formula}) - 1',
             product_formulations2[0]._absorb, product_formulations2[0]._absorb_method
         )
         ZD_formulation3 = Formulation(
-            f'{ZD_formula} + {product_formulations3[0]._formula} - ({product_formulations[0]._formula}) - 1',
+            f'{instrument_formula} + {product_formulations3[0]._formula} - ({product_formulations[0]._formula}) - 1',
             product_formulations3[0]._absorb, product_formulations3[0]._absorb_method
         )
-        expected_prices1 = compute_fitted_values(product_data['prices'], ZD_formulation1, product_data1)
-        expected_prices2 = compute_fitted_values(product_data['prices'], ZD_formulation2, product_data2)
-        expected_prices3 = compute_fitted_values(product_data['prices'], ZD_formulation3, product_data3)
+        expected_prices1 = compute_fitted_values(product_data['prices'], ZD_formulation1, product_data)
+        expected_prices2 = compute_fitted_values(product_data['prices'], ZD_formulation2, product_data)
+        expected_prices3 = compute_fitted_values(product_data['prices'], ZD_formulation3, product_data)
 
     # compute optimal instruments (use only two draws for speed; accuracy is not a concern here)
     Z_results1 = problem_results1.compute_optimal_instruments(draws=2, seed=0, expected_prices=expected_prices1)
@@ -375,18 +348,12 @@ def test_fixed_effects(
     # test that all optimal instrument results expected to be identical are essentially identical
     Z_results_keys = [
         'demand_instruments', 'supply_instruments', 'inverse_covariance_matrix', 'expected_xi_by_theta_jacobian',
-        'expected_xi_by_beta_jacobian', 'expected_omega_by_theta_jacobian', 'expected_omega_by_beta_jacobian'
+        'expected_xi_by_alpha_jacobian', 'expected_omega_by_theta_jacobian', 'expected_omega_by_alpha_jacobian'
     ]
     for key in Z_results_keys:
         result1 = getattr(Z_results1, key)
         result2 = getattr(Z_results2, key)
         result3 = getattr(Z_results3, key)
-        if key in {'demand_instruments', 'supply_instruments'}:
-            result2 = np.delete(result2, [i for i, x in enumerate(result2.T) if np.any(x == 0)], axis=1)
-            result3 = np.delete(result3, [i for i, x in enumerate(result3.T) if np.any(x == 0)], axis=1)
-        elif key in {'expected_xi_by_beta_jacobian', 'expected_omega_by_beta_jacobian'}:
-            result2 = np.c_[result2[:, :result1.shape[1]]]
-            result3 = np.c_[result3[:, :result1.shape[1]]]
         np.testing.assert_allclose(result1, result2, atol=atol, rtol=rtol, err_msg=key)
         np.testing.assert_allclose(result1, result3, atol=atol, rtol=rtol, err_msg=key)
 

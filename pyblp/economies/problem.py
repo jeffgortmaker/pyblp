@@ -1,5 +1,6 @@
 """Economy-level BLP problem functionality."""
 
+import abc
 import collections
 import functools
 import time
@@ -7,7 +8,7 @@ from typing import Any, Dict, Hashable, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
-from .economy import Economy
+from .abstract_economy import AbstractEconomy
 from .results.problem_results import ProblemResults
 from .. import exceptions, options
 from ..configurations.formulation import Formulation
@@ -18,13 +19,21 @@ from ..markets.problem_market import ProblemMarket
 from ..parameters import NonlinearParameters
 from ..primitives import Agents, Products
 from ..utilities.basics import (
-    Array, Bounds, Error, Groups, TableFormatter, format_number, format_seconds, generate_items, output
+    Array, Bounds, Error, Groups, RecArray, TableFormatter, format_number, format_seconds, generate_items, output,
+    update_matrices
 )
 from ..utilities.statistics import IV, compute_2sls_weights
 
 
-class StructuredProblem(Economy):
-    """A BLP problem initialized with structured product and agent data."""
+class AbstractProblem(AbstractEconomy):
+    """An abstract BLP problem."""
+
+    @abc.abstractmethod
+    def __init__(
+            self, product_formulations: Sequence[Optional[Formulation]], agent_formulation: Optional[Formulation],
+            products: RecArray, agents: RecArray) -> None:
+        """Initialize the underlying economy with product and agent data."""
+        super().__init__(product_formulations, agent_formulation, products, agents)
 
     def solve(
             self, sigma: Optional[Any] = None, pi: Optional[Any] = None, rho: Optional[Any] = None,
@@ -286,7 +295,8 @@ class StructuredProblem(Economy):
         Examples
         --------
         In this example, we'll first set up the fake cereal problem used in the example for :class:`Problem` from
-        :ref:`Nevo (2000) <n00>`.
+        :ref:`Nevo (2000) <n00>`. Since ``sugar`` and ``mushy`` are collinear with ``product_ids``, it's okay to only
+        include them in :math:`X_2`.
 
         .. ipython:: python
 
@@ -762,15 +772,15 @@ class StructuredProblem(Economy):
             output("")
 
 
-class Problem(StructuredProblem):
+class Problem(AbstractProblem):
     r"""A BLP problem.
 
     This class is initialized with relevant data and solved with :meth:`Problem.solve`.
 
     In both `product_data` and `agent_data`, fields with multiple columns can be either matrices or can be broken up
     into multiple one-dimensional fields with column index suffixes that start at zero. For example, if there are three
-    columns of demand-side instruments, the `demand_instruments` field in `product_data`, which in this case should be a
-    matrix with three columns, can be replaced by three one-dimensional fields: `demand_instruments0`,
+    columns of excluded demand-side instruments, the `demand_instruments` field in `product_data`, which in this case
+    should be a matrix with three columns, can be replaced by three one-dimensional fields: `demand_instruments0`,
     `demand_instruments1`, and `demand_instruments2`.
 
     Parameters
@@ -785,7 +795,24 @@ class Problem(StructuredProblem):
         Variable names should correspond to fields in `product_data`. The ``shares`` variable should not be included in
         any of the formulations and ``prices`` should be included in the formulation for :math:`X_1` or :math:`X_2` (or
         both). The `absorb` argument of :class:`Formulation` can be used to absorb fixed effects into :math:`X_1` and
-        :math:`X_3`, but not :math:`X_2`.
+        :math:`X_3`, but not :math:`X_2`. Generally speaking, all exogenous characteristics in :math:`X_2` should also
+        be included in :math:`X_1`. The exception is characteristics that are collinear with fixed effects in
+        :math`X_1`.
+
+        Characteristics in :math:`X_1` that do not involve ``prices`` will be combined with the below specified excluded
+        demand-side instruments to create the full set of demand-side instruments, :math:`Z_D`. Any fixed effects
+        absorbed into :math:`X_1` will also be absorbed into :math:`Z_D`. Similarly, characteristics in :math:`X_3` will
+        be combined with the excluded supply-side instruments to create :math:`Z_S`, and any fixed effects absorbed into
+        :math:`X_3` will also be absorbed into :math:`Z_S`.
+
+        .. warning::
+
+           Characteristics that involve prices, :math:`p`, should always be formulated with the ``prices`` variable. If
+           another name is used, :class:`Problem` will not understand that the characteristic is endogenous, so it may
+           be erroneously included in :math:`Z_D`, and derivatives computed with respect to prices (which are computed
+           during supply-side estimation and post-estimation routines) will likely be wrong. For example, to include a
+           :math:`p^2` characteristic, include ``I(prices**2)`` in a formula instead of manually including a
+           ``prices_squared`` variable in `product_data` and a formula.
 
     product_data : `structured array-like`
         Each row corresponds to a product. Markets can have differing numbers of products. The following fields are
@@ -797,7 +824,9 @@ class Problem(StructuredProblem):
 
             - **prices** : (`numeric`) - Product prices, :math:`p`.
 
-            - **demand_instruments** : (`numeric`) - Demand-side instruments, :math:`Z_D`.
+            - **demand_instruments** : (`numeric`) - Excluded demand-side instruments, which together with the
+              formulated exogenous linear product characteristics (:math:`X_1` except for characteristics involving
+              ``prices``, :math:`X_1^p`), constitute the full set of demand-side instruments, :math:`Z_D`.
 
         If a formulation for :math:`X_3` is specified in `product_formulations`, the following fields are also required,
         since they will be used to estimate the supply side of the problem:
@@ -805,7 +834,9 @@ class Problem(StructuredProblem):
             - **firm_ids** : (`object, optional`) - IDs that associate products with firms. Any columns after the first
               can be used to compute post-estimation outputs for firm changes, such as mergers.
 
-            - **supply_instruments** : (`numeric, optional`) - Supply-side instruments, :math:`Z_S`.
+            - **supply_instruments** : (`numeric, optional`) - Excluded supply-side instruments, which together with the
+              formulated cost characteristics, :math:`X_3`, constitute the full set of supply-side instruments,
+              :math:`Z_S`.
 
         In addition to supply-side estimation, the `firm_ids` field is also needed to compute some post-estimation
         outputs. If `firm_ids` are specified, custom ownership matrices can be specified as well:
@@ -889,9 +920,11 @@ class Problem(StructuredProblem):
     D : `int`
         Number of demographic variables, :math:`D`.
     MD : `int`
-        Number of demand-side instruments, :math:`M_D`.
+        Number of demand-side instruments, :math:`M_D`, which is the number of excluded demand-side instruments plus
+        :math:`K_1 - K_1^p`.
     MS : `int`
-        Number of supply-side instruments, :math:`M_S`.
+        Number of supply-side instruments, :math:`M_S`, which is the number of excluded supply-side instruments plus
+        :math:`K_3`.
     ED : `int`
         Number of absorbed demand-side fixed effects, :math:`E_D`.
     ES : `int`
@@ -901,7 +934,8 @@ class Problem(StructuredProblem):
 
     Example
     -------
-    In this example, we'll set up the fake cereal problem from :ref:`Nevo (2000) <n00>`.
+    In this example, we'll set up the fake cereal problem from :ref:`Nevo (2000) <n00>`. Since ``sugar`` and ``mushy``
+    are collinear with ``product_ids``, it's okay to only include them in :math:`X_2`.
 
     .. ipython:: python
 
@@ -924,7 +958,7 @@ class Problem(StructuredProblem):
             self, product_formulations: Union[Formulation, Sequence[Optional[Formulation]]], product_data: Mapping,
             agent_formulation: Optional[Formulation] = None, agent_data: Optional[Mapping] = None,
             integration: Optional[Integration] = None) -> None:
-        """Initialize the underlying economy with product and agent data."""
+        """Initialize the underlying economy with product and agent data before absorbing fixed effects."""
 
         # keep track of long it takes to initialize the problem
         output("Initializing the problem ...")
@@ -944,8 +978,78 @@ class Problem(StructuredProblem):
         agents = Agents(products, agent_formulation, agent_data, integration)
         super().__init__(product_formulations, agent_formulation, products, agents)
 
+        # absorb any demand-side fixed effects
+        if self._absorb_demand_ids is not None:
+            output("Absorbing demand-side fixed effects ...")
+            self.products.X1, X1_errors = self._absorb_demand_ids(self.products.X1)
+            self.products.ZD, ZD_errors = self._absorb_demand_ids(self.products.ZD)
+            if X1_errors or ZD_errors:
+                raise exceptions.MultipleErrors(X1_errors + ZD_errors)
+
+        # absorb any supply-side fixed effects
+        if self._absorb_supply_ids is not None:
+            output("Absorbing supply-side fixed effects ...")
+            self.products.X3, X3_errors = self._absorb_supply_ids(self.products.X3)
+            self.products.ZS, ZS_errors = self._absorb_supply_ids(self.products.ZS)
+            if X3_errors or ZS_errors:
+                raise exceptions.MultipleErrors(X3_errors + ZS_errors)
+
         # output information about the initialized problem
         output(f"Initialized the problem after {format_seconds(time.time() - start_time)}.")
+        output("")
+        output(self)
+
+
+class OptimalInstrumentProblem(AbstractProblem):
+    """A BLP problem updated with optimal excluded instruments.
+
+    This class can be used exactly like :class:`Problem`.
+
+    """
+
+    def __init__(self, problem: AbstractProblem, demand_instruments: Array, supply_instruments: Array) -> None:
+        """Initialize the underlying economy with updated product data before absorbing fixed effects."""
+
+        # keep track of long it takes to re-create the problem
+        output("Re-creating the problem ...")
+        start_time = time.time()
+
+        # supplement the excluded demand-side instruments with exogenous characteristics in X1
+        X1 = problem._compute_true_X1()
+        ZD = demand_instruments
+        for index, formulation in enumerate(problem._X1_formulations):
+            if 'prices' not in formulation.names:
+                ZD = np.c_[ZD, X1[:, [index]]]
+
+        # supplement the excluded supply-side instruments with X3
+        X3 = problem._compute_true_X3()
+        ZS = np.c_[supply_instruments, X3]
+
+        # update the products array
+        updated_products = update_matrices(problem.products, {
+            'ZD': (ZD, options.dtype),
+            'ZS': (ZS, options.dtype)
+        })
+
+        # initialize the underlying economy with structured product and agent data
+        super().__init__(problem.product_formulations, problem.agent_formulation, updated_products, problem.agents)
+
+        # absorb any demand-side fixed effects, which have already been absorbed into X1
+        if self._absorb_demand_ids is not None:
+            output("Absorbing demand-side fixed effects ...")
+            self.products.ZD, ZD_errors = self._absorb_demand_ids(self.products.ZD)
+            if ZD_errors:
+                raise exceptions.MultipleErrors(ZD_errors)
+
+        # absorb any supply-side fixed effects, which have already been absorbed into X3
+        if self._absorb_supply_ids is not None:
+            output("Absorbing supply-side fixed effects ...")
+            self.products.ZS, ZS_errors = self._absorb_supply_ids(self.products.ZS)
+            if ZS_errors:
+                raise exceptions.MultipleErrors(ZS_errors)
+
+        # output information about the re-created problem
+        output(f"Re-created the problem after {format_seconds(time.time() - start_time)}.")
         output("")
         output(self)
 
@@ -953,7 +1057,7 @@ class Problem(StructuredProblem):
 class Progress(object):
     """Structured information about estimation progress."""
 
-    problem: StructuredProblem
+    problem: AbstractProblem
     nonlinear_parameters: NonlinearParameters
     WD: Array
     WS: Array
@@ -978,7 +1082,7 @@ class Progress(object):
     gradient_norm: Array
 
     def __init__(
-            self, problem: StructuredProblem, nonlinear_parameters: NonlinearParameters, WD: Array, WS: Array,
+            self, problem: AbstractProblem, nonlinear_parameters: NonlinearParameters, WD: Array, WS: Array,
             theta: Array, objective: Array, gradient: Array, next_delta: Array, true_delta: Array,
             true_tilde_costs: Array, xi_jacobian: Array, omega_jacobian: Array, delta: Optional[Array] = None,
             tilde_costs: Optional[Array] = None, true_xi: Optional[Array] = None, true_omega: Optional[Array] = None,

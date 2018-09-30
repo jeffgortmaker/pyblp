@@ -3,47 +3,40 @@
 import abc
 from typing import Any, Callable, Optional, Sequence, TYPE_CHECKING
 
-import numpy as np
-
-from ... import options
 from ...configurations.iteration import Iteration
 from ...markets.results_market import ResultsMarket
-from ...utilities.basics import Array, Mapping, StringRepresentation, output
+from ...utilities.basics import Array, StringRepresentation, output
 
 
 # only import objects that create import cycles when checking types
 if TYPE_CHECKING:
-    from ..problem import StructuredProblem  # noqa
+    from ..problem import AbstractProblem  # noqa
 
 
 class AbstractProblemResults(abc.ABC, StringRepresentation):
     """Abstract results of a solved BLP problem."""
 
-    problem: 'StructuredProblem'
+    problem: 'AbstractProblem'
 
-    def __init__(self, problem: 'StructuredProblem') -> None:
+    def __init__(self, problem: 'AbstractProblem') -> None:
         """Store the underlying problem."""
         self.problem = problem
 
     @abc.abstractmethod
     def _coerce_matrices(self, matrices: Any) -> Array:
         """Coerce array-like stacked arrays into a stacked array and validate it."""
-        pass
 
     @abc.abstractmethod
     def _coerce_optional_costs(self, costs: Optional[Any]) -> Array:
         """Coerce optional array-like costs into an array and validate it."""
-        pass
 
     @abc.abstractmethod
     def _coerce_optional_prices(self, prices: Optional[Any]) -> Array:
         """Coerce optional array-like prices into an array and validate it."""
-        pass
 
     @abc.abstractmethod
     def _coerce_optional_shares(self, shares: Optional[Any]) -> Array:
         """Coerce optional array-like shares into an array and validate it."""
-        pass
 
     @abc.abstractmethod
     def _combine_arrays(self, compute_market_results: Callable, fixed_args: Sequence, market_args: Sequence) -> Array:
@@ -51,23 +44,6 @@ class AbstractProblemResults(abc.ABC, StringRepresentation):
         market_args (arrays that need to be restricted to markets) to compute_market_results, a ResultsMarket method
         that returns the output for the market and a set of any errors encountered during computation.
         """
-        pass
-
-    def _compute_true_X1(self, data_override: Optional[Mapping] = None) -> Array:
-        """Compute X1 without any absorbed demand-side fixed effects."""
-        if self.problem.ED == 0 and not data_override:
-            return self.problem.products.X1
-        ones = np.ones((self.problem.N, 1), options.dtype)
-        columns = (ones * f.evaluate(self.problem.products, data_override) for f in self.problem._X1_formulations)
-        return np.column_stack(columns)
-
-    def _compute_true_X3(self, data_override: Optional[Mapping] = None) -> Array:
-        """Compute X3 without any absorbed supply-side fixed effects."""
-        if self.problem.ES == 0 and not data_override:
-            return self.problem.products.X3
-        ones = np.ones((self.problem.N, 1), options.dtype)
-        columns = (ones * f.evaluate(self.problem.products, data_override) for f in self.problem._X3_formulations)
-        return np.column_stack(columns)
 
     def compute_aggregate_elasticities(self, factor: float = 0.1, name: str = 'prices') -> Array:
         r"""Estimate aggregate elasticities of demand, :math:`E`, with respect to a variable, :math:`x`.
@@ -444,7 +420,7 @@ class AbstractProblemResults(abc.ABC, StringRepresentation):
 
         in which, if there is no nesting, the consumer surplus for individual :math:`i` is
 
-        .. math:: \text{CS}_i = \frac{\log\left(1 + \sum_{j=1}^{J_t} \exp V_{jti}\right)}{\alpha + \alpha_i}
+        .. math:: \text{CS}_i = \frac{\log\left(1 + \sum_{j=1}^{J_t} \exp V_{jti}\right)}{\partial U_{i1}/\partial p_1}
 
         where
 
@@ -452,7 +428,7 @@ class AbstractProblemResults(abc.ABC, StringRepresentation):
 
         If there is nesting,
 
-        .. math:: \text{CS}_i = \frac{\log\left(1 + \sum_{h=1}^H \exp V_{hti}\right)}{\alpha + \alpha_i}
+        .. math:: \text{CS}_i = \frac{\log\left(1 + \sum_{h=1}^H \exp V_{hti}\right)}{\partial U_{i1}/\partial p_1}
 
         where
 
@@ -460,16 +436,18 @@ class AbstractProblemResults(abc.ABC, StringRepresentation):
 
         .. warning::
 
-           The consumer surpluses computed by this method are only correct when there are not nonlinear income effects.
-           For example, computed consumer surpluses will be incorrect if a formulation contains ``log(prices)``.
+           Note that :math:`\partial U_{i1} / \partial p_1` is the derivative of utility for the first product with
+           respect to its price. The first product is chosen arbitrarily because the consumer surpluses computed by this
+           method assumes that there are not nonlinear income effects, which implies that this derivative is the same
+           for all products. Computed consumer surpluses will be incorrect if a formulation contains, for example,
+           ``log(prices)``.
 
         Parameters
         ----------
         prices : `array-like, optional`
-            Prices at which utilities, :math:`u`, and price derivatives, :math:`\alpha` and :math:`\alpha_i`, will be
-            evaluated, such as equilibrium prices, :math:`p^*`, computed by :meth:`ProblemResults.compute_prices`, or
-            approximate equilibrium prices, :math:`p^a`, computed by :meth:`ProblemResults.compute_approximate_prices`.
-            By default, unchanged prices are used.
+            Prices at which utilities and price derivatives will be evaluated, such as equilibrium prices, :math:`p^*`,
+            computed by :meth:`ProblemResults.compute_prices`, or approximate equilibrium prices, :math:`p^a`, computed
+            by :meth:`ProblemResults.compute_approximate_prices`. By default, unchanged prices are used.
 
         Returns
         -------

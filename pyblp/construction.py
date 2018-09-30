@@ -205,11 +205,11 @@ def build_ownership(product_data: Mapping, kappa_specification: Optional[Callabl
 
 
 def build_blp_instruments(formulation: Formulation, product_data: Mapping, firms_index: int = 0) -> Array:
-    r"""Construct traditional BLP instruments.
+    r"""Construct traditional excluded BLP instruments.
 
-    Traditional BLP instruments are
+    Traditional excluded BLP instruments are
 
-    .. math:: \mathrm{BLP}(X) = [X, \mathrm{Other}(X), \mathrm{Rival}(X)],
+    .. math:: \mathrm{BLP}(X) = [\mathrm{Other}(X), \mathrm{Rival}(X)],
 
     in which :math:`X` is a matrix of product characteristics, :math:`\mathrm{Rival}(X)` consists of sums over
     characteristics of rival goods, and :math:`\mathrm{Other}(X)` consists of sums over characteristics of other
@@ -227,7 +227,7 @@ def build_blp_instruments(formulation: Formulation, product_data: Mapping, firms
     Parameters
     ----------
     formulation : `Formulation`
-        :class:`Formulation` configuration for :math:`X`, the matrix of product characteristics used to build
+        :class:`Formulation` configuration for :math:`X`, the matrix of product characteristics used to build excluded
         instruments. Variable names should correspond to fields in `product_data`.
     product_data : `structured array-like`
         Each row corresponds to a product. Markets can have differing numbers of products. The following fields are
@@ -239,19 +239,20 @@ def build_blp_instruments(formulation: Formulation, product_data: Mapping, firms
 
         Along with `market_ids` and `firm_ids`, the names of any additional fields can be used as variables in
         `formulation`.
+
     firms_index : `int, optional`
         Column index of the firm IDs in the `firm_ids` field of `product_data`.
 
     Returns
     -------
     `ndarray`
-        Traditional BLP instruments :math:`\mathrm{BLP}(X)`.
+        Traditional excluded BLP instruments :math:`\mathrm{BLP}(X)`.
 
     Example
     -------
     In this example, we'll load the automobile product data from :ref:`Berry, Levinsohn, and Pakes (1995) <blp95>` and
-    build some very simple demand-side instruments for the problem. These instruments are different from the pre-built
-    ones included in the automobile product data file.
+    build some very simple excluded demand-side instruments for the problem. These instruments are different from the
+    pre-built ones included in the automobile product data file.
 
     .. ipython:: python
 
@@ -291,7 +292,7 @@ def build_blp_instruments(formulation: Formulation, product_data: Mapping, firms
     X = build_matrix(formulation, product_data)
     other = paired_groups.expand(paired_groups.sum(X)) - X
     rival = market_groups.expand(market_groups.sum(X)) - X - other
-    return np.ascontiguousarray(np.c_[X, other, rival])
+    return np.ascontiguousarray(np.c_[other, rival])
 
 
 def build_matrix(formulation: Formulation, data: Mapping) -> Array:
@@ -311,19 +312,17 @@ def build_matrix(formulation: Formulation, data: Mapping) -> Array:
 
     Example
     -------
-    In this example, we'll load the fake cereal data from :ref:`Nevo (2000) <n00>` and build instruments for a problem
-    when instead of absorbing product fixed effects, we configure :math:`X_1` to include product indicator variables.
-    Specifically, :math:`Z_D` is then product ID indicators followed by the pre-built instruments.
+    In this example, we'll load the fake cereal data from :ref:`Nevo (2000) <n00>` and create a simple matrix involving
+    a constant, prices, and shares.
 
     .. ipython:: python
 
-       instruments_formula = ' + '.join(f'demand_instruments{i}' for i in range(20))
-       formulation = pyblp.Formulation(f'0 + C(product_ids) + {instruments_formula}')
+       formulation = pyblp.Formulation(f'1 + prices + shares')
        formulation
        product_data = np.recfromcsv(pyblp.data.NEVO_PRODUCTS_LOCATION, encoding='utf-8')
        product_data.dtype.names
-       instruments = pyblp.build_matrix(formulation, product_data)
-       instruments.shape
+       matrix = pyblp.build_matrix(formulation, product_data)
+       matrix
 
     For more examples, refer to the :doc:`Examples </examples>` section.
 
@@ -356,8 +355,8 @@ def compute_fitted_values(variable: Any, formulation: Formulation, data: Mapping
     Example
     -------
     In this example, we'll load the fake cereal data from :ref:`Nevo (2000) <n00>` and compute the fitted values from a
-    reduced form regression of endogenous prices onto all exogenous variables: instruments and product fixed effects,
-    which we'll absorb to reduce memory usage.
+    reduced form regression of endogenous prices onto the full set of instruments: excluded instruments and the absorbed
+    product IDs that constitute :math:`X_1`.
 
     .. ipython:: python
 
@@ -370,7 +369,7 @@ def compute_fitted_values(variable: Any, formulation: Formulation, data: Mapping
        expected_prices
 
     These fitted values could be passed to `expected_prices` in :meth:`ProblemResults.compute_optimal_instruments`
-    because they are a reasonable reduced form estimate of expected prices conditional on all exogenous variables.
+    because they are a reasonable reduced form estimate of expected prices conditional on the full set of instruments.
 
     """
 

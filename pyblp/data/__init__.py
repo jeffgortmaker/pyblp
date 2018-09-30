@@ -2,25 +2,40 @@
 
 Attributes
 ----------
+NEVO_PRODUCTS_LOCATION : `str`
+    Location of a CSV file containing the fake cereal product data from :ref:`Nevo (2000) <n00>`. The file includes
+    the same pre-computed excluded instruments used in the original paper.
+NEVO_AGENTS_LOCATION : `str`
+    Location of a CSV file containing the fake cereal agent data. Included in the file are Monte Carlo weights and
+    draws along with demographics, which collectively are used by :ref:`Nevo (2000) <n00>` to solve the fake cereal
+    problem.
 BLP_PRODUCTS_LOCATION : `str`
     Location of a CSV file containing the automobile product data extracted by
     :ref:`Andrews, Gentzkow, and Shapiro (2017) <ags17>` from the original GAUSS code for
     :ref:`Berry, Levinsohn, and Pakes (1999) <blp99>`, which is commonly assumed to be the same data used in
-    :ref:`Berry, Levinsohn, and Pakes (1995) <blp95>`. The file includes some basic pre-computed instruments, which are
-    the instruments used in the original paper, excluding a few that give rise to collinearity issues.
+    :ref:`Berry, Levinsohn, and Pakes (1995) <blp95>`.
+
+    The file also includes a set of :ref:`Chamberlain's (1987) <c87>` optimal excluded instruments for the automobile
+    problem from :ref:`Berry, Levinsohn, and Pakes (1995) <blp95>`, which are used to solve the problem in
+    :doc:`Examples </examples>`. These instruments were computed according to the following procedure:
+
+        1. Traditional excluded BLP instruments from the original paper were computed with
+           :func:`~pyblp.build_blp_instruments`. As in the original paper, the ``mpd`` variable was added to the set of
+           excluded supply-side instruments.
+        2. Each set of excluded instruments was interacted up to the second degree, standardized, and replaced with the
+           minimum set of principal components that explained at least 99% of the variance.
+        3. These two sets of principal components were used as excluded demand- and supply-side instruments when solving
+           the first GMM stage of a :class:`~pyblp.Problem` configured as in :doc:`Examples </examples>` (but with
+           non-optimal instruments).
+        4. The :meth:`~pyblp.ProblemResults.compute_optimal_instruments` method was used to estimate the optimal
+           excluded instruments for the problem.
+
 BLP_AGENTS_LOCATION : `str`
-    Location of a CSV file containing the automobile agent data, which are also extracted from the original GAUSS code.
-    Included in the file are importance sampling weights, nodes for integration, and income.
+    Location of a CSV file containing automobile agent data. Included in the file are 200 Monte Carlo weights and draws
+    for each market, which, unlike in the fake cereal data, are not the same draws used in the original paper.
 
-    Instead of being named ``nodes0``, ``nodes1``, ``nodes2``, and so on as expected by :class:`~pyblp.Problem`, each
-    column of nodes is associated with a named product characteristic. Usually, it wouldn't matter which nodes were
-    associated with which characteristics in :math:`X_2`. However, since nodes in the automobile problem were computed
-    according to importance sampling, the ordering of nodes severely impacts estimation results. If you want to use
-    these nodes, before passing them to :class:`~pyblp.Problem`, they will need to be renamed. Alternatively, the
-    :doc:`Examples </examples>` section demonstrates how use :func:`~pyblp.build_matrix` to build a new ``nodes`` field.
-
-    Before importance sampling, income consists of draws from lognormal distributions with standard deviation ``1.72``
-    and the following means:
+    Also included is an income demographic, which consists of draws from lognormal distributions with common standard
+    deviation ``1.72`` and the following market-varying means:
 
     ====  =======
     Year  Mean
@@ -47,18 +62,8 @@ BLP_AGENTS_LOCATION : `str`
     1990  2.18377
     ====  =======
 
-NEVO_PRODUCTS_LOCATION : `str`
-    Location of a CSV file containing the fake cereal product data from :ref:`Nevo (2000) <n00>`. The file includes
-    the same pre-computed instruments used in the original paper.
-NEVO_AGENTS_LOCATION : `str`
-    Location of a CSV file containing the fake cereal agent data. Included in the file Monte Carlo weights and draws,
-    along with demographics, which collectively are used by :ref:`Nevo (2000) <n00>` to solve the fake cereal problem.
-
-    Unlike for the automobile data, integration nodes are named ``nodes0``, ``nodes1``, ``nodes2``, and so on as
-    expected by :class:`~pyblp.Problem`. This is because for a large enough set of Monte Carlo draws, the ordering of
-    nodes shouldn't impact estimation results. However, since there are only a small number of agents in these example
-    data, their ordering does somewhat impact results. For this reason, when formulating :math:`X_2`, the following
-    ordering is the one that is generally used: ``1 + prices + sugar + mushy``.
+    These numbers were extracted also extracted from the original GAUSS code for
+    :ref:`Berry, Levinsohn, and Pakes (1999) <blp99>`.
 
 Examples
 --------
@@ -88,7 +93,7 @@ from pathlib import Path
 
 
 _DATA_PATH = Path(__file__).resolve().parent
-BLP_PRODUCTS_LOCATION = str(_DATA_PATH / 'blp_products.csv')
-BLP_AGENTS_LOCATION = str(_DATA_PATH / 'blp_agents.csv')
 NEVO_PRODUCTS_LOCATION = str(_DATA_PATH / 'nevo_products.csv')
 NEVO_AGENTS_LOCATION = str(_DATA_PATH / 'nevo_agents.csv')
+BLP_PRODUCTS_LOCATION = str(_DATA_PATH / 'blp_products.csv')
+BLP_AGENTS_LOCATION = str(_DATA_PATH / 'blp_agents.csv')

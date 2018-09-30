@@ -38,17 +38,17 @@ def configure() -> Iterator[None]:
 
 @pytest.fixture(scope='session')
 def small_logit_simulation() -> SimulationFixture:
-    """Solve a simulation with two markets, linear prices, a linear characteristic, a cost characteristic, and an
-    acquisition.
+    """Solve a simulation with two markets, a linear constant, linear prices, a linear characteristic, a cost
+    characteristic, and an acquisition.
     """
     id_data = build_id_data(T=2, J=18, F=3, mergers=[{1: 0}])
     simulation = Simulation(
         product_formulations=(
-            Formulation('0 + prices + x'),
+            Formulation('1 + prices + x'),
             None,
             Formulation('0 + a')
         ),
-        beta=[-5, 1],
+        beta=[-5, 1, 1],
         sigma=None,
         gamma=2,
         product_data={
@@ -66,7 +66,7 @@ def small_logit_simulation() -> SimulationFixture:
 
 @pytest.fixture(scope='session')
 def large_logit_simulation() -> SimulationFixture:
-    """Solve a simulation with ten markets, linear prices, a linear constant, a cost/linear characteristic, another
+    """Solve a simulation with ten markets, a linear constant, linear prices, a linear/cost characteristic, another
     three cost characteristics, another two linear characteristics, an acquisition, a triple acquisition, and a
     log-linear cost specification.
     """
@@ -96,7 +96,7 @@ def large_logit_simulation() -> SimulationFixture:
 
 @pytest.fixture(scope='session')
 def small_nested_logit_simulation() -> SimulationFixture:
-    """Solve a simulation with four markets, linear prices, a linear characteristic, two cost characteristics, two
+    """Solve a simulation with four markets, linear prices, two linear characteristics, two cost characteristics, two
     nesting groups with different nesting parameters, and an acquisition.
     """
     id_data = build_id_data(T=4, J=18, F=3, mergers=[{1: 0}])
@@ -126,7 +126,7 @@ def small_nested_logit_simulation() -> SimulationFixture:
 
 @pytest.fixture(scope='session')
 def large_nested_logit_simulation() -> SimulationFixture:
-    """Solve a simulation with ten markets, linear prices, a linear constant, a cost/linear characteristic, another
+    """Solve a simulation with ten markets, a linear constant, linear prices, a linear/cost characteristic, another
     three cost characteristics, another two linear characteristics, three nesting groups with the same nesting
     parameter, an acquisition, a triple acquisition, and a log-linear cost specification.
     """
@@ -158,19 +158,19 @@ def large_nested_logit_simulation() -> SimulationFixture:
 
 @pytest.fixture(scope='session')
 def small_blp_simulation() -> SimulationFixture:
-    """Solve a simulation with two markets, linear prices, a nonlinear characteristic, a cost characteristic, and an
-    acquisition.
+    """Solve a simulation with two markets, linear prices, a linear/nonlinear characteristic, two cost characteristics,
+    and an acquisition.
     """
     id_data = build_id_data(T=2, J=18, F=3, mergers=[{1: 0}])
     simulation = Simulation(
         product_formulations=(
-            Formulation('0 + prices'),
+            Formulation('0 + prices + x'),
             Formulation('0 + x'),
-            Formulation('0 + a')
+            Formulation('0 + a + b')
         ),
-        beta=-5,
-        sigma=1,
-        gamma=2,
+        beta=[-5, 1],
+        sigma=2,
+        gamma=[2, 1],
         product_data={
             'market_ids': id_data.market_ids,
             'firm_ids': id_data.firm_ids,
@@ -187,18 +187,18 @@ def small_blp_simulation() -> SimulationFixture:
 
 @pytest.fixture(scope='session')
 def medium_blp_simulation() -> SimulationFixture:
-    """Solve a simulation with four markets, a nonlinear/cost constant, two linear characteristics, two cost
+    """Solve a simulation with four markets, linear/nonlinear/cost constants, two linear characteristics, two cost
     characteristics, a demographic interacted with second-degree prices, a double acquisition, and a non-standard
     ownership structure.
     """
     id_data = build_id_data(T=4, J=25, F=6, mergers=[{f: 2 for f in range(2)}])
     simulation = Simulation(
         product_formulations=(
-            Formulation('0 + x + y'),
+            Formulation('1 + x + y'),
             Formulation('1 + I(prices ** 2)'),
             Formulation('1 + a + b')
         ),
-        beta=[2, 1],
+        beta=[1, 2, 1],
         sigma=[
             [0.5, 0],
             [0.0, 0],
@@ -226,9 +226,9 @@ def medium_blp_simulation() -> SimulationFixture:
 
 @pytest.fixture(scope='session')
 def large_blp_simulation() -> SimulationFixture:
-    """Solve a simulation with ten markets, linear/nonlinear prices, a linear constant, a cost/linear/nonlinear
-    characteristic, another three cost characteristics, another two linear characteristics, demographics interacted with
-    prices and the cost/linear/nonlinear characteristic, dense parameter matrices, an acquisition, a triple acquisition,
+    """Solve a simulation with ten markets, a linear constant, linear/nonlinear prices, a linear/nonlinear/cost
+    characteristic, another two linear characteristics, another three cost characteristics, demographics interacted with
+    prices and the linear/nonlinear/cost characteristic, dense parameter matrices, an acquisition, a triple acquisition,
     and a log-linear cost specification.
     """
     id_data = build_id_data(T=10, J=20, F=9, mergers=[{f: 4 + int(f > 0) for f in range(4)}])
@@ -266,19 +266,19 @@ def large_blp_simulation() -> SimulationFixture:
 
 @pytest.fixture(scope='session')
 def small_nested_blp_simulation() -> SimulationFixture:
-    """Solve a simulation with four markets, linear prices, a nonlinear characteristic, two cost characteristics, two
-    nesting groups with different nesting parameters, and an acquisition.
+    """Solve a simulation with four markets, linear prices, a linear/nonlinear characteristic, three cost
+    characteristics, two nesting groups with different nesting parameters, and an acquisition.
     """
     id_data = build_id_data(T=4, J=18, F=3, mergers=[{1: 0}])
     simulation = Simulation(
         product_formulations=(
-            Formulation('0 + prices'),
+            Formulation('0 + prices + x'),
             Formulation('0 + x'),
-            Formulation('0 + a + b')
+            Formulation('0 + a + b + c')
         ),
-        beta=-5,
-        sigma=1,
-        gamma=[2, 1],
+        beta=[-5, 1],
+        sigma=2,
+        gamma=[2, 1, 1],
         product_data={
             'market_ids': id_data.market_ids,
             'firm_ids': id_data.firm_ids,
@@ -297,9 +297,9 @@ def small_nested_blp_simulation() -> SimulationFixture:
 
 @pytest.fixture(scope='session')
 def large_nested_blp_simulation() -> SimulationFixture:
-    """Solve a simulation with ten markets, linear/nonlinear prices, a linear constant, a cost/linear/nonlinear
+    """Solve a simulation with ten markets, a linear constant, linear/nonlinear prices, a linear/nonlinear/cost
     characteristic, another three cost characteristics, another two linear characteristics, demographics interacted with
-    prices and the cost/linear/nonlinear characteristic, dense parameter matrices, three nesting groups with the same
+    prices and the linear/nonlinear/cost characteristic, dense parameter matrices, three nesting groups with the same
     nesting parameter, an acquisition, a triple acquisition, and a log-linear cost specification.
     """
     id_data = build_id_data(T=10, J=20, F=9, mergers=[{f: 4 + int(f > 0) for f in range(4)}])

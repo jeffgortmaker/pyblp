@@ -6,7 +6,7 @@ from typing import Any, Dict, Hashable, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
-from .economy import Economy
+from .abstract_economy import AbstractEconomy
 from .results.simulation_results import SimulationResults
 from .. import exceptions, options
 from ..configurations.formulation import Formulation
@@ -22,7 +22,7 @@ from ..utilities.basics import (
 )
 
 
-class Simulation(Economy):
+class Simulation(AbstractEconomy):
     r"""Simulation of synthetic BLP data.
 
     All data are either loaded or simulated during initialization, except for synthetic prices and shares, which are
@@ -36,23 +36,28 @@ class Simulation(Economy):
     mean-zero bivariate normal distribution.
 
     After variables are loaded or simulated, any unspecified nodes and weights are constructed according to an
-    integration configuration. Next, some simple instruments are computed:
+    integration configuration.
 
-    .. math:: Z_D = [1, X, \mathrm{Rival}(X_D), \mathrm{Other}(X_D)]
+    Next, simple excluded demand-side instruments are constructed according to
 
-    and
+    .. math:: [X_{S \setminus D}, \mathrm{BLP}(X)],
 
-    .. math:: Z_S = [1, X, \mathrm{Rival}(X_S), \mathrm{Other}(X_S)],
+    in which :math:`X_{S \setminus D}` is all variables used to formulate :math:`X_3` that were not used to formulate
+    :math:`X_1` and :math:`X_2`, :math:`X_D` is all variables used to formulate :math:`X_1` and :math:`X_2`, and
+    :math:`\mathrm{BLP}(X)` is defined in :func:`build_blp_instruments`, which is used to construct traditional excluded
+    BLP instruments.
 
-    in which :math:`X` are all non-constant exogenous numerical product variables, :math:`X_D` are all variables in
-    :math:`X` used to formulate :math:`X_1` and :math:`X_2`, :math:`X_S` are all variables in :math:`X` used to
-    formulate :math:`X_3`, and both :math:`\mathrm{Rival}` and :math:`\mathrm{Other}` are defined in
-    :func:`build_blp_instruments`, which is used to construct the traditional BLP instruments.
+    Similarly, simple excluded supply-side instruments are constructed according to
+
+    .. math:: [X_{D \setminus S}, \mathrm{BLP}(X)],
+
+    in which :math:`X_{D \setminus S}` is all variables used to formulate :math:`X_1` and :math:`X_2` that were not used
+    to formulate :math:`X_3`, and :math:`X_S` is all variables used to formulate :math:`X_3`.
 
     .. note::
 
-       These instruments are constructed only for convenience. Especially for more complicated formulations, instrument
-       fields in simulated product data should be replaced with better instruments.
+       These excluded instruments are constructed only for convenience. Especially for more complicated formulations,
+       instruments in simulated product data should be replaced with better instruments.
 
     In both `product_data` and `agent_data`, fields with multiple columns can be either matrices or can be broken up
     into multiple one-dimensional fields with column index suffixes that start at zero. For example, if there are two
@@ -70,7 +75,8 @@ class Simulation(Economy):
         The ``shares`` variable should not be included in any of the formulations and ``prices`` should be included in
         the formulation for :math:`X_1` or :math:`X_2` (or both). Any additional variables that cannot be loaded from
         `product_data` will be drawn from independent standard uniform distributions. Unlike in :class:`Problem`, fixed
-        effect absorption is not supported during simulation.
+        effect absorption is not supported during simulation. All exogenous characteristics in :math:`X_2` should also
+        be included in :math:`X_1`.
 
     beta : `array-like`
         Vector of demand-side linear parameters, :math:`\beta`. Elements correspond to columns in :math:`X_1`, which
@@ -218,9 +224,11 @@ class Simulation(Economy):
     D : `int`
         Number of demographic variables, :math:`D`.
     MD : `int`
-        Number of demand-side instruments, :math:`M_D`.
+        Number of demand-side instruments, :math:`M_D`, which is the number of excluded demand-side instruments plus
+        :math:`K_1 - K_1^p`.
     MS : `int`
-        Number of supply-side instruments, :math:`M_S`.
+        Number of supply-side instruments, :math:`M_S`, which is the number of excluded supply-side instruments plus
+        :math:`K_3`.
     ED : `int`
         Number of absorbed demand-side fixed effects, :math:`E_D`, which is always zero because simulations do not
         support fixed effect absorption.
@@ -233,30 +241,24 @@ class Simulation(Economy):
     Example
     -------
     In this example, we'll simulate a small amount of data for two markets. Specifically, we'll simulate exogenous
-    product data, ``size`` and ``weight``, along with a demographic, ``income``. We'll construct unobserved agent data
+    product data, ``x``, ``y``, and ``z``, along with a demographic, ``d``. We'll construct unobserved agent data
     according to a low-level Gauss-Hermite product rule. A non-example simulation would be much larger.
 
     .. ipython:: python
 
        simulation = pyblp.Simulation(
            product_formulations=(
-               pyblp.Formulation('0 + prices + size'),
-               pyblp.Formulation('1 + prices'),
-               pyblp.Formulation('0 + size + weight')
+               pyblp.Formulation('0 + prices + x + y'),
+               pyblp.Formulation('0 + y'),
+               pyblp.Formulation('0 + x + z')
            ),
-           beta=[-10, 1],
-           sigma=[
-               [2, 0],
-               [0, 1]
-           ],
-           gamma=[1, 2],
-           product_data=pyblp.build_id_data(T=2, J=20, F=5),
-           agent_formulation=pyblp.Formulation('0 + income'),
-           integration=pyblp.Integration('product', 4),
-           pi=[
-               [0],
-               [1]
-           ],
+           beta=[-5, 1, 1],
+           sigma=0.5,
+           gamma=[2, 2],
+           product_data=pyblp.build_id_data(T=50, J=20, F=10),
+           agent_formulation=pyblp.Formulation('0 + d'),
+           pi=3,
+           integration=pyblp.Integration('product', 5),
            seed=0
        )
        simulation
@@ -295,7 +297,7 @@ class Simulation(Economy):
         output("Initializing the simulation ...")
         start_time = time.time()
 
-        # validate the formulations
+        # validate the product formulations
         if not isinstance(product_formulations, collections.Sequence) or len(product_formulations) != 3:
             raise TypeError("product_formulations must be a tuple of three formulations.")
         if not all(f is None or isinstance(f, Formulation) for f in product_formulations):
@@ -306,10 +308,13 @@ class Simulation(Economy):
             raise ValueError("The formulation for X3 must be specified.")
         if any(f._absorbed_terms for f in product_formulations if f is not None):
             raise ValueError("product_formulations do not support fixed effect absorption in simulations.")
-        if agent_formulation is not None and not isinstance(agent_formulation, Formulation):
-            raise TypeError("agent_formulation must be None or a Formulation instance.")
-        if agent_formulation is not None and agent_formulation._absorbed_terms:
-            raise ValueError("agent_formulation does not support fixed effect absorption.")
+
+        # validate the agent formulation
+        if agent_formulation is not None:
+            if not isinstance(agent_formulation, Formulation):
+                raise TypeError("agent_formulation must be None or a Formulation instance.")
+            if agent_formulation._absorbed_terms:
+                raise ValueError("agent_formulation does not support fixed effect absorption.")
 
         # load IDs
         market_ids = extract_matrix(product_data, 'market_ids')
@@ -361,18 +366,18 @@ class Simulation(Economy):
         only_demand_names = demand_names - supply_names
         only_supply_names = supply_names - demand_names
 
-        # construct instruments
+        # construct excluded instruments
         instrument_data = {
             'market_ids': market_ids,
             'firm_ids': firm_ids,
             **numerical_mapping
         }
         demand_instruments = np.c_[
-            build_matrix(Formulation(' + '.join(sorted(only_supply_names))), numerical_mapping),
+            build_matrix(Formulation(' + '.join(['0'] + sorted(only_supply_names))), numerical_mapping),
             build_blp_instruments(Formulation(' + '.join(['0'] + sorted(demand_names))), instrument_data)
         ]
         supply_instruments = np.c_[
-            build_matrix(Formulation(' + '.join(sorted(only_demand_names))), numerical_mapping),
+            build_matrix(Formulation(' + '.join(['0'] + sorted(only_demand_names))), numerical_mapping),
             build_blp_instruments(Formulation(' + '.join(['0'] + sorted(supply_names))), instrument_data)
         ]
 
@@ -452,6 +457,11 @@ class Simulation(Economy):
 
         # initialize the underlying economy
         super().__init__(product_formulations, agent_formulation, products, agents)
+
+        # validate that all exogenous characteristics in X2 are also in X1
+        for column_formulation in self._X2_formulations:
+            if 'prices' not in column_formulation.names and column_formulation not in self._X1_formulations:
+                raise ValueError(f"'{column_formulation}' in the formulation for X2 is not in the formulation for X1.")
 
         # validate parameters
         self._linear_parameters = LinearParameters(self, beta, gamma)
@@ -543,23 +553,17 @@ class Simulation(Economy):
 
            simulation = pyblp.Simulation(
                product_formulations=(
-                   pyblp.Formulation('0 + prices + size'),
-                   pyblp.Formulation('1 + prices'),
-                   pyblp.Formulation('0 + size + weight')
+                   pyblp.Formulation('0 + prices + x + y'),
+                   pyblp.Formulation('0 + y'),
+                   pyblp.Formulation('0 + x + z')
                ),
-               beta=[-10, 1],
-               sigma=[
-                   [2, 0],
-                   [0, 1]
-               ],
-               gamma=[1, 2],
-               product_data=pyblp.build_id_data(T=2, J=20, F=5),
-               agent_formulation=pyblp.Formulation('0 + income'),
-               integration=pyblp.Integration('product', 4),
-               pi=[
-                   [0],
-                   [1]
-               ],
+               beta=[-5, 1, 1],
+               sigma=0.5,
+               gamma=[2, 2],
+               product_data=pyblp.build_id_data(T=50, J=20, F=10),
+               agent_formulation=pyblp.Formulation('0 + d'),
+               pi=3,
+               integration=pyblp.Integration('product', 5),
                seed=0
            )
            simulation

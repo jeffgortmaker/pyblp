@@ -155,7 +155,7 @@ Parametric bootstrap computation returns the following class.
 .. autosummary::
    :nosignatures:
    :toctree: api
-   :template: class_without_methods.rst
+   :template: class_without_methods_or_signature.rst
 
    BootstrappedProblemResults
 
@@ -181,6 +181,15 @@ The optimal instrument results can be converted into a :class:`Problem` with the
 
    OptimalInstrumentResults.to_problem
 
+This method returns the following class, which behaves exactly like a :class:`Problem`.
+
+.. autosummary::
+   :nosignatures:
+   :toctree: api
+   :template: class_without_methods_or_signature.rst
+
+   OptimalInstrumentProblem
+
 
 Structured Data Classes
 -----------------------
@@ -190,7 +199,7 @@ Product and agent data that are passed or constructed by :class:`Problem` and :c
 .. autosummary::
    :nosignatures:
    :toctree: api
-   :template: class_without_methods.rst
+   :template: class_without_methods_or_signature.rst
 
    Products
    Agents

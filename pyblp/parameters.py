@@ -12,7 +12,7 @@ from .utilities.basics import Array, Bounds, Error, Groups, RecArray, TableForma
 
 # only import objects that create import cycles when checking types
 if TYPE_CHECKING:
-    from .economies.economy import Economy  # noqa
+    from .economies.abstract_economy import AbstractEconomy  # noqa
 
 
 class NonlinearParameter(abc.ABC):
@@ -39,7 +39,6 @@ class RandomCoefficientParameter(NonlinearParameter):
     @abc.abstractmethod
     def get_agent_characteristic(self, agents: RecArray) -> Array:
         """Get the agent characteristic associated with the parameter."""
-        pass
 
 
 class SigmaParameter(RandomCoefficientParameter):
@@ -95,9 +94,10 @@ class NonlinearParameters(object):
     errors: List[Error]
 
     def __init__(
-            self, economy: 'Economy', sigma: Optional[Any] = None, pi: Optional[Any] = None, rho: Optional[Any] = None,
-            sigma_bounds: Optional[Tuple[Any, Any]] = None, pi_bounds: Optional[Tuple[Any, Any]] = None,
-            rho_bounds: Optional[Tuple[Any, Any]] = None, bounded: bool = False) -> None:
+            self, economy: 'AbstractEconomy', sigma: Optional[Any] = None, pi: Optional[Any] = None,
+            rho: Optional[Any] = None, sigma_bounds: Optional[Tuple[Any, Any]] = None,
+            pi_bounds: Optional[Tuple[Any, Any]] = None, rho_bounds: Optional[Tuple[Any, Any]] = None,
+            bounded: bool = False) -> None:
         """Store information about fixed (equal bounds) and unfixed (unequal bounds) elements of sigma, pi, and rho.
         Also verify that parameters have been chosen such that choice probability computation is unlikely to overflow.
         If unspecified, determine reasonable bounds as well.
@@ -265,7 +265,8 @@ class NonlinearParameters(object):
                     ub = max(self.rho[location], self.normalize_default_bound(1 - min(1, mu_norm / mu_max)))
                     self.rho_bounds[0][location], self.rho_bounds[1][location] = lb, ub
 
-    def compute_mu_norm(self, economy: 'Economy', eliminate_parameter: Optional[NonlinearParameter] = None) -> float:
+    def compute_mu_norm(
+            self, economy: 'AbstractEconomy', eliminate_parameter: Optional[NonlinearParameter] = None) -> float:
         """Compute the infinity norm of mu under initial parameters, optionally eliminating the contribution of a
         parameter.
         """
@@ -470,7 +471,7 @@ class LinearParameters(object):
     beta: Array
     gamma: Array
 
-    def __init__(self, economy: 'Economy', beta: Any, gamma: Optional[Any] = None) -> None:
+    def __init__(self, economy: 'AbstractEconomy', beta: Any, gamma: Optional[Any] = None) -> None:
         """Store information about parameters in beta and gamma."""
 
         # store labels

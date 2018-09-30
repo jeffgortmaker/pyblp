@@ -53,7 +53,7 @@ The `product_data` argument of :class:`Problem` should be a structured array-lik
    nevo_product_data.dtype.names
    blp_product_data.dtype.names
 
-Both sets of product data contain market IDs, product IDs, two sets of firm IDs (the second are IDs after a simple merger, which are used later), shares, prices, a number of product characteristics, and some basic pre-computed instruments. The fake cereal product IDs will be used to construct fixed effects and the automobile product IDs are called clustering IDs because they will be used to compute clustered standard errors.
+Both sets of product data contain market IDs, product IDs, two sets of firm IDs (the second are IDs after a simple merger, which are used later), shares, prices, a number of product characteristics, and some pre-computed excluded instruments. The fake cereal product IDs will be used to construct fixed effects. The automobile product IDs are called clustering IDs because they will be used to compute clustered standard errors. For more information about the instruments and the example data as a whole, refer to the :mod:`~pyblp.data` module.
 
 
 Agent Data
@@ -68,21 +68,7 @@ The `agent_data` argument of :class:`Problem` should also be a structured array-
    nevo_agent_data.dtype.names
    blp_agent_data.dtype.names
 
-Both sets of agent data contain market IDs, integration weights, integration nodes, and demographics. The fake cereal data contains multiple demographics, whereas income is the only demographic included in the automobile data. The fake cereal data contains simple Monte Carlo draws. Nodes and weights in the automobile data are from importance sampling.
-
-Instead of being named ``nodes0``, ``nodes1``, ``nodes2``, and so on as expected by :class:`Problem`, each column of nodes in the automobile data is associated with a named product characteristic. Usually, it wouldn't matter which nodes were associated with which characteristics. However, since nodes in the automobile problem were computed according to importance sampling, the ordering of nodes severely impacts estimation results. Since there are so few agents, the ordering of nodes also impacts estimation results for the fake cereal problem, but not by as much.
-
-When constructing the automobile ``nodes`` field expected by :class:`Problem`, we'll choose an ordering of characteristics that we'll use again below when formulating :math:`X_2`. The :func:`build_matrix` function is convenient for building matrices according to a :class:`Formulation`. Since NumPy structured arrays are not easily mutable, we'll replace our automobile agents with a :class:`dict`.
-
-.. ipython:: python
-
-   blp_agent_data = {n: blp_agent_data[n] for n in blp_agent_data.dtype.names}
-   blp_agent_data['nodes'] = pyblp.build_matrix(
-       pyblp.Formulation('0 + constant_nodes + I(0) + hpwt_nodes + air_nodes + mpd_nodes + space_nodes'),
-       blp_agent_data
-   )
-
-We've included an arbitrary column of zeros because in the automobile problem, we'll end up interacting prices only with income, not with unobserved characteristics. 
+Both sets of agent data contain market IDs, integration weights, integration nodes, and demographics. The fake cereal data contains multiple demographics, whereas income is the only demographic included in the automobile data. Both sets of data contain relatively small numbers of Monte Carlo draws. In non-example problems, it is usually a better idea to use many more draws, or a more sophisticated :class:`Integration` configuration such as sparse grid quadrature.
 
 
 Solving Problems
@@ -94,7 +80,7 @@ Formulations, product data, and either agent data or an integration configuratio
 The Fake Cereal Problem
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-Up to four :class:`Formulation` configurations can be used to configure a :class:`Problem`. For the fake cereal problem, we'll specify formulations for :math:`X_1`, :math:`X_2`, and :math:`d`. The formulation for :math:`X_1` consists of prices and product fixed effects, which we will absorb into :math:`X_1` with the `absorb` argument of :class:`Formulation`. Columns in the formulation for :math:`X_2` are in the same order as the columns of nodes formulated above.
+Up to four :class:`Formulation` configurations can be used to configure a :class:`Problem`. For the fake cereal problem, we'll specify formulations for :math:`X_1`, :math:`X_2`, and :math:`d`. The formulation for :math:`X_1` consists of prices and product fixed effects, which we will absorb into :math:`X_1` with the `absorb` argument of :class:`Formulation`.  Since ``sugar`` and ``mushy`` are collinear with ``product_ids``, it's okay to only include them in :math:`X_2`.
 
 .. ipython:: python
 
@@ -115,7 +101,7 @@ Up to four :class:`Formulation` configurations can be used to configure a :class
 
 .. note::
 
-   If we were interested in estimates for each product, we could replace the formulation for :math:`X_1` with ``0 + prices + C(product_ids)`` and supplement :math:`Z_D` with product indicator variables (the documentation for the :func:`build_matrix` function demonstrates how to do this). Absorption of fixed effects yields the same first-stage results as including them as indicator variables, although results for GMM stages after the first may be slightly different because the two methods can give rise to different weighting matrices.
+   If we were interested in estimates for each product, we could replace the formulation for :math:`X_1` with ``pyblp.Formulation('prices + C(product_ids)')``. Absorption of fixed effects yields the same first-stage results as does including them as indicator variables, although results for GMM stages after the first may be slightly different because the two methods can give rise to different weighting matrices.
 
 Inspecting the attributes of the :class:`Problem` instance helps to confirm that the problem has been configured correctly. For example, inspecting :attr:`Problem.products` and :attr:`Problem.agents` confirms that product data were structured correctly and that agent data were built correctly.
 
@@ -126,7 +112,7 @@ Inspecting the attributes of the :class:`Problem` instance helps to confirm that
 
 The initialized problem can be solved with :meth:`Problem.solve`. We'll use the same starting values as :ref:`Nevo (2000) <n00>`. By passing a diagonal matrix of ones as starting values for :math:`\Sigma`, we're choosing to optimize over only variance terms. Similarly, zeros in the starting values for :math:`\Pi` mean that those parameters will be fixed at zero.
 
-To solve the problem, we'll use a non-default unbounded optimization routine that is similar to the default one in Matlab used by :ref:`Nevo (2000) <n00>`. For the sake of speed in this example, we'll only perform one GMM step.
+To solve the problem, we'll use a non-default unbounded optimization routine that is similar to the default one in Matlab often used to replicate the paper. For the sake of speed in this example, we'll only perform one GMM step.
 
 .. ipython:: python
 
@@ -145,13 +131,13 @@ To solve the problem, we'll use a non-default unbounded optimization routine tha
    )
    nevo_results
 
-Results are similar to those in the original paper. Note that one of the estimated terms on the diagonal of :math:`\Sigma` is negative. Since the diagonal consists of standard deviations, negative values do not make much sense. When using another optimization routine (like the default L-BFGS-B routine) that supports bounds, these diagonal elements are by default bounded from below by zero. In the next example we'll use the default routine.
+Results are similar to those in the original paper. Note that one of the estimated terms on the diagonal of :math:`\Sigma` is negative. Since the diagonal consists of standard deviations, negative values are unrealistic. When using another optimization routine (like the default L-BFGS-B routine) that supports bounds, these diagonal elements are by default bounded from below by zero. In the next example we'll use the default routine.
 
 
 The Automobile Problem
 ~~~~~~~~~~~~~~~~~~~~~~
 
-Unlike the fake cereal problem, we won't absorb any fixed effects. However, we'll estimate the supply side of the automobile problem, so we need to formulate :math:`X_3` in addition to the three other matrices. Again, columns in the formulation for :math:`X_2` are in the same order as the columns of nodes formulated above.
+Unlike the fake cereal problem, we won't absorb any fixed effects in the automobile problem. However, we'll estimate the supply side, so we need to formulate :math:`X_3` in addition to the three other matrices.
 
 .. ipython:: python
 
@@ -166,19 +152,8 @@ Unlike the fake cereal problem, we won't absorb any fixed effects. However, we'l
 
 The original specification for the automobile problem includes the term :math:`\log(y_i - p_j)`, in which :math:`y` is income and :math:`p` are prices. Instead of including this term, which gives rise to a host of numerical problems, we'll follow :ref:`Berry, Levinsohn, and Pakes (1999) <blp99>` and uses its first-order linear approximation, :math:`p_j / y_i`. The above formulation for :math:`d` includes a column of :math:`1 / y_i` values, which we'll interact with :math:`p_j`.
 
-Similar to :ref:`Andrews, Gentzkow, and Shapiro (2017) <ags17>`, who replicated the original :ref:`Berry, Levinsohn, and Pakes (1995) <blp95>`, we'll use published estimates as our starting values for :math:`\Sigma`. By passing a column vector of all zeros except for negative the published estimate for the coefficient on :math:`\log(y_i - p_j)` as the starting values for :math:`\Pi`, we're choosing to interact the inverse of income only with prices.
-
 .. ipython:: python
 
-   blp_sigma = np.diag([3.612, 0, 4.628, 1.818, 1.050, 2.056])
-   blp_pi = [
-       [  0    ],
-       [-43.501],
-       [  0    ],
-       [  0    ],
-       [  0    ],
-       [  0    ]
-   ]
    blp_problem = pyblp.Problem(
        blp_product_formulations, 
        blp_product_data, 
@@ -186,7 +161,24 @@ Similar to :ref:`Andrews, Gentzkow, and Shapiro (2017) <ags17>`, who replicated 
        blp_agent_data
    )
 
-A linear marginal cost specification is the default, so we'll need to use the `costs_type` argument to employ the log-linear specification used by :ref:`Berry, Levinsohn, and Pakes (1995) <blp95>`. A downside of this specification is that nonpositive estimated marginal costs can create problems for the optimization routine when computing :math:`\tilde{c}(\hat{\theta}) = \log c(\hat{\theta})`. Since this specification of the automobile problem suffers from such problems, we'll use the `costs_bounds` argument to bound marginal costs from below by a small number. 
+We'll use published estimates as our starting values for :math:`\Sigma`. By choosing a column vector of all zeros except for a negative term for the coefficient on :math:`\log(y_i - p_j)` as the starting values for :math:`\Pi`, we're choosing to interact the inverse of income only with prices.
+
+We'll also bound our parameters. When using a routine that supports bounds, :class:`Problem` chooses some default bounds to reduce the chance of numerical overflow that happens, for example, when optimization routines try out large parameter values. However, these default bounds are not quite restrictive enough to prevent overflow in the automobile problem, so we'll set our own bounds. In addition to overflow concerns, we'll also bound the diagonal of :math:`\Sigma` from below by zero for realism, and we'll make sure that demand is sloping downward by bounding the parameter in :math:`\Pi` from above (specifically, we'll use a bound that's slightly smaller than zero because when the parameter is exactly zero, there are matrix inversion problems with computing :math:`\eta`). Choosing reasonable bounds can be very important.
+
+.. ipython:: python
+
+   blp_sigma = np.diag([3.612, 0, 4.628, 1.818, 1.050, 2.056])
+   blp_pi = np.c_[[0, -10, 0, 0, 0, 0]]
+   blp_sigma_bounds = (
+       np.zeros_like(blp_sigma),
+       np.diag([100, 0, 100, 100, 50, 100])
+   )
+   blp_pi_bounds = (
+       np.c_[[0, -50, 0, 0, 0, 0]],
+       np.c_[[0, -0.1, 0, 0, 0, 0]]
+   )
+
+A linear marginal cost specification is the default, so we'll need to use the `costs_type` argument to employ the log-linear specification used by :ref:`Berry, Levinsohn, and Pakes (1995) <blp95>`. A downside of this specification is that nonpositive estimated marginal costs can create problems for the optimization routine when computing :math:`\tilde{c}(\hat{\theta}) = \log c(\hat{\theta})`. We'll use the `costs_bounds` argument to bound marginal costs from below by a small number. 
 
 Finally, as in the original paper, we'll use the `W_type` and `se_type` argument to cluster by product IDs, which were specified as ``clustering_ids`` in product data. Again, to speed up this example, we'll stop after one GMM step.
 
@@ -195,6 +187,8 @@ Finally, as in the original paper, we'll use the `W_type` and `se_type` argument
    blp_results = blp_problem.solve(
        blp_sigma,
        blp_pi,
+       sigma_bounds=blp_sigma_bounds,
+       pi_bounds=blp_pi_bounds,
        method='1s',
        costs_type='log',
        costs_bounds=(0.001, None),
@@ -203,22 +197,13 @@ Finally, as in the original paper, we'll use the `W_type` and `se_type` argument
    )
    blp_results
 
-Again, results are similar to those in the original paper.
-
-One thing to note is that unlike our estimation procedure for the fake cereal problem, for which we used the non-default BFGS routine, here we used the default optimization routine, which supports parameter bounds. These bounds are displayed along with other optimization information when verbosity is not turned off. We can also look at them by inspecting their :class:`ProblemResults` attributes.
-
-.. ipython::
-
-   blp_results.sigma_bounds
-   blp_results.pi_bounds
-
-The default bounds were chosen to reduce the risk of numerical overflow. Without such bounds, optimization routines tend to try out large parameter values, which creates errors. The package tries to intelligently handle such errors, but they can create problems for the optimization routine. Using an optimization routine that supports bounds and choosing reasonable bounds yourself can be very important.
+Here, results are less similar to those in the original paper.
 
 
 Problem Results
 ---------------
 
-The :meth:`Problem.solve` method returns an instance of the :class:`ProblemResults` class, which, when printed, displays basic estimation results. The results that are displayed are simply formatted information extracted from various class attributes such as :attr:`ProblemResults.sigma` and :attr:`ProblemResults.sigma_se`.
+The :meth:`Problem.solve` method returns a :class:`ProblemResults` class, which, when printed, displays basic estimation results. The results that are displayed are simply formatted information extracted from various class attributes such as :attr:`ProblemResults.sigma` and :attr:`ProblemResults.sigma_se`.
 
 Additional post-estimation outputs can be computed with :class:`ProblemResults` methods.
 
@@ -483,11 +468,11 @@ Constructing bootstrap confidence intervals for the automobile problem could be 
 Optimal Instruments
 -------------------
 
-Given a consistent estimate of :math:`\theta`, we may want to compute :ref:`Chamberlain's (1987) <c87>` optimal instruments and then re-solve the problem. Optimal instruments have been shown, for example, by :ref:`Reynaert and Verboven (2014) <rv14>`, to not only reduce bias in the BLP problem, but also to improve efficiency and stability.
+Given a consistent estimate of :math:`\theta`, we may want to compute :ref:`Chamberlain's (1987) <c87>` optimal instruments and use them to re-solve the problem. Optimal instruments have been shown, for example, by :ref:`Reynaert and Verboven (2014) <rv14>`, to reduce bias, improve efficiency, and enhance stability of BLP estimates.
 
-Since the instruments provided in the automobile example data are already an estimate of the optimal instruments for the problem (see :mod:`~pyblp.data` for an explanation of how the instruments were constructed), we'll estimate the set of optimal instruments for the fake cereal problem.
+Since the instruments provided in the automobile example data are already an estimate of the optimal excluded instruments for the problem (see :mod:`~pyblp.data` for an explanation of how the excluded instruments were constructed), we'll estimate the set of optimal excluded instruments for the fake cereal problem.
 
-The :meth:`ProblemResults.compute_optimal_instruments` method computes the expected Jacobians that comprise the optimal instruments by integrating over the density of :math:`\xi` (and :math:`\omega` if a supply side was estimated). Since we didn't specify a supply side in the fake cereal problem, we need to supply an estimate of :math:`\operatorname{\mathbb{E}}[p \mid Z]`. We'll use the convenience function :func:`compute_fitted_values` to estimate this vector with a reduced form regression of endogenous prices onto all exogenous variables.
+The :meth:`ProblemResults.compute_optimal_instruments` method computes the expected Jacobians that comprise the optimal instruments by integrating over the density of :math:`\xi` (and :math:`\omega` if a supply side was estimated). Since we didn't specify a supply side in the fake cereal problem, we need to supply an estimate of :math:`\operatorname{\mathbb{E}}[p \mid Z]`. We'll use the convenience function :func:`compute_fitted_values` to estimate this vector with a reduced form regression of endogenous prices onto the full set of instruments: excluded instruments and the absorbed product IDs that constitute :math:`X_1`.
 
 .. ipython:: python
 
@@ -499,7 +484,7 @@ The :meth:`ProblemResults.compute_optimal_instruments` method computes the expec
        nevo_product_data
    )
 
-By default, :meth:`ProblemResults.compute_optimal_instruments` approximates the integral over the density of the error terms by averaging over Jacobian realizations computed under draws from the asymptotic normal distribution of the error terms. For speed in this example, we'll use ``method='approximate'`` to simply evaluate the Jacobians at the expected value of :math:`\xi`, zero.
+By default, :meth:`ProblemResults.compute_optimal_instruments` approximates an integral over the density of the error terms by averaging over Jacobian realizations computed under draws from the asymptotic normal distribution of the error terms. For speed in this example, we'll use ``method='approximate'`` to simply evaluate the Jacobians at the expected value of :math:`\xi`, zero.
 
 .. ipython:: python
    
@@ -509,9 +494,7 @@ By default, :meth:`ProblemResults.compute_optimal_instruments` approximates the 
    )
    instrument_results
 
-Fixed point iterations and contraction evaluation counts are both zero because we had to supply an estimate of :math:`\operatorname{\mathbb{E}}[p \mid Z]`. These counts woul be positive if a supply side was estimated and we didn't supply such an estimate because equilibrium prices under each draw of :math:`\xi` and :math:`\omega` would be computed via iteration over the :math:`\zeta`-markup equation from :ref:`Morrow and Skerlos (2011) <ms11>`.
-
-We can use the :meth:`OptimalInstrumentResults.to_problem` method to re-create the fake cereal problem with the estimated optimal instruments.
+We can use the :meth:`OptimalInstrumentResults.to_problem` method to re-create the fake cereal problem with the estimated optimal excluded instruments.
 
 .. ipython:: python
 
@@ -573,7 +556,7 @@ First, we'll use :func:`build_id_data` to build market and firm IDs for a model 
 
    simulation_ids = pyblp.build_id_data(T=50, J=20, F=10)
 
-Next, we'll choose configure :class:`Integration` to build agent data according to a level-``5`` Gauss-Hermite product rule.
+Next, we'll configure :class:`Integration` to build agent data according to a level-``5`` Gauss-Hermite product rule.
 
 .. ipython:: python
 
@@ -586,16 +569,16 @@ We'll then pass these along formulations and parameters to :class:`Simulation`.
 
    simulation = pyblp.Simulation(
        product_formulations=(
-           pyblp.Formulation('1 + prices + x'),
+           pyblp.Formulation('0 + prices + x + y'),
            pyblp.Formulation('0 + y'),
-           pyblp.Formulation('1 + x + z')
+           pyblp.Formulation('0 + x + z')
        ),
-       beta=[1, -5, 1],
-       sigma=1,
-       gamma=[1, 2, 2],
+       beta=[-5, 1, 1],
+       sigma=0.5,
+       gamma=[2, 2],
        product_data=simulation_ids,
        agent_formulation=pyblp.Formulation('0 + d'),
-       pi=2,
+       pi=3,
        integration=simulation_integration,
        seed=0
    )
@@ -608,11 +591,11 @@ When :class:`Simulation` is initialized, it constructs agent data and simulates 
    simulation.product_data
    simulation.agent_data
 
-The instruments in :attr:`Simulation.product_data` are basic ones computed with :func:`build_blp_instruments` that are functions of all exogenous numerical variables in the problem. For this example, :math:`Z_D` is a constant column followed by all non-price characteristics and two other columns of traditional BLP instruments that are computed for the one demand-side characteristic that doesn't enter :math:`X_3`. Similarly, :math:`Z_S` is a constant column followed by all non-price characteristics and two other columns of BLP instruments that are computed for the one supply-side characteristic that doesn't enter :math:`X_1` or :math:`X_2`.
+The excluded instruments in :attr:`Simulation.product_data` include basic instruments computed with :func:`build_blp_instruments` that are functions of all exogenous numerical variables in the problem. In this example, excluded demand-side instruments are four columns of traditional BLP instruments based on ``x`` and ``y``, along with the cost-shifter ``z``. Excluded supply-side instruments are traditional BLP instruments based on ``x`` and ``z``, along with ``y``.
 
 The :class:`Simulation` can be further configured with other arguments that determine how unobserved product characteristics are simulated and how marginal costs are specified.
 
-Since at this stage, prices and shares are all zeros, we still need to solve the simulation with :meth:`Simulation.solve`. This method computes synthetic prices and shares. Just like :meth:`ProblemResults.compute_prices`, it iterates over the :math:`\zeta`-markup equation from :ref:`Morrow and Skerlos (2011) <ms11>` to do so.
+Since at this stage prices and shares are all zeros, we still need to solve the simulation with :meth:`Simulation.solve`. This method computes synthetic prices and shares. Just like :meth:`ProblemResults.compute_prices`, to do so it iterates over the :math:`\zeta`-markup equation from :ref:`Morrow and Skerlos (2011) <ms11>`.
 
 .. ipython:: python
 

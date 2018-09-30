@@ -304,12 +304,12 @@ class ProblemResults(AbstractProblemResults):
         # compute a version of xi that includes the contribution of any demand-side fixed effects
         self.xi = self.true_xi
         if self.problem.ED > 0:
-            self.xi = self.true_delta - self._compute_true_X1() @ self.beta
+            self.xi = self.true_delta - self.problem._compute_true_X1() @ self.beta
 
         # compute a version of omega that includes the contribution of any supply-side fixed effects
         self.omega = self.true_omega
         if self.problem.ES > 0:
-            self.omega = self.true_tilde_costs - self._compute_true_X3() @ self.gamma
+            self.omega = self.true_tilde_costs - self.problem._compute_true_X3() @ self.gamma
 
         # update the weighting matrices
         self.updated_WD, WD_errors = compute_gmm_weights(
@@ -568,8 +568,8 @@ class ProblemResults(AbstractProblemResults):
         errors: List[Error] = []
 
         # compute delta (which will change under equilibrium prices) and marginal costs (which won't change)
-        delta = self.true_delta + self._compute_true_X1() @ (beta - self.beta)
-        costs = self.true_tilde_costs + self._compute_true_X3() @ (gamma - self.gamma)
+        delta = self.true_delta + self.problem._compute_true_X1() @ (beta - self.beta)
+        costs = self.true_tilde_costs + self.problem._compute_true_X3() @ (gamma - self.gamma)
         if self._costs_type == 'log':
             costs = np.exp(costs)
 
@@ -604,12 +604,13 @@ class ProblemResults(AbstractProblemResults):
     def compute_optimal_instruments(
             self, method: str = 'normal', draws: int = 100, seed: Optional[int] = None,
             expected_prices: Optional[Any] = None, iteration: Optional[Iteration] = None) -> 'OptimalInstrumentResults':
-        r"""Estimate the set of optimal or efficient instruments, :math:`\mathscr{Z}_D` and :math:`\mathscr{Z}_S`.
+        r"""Estimate the set of optimal or efficient excluded instruments, :math:`\mathscr{Z}_D` and
+        :math:`\mathscr{Z}_S`.
 
         Optimal instruments have been shown, for example, by :ref:`Reynaert and Verboven (2014) <rv14>`, to not only
         reduce bias in the BLP problem, but also to improve efficiency and stability.
 
-        :ref:`Chamberlain's (1987) <c87>` optimal instruments are
+        :ref:`Chamberlain's (1987) <c87>` optimal excluded instruments are
 
         .. math::
 
@@ -620,19 +621,16 @@ class ProblemResults(AbstractProblemResults):
            = \text{Var}(\xi, \omega)^{-1}\operatorname{\mathbb{E}}\left[
            \begin{matrix}
                \frac{\partial\xi_{jt}}{\partial\theta} &
-               \frac{\partial\xi_{jt}}{\partial\beta} &
-               0 \\
+               \frac{\partial\xi_{jt}}{\partial\alpha} \\
                \frac{\partial\omega_{jt}}{\partial\theta} &
-               \frac{\partial\omega_{jt}}{\partial\beta} &
-               \frac{\partial\omega_{jt}}{\partial\gamma}
+               \frac{\partial\omega_{jt}}{\partial\alpha}
            \end{matrix}
            \mathrel{\Bigg|} Z \right],
 
         The expectation is taken by integrating over the joint density of :math:`\xi` and :math:`\omega`. For each error
         term realization, if not already estimated, equilibrium prices are computed via iteration over the
         :math:`\zeta`-markup equation from :ref:`Morrow and Skerlos (2011) <ms11>`. Associated shares and :math:`\delta`
-        are then computed before each Jacobian is evaluated. Note that :math:`\partial\xi / \partial\beta = -X_1` and
-        :math:`\partial\omega / \partial\gamma = -X_3`.
+        are then computed before each Jacobian is evaluated.
 
         The expected Jacobians are estimated with the average over all computed Jacobian realizations. The normalizing
         matrix :math:`\text{Var}(\xi, \omega)^{-1}` is estimated with the sample covariance matrix of the error terms.
@@ -677,8 +675,8 @@ class ProblemResults(AbstractProblemResults):
         """
         errors: List[Error] = []
 
-        # keep track of long it takes to compute optimal instruments
-        output("Computing optimal instruments ...")
+        # keep track of long it takes to compute optimal excluded instruments
+        output("Computing optimal excluded instruments ...")
         start_time = time.time()
 
         # validate the method and create a function that samples from the error distribution
@@ -747,16 +745,21 @@ class ProblemResults(AbstractProblemResults):
             output(exceptions.MultipleErrors(errors))
             output("")
 
+        # select columns in the expected Jacobians with respect to beta associated with endogenous characteristics
+        endogenous_column_indices = [i for i, f in enumerate(self.problem._X1_formulations) if 'prices' in f.names]
+        expected_xi_by_alpha = np.c_[expected_xi_by_beta[:, endogenous_column_indices]]
+        expected_omega_by_alpha = np.c_[expected_omega_by_beta[:, endogenous_column_indices]]
+
         # compute the optimal instruments
         if self.problem.K3 == 0:
             inverse_covariance_matrix = np.c_[1 / np.var(self.true_xi)]
-            demand_instruments = inverse_covariance_matrix * np.c_[expected_xi_by_theta, expected_xi_by_beta]
+            demand_instruments = inverse_covariance_matrix * np.c_[expected_xi_by_theta, expected_xi_by_alpha]
             supply_instruments = np.full((self.problem.N, 0), np.nan, options.dtype)
         else:
             inverse_covariance_matrix = np.c_[scipy.linalg.inv(np.cov(self.true_xi, self.true_omega, rowvar=False))]
             jacobian = np.r_[
-                np.c_[expected_xi_by_theta, expected_xi_by_beta, np.zeros_like(self.problem.products.X3)],
-                np.c_[expected_omega_by_theta, expected_omega_by_beta, -self._compute_true_X3()]
+                np.c_[expected_xi_by_theta, expected_xi_by_alpha],
+                np.c_[expected_omega_by_theta, expected_omega_by_alpha]
             ]
             tensor = multiply_matrix_and_tensor(inverse_covariance_matrix, np.stack(np.split(jacobian, 2), axis=1))
             demand_instruments, supply_instruments = np.split(tensor.reshape((self.problem.N, -1)), 2, axis=1)
@@ -765,7 +768,7 @@ class ProblemResults(AbstractProblemResults):
         from .optimal_instrument_results import OptimalInstrumentResults  # noqa
         results = OptimalInstrumentResults(
             self, demand_instruments, supply_instruments, inverse_covariance_matrix, expected_xi_by_theta,
-            expected_xi_by_beta, expected_omega_by_theta, expected_omega_by_beta, start_time, time.time(), draws,
+            expected_xi_by_alpha, expected_omega_by_theta, expected_omega_by_alpha, start_time, time.time(), draws,
             iteration_mappings, evaluation_mappings
         )
         output(f"Computed optimal instruments after {format_seconds(results.computation_time)}.")
@@ -817,7 +820,7 @@ class ProblemResults(AbstractProblemResults):
         errors.extend(demand_errors)
 
         # compute the Jacobian of xi with respect to beta (prices just need to be replaced in X1)
-        xi_by_beta_jacobian = -self._compute_true_X1({'prices': equilibrium_prices})
+        xi_by_beta_jacobian = -self.problem._compute_true_X1({'prices': equilibrium_prices})
 
         # compute the Jacobians of omega with respect to theta and beta
         omega_by_theta_jacobian = np.full((self.problem.N, self._nonlinear_parameters.P), np.nan, options.dtype)

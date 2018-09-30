@@ -30,6 +30,10 @@ and the type-specific portion for all products and agents in a single market is
 
 .. math:: \mu = X_2(\Sigma\nu' + \Pi d').
 
+.. note::
+
+   Unlike some of the existing literature, :math:`X_1` includes endogenous characteristics. That is, it includes characteristics that are functions of prices, :math:`p`, and :math:`\beta` includes parameters on these endogenous characteristics. The notation :math:`X_1^p` is used to denote these endogenous characteristics, and :math:`\alpha` is used to denote the parameters (which are a subset of those in :math:`\beta`) on these endogenous characteristics. Often, :math:`X_1^p` is simply a single column of prices.
+
 The :math:`K_2 \times K_2` matrix :math:`\Sigma` is the Cholesky decomposition of the covariance matrix that defines the multivariate normal distribution from which each :math:`\nu_i` is assumed to be drawn. The :math:`K_2 \times D` matrix :math:`\Pi` measures how agent tastes vary with demographics.
 
 Random idiosyncratic preferences :math:`\epsilon_{jti}` are assumed to be Type I Extreme Value so that market shares can be approximated with Monte Carlo integration or quadrature rules as in :ref:`Heiss and Winschel (2008) <hw08>` and :ref:`Judd and Skrainka (2011) <js11>`:
@@ -110,7 +114,7 @@ The GMM moment conditions are
 .. math:: \mathrm{E}[g_i] = 0 \quad\text{where}\quad g_i = u_iZ_i.
    :label: moments
 
-Demand-side instruments include all non-price product characteristics from :math:`X_1` and :math:`X_2`, and supply-side instruments include :math:`X_3`. Since cost characteristics are often good demand-side instruments and vice versa, both :math:`Z_D` and :math:`Z_S` often include all characteristics.
+The full set of demand-side instruments include excluded demand-side instruments along with include all exogenous (not involving price) product characteristics from :math:`X_1` and :math:`X_2`. Similarly, the full set of supply-side instruments include excluded supply-side instruments along with :math:`X_3`.
 
 
 Estimation
@@ -247,7 +251,7 @@ Standard errors extracted from an estimate of this last expression are called un
 Fixed Effect Absorption
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-One way to include demand-side fixed effects is to construct a large number of indicator variables and include them in :math:`X_1` and :math:`Z_D`. Similarly, indicator variables can be added to :math:`X_3` and :math:`Z_S` to incorporate supply-side fixed effects. However, this approach becomes infeasible when there are a large amount of data or a large number of fixed effects because estimation with many indicator variables can be both memory- and processor-intensive. In particular, inversion of large matrices in :eq:`beta` and :eq:`gamma` can be problematic.
+One way to include demand-side fixed effects is to construct a large number of indicator variables and include them in :math:`X_1` (and hence in :math:`Z_D`). Similarly, indicator variables can be added to :math:`X_3` (and hence in :math:`Z_S`) to incorporate supply-side fixed effects. However, this approach becomes infeasible when there are a large amount of data or a large number of fixed effects because estimation with many indicator variables can be both memory- and processor-intensive. In particular, inversion of large matrices in :eq:`beta` and :eq:`gamma` can be problematic.
 
 An alternative is to absorb or partial out fixed effects. If there is only one demand-side fixed effect, that is, if :math:`E_D = 1`, the procedure is simple and efficient: :math:`X_1`, :math:`Z_D`, and :math:`\delta(\hat{\theta})` are de-meaned within each level of the fixed effect. If there is only one supply-side effect, that is, if :math:`E_S = 1`, the same is done with :math:`X_3`, :math:`Z_S`, and :math:`\tilde{c}(\hat{\theta})`.
 

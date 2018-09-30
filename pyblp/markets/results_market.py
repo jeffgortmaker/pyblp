@@ -208,8 +208,8 @@ class ResultsMarket(Market):
             exp_utilities = self.groups.sum(exp_utilities**(1 / (1 - self.rho)))**(1 - self.group_rho)
 
         # compute the derivatives of utility with respect to prices, which are assumed to be constant across products
-        alpha = -self.compute_utility_derivatives('prices')[0]
+        derivatives = -self.compute_utility_derivatives('prices')[0]
 
         # compute consumer surplus
-        consumer_surplus = (np.log1p(exp_utilities.sum(axis=0)) / alpha) @ self.agents.weights
+        consumer_surplus = (np.log1p(exp_utilities.sum(axis=0)) / derivatives) @ self.agents.weights
         return consumer_surplus, []

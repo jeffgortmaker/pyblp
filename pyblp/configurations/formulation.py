@@ -397,6 +397,10 @@ class ColumnFormulation(object):
         """Hash the expression."""
         return hash(self.expression)
 
+    def __eq__(self, other: Any) -> bool:
+        """Defer to the string representation."""
+        return str(self) == str(other)
+
     def evaluate(self, data: Mapping, data_override: Optional[Mapping] = None) -> Array:
         """Evaluate the SymPy column expression at the values supplied by mappings from variable names to arrays."""
         return evaluate_expression(self.expression, data, data_override)

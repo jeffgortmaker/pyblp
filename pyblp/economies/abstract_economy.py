@@ -1,19 +1,19 @@
-"""Economy underlying the BLP model."""
+"""Abstract economy underlying the BLP model."""
 
+import abc
 import collections
 import functools
-import time
-from typing import Dict, Hashable, Optional, Sequence, Tuple
+from typing import Dict, Hashable, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
-from .. import exceptions
+from .. import options
 from ..configurations.formulation import ColumnFormulation, Formulation
-from ..utilities.basics import Array, RecArray, StringRepresentation, TableFormatter, format_seconds, output
+from ..utilities.basics import Array, RecArray, StringRepresentation, TableFormatter
 
 
-class Economy(StringRepresentation):
-    """An economy underlying the BLP model."""
+class AbstractEconomy(abc.ABC, StringRepresentation):
+    """An abstract economy underlying the BLP model."""
 
     product_formulations: Sequence[Optional[Formulation]]
     agent_formulation: Optional[Formulation]
@@ -43,12 +43,11 @@ class Economy(StringRepresentation):
     _absorb_demand_ids: Optional[functools.partial]
     _absorb_supply_ids: Optional[functools.partial]
 
+    @abc.abstractmethod
     def __init__(
             self, product_formulations: Sequence[Optional[Formulation]], agent_formulation: Optional[Formulation],
-            products: RecArray, agents: RecArray, updating_instruments: bool = False) -> None:
-        """Store information about formulations and data before absorbing any fixed effects. Fixed effects will only be
-        absorbed into instruments if updating_instruments is True.
-        """
+            products: RecArray, agents: RecArray) -> None:
+        """Store information about formulations and data. Any fixed effects should be absorbed after initialization."""
 
         # store formulations and data
         self.product_formulations = product_formulations
@@ -95,36 +94,6 @@ class Economy(StringRepresentation):
         if self.ES > 0:
             assert product_formulations[2] is not None
             self._absorb_supply_ids = functools.partial(product_formulations[2]._build_absorb(self.products.supply_ids))
-
-        # absorb any demand-side fixed effects
-        if self._absorb_demand_ids is not None:
-            start_time = time.time()
-            output("")
-            output("Absorbing demand-side fixed effects ...")
-            self.products.ZD, ZD_errors = self._absorb_demand_ids(self.products.ZD)
-            if ZD_errors:
-                raise exceptions.MultipleErrors(ZD_errors)
-            if not updating_instruments:
-                self.products.X1, X1_errors = self._absorb_demand_ids(self.products.X1)
-                if X1_errors:
-                    raise exceptions.MultipleErrors(X1_errors)
-            end_time = time.time()
-            output(f"Absorbed demand-side fixed effects after {format_seconds(end_time - start_time)}.")
-
-        # absorb any supply-side fixed effects
-        if self._absorb_supply_ids is not None:
-            start_time = time.time()
-            output("")
-            output("Absorbing supply-side fixed effects ...")
-            self.products.ZS, ZS_errors = self._absorb_supply_ids(self.products.ZS)
-            if ZS_errors:
-                raise exceptions.MultipleErrors(ZS_errors)
-            if not updating_instruments:
-                self.products.X3, X3_errors = self._absorb_supply_ids(self.products.X3)
-                if X3_errors:
-                    raise exceptions.MultipleErrors(X3_errors)
-            end_time = time.time()
-            output(f"Absorbed supply-side fixed effects after {format_seconds(end_time - start_time)}.")
 
     def __str__(self) -> str:
         """Format economy information as a string."""
@@ -198,3 +167,19 @@ class Economy(StringRepresentation):
         max_firms_index = self.products.firm_ids.shape[1]
         if not isinstance(firms_index, int) or not 0 <= firms_index <= max_firms_index:
             raise ValueError(f"firms_index must be an int between 0 and {firms_index}.")
+
+    def _compute_true_X1(self, data_override: Optional[Mapping] = None) -> Array:
+        """Compute X1 without any absorbed demand-side fixed effects."""
+        if self.ED == 0 and not data_override:
+            return self.products.X1
+        ones = np.ones((self.N, 1), options.dtype)
+        columns = (ones * f.evaluate(self.products, data_override) for f in self._X1_formulations)
+        return np.column_stack(columns)
+
+    def _compute_true_X3(self, data_override: Optional[Mapping] = None) -> Array:
+        """Compute X3 without any absorbed supply-side fixed effects."""
+        if self.ES == 0 and not data_override:
+            return self.products.X3
+        ones = np.ones((self.N, 1), options.dtype)
+        columns = (ones * f.evaluate(self.products, data_override) for f in self._X3_formulations)
+        return np.column_stack(columns)
