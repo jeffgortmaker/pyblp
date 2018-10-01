@@ -238,35 +238,9 @@ class Simulation(AbstractEconomy):
     H : `int`
         Number of nesting groups, :math:`H`.
 
-    Example
-    -------
-    In this example, we'll simulate a small amount of data for two markets. Specifically, we'll simulate exogenous
-    product data, ``x``, ``y``, and ``z``, along with a demographic, ``d``. We'll construct unobserved agent data
-    according to a low-level Gauss-Hermite product rule. A non-example simulation would be much larger.
-
-    .. ipython:: python
-
-       simulation = pyblp.Simulation(
-           product_formulations=(
-               pyblp.Formulation('0 + prices + x + y'),
-               pyblp.Formulation('0 + y'),
-               pyblp.Formulation('0 + x + z')
-           ),
-           beta=[-5, 1, 1],
-           sigma=0.5,
-           gamma=[2, 2],
-           product_data=pyblp.build_id_data(T=50, J=20, F=10),
-           agent_formulation=pyblp.Formulation('0 + d'),
-           pi=3,
-           integration=pyblp.Integration('product', 5),
-           seed=0
-       )
-       simulation
-       simulation.agent_data
-       simulation.product_data
-
-    We'll solve this example simulation in :meth:`Simulation.solve`. For more examples, refer to the
-    :doc:`Examples </examples>` section.
+    Examples
+    --------
+        - :doc:`Tutorial </tutorial>`
 
     """
 
@@ -545,39 +519,9 @@ class Simulation(AbstractEconomy):
         `SimulationResults`
             :class:`SimulationResults` of the solved simulation.
 
-        Example
-        -------
-        In this example, we'll first create the simulation from the example for :class:`Simulation`.
-
-        .. ipython:: python
-
-           simulation = pyblp.Simulation(
-               product_formulations=(
-                   pyblp.Formulation('0 + prices + x + y'),
-                   pyblp.Formulation('0 + y'),
-                   pyblp.Formulation('0 + x + z')
-               ),
-               beta=[-5, 1, 1],
-               sigma=0.5,
-               gamma=[2, 2],
-               product_data=pyblp.build_id_data(T=50, J=20, F=10),
-               agent_formulation=pyblp.Formulation('0 + d'),
-               pi=3,
-               integration=pyblp.Integration('product', 5),
-               seed=0
-           )
-           simulation
-           simulation.agent_data
-           simulation.product_data
-
-        We'll compute synthetic prices and shares, which are initialized as zero above, by solving the simulation.
-
-        .. ipython:: python
-
-           results = simulation.solve()
-           results
-
-        For more examples, refer to the :doc:`Examples </examples>` section.
+        Examples
+        --------
+            - :doc:`Tutorial </tutorial>`
 
         """
         errors: List[Error] = []

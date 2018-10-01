@@ -27,14 +27,8 @@ dtype : `dtype`
     The precision of ``numpy.longdouble`` depends on the platform on which NumPy is installed. If the platform in use
     does not support extended precision, using ``numpy.longdouble`` may lead to unreliably results. For example, on
     Windows, NumPy is usually compiled such that ``numpy.longdouble`` often behaves like ``numpy.float64``. Precisions
-    can be compared with :class:`numpy.finfo`.
-
-    .. ipython:: python
-
-       np.finfo(np.float64)
-       np.finfo(np.longdouble)
-
-    For more information, refer to
+    can be compared with :class:`numpy.finfo` by running ``np.finfo(np.float64)`` and ``np.finfo(np.longdouble)``. For
+    more information, refer to
     `this discussion <https://docs.scipy.org/doc/numpy-1.13.0/user/basics.types.html#extended-precision>`_.
 
     If extended precisions is supported, the data type can be switched with ``pyblp.options.dtype = np.longdouble``. On

@@ -68,6 +68,10 @@ class AbstractProblemResults(abc.ABC, StringRepresentation):
             Estimates of aggregate elasticities of demand, :math:`E`, for all markets. Rows are in the same order as
             :attr:`Problem.unique_market_ids`.
 
+        Examples
+        --------
+            - :doc:`Tutorial </tutorial>`
+
         """
         output(f"Computing aggregate elasticities with respect to {name} ...")
         if not isinstance(factor, float):
@@ -93,6 +97,10 @@ class AbstractProblemResults(abc.ABC, StringRepresentation):
             Stacked :math:`J_t \times J_t` estimated matrices of elasticities of demand, :math:`\varepsilon`, for each
             market :math:`t`. Columns for a market are in the same order as products for the market. If a market has
             fewer products than others, extra columns will contain ``numpy.nan``.
+
+        Examples
+        --------
+            - :doc:`Tutorial </tutorial>`
 
         """
         output(f"Computing elasticities with respect to {name} ...")
@@ -121,6 +129,10 @@ class AbstractProblemResults(abc.ABC, StringRepresentation):
             Columns for a market are in the same order as products for the market. If a market has fewer products than
             others, extra columns will contain ``numpy.nan``.
 
+        Examples
+        --------
+            - :doc:`Tutorial </tutorial>`
+
         """
         output(f"Computing diversion ratios with respect to {name} ...")
         self.problem._validate_name(name)
@@ -147,6 +159,10 @@ class AbstractProblemResults(abc.ABC, StringRepresentation):
             for all markets. Columns for a market are in the same order as products for the market. If a market has
             fewer products than others, extra columns will contain ``numpy.nan``.
 
+        Examples
+        --------
+            - :doc:`Tutorial </tutorial>`
+
         """
         output("Computing long run mean diversion ratios ...")
         return self._combine_arrays(ResultsMarket.compute_long_run_diversion_ratios, [], [])
@@ -168,6 +184,10 @@ class AbstractProblemResults(abc.ABC, StringRepresentation):
             Stacked diagonals for all markets. If the matrices are estimates of :math:`\varepsilon`, a diagonal is a
             market's own elasticities of demand; if they are estimates of :math:`\mathscr{D}` or
             :math:`\bar{\mathscr{D}}`, a diagonal is a market's diversion ratios to the outside good.
+
+        Examples
+        --------
+            - :doc:`Tutorial </tutorial>`
 
         """
         output("Extracting diagonals ...")
@@ -193,6 +213,10 @@ class AbstractProblemResults(abc.ABC, StringRepresentation):
             :math:`\bar{\mathscr{D}}`, the mean of a diagonal is a market's mean diversion ratio to the outside good.
             Rows are in the same order as :attr:`Problem.unique_market_ids`.
 
+        Examples
+        --------
+            - :doc:`Tutorial </tutorial>`
+
         """
         output("Extracting diagonal means ...")
         matrices = self._coerce_matrices(matrices)
@@ -205,13 +229,14 @@ class AbstractProblemResults(abc.ABC, StringRepresentation):
 
         .. math:: c = p - \eta.
 
-        Parameters
-        ----------
-
         Returns
         -------
         `ndarray`
             Marginal costs, :math:`c`.
+
+        Examples
+        --------
+            - :doc:`Tutorial </tutorial>`
 
         """
         output("Computing marginal costs ...")
@@ -245,6 +270,10 @@ class AbstractProblemResults(abc.ABC, StringRepresentation):
         -------
         `ndarray`
             Estimates of approximate equilibrium prices after any firm ID changes, :math:`p^a`.
+
+        Examples
+        --------
+            - :doc:`Tutorial </tutorial>`
 
         """
         output("Solving for approximate equilibrium prices ...")
@@ -289,6 +318,10 @@ class AbstractProblemResults(abc.ABC, StringRepresentation):
         `ndarray`
             Estimates of equilibrium prices after any firm ID changes, :math:`p^*`.
 
+        Examples
+        --------
+            - :doc:`Tutorial </tutorial>`
+
         """
         output("Solving for equilibrium prices ...")
         if iteration is None:
@@ -314,6 +347,10 @@ class AbstractProblemResults(abc.ABC, StringRepresentation):
         -------
         `ndarray`
             Estimates of shares evaluated at the specified prices.
+
+        Examples
+        --------
+            - :doc:`Tutorial </tutorial>`
 
         """
         output("Computing shares ...")
@@ -344,6 +381,10 @@ class AbstractProblemResults(abc.ABC, StringRepresentation):
             Estimated Herfindahl-Hirschman Indices, :math:`\text{HHI}`, for all markets. Rows are in the same order as
             :attr:`Problem.unique_market_ids`.
 
+        Examples
+        --------
+            - :doc:`Tutorial </tutorial>`
+
         """
         output("Computing HHI ...")
         self.problem._validate_firms_index(firms_index)
@@ -371,6 +412,10 @@ class AbstractProblemResults(abc.ABC, StringRepresentation):
         -------
         `ndarray`
             Estimated markups, :math:`\mathscr{M}`.
+
+        Examples
+        --------
+            - :doc:`Tutorial </tutorial>`
 
         """
         output("Computing markups ...")
@@ -403,6 +448,10 @@ class AbstractProblemResults(abc.ABC, StringRepresentation):
         -------
         `ndarray`
             Estimated population-normalized gross expected profits, :math:`\pi`.
+
+        Examples
+        --------
+            - :doc:`Tutorial </tutorial>`
 
         """
         output("Computing profits ...")
@@ -454,6 +503,10 @@ class AbstractProblemResults(abc.ABC, StringRepresentation):
         `ndarray`
             Estimated population-normalized consumer surpluses, :math:`\text{CS}`, for all markets. Rows are in the same
             order as :attr:`Problem.unique_market_ids`.
+
+        Examples
+        --------
+            - :doc:`Tutorial </tutorial>`
 
         """
         output("Computing consumer surpluses with the equation that assumes away nonlinear income effects ...")

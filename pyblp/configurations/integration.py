@@ -43,25 +43,11 @@ class Integration(StringRepresentation):
         Passed to :class:`numpy.random.RandomState` when `specification` is ``'monte_carlo'`` to seed the random number
         generator before building nodes. By default, a seed is not passed to the random number generator.
 
-    Example
-    -------
-    In this example, we'll build a Monte Carlo configuration with 1,000 draws for each market and a fixed seed.
+    Examples
+    --------
+    .. toctree::
 
-    .. ipython:: python
-
-       integration = pyblp.Integration('monte_carlo', size=1000, seed=0)
-       integration
-
-    Depending on the dimension of the integration problem, a level six sparse grid configuration may have a similar
-    number of nodes. However, even if there are fewer nodes, it is likely to perform better in the BLP problem. Sparse
-    grid construction is deterministic, so a seed is not needed to fix the grid every time we use this configuration.
-
-    .. ipython:: python
-
-       integration = pyblp.Integration('grid', size=7)
-       integration
-
-    For more examples, refer to the :doc:`Examples </examples>` section.
+       /notebooks/api/integration.ipynb
 
     """
 

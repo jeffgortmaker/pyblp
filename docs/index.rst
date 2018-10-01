@@ -14,8 +14,8 @@ pyblp
 
    notation
    background
+   tutorial
    api
-   examples
    references
    genindex
    legal

@@ -67,38 +67,9 @@ class Iteration(StringRepresentation):
 
     Examples
     --------
-    In this example, we'll build a SQUAREM configuration with a :math:`\ell^2`-norm and use scheme S1 from
-    :ref:`Varadhan and Roland (2008) <vr08>`.
+    .. toctree::
 
-    .. ipython:: python
-
-       iteration = pyblp.Iteration('squarem', {'norm': np.linalg.norm, 'scheme': 1})
-       iteration
-
-    Next, instead of using a built-in routine, we'll create a custom method that implements a version of simple
-    iteration, which, for the sake of having a nontrivial example, arbitrarily identifies a major iteration with three
-    objective evaluations.
-
-    .. ipython:: python
-
-       def custom_method(initial, contraction, callback, max_evaluations, tol, norm):
-           evaluations = 1
-           x = contraction(initial)
-           while evaluations < max_evaluations and norm(x) < tol:
-               evaluations += 1
-               x = contraction(x)
-               if evaluations % 3 == 0:
-                   callback()
-           return x, evaluations < max_evaluations
-
-    We can then use this custom method to build an iteration configuration.
-
-    .. ipython:: python
-
-       iteration = pyblp.Iteration(custom_method)
-       iteration
-
-    For more examples, refer to the :doc:`Examples </examples>` section.
+       /notebooks/api/iteration.ipynb
 
     """
 

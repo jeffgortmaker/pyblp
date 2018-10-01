@@ -40,20 +40,11 @@ def build_id_data(T: int, J: int, F: int, mergers: Sequence[Dict[int, int]] = ()
             - **firm_ids** : (`object`) - Firm IDs that take on values from ``0`` to ``F - 1``. Any columns after the
               first are defined according to `mergers`.
 
-    Example
-    -------
-    In this example, we'll build a small panel of market and firm IDs with an extra column of firm IDs that represent a
-    simple acquisition:
+    Examples
+    --------
+    .. toctree::
 
-    .. ipython:: python
-
-       @suppress
-       np.set_printoptions(linewidth=1)
-
-       id_data = pyblp.build_id_data(T=2, J=5, F=4, mergers=[{2: 0}])
-       id_data
-
-    For more examples, refer to the :doc:`Examples </examples>` section.
+       /notebooks/api/build_id_data.ipynb
 
     """
 
@@ -131,41 +122,11 @@ def build_ownership(product_data: Mapping, kappa_specification: Optional[Callabl
         associated with a `firm_ids` column. If a market has fewer products than others, extra columns will contain
         ``numpy.nan``.
 
-    Example
-    -------
-    In this example, we'll use the IDs created in the example for :func:`build_id_data` to build two stacks of standard
-    ownership matrices.
+    Examples
+    --------
+    .. toctree::
 
-    .. ipython:: python
-
-       @suppress
-       np.set_printoptions(threshold=100)
-
-       id_data = pyblp.build_id_data(T=2, J=5, F=4, mergers=[{2: 0}])
-       ownership = pyblp.build_ownership(id_data)
-       ownership
-
-    We'll now modify the default :math:`\kappa` specification so that the elements associated with firm IDs ``0`` and
-    ``1`` are equal to ``0.5``.
-
-    .. ipython:: python
-
-       def kappa_specification(f, g):
-           if f == g:
-               return 1
-           return 0.5 if f < 2 and g < 2 else 0
-
-    Finally, we'll use this specification to build two more stacks of non-standard ownership matrices.
-
-    .. ipython:: python
-
-       @suppress
-       np.set_printoptions(threshold=100)
-
-       ownership = pyblp.build_ownership(id_data, kappa_specification)
-       ownership
-
-    For more examples, refer to the :doc:`Examples </examples>` section.
+       /notebooks/api/build_ownership.ipynb
 
     """
 
@@ -248,22 +209,11 @@ def build_blp_instruments(formulation: Formulation, product_data: Mapping, firms
     `ndarray`
         Traditional excluded BLP instruments :math:`\mathrm{BLP}(X)`.
 
-    Example
-    -------
-    In this example, we'll load the automobile product data from :ref:`Berry, Levinsohn, and Pakes (1995) <blp95>` and
-    build some very simple excluded demand-side instruments for the problem. These instruments are different from the
-    pre-built ones included in the automobile product data file.
+    Examples
+    --------
+    .. toctree::
 
-    .. ipython:: python
-
-       formulation = pyblp.Formulation('1 + hpwt + air + mpd + space')
-       formulation
-       product_data = np.recfromcsv(pyblp.data.BLP_PRODUCTS_LOCATION, encoding='utf-8')
-       product_data.dtype.names
-       instruments = pyblp.build_blp_instruments(formulation, product_data)
-       instruments.shape
-
-    For more examples, refer to the :doc:`Examples </examples>` section.
+       /notebooks/api/build_blp_instruments.ipynb
 
     """
 
@@ -310,21 +260,11 @@ def build_matrix(formulation: Formulation, data: Mapping) -> Array:
     `ndarray`
         The built matrix.
 
-    Example
-    -------
-    In this example, we'll load the fake cereal data from :ref:`Nevo (2000) <n00>` and create a simple matrix involving
-    a constant, prices, and shares.
+    Examples
+    --------
+    .. toctree::
 
-    .. ipython:: python
-
-       formulation = pyblp.Formulation(f'1 + prices + shares')
-       formulation
-       product_data = np.recfromcsv(pyblp.data.NEVO_PRODUCTS_LOCATION, encoding='utf-8')
-       product_data.dtype.names
-       matrix = pyblp.build_matrix(formulation, product_data)
-       matrix
-
-    For more examples, refer to the :doc:`Examples </examples>` section.
+       /notebooks/api/build_matrix.ipynb
 
     """
     if not isinstance(formulation, Formulation):
@@ -352,24 +292,11 @@ def compute_fitted_values(variable: Any, formulation: Formulation, data: Mapping
     `ndarray`
         The fitted values.
 
-    Example
-    -------
-    In this example, we'll load the fake cereal data from :ref:`Nevo (2000) <n00>` and compute the fitted values from a
-    reduced form regression of endogenous prices onto the full set of instruments: excluded instruments and the absorbed
-    product IDs that constitute :math:`X_1`.
+    Examples
+    --------
+    .. toctree::
 
-    .. ipython:: python
-
-       instrument_formula = ' + '.join(f'demand_instruments{i}' for i in range(20))
-       exogenous_formulation = pyblp.Formulation(instrument_formula, absorb='C(product_ids)')
-       exogenous_formulation
-       product_data = np.recfromcsv(pyblp.data.NEVO_PRODUCTS_LOCATION, encoding='utf-8')
-       product_data.dtype.names
-       expected_prices = pyblp.compute_fitted_values(product_data.prices, exogenous_formulation, product_data)
-       expected_prices
-
-    These fitted values could be passed to `expected_prices` in :meth:`ProblemResults.compute_optimal_instruments`
-    because they are a reasonable reduced form estimate of expected prices conditional on the full set of instruments.
+       /notebooks/api/compute_fitted_values.ipynb
 
     """
 

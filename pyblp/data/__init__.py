@@ -16,8 +16,8 @@ BLP_PRODUCTS_LOCATION : `str`
     :ref:`Berry, Levinsohn, and Pakes (1995) <blp95>`.
 
     The file also includes a set of :ref:`Chamberlain's (1987) <c87>` optimal excluded instruments for the automobile
-    problem from :ref:`Berry, Levinsohn, and Pakes (1995) <blp95>`, which are used to solve the problem in
-    :doc:`Examples </examples>`. These instruments were computed according to the following procedure:
+    problem from :ref:`Berry, Levinsohn, and Pakes (1995) <blp95>`, which are used to solve the problem in the
+    `tutorial </notebooks/tutorial/blp.ipynb>`_. These instruments were computed according to the following procedure:
 
         1. Traditional excluded BLP instruments from the original paper were computed with
            :func:`~pyblp.build_blp_instruments`. As in the original paper, the ``mpd`` variable was added to the set of
@@ -25,8 +25,8 @@ BLP_PRODUCTS_LOCATION : `str`
         2. Each set of excluded instruments was interacted up to the second degree, standardized, and replaced with the
            minimum set of principal components that explained at least 99% of the variance.
         3. These two sets of principal components were used as excluded demand- and supply-side instruments when solving
-           the first GMM stage of a :class:`~pyblp.Problem` configured as in :doc:`Examples </examples>` (but with
-           non-optimal instruments).
+           the first GMM stage of a :class:`~pyblp.Problem` configured as in the
+           `tutorial </notebooks/tutorial/blp.ipynb>`_. (but with non-optimal instruments).
         4. The :meth:`~pyblp.ProblemResults.compute_optimal_instruments` method was used to estimate the optimal
            excluded instruments for the problem.
 
@@ -67,25 +67,9 @@ BLP_AGENTS_LOCATION : `str`
 
 Examples
 --------
-Any number of functions can be used to load these data into memory. In this example, we'll first use :mod:`numpy`.
+.. toctree::
 
-.. ipython:: python
-
-   import numpy as np
-   blp_product_data = np.recfromcsv(pyblp.data.BLP_PRODUCTS_LOCATION, encoding='utf-8')
-   blp_agent_data = np.recfromcsv(pyblp.data.BLP_AGENTS_LOCATION, encoding='utf-8')
-
-Record arrays can be cumbersome to manipulate. A more flexible alternative, the :class:`pandas.DataFrame`, can be built
-by the :func:`pandas.read_csv` function in the :mod:`pandas` package, which, unlike :mod:`numpy`, is not a pyblp
-requirement.
-
-.. ipython:: python
-
-   import pandas as pd
-   blp_product_data = pd.read_csv(pyblp.data.BLP_PRODUCTS_LOCATION)
-   blp_agent_data = pd.read_csv(pyblp.data.BLP_AGENTS_LOCATION)
-
-For more examples, refer to the :doc:`Examples </examples>` section.
+   /notebooks/api/data.ipynb
 
 """
 

@@ -6,11 +6,6 @@ API Documentation
 
 The majority of the package consists of classes, which compartmentalize different aspects of the BLP model. There are some convenience functions as well.
 
-Many of the pages that the below summaries link to contain example code. For the sake of brevity, the following lines of code, which import the package, import :mod:`numpy`, and limit verbosity, are executed before each example.
-
-.. literalinclude:: include.py
-   :language: ipython
-
 
 Configuration Classes
 ---------------------
@@ -18,7 +13,7 @@ Configuration Classes
 Various components of the package require configurations for how to approximate integrals, solve fixed point problems, and solve optimimzation problems. Such configurations are specified with the following classes.
 
 .. autosummary::
-   :toctree: api
+   :toctree: _api
    :template: class_without_methods.rst
 
    Formulation
@@ -33,7 +28,7 @@ Data Construction Functions
 There are also a number of convenience functions that can be used to construct common components of product data.
 
 .. autosummary::
-   :toctree: api
+   :toctree: _api
 
    build_id_data
    build_ownership
@@ -48,7 +43,7 @@ Simulation Class
 In addition to reading from data files, data can be simulated by initializing the following class.
 
 .. autosummary::
-   :toctree: api
+   :toctree: _api
    :template: class_with_signature.rst
 
    Simulation
@@ -56,7 +51,7 @@ In addition to reading from data files, data can be simulated by initializing th
 Once initialized, the following method computes equilibrium prices and shares.
 
 .. autosummary::
-   :toctree: api
+   :toctree: _api
 
    Simulation.solve
 
@@ -68,7 +63,7 @@ Solved simulations return the following results class.
 
 .. autosummary::
    :nosignatures:
-   :toctree: api
+   :toctree: _api
    :template: class_without_signature.rst
 
    SimulationResults
@@ -76,7 +71,7 @@ Solved simulations return the following results class.
 The simulation results can be converted into a :class:`Problem` with the following method.
 
 .. autosummary::
-   :toctree: api
+   :toctree: _api
 
    SimulationResults.to_problem
 
@@ -87,7 +82,7 @@ Problem Class
 Given real or simulated data and appropriate configurations, the BLP problem can be structured by initializing the following class.
 
 .. autosummary::
-   :toctree: api
+   :toctree: _api
    :template: class_with_signature.rst
 
    Problem
@@ -95,7 +90,7 @@ Given real or simulated data and appropriate configurations, the BLP problem can
 Once initialized, the following method solves the problem.
 
 .. autosummary::
-   :toctree: api
+   :toctree: _api
 
    Problem.solve
 
@@ -107,7 +102,7 @@ Solved problems return the following results class.
 
 .. autosummary::
    :nosignatures:
-   :toctree: api
+   :toctree: _api
    :template: class_without_signature.rst
 
    ProblemResults
@@ -115,7 +110,7 @@ Solved problems return the following results class.
 In addition to class attributes, other post-estimation outputs can be estimated with the following methods, which each return an array.
 
 .. autosummary::
-   :toctree: api
+   :toctree: _api
 
    ProblemResults.compute_aggregate_elasticities
    ProblemResults.compute_elasticities
@@ -135,14 +130,14 @@ In addition to class attributes, other post-estimation outputs can be estimated 
 A parametric bootstrap can be used, for example, to compute standard errors for the above post-estimation outputs. The following method returns a results class with all of the above methods, which returns a distribution of post-estimation outputs corresponding to different bootstrapped samples.
 
 .. autosummary::
-   :toctree: api
+   :toctree: _api
 
    ProblemResults.bootstrap
 
 Optimal instruments, which also return a results class instead of an array, can be estimated with the following method.
 
 .. autosummary::
-   :toctree: api
+   :toctree: _api
 
    ProblemResults.compute_optimal_instruments
 
@@ -154,7 +149,7 @@ Parametric bootstrap computation returns the following class.
 
 .. autosummary::
    :nosignatures:
-   :toctree: api
+   :toctree: _api
    :template: class_without_methods_or_signature.rst
 
    BootstrappedProblemResults
@@ -169,7 +164,7 @@ Optimal instrument computation returns the following results class.
 
 .. autosummary::
    :nosignatures:
-   :toctree: api
+   :toctree: _api
    :template: class_without_signature.rst
 
    OptimalInstrumentResults
@@ -177,7 +172,7 @@ Optimal instrument computation returns the following results class.
 The optimal instrument results can be converted into a :class:`Problem` with the following method.
 
 .. autosummary::
-   :toctree: api
+   :toctree: _api
 
    OptimalInstrumentResults.to_problem
 
@@ -185,7 +180,7 @@ This method returns the following class, which behaves exactly like a :class:`Pr
 
 .. autosummary::
    :nosignatures:
-   :toctree: api
+   :toctree: _api
    :template: class_without_methods_or_signature.rst
 
    OptimalInstrumentProblem
@@ -198,7 +193,7 @@ Product and agent data that are passed or constructed by :class:`Problem` and :c
 
 .. autosummary::
    :nosignatures:
-   :toctree: api
+   :toctree: _api
    :template: class_without_methods_or_signature.rst
 
    Products
@@ -211,7 +206,7 @@ Multiprocessing
 A context manager can be used to enable parallel processing for methods that perform market-by-market computation.
 
 .. autosummary::
-   :toctree: api
+   :toctree: _api
 
    parallel
 
@@ -222,7 +217,7 @@ Options and Example Data
 In addition to classes and functions, there are also two modules that can be used to configure global package options and locate example data that comes with the package.
 
 .. autosummary::
-   :toctree: api
+   :toctree: _api
 
    options
    data
@@ -235,7 +230,7 @@ When errors occur, they will either be displayed as warnings or raised as except
 
 .. autosummary::
    :nosignatures:
-   :toctree: api
+   :toctree: _api
    :template: class_without_signature.rst
 
    exceptions.MultipleErrors

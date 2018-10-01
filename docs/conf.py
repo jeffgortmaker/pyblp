@@ -15,7 +15,7 @@ source_path = Path(__file__).resolve().parent
 # configure locations of other configuration files
 html_static_path = ['static']
 templates_path = ['templates']
-exclude_patterns = templates_path
+exclude_patterns = templates_path + ['_build', '**.ipynb_checkpoints']
 
 # configure project information
 language = 'en'
@@ -28,17 +28,15 @@ release = version = pyblp.__version__
 nitpicky = True
 tls_verify = False
 master_doc = 'index'
-source_suffix = '.rst'
 
 # configure extensions
 extensions = [
-    'IPython.sphinxext.ipython_console_highlighting',
-    'IPython.sphinxext.ipython_directive',
     'sphinx.ext.autosummary',
     'sphinx.ext.intersphinx',
     'sphinx.ext.autodoc',
     'sphinx.ext.mathjax',
-    'sphinx.ext.napoleon'
+    'sphinx.ext.napoleon',
+    'nbsphinx'
 ]
 intersphinx_mapping = {
     'matplotlib': ('https://matplotlib.org/', None),
@@ -52,12 +50,8 @@ intersphinx_mapping = {
 }
 math_number_all = True
 autosummary_generate = True
-ipython_savefig_dir = 'images'
 numpydoc_show_class_members = False
-ipython_execlines = Path(source_path / 'include.py').read_text().splitlines()
-
-# add a line to be executed by IPython that stores the location of the source directory so that files can be saved
-ipython_execlines.append(f'source_path = \'{source_path.as_posix()}\'')
+nbsphinx_prolog = Path(source_path / templates_path[0] / 'nbsphinx_prolog.rst').read_text()
 
 # configure theme information
 html_theme = 'sphinx_rtd_theme'

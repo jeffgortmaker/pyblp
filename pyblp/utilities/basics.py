@@ -51,29 +51,11 @@ def parallel(processes: int) -> Iterator[None]:
     processes : `int`
         Number of Python processes that will be created and used by any method that supports parallel processing.
 
-    Example
-    -------
-    The following code uses multiprocessing to compute elasticities market-by-market for a simple Logit problem
-    configured with some of the fake cereal data from :ref:`Nevo (2000) <n00>`.
+    Examples
+    --------
+    .. toctree::
 
-    .. ipython:: python
-
-       product_data = np.recfromcsv(pyblp.data.NEVO_PRODUCTS_LOCATION, encoding='utf-8')
-       formulation = pyblp.Formulation('0 + prices', absorb='C(product_ids)')
-       problem = pyblp.Problem(formulation, product_data)
-       results = problem.solve()
-       with pyblp.parallel(2):
-            elasticities = results.compute_elasticities()
-       elasticities
-
-    Solving a Logit problem does not require market-by-market computation, so parallelization does not change its
-    estimation procedure. Although elasticity computation does happen market-by-market, this problem is very small, so
-    there are no gains from parallelization in this example.
-
-    If the problem were much larger, running :meth:`Problem.solve` and :meth:`ProblemResults.compute_elasticities` under
-    the ``with`` statement could substantially speed up estimation and elasticity computation.
-
-    For more examples, refer to the :doc:`Examples </examples>` section.
+       /notebooks/api/parallel.ipynb
 
     """
 

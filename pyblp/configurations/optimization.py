@@ -110,38 +110,9 @@ class Optimization(StringRepresentation):
 
     Examples
     --------
-    In this example, we'll build a SLSQP configuration with a non-default tolerance.
+    .. toctree::
 
-    .. ipython:: python
-
-       optimization = pyblp.Optimization('slsqp', {'tol': 1e-10})
-       optimization
-
-    Next, instead of using a non-custom routine, we'll create a custom method that implements a grid search over
-    parameter values between specified bounds.
-
-    .. ipython:: python
-
-       from itertools import product
-       def custom_method(initial, bounds, objective_function, iteration_callback):
-           best_values = initial
-           best_objective = np.inf
-           for values in product(*(np.linspace(l, u, 10) for l, u in bounds)):
-               objective = objective_function(values)
-               if objective < best_objective:
-                   best_values = values
-                   best_objective = objective
-               iteration_callback()
-           return best_values, True
-
-    We can then use this custom method to build an optimization configuration.
-
-    .. ipython:: python
-
-       optimization = pyblp.Optimization(custom_method, compute_gradient=False)
-       optimization
-
-    For more examples, refer to the :doc:`Examples </examples>` section.
+       /notebooks/api/optimization.ipynb
 
     """
 

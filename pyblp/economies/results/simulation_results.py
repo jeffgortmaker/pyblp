@@ -41,8 +41,7 @@ class SimulationResults(StringRepresentation):
 
     Examples
     --------
-    For an example of turning these results into a :class:`Problem` and then solving the problem, refer to the
-    :doc:`Examples </examples>` section.
+        - :doc:`Tutorial </tutorial>`
 
     """
 
@@ -110,6 +109,10 @@ class SimulationResults(StringRepresentation):
         -------
         `Problem`
             A BLP problem.
+
+        Examples
+        --------
+            - :doc:`Tutorial </tutorial>`
 
         """
         from ..problem import Problem  # noqa

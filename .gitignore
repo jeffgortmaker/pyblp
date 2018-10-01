@@ -60,6 +60,5 @@ build
 .pytest_cache
 
 # documentation generated files
-docs/api
-docs/images
+docs/_api
 docs/_build

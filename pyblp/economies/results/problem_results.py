@@ -164,7 +164,7 @@ class ProblemResults(AbstractProblemResults):
 
     Examples
     --------
-    For examples of how to use class methods, refer to the :doc:`Examples </examples>` section.
+        - :doc:`Tutorial </tutorial>`
 
     """
 
@@ -484,6 +484,10 @@ class ProblemResults(AbstractProblemResults):
         `BootstrappedProblemResults`
             Computed :class:`BootstrappedProblemResults`.
 
+        Examples
+        --------
+            - :doc:`Tutorial </tutorial>`
+
         """
         errors: List[Error] = []
 
@@ -671,6 +675,10 @@ class ProblemResults(AbstractProblemResults):
         -------
         `OptimalInstrumentResults`
            Computed :class:`OptimalInstrumentResults`.
+
+        Examples
+        --------
+            - :doc:`Tutorial </tutorial>`
 
         """
         errors: List[Error] = []

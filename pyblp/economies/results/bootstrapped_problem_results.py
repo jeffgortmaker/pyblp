@@ -60,7 +60,7 @@ class BootstrappedProblemResults(AbstractProblemResults):
 
     Examples
     --------
-    For an example of how to use this class, refer to the :doc:`Examples </examples>` section.
+        - :doc:`Tutorial </tutorial>`
 
     """
 

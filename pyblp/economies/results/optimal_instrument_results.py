@@ -54,7 +54,7 @@ class OptimalInstrumentResults(StringRepresentation):
 
     Examples
     --------
-    For an example of how to use this class, refer to the :doc:`Examples </examples>` section.
+        - :doc:`Tutorial </tutorial>`
 
     """
 
@@ -128,8 +128,7 @@ class OptimalInstrumentResults(StringRepresentation):
 
         Examples
         --------
-        For an example of turning these results into a :class:`Problem`, refer to the :doc:`Examples </examples>`
-        section.
+            - :doc:`Tutorial </tutorial>`
 
         """
         from ..problem import OptimalInstrumentProblem  # noqa
