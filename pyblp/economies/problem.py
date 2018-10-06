@@ -59,7 +59,7 @@ class AbstractProblem(AbstractEconomy):
         .. note::
 
            This method supports :func:`parallel` processing. If multiprocessing is used, market-by-market computation of
-           :math:`\delta(\hat{\theta})` and, if :math:`X_3` was formulated by `product_formulations` in
+           :math:`\delta(\hat{\theta})` and, if :math:`X_3` was formulated by ``product_formulations`` in
            :class:`Problem`, of :math:`\tilde{c}(\hat{\theta})`, along with associated Jacobians, will be distributed
            among the processes.
 
@@ -68,71 +68,71 @@ class AbstractProblem(AbstractEconomy):
         sigma : `array-like, optional`
             Configuration for which elements in the Cholesky decomposition of the covariance matrix that measures
             agents' random taste distribution, :math:`\Sigma`, are fixed at zero and starting values for the other
-            elements, which, if not fixed by `sigma_bounds`, are in the vector of unknown elements, :math:`\theta`. Rows
-            and columns correspond to columns in :math:`X_2`, which is formulated according `product_formulations` in
-            :class:`Problem`. If :math:`X_2` was not formulated, this should not be specified, since the Logit model
-            will be estimated.
+            elements, which, if not fixed by ``sigma_bounds``, are in the vector of unknown elements, :math:`\theta`.
+            Rows and columns correspond to columns in :math:`X_2`, which is formulated according
+            ``product_formulations`` in :class:`Problem`. If :math:`X_2` was not formulated, this should not be
+            specified, since the Logit model will be estimated.
 
             Values below the diagonal are ignored. Zeros are assumed to be zero throughout estimation and nonzeros are,
-            if not fixed by `sigma_bounds`, starting values for unknown elements in :math:`\theta`.
+            if not fixed by ``sigma_bounds``, starting values for unknown elements in :math:`\theta`.
 
         pi : `array-like, optional`
             Configuration for which elements in the matrix of parameters that measures how agent tastes vary with
             demographics, :math:`\Pi`, are fixed at zero and starting values for the other elements, which, if not fixed
-            by `pi_bounds`, are in the vector of unknown elements, :math:`\theta`. Rows correspond to the same product
-            characteristics as in `sigma`. Columns correspond to columns in :math:`d`, which is formulated according to
-            `agent_formulation` in :class:`Problem`. If :math:`d` was not formulated, this should not be specified.
+            by ``pi_bounds``, are in the vector of unknown elements, :math:`\theta`. Rows correspond to the same product
+            characteristics as in ``sigma``. Columns correspond to columns in :math:`d`, which is formulated according
+            to ``agent_formulation`` in :class:`Problem`. If :math:`d` was not formulated, this should not be specified.
 
-            Zeros are assumed to be zero throughout estimation and nonzeros are, if not fixed by `pi_bounds`, starting
+            Zeros are assumed to be zero throughout estimation and nonzeros are, if not fixed by ``pi_bounds``, starting
             values for unknown elements in :math:`\theta`.
 
         rho : `array-like, optional`
             Configuration for which elements in the vector of parameters that measure within nesting group correlation,
             :math:`\rho`, are fixed at zero and starting values for the other elements, which, if not fixed by
-            `rho_bounds`, are in the vector of unknown elements, :math:`\theta`. If there is only one element, it
-            corresponds to all groups defined by the `nesting_ids` field of `product_data` in :class:`Problem`. If there
-            is more than one element, there must be as many elements as :math:`H`, the number of distinct nesting
+            ``rho_bounds``, are in the vector of unknown elements, :math:`\theta`. If there is only one element, it
+            corresponds to all groups defined by the ``nesting_ids`` field of ``product_data`` in :class:`Problem`. If
+            there is more than one element, there must be as many elements as :math:`H`, the number of distinct nesting
             groups, and elements correspond to group IDs in the sorted order given by
             :attr:`Problem.unique_nesting_ids`. If nesting IDs were not specified, this should not be specified either.
 
-            Zeros are assumed to be zero throughout estimation and nonzeros are, if not fixed by `rho_bounds`, starting
-            values for unknown elements in :math:`\theta`.
+            Zeros are assumed to be zero throughout estimation and nonzeros are, if not fixed by ``rho_bounds``,
+            starting values for unknown elements in :math:`\theta`.
 
         sigma_bounds : `tuple, optional`
             Configuration for :math:`\Sigma` bounds of the form ``(lb, ub)``, in which both ``lb`` and ``ub`` are of the
-            same size as `sigma`. Each element in ``lb`` and ``ub`` determines the lower and upper bound for its
-            counterpart in `sigma`. If `optimization` does not support bounds, these will be ignored.
+            same size as ``sigma``. Each element in ``lb`` and ``ub`` determines the lower and upper bound for its
+            counterpart in ``sigma``. If ``optimization`` does not support bounds, these will be ignored.
 
-            By default, if bounds are supported, the diagonal of `sigma` is bounded from below by zero. Conditional on
+            By default, if bounds are supported, the diagonal of ``sigma`` is bounded from below by zero. Conditional on
             :math:`X_2`, :math:`\nu`, and an initial estimate of :math:`\mu`, default bounds for off-diagonal parameters
             are chosen to reduce the chance of overflow.
 
-            Values below the diagonal are ignored. Lower and upper bounds corresponding to zeros in `sigma` are set to
+            Values below the diagonal are ignored. Lower and upper bounds corresponding to zeros in ``sigma`` are set to
             zero. Setting a lower bound equal to an upper bound fixes the corresponding element. Both ``None`` and
             ``numpy.nan`` are converted to ``-numpy.inf`` in ``lb`` and to ``numpy.inf`` in ``ub``.
 
         pi_bounds : `tuple, optional`
             Configuration for :math:`\Pi` bounds of the form ``(lb, ub)``, in which both ``lb`` and ``ub`` are of the
-            same size as `pi`. Each element in ``lb`` and ``ub`` determines the lower and upper bound for its
-            counterpart in `pi`. If `optimization` does not support bounds, these will be ignored.
+            same size as ``pi``. Each element in ``lb`` and ``ub`` determines the lower and upper bound for its
+            counterpart in ``pi``. If ``optimization`` does not support bounds, these will be ignored.
 
             By default, if bounds are supported, conditional on :math:`X_2`, :math:`d`, and an initial estimate of
             :math:`\mu`, default bounds are chosen to reduce the chance of overflow.
 
-            Lower and upper bounds corresponding to zeros in `pi` are set to zero. Setting a lower bound equal to an
+            Lower and upper bounds corresponding to zeros in ``pi`` are set to zero. Setting a lower bound equal to an
             upper bound fixes the corresponding element. Both ``None`` and ``numpy.nan`` are converted to ``-numpy.inf``
             in ``lb`` and to ``numpy.inf`` in ``ub``.
 
         rho_bounds : `tuple, optional`
             Configuration for :math:`\rho` bounds of the form ``(lb, ub)``, in which both ``lb`` and ``ub`` are of the
-            same size as `rho`. Each element in ``lb`` and ``ub`` determines the lower and upper bound for its
-            counterpart in `rho`. If `optimization` does not support bounds, these will be ignored.
+            same size as ``rho``. Each element in ``lb`` and ``ub`` determines the lower and upper bound for its
+            counterpart in ``rho``. If ``optimization`` does not support bounds, these will be ignored.
 
             By default, if bounds are supported, all elements are bounded from below by ``0``, which corresponds to the
             simple Logit model. Conditional on an initial estimate of :math:`\mu`, upper bounds are chosen to reduce the
             chance of overflow and are less than ``1`` because larger values are inconsistent with utility maximization.
 
-            Lower and upper bounds corresponding to zeros in `rho` are set to zero. Setting a lower bound equal to an
+            Lower and upper bounds corresponding to zeros in ``rho`` are set to zero. Setting a lower bound equal to an
             upper bound fixes the corresponding element. Both ``None`` and ``numpy.nan`` are converted to ``-numpy.inf``
             in ``lb`` and to ``numpy.inf`` in ``ub``.
 
@@ -143,7 +143,7 @@ class AbstractProblem(AbstractEconomy):
 
             .. math:: \delta_{jt} = \log s_{jt} - \log s_{0t}.
 
-            If there is nesting, the solution to the nested Logit model under the initial `rho` is used instead:
+            If there is nesting, the solution to the nested Logit model under the initial ``rho`` is used instead:
 
             .. math:: \delta_{jt} = \log s_{jt} - \log s_{0t} - \rho_{h(j)}\log\frac{s_{jt}}{s_{h(j)t}}
 
@@ -156,7 +156,7 @@ class AbstractProblem(AbstractEconomy):
             :math:`W_D = (Z_D'Z_D)^{-1}`, is used.
         WS : `array-like, optional`
             Starting values for the supply-side weighting matrix, :math:`W_S`, which is only used if :math:`X_3` was
-            formulated by `product_formulations` in :class:`Problem`. By default, the 2SLS weighting matrix,
+            formulated by ``product_formulations`` in :class:`Problem`. By default, the 2SLS weighting matrix,
             :math:`W_S = (Z_S'Z_S)^{-1}`, is used.
         method : `str, optional`
             The estimation routine that will be used. The following methods are supported:
@@ -172,8 +172,8 @@ class AbstractProblem(AbstractEconomy):
         optimization : `Optimization, optional`
             :class:`Optimization` configuration for how to solve the optimization problem in each GMM step, which is
             only used if there are unfixed nonlinear parameters over which to optimize. By default,
-            ``Optimization('l-bfgs-b')`` is used. Routines that do not support bounds will ignore `sigma_bounds` and
-            `pi_bounds`. Choosing a routine that does not use analytic gradients will slow down estimation.
+            ``Optimization('l-bfgs-b')`` is used. Routines that do not support bounds will ignore ``sigma_bounds`` and
+            ``pi_bounds``. Choosing a routine that does not use analytic gradients will slow down estimation.
         error_behavior : `str, optional`
             How to handle any errors. For example, it is common to encounter overflow when computing
             :math:`\delta(\hat{\theta})` at a large :math:`\hat{\theta}`. The following behaviors are supported:
@@ -191,7 +191,7 @@ class AbstractProblem(AbstractEconomy):
                   objective to ``1e10`` and its gradient to zeros.
 
                 - ``'punish'`` - Set the objective to ``1`` and its gradient to all zeros. This option along with a
-                  large `error_punishment` can be helpful for routines that do not use analytic gradients.
+                  large ``error_punishment`` can be helpful for routines that do not use analytic gradients.
 
                 - ``'raise'`` - Raise an exception.
 
@@ -203,11 +203,11 @@ class AbstractProblem(AbstractEconomy):
             to optimize. The following behaviors are supported:
 
                 - ``'last'`` (default) - Start at the values of :math:`\delta(\hat{\theta})` computed during the last
-                  objective evaluation, or, if this is the first evaluation, at the values configured by `delta`. This
+                  objective evaluation, or, if this is the first evaluation, at the values configured by ``delta``. This
                   behavior tends to speed up computation but may introduce noise into gradient computation, especially
                   when the fixed point iteration tolerance is low.
 
-                - ``'first'`` - Start at the values configured by `delta` during the first GMM step, and at the values
+                - ``'first'`` - Start at the values configured by ``delta`` during the first GMM step, and at the values
                   computed by the last GMM step for each subsequent step. This behavior is more conservative and will
                   often be slower.
 
@@ -231,7 +231,7 @@ class AbstractProblem(AbstractEconomy):
                   .. math:: \exp(\delta_{jt}) \leftarrow \exp(\delta_{jt})s_{jt} / s_{jt}(\delta, \hat{\theta}),
 
                   which can be faster because fewer logarithms need to be calculated. Additionally, when there are no
-                  nesting parameters, as in :ref:`Brunner, Heiss, Romahn, and Weiser (2017) <bhrw17>`,
+                  nesting parameters, as in :ref:`references:Brunner, Heiss, Romahn, and Weiser (2017)`,
                   :math:`\exp(\delta)` is cancelled out of the numerator in the expression for
                   :math:`s(\delta, \hat{\theta})`, which slightly reduces the computational burden. This formulation can
                   also help mitigate problems stemming from any negative integration weights; however, without
@@ -247,15 +247,15 @@ class AbstractProblem(AbstractEconomy):
 
                 - ``'log'`` - Log-linear specification: :math:`\tilde{c} = \log c`.
 
-            This specification is only relevant if :math:`X_3` was formulated by `product_formulations` in
+            This specification is only relevant if :math:`X_3` was formulated by ``product_formulations`` in
             :class:`Problem`.
 
         costs_bounds : `tuple, optional`
             Configuration for :math:`c` bounds of the form ``(lb, ub)``, in which both ``lb`` and ``ub`` are floats.
-            This is only relevant if :math:`X_3` was formulated by `product_formulations` in :class:`Problem`. By
+            This is only relevant if :math:`X_3` was formulated by ``product_formulations`` in :class:`Problem`. By
             default, marginal costs are unbounded.
 
-            When `costs_type` is ``'log'``, nonpositive :math:`c(\hat{\theta})` values can create problems when
+            When ``costs_type`` is ``'log'``, nonpositive :math:`c(\hat{\theta})` values can create problems when
             computing :math:`\tilde{c}(\hat{\theta}) = \log c(\hat{\theta})`. One solution is to set ``lb`` to a small
             number. Rows in Jacobians associated with clipped marginal costs will be zero.
 
@@ -263,21 +263,21 @@ class AbstractProblem(AbstractEconomy):
 
         center_moments : `bool, optional`
             Whether to center the sample moments before using them to update weighting matrices. By default, sample
-            moments are centered. This has no effect if `W_type` is ``'unadjusted'``.
+            moments are centered. This has no effect if ``W_type`` is ``'unadjusted'``.
         W_type : `str, optional`
-            How to update weighting matrices. This has no effect if `method` is ``'1s'``. Often, `se_type` should be the
-            same. The following types are supported:
+            How to update weighting matrices. This has no effect if ``method`` is ``'1s'``. Often, ``se_type`` should be
+            the same. The following types are supported:
 
                 - ``'robust'`` (default) - Heteroscedasticity robust weighting matrices.
 
                 - ``'unadjusted'`` - Homoskedastic weighting matrices. Errors are always centered when computing this
-                  type of weighting matrix, so `center_moments` has no effect.
+                  type of weighting matrix, so ``center_moments`` has no effect.
 
                 - ``'clustered'`` - Clustered weighting matrices, which account for arbitrary within-group correlation.
-                  Clusters must be defined by the `clustering_ids` field of `product_data` in :class:`Problem`.
+                  Clusters must be defined by the ``clustering_ids`` field of ``product_data`` in :class:`Problem`.
 
         se_type : `str, optional`
-            How to compute standard errors. Often, `W_type` should be the same. The following types are supported:
+            How to compute standard errors. Often, ``W_type`` should be the same. The following types are supported:
 
                 - ``'robust'`` (default) - Heteroscedasticity robust standard errors.
 
@@ -285,7 +285,7 @@ class AbstractProblem(AbstractEconomy):
                   assumption that weighting matrices are optimal.
 
                 - ``'clustered'`` - Clustered standard errors, which account for arbitrary within-group correlation.
-                  Clusters must be defined by the `clustering_ids` field of `product_data` in :class:`Problem`.
+                  Clusters must be defined by the ``clustering_ids`` field of ``product_data`` in :class:`Problem`.
 
         Returns
         -------
@@ -745,11 +745,11 @@ class Problem(AbstractProblem):
 
     This class is initialized with relevant data and solved with :meth:`Problem.solve`.
 
-    In both `product_data` and `agent_data`, fields with multiple columns can be either matrices or can be broken up
+    In both ``product_data`` and ``agent_data``, fields with multiple columns can be either matrices or can be broken up
     into multiple one-dimensional fields with column index suffixes that start at zero. For example, if there are three
-    columns of excluded demand-side instruments, the `demand_instruments` field in `product_data`, which in this case
-    should be a matrix with three columns, can be replaced by three one-dimensional fields: `demand_instruments0`,
-    `demand_instruments1`, and `demand_instruments2`.
+    columns of excluded demand-side instruments, the ``demand_instruments`` field in ``product_data``, which in this
+    case should be a matrix with three columns, can be replaced by three one-dimensional fields:
+    ``demand_instruments0``, ``demand_instruments1``, and ``demand_instruments2``.
 
     Parameters
     ----------
@@ -760,12 +760,12 @@ class Problem(AbstractProblem):
         :math:`X_3` is not specified or is ``None``, a supply side will not be estimated. Similarly, if the formulation
         for :math:`X_2` is not specified or is ``None``, the Logit model will be estimated.
 
-        Variable names should correspond to fields in `product_data`. The ``shares`` variable should not be included in
-        any of the formulations and ``prices`` should be included in the formulation for :math:`X_1` or :math:`X_2` (or
-        both). The `absorb` argument of :class:`Formulation` can be used to absorb fixed effects into :math:`X_1` and
-        :math:`X_3`, but not :math:`X_2`. Generally speaking, all exogenous characteristics in :math:`X_2` should also
-        be included in :math:`X_1`. The exception is characteristics that are collinear with fixed effects in
-        :math`X_1`.
+        Variable names should correspond to fields in ``product_data``. The ``shares`` variable should not be included
+        in any of the formulations and ``prices`` should be included in the formulation for :math:`X_1` or :math:`X_2`
+        (or both). The ``absorb`` argument of :class:`Formulation` can be used to absorb fixed effects into :math:`X_1`
+        and :math:`X_3`, but not :math:`X_2`. Generally speaking, all exogenous characteristics in :math:`X_2` should
+        also be included in :math:`X_1`. The exception is characteristics that are collinear with fixed effects in
+        :math:`X_1`.
 
         Characteristics in :math:`X_1` that do not involve ``prices`` will be combined with the below specified excluded
         demand-side instruments to create the full set of demand-side instruments, :math:`Z_D`. Any fixed effects
@@ -780,7 +780,7 @@ class Problem(AbstractProblem):
            be erroneously included in :math:`Z_D`, and derivatives computed with respect to prices (which are computed
            during supply-side estimation and post-estimation routines) will likely be wrong. For example, to include a
            :math:`p^2` characteristic, include ``I(prices**2)`` in a formula instead of manually including a
-           ``prices_squared`` variable in `product_data` and a formula.
+           ``prices_squared`` variable in ``product_data`` and a formula.
 
     product_data : `structured array-like`
         Each row corresponds to a product. Markets can have differing numbers of products. The following fields are
@@ -796,8 +796,8 @@ class Problem(AbstractProblem):
               formulated exogenous linear product characteristics (:math:`X_1` except for characteristics involving
               ``prices``, :math:`X_1^p`), constitute the full set of demand-side instruments, :math:`Z_D`.
 
-        If a formulation for :math:`X_3` is specified in `product_formulations`, the following fields are also required,
-        since they will be used to estimate the supply side of the problem:
+        If a formulation for :math:`X_3` is specified in ``product_formulations``, the following fields are also
+        required, since they will be used to estimate the supply side of the problem:
 
             - **firm_ids** : (`object, optional`) - IDs that associate products with firms. Any columns after the first
               can be used to compute post-estimation outputs for firm changes, such as mergers.
@@ -806,58 +806,59 @@ class Problem(AbstractProblem):
               formulated cost characteristics, :math:`X_3`, constitute the full set of supply-side instruments,
               :math:`Z_S`.
 
-        In addition to supply-side estimation, the `firm_ids` field is also needed to compute some post-estimation
-        outputs. If `firm_ids` are specified, custom ownership matrices can be specified as well:
+        In addition to supply-side estimation, the ``firm_ids`` field is also needed to compute some post-estimation
+        outputs. If ``firm_ids`` are specified, custom ownership matrices can be specified as well:
 
             - **ownership** : (`numeric, optional`) - Custom stacked :math:`J_t \times J_t` ownership matrices,
               :math:`O`, for each market :math:`t`, which can be built with :func:`build_ownership`. By default,
               standard ownership matrices are built only when they are needed. If specified, each stack is associated
-              with a `firm_ids` column and must have as many columns as there are products in the market with the most
+              with a ``firm_ids`` column and must have as many columns as there are products in the market with the most
               products.
 
         To estimate a nested Logit or random coefficients nested Logit (RCNL) model, nesting groups must be specified:
 
             - **nesting_ids** (`object, optional`) - IDs that associate products with nesting groups. When these IDs are
-              specified, `rho` in :meth:`Problem.solve`, the vector of parameters that measure within nesting group
+              specified, ``rho`` in :meth:`Problem.solve`, the vector of parameters that measure within nesting group
               correlation, must be specified as well.
 
         Finally, clustering groups can be specified to account for arbitrary within-group correlation while computing
         standard errors and weighting matrices:
 
             - **clustering_ids** (`object, optional`) - Cluster group IDs, which will be used when estimating standard
-              errors and updating weighting matrices if `covariance_type` in :meth:`Problem.solve` is ``'clustered'``.
+              errors and updating weighting matrices if ``covariance_type`` in :meth:`Problem.solve` is ``'clustered'``.
 
-        Along with `market_ids`, `firm_ids`, `nesting_ids`, `clustering_ids`, and `prices`, the names of any additional
-        fields can be used as variables in `product_formulations`.
+        Along with ``market_ids``, ``firm_ids``, ``nesting_ids``, ``clustering_ids``, and ``prices``, the names of any
+        additional fields can be used as variables in ``product_formulations``.
 
     agent_formulation : `Formulation, optional`
         :class:`Formulation` configuration for the matrix of observed agent characteristics called demographics,
         :math:`d`, which will only be included in the model if this formulation is specified. Since demographics are
         only used if there are nonlinear product characteristics, this formulation should only be specified if
-        :math:`X_2` is formulated in `product_formulations`. Variable names should correspond to fields in `agent_data`.
+        :math:`X_2` is formulated in ``product_formulations``. Variable names should correspond to fields in
+        ``agent_data``.
     agent_data : `structured array-like, optional`
         Each row corresponds to an agent. Markets can have differing numbers of agents. Since simulated agents are only
         used if there are nonlinear product characteristics, agent data should only be specified if :math:`X_2` is
-        formulated in `product_formulations`. If agent data are specified, market IDs are required:
+        formulated in ``product_formulations``. If agent data are specified, market IDs are required:
 
             - **market_ids** : (`object`) - IDs that associate agents with markets. The set of distinct IDs should be
-              the same as the set of IDs in `product_data`. If `integration` is specified, there must be at least as
+              the same as the set of IDs in ``product_data``. If ``integration`` is specified, there must be at least as
               many rows in each market as the number of nodes and weights that are built for each market.
 
-        If `integration` is not specified, the following fields are required:
+        If ``integration`` is not specified, the following fields are required:
 
             - **weights** : (`numeric, optional`) - Integration weights, :math:`w`.
 
             - **nodes** : (`numeric, optional`) - Unobserved agent characteristics called integration nodes,
               :math:`\nu`. If there are more than :math:`K_2` columns, only the first :math:`K_2` will be used.
 
-        Along with `market_ids`, the names of any additional fields can be used as variables in `agent_formulation`.
+        Along with ``market_ids``, the names of any additional fields can be used as variables in ``agent_formulation``.
 
     integration : `Integration, optional`
         :class:`Integration` configuration for how to build nodes and weights for integration over agent utilities,
-        which will replace any `nodes` and `weights` fields in `agent_data`. This configuration is required if `nodes`
-        and `weights` in `agent_data` are not specified. It should not be specified if :math:`X_2` is not formulated
-        in `product_formulations`.
+        which will replace any ``nodes`` and ``weights`` fields in ``agent_data``. This configuration is required if
+        ``nodes`` and ``weights`` in ``agent_data`` are not specified. It should not be specified if :math:`X_2` is not
+        formulated in ``product_formulations``.
 
     Attributes
     ----------
@@ -866,11 +867,11 @@ class Problem(AbstractProblem):
     agent_formulation : `Formulation`
         :class:`Formulation` configuration for :math:`d`.
     products : `Products`
-        Product data structured as :class:`Products`, which consists of data taken from `product_data` along with
+        Product data structured as :class:`Products`, which consists of data taken from ``product_data`` along with
         matrices build according to :attr:`Problem.product_formulations`.
     agents : `Agents`
-        Agent data structured as :class:`Agents`, which consists of data taken from `agent_data` or built by
-        `integration` along with any demographics formulated by `agent_formulation`.
+        Agent data structured as :class:`Agents`, which consists of data taken from ``agent_data`` or built by
+        ``integration`` along with any demographics formulated by ``agent_formulation``.
     unique_market_ids : `ndarray`
         Unique market IDs in product and agent data.
     unique_nesting_ids : `ndarray`

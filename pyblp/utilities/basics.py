@@ -55,7 +55,7 @@ def parallel(processes: int) -> Iterator[None]:
     --------
     .. toctree::
 
-       /notebooks/api/parallel.ipynb
+       /_notebooks/api/parallel.ipynb
 
     """
 
@@ -326,7 +326,7 @@ class Error(Exception):
 
         # normalize references
         while True:
-            match = re.search(r':ref:`([^`]+)`', doc)
+            match = re.search(r':ref:`[a-zA-Z0-9]+:([^`]+)`', doc)
             if match is None:
                 break
             start, end = match.span()

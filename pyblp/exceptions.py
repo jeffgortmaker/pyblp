@@ -275,7 +275,8 @@ class OmegaByBetaJacobianReversionError(_MultipleReversionError):
 
 
 class AbsorptionInversionError(_InversionError):
-    """Failed to invert the A matrix from :ref:`Somaini and Wolak (2016) <sw16>` when absorbing two-way fixed effects.
+    """Failed to invert the A matrix from :ref:`references:Somaini and Wolak (2016)` when absorbing two-way fixed
+    effects.
 
     The formulated fixed effects may be highly collinear.
 

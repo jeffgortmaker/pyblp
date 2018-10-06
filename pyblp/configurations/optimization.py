@@ -58,13 +58,13 @@ class Optimization(StringRepresentation):
 
             method(initial, bounds, objective_function, iteration_callback, **options) -> (final, converged)
 
-        where `initial` is an array of initial parameter values, `bounds` is a list of ``(min, max)`` pairs for each
-        element in `initial`, `objective_function` is a callable objective function that accepts an array of parameter
-        values and returns either the objective value if `compute_gradient` is ``False`` or a tuple of the objective
-        value and its gradient if ``True``, `iteration_callback` is a function that should be called without any
-        arguments after each major iteration (it is used to record the number of major iterations), `options` are
-        specified below, `final` is an array of optimized parameter values, and `converged` is a flag for whether the
-        routine converged.
+        where ``initial`` is an array of initial parameter values, ``bounds`` is a list of ``(min, max)`` pairs for each
+        element in ``initial``, ``objective_function`` is a callable objective function that accepts an array of
+        parameter values and returns either the objective value if ``compute_gradient`` is ``False`` or a tuple of the
+        objective value and its gradient if ``True``, ``iteration_callback`` is a function that should be called without
+        any arguments after each major iteration (it is used to record the number of major iterations), ``options`` are
+        specified below, ``final`` is an array of optimized parameter values, and ``converged`` is a flag for whether
+        the routine converged.
 
         To simply evaluate a problem's objective at the initial parameter values, the trivial custom method
         ``lambda x, *_: (x, True)`` can be used.
@@ -72,13 +72,14 @@ class Optimization(StringRepresentation):
     method_options : `dict, optional`
         Options for the optimization routine.
 
-        For any non-custom `method` other than ``'knitro'`` and ``'return'``, these options will be passed to `options`
-        in :func:`scipy.optimize.minimize`. Refer to the SciPy documentation for information about which options are
-        available for each optimization routine.
+        For any non-custom ``method`` other than ``'knitro'`` and ``'return'``, these options will be passed to
+        ``options`` in :func:`scipy.optimize.minimize`. Refer to the SciPy documentation for information about which
+        options are available for each optimization routine.
 
-        If `method` is ``'knitro'``, these options should be
+        If ``method`` is ``'knitro'``, these options should be
         `Knitro user options <https://www.artelys.com/tools/knitro_doc/3_referenceManual/userOptions.html>`_. The
-        non-standard `knitro_dir` option can also be specified. The following options have non-standard default values:
+        non-standard ``knitro_dir`` option can also be specified. The following options have non-standard default
+        values:
 
             - **knitro_dir** : (`str`) - By default, the KNITRODIR environment variable is used. Otherwise, this
               option should point to the installation directory of Knitro, which contains direct subdirectories such as
@@ -89,7 +90,7 @@ class Optimization(StringRepresentation):
               corresponds to the Interior/Direct algorithm.
 
             - **gradopt** : (`int`) - How the objective's gradient is computed. The default value is ``1`` if
-              `compute_gradient` is ``True`` and is ``2`` otherwise, which corresponds to estimating the gradient with
+              ``compute_gradient`` is ``True`` and is ``2`` otherwise, which corresponds to estimating the gradient with
               finite differences.
 
             - **hessopt** : (`int`) - How the objective's Hessian is computed. The default value is ``2``, which
@@ -100,19 +101,19 @@ class Optimization(StringRepresentation):
               the bounds.
 
     compute_gradient : `bool, optional`
-        Whether to compute an analytic objective gradient during optimization, which must be ``False`` if `method` does
-        not use analytic gradients, and must be ``True`` if `method` is ``'newton-cg'``, which requires an analytic
-        gradient. By default, analytic gradients are computed. If ``False``, an analytic gradient may still be computed
-        once at the end of optimization to compute optimization results.
+        Whether to compute an analytic objective gradient during optimization, which must be ``False`` if ``method``
+        does not use analytic gradients, and must be ``True`` if ``method`` is ``'newton-cg'``, which requires an
+        analytic gradient. By default, analytic gradients are computed. If ``False``, an analytic gradient may still be
+        computed once at the end of optimization to compute optimization results.
     universal_display : `bool, optional`
         Whether to format optimization progress such that the display looks the same for all routines. By default, the
-        universal display is used and some `method_options` are used to prevent default displays from showing up.
+        universal display is used and some ``method_options`` are used to prevent default displays from showing up.
 
     Examples
     --------
     .. toctree::
 
-       /notebooks/api/optimization.ipynb
+       /_notebooks/api/optimization.ipynb
 
     """
 

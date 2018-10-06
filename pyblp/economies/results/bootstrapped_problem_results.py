@@ -28,15 +28,15 @@ class BootstrappedProblemResults(AbstractProblemResults):
         :class:`ProblemResults` that was used to compute these optimal instrument results.
     bootstrapped_sigma : `ndarray`
         Bootstrapped Cholesky decomposition of the covariance matrix that measures agents' random taste distribution,
-        :math:\Sigma`.
+        :math:`\Sigma`.
     bootstrapped_pi : `ndarray`
-        Bootstrapped parameters that measures how agent tastes vary with demographics, :math:\Pi`.
+        Bootstrapped parameters that measures how agent tastes vary with demographics, :math:`\Pi`.
     bootstrapped_rho : `ndarray`
-        Bootstrapped parameters that measure within nesting group correlations, :math:\rho`.
+        Bootstrapped parameters that measure within nesting group correlations, :math:`\rho`.
     bootstrapped_beta : `ndarray`
-        Bootstrapped demand-side linear parameters, :math:\beta`.
+        Bootstrapped demand-side linear parameters, :math:`\beta`.
     bootstrapped_gamma : `ndarray`
-        Bootstrapped supply-side linear parameters, :math:\gamma`.
+        Bootstrapped supply-side linear parameters, :math:`\gamma`.
     bootstrapped_prices : `ndarray`
         Bootstrapped prices, :math:`p`. If a supply-side was not estimated, these are unchanged prices. Otherwise, they
         are equilibrium prices implied by each draw.

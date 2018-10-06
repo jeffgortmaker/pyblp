@@ -114,15 +114,15 @@ class ProblemResults(AbstractProblemResults):
         Estimated transformed marginal costs, :math:`\tilde{c}(\hat{\theta})`, which may have been residualized to
         absorb any demand-side fixed effects. Transformed marginal costs are simply :math:`\tilde{c} = c`, marginal
         costs, under a linear cost specification, and are :math:`\tilde{c} = \log c` under a log-linear specification.
-        If `costs_bounds` were specified in :meth:`Problem.solve`, :math:`c` may have been clipped.
+        If ``costs_bounds`` were specified in :meth:`Problem.solve`, :math:`c` may have been clipped.
     true_tilde_costs : `ndarray`
         Estimated transformed marginal costs, :math:`\tilde{c}(\hat{\theta})`. Transformed marginal costs are simply
         :math:`\tilde{c} = c`, marginal costs, under a linear cost specification, and are :math:`\tilde{c} = \log c`
-        under a log-linear specification. If `costs_bounds` were specified in :meth:`Problem.solve`, :math:`c` may have
-        been clipped.
+        under a log-linear specification. If ``costs_bounds`` were specified in :meth:`Problem.solve`, :math:`c` may
+        have been clipped.
     clipped_costs : `ndarray`
         Vector of booleans indicating whether the associated marginal costs were clipped. All elements will be ``False``
-        if `costs_bounds` in :meth:`Problem.solve` was not specified.
+        if ``costs_bounds`` in :meth:`Problem.solve` was not specified.
     xi : `ndarray`
         Estimated unobserved demand-side product characteristics, :math:`\xi(\hat{\theta})`, or equivalently, the
         demand-side structural error term, which includes the contribution of any absorbed demand-side fixed effects.
@@ -455,13 +455,13 @@ class ProblemResults(AbstractProblemResults):
         parameters are used to compute the implied mean utility, :math:`\delta`, and shares, :math:`s`. If a supply side
         was estimated, the implied marginal costs, :math:`c`, and prices, :math:`p`, are computed as well. Specifically,
         if a supply side was estimated, equilibrium prices and shares are computed by iterating over the
-        :math:`\zeta`-markup equation from :ref:`Morrow and Skerlos (2011) <ms11>`.
+        :math:`\zeta`-markup equation from :ref:`references:Morrow and Skerlos (2011)`.
 
         .. note::
 
            By default, the bootstrapping procedure can use a lot of memory. This is because it stores in memory all
-           bootstrapped results (for all `draws`) at the same time. To reduce the memory footprint of the procedure,
-           call this method in a loop with `draws` set to ``1``. In each iteration of the loop, compute the desired
+           bootstrapped results (for all ``draws``) at the same time. To reduce the memory footprint of the procedure,
+           call this method in a loop with ``draws`` set to ``1``. In each iteration of the loop, compute the desired
            post-estimation output with the proper method of the returned :class:`BootstrappedProblemResults` class and
            store these outputs.
 
@@ -475,8 +475,8 @@ class ProblemResults(AbstractProblemResults):
             By default, a seed is not passed to the random number generator.
         iteration : `Iteration, optional`
             :class:`Iteration` configuration used to compute bootstrapped prices by iterating over the
-            :math:`\zeta`-markup equation from :ref:`Morrow and Skerlos (2011) <ms11>`. By default, if a supply side was
-            estimated, this is ``Iteration('simple', {'tol': 1e-12})``. It is not used if a supply side was not
+            :math:`\zeta`-markup equation from :ref:`references:Morrow and Skerlos (2011)`. By default, if a supply side
+            was estimated, this is ``Iteration('simple', {'tol': 1e-12})``. It is not used if a supply side was not
             estimated.
 
         Returns
@@ -611,10 +611,10 @@ class ProblemResults(AbstractProblemResults):
         r"""Estimate the set of optimal or efficient excluded instruments, :math:`\mathscr{Z}_D` and
         :math:`\mathscr{Z}_S`.
 
-        Optimal instruments have been shown, for example, by :ref:`Reynaert and Verboven (2014) <rv14>`, to not only
+        Optimal instruments have been shown, for example, by :ref:`references:Reynaert and Verboven (2014)`, to not only
         reduce bias in the BLP problem, but also to improve efficiency and stability.
 
-        :ref:`Chamberlain's (1987) <c87>` optimal excluded instruments are
+        Optimal excluded instruments in the spirit of :ref:`references:Chamberlain (1987)` are
 
         .. math::
 
@@ -633,8 +633,8 @@ class ProblemResults(AbstractProblemResults):
 
         The expectation is taken by integrating over the joint density of :math:`\xi` and :math:`\omega`. For each error
         term realization, if not already estimated, equilibrium prices are computed via iteration over the
-        :math:`\zeta`-markup equation from :ref:`Morrow and Skerlos (2011) <ms11>`. Associated shares and :math:`\delta`
-        are then computed before each Jacobian is evaluated.
+        :math:`\zeta`-markup equation from :ref:`references:Morrow and Skerlos (2011)`. Associated shares and
+        :math:`\delta` are then computed before each Jacobian is evaluated.
 
         The expected Jacobians are estimated with the average over all computed Jacobian realizations. The normalizing
         matrix :math:`\text{Var}(\xi, \omega)^{-1}` is estimated with the sample covariance matrix of the error terms.
@@ -646,17 +646,17 @@ class ProblemResults(AbstractProblemResults):
             following methods are supported:
 
                 - ``'normal'`` (default) - Draw from the normal approximation to the joint distribution of the error
-                  terms and take the average over the computed Jacobians (`draws` determines the number of draws).
+                  terms and take the average over the computed Jacobians (``draws`` determines the number of draws).
 
                 - ``'empirical'`` - Draw with replacement from the empirical joint distribution of the error terms and
-                  take the average over the computed Jacobians (`draws` determines the number of draws).
+                  take the average over the computed Jacobians (``draws`` determines the number of draws).
 
-                - ``'approximate'`` - Evaluate the Jacobians at the expected value of the error terms: zero (`draws`
+                - ``'approximate'`` - Evaluate the Jacobians at the expected value of the error terms: zero (``draws``
                   will be ignored).
 
         draws : `int, optional`
             The number of draws that will be taken from the joint distribution of the error terms. This is ignored if
-            `method` is ``'approximate'``. The default is ``100``.
+            ``method`` is ``'approximate'``. The default is ``100``.
         seed : `int, optional`
             Passed to :class:`numpy.random.RandomState` to seed the random number generator before any draws are taken.
             By default, a seed is not passed to the random number generator.
@@ -668,8 +668,8 @@ class ProblemResults(AbstractProblemResults):
             convenience function :func:`compute_fitted_values`.
         iteration : `Iteration, optional`
             :class:`Iteration` configuration used to estimate expected prices by iterating over the :math:`\zeta`-markup
-            equation from :ref:`Morrow and Skerlos (2011) <ms11>`. By default, if a supply side was estimated, this is
-            ``Iteration('simple', {'tol': 1e-12})``. It is not used if `expected_prices` is specified.
+            equation from :ref:`references:Morrow and Skerlos (2011)`. By default, if a supply side was estimated, this
+            is ``Iteration('simple', {'tol': 1e-12})``. It is not used if ``expected_prices`` is specified.
 
         Returns
         -------

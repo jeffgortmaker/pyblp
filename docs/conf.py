@@ -1,7 +1,9 @@
 """Sphinx configuration."""
 
 import ast
+import os
 from pathlib import Path
+import re
 from typing import Any, Optional, Tuple
 
 import astunparse
@@ -15,7 +17,7 @@ source_path = Path(__file__).resolve().parent
 # configure locations of other configuration files
 html_static_path = ['static']
 templates_path = ['templates']
-exclude_patterns = templates_path + ['_build', '**.ipynb_checkpoints']
+exclude_patterns = templates_path + ['notebooks', '_downloads', '_build', '**.ipynb_checkpoints']
 
 # configure project information
 language = 'en'
@@ -31,6 +33,7 @@ master_doc = 'index'
 
 # configure extensions
 extensions = [
+    'sphinx.ext.autosectionlabel',
     'sphinx.ext.autosummary',
     'sphinx.ext.intersphinx',
     'sphinx.ext.autodoc',
@@ -51,10 +54,58 @@ intersphinx_mapping = {
 math_number_all = True
 autosummary_generate = True
 numpydoc_show_class_members = False
+autosectionlabel_prefix_document = True
 nbsphinx_prolog = Path(source_path / templates_path[0] / 'nbsphinx_prolog.rst').read_text()
 
 # configure theme information
 html_theme = 'sphinx_rtd_theme'
+
+
+def process_notebooks() -> None:
+    """Copy notebook files to _notebooks and _downloads, replacing domains with Markdown equivalents."""
+
+    # construct a RTD URL that will be used in absolute links
+    rtd_version = os.environ.get('READTHEDOCS_VERSION', 'latest')
+    rtd_url = f'https://{project}.readthedocs.io/{language}/{rtd_version}/'
+
+    # load each notebook
+    for notebook_path in Path(source_path / 'notebooks').glob('**/*.ipynb'):
+        download = notebook = notebook_path.read_text()
+
+        # extract parts of the path relative to the notebooks directory and construct the directory's relative location
+        relative_parts = notebook_path.relative_to(source_path).parts[1:]
+        relative_location = '../' * len(relative_parts)
+
+        # extract the text, document, and section associated with supported domains
+        for role, content in re.findall(':([a-z]+):`([^`]+)`', notebook):
+            domain = f':{role}:`{content}`'
+            if role == 'ref':
+                document, text = content.split(':', 1)
+                section = re.sub(r'-+', '-', re.sub('[^0-9a-zA-Z]+', '-', text)).strip('-').lower()
+            elif role in {'mod', 'func', 'class', 'meth', 'attr', 'exc'}:
+                text = f'`{content}`'
+                section = f'{project}.{content}'
+                document = f'_api/{project}.{content}'
+                if role == 'mod':
+                    section = f'module-{section}'
+                elif role == 'attr':
+                    document = document.rsplit('.', 1)[0]
+            else:
+                raise NotImplementedError(f"The domain '{domain}' is not supported.")
+
+            # reStructuredText does not support linked code (API links will be formatted with Javascript overrides)
+            download_text = text
+            notebook_text = text.strip('`')
+
+            # replace the domain with Markdown equivalents
+            download = download.replace(domain, f'[{download_text}]({rtd_url}{document}.html#{section})')
+            notebook = notebook.replace(domain, f'[{notebook_text}]({relative_location}{document}.rst#{section})')
+
+        # save the updated notebook files
+        for updated, location in [(download, '_downloads'), (notebook, '_notebooks')]:
+            updated_path = source_path / Path(location, *relative_parts)
+            updated_path.parent.mkdir(parents=True, exist_ok=True)
+            updated_path.write_text(updated)
 
 
 def process_signature(*args: Any) -> Optional[Tuple[str, str]]:
@@ -73,7 +124,8 @@ def process_signature(*args: Any) -> Optional[Tuple[str, str]]:
 
 
 def setup(app: sphinx.application.Sphinx) -> None:
-    """Configure extra resources and type hint stripping."""
+    """Process notebooks, configure extra resources, and strip type hints."""
+    process_notebooks()
     app.add_javascript('override.js')
     app.add_stylesheet('override.css')
     app.connect('autodoc-process-signature', process_signature)

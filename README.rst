@@ -44,7 +44,7 @@ If you lack permissions, you can install pyblp in your user directory with the `
 
     pip install --user pyblp
 
-Alternatively, you can download a wheel or source archive from `PyPI <https://pypi.org/project/pyblp/>`_. You can find the latest development code on `GitHub <https://github.com/jeffgortmaker/pyblp/>`_ and the latest development documentation `here <http://pyblp.readthedocs.io/en/latest/>`_.
+Alternatively, you can download a wheel or source archive from `PyPI <https://pypi.org/project/pyblp/>`_. You can find the latest development code on `GitHub <https://github.com/jeffgortmaker/pyblp/>`_ and the latest development documentation `here <https://pyblp.readthedocs.io/en/latest/>`_.
 
 
 Features

@@ -14,7 +14,7 @@ from .utilities.algebra import precisely_solve
 def build_id_data(T: int, J: int, F: int, mergers: Sequence[Dict[int, int]] = ()) -> RecArray:
     """Build a balanced panel of market and firm IDs.
 
-    This function can be used to build `id_data` for :class:`Simulation` initialization.
+    This function can be used to build ``id_data`` for :class:`Simulation` initialization.
 
     Parameters
     ----------
@@ -23,8 +23,8 @@ def build_id_data(T: int, J: int, F: int, mergers: Sequence[Dict[int, int]] = ()
     J : `int`
         Number of products in each market.
     F : `int`
-        Number of firms. If `J` is divisible by `F`, firms produce ``J / F`` products in each market. Otherwise, firms
-        with smaller IDs will produce excess products.
+        Number of firms. If ``J`` is divisible by ``F``, firms produce ``J / F`` products in each market. Otherwise,
+        firms with smaller IDs will produce excess products.
     mergers : `tuple of dict, optional`
         Each dictionary adds a column of changed firm IDs to the returned matrix of firm IDs. Changed firm IDs are
         identical to the first column of firm IDs, but IDs that are dictionary keys will be replaced with their values,
@@ -38,13 +38,13 @@ def build_id_data(T: int, J: int, F: int, mergers: Sequence[Dict[int, int]] = ()
             - **market_ids** : (`object`) - Market IDs that take on values from ``0`` to ``T - 1``.
 
             - **firm_ids** : (`object`) - Firm IDs that take on values from ``0`` to ``F - 1``. Any columns after the
-              first are defined according to `mergers`.
+              first are defined according to ``mergers``.
 
     Examples
     --------
     .. toctree::
 
-       /notebooks/api/build_id_data.ipynb
+       /_notebooks/api/build_id_data.ipynb
 
     """
 
@@ -98,7 +98,7 @@ def build_ownership(product_data: Mapping, kappa_specification: Optional[Callabl
               one stack of ownership matrices. If there are multiple columns, this field can either be a matrix or it
               can be broken up into multiple one-dimensional fields with column index suffixes that start at zero. For
               example, if there are two columns, this field can be replaced with two one-dimensional fields: `firm_ids0`
-              and `firm_ids1`.
+              and ``firm_ids1``.
 
     kappa_specification : `callable, optional`
         A function that specifies each market's cooperation matrix, :math:`\kappa`. The function is of the following
@@ -106,27 +106,28 @@ def build_ownership(product_data: Mapping, kappa_specification: Optional[Callabl
 
             kappa(f, g) -> value
 
-        where `value` is :math:`O_{jk}` and both `f` and `g` are firm IDs from the `firm_ids` field of `product_data`.
+        where ``value`` is :math:`O_{jk}` and both ``f`` and ``g`` are firm IDs from the ``firm_ids`` field of
+        ``product_data``.
 
         The default specification, ``lambda: f, g: int(f == g)``, constructs traditional ownership matrices. That is,
         :math:`\kappa = I`, the identify matrix, implies that :math:`O_{jk}` is :math:`1` if the same firm produces
         products :math:`j` and :math:`k`, and is :math:`0` otherwise.
 
-        If `firm_ids` happen to be indices for an actual :math:`\kappa` matrix, ``lambda f, g: kappa[f, g]`` will
+        If ``firm_ids`` happen to be indices for an actual :math:`\kappa` matrix, ``lambda f, g: kappa[f, g]`` will
         build ownership matrices according to the matrix ``kappa``.
 
     Returns
     -------
     `ndarray`
         Stacked :math:`J_t \times J_t` ownership matrices, :math:`O`, for each market :math:`t`. Each stack is
-        associated with a `firm_ids` column. If a market has fewer products than others, extra columns will contain
+        associated with a ``firm_ids`` column. If a market has fewer products than others, extra columns will contain
         ``numpy.nan``.
 
     Examples
     --------
     .. toctree::
 
-       /notebooks/api/build_ownership.ipynb
+       /_notebooks/api/build_ownership.ipynb
 
     """
 
@@ -189,7 +190,7 @@ def build_blp_instruments(formulation: Formulation, product_data: Mapping, firms
     ----------
     formulation : `Formulation`
         :class:`Formulation` configuration for :math:`X`, the matrix of product characteristics used to build excluded
-        instruments. Variable names should correspond to fields in `product_data`.
+        instruments. Variable names should correspond to fields in ``product_data``.
     product_data : `structured array-like`
         Each row corresponds to a product. Markets can have differing numbers of products. The following fields are
         required:
@@ -198,11 +199,11 @@ def build_blp_instruments(formulation: Formulation, product_data: Mapping, firms
 
             - **firm_ids** : (`object`) - IDs that associate products with firms.
 
-        Along with `market_ids` and `firm_ids`, the names of any additional fields can be used as variables in
-        `formulation`.
+        Along with ``market_ids`` and ``firm_ids``, the names of any additional fields can be used as variables in
+        ``formulation``.
 
     firms_index : `int, optional`
-        Column index of the firm IDs in the `firm_ids` field of `product_data`.
+        Column index of the firm IDs in the ``firm_ids`` field of ``product_data``.
 
     Returns
     -------
@@ -213,7 +214,7 @@ def build_blp_instruments(formulation: Formulation, product_data: Mapping, firms
     --------
     .. toctree::
 
-       /notebooks/api/build_blp_instruments.ipynb
+       /_notebooks/api/build_blp_instruments.ipynb
 
     """
 
@@ -251,9 +252,9 @@ def build_matrix(formulation: Formulation, data: Mapping) -> Array:
     Parameters
     ----------
     formulation : `Formulation`
-        :class:`Formulation` configuration for the matrix. Variable names should correspond to fields in `data`.
+        :class:`Formulation` configuration for the matrix. Variable names should correspond to fields in ``data``.
     data : `structured array-like`
-        Fields can be used as variables in `formulation`.
+        Fields can be used as variables in ``formulation``.
 
     Returns
     -------
@@ -264,7 +265,7 @@ def build_matrix(formulation: Formulation, data: Mapping) -> Array:
     --------
     .. toctree::
 
-       /notebooks/api/build_matrix.ipynb
+       /_notebooks/api/build_matrix.ipynb
 
     """
     if not isinstance(formulation, Formulation):
@@ -282,10 +283,10 @@ def compute_fitted_values(variable: Any, formulation: Formulation, data: Mapping
     variable : `array-like`
         The variable that will be regressed onto the formulated set of regressors.
     formulation : `Formulation`
-        :class:`Formulation` configuration for the regressors. The `absorb` argument of :class:`Formulation` can be used
-        to absorb fixed effects.
+        :class:`Formulation` configuration for the regressors. The ``absorb`` argument of :class:`Formulation` can be
+        used to absorb fixed effects.
     data : `structured array-like`
-        Fields can be used as variables in `formulation`.
+        Fields can be used as variables in ``formulation``.
 
     Returns
     -------
@@ -296,7 +297,7 @@ def compute_fitted_values(variable: Any, formulation: Formulation, data: Mapping
     --------
     .. toctree::
 
-       /notebooks/api/compute_fitted_values.ipynb
+       /_notebooks/api/compute_fitted_values.ipynb
 
     """
 

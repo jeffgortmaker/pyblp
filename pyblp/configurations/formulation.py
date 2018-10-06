@@ -25,7 +25,8 @@ from ..utilities.basics import Array, Data, Error, Groups, StringRepresentation,
 class Formulation(StringRepresentation):
     """Configuration for designing matrices and absorbing fixed effects.
 
-    Internally, the :mod:`patsy` package is used to convert data and R-style formulas into matrices. All of the standard
+    Internally, the `patsy <https://patsy.readthedocs.io/en/stable/>`_ package is used to convert data and R-style
+    formulas into matrices. All of the standard
     `binary operators <https://patsy.readthedocs.io/en/stable/formulas.html#operators>`_ can be used to design complex
     matrices of factor interactions:
 
@@ -48,8 +49,8 @@ class Formulation(StringRepresentation):
     operators function like normal mathematical operators on numeric variables: ``+`` adds, ``-`` subtracts, ``*``
     multiplies, ``/`` divides, and ``**`` exponentiates.
 
-    Internally, mathematical operations are parsed and evaluated by the :mod:`sympy` package, which is also used to
-    symbolically differentiate terms when their derivatives are required.
+    Internally, mathematical operations are parsed and evaluated by the `SymPy <https://www.sympy.org/en/index.html>`_
+    package, which is also used to symbolically differentiate terms when their derivatives are required.
 
     .. warning::
 
@@ -63,36 +64,36 @@ class Formulation(StringRepresentation):
     formula : `str`
         R-style formula used to design a matrix. Variable names will be validated when this formulation along with
         data are passed to a function that uses them. By default, an intercept is included, which can be removed with
-        ``0`` or ``-1``. If `absorb` is specified, intercepts are ignored.
+        ``0`` or ``-1``. If ``absorb`` is specified, intercepts are ignored.
     absorb : `str, optional`
         R-style formula used to design a matrix of categorical variables representing fixed effects, which will be
-        absorbed into the matrix designed by `formula`. Fixed effect absorption is only supported for some matrices.
-        Unlike `formula`, intercepts are ignored. Only categorical variables are supported.
+        absorbed into the matrix designed by ``formula``. Fixed effect absorption is only supported for some matrices.
+        Unlike ``formula``, intercepts are ignored. Only categorical variables are supported.
     absorb_method : `str or Iteration, optional`
         The method with which fixed effects will be absorbed. One of the following:
 
             - ``'simple'`` (default for one fixed effect) - Use simple de-meaning. This method is very unlikely to fully
               absorb more than one fixed effect.
 
-            - ``'memory'`` (default for two fixed effects) - Use the :ref:`Somaini and Wolak (2016) <sw16>` algorithm,
-              which only works for two-way fixed effects, and which requires inversion of a dense matrix with dimensions
-              equal to the smaller number of fixed effect groups.
+            - ``'memory'`` (default for two fixed effects) - Use the :ref:`references:Somaini and Wolak (2016)`
+              algorithm, which only works for two-way fixed effects, and which requires inversion of a dense matrix with
+              dimensions equal to the smaller number of fixed effect groups.
 
-            - ``'speed'`` - Use the same :ref:`Somaini and Wolak (2016) <sw16>` algorithm but pre-compute the :math:`A`
-              matrix, which is a dense matrix with dimensions equal to the larger number of fixed effect groups. Again,
-              this method only works for two-way fixed effects.
+            - ``'speed'`` - Use the same :ref:`references:Somaini and Wolak (2016)` algorithm but pre-compute the
+              :math:`A` matrix, which is a dense matrix with dimensions equal to the larger number of fixed effect
+              groups. Again, this method only works for two-way fixed effects.
 
             - ``Iteration`` (default for more than two fixed effects) - Use the iterative de-meaning algorithm of
-              :ref:`Rios-Avila (2015) <r15>` and configure the fixed point iteration with a :class:`Iteration`
+              :ref:`references:Rios-Avila (2015)` and configure the fixed point iteration with a :class:`Iteration`
               configuration. By default, ``Iteration('simple', {'tol': 1e-14})`` is used. This method is equivalent to
               ``'simple'`` for one fixed effect, and it will also work for two fixed effects, although either variant of
-              the :ref:`Somaini and Wolak (2016) <sw16>` algorithm is usually more performant.
+              the :ref:`references:Somaini and Wolak (2016)` algorithm is usually more performant.
 
     Examples
     --------
     .. toctree::
 
-       /notebooks/api/formulation.ipynb
+       /_notebooks/api/formulation.ipynb
 
     """
 

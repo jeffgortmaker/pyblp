@@ -1,7 +1,7 @@
 Notation
 ========
 
-The notation in pyblp is a customized amalgamation of the notation employed by :ref:`Berry, Levinsohn, and Pakes (1995) <blp95>`, :ref:`Nevo (2000) <n00>`, :ref:`Morrow and Skerlos (2011) <ms11>`, :ref:`Grigolon and Verboven (2014) <gv14>`, and others.
+The notation in pyblp is a customized amalgamation of the notation employed by :ref:`references:Berry, Levinsohn, and Pakes (1995)`, :ref:`references:Nevo (2000)`, :ref:`references:Morrow and Skerlos (2011)`, :ref:`references:Grigolon and Verboven (2014)`, and others.
 
 
 Dimensions and Sets

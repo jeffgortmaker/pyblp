@@ -26,8 +26,8 @@ class SimulationResults(StringRepresentation):
     simulation: `Simulation`
         :class:`Simulation` that created these results.
     firms_index : `int`
-        Column index of the firm IDs in the `firm_ids` field of `product_data` in :class:`Simulation` that defined which
-        firms produce which products during computation of synthetic prices and shares.
+        Column index of the firm IDs in the ``firm_ids`` field of ``product_data`` in :class:`Simulation` that defined
+        which firms produce which products during computation of synthetic prices and shares.
     product_data : `recarray`
         Simulated :attr:`Simulation.product_data` that are updated with synthetic prices and shares.
     computation_time : `float`

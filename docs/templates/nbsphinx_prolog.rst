@@ -1,3 +1,5 @@
+{% set path = env.doc2path(env.docname, base=None).replace('\\', '/') %}
+
 .. nbinfo::
 
-   Download this notebook `on GitHub <https://github.com/jeffgortmaker/pyblp/blob/v{{ env.config.release }}/{{ env.doc2path(env.docname, base='docs').replace('\\', '/') }}>`_.
+   Download the `Jupyter Notebook <http://jupyter.org/>`_ for this section: :download:`{{ path.rsplit('/', 1)[1] }} </{{ path.replace('_notebooks', '_downloads') }}>`

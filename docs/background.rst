@@ -15,7 +15,7 @@ Demand-Side
 
 Observed demand-side product characteristics are contained in the :math:`N \times K_1` matrix of linear characteristics, :math:`X_1`, and the :math:`N \times K_2` matrix of nonlinear characteristics, :math:`X_2`. Characteristic columns can overlap. For example, either matrix may contain a constant column and both matrices often contain a column of prices. Unobserved demand-side product characteristics, :math:`\xi`, are a :math:`N \times 1` column vector.
 
-In market :math:`t`, observed agent characteristics are a :math:`I_t \times D` matrix called demographics, :math:`d`. Note that in :ref:`Nevo (2000) <n00>`, :math:`d` refers to the number of demographics and :math:`D` to the matrix; the opposite is employed here so that all numbers are capital letters. Unobserved characteristics are a :math:`I_t \times K_2` matrix, :math:`\nu`, which consists of rows that are usually assumed to be independent draws from a mean-zero multivariate normal distribution.
+In market :math:`t`, observed agent characteristics are a :math:`I_t \times D` matrix called demographics, :math:`d`. Note that in :ref:`references:Nevo (2000)`, :math:`d` refers to the number of demographics and :math:`D` to the matrix; the opposite is employed here so that all numbers are capital letters. Unobserved characteristics are a :math:`I_t \times K_2` matrix, :math:`\nu`, which consists of rows that are usually assumed to be independent draws from a mean-zero multivariate normal distribution.
 
 The indirect utility of agent :math:`i` from consuming product :math:`j` in market :math:`t` is
 
@@ -36,7 +36,7 @@ and the type-specific portion for all products and agents in a single market is
 
 The :math:`K_2 \times K_2` matrix :math:`\Sigma` is the Cholesky decomposition of the covariance matrix that defines the multivariate normal distribution from which each :math:`\nu_i` is assumed to be drawn. The :math:`K_2 \times D` matrix :math:`\Pi` measures how agent tastes vary with demographics.
 
-Random idiosyncratic preferences :math:`\epsilon_{jti}` are assumed to be Type I Extreme Value so that market shares can be approximated with Monte Carlo integration or quadrature rules as in :ref:`Heiss and Winschel (2008) <hw08>` and :ref:`Judd and Skrainka (2011) <js11>`:
+Random idiosyncratic preferences :math:`\epsilon_{jti}` are assumed to be Type I Extreme Value so that market shares can be approximated with Monte Carlo integration or quadrature rules as in :ref:`references:Heiss and Winschel (2008)` and :ref:`references:Judd and Skrainka (2011)`:
 
 .. math:: s_{jt} = \sum_{i=1}^{I_t} w_i s_{jti},
    :label: shares
@@ -50,7 +50,7 @@ in which :math:`w` is a :math:`I_t \times 1` column vector of integration weight
 Supply-Side
 ~~~~~~~~~~~
 
-Observed supply-side product characteristics are the :math:`N \times K_3` matrix of cost characteristics, :math:`X_3`. Prices cannot be cost characteristics, but non-price product characteristics often overlap with the demand-side characteristics in :math:`X_1` and :math:`X_2`. Unobserved supply-side product characteristics, :math:`\omega`, are a :math:`N \times 1` column vector. Note that in contrast to :ref:`Berry, Levinsohn, and Pakes (1995) <blp95>`, the notation for observed cost characteristics is similar to the notation for demand-side characteristics.
+Observed supply-side product characteristics are the :math:`N \times K_3` matrix of cost characteristics, :math:`X_3`. Prices cannot be cost characteristics, but non-price product characteristics often overlap with the demand-side characteristics in :math:`X_1` and :math:`X_2`. Unobserved supply-side product characteristics, :math:`\omega`, are a :math:`N \times 1` column vector. Note that in contrast to :ref:`references:Berry, Levinsohn, and Pakes (1995)`, the notation for observed cost characteristics is similar to the notation for demand-side characteristics.
 
 Firms play a differentiated Bertrand-Nash pricing game. Firm :math:`f` produces a subset :math:`\mathscr{J}_{ft} \subset \{1, 2, \ldots, J_t\}` of the products in market :math:`t` and chooses prices to maximize the sum of population-normalized gross expected profits, which for product :math:`j` in market :math:`t` are
 
@@ -66,7 +66,7 @@ The :math:`K_3 \times 1` column vector :math:`\gamma` measures how marginal cost
 .. math:: p = c + \eta.
    :label: eta_markup
 
-Called the BLP-markup equation in :ref:`Morrow and Skerlos (2011) <ms11>`, the markup term is
+Called the BLP-markup equation in :ref:`references:Morrow and Skerlos (2011)`, the markup term is
 
 .. math:: \eta = -(O \circ \frac{\partial s}{\partial p})^{-1}s,
    :label: eta
@@ -87,7 +87,7 @@ and :math:`\Gamma` is a more dense :math:`J_t \times J_t` matrix that can be app
 .. math:: \Gamma_{jk} = \sum_{i=1}^{I_t} w_i s_{jti}s_{kti}\frac{\partial U_{jti}}{\partial p_{jt}}.
    :label: capital_gamma
 
-Derivatives in these expressions are derived from the definition of :math:`U` in :eq:`utilities`. An alternative form of the first-order conditions is called the :math:`\zeta`-markup equation in :ref:`Morrow and Skerlos (2011) <ms11>`:
+Derivatives in these expressions are derived from the definition of :math:`U` in :eq:`utilities`. An alternative form of the first-order conditions is called the :math:`\zeta`-markup equation in :ref:`references:Morrow and Skerlos (2011)`:
 
 .. math:: p = c + \zeta,
    :label: zeta_markup
@@ -159,7 +159,7 @@ Given a :math:`\hat{\theta}`, the first step towards computing its associated ob
 
 .. math:: \delta \leftarrow \delta + \log s - \log s(\delta, \hat{\theta})
 
-where :math:`s` are the market's observed shares and :math:`s(\hat{\theta}, \delta)` are shares evaluated at :math:`\hat{\theta}` and the current iteration's :math:`\delta`. As noted in the appendix of :ref:`Nevo (2000) <n00>`, exponentiating both sides of the contraction mapping and iterating over :math:`\exp(\delta)` gives an alternate formulation that can be faster. Conventional starting values are those that solve the Logit model.
+where :math:`s` are the market's observed shares and :math:`s(\hat{\theta}, \delta)` are shares evaluated at :math:`\hat{\theta}` and the current iteration's :math:`\delta`. As noted in the appendix of :ref:`references:Nevo (2000)`, exponentiating both sides of the contraction mapping and iterating over :math:`\exp(\delta)` gives an alternate formulation that can be faster. Conventional starting values are those that solve the Logit model.
 
 The mean utility in conjunction with the demand-side conditional independence assumption in :eq:`moments` is used to recover the demand-side linear parameters with
 
@@ -255,15 +255,15 @@ One way to include demand-side fixed effects is to construct a large number of i
 
 An alternative is to absorb or partial out fixed effects. If there is only one demand-side fixed effect, that is, if :math:`E_D = 1`, the procedure is simple and efficient: :math:`X_1`, :math:`Z_D`, and :math:`\delta(\hat{\theta})` are de-meaned within each level of the fixed effect. If there is only one supply-side effect, that is, if :math:`E_S = 1`, the same is done with :math:`X_3`, :math:`Z_S`, and :math:`\tilde{c}(\hat{\theta})`.
 
-Estimates computed with the de-meaned or residualized data are guaranteed by the Frish-Waugh-Lovell (FWL) theorem (:ref:`Frisch and Waugh, 1933 <fw33>`; :ref:`Lovell, 1963 <l63>`) to be the same as estimates computed when fixed effects are included as indicator variables.
+Estimates computed with the de-meaned or residualized data are guaranteed by the Frish-Waugh-Lovell (FWL) theorem of :ref:`references:Frisch and Waugh (1933)` and :ref:`references:Lovell (1963)` to be the same as estimates computed when fixed effects are included as indicator variables.
 
-When :math:`E_D > 1` or :math:`E_S > 1`, the iterative de-meaning algorithm of :ref:`Rios-Avila (2015) <r15>` can be applied to absorb the multiple fixed effects. Iterative de-meaning can be processor-intensive, but for large amounts of data or for large numbers of fixed effects, it is often preferable to including indicator variables. When :math:`E_D = 2` or :math:`E_S = 2`, the more performant algorithm of :ref:`Somaini and Wolak (2016) <sw16>` can be used instead.
+When :math:`E_D > 1` or :math:`E_S > 1`, the iterative de-meaning algorithm of :ref:`references:Rios-Avila (2015)` can be applied to absorb the multiple fixed effects. Iterative de-meaning can be processor-intensive, but for large amounts of data or for large numbers of fixed effects, it is often preferable to including indicator variables. When :math:`E_D = 2` or :math:`E_S = 2`, the more performant algorithm of :ref:`references:Somaini and Wolak (2016)` can be used instead.
 
 
 Random Coefficients Nested Logit
 --------------------------------
 
-Incorporating parameters that measure within nesting group correlation gives rise to the random coefficients nested logit (RCNL) model described, for example, by :ref:`Grigolon and Verboven (2014) <gv14>`. In this model, there are :math:`h = 1, 2, \dotsc, H` nesting groups and each product :math:`j` is assigned to a group :math:`h(j)`. The set :math:`\mathscr{J}_{ht} \subset \{1, 2, \ldots, J_t\}` denotes the products in group :math:`h` and market :math:`t`.
+Incorporating parameters that measure within nesting group correlation gives rise to the random coefficients nested logit (RCNL) model described, for example, by :ref:`references:Grigolon and Verboven (2014)`. In this model, there are :math:`h = 1, 2, \dotsc, H` nesting groups and each product :math:`j` is assigned to a group :math:`h(j)`. The set :math:`\mathscr{J}_{ht} \subset \{1, 2, \ldots, J_t\}` denotes the products in group :math:`h` and market :math:`t`.
 
 In the RCNL model, the error term is decomposed into
 
@@ -311,7 +311,7 @@ Bertrand-Nash Prices and Shares
 
 Computing equilibrium prices and shares is necessary during post-estimation to evaluate counterfactuals such as mergers. Similarly, synthetic data can be simulated in a straightforward manner according to a demand-side specification, but if the data are to simultaneously conform to a supply-side specification as well, it is necessary to compute equilibrium prices and shares that are implied by the other synthetic data.
 
-To efficiently compute equilibrium prices, the :math:`\zeta`-markup equation from :ref:`Morrow and Skerlos (2011) <ms11>` in :eq:`zeta_markup` is employed in the following contraction:
+To efficiently compute equilibrium prices, the :math:`\zeta`-markup equation from :ref:`references:Morrow and Skerlos (2011)` in :eq:`zeta_markup` is employed in the following contraction:
 
 .. math:: p \leftarrow c + \zeta(p).
 

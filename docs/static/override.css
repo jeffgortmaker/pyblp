@@ -1,5 +1,4 @@
 /* move equation numbers to the right of equations and make their links visible upon hover on desktops */
-
 @media screen and (min-width: 767px) {
     .eqno {
         margin-left: 5px;
@@ -17,7 +16,6 @@
 }
 
 /* allow table to have multi-line rows on desktops */
-
 @media screen and (min-width: 767px) {
     .wy-table-responsive table td {
       white-space: normal;
@@ -28,9 +26,11 @@
 }
 
 /* make inline code formatting less jarring */
-
 code {
     padding: 1px 3px !important;
+}
+code.download {
+    background: transparent !important;
 }
 .literal {
     color: black !important;
@@ -43,7 +43,6 @@ code {
 }
 
 /* increase spacing between index and links */
-
 .genindex-jumpbox, .genindextable {
     margin-bottom: 1.5em;
 }

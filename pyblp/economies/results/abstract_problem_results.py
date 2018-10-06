@@ -246,8 +246,8 @@ class AbstractProblemResults(abc.ABC, StringRepresentation):
         r"""Estimate approximate equilibrium prices after firm ID changes, :math:`p^a`, under the assumption that
         shares and their price derivatives are unaffected by such changes.
 
-        This approximation is discussed in, for example, :ref:`Nevo (1997) <n97>`. Prices in each market are computed
-        according to the BLP-markup equation,
+        This approximation is discussed in, for example, :ref:`references:Nevo (1997)`. Prices in each market are
+        computed according to the BLP-markup equation,
 
         .. math:: p^a = c + \eta^a,
 
@@ -260,8 +260,8 @@ class AbstractProblemResults(abc.ABC, StringRepresentation):
         Parameters
         ----------
         firms_index : `int, optional`
-            Column index of the firm IDs in the `firm_ids` field of `product_data` in :class:`Problem`. If an
-            `ownership` field was specified, the corresponding stack of ownership matrices will be used.
+            Column index of the firm IDs in the ``firm_ids`` field of ``product_data`` in :class:`Problem`. If an
+            ``ownership`` field was specified, the corresponding stack of ownership matrices will be used.
         costs : `array-like, optional`
             Marginal costs, :math:`c`, computed by :meth:`ProblemResults.compute_costs`. By default, marginal costs are
             computed.
@@ -287,7 +287,7 @@ class AbstractProblemResults(abc.ABC, StringRepresentation):
         r"""Estimate equilibrium prices after firm ID changes, :math:`p^*`.
 
         Prices are computed in each market by iterating over the :math:`\zeta`-markup equation from
-        :ref:`Morrow and Skerlos (2011) <ms11>`,
+        :ref:`references:Morrow and Skerlos (2011)`,
 
         .. math:: p^* \leftarrow c + \zeta^*(p^*),
 
@@ -303,8 +303,8 @@ class AbstractProblemResults(abc.ABC, StringRepresentation):
             :class:`Iteration` configuration for how to solve the fixed point problem in each market. By default,
             ``Iteration('simple', {'tol': 1e-12})`` is used.
         firms_index : `int, optional`
-            Column index of the firm IDs in the `firm_ids` field of `product_data` in :class:`Problem`. If an
-            `ownership` field was specified, the corresponding stack of ownership matrices will be used.
+            Column index of the firm IDs in the ``firm_ids`` field of ``product_data`` in :class:`Problem`. If an
+            ``ownership`` field was specified, the corresponding stack of ownership matrices will be used.
         prices : `array-like, optional`
             Prices at which the fixed point iteration routine will start. By default, unchanged prices, :math:`p`, are
             used as starting values. Other reasonable starting prices include :math:`p^a`, computed by
@@ -369,7 +369,7 @@ class AbstractProblemResults(abc.ABC, StringRepresentation):
         Parameters
         ----------
         firms_index : `int, optional`
-            Column index of the firm IDs in the `firm_ids` field of `product_data` in :class:`Problem`. By default,
+            Column index of the firm IDs in the ``firm_ids`` field of ``product_data`` in :class:`Problem`. By default,
             unchanged firm IDs are used.
         shares : `array-like, optional`
             Shares, :math:`s`, such as those computed by :meth:`ProblemResults.compute_shares`. By default, unchanged

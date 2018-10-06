@@ -3,21 +3,23 @@
 Attributes
 ----------
 NEVO_PRODUCTS_LOCATION : `str`
-    Location of a CSV file containing the fake cereal product data from :ref:`Nevo (2000) <n00>`. The file includes
+    Location of a CSV file containing the fake cereal product data from :ref:`references:Nevo (2000)`. The file includes
     the same pre-computed excluded instruments used in the original paper.
 NEVO_AGENTS_LOCATION : `str`
     Location of a CSV file containing the fake cereal agent data. Included in the file are Monte Carlo weights and
-    draws along with demographics, which collectively are used by :ref:`Nevo (2000) <n00>` to solve the fake cereal
+    draws along with demographics, which collectively are used by :ref:`references:Nevo (2000)` to solve the fake cereal
     problem.
 BLP_PRODUCTS_LOCATION : `str`
     Location of a CSV file containing the automobile product data extracted by
-    :ref:`Andrews, Gentzkow, and Shapiro (2017) <ags17>` from the original GAUSS code for
-    :ref:`Berry, Levinsohn, and Pakes (1999) <blp99>`, which is commonly assumed to be the same data used in
-    :ref:`Berry, Levinsohn, and Pakes (1995) <blp95>`.
+    :ref:`references:Andrews, Gentzkow, and Shapiro (2017)` from the original GAUSS code for
+    :ref:`references:Berry, Levinsohn, and Pakes (1999)`, which is commonly assumed to be the same data used in
+    :ref:`references:Berry, Levinsohn, and Pakes (1995)`.
 
-    The file also includes a set of :ref:`Chamberlain's (1987) <c87>` optimal excluded instruments for the automobile
-    problem from :ref:`Berry, Levinsohn, and Pakes (1995) <blp95>`, which are used to solve the problem in the
-    `tutorial </notebooks/tutorial/blp.ipynb>`_. These instruments were computed according to the following procedure:
+    The file also includes a set of optimal excluded instruments computed in the spirit of
+    :ref:`references:Chamberlain (1987)` for the automobile problem from
+    :ref:`references:Berry, Levinsohn, and Pakes (1995)`, which are used to solve the problem in the
+    `tutorial </notebooks/tutorial/blp.ipynb>`_. These instruments were computed according to the following
+    procedure:
 
         1. Traditional excluded BLP instruments from the original paper were computed with
            :func:`~pyblp.build_blp_instruments`. As in the original paper, the ``mpd`` variable was added to the set of
@@ -63,13 +65,13 @@ BLP_AGENTS_LOCATION : `str`
     ====  =======
 
     These numbers were extracted also extracted from the original GAUSS code for
-    :ref:`Berry, Levinsohn, and Pakes (1999) <blp99>`.
+    :ref:`references:Berry, Levinsohn, and Pakes (1999)`.
 
 Examples
 --------
 .. toctree::
 
-   /notebooks/api/data.ipynb
+   /_notebooks/api/data.ipynb
 
 """
 

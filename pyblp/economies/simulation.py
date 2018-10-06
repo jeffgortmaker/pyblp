@@ -59,10 +59,10 @@ class Simulation(AbstractEconomy):
        These excluded instruments are constructed only for convenience. Especially for more complicated formulations,
        instruments in simulated product data should be replaced with better instruments.
 
-    In both `product_data` and `agent_data`, fields with multiple columns can be either matrices or can be broken up
+    In both ``product_data`` and ``agent_data``, fields with multiple columns can be either matrices or can be broken up
     into multiple one-dimensional fields with column index suffixes that start at zero. For example, if there are two
-    columns of firm IDs, the `firm_ids` field, which in this case should be a matrix with two columns, can be replaced
-    by two one-dimensional fields: `firm_ids0` and `firm_ids1`.
+    columns of firm IDs, the ``firm_ids`` field, which in this case should be a matrix with two columns, can be replaced
+    by two one-dimensional fields: ``firm_ids0`` and ``firm_ids1``.
 
     Parameters
     ----------
@@ -74,21 +74,21 @@ class Simulation(AbstractEconomy):
 
         The ``shares`` variable should not be included in any of the formulations and ``prices`` should be included in
         the formulation for :math:`X_1` or :math:`X_2` (or both). Any additional variables that cannot be loaded from
-        `product_data` will be drawn from independent standard uniform distributions. Unlike in :class:`Problem`, fixed
-        effect absorption is not supported during simulation. All exogenous characteristics in :math:`X_2` should also
-        be included in :math:`X_1`.
+        ``product_data`` will be drawn from independent standard uniform distributions. Unlike in :class:`Problem`,
+        fixed effect absorption is not supported during simulation. All exogenous characteristics in :math:`X_2` should
+        also be included in :math:`X_1`.
 
     beta : `array-like`
         Vector of demand-side linear parameters, :math:`\beta`. Elements correspond to columns in :math:`X_1`, which
-        is formulated according to `product_formulations`.
+        is formulated according to ``product_formulations``.
     sigma : `array-like`
         Cholesky decomposition of the covariance matrix that measures agents' random taste distribution, :math:`\Sigma`,
         which is a square matrix with a lower triangle of all zeros. Rows and columns correspond to columns in
-        :math:`X_2`, which is formulated according to `product_formulations`. If the formulation for :math:`X_2` is
+        :math:`X_2`, which is formulated according to ``product_formulations``. If the formulation for :math:`X_2` is
         ``None``, this should be ``None`` as well.
     gamma : `array-like`
         Vector of supply-side linear parameters, :math:`\gamma`. Elements correspond to columns in :math:`X_3`, which
-        is formulated according to `product_formulations`.
+        is formulated according to ``product_formulations``.
     product_data : `structured array-like`
         Each row corresponds to a product. Markets can have differing numbers of products. The convenience function
         :func:`build_id_data` can be used to construct the following required ID data from market, product, and firm
@@ -105,51 +105,51 @@ class Simulation(AbstractEconomy):
             - **ownership** : (`numeric, optional') - Custom stacked :math:`J_t \times J_t` ownership matrices,
               :math:`O`, for each market :math:`t`, which can be built with :func:`build_ownership`. By default,
               standard ownership matrices are built only when they are needed. If specified, each stack is associated
-              with a `firm_ids` column and must have as many columns as there are products in the market with the most
+              with a ``firm_ids`` column and must have as many columns as there are products in the market with the most
               products.
 
         To simulate a nested Logit or random coefficients nested Logit (RCNL) model, nesting groups must be specified:
 
             - **nesting_ids** (`object, optional`) - IDs that associate products with nesting groups. When these IDs are
-              specified, `rho` must be specified as well.
+              specified, ``rho`` must be specified as well.
 
-        Along with `market_ids`, `firm_ids`, and `nesting_ids`, the names of any additional fields can be used as
-        variables in `product_formulations`.
+        Along with ``market_ids``, ``firm_ids``, and ``nesting_ids``, the names of any additional fields can be used as
+        variables in ``product_formulations``.
 
     agent_formulation : `Formulation, optional`
         :class:`Formulation` configuration for the matrix of observed agent characteristics called demographics,
         :math:`d`, which will only be included in the model if this formulation is specified. Any variables that cannot
-        be loaded from `agent_data` will be drawn from independent standard uniform distributions.
+        be loaded from ``agent_data`` will be drawn from independent standard uniform distributions.
     pi : `array-like, optional`
         Parameters that measure how agent tastes vary with demographics, :math:`\Pi`. Rows correspond to the same
-        product characteristics as in `sigma`. Columns correspond to to columns in :math:`d`, which is formulated
-        according to `agent_formulation`.
+        product characteristics as in ``sigma``. Columns correspond to to columns in :math:`d`, which is formulated
+        according to ``agent_formulation``.
     agent_data : `structured array-like, optional`
         Each row corresponds to an agent. Markets can have differing numbers of agents. Since simulated agents are only
         used if there are nonlinear product characteristics, agent data should only be specified if :math:`X_2` is
-        formulated in `product_formulations`. If agent data are specified, market IDs are required:
+        formulated in ``product_formulations``. If agent data are specified, market IDs are required:
 
             - **market_ids** : (`object, optional`) - IDs that associate agents with markets. The set of distinct IDs
-              should be the same as the set of IDs in `product_data`. If `integration` is specified, there must be at
-              least as many rows in each market as the number of nodes and weights that are built for each market.
+              should be the same as the set of IDs in ``product_data``. If ``integration`` is specified, there must be
+              at least as many rows in each market as the number of nodes and weights that are built for each market.
 
-        If `integration` is not specified, the following fields are required:
+        If ``integration`` is not specified, the following fields are required:
 
             - **weights** : (`numeric, optional`) - Integration weights, :math:`w`.
 
             - **nodes** : (`numeric, optional`) - Unobserved agent characteristics called integration nodes,
               :math:`\nu`. If there are more than :math:`K_2` columns, only the first :math:`K_2` will be used.
 
-        Along with `market_ids`, the names of any additional fields can be used as variables in `agent_formulation`.
+        Along with ``market_ids``, the names of any additional fields can be used as variables in ``agent_formulation``.
 
     integration : `Integration, optional`
         :class:`Integration` configuration for how to build nodes and weights for integration over agent utilities,
-        which will replace any `nodes` and `weights` fields in `agent_data`. This configuration is required if `nodes`
-        and `weights` in `agent_data` are not specified. It should not be specified if :math:`X_2` is not formulated
-        in `product_formulations`.
+        which will replace any ``nodes`` and ``weights`` fields in ``agent_data``. This configuration is required if
+        ``nodes`` and ``weights`` in ``agent_data`` are not specified. It should not be specified if :math:`X_2` is not
+        formulated in ``product_formulations``.
     rho : `array-like, optional`
         Parameters that measure within nesting group correlation, :math:`\rho`. If there is only one element, it
-        corresponds to all groups defined by the `nesting_ids` field of `product_data`. If there is more than one
+        corresponds to all groups defined by the ``nesting_ids`` field of ``product_data``. If there is more than one
         element, there must be as many elements as :math:`H`, the number of distinct nesting groups, and elements
         correspond to group IDs in the sorted order given by :attr:`Simulation.unique_nesting_ids`.
     xi_variance : `float, optional`
@@ -482,7 +482,7 @@ class Simulation(AbstractEconomy):
         r"""Compute synthetic prices and shares.
 
         Prices and shares are computed by iterating market-by-market over the :math:`\zeta`-markup equation from
-        :ref:`Morrow and Skerlos (2011) <ms11>`,
+        :ref:`references:Morrow and Skerlos (2011)`,
 
         .. math:: p^* \leftarrow c + \zeta(p^*).
 
@@ -494,9 +494,9 @@ class Simulation(AbstractEconomy):
         Parameters
         ----------
         firms_index : `int, optional`
-            Column index of the firm IDs in the `firm_ids` field of `product_data` in :class:`Simulation` that defines
-            which firms produce which products. If an `ownership` field was specified, the corresponding stack of
-            ownership matrices will be used. By default, unchanged firm IDs are used.
+            Column index of the firm IDs in the ``firm_ids`` field of ``product_data`` in :class:`Simulation` that
+            defines which firms produce which products. If an ``ownership`` field was specified, the corresponding stack
+            of ownership matrices will be used. By default, unchanged firm IDs are used.
         prices : `array-like, optional`
             Prices at which the fixed point iteration routine will start. By default, marginal costs, :math:`c`, are
             used as starting values.

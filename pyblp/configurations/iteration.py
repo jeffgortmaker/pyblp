@@ -18,10 +18,10 @@ class Iteration(StringRepresentation):
 
             - ``'simple'`` - Non-accelerated iteration.
 
-            - ``'squarem'`` - SQUAREM acceleration method of :ref:`Varadhan and Roland (2008) <vr08>` and considered in
-              the context of the BLP problem in :ref:`Reynaerts, Varadhan, and Nash (2012) <rvn12>`. This implementation
-              uses a first-order squared non-monotone extrapolation scheme. If there are any errors during the
-              acceleration step, it uses the last values for the next iteration of the algorithm.
+            - ``'squarem'`` - SQUAREM acceleration method of :ref:`references:Varadhan and Roland (2008)` and considered
+              in the context of the BLP problem in :ref:`references:Reynaerts, Varadhan, and Nash (2012)`. This
+              implementation uses a first-order squared non-monotone extrapolation scheme. If there are any errors
+              during the acceleration step, it uses the last values for the next iteration of the algorithm.
 
         The following trivial routine can be used to simply return the initial values:
 
@@ -31,10 +31,10 @@ class Iteration(StringRepresentation):
 
             method(initial, contraction, callback, **options) -> (final, converged)
 
-        where `initial` is an array of initial values, `contraction` is a callable contraction mapping, `callback` is a
-        function that should be called without any arguments after each major iteration (it is used to record the number
-        of major iterations), `options` are specified below, `final` is an array of final values, and `converged` is a
-        flag for whether the routine converged.
+        where ``initial`` is an array of initial values, ``contraction`` is a callable contraction mapping, ``callback``
+        is a function that should be called without any arguments after each major iteration (it is used to record the
+        number of major iterations), ``options`` are specified below, ``final`` is an array of final values, and
+        ``converged`` is a flag for whether the routine converged.
 
     method_options : `dict, optional`
         Options for the fixed point iteration routine. Non-custom routines other than ``'return'`` support the following
@@ -50,26 +50,26 @@ class Iteration(StringRepresentation):
 
         The ``'squarem'`` routine accepts additional options that mirror those in the
         `SQUAREM <https://cran.r-project.org/web/packages/SQUAREM/index.html>`_ package, written in R by Ravi Varadhan,
-        which identifies the step length with :math:`-\alpha` from :ref:`Varadhan and Roland (2008) <vr08>`:
+        which identifies the step length with :math:`-\alpha` from :ref:`references:Varadhan and Roland (2008)`:
 
             - **scheme** : (`int`) - The default value is ``3``, which corresponds to S3 in
-              :ref:`Varadhan and Roland (2008) <vr08>`. Other acceptable schemes are ``1`` and ``2``, which correspond
-              to S1 and S2.
+              :ref:`references:Varadhan and Roland (2008)`. Other acceptable schemes are ``1`` and ``2``, which
+              correspond to S1 and S2.
 
             - **step_min** : (`float`) - The initial value for the minimum step length. The default value is ``1.0``.
 
             - **step_max** : (`float`) - The initial value for the maximum step length. The default value is ``1.0``.
 
-            - **step_factor** : (`float`) - When the step length exceeds `step_max`, it is set equal to `step_max`, but
-              `step_max` is scaled by this factor. Similarly, if `step_min` is negative and the step length is below
-              `step_min`, it is set equal to `step_min` and `step_min` is scaled by this factor. The default value is
-              ``4.0``.
+            - **step_factor** : (`float`) - When the step length exceeds ``step_max``, it is set equal to ``step_max``,
+              but ``step_max`` is scaled by this factor. Similarly, if ``step_min`` is negative and the step length is
+              below ``step_min``, it is set equal to ``step_min`` and ``step_min`` is scaled by this factor. The default
+              value is ``4.0``.
 
     Examples
     --------
     .. toctree::
 
-       /notebooks/api/iteration.ipynb
+       /_notebooks/api/iteration.ipynb
 
     """
 

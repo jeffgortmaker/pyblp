@@ -14,40 +14,41 @@ from ..utilities.basics import Array, StringRepresentation
 class Integration(StringRepresentation):
     """Configuration for building integration nodes and weights.
 
-    For more information pertaining to the supported quadrature rules, refer to :ref:`Heiss and Winschel (2008) <hw08>`
-    and :ref:`Judd and Skrainka (2011) <js11>`. Sparse grids are constructed in analogously to the Matlab function
-    `nwspgr <http://www.sparse-grids.de/>`_ created by Florian Heiss and Viktor Winschel.
+    For more information pertaining to the supported quadrature rules, refer to
+    :ref:`references:Heiss and Winschel (2008)` and :ref:`references:Judd and Skrainka (2011)`. Sparse grids are
+    constructed in analogously to the Matlab function `nwspgr <http://www.sparse-grids.de/>`_ created by Florian Heiss
+    and Viktor Winschel.
 
     Parameters
     ----------
     specification : `str`
         How to build nodes and weights. One of the following:
 
-            - ``'monte_carlo'`` - Calls :func:`numpy.random.normal` to draw from a pseudo-random standard multivariate
-              normal distribution. Integration weights are ``1 / size``.
+            - ``'monte_carlo'`` - Draw from a pseudo-random standard multivariate normal distribution. Integration
+              weights are ``1 / size``.
 
-            - ``'product'`` - Generates nodes and weights according to the level-`size` Gauss-Hermite product rule.
+            - ``'product'`` - Generate nodes and weights according to the level-``size`` Gauss-Hermite product rule.
 
-            - ``'nested_product'`` - Generates nodes and weights according to the level-`size` nested Gauss-Hermite
+            - ``'nested_product'`` - Generate nodes and weights according to the level-``size`` nested Gauss-Hermite
               product rule. Weights can be negative.
 
-            - ``'grid'`` - Generates a sparse grid of nodes and weights according to the level-`size` Gauss-Hermite
+            - ``'grid'`` - Generate a sparse grid of nodes and weights according to the level-``size`` Gauss-Hermite
               quadrature rule. Weights can be negative.
 
-            - ``'nested_grid'`` - Generates a sparse grid of nodes and weights according to the level `size` nested
+            - ``'nested_grid'`` - Generate a sparse grid of nodes and weights according to the level ``size`` nested
               Gauss-Hermite quadrature rule. Weights can be negative.
 
     size : `int`
-        The number of draws if `specification` is ``'monte_carlo'``, and the level of the quadrature rule otherwise.
+        The number of draws if ``specification`` is ``'monte_carlo'``, and the level of the quadrature rule otherwise.
     seed : `int, optional`
-        Passed to :class:`numpy.random.RandomState` when `specification` is ``'monte_carlo'`` to seed the random number
-        generator before building nodes. By default, a seed is not passed to the random number generator.
+        Passed to :class:`numpy.random.RandomState` when ``specification`` is ``'monte_carlo'`` to seed the random
+        number generator before building nodes. By default, a seed is not passed to the random number generator.
 
     Examples
     --------
     .. toctree::
 
-       /notebooks/api/integration.ipynb
+       /_notebooks/api/integration.ipynb
 
     """
 

@@ -62,3 +62,5 @@ build
 # documentation generated files
 docs/_api
 docs/_build
+docs/_downloads
+docs/_notebooks

@@ -1,12 +1,12 @@
 Tutorial
 =========
 
-This section uses a series of `Jupyter Notebooks <http://jupyter.org/>`_ to explain how pyblp can be used to solve example problems, compute post-estimation outputs, and simulate problems. Other examples can be found in the :doc:`API Documentation </api>`.
+This section uses a series of `Jupyter Notebooks <http://jupyter.org/>`_ to explain how pyblp can be used to solve example problems, compute post-estimation outputs, and simulate problems. Other examples can be found in the :ref:`api:API Documentation`.
 
 .. toctree::
 
-   notebooks/tutorial/nevo.ipynb
-   notebooks/tutorial/blp.ipynb
-   notebooks/tutorial/logit.ipynb
-   notebooks/tutorial/nesting.ipynb
-   notebooks/tutorial/simulation.ipynb
+   _notebooks/tutorial/nevo.ipynb
+   _notebooks/tutorial/blp.ipynb
+   _notebooks/tutorial/logit.ipynb
+   _notebooks/tutorial/nesting.ipynb
+   _notebooks/tutorial/simulation.ipynb
