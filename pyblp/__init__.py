@@ -12,6 +12,19 @@ from .economies.results.optimal_instrument_results import OptimalInstrumentResul
 from .economies.results.problem_results import ProblemResults
 from .economies.results.simulation_results import SimulationResults
 from .economies.simulation import Simulation
+from .exceptions import (
+    AbsorptionConvergenceError, AbsorptionInversionError, CostsFloatingPointError, CostsReversionError,
+    DeltaConvergenceError, DeltaFloatingPointError, DeltaReversionError, EquilibriumPricesConvergenceError,
+    EquilibriumPricesFloatingPointError, EquilibriumSharesFloatingPointError,
+    FittedValuesInversionError, GMMMomentCovariancesInversionError, GMMParameterCovariancesInversionError,
+    GradientReversionError, IntraFirmJacobianInversionError, InvalidMomentCovariancesError,
+    InvalidParameterCovariancesError, LargeInitialParametersError, LinearParameterCovariancesInversionError,
+    MultipleErrors, NonpositiveCostsError, ObjectiveReversionError,
+    OmegaByBetaJacobianFloatingPointError, OmegaByBetaJacobianReversionError,
+    OmegaByThetaJacobianFloatingPointError, OmegaByThetaJacobianReversionError, SharesByXiJacobianInversionError,
+    SyntheticPricesConvergenceError, SyntheticPricesFloatingPointError, SyntheticSharesFloatingPointError,
+    ThetaConvergenceError, XiByThetaJacobianFloatingPointError, XiByThetaJacobianReversionError
+)
 from .primitives import Agents, Products
 from .utilities.basics import parallel
 from .version import __version__
@@ -29,6 +42,17 @@ __all__ = [
     'ProblemResults',
     'SimulationResults',
     'Simulation',
+    'AbsorptionConvergenceError', 'AbsorptionInversionError', 'CostsFloatingPointError', 'CostsReversionError',
+    'DeltaConvergenceError', 'DeltaFloatingPointError', 'DeltaReversionError', 'EquilibriumPricesConvergenceError',
+    'EquilibriumPricesFloatingPointError', 'EquilibriumSharesFloatingPointError',
+    'FittedValuesInversionError', 'GMMMomentCovariancesInversionError', 'GMMParameterCovariancesInversionError',
+    'GradientReversionError', 'IntraFirmJacobianInversionError', 'InvalidMomentCovariancesError',
+    'InvalidParameterCovariancesError', 'LargeInitialParametersError', 'LinearParameterCovariancesInversionError',
+    'MultipleErrors', 'NonpositiveCostsError', 'ObjectiveReversionError',
+    'OmegaByBetaJacobianFloatingPointError', 'OmegaByBetaJacobianReversionError',
+    'OmegaByThetaJacobianFloatingPointError', 'OmegaByThetaJacobianReversionError', 'SharesByXiJacobianInversionError',
+    'SyntheticPricesConvergenceError', 'SyntheticPricesFloatingPointError', 'SyntheticSharesFloatingPointError',
+    'ThetaConvergenceError', 'XiByThetaJacobianFloatingPointError', 'XiByThetaJacobianReversionError',
     'Agents', 'Products',
     'parallel',
     '__version__'

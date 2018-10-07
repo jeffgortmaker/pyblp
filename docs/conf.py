@@ -20,7 +20,7 @@ read = lambda p: Path(Path(__file__).resolve().parent / p).read_text()
 # configure locations of other configuration files
 html_static_path = ['static']
 templates_path = ['templates']
-exclude_patterns = templates_path + ['notebooks', '_downloads', '_build', '**.ipynb_checkpoints']
+exclude_patterns = ['_build', '_downloads', 'notebooks', 'templates', '**.ipynb_checkpoints']
 
 # configure project information
 language = 'en'
