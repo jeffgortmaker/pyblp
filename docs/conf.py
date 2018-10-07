@@ -92,10 +92,10 @@ def process_notebooks() -> None:
 
         # manipulate notebook cells
         for notebook_cell, download_cell in zip(notebook['cells'], download['cells']):
-            # reset execution counts
-            if 'execution_count' in notebook_cell:
-                notebook_cell['execution_count'] = download_cell['execution_count'] = 1
-                continue
+            # reset download execution counts
+            for data in [download_cell] + download_cell.get('outputs', []):
+                if 'execution_count' in data:
+                    data['execution_count'] = 1
 
             # replace supported Sphinx domains with Markdown equivalents
             if notebook_cell['cell_type'] == 'markdown':
@@ -130,7 +130,7 @@ def process_notebooks() -> None:
         for updated, location in [(download, '_downloads'), (notebook, '_notebooks')]:
             updated_path = source_path / Path(location, *relative_parts)
             updated_path.parent.mkdir(parents=True, exist_ok=True)
-            updated_path.write_text(json.dumps(updated))
+            updated_path.write_text(json.dumps(updated, indent=1, sort_keys=True, separators=(', ', ': ')))
 
 
 def process_signature(*args: Any) -> Optional[Tuple[str, str]]:
