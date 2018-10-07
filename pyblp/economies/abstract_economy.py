@@ -100,17 +100,17 @@ class AbstractEconomy(abc.ABC, StringRepresentation):
 
         # associate dimensions and formulations with names
         dimension_mapping = collections.OrderedDict([
-            (("N:", "Products"), self.N),
-            (("T:", "Markets"), self.T),
-            (("K1:", "Linear Characteristics"), self.K1),
-            (("K2:", "Nonlinear Characteristics"), self.K2),
-            (("K3:", "Cost Characteristics"), self.K3),
-            (("D:", "Demographics"), self.D),
-            (("MD:", "Demand Instruments"), self.MD),
-            (("MS:", "Supply Instruments"), self.MS),
-            (("ED:", "Demand FEs"), self.ED),
-            (("ES:", "Supply FEs"), self.ES),
-            (("H:", "Nesting Groups"), self.H)
+            ("N", self.N),
+            ("T", self.T),
+            ("K1", self.K1),
+            ("K2", self.K2),
+            ("K3", self.K3),
+            ("D", self.D),
+            ("MD", self.MD),
+            ("MS", self.MS),
+            ("ED", self.ED),
+            ("ES", self.ES),
+            ("H", self.H)
         ])
         formulation_mapping = collections.OrderedDict([
             ("X1: Linear Characteristics", self._X1_formulations),
@@ -120,14 +120,13 @@ class AbstractEconomy(abc.ABC, StringRepresentation):
         ])
 
         # build a dimensions section
-        dimension_widths = [max(len(k1), len(k2), len(str(d))) for (k1, k2), d in dimension_mapping.items()]
+        dimension_widths = [max(len(k) + 2, len(str(d))) for k, d in dimension_mapping.items() if d > 0]
         dimension_formatter = TableFormatter(dimension_widths)
         dimension_section = [
             "Dimensions:",
             dimension_formatter.line(),
-            dimension_formatter([k[0] for k in dimension_mapping]),
-            dimension_formatter([k[1] for k in dimension_mapping], underline=True),
-            dimension_formatter(list(dimension_mapping.values())),
+            dimension_formatter([k for k, d in dimension_mapping.items() if d > 0], underline=True),
+            dimension_formatter([d for k, d in dimension_mapping.items() if d > 0]),
             dimension_formatter.line()
         ]
 
