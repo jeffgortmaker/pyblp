@@ -54,13 +54,7 @@ class OptimalInstrumentResults(StringRepresentation):
 
     Examples
     --------
-    .. only:: html
-
-       - :doc:`Tutorial </tutorial>`
-
-    .. only:: latex
-
-       Refer to the online documentation.
+        - :doc:`Tutorial </tutorial>`
 
     """
 
@@ -134,13 +128,7 @@ class OptimalInstrumentResults(StringRepresentation):
 
         Examples
         --------
-        .. only:: html
-
-           - :doc:`Tutorial </tutorial>`
-
-        .. only:: latex
-
-           Refer to the online documentation.
+            - :doc:`Tutorial </tutorial>`
 
         """
         from ..problem import OptimalInstrumentProblem  # noqa

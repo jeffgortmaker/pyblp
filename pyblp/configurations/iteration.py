@@ -67,15 +67,9 @@ class Iteration(StringRepresentation):
 
     Examples
     --------
-    .. only:: html
+    .. toctree::
 
-       .. toctree::
-
-          /_notebooks/api/iteration.ipynb
-
-    .. only:: latex
-
-       Refer to the online documentation.
+       /_notebooks/api/iteration.ipynb
 
     """
 

@@ -1,7 +1,9 @@
 """Sphinx configuration."""
 
 import ast
+import copy
 import os
+import json
 from pathlib import Path
 import re
 from typing import Any, Optional, Tuple
@@ -34,11 +36,16 @@ nitpicky = True
 tls_verify = False
 master_doc = 'index'
 
+# construct a RTD URL that will be used in absolute links and make it available to included files
+rtd_version = os.environ.get('READTHEDOCS_VERSION', 'latest')
+rtd_url = f'https://{project}.readthedocs.io/{language}/{rtd_version}'
+
 # configure extensions
 extensions = [
     'sphinx.ext.autosectionlabel',
     'sphinx.ext.autosummary',
     'sphinx.ext.intersphinx',
+    'sphinx.ext.extlinks',
     'sphinx.ext.autodoc',
     'sphinx.ext.mathjax',
     'sphinx.ext.napoleon',
@@ -54,67 +61,77 @@ intersphinx_mapping = {
     'pandas': ('http://pandas.pydata.org/pandas-docs/stable/', None),
 
 }
+extlinks = {
+    'rtd': (f'{rtd_url}/%s', None)
+}
 math_number_all = True
 autosummary_generate = True
 numpydoc_show_class_members = False
 autosectionlabel_prefix_document = True
 nbsphinx_prolog = read('templates/nbsphinx_prolog.rst')
 
-# configure HTM information
+# configure HTML information
 html_theme = 'sphinx_rtd_theme'
 
 # configure LaTeX information
-latex_show_urls = 'footnote'
 latex_elements = {
     'preamble': read('static/preamble.tex')
 }
 
 
 def process_notebooks() -> None:
-    """Copy notebook files to _notebooks and _downloads, replacing domains with Markdown equivalents."""
-
-    # construct a RTD URL that will be used in absolute links
-    rtd_version = os.environ.get('READTHEDOCS_VERSION', 'latest')
-    rtd_url = f'https://{project}.readthedocs.io/{language}/{rtd_version}/'
-
-    # load each notebook
+    """Copy notebook files to _notebooks and _downloads, resetting executing counts and replacing domains with Markdown
+    equivalents.
+    """
     for notebook_path in Path(source_path / 'notebooks').glob('**/*.ipynb'):
-        download = notebook = notebook_path.read_text()
+        notebook = json.loads(notebook_path.read_text())
+        download = copy.deepcopy(notebook)
 
         # extract parts of the path relative to the notebooks directory and construct the directory's relative location
         relative_parts = notebook_path.relative_to(source_path).parts[1:]
         relative_location = '../' * len(relative_parts)
 
-        # extract the text, document, and section associated with supported domains
-        for role, content in re.findall(':([a-z]+):`([^`]+)`', notebook):
-            domain = f':{role}:`{content}`'
-            if role == 'ref':
-                document, text = content.split(':', 1)
-                section = re.sub(r'-+', '-', re.sub('[^0-9a-zA-Z]+', '-', text)).strip('-').lower()
-            elif role in {'mod', 'func', 'class', 'meth', 'attr', 'exc'}:
-                text = f'`{content}`'
-                section = f'{project}.{content}'
-                document = f'_api/{project}.{content}'
-                if role == 'mod':
-                    section = f'module-{section}'
-                elif role == 'attr':
-                    document = document.rsplit('.', 1)[0]
-            else:
-                raise NotImplementedError(f"The domain '{domain}' is not supported.")
+        # manipulate notebook cells
+        for notebook_cell, download_cell in zip(notebook['cells'], download['cells']):
+            # reset execution counts
+            if 'execution_count' in notebook_cell:
+                notebook_cell['execution_count'] = download_cell['execution_count'] = 1
+                continue
 
-            # reStructuredText does not support linked code (API links will be formatted with Javascript overrides)
-            download_text = text
-            notebook_text = text.strip('`')
+            # replace supported Sphinx domains with Markdown equivalents
+            if notebook_cell['cell_type'] == 'markdown':
+                for source_index, notebook_source in enumerate(notebook_cell['source']):
+                    for role, content in re.findall(':([a-z]+):`([^`]+)`', notebook_source):
+                        domain = f':{role}:`{content}`'
+                        if role == 'ref':
+                            document, text = content.split(':', 1)
+                            section = re.sub(r'-+', '-', re.sub('[^0-9a-zA-Z]+', '-', text)).strip('-').lower()
+                        elif role in {'mod', 'func', 'class', 'meth', 'attr', 'exc'}:
+                            text = f'`{content}`'
+                            section = f'{project}.{content}'
+                            document = f'_api/{project}.{content}'
+                            if role == 'mod':
+                                section = f'module-{section}'
+                            elif role == 'attr':
+                                document = document.rsplit('.', 1)[0]
+                        else:
+                            raise NotImplementedError(f"The domain '{domain}' is not supported.")
 
-            # replace the domain with Markdown equivalents
-            download = download.replace(domain, f'[{download_text}]({rtd_url}{document}.html#{section})')
-            notebook = notebook.replace(domain, f'[{notebook_text}]({relative_location}{document}.rst#{section})')
+                        # replace the domain with Markdown equivalents (reStructuredText doesn't support linked code)
+                        notebook_cell['source'][source_index] = notebook_cell['source'][source_index].replace(
+                            domain,
+                            f'[{text.strip("`")}]({relative_location}{document}.rst#{section})'
+                        )
+                        download_cell['source'][source_index] = download_cell['source'][source_index].replace(
+                            domain,
+                            f'[{text}]({rtd_url}/{document}.html#{section})'
+                        )
 
         # save the updated notebook files
         for updated, location in [(download, '_downloads'), (notebook, '_notebooks')]:
             updated_path = source_path / Path(location, *relative_parts)
             updated_path.parent.mkdir(parents=True, exist_ok=True)
-            updated_path.write_text(updated)
+            updated_path.write_text(json.dumps(updated))
 
 
 def process_signature(*args: Any) -> Optional[Tuple[str, str]]:

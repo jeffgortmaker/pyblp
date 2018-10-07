@@ -111,15 +111,9 @@ class Optimization(StringRepresentation):
 
     Examples
     --------
-    .. only:: html
+    .. toctree::
 
-       .. toctree::
-
-          /_notebooks/api/optimization.ipynb
-
-    .. only:: latex
-
-       Refer to the online documentation.
+       /_notebooks/api/optimization.ipynb
 
     """
 

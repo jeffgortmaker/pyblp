@@ -240,13 +240,7 @@ class Simulation(AbstractEconomy):
 
     Examples
     --------
-    .. only:: html
-
-       - :doc:`Tutorial </tutorial>`
-
-    .. only:: latex
-
-       Refer to the online documentation.
+        - :doc:`Tutorial </tutorial>`
 
     """
 
@@ -527,13 +521,7 @@ class Simulation(AbstractEconomy):
 
         Examples
         --------
-        .. only:: html
-
-           - :doc:`Tutorial </tutorial>`
-
-        .. only:: latex
-
-           Refer to the online documentation.
+            - :doc:`Tutorial </tutorial>`
 
         """
         errors: List[Error] = []
