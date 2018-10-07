@@ -91,9 +91,15 @@ class Formulation(StringRepresentation):
 
     Examples
     --------
-    .. toctree::
+    .. only:: html
 
-       /_notebooks/api/formulation.ipynb
+       .. toctree::
+
+          /_notebooks/api/formulation.ipynb
+
+    .. only:: latex
+
+       Refer to the online documentation.
 
     """
 

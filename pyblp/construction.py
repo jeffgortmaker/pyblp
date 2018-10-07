@@ -42,9 +42,15 @@ def build_id_data(T: int, J: int, F: int, mergers: Sequence[Dict[int, int]] = ()
 
     Examples
     --------
-    .. toctree::
+    .. only:: html
 
-       /_notebooks/api/build_id_data.ipynb
+       .. toctree::
+
+          /_notebooks/api/build_id_data.ipynb
+
+    .. only:: latex
+
+       Refer to the online documentation.
 
     """
 
@@ -125,9 +131,15 @@ def build_ownership(product_data: Mapping, kappa_specification: Optional[Callabl
 
     Examples
     --------
-    .. toctree::
+    .. only:: html
 
-       /_notebooks/api/build_ownership.ipynb
+       .. toctree::
+
+          /_notebooks/api/build_ownership.ipynb
+
+    .. only:: latex
+
+       Refer to the online documentation.
 
     """
 
@@ -212,9 +224,15 @@ def build_blp_instruments(formulation: Formulation, product_data: Mapping, firms
 
     Examples
     --------
-    .. toctree::
+    .. only:: html
 
-       /_notebooks/api/build_blp_instruments.ipynb
+       .. toctree::
+
+          /_notebooks/api/build_blp_instruments.ipynb
+
+    .. only:: latex
+
+       Refer to the online documentation.
 
     """
 
@@ -263,9 +281,15 @@ def build_matrix(formulation: Formulation, data: Mapping) -> Array:
 
     Examples
     --------
-    .. toctree::
+    .. only:: html
 
-       /_notebooks/api/build_matrix.ipynb
+       .. toctree::
+
+          /_notebooks/api/build_matrix.ipynb
+
+    .. only:: latex
+
+       Refer to the online documentation.
 
     """
     if not isinstance(formulation, Formulation):
@@ -295,9 +319,15 @@ def compute_fitted_values(variable: Any, formulation: Formulation, data: Mapping
 
     Examples
     --------
-    .. toctree::
+    .. only:: html
 
-       /_notebooks/api/compute_fitted_values.ipynb
+       .. toctree::
+
+          /_notebooks/api/compute_fitted_values.ipynb
+
+    .. only:: latex
+
+       Refer to the online documentation.
 
     """
 

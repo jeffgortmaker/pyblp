@@ -1,5 +1,6 @@
 formats:
-    - none
+    - htmlzip
+    - pdf
 
 build:
     image: latest

@@ -70,7 +70,13 @@ class AbstractProblemResults(abc.ABC, StringRepresentation):
 
         Examples
         --------
-            - :doc:`Tutorial </tutorial>`
+        .. only:: html
+
+           - :doc:`Tutorial </tutorial>`
+
+        .. only:: latex
+
+           Refer to the online documentation.
 
         """
         output(f"Computing aggregate elasticities with respect to {name} ...")
@@ -100,7 +106,13 @@ class AbstractProblemResults(abc.ABC, StringRepresentation):
 
         Examples
         --------
-            - :doc:`Tutorial </tutorial>`
+        .. only:: html
+
+           - :doc:`Tutorial </tutorial>`
+
+        .. only:: latex
+
+           Refer to the online documentation.
 
         """
         output(f"Computing elasticities with respect to {name} ...")
@@ -131,7 +143,13 @@ class AbstractProblemResults(abc.ABC, StringRepresentation):
 
         Examples
         --------
-            - :doc:`Tutorial </tutorial>`
+        .. only:: html
+
+           - :doc:`Tutorial </tutorial>`
+
+        .. only:: latex
+
+           Refer to the online documentation.
 
         """
         output(f"Computing diversion ratios with respect to {name} ...")
@@ -161,7 +179,13 @@ class AbstractProblemResults(abc.ABC, StringRepresentation):
 
         Examples
         --------
-            - :doc:`Tutorial </tutorial>`
+        .. only:: html
+
+           - :doc:`Tutorial </tutorial>`
+
+        .. only:: latex
+
+           Refer to the online documentation.
 
         """
         output("Computing long run mean diversion ratios ...")
@@ -187,7 +211,13 @@ class AbstractProblemResults(abc.ABC, StringRepresentation):
 
         Examples
         --------
-            - :doc:`Tutorial </tutorial>`
+        .. only:: html
+
+           - :doc:`Tutorial </tutorial>`
+
+        .. only:: latex
+
+           Refer to the online documentation.
 
         """
         output("Extracting diagonals ...")
@@ -215,7 +245,13 @@ class AbstractProblemResults(abc.ABC, StringRepresentation):
 
         Examples
         --------
-            - :doc:`Tutorial </tutorial>`
+        .. only:: html
+
+           - :doc:`Tutorial </tutorial>`
+
+        .. only:: latex
+
+           Refer to the online documentation.
 
         """
         output("Extracting diagonal means ...")
@@ -236,7 +272,13 @@ class AbstractProblemResults(abc.ABC, StringRepresentation):
 
         Examples
         --------
-            - :doc:`Tutorial </tutorial>`
+        .. only:: html
+
+           - :doc:`Tutorial </tutorial>`
+
+        .. only:: latex
+
+           Refer to the online documentation.
 
         """
         output("Computing marginal costs ...")
@@ -273,7 +315,13 @@ class AbstractProblemResults(abc.ABC, StringRepresentation):
 
         Examples
         --------
-            - :doc:`Tutorial </tutorial>`
+        .. only:: html
+
+           - :doc:`Tutorial </tutorial>`
+
+        .. only:: latex
+
+           Refer to the online documentation.
 
         """
         output("Solving for approximate equilibrium prices ...")
@@ -320,7 +368,13 @@ class AbstractProblemResults(abc.ABC, StringRepresentation):
 
         Examples
         --------
-            - :doc:`Tutorial </tutorial>`
+        .. only:: html
+
+           - :doc:`Tutorial </tutorial>`
+
+        .. only:: latex
+
+           Refer to the online documentation.
 
         """
         output("Solving for equilibrium prices ...")
@@ -350,7 +404,13 @@ class AbstractProblemResults(abc.ABC, StringRepresentation):
 
         Examples
         --------
-            - :doc:`Tutorial </tutorial>`
+        .. only:: html
+
+           - :doc:`Tutorial </tutorial>`
+
+        .. only:: latex
+
+           Refer to the online documentation.
 
         """
         output("Computing shares ...")
@@ -383,7 +443,13 @@ class AbstractProblemResults(abc.ABC, StringRepresentation):
 
         Examples
         --------
-            - :doc:`Tutorial </tutorial>`
+        .. only:: html
+
+           - :doc:`Tutorial </tutorial>`
+
+        .. only:: latex
+
+           Refer to the online documentation.
 
         """
         output("Computing HHI ...")
@@ -415,7 +481,13 @@ class AbstractProblemResults(abc.ABC, StringRepresentation):
 
         Examples
         --------
-            - :doc:`Tutorial </tutorial>`
+        .. only:: html
+
+           - :doc:`Tutorial </tutorial>`
+
+        .. only:: latex
+
+           Refer to the online documentation.
 
         """
         output("Computing markups ...")
@@ -451,7 +523,13 @@ class AbstractProblemResults(abc.ABC, StringRepresentation):
 
         Examples
         --------
-            - :doc:`Tutorial </tutorial>`
+        .. only:: html
+
+           - :doc:`Tutorial </tutorial>`
+
+        .. only:: latex
+
+           Refer to the online documentation.
 
         """
         output("Computing profits ...")
@@ -506,7 +584,13 @@ class AbstractProblemResults(abc.ABC, StringRepresentation):
 
         Examples
         --------
-            - :doc:`Tutorial </tutorial>`
+        .. only:: html
+
+           - :doc:`Tutorial </tutorial>`
+
+        .. only:: latex
+
+           Refer to the online documentation.
 
         """
         output("Computing consumer surpluses with the equation that assumes away nonlinear income effects ...")

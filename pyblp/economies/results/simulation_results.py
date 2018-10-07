@@ -41,7 +41,13 @@ class SimulationResults(StringRepresentation):
 
     Examples
     --------
-        - :doc:`Tutorial </tutorial>`
+    .. only:: html
+
+       - :doc:`Tutorial </tutorial>`
+
+    .. only:: latex
+
+       Refer to the online documentation.
 
     """
 
@@ -112,7 +118,13 @@ class SimulationResults(StringRepresentation):
 
         Examples
         --------
-            - :doc:`Tutorial </tutorial>`
+        .. only:: html
+
+           - :doc:`Tutorial </tutorial>`
+
+        .. only:: latex
+
+           Refer to the online documentation.
 
         """
         from ..problem import Problem  # noqa

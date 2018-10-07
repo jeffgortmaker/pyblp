@@ -69,9 +69,15 @@ BLP_AGENTS_LOCATION : `str`
 
 Examples
 --------
-.. toctree::
+.. only:: html
 
-   /_notebooks/api/data.ipynb
+       .. toctree::
+
+          /_notebooks/api/data.ipynb
+
+    .. only:: latex
+
+       Refer to the online documentation.
 
 """
 

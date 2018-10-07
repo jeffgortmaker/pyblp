@@ -14,6 +14,9 @@ import sphinx.application
 # get the location of the source directory
 source_path = Path(__file__).resolve().parent
 
+# define a function that reads a file in this directory
+read = lambda p: Path(Path(__file__).resolve().parent / p).read_text()
+
 # configure locations of other configuration files
 html_static_path = ['static']
 templates_path = ['templates']
@@ -55,10 +58,16 @@ math_number_all = True
 autosummary_generate = True
 numpydoc_show_class_members = False
 autosectionlabel_prefix_document = True
-nbsphinx_prolog = Path(source_path / templates_path[0] / 'nbsphinx_prolog.rst').read_text()
+nbsphinx_prolog = read('templates/nbsphinx_prolog.rst')
 
-# configure theme information
+# configure HTM information
 html_theme = 'sphinx_rtd_theme'
+
+# configure LaTeX information
+latex_show_urls = 'footnote'
+latex_elements = {
+    'preamble': read('static/preamble.tex')
+}
 
 
 def process_notebooks() -> None:

@@ -53,9 +53,15 @@ def parallel(processes: int) -> Iterator[None]:
 
     Examples
     --------
-    .. toctree::
+    .. only:: html
 
-       /_notebooks/api/parallel.ipynb
+       .. toctree::
+
+          /_notebooks/api/parallel.ipynb
+
+    .. only:: latex
+
+       Refer to the online documentation.
 
     """
 

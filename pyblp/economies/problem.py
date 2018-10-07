@@ -294,7 +294,13 @@ class AbstractProblem(AbstractEconomy):
 
         Examples
         --------
-            - :doc:`Tutorial </tutorial>`
+        .. only:: html
+
+           - :doc:`Tutorial </tutorial>`
+
+        .. only:: latex
+
+           Refer to the online documentation.
 
         """
 
@@ -903,7 +909,13 @@ class Problem(AbstractProblem):
 
     Examples
     --------
-        - :doc:`Tutorial </tutorial>`
+    .. only:: html
+
+       - :doc:`Tutorial </tutorial>`
+
+    .. only:: latex
+
+       Refer to the online documentation.
 
     """
 

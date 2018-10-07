@@ -46,9 +46,15 @@ class Integration(StringRepresentation):
 
     Examples
     --------
-    .. toctree::
+    .. only:: html
 
-       /_notebooks/api/integration.ipynb
+       .. toctree::
+
+          /_notebooks/api/integration.ipynb
+
+    .. only:: latex
+
+       Refer to the online documentation.
 
     """
 

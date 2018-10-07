@@ -1,24 +1,28 @@
 pyblp
 =====
 
-.. note::
+.. only:: html
 
-   This package is in beta. In future versions, the API will change substantially. Please use the
-   `GitHub issue tracker <https://github.com/jeffgortmaker/pyblp/issues>`_ to report bugs or to request features.
+   The documentation can be navigated with the sidebar, the links below, or the :ref:`index <genindex>`.
 
-.. include:: ../README.rst
-   :start-after: docs-start
+.. raw:: latex
+
+   \part{User Documentation}
 
 .. toctree::
    :caption: User Documentation
 
+   introduction
    notation
    background
    tutorial
    api
    references
-   genindex
    legal
+
+.. raw:: latex
+
+   \part{Developer Documentation}
 
 .. toctree::
    :caption: Developer Documentation
@@ -26,3 +30,7 @@ pyblp
    contributing
    testing
    versions
+
+.. raw:: latex
+
+   \part{Indices}
