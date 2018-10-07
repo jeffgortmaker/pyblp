@@ -32,7 +32,7 @@ You can choose to run only one environment, such as the one that builds the docu
 Test Organization
 -----------------
 
-Fixtures, which are defined in ``tests.confest``, configure the testing environment and simulate problems according to a range of specifications.
+Fixtures, which are defined in ``tests.conftest``, configure the testing environment and simulate problems according to a range of specifications.
 
 Most BLP-specific tests in ``tests.test_blp`` verify properties about results obtained by solving the simulated problems under various parameterizations. Examples include:
 
