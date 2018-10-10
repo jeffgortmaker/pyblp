@@ -5,8 +5,8 @@ This section uses a series of `Jupyter Notebooks <http://jupyter.org/>`_ to expl
 
 .. toctree::
 
+   _notebooks/tutorial/logit_nested.ipynb
    _notebooks/tutorial/nevo.ipynb
    _notebooks/tutorial/blp.ipynb
-   _notebooks/tutorial/logit.ipynb
    _notebooks/tutorial/nesting.ipynb
    _notebooks/tutorial/simulation.ipynb
