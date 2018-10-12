@@ -6,6 +6,7 @@ import os
 import json
 from pathlib import Path
 import re
+import shutil
 from typing import Any, Optional, Tuple
 
 import astunparse
@@ -76,6 +77,12 @@ html_theme = 'sphinx_rtd_theme'
 latex_elements = {
     'preamble': read('static/preamble.tex')
 }
+
+
+def clean_directories() -> None:
+    """Clean directories that will be generated."""
+    for name in ['_api', '_downloads', '_notebooks']:
+        shutil.rmtree(source_path / name, ignore_errors=True)
 
 
 def process_notebooks() -> None:
@@ -149,7 +156,8 @@ def process_signature(*args: Any) -> Optional[Tuple[str, str]]:
 
 
 def setup(app: sphinx.application.Sphinx) -> None:
-    """Process notebooks, configure extra resources, and strip type hints."""
+    """Clean directories, process notebooks, configure extra resources, and strip type hints."""
+    clean_directories()
     process_notebooks()
     app.add_javascript('override.js')
     app.add_stylesheet('override.css')
