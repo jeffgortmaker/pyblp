@@ -1,11 +1,12 @@
 """Optimization routines."""
 
+import contextlib
 import functools
 import os
 import sys
 import warnings
 from pathlib import Path
-from typing import Any, Callable, Iterable, Optional, Tuple, Union
+from typing import Any, Callable, Iterable, Iterator, Optional, Tuple, Union
 
 import numpy as np
 import scipy.optimize
@@ -192,7 +193,7 @@ class Optimization(StringRepresentation):
                 if method in {'l-bfgs-b', 'slsqp'}:
                     self._method_options['iprint'] = 2
 
-        # validate options for non-custom methods
+        # validate options for non-custom methods and make sure that Knitro works
         self._method_options.update(method_options)
         if method == 'knitro':
             knitro_dir = self._method_options.pop('knitro_dir')
@@ -210,6 +211,8 @@ class Optimization(StringRepresentation):
                         f"knitro_dir optimization option should point to the Knitro installation directory."
                     )
                 sys.path.append(str(full_path))
+            with knitro_context_manager():
+                pass
 
     def __str__(self) -> str:
         """Format the configuration as a string."""
@@ -283,35 +286,10 @@ def knitro_optimizer(
         iteration_callback: Callable[[], None], compute_gradient: bool, **knitro_options: dict) -> (
         Tuple[Array, bool]):
     """Optimize with Knitro."""
-    try:
-        import knitro
-    except OSError as exception:
-        if 'Win32' in repr(exception):
-            raise EnvironmentError("Make sure both Knitro and Python are 32- or 64-bit.") from exception
-        raise
-
-    # modify Knitro to work with numpy
-    import knitroNumPy
-    knitro.KTR_array_handler._cIntArray = knitroNumPy._cIntArray
-    knitro.KTR_array_handler._cDoubleArray = knitroNumPy._cDoubleArray
-    knitro.KTR_array_handler._userArray = knitroNumPy._userArray
-    knitro.KTR_array_handler._userToCArray = knitroNumPy._userToCArray
-    knitro.KTR_array_handler._cToUserArray = knitroNumPy._cToUserArray
-
-    # create the Knitro context and attempt to free it if anything goes wrong
-    knitro_context = None
-    try:
-        knitro_context = knitro.KTR_new()
-        if not knitro_context:
-            raise RuntimeError(
-                "Failed to find a Knitro license. Make sure that Knitro is properly installed. You may have to create "
-                "the environment variable ARTELYS_LICENSE and set it to the location of the directory with the license "
-                "file."
-            )
-
-        # initialize an empty cache and an iteration counter
-        cache = None
+    with knitro_context_manager() as (knitro, knitro_context):
+        # initialize an iteration counter and and empty cache
         iterations = 0
+        cache: Optional[Tuple[Array, Union[float, Tuple[float, Array]]]] = None
 
         # define a callback for objective and gradient computation
         def combined_callback(
@@ -408,6 +386,37 @@ def knitro_optimizer(
         # Knitro was only successful if its return code was 0 (final solution satisfies the termination conditions for
         #   verifying optimality) or between -100 and -199 (a feasible approximate solution was found)
         return values_store, return_code > -200
+
+
+@contextlib.contextmanager
+def knitro_context_manager() -> Iterator[Tuple[Any, Any]]:
+    """Import Knitro and initialize its context."""
+    try:
+        import knitro
+    except OSError as exception:
+        if 'Win32' in repr(exception):
+            raise EnvironmentError("Make sure both Knitro and Python are 32- or 64-bit.") from exception
+        raise
+
+    # modify Knitro to work with numpy
+    import knitroNumPy
+    knitro.KTR_array_handler._cIntArray = knitroNumPy._cIntArray
+    knitro.KTR_array_handler._cDoubleArray = knitroNumPy._cDoubleArray
+    knitro.KTR_array_handler._userArray = knitroNumPy._userArray
+    knitro.KTR_array_handler._userToCArray = knitroNumPy._userToCArray
+    knitro.KTR_array_handler._cToUserArray = knitroNumPy._cToUserArray
+
+    # create the Knitro context and attempt to free it if anything goes wrong
+    knitro_context = None
+    try:
+        knitro_context = knitro.KTR_new()
+        if not knitro_context:
+            raise OSError(
+                "Failed to find a Knitro license. Make sure that Knitro is properly installed. You may have to create "
+                "the environment variable ARTELYS_LICENSE and set it to the location of the directory with the license "
+                "file."
+            )
+        yield knitro, knitro_context
     finally:
         try:
             knitro.KTR_free(knitro_context)
