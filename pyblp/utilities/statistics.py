@@ -136,34 +136,12 @@ def compute_gmm_error_covariance(u1: Array, u2: Array) -> Array:
 
 def compute_gmm_moments(u_list: List[Array], Z_list: List[Array]) -> Array:
     """Compute GMM moment conditions."""
-
-    # count dimensions
-    N = u_list[0].shape[0]
-    M = sum(Z.shape[1] for Z in Z_list)
-
-    # compute the moments
-    g = np.zeros((N, M), options.dtype)
-    for n in range(N):
-        Z_n = scipy.linalg.block_diag(*(Z[n] for Z in Z_list))
-        u_n = np.vstack(u[n] for u in u_list)
-        g[n] = (Z_n.T @ u_n).flat
-    return g
+    return np.hstack(u * Z for u, Z in zip(u_list, Z_list))
 
 
 def compute_gmm_moments_mean(u_list: List[Array], Z_list: List[Array]) -> Array:
     """Compute GMM moment conditions, averaged across observations."""
-
-    # count dimensions
-    N = u_list[0].shape[0]
-    M = sum(Z.shape[1] for Z in Z_list)
-
-    # compute the moment means
-    g_bar = np.zeros((M, 1))
-    for n in range(N):
-        Z_n = scipy.linalg.block_diag(*(Z[n] for Z in Z_list))
-        u_n = np.vstack(u[n] for u in u_list)
-        g_bar += Z_n.T @ u_n / N
-    return g_bar
+    return np.c_[compute_gmm_moments(u_list, Z_list).mean(axis=0)]
 
 
 def compute_gmm_moments_jacobian_mean(jacobian_list: List[Array], Z_list: List[Array]) -> Array:
