@@ -632,7 +632,7 @@ class AbstractProblem(AbstractEconomy):
 
         # compute the objective value and replace it with its last value if computation failed
         g_bar = compute_gmm_moments_mean(u_list, Z_list)
-        objective = g_bar.T @ W @ g_bar
+        objective = self.N**2 * g_bar.T @ W @ g_bar
         if not np.isfinite(np.squeeze(objective)):
             objective = progress.objective
             errors.append(exceptions.ObjectiveReversionError())
@@ -641,7 +641,7 @@ class AbstractProblem(AbstractEconomy):
         gradient = np.full_like(theta, np.nan, options.dtype)
         if compute_gradient:
             G_bar = compute_gmm_moments_jacobian_mean(jacobian_list, Z_list)
-            gradient = 2 * (G_bar.T @ W @ g_bar)
+            gradient = self.N**2 * 2 * (G_bar.T @ W @ g_bar)
             bad_gradient_index = ~np.isfinite(gradient)
             if np.any(bad_gradient_index):
                 gradient[bad_gradient_index] = progress.gradient[bad_gradient_index]

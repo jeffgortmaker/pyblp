@@ -125,7 +125,7 @@ The GMM problem is
 .. math:: \min_\theta \bar{g}'W\bar{g},
    :label: objective
 
-in which :math:`\bar{g}` is the sample mean of the moment conditions and :math:`W` is a weighting matrix.
+in which :math:`\bar{g}` is the sample mean of the moment conditions and :math:`W` is a weighting matrix. The objective value is scaled by :math:`N^2` for comparability's sake.
 
 Conventionally, the 2SLS weighting matrix is used in the first stage:
 
