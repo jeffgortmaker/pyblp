@@ -242,7 +242,6 @@ When errors occur, they will either be displayed as warnings or raised as except
    XiByThetaJacobianFloatingPointError
    CostsFloatingPointError
    OmegaByThetaJacobianFloatingPointError
-   OmegaByBetaJacobianFloatingPointError
    SyntheticPricesFloatingPointError
    SyntheticSharesFloatingPointError
    EquilibriumPricesFloatingPointError
@@ -258,7 +257,6 @@ When errors occur, they will either be displayed as warnings or raised as except
    CostsReversionError
    XiByThetaJacobianReversionError
    OmegaByThetaJacobianReversionError
-   OmegaByBetaJacobianReversionError
    AbsorptionInversionError
    FittedValuesInversionError
    SharesByXiJacobianInversionError

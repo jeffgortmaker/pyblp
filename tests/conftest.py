@@ -1,17 +1,19 @@
 """Fixtures used by tests."""
 
+import hashlib
 import os
-from typing import Any, Iterator, Tuple
+from typing import Any, Callable, Dict, Hashable, Iterator, Tuple
 
 import numpy as np
 import patsy
 import pytest
+import scipy.linalg
 
 from pyblp import (
     Formulation, Integration, Problem, ProblemResults, Simulation, SimulationResults, build_id_data, build_ownership,
     options
 )
-from pyblp.utilities.basics import Data, Options, RecArray
+from pyblp.utilities.basics import Array, Data, Options, RecArray
 
 
 # define common types
@@ -21,17 +23,47 @@ SimulatedProblemFixture = Tuple[Simulation, RecArray, Problem, Options, ProblemR
 
 @pytest.fixture(scope='session', autouse=True)
 def configure() -> Iterator[None]:
-    """Configure NumPy so that it raises all warnings as exceptions, and, if a DTYPE environment variable is set in this
-    testing environment that is different from the default data type, use it for all numeric calculations.
+    """Configure NumPy so that it raises all warnings as exceptions. Next, if a DTYPE environment variable is set in
+    this testing environment that is different from the default data type, use it for all numeric calculations. Finally,
+    cache results for SciPy linear algebra inversion routines. This is very memory inefficient but guarantees that
+    matrix inversion will always give rise to the same deterministic result, which is important for precise testing of
+    equality.
     """
+
+    # configure NumPy so that it raises all warnings as exceptions
     old_error = np.seterr(all='raise')
+
+    # use any different data type for all numeric calculations
     old_dtype = options.dtype
     dtype_string = os.environ.get('DTYPE')
     if dtype_string:
         options.dtype = np.dtype(dtype_string)
         if np.finfo(options.dtype).dtype == old_dtype:
             pytest.skip(f"The {dtype_string} data type is the same as the default one in this environment.")
+
+    # define a patch for SciPy functions
+    def patch(uncached: Callable) -> Tuple[Callable, Callable]:
+        """Patch a function by caching its array arguments."""
+        mapping: Dict[Hashable, Array] = {}
+
+        # define the cached function
+        def cached(*args: Array) -> Array:
+            """Replicate the function, caching its results."""
+            nonlocal mapping
+            key = tuple(hashlib.sha1(a.data.tobytes()).digest() for a in args)
+            if key not in mapping:
+                mapping[key] = uncached(*args)
+            return mapping[key]
+        return uncached, cached
+
+    # monkey patch the functions
+    old_inv, scipy.linalg.inv = patch(scipy.linalg.inv)
+    old_solve, scipy.linalg.solve = patch(scipy.linalg.solve)
+
+    # run tests before reverting all changes
     yield
+    scipy.linalg.inv = old_inv
+    scipy.linalg.solve = old_solve
     options.dtype = old_dtype
     np.seterr(**old_error)
 
@@ -48,7 +80,7 @@ def small_logit_simulation() -> SimulationFixture:
             None,
             Formulation('0 + a')
         ),
-        beta=[-5, 1, 1],
+        beta=[1, -5, 1],
         sigma=None,
         gamma=2,
         product_data={
@@ -87,7 +119,7 @@ def large_logit_simulation() -> SimulationFixture:
         },
         xi_variance=0.00001,
         omega_variance=0.00001,
-        correlation=0.9,
+        correlation=0.1,
         costs_type='log',
         seed=2
     )
@@ -158,10 +190,10 @@ def large_nested_logit_simulation() -> SimulationFixture:
 
 @pytest.fixture(scope='session')
 def small_blp_simulation() -> SimulationFixture:
-    """Solve a simulation with two markets, linear prices, a linear/nonlinear characteristic, two cost characteristics,
-    and an acquisition.
+    """Solve a simulation with three markets, linear prices, a linear/nonlinear characteristic, two cost
+    characteristics, and an acquisition.
     """
-    id_data = build_id_data(T=2, J=18, F=3, mergers=[{1: 0}])
+    id_data = build_id_data(T=3, J=18, F=3, mergers=[{1: 0}])
     simulation = Simulation(
         product_formulations=(
             Formulation('0 + prices + x'),
@@ -234,11 +266,11 @@ def large_blp_simulation() -> SimulationFixture:
     id_data = build_id_data(T=10, J=20, F=9, mergers=[{f: 4 + int(f > 0) for f in range(4)}])
     simulation = Simulation(
         product_formulations=(
-            Formulation('1 + prices + x + y + z'),
+            Formulation('1 + prices + x + y + z + q'),
             Formulation('0 + prices + x'),
             Formulation('0 + log(x) + a + b + c')
         ),
-        beta=[1, -6, 1, 2, 3],
+        beta=[1, -10, 1, 2, 3, 1],
         sigma=[
             [1, -0.1],
             [0, +2.0]
@@ -266,17 +298,18 @@ def large_blp_simulation() -> SimulationFixture:
 
 @pytest.fixture(scope='session')
 def small_nested_blp_simulation() -> SimulationFixture:
-    """Solve a simulation with four markets, linear prices, a linear/nonlinear characteristic, three cost
-    characteristics, two nesting groups with different nesting parameters, and an acquisition.
+    """Solve a simulation with five markets, linear prices, a linear/nonlinear characteristic, another linear
+    characteristic, three cost characteristics, two nesting groups with different nesting parameters, and an
+    acquisition.
     """
-    id_data = build_id_data(T=4, J=18, F=3, mergers=[{1: 0}])
+    id_data = build_id_data(T=5, J=18, F=3, mergers=[{1: 0}])
     simulation = Simulation(
         product_formulations=(
-            Formulation('0 + prices + x'),
+            Formulation('0 + prices + x + z'),
             Formulation('0 + x'),
             Formulation('0 + a + b + c')
         ),
-        beta=[-5, 1],
+        beta=[-5, 1, 2],
         sigma=2,
         gamma=[2, 1, 1],
         product_data={
@@ -298,23 +331,23 @@ def small_nested_blp_simulation() -> SimulationFixture:
 @pytest.fixture(scope='session')
 def large_nested_blp_simulation() -> SimulationFixture:
     """Solve a simulation with ten markets, a linear constant, linear/nonlinear prices, a linear/nonlinear/cost
-    characteristic, another three cost characteristics, another two linear characteristics, demographics interacted with
-    prices and the linear/nonlinear/cost characteristic, dense parameter matrices, three nesting groups with the same
-    nesting parameter, an acquisition, a triple acquisition, and a log-linear cost specification.
+    characteristic, another three linear characteristics, another four cost characteristics, demographics interacted
+    with prices and the linear/nonlinear/cost characteristic, three nesting groups with the same nesting parameter, an
+    acquisition, a triple acquisition, and a log-linear cost specification.
     """
     id_data = build_id_data(T=10, J=20, F=9, mergers=[{f: 4 + int(f > 0) for f in range(4)}])
     simulation = Simulation(
         product_formulations=(
-            Formulation('1 + prices + x + y + z'),
+            Formulation('1 + prices + x + y + z + q'),
             Formulation('0 + prices + x'),
-            Formulation('0 + log(x) + a + b + c')
+            Formulation('0 + log(x) + a + b + c + d')
         ),
-        beta=[1, -6, 1, 2, 3],
+        beta=[1, -10, 1, 2, 3, 1],
         sigma=[
-            [1, -0.1],
-            [0, +2.0]
+            [1, 0],
+            [0, 2]
         ],
-        gamma=[0.1, 0.2, 0.3, 0.5],
+        gamma=[0.1, 0.2, 0.3, 0.1, 0.3],
         product_data={
             'market_ids': id_data.market_ids,
             'firm_ids': id_data.firm_ids,
@@ -368,7 +401,8 @@ def simulated_problem(request: Any) -> SimulatedProblemFixture:
         'sigma': simulation.sigma,
         'pi': simulation.pi,
         'rho': simulation.rho,
-        'rho_bounds': (np.zeros_like(simulation.rho), np.minimum(0.9, 2 * simulation.rho)),
+        'beta': np.where(simulation._parameters.alpha_index, simulation.beta if supply else np.nan, np.nan),
+        'rho_bounds': (np.zeros_like(simulation.rho), np.minimum(0.9, 1.5 * simulation.rho)),
         'costs_type': simulation.costs_type,
         'method': '1s'
     }

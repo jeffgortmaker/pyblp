@@ -20,7 +20,6 @@ from .exceptions import (
     GradientReversionError, IntraFirmJacobianInversionError, InvalidMomentCovariancesError,
     InvalidParameterCovariancesError, LargeInitialParametersError, LinearParameterCovariancesInversionError,
     MultipleErrors, NonpositiveCostsError, ObjectiveReversionError,
-    OmegaByBetaJacobianFloatingPointError, OmegaByBetaJacobianReversionError,
     OmegaByThetaJacobianFloatingPointError, OmegaByThetaJacobianReversionError, SharesByXiJacobianInversionError,
     SyntheticPricesConvergenceError, SyntheticPricesFloatingPointError, SyntheticSharesFloatingPointError,
     ThetaConvergenceError, XiByThetaJacobianFloatingPointError, XiByThetaJacobianReversionError
@@ -49,7 +48,6 @@ __all__ = [
     'GradientReversionError', 'IntraFirmJacobianInversionError', 'InvalidMomentCovariancesError',
     'InvalidParameterCovariancesError', 'LargeInitialParametersError', 'LinearParameterCovariancesInversionError',
     'MultipleErrors', 'NonpositiveCostsError', 'ObjectiveReversionError',
-    'OmegaByBetaJacobianFloatingPointError', 'OmegaByBetaJacobianReversionError',
     'OmegaByThetaJacobianFloatingPointError', 'OmegaByThetaJacobianReversionError', 'SharesByXiJacobianInversionError',
     'SyntheticPricesConvergenceError', 'SyntheticPricesFloatingPointError', 'SyntheticSharesFloatingPointError',
     'ThetaConvergenceError', 'XiByThetaJacobianFloatingPointError', 'XiByThetaJacobianReversionError',

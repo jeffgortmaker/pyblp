@@ -142,17 +142,6 @@ class OmegaByThetaJacobianFloatingPointError(Error):
     """
 
 
-class OmegaByBetaJacobianFloatingPointError(Error):
-    r"""Encountered floating point issues when computing the Jacobian of :math:`\omega` (equivalently, of transformed
-    marginal costs) with respect to :math:`\beta`.
-
-    This problem is often due to prior problems or overflow, and can sometimes be mitigated by choosing smaller initial
-    parameter values, setting more conservative bounds, rescaling data, removing outliers, or changing the floating
-    point precision.
-
-    """
-
-
 class SyntheticPricesFloatingPointError(Error):
     """Encountered floating point issues when computing synthetic prices.
 
@@ -263,13 +252,6 @@ class XiByThetaJacobianReversionError(_MultipleReversionError):
 class OmegaByThetaJacobianReversionError(_MultipleReversionError):
     r"""Reverted problematic elements in the Jacobian of :math:`\omega` (equivalently, of transformed marginal costs)
     with respect to :math:`\theta`.
-
-    """
-
-
-class OmegaByBetaJacobianReversionError(_MultipleReversionError):
-    r"""Reverted problematic elements in the Jacobian of :math:`\omega` (equivalently, of transformed marginal costs)
-    with respect to :math:`\beta`.
 
     """
 

@@ -50,7 +50,7 @@ in which :math:`w` is a :math:`I_t \times 1` column vector of integration weight
 Supply-Side
 ~~~~~~~~~~~
 
-Observed supply-side product characteristics are the :math:`N \times K_3` matrix of cost characteristics, :math:`X_3`. Prices cannot be cost characteristics, but non-price product characteristics often overlap with the demand-side characteristics in :math:`X_1` and :math:`X_2`. Unobserved supply-side product characteristics, :math:`\omega`, are a :math:`N \times 1` column vector. Note that in contrast to :ref:`references:Berry, Levinsohn, and Pakes (1995)`, the notation for observed cost characteristics is similar to the notation for demand-side characteristics.
+Observed supply-side product characteristics are the :math:`N \times K_3` matrix of cost characteristics, :math:`X_3`. Prices cannot be cost characteristics, but non-price product characteristics often overlap with the demand-side characteristics in :math:`X_1` and :math:`X_2`. Unobserved supply-side product characteristics, :math:`\omega`, are a :math:`N \times 1` column vector. In contrast to the notation employed by :ref:`references:Berry, Levinsohn, and Pakes (1995)`, the notation for observed cost characteristics here is similar to the notation for demand-side characteristics.
 
 Firms play a differentiated Bertrand-Nash pricing game. Firm :math:`f` produces a subset :math:`\mathscr{J}_{ft} \subset \{1, 2, \ldots, J_t\}` of the products in market :math:`t` and chooses prices to maximize the sum of population-normalized gross expected profits, which for product :math:`j` in market :math:`t` are
 
@@ -101,53 +101,55 @@ in which the markup term is
 Identification
 ~~~~~~~~~~~~~~
 
-The unobserved product characteristics can be stacked to form a combined error term,
+The GMM moments, :math:`g`, which are :math:`N \times (M_D + M_S)`, are defined by
 
-.. math:: u = \begin{bmatrix} \xi \\ \omega \end{bmatrix},
+.. math:: g_n = \begin{bmatrix} Z_{nD}\xi_n & Z_{nS}\omega_n \end{bmatrix},
 
-and similarly, :math:`Z_D` and :math:`Z_S`, which are :math:`N \times M_D` and :math:`N \times M_S` matrices of demand- and supply-side instruments, can be stacked to form a combined block-diagonal matrix of instruments,
+in which :math:`Z_D` and :math:`Z_S` are :math:`N \times M_D` and :math:`N \times M_S` matrices of demand- and supply-side instruments.
 
-.. math:: Z = \begin{bmatrix} Z_D & 0 \\ 0 & Z_S \end{bmatrix}.
+The moment conditions are
 
-The GMM moment conditions are
-
-.. math:: \mathrm{E}[g_i] = 0 \quad\text{where}\quad g_i = u_iZ_i.
+.. math:: \mathrm{E}[g_n] = 0.
    :label: moments
 
-The full set of demand-side instruments include excluded demand-side instruments along with include all exogenous (not involving price) product characteristics from :math:`X_1` and :math:`X_2`. Similarly, the full set of supply-side instruments include excluded supply-side instruments along with :math:`X_3`.
+The full set of demand-side instruments include excluded demand-side instruments along with include all exogenous product characteristics from :math:`X_1` (and hence :math:`X_2`), except for those including price, :math:`X_1^p`. Similarly, the full set of supply-side instruments include excluded supply-side instruments along with :math:`X_3`.
 
 
 Estimation
 ----------
 
-There are four sets of parameters to be estimated: :math:`\beta`, :math:`\Sigma`, :math:`\Pi`, and :math:`\gamma`. If the supply side is not considered, only the first three sets of parameters are estimated. The linear parameters, :math:`\beta` and :math:`\gamma`, are concentrated out of the problem. Unknown elements in the remaining matrices of nonlinear parameters, :math:`\Sigma` and :math:`\Pi`, are collectively referred to as :math:`\theta`, a :math:`P \times 1` column vector. If demographics are not considered, :math:`\theta` will only consist of elements from :math:`\Sigma`.
+There are four sets of parameters to be estimated: :math:`\beta` (which may include :math:`\alpha`), :math:`\Sigma`, :math:`\Pi`, and :math:`\gamma`. If the supply side is not considered, only the first three sets of parameters are estimated. The linear parameters, :math:`\beta` and :math:`\gamma`, may be concentrated out of the problem. The exception is :math:`\alpha`, which cannot be concentrated out when there is a supply side because it is needed to compute marginal costs. Linear parameters that are not concentrated out along with unknown elements in the remaining matrices of nonlinear parameters, :math:`\Sigma` and :math:`\Pi`, are collectively referred to as :math:`\theta`, a :math:`P \times 1` column vector.
 
 The GMM problem is
 
-.. math:: \min_\theta u'ZWZ'u,
+.. math:: \min_\theta \bar{g}'W\bar{g},
    :label: objective
 
-in which :math:`W` is a combined block-diagonal weighting matrix that consists of separate demand- and supply-side weighting matrices,
+in which :math:`\bar{g}` is the sample mean of the moment conditions and :math:`W` is a weighting matrix.
 
-.. math:: W = \begin{bmatrix} W_D & 0 \\ 0 & W_S \end{bmatrix},
+Conventionally, the 2SLS weighting matrix is used in the first stage:
 
-which is assumed to have an inverse that is a consistant estimate of :math:`\mathrm{E}[Z'uu'Z]`.
+.. math:: W = \begin{bmatrix} (Z_D'Z_D)^{-1} & 0 \\ 0 & (Z_S'Z_S)^{-1} \end{bmatrix}.
 
-If only the demand side is considered, :math:`u = \xi`, :math:`Z = Z_D`, and :math:`W = W_D`.
+With two-step or iterated GMM, the weighting matrix is updated before each subsequent stage according to :math:`W = S^{-1}`. For robust weighting matrices,
 
-Conventionally, the 2SLS weighting matrix, :math:`W = (Z'Z)^{-1}`, is used in the first stage. With two-step or iterated GMM, the weighting matrix is updated before each subsequent stage according to :math:`W = S^{-1}`. For robust weighting matrices, :math:`S = N^{-1}g'g`. For clustered weighting matrices, which account for arbitrary correlation within :math:`c = 1, 2, \dotsc, C` clusters,
+.. math:: S = \frac{1}{N}\sum_{n=1}^N g_ng_n'.
 
-.. math:: S = N^{-1}\sum_{c=1}^C q_cq_c'.
+For clustered weighting matrices, which account for arbitrary correlation within :math:`c = 1, 2, \dotsc, C` clusters,
+
+.. math:: S = \frac{1}{N}\sum_{c=1}^C q_cq_c',
 
 where, letting the set :math:`\mathscr{J}_c \subset \{1, 2, \ldots, N\}` denote the products in cluster :math:`c`,
 
 .. math:: q_c = \sum_{j\in\mathscr{J}_c} g_j.
 
-Before being used to update the weighting matrix, the sample moments are often centered. That is, :math:`g - \bar{g}` is often used instead.
+Before being used to update the weighting matrix, the sample moments are often centered.
 
-On the other hand, for unadjusted weighting matrices, the instruments are simply scaled by the estimated variance of the error term:
+On the other hand, for unadjusted weighting matrix, the instruments are simply scaled by estimated error term covariances:
 
-.. math:: S = N^{-1} \hat{\sigma}_u^2 Z'Z \quad\text{where}\quad \hat{\sigma}_u^2 = N^{-1}(u - \bar{u})'(u - \bar{u})
+.. math:: S = \frac{1}{N} \begin{bmatrix} \sigma_{\xi}^2 Z_D'Z_D & \sigma_{\xi\omega} Z_D'Z_S \\ \sigma_{\xi\omega} Z_S'Z_D & \sigma_{\omega}^2 Z_S'Z_S \end{bmatrix}
+
+where :math:`\sigma_{\xi}^2` and :math:`\sigma_{\omega}^2` are the sample variances of :math:`\xi` and :math:`\omega`, and :math:`\sigma_{\xi\omega}` is their sample covariance.
 
 In each stage, a nonlinear optimizer is used to find values of :math:`\hat{\theta}` that minimize the GMM objective. The gradient of the objective is typically computed to speed up optimization.
 
@@ -161,26 +163,33 @@ Given a :math:`\hat{\theta}`, the first step towards computing its associated ob
 
 where :math:`s` are the market's observed shares and :math:`s(\hat{\theta}, \delta)` are shares evaluated at :math:`\hat{\theta}` and the current iteration's :math:`\delta`. As noted in the appendix of :ref:`references:Nevo (2000)`, exponentiating both sides of the contraction mapping and iterating over :math:`\exp(\delta)` gives an alternate formulation that can be faster. Conventional starting values are those that solve the Logit model.
 
-The mean utility in conjunction with the demand-side conditional independence assumption in :eq:`moments` is used to recover the demand-side linear parameters with
-
-.. math:: \hat{\beta} = (X_1'Z_DW_DZ_D'X_1)^{-1}X_1'Z_DW_DZ_D'\delta(\hat{\theta}).
-   :label: beta
-
-The demand-side linear parameters are in turn are used to recover the unobserved demand-side product characteristics,
-
-.. math:: \xi(\hat{\theta}) = \delta(\hat{\theta}) - X_1\hat{\beta}.
-   :label: xi
-
 If the supply side is considered, the BLP-markup equation from :eq:`eta_markup` is employed to compute marginal costs,
 
-.. math:: c(\hat{\theta}) = p - \eta(\hat{\beta}, \hat{\theta}),
+.. math:: c(\hat{\theta}) = p - \eta(\hat{\theta}).
 
-and in conjunction with the supply-side conditional independence assumption in :eq:`moments`, marginal costs are used to recover the supply-side linear parameters according to their specification in :eq:`costs` with
+Unlike when there is only a demand side, :math:`\theta` must contain :math:`\alpha` here because it is needed to compute :math:`\eta`.
 
-.. math:: \hat{\gamma} = (X_3'Z_SW_SZ_S'X_3)^{-1}X_3'Z_SW_SZ_S'\tilde{c}(\hat{\theta}).
-   :label: gamma
+The conditional independence assumption in :eq:`moments` is used to recover the concentrated out linear parameters with
 
-The supply-side linear parameters are in turn are used to recover the unobserved supply-side product characteristics,
+.. math:: \begin{bmatrix} \hat{\beta} \\ \hat{\gamma} \end{bmatrix} = (X'ZWZ'X)^{-1}X'ZWZ'y(\hat{\theta}),
+   :label: iv
+
+where the linear parameters and instruments are stacked in a block diagonal fashion,
+
+.. math:: X = \begin{bmatrix} X_1 & 0 \\ 0 & X_3 \end{bmatrix} \quad\text{and}\quad Z = \begin{bmatrix} Z_D & 0 \\ 0 & Z_S \end{bmatrix},
+
+and the mean utility along with marginal costs according to their specification in :eq:`costs` are stacked as well,
+
+.. math:: y(\hat{\theta}) = \begin{bmatrix} \delta(\hat{\theta}) \\ \tilde{c}(\hat{\theta}) \end{bmatrix}.
+
+If any linear parameters were not concentrated out but rather included in :math:`\theta` (such as :math:`\alpha`, which cannot be concentrated out when there is a supply side), their contributions are subtracted from :math:`y(\hat{\theta})` before it is used to recover the concentrated out parameters.
+
+The demand-side linear parameters are used to recover the unobserved demand-side product characteristics,
+
+.. math:: \xi(\hat{\theta}) = \delta(\hat{\theta}) - X_1\hat{\beta},
+   :label: xi
+
+and the same is done for the supply side,
 
 .. math:: \omega(\hat{\theta}) = \tilde{c}(\hat{\theta}) - X_3\hat{\gamma}.
    :label: omega
@@ -191,21 +200,17 @@ Finally, interacting the estimated unobserved product characteristics with the i
 The Gradient
 ~~~~~~~~~~~~
 
-The gradient of the GMM objective in :eq:`objective` is
+The gradient of the GMM objective in :eq:`objective` is :math:`2\bar{G}'W\bar{g}`, in which :math:`\bar{g}` is the mean of the sample moments and :math:`\bar{G}` is the mean of the Jacobian of the sample moments with respect to :math:`\theta`. This Jacobian, :math:`G`, which is :math:`N \times (M_D + M_S) + P`, is defined by
 
-.. math:: 2\left(\frac{\partial u}{\partial\theta}\right)'ZWZ'u,
+.. math:: G_n = \begin{bmatrix} Z_{nD}'\frac{\partial\xi}{\partial\theta} \\ Z_{nS}'\frac{\partial\omega}{\partial\theta} \end{bmatrix} = \begin{bmatrix} Z_{nD}'\frac{\partial\delta}{\partial\theta} \\ Z_{nS}'\frac{\partial\tilde{c}}{\partial\theta} \end{bmatrix}.
 
-in which Jacobians of the unobserved product characteristics are stacked to form
-
-.. math:: \frac{\partial u}{\partial\theta} = \begin{bmatrix} \frac{\partial\xi}{\partial\theta} \\ \frac{\partial\omega}{\partial\theta} \end{bmatrix} = \begin{bmatrix} \frac{\partial\delta}{\partial\theta} \\ \frac{\partial\tilde{c}}{\partial\theta} \end{bmatrix}.
-
-The demand-side Jacobian can be computed by writing :math:`\delta` as an implicit function of :math:`s`:
+The demand-side Jacobian can be computed by writing :math:`\delta` as an implicit function of :math:`s`,
 
 .. math:: \frac{\partial\delta}{\partial\theta} = -\left(\frac{\partial s}{\partial\delta}\right)^{-1}\frac{\partial s}{\partial\theta}.
 
 Derivatives in this expression are derived directly from the definition of :math:`s` in :eq:`shares`.
 
-The supply-side Jacobian can be derived from the BLP-markup equation in :eq:`eta_markup`:
+The supply-side Jacobian can be derived from the BLP-markup equation in :eq:`eta_markup`,
 
 .. math:: \frac{\partial\tilde{c}}{\partial\theta_p} = -\frac{\partial\tilde{c}}{\partial c}\frac{\partial\eta}{\partial\theta}.
 
@@ -223,47 +228,37 @@ are derived from the definitions of :math:`\Gamma` and :math:`\Lambda` in :eq:`c
 Standard Errors
 ~~~~~~~~~~~~~~~
 
-Computing standard errors requires an estimate of the Jacobian of the moments with respect to :math:`\theta`, :math:`\beta`, and :math:`\gamma`, which is
-
-.. math:: G = N^{-1}Z'\begin{bmatrix} \frac{\partial\xi}{\partial\theta} & \frac{\partial\xi}{\partial\beta} & 0 \\ \frac{\partial\omega}{\partial\theta} & \frac{\partial\omega}{\partial\beta} & \frac{\partial\omega}{\partial\gamma} \end{bmatrix}.
-
-Note that :math:`\partial\xi / \partial\beta = -X_1` and :math:`\partial\omega / \partial\gamma = -X_3`.
+Computing standard errors requires an estimate of the Jacobian of the moments with respect to all the parameters, which is the same as the above expression for :math:`G`, except that it includes terms for concentrated out parameters in :math:`\beta` and :math:`\gamma`, which are relatively simple because :math:`\partial\xi / \partial\beta = -X_1` and :math:`\partial\omega / \partial\gamma = -X_3`.
 
 Before updating the weighting matrix, standard errors are extracted from
 
-.. math:: \hat{\text{Var}}\begin{pmatrix} \theta \\ \beta \\ \gamma \end{pmatrix} = (G'WG)^{-1}G'WSWG(G'WG)^{-1},
+.. math:: \hat{\text{Var}}\begin{pmatrix} \hat{\theta} \\ \hat{\beta} \\ \hat{\gamma} \end{pmatrix} = (\bar{G}'W\bar{G})^{-1}\bar{G}'WSW\bar{G}(\bar{G}'W\bar{G})^{-1},
 
-For robust standard errors, :math:`S = N^{-1}g'g`. For clustered standard errors, which account for arbitrary correlation within :math:`c = 1, 2, \dotsc, C` clusters,
-
-.. math:: S = \sum_{c=1}^C q_cq_c'
-
-where, letting the set :math:`\mathscr{J}_c \subset \{1, 2, \ldots, N\}` denote the products in cluster :math:`c`,
-
-.. math:: q_c = \sum_{j\in\mathscr{J}_c} g_j.
+in which :math:`S` is defined in the same way as it is defined when computing the weighting matrix.
 
 If the weighting matrix was chosen such that :math:`W = S^{-1}`, then
 
-.. math:: \hat{\text{Var}}\begin{pmatrix} \hat{\theta} \\ \hat{\beta} \\ \hat{\gamma} \end{pmatrix} = (G'WG)^{-1}.
+.. math:: \hat{\text{Var}}\begin{pmatrix} \hat{\theta} \\ \hat{\beta} \\ \hat{\gamma} \end{pmatrix} = (\bar{G}'W\bar{G})^{-1}.
 
-Standard errors extracted from an estimate of this last expression are called unadjusted. One caveat is that after only one GMM step, the above expression for the unadjusted covariance matrix is missing the estimated variance of the error term. In this one case, :math:`W` is replaced with an updated unadjusted weighting matrix. Doing so properly scales the expression.
+Standard errors extracted from an estimate of this last expression are called unadjusted. One caveat is that after only one GMM step, the above expression for the unadjusted covariance matrix is missing the estimated variance of the error term. In this one case, :math:`W` is replaced with an updated unadjusted weighting matrix, which properly scales the expression.
 
 
 Fixed Effect Absorption
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-One way to include demand-side fixed effects is to construct a large number of indicator variables and include them in :math:`X_1` (and hence in :math:`Z_D`). Similarly, indicator variables can be added to :math:`X_3` (and hence in :math:`Z_S`) to incorporate supply-side fixed effects. However, this approach becomes infeasible when there are a large amount of data or a large number of fixed effects because estimation with many indicator variables can be both memory- and processor-intensive. In particular, inversion of large matrices in :eq:`beta` and :eq:`gamma` can be problematic.
+One way to include demand-side fixed effects is to construct a large number of indicator variables and include them in :math:`X_1` (and hence in :math:`Z_D`). Similarly, indicator variables can be added to :math:`X_3` (and hence in :math:`Z_S`) to incorporate supply-side fixed effects. However, this approach becomes infeasible when there are a large amount of data or a large number of fixed effects because estimation with many indicator variables can be both memory- and processor-intensive. In particular, inversion of large matrices in :eq:`iv` can be problematic.
 
 An alternative is to absorb or partial out fixed effects. If there is only one demand-side fixed effect, that is, if :math:`E_D = 1`, the procedure is simple and efficient: :math:`X_1`, :math:`Z_D`, and :math:`\delta(\hat{\theta})` are de-meaned within each level of the fixed effect. If there is only one supply-side effect, that is, if :math:`E_S = 1`, the same is done with :math:`X_3`, :math:`Z_S`, and :math:`\tilde{c}(\hat{\theta})`.
 
-Estimates computed with the de-meaned or residualized data are guaranteed by the Frish-Waugh-Lovell (FWL) theorem of :ref:`references:Frisch and Waugh (1933)` and :ref:`references:Lovell (1963)` to be the same as estimates computed when fixed effects are included as indicator variables.
+Estimates and structural error terms computed with the de-meaned or residualized data are guaranteed by the Frish-Waugh-Lovell (FWL) theorem of :ref:`references:Frisch and Waugh (1933)` and :ref:`references:Lovell (1963)` to be the same as results computed when fixed effects are included as indicator variables.
 
-When :math:`E_D > 1` or :math:`E_S > 1`, the iterative de-meaning algorithm of :ref:`references:Rios-Avila (2015)` can be applied to absorb the multiple fixed effects. Iterative de-meaning can be processor-intensive, but for large amounts of data or for large numbers of fixed effects, it is often preferable to including indicator variables. When :math:`E_D = 2` or :math:`E_S = 2`, the more performant algorithm of :ref:`references:Somaini and Wolak (2016)` can be used instead.
+When :math:`E_D > 1` or :math:`E_S > 1`, the iterative de-meaning algorithm of :ref:`references:Rios-Avila (2015)` can be employed to absorb the multiple fixed effects. Iterative de-meaning can be processor-intensive, but for large amounts of data or for large numbers of fixed effects, it is often preferable to including indicator variables. When :math:`E_D = 2` or :math:`E_S = 2`, the more performant algorithm of :ref:`references:Somaini and Wolak (2016)` can be used instead.
 
 
 Random Coefficients Nested Logit
 --------------------------------
 
-Incorporating parameters that measure within nesting group correlation gives rise to the random coefficients nested logit (RCNL) model described, for example, by :ref:`references:Grigolon and Verboven (2014)`. In this model, there are :math:`h = 1, 2, \dotsc, H` nesting groups and each product :math:`j` is assigned to a group :math:`h(j)`. The set :math:`\mathscr{J}_{ht} \subset \{1, 2, \ldots, J_t\}` denotes the products in group :math:`h` and market :math:`t`.
+Incorporating parameters that measure within nesting group correlation gives the random coefficients nested logit (RCNL) model described, for example, by :ref:`references:Grigolon and Verboven (2014)`. In this model, there are :math:`h = 1, 2, \dotsc, H` nesting groups and each product :math:`j` is assigned to a group :math:`h(j)`. The set :math:`\mathscr{J}_{ht} \subset \{1, 2, \ldots, J_t\}` denotes the products in group :math:`h` and market :math:`t`.
 
 In the RCNL model, the error term is decomposed into
 

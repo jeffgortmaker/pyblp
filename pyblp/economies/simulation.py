@@ -14,7 +14,7 @@ from ..configurations.integration import Integration
 from ..configurations.iteration import Iteration
 from ..construction import build_blp_instruments, build_matrix
 from ..markets.simulation_market import SimulationMarket
-from ..parameters import LinearParameters, NonlinearParameters
+from ..parameters import Parameters
 from ..primitives import Agents, Products
 from ..utilities.basics import (
     Array, Data, Error, RecArray, extract_matrix, format_seconds, generate_items, output, output_progress,
@@ -256,8 +256,7 @@ class Simulation(AbstractEconomy):
     omega: Array
     costs: Array
     costs_type: str
-    _linear_parameters: LinearParameters
-    _nonlinear_parameters: NonlinearParameters
+    _parameters: Parameters
 
     def __init__(
             self, product_formulations: Sequence[Optional[Formulation]], beta: Any, sigma: Any, gamma: Any,
@@ -438,13 +437,12 @@ class Simulation(AbstractEconomy):
                 raise ValueError(f"'{column_formulation}' in the formulation for X2 is not in the formulation for X1.")
 
         # validate parameters
-        self._linear_parameters = LinearParameters(self, beta, gamma)
-        self._nonlinear_parameters = NonlinearParameters(self, sigma, pi, rho)
-        self.beta = self._linear_parameters.beta
-        self.gamma = self._linear_parameters.gamma
-        self.sigma = self._nonlinear_parameters.sigma
-        self.pi = self._nonlinear_parameters.pi
-        self.rho = self._nonlinear_parameters.rho
+        self._parameters = Parameters(self, sigma, pi, rho, beta, gamma)
+        self.sigma = self._parameters.sigma
+        self.pi = self._parameters.pi
+        self.rho = self._parameters.rho
+        self.beta = self._parameters.beta
+        self.gamma = self._parameters.gamma
 
         # simulate xi and omega
         covariance = correlation * np.sqrt(xi_variance * omega_variance)
@@ -471,10 +469,7 @@ class Simulation(AbstractEconomy):
 
     def __str__(self) -> str:
         """Supplement general formatted information with other information about parameters."""
-        sections = [[super().__str__()], ["Linear Parameters:", self._linear_parameters.format()]]
-        if self.K2 > 0 or self.H > 0:
-            sections.append(["Nonlinear Parameters:", self._nonlinear_parameters.format()])
-        return "\n\n".join("\n".join(s) for s in sections)
+        return "\n\n".join([super().__str__(), self._parameters.format("True Values")])
 
     def solve(
             self, firms_index: int = 0, prices: Optional[Any] = None, iteration: Optional[Iteration] = None,

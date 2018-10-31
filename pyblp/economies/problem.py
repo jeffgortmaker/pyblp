@@ -16,13 +16,13 @@ from ..configurations.integration import Integration
 from ..configurations.iteration import Iteration
 from ..configurations.optimization import Optimization
 from ..markets.problem_market import ProblemMarket
-from ..parameters import NonlinearParameters
+from ..parameters import Parameters
 from ..primitives import Agents, Products
 from ..utilities.basics import (
     Array, Bounds, Error, Groups, RecArray, TableFormatter, format_number, format_seconds, generate_items, output,
     update_matrices
 )
-from ..utilities.statistics import IV, compute_2sls_weights
+from ..utilities.statistics import IV, compute_2sls_weights, compute_gmm_moments_mean, compute_gmm_moments_jacobian_mean
 
 
 class AbstractProblem(AbstractEconomy):
@@ -37,18 +37,20 @@ class AbstractProblem(AbstractEconomy):
 
     def solve(
             self, sigma: Optional[Any] = None, pi: Optional[Any] = None, rho: Optional[Any] = None,
-            sigma_bounds: Optional[Tuple[Any, Any]] = None, pi_bounds: Optional[Tuple[Any, Any]] = None,
-            rho_bounds: Optional[Tuple[Any, Any]] = None, delta: Optional[Any] = None, WD: Optional[Any] = None,
-            WS: Optional[Any] = None, method: str = '2s', optimization: Optional[Optimization] = None,
-            error_behavior: str = 'revert', error_punishment: float = 1, delta_behavior: str = 'last',
-            iteration: Optional[Iteration] = None, fp_type: str = 'linear', costs_type: str = 'linear',
-            costs_bounds: Optional[Tuple[Any, Any]] = None, center_moments: bool = True, W_type: str = 'robust',
-            se_type: str = 'robust') -> ProblemResults:
+            beta: Optional[Any] = None, gamma: Optional[Any] = None, sigma_bounds: Optional[Tuple[Any, Any]] = None,
+            pi_bounds: Optional[Tuple[Any, Any]] = None, rho_bounds: Optional[Tuple[Any, Any]] = None,
+            beta_bounds: Optional[Tuple[Any, Any]] = None, gamma_bounds: Optional[Tuple[Any, Any]] = None,
+            delta: Optional[Any] = None, W: Optional[Any] = None, method: str = '2s',
+            optimization: Optional[Optimization] = None, error_behavior: str = 'revert', error_punishment: float = 1,
+            delta_behavior: str = 'last', iteration: Optional[Iteration] = None, fp_type: str = 'linear',
+            costs_type: str = 'linear', costs_bounds: Optional[Tuple[Any, Any]] = None, center_moments: bool = True,
+            W_type: str = 'robust', se_type: str = 'robust') -> ProblemResults:
         r"""Solve the problem.
 
-        The problem is solved in one or more GMM steps. During each step, any unfixed nonlinear parameters in
-        :math:`\hat{\theta}` are optimized to minimize the GMM objective value. If all nonlinear parameters are fixed or
-        if there are no nonlinear parameters (as in the Logit model), the objective is evaluated once during the step.
+        The problem is solved in one or more GMM steps. During each step, any parameters in :math:`\hat{\theta}` are
+        optimized to minimize the GMM objective value. If there are no parameters in :math:`\hat{\theta}` (for example,
+        in the Logit model there are no nonlinear parameters and all linear parameters can be concentrated out), the
+        objective is evaluated once during the step.
 
         If there are nonlinear parameters, the mean utility, :math:`\delta(\hat{\theta})` is computed market-by-market
         with fixed point iteration. Otherwise, it is computed analytically according to the solution of the Logit model.
@@ -69,6 +71,7 @@ class AbstractProblem(AbstractEconomy):
             Configuration for which elements in the Cholesky decomposition of the covariance matrix that measures
             agents' random taste distribution, :math:`\Sigma`, are fixed at zero and starting values for the other
             elements, which, if not fixed by ``sigma_bounds``, are in the vector of unknown elements, :math:`\theta`.
+
             Rows and columns correspond to columns in :math:`X_2`, which is formulated according
             ``product_formulations`` in :class:`Problem`. If :math:`X_2` was not formulated, this should not be
             specified, since the Logit model will be estimated.
@@ -79,9 +82,11 @@ class AbstractProblem(AbstractEconomy):
         pi : `array-like, optional`
             Configuration for which elements in the matrix of parameters that measures how agent tastes vary with
             demographics, :math:`\Pi`, are fixed at zero and starting values for the other elements, which, if not fixed
-            by ``pi_bounds``, are in the vector of unknown elements, :math:`\theta`. Rows correspond to the same product
-            characteristics as in ``sigma``. Columns correspond to columns in :math:`d`, which is formulated according
-            to ``agent_formulation`` in :class:`Problem`. If :math:`d` was not formulated, this should not be specified.
+            by ``pi_bounds``, are in the vector of unknown elements, :math:`\theta`.
+
+            Rows correspond to the same product characteristics as in ``sigma``. Columns correspond to columns in
+            :math:`d`, which is formulated according to ``agent_formulation`` in :class:`Problem`. If :math:`d` was not
+            formulated, this should not be specified.
 
             Zeros are assumed to be zero throughout estimation and nonzeros are, if not fixed by ``pi_bounds``, starting
             values for unknown elements in :math:`\theta`.
@@ -89,14 +94,45 @@ class AbstractProblem(AbstractEconomy):
         rho : `array-like, optional`
             Configuration for which elements in the vector of parameters that measure within nesting group correlation,
             :math:`\rho`, are fixed at zero and starting values for the other elements, which, if not fixed by
-            ``rho_bounds``, are in the vector of unknown elements, :math:`\theta`. If there is only one element, it
-            corresponds to all groups defined by the ``nesting_ids`` field of ``product_data`` in :class:`Problem`. If
-            there is more than one element, there must be as many elements as :math:`H`, the number of distinct nesting
-            groups, and elements correspond to group IDs in the sorted order given by
-            :attr:`Problem.unique_nesting_ids`. If nesting IDs were not specified, this should not be specified either.
+            ``rho_bounds``, are in the vector of unknown elements, :math:`\theta`.
+
+            If there is only one element, it corresponds to all groups defined by the ``nesting_ids`` field of
+            ``product_data`` in :class:`Problem`. If there is more than one element, there must be as many elements as
+            :math:`H`, the number of distinct nesting groups, and elements correspond to group IDs in the sorted order
+            given by :attr:`Problem.unique_nesting_ids`. If nesting IDs were not specified, this should not be specified
+            either.
 
             Zeros are assumed to be zero throughout estimation and nonzeros are, if not fixed by ``rho_bounds``,
             starting values for unknown elements in :math:`\theta`.
+
+        beta: `array-like, optional`
+            Configuration for which elements in the vector of demand-side linear parameters, :math:`\beta`, are
+            concentrated out of the problem. Usually, this is left unspecified, unless there is a supply side, in which
+            case parameters on endogenous product characteristics cannot be concentrated out of the problem. Values
+            specify which elements are fixed at zero and starting values for the other elements, which, if not fixed by
+            ``beta_bounds``, are in the vector of unknown elements, :math:`\theta`.
+
+            Elements correspond to columns in :math:`X_1`, which is formulated according to ``product_formulations`` in
+            :class:`Problem`.
+
+            Both ``None`` and ``numpy.nan`` indicate that the parameter should be concentrated out of the problem. That
+            is, it will be estimated, but does not have to be included in :math:`\theta`. Zeros are assumed to be zero
+            throughout estimation and nonzeros are, if not fixed by ``beta_bounds``, starting values for unknown
+            elements in :math:`\theta`.
+
+        gamma: `array-like, optional`
+            Configuration for which elements in the vector of supply-side linear parameters, :math:`\gamma`, are
+            concentrated out of the problem. Usually, this is left unspecified. Values specify which elements are fixed
+            at zero and starting values for the other elements, which, if not fixed by ``gamma_bounds``, are in the
+            vector of unknown elements, :math:`\theta`.
+
+            Elements correspond to columns in :math:`X_3`, which is formulated according to ``product_formulations`` in
+            :class:`Problem`. If :math:`X_3` was not formulated, this should not be specified.
+
+            Both ``None`` and ``numpy.nan`` indicate that the parameter should be concentrated out of the problem. That
+            is, it will be estimated, but does not have to be included in :math:`\theta`. Zeros are assumed to be zero
+            throughout estimation and nonzeros are, if not fixed by ``gamma_bounds``, starting values for unknown
+            elements in :math:`\theta`.
 
         sigma_bounds : `tuple, optional`
             Configuration for :math:`\Sigma` bounds of the form ``(lb, ub)``, in which both ``lb`` and ``ub`` are of the
@@ -104,12 +140,13 @@ class AbstractProblem(AbstractEconomy):
             counterpart in ``sigma``. If ``optimization`` does not support bounds, these will be ignored.
 
             By default, if bounds are supported, the diagonal of ``sigma`` is bounded from below by zero. Conditional on
-            :math:`X_2`, :math:`\nu`, and an initial estimate of :math:`\mu`, default bounds for off-diagonal parameters
+            :math:`X_2`, :math:`\mu`, and an initial estimate of :math:`\mu`, default bounds for off-diagonal parameters
             are chosen to reduce the chance of overflow.
 
             Values below the diagonal are ignored. Lower and upper bounds corresponding to zeros in ``sigma`` are set to
-            zero. Setting a lower bound equal to an upper bound fixes the corresponding element. Both ``None`` and
-            ``numpy.nan`` are converted to ``-numpy.inf`` in ``lb`` and to ``numpy.inf`` in ``ub``.
+            zero. Setting a lower bound equal to an upper bound fixes the corresponding element, removing it from
+            :math:`\theta`. Both ``None`` and ``numpy.nan`` are converted to ``-numpy.inf`` in ``lb`` and to
+            ``numpy.inf`` in ``ub``.
 
         pi_bounds : `tuple, optional`
             Configuration for :math:`\Pi` bounds of the form ``(lb, ub)``, in which both ``lb`` and ``ub`` are of the
@@ -120,8 +157,8 @@ class AbstractProblem(AbstractEconomy):
             :math:`\mu`, default bounds are chosen to reduce the chance of overflow.
 
             Lower and upper bounds corresponding to zeros in ``pi`` are set to zero. Setting a lower bound equal to an
-            upper bound fixes the corresponding element. Both ``None`` and ``numpy.nan`` are converted to ``-numpy.inf``
-            in ``lb`` and to ``numpy.inf`` in ``ub``.
+            upper bound fixes the corresponding element, removing it from :math:`\theta`. Both ``None`` and
+            ``numpy.nan`` are converted to ``-numpy.inf`` in ``lb`` and to ``numpy.inf`` in ``ub``.
 
         rho_bounds : `tuple, optional`
             Configuration for :math:`\rho` bounds of the form ``(lb, ub)``, in which both ``lb`` and ``ub`` are of the
@@ -133,8 +170,32 @@ class AbstractProblem(AbstractEconomy):
             chance of overflow and are less than ``1`` because larger values are inconsistent with utility maximization.
 
             Lower and upper bounds corresponding to zeros in ``rho`` are set to zero. Setting a lower bound equal to an
-            upper bound fixes the corresponding element. Both ``None`` and ``numpy.nan`` are converted to ``-numpy.inf``
-            in ``lb`` and to ``numpy.inf`` in ``ub``.
+            upper bound fixes the corresponding element, removing it from :math:`\theta`. Both ``None`` and
+            ``numpy.nan`` are converted to ``-numpy.inf`` in ``lb`` and to ``numpy.inf`` in ``ub``.
+
+        beta_bounds: `tuple, optional`
+            Configuration for :math:`\beta` bounds of the form ``(lb, ub)``, in which both ``lb`` and ``ub`` are of the
+            same size as ``beta``. Each element in ``lb`` and ``ub`` determines the lower and upper bound for its
+            counterpart in ``beta``. If ``optimization`` does not support bounds, these will be ignored.
+
+            By default, all non-concentrated out parameters are unbounded. Bounds should only be specified for
+            parameters that are included in :math:`\theta`; that is, those with initial values specified in ``beta``.
+
+            Lower and upper bounds corresponding to zeros in ``beta`` are set to zero. Setting a lower bound equal to an
+            upper bound fixes the corresponding element, removing it from :math:`\theta`. Both ``None`` and
+            ``numpy.nan`` are converted to ``-numpy.inf`` in ``lb`` and to ``numpy.inf`` in ``ub``.
+
+        gamma_bounds: `tuple, optional`
+            Configuration for :math:`\gamma` bounds of the form ``(lb, ub)``, in which both ``lb`` and ``ub`` are of the
+            same size as ``gamma``. Each element in ``lb`` and ``ub`` determines the lower and upper bound for its
+            counterpart in ``gamma``. If ``optimization`` does not support bounds, these will be ignored.
+
+            By default, all non-concentrated out parameters are unbounded. Bounds should only be specified for
+            parameters that are included in :math:`\theta`; that is, those with initial values specified in ``gamma``.
+
+            Lower and upper bounds corresponding to zeros in ``gamma`` are set to zero. Setting a lower bound equal to
+            an upper bound fixes the corresponding element, removing it from :math:`\theta`. Both ``None`` and
+            ``numpy.nan`` are converted to ``-numpy.inf`` in ``lb`` and to ``numpy.inf`` in ``ub``.
 
         delta : `array-like, optional`
             Initial values for the mean utility, :math:`\delta`. If there are any nonlinear parameters, these are the
@@ -151,13 +212,9 @@ class AbstractProblem(AbstractEconomy):
 
             .. math:: s_{h(j)t} = \sum_{k\in\mathscr{J}_{h(j)t}} s_{kt}.
 
-        WD : `array-like, optional`
-            Starting values for the demand-side weighting matrix, :math:`W_D`. By default, the 2SLS weighting matrix,
-            :math:`W_D = (Z_D'Z_D)^{-1}`, is used.
-        WS : `array-like, optional`
-            Starting values for the supply-side weighting matrix, :math:`W_S`, which is only used if :math:`X_3` was
-            formulated by ``product_formulations`` in :class:`Problem`. By default, the 2SLS weighting matrix,
-            :math:`W_S = (Z_S'Z_S)^{-1}`, is used.
+        W : `array-like, optional`
+            Starting values for the weighting matrix, :math:`W`. By default, the 2SLS weighting matrix,
+            :math:`(Z'Z)^{-1}`, is used.
         method : `str, optional`
             The estimation routine that will be used. The following methods are supported:
 
@@ -172,8 +229,9 @@ class AbstractProblem(AbstractEconomy):
         optimization : `Optimization, optional`
             :class:`Optimization` configuration for how to solve the optimization problem in each GMM step, which is
             only used if there are unfixed nonlinear parameters over which to optimize. By default,
-            ``Optimization('l-bfgs-b')`` is used. Routines that do not support bounds will ignore ``sigma_bounds`` and
-            ``pi_bounds``. Choosing a routine that does not use analytic gradients will slow down estimation.
+            ``Optimization('slsqp', {'ftol': 1e-12})`` is used. Routines that do not support bounds will ignore
+            ``sigma_bounds`` and ``pi_bounds``. Choosing a routine that does not use analytic gradients will slow down
+            estimation.
         error_behavior : `str, optional`
             How to handle any errors. For example, it is common to encounter overflow when computing
             :math:`\delta(\hat{\theta})` at a large :math:`\hat{\theta}`. The following behaviors are supported:
@@ -265,8 +323,8 @@ class AbstractProblem(AbstractEconomy):
             Whether to center the sample moments before using them to update weighting matrices. By default, sample
             moments are centered. This has no effect if ``W_type`` is ``'unadjusted'``.
         W_type : `str, optional`
-            How to update weighting matrices. This has no effect if ``method`` is ``'1s'``. Often, ``se_type`` should be
-            the same. The following types are supported:
+            How to update the weighting matrix. This has no effect if ``method`` is ``'1s'``. Often, ``se_type`` should
+            be the same. The following types are supported:
 
                 - ``'robust'`` (default) - Heteroscedasticity robust weighting matrices.
 
@@ -308,7 +366,7 @@ class AbstractProblem(AbstractEconomy):
 
         # configure or validate configurations
         if optimization is None:
-            optimization = Optimization('l-bfgs-b')
+            optimization = Optimization('slsqp', {'ftol': 1e-12})
         if iteration is None:
             iteration = Iteration('squarem', {'tol': 1e-14})
         if not isinstance(optimization, Optimization):
@@ -342,100 +400,98 @@ class AbstractProblem(AbstractEconomy):
             costs_bounds[0][np.isnan(costs_bounds[0])] = -np.inf
             costs_bounds[1][np.isnan(costs_bounds[1])] = +np.inf
             if costs_bounds[0].size != 1:
-                raise ValueError(f"The lower bound in costs_bounds is not a float.")
+                raise ValueError(f"The lower bound in costs_bounds must be None or a float.")
             if costs_bounds[1].size != 1:
-                raise ValueError(f"The upper bound in costs_bounds is not a float.")
+                raise ValueError(f"The upper bound in costs_bounds must be None or a float.")
             if costs_bounds[0] > costs_bounds[1]:
                 raise ValueError("The lower bound in costs_bounds cannot be larger than the upper bound.")
 
-        # compress sigma, pi, and rho into theta
-        nonlinear_parameters = NonlinearParameters(
-            self, sigma, pi, rho, sigma_bounds, pi_bounds, rho_bounds, optimization._supports_bounds
+        # validate parameters before compressing unfixed parameters into theta
+        parameters = Parameters(
+            self, sigma, pi, rho, beta, gamma, sigma_bounds, pi_bounds, rho_bounds, beta_bounds, gamma_bounds,
+            bounded=optimization._supports_bounds, allow_linear_nans=True
         )
-        self._handle_errors(error_behavior, nonlinear_parameters.errors)
-        theta = nonlinear_parameters.compress()
-        theta_bounds = nonlinear_parameters.compress_bounds()
-        if self.K2 > 0 or self.H > 0:
-            output("")
-            output("Initial Nonlinear Parameters:")
-            output(nonlinear_parameters.format())
-            output("")
-            output("Lower Bounds on Nonlinear Parameters:")
-            output(nonlinear_parameters.format_lower_bounds())
-            output("")
-            output("Upper Bounds on Nonlinear Parameters:")
-            output(nonlinear_parameters.format_upper_bounds())
+        self._handle_errors(error_behavior, parameters.errors)
+        theta = parameters.compress()
+        theta_bounds = parameters.compress_bounds()
 
-        # compute or load the demand-side weighting matrix
-        if WD is None:
-            WD, WD_errors = compute_2sls_weights(self.products.ZD)
-            self._handle_errors(error_behavior, WD_errors)
-        else:
-            WD = np.asarray(WD, options.dtype)
-            if WD.shape != (self.MD, self.MD):
-                raise ValueError(f"WD must have {self.MD} rows and columns.")
+        # output information about initial parameters and their bounds
+        if parameters.fixed or parameters.unfixed:
+            output("")
+            output(parameters.format("Initial Values"))
+            if optimization._supports_bounds:
+                output("")
+                output(parameters.format_lower_bounds("Lower Bounds"))
+                output("")
+                output(parameters.format_upper_bounds("Upper Bounds"))
 
-        # compute or load the supply-side weighting matrix
-        if self.MS == 0:
-            WS = np.full((0, 0), np.nan, options.dtype)
-        elif WS is None:
-            WS, WS_errors = compute_2sls_weights(self.products.ZS)
-            self._handle_errors(error_behavior, WS_errors)
+        # compute or load the weighting matrix
+        if W is None:
+            Z_list = [self.products.ZD]
+            if self.MS > 0:
+                Z_list.append(self.products.ZS)
+            W, W_errors = compute_2sls_weights(Z_list)
+            self._handle_errors(error_behavior, W_errors)
         else:
-            WS = np.asarray(WS, options.dtype)
-            if WS.shape != (self.MS, self.MS):
-                raise ValueError(f"WS must have {self.MS} rows and columns.")
+            W = np.asarray(W, options.dtype)
+            if W.shape != (self.MD + self.MS, self.MD + self.MS):
+                raise ValueError(f"WD must have {self.MD + self.MS} rows and columns.")
 
         # compute or load initial delta values
         if delta is None:
-            true_delta = self._compute_logit_delta(nonlinear_parameters.rho)
+            delta = self._compute_logit_delta(parameters.rho)
         else:
-            true_delta = np.c_[np.asarray(delta, options.dtype)]
-            if true_delta.shape != (self.N, 1):
+            delta = np.c_[np.asarray(delta, options.dtype)]
+            if delta.shape != (self.N, 1):
                 raise ValueError(f"delta must be a vector with {self.N} elements.")
 
         # initialize marginal costs as prices, which will only be used if there are computation errors during the first
         #   objective evaluation
-        true_tilde_costs = np.full((self.N, 0), np.nan, options.dtype)
+        tilde_costs = np.full((self.N, 0), np.nan, options.dtype)
         if self.K3 > 0:
             if costs_type == 'linear':
-                true_tilde_costs = self.products.prices
+                tilde_costs = self.products.prices
             else:
                 assert costs_type == 'log'
-                true_tilde_costs = np.log(self.products.prices)
+                tilde_costs = np.log(self.products.prices)
 
         # initialize Jacobians of xi and omega with respect to theta as all zeros, which will only be used if there are
         #   computation errors during the first objective evaluation
-        xi_jacobian = np.zeros((self.N, nonlinear_parameters.P), options.dtype)
+        xi_jacobian = np.zeros((self.N, parameters.P), options.dtype)
         omega_jacobian = np.full_like(xi_jacobian, 0 if self.K3 > 0 else np.nan, options.dtype)
 
         # initialize the objective as a large number and its gradient as all zeros, which will only be used if there are
         #   computation errors during the first objective evaluation
         objective = np.array(1e10, options.dtype)
-        gradient = np.zeros((nonlinear_parameters.P, 1), options.dtype)
+        gradient = np.zeros((parameters.P, 1), options.dtype)
 
         # iterate over each GMM step
         step = 1
         last_results = None
         while True:
-            # initialize IV models for demand- and supply-side linear parameter estimation
-            demand_iv = IV(self.products.X1, self.products.ZD, WD)
-            supply_iv = IV(self.products.X3, self.products.ZS, WS)
-            self._handle_errors(error_behavior, demand_iv.errors + supply_iv.errors)
+            # collect inputs into linear parameter estimation
+            X_list = [self.products.X1[:, parameters.eliminated_beta_index.flat]]
+            Z_list = [self.products.ZD]
+            if self.K3 > 0:
+                X_list.append(self.products.X3[:, parameters.eliminated_gamma_index.flat])
+                Z_list.append(self.products.ZS)
+
+            # initialize an IV model for linear parameter estimation
+            iv = IV(X_list, Z_list, W)
+            self._handle_errors(error_behavior, iv.errors)
 
             # wrap computation of progress information with step-specific information
             compute_step_progress = functools.partial(
-                self._compute_progress, nonlinear_parameters, demand_iv, supply_iv, WD, WS, error_behavior,
-                error_punishment, delta_behavior, iteration, fp_type, costs_type, costs_bounds
+                self._compute_progress, parameters, iv, W, error_behavior, error_punishment, delta_behavior, iteration,
+                fp_type, costs_type, costs_bounds
             )
 
             # initialize optimization progress
             iteration_mappings: List[Dict[Hashable, int]] = []
             evaluation_mappings: List[Dict[Hashable, int]] = []
             smallest_objective = smallest_gradient = np.inf
-            last_progress = Progress(
-                self, nonlinear_parameters, WD, WS, theta, objective, gradient, true_delta, true_delta,
-                true_tilde_costs, xi_jacobian, omega_jacobian
+            progress = InitialProgress(
+                self, parameters, W, theta, objective, gradient, delta, delta, tilde_costs, xi_jacobian, omega_jacobian
             )
 
             # define the objective function
@@ -443,10 +499,10 @@ class AbstractProblem(AbstractEconomy):
                     new_theta: Array, current_iterations: int, current_evaluations: int) -> (
                     Union[float, Tuple[float, Array]]):
                 """Compute and output progress associated with a single objective evaluation."""
-                nonlocal iteration_mappings, evaluation_mappings, smallest_objective, smallest_gradient, last_progress
+                nonlocal iteration_mappings, evaluation_mappings, smallest_objective, smallest_gradient, progress
                 assert optimization is not None and costs_bounds is not None
-                progress = last_progress = compute_step_progress(
-                    new_theta, last_progress, optimization._compute_gradient
+                progress = progress = compute_step_progress(
+                    new_theta, progress, optimization._compute_gradient
                 )
                 iteration_mappings.append(progress.iteration_mapping)
                 evaluation_mappings.append(progress.evaluation_mapping)
@@ -463,7 +519,7 @@ class AbstractProblem(AbstractEconomy):
             # optimize theta
             iterations = evaluations = 0
             optimization_start_time = optimization_end_time = time.time()
-            if nonlinear_parameters.P > 0:
+            if parameters.P > 0:
                 output("")
                 output(f"Starting optimization for step {step} ...")
                 output("")
@@ -479,7 +535,7 @@ class AbstractProblem(AbstractEconomy):
             # use progress information computed at the optimal theta to compute results for the step
             output("")
             output(f"Computing results for step {step} ...")
-            final_progress = compute_step_progress(theta, last_progress, compute_gradient=nonlinear_parameters.P > 0)
+            final_progress = compute_step_progress(theta, progress, compute_gradient=parameters.P > 0)
             results = ProblemResults(
                 final_progress, last_results, step_start_time, optimization_start_time, optimization_end_time,
                 iterations, evaluations + 1, iteration_mappings, evaluation_mappings, costs_type, costs_bounds,
@@ -496,75 +552,100 @@ class AbstractProblem(AbstractEconomy):
                 return results
 
             # update vectors and matrices
-            true_delta = results.true_delta
-            true_tilde_costs = results.true_tilde_costs
+            delta = results.delta
+            tilde_costs = results.tilde_costs
             xi_jacobian = results.xi_by_theta_jacobian
             omega_jacobian = results.omega_by_theta_jacobian
-            WD = results.updated_WD
-            WS = results.updated_WS
+            W = results.updated_W
             step += 1
             step_start_time = time.time()
 
     def _compute_progress(
-            self, nonlinear_parameters: NonlinearParameters, demand_iv: IV, supply_iv: IV, WD: Array, WS: Array,
-            error_behavior: str, error_punishment: float, delta_behavior: str, iteration: Iteration, fp_type: str,
-            costs_type: str, costs_bounds: Bounds, theta: Array, last_progress: 'Progress', compute_gradient: bool) -> (
-            'Progress'):
-        """Compute demand- and supply-side contributions. Then, form the GMM objective value and its gradient. Finally,
-        handle any errors that were encountered before structuring relevant progress information.
+            self, parameters: Parameters, iv: IV, W: Array, error_behavior: str, error_punishment: float,
+            delta_behavior: str, iteration: Iteration, fp_type: str, costs_type: str, costs_bounds: Bounds,
+            theta: Array, progress: 'InitialProgress', compute_gradient: bool) -> 'Progress':
+        """Compute demand- and supply-side contributions before recovering the linear parameters and structural error
+        terms. Then, form the GMM objective value and its gradient. Finally, handle any errors that were encountered
+        before structuring relevant progress information.
         """
         errors: List[Error] = []
 
-        # expand the nonlinear parameters
-        sigma, pi, rho = nonlinear_parameters.expand(theta)
+        # expand theta
+        sigma, pi, rho, beta, gamma = parameters.expand(theta)
 
         # compute demand-side contributions
-        true_delta, xi_jacobian, delta, beta, true_xi, iterations, evaluations, demand_errors = (
-            self._compute_demand_contributions(
-                nonlinear_parameters, demand_iv, iteration, fp_type, sigma, pi, rho, last_progress, compute_gradient
-            )
+        delta, xi_jacobian, iterations, evaluations, demand_errors = self._compute_demand_contributions(
+            parameters, iteration, fp_type, sigma, pi, rho, progress, compute_gradient
         )
         errors.extend(demand_errors)
 
         # compute supply-side contributions
-        true_tilde_costs = tilde_costs = true_omega = np.full((self.N, 0), np.nan, options.dtype)
-        omega_jacobian = np.full((self.N, nonlinear_parameters.P), np.nan, options.dtype)
-        clipped_costs = np.zeros((self.N, 1), np.bool)
-        gamma = np.full((self.K3, 1), np.nan, options.dtype)
-        if self.K3 > 0:
-            true_tilde_costs, omega_jacobian, tilde_costs, gamma, true_omega, clipped_costs, supply_errors = (
-                self._compute_supply_contributions(
-                    nonlinear_parameters, demand_iv, supply_iv, costs_type, costs_bounds, beta, sigma, pi, rho,
-                    true_delta, xi_jacobian, last_progress, compute_gradient
-                )
+        if self.K3 == 0:
+            tilde_costs = np.zeros((self.N, 0), options.dtype)
+            omega_jacobian = np.full((self.N, parameters.P), np.nan, options.dtype)
+            clipped_costs = np.zeros((self.N, 1), np.bool)
+        else:
+            tilde_costs, omega_jacobian, clipped_costs, supply_errors = self._compute_supply_contributions(
+                parameters, costs_type, costs_bounds, sigma, pi, rho, beta, delta, xi_jacobian, progress,
+                compute_gradient
             )
             errors.extend(supply_errors)
 
-        # compute the objective value
-        demand_moments = self.products.ZD.T @ true_xi
-        supply_moments = self.products.ZS.T @ true_omega
-        objective = demand_moments.T @ WD @ demand_moments
-        if self.K3 > 0:
-            objective += supply_moments.T @ WS @ supply_moments
+        # subtract contributions of linear parameters in theta
+        iv_delta = delta.copy()
+        iv_tilde_costs = tilde_costs.copy()
+        if not parameters.eliminated_beta_index.all():
+            theta_beta = np.c_[beta[~parameters.eliminated_beta_index]]
+            iv_delta -= self._compute_true_X1(index=~parameters.eliminated_beta_index.flatten()) @ theta_beta
+        if not parameters.eliminated_gamma_index.all():
+            theta_gamma = np.c_[gamma[~parameters.eliminated_gamma_index]]
+            iv_delta -= self._compute_true_X3(index=~parameters.eliminated_gamma_index.flatten()) @ theta_gamma
 
-        # replace the objective with its last value if its computation failed, which is unlikely but possible
+        # absorb any fixed effects
+        if self._absorb_demand_ids is not None:
+            iv_delta, demand_absorption_errors = self._absorb_demand_ids(iv_delta)
+            errors.extend(demand_absorption_errors)
+        if self._absorb_supply_ids is not None:
+            iv_tilde_costs, supply_absorption_errors = self._absorb_supply_ids(iv_tilde_costs)
+            errors.extend(supply_absorption_errors)
+
+        # collect inputs into GMM estimation
+        X_list = [self.products.X1[:, parameters.eliminated_beta_index.flat]]
+        Z_list = [self.products.ZD]
+        y_list = [iv_delta]
+        jacobian_list = [xi_jacobian]
+        if self.K3 > 0:
+            X_list.append(self.products.X3[:, parameters.eliminated_gamma_index.flat])
+            Z_list.append(self.products.ZS)
+            y_list.append(iv_tilde_costs)
+            jacobian_list.append(omega_jacobian)
+
+        # recover the linear parameters and structural error terms
+        parameters_list, u_list = iv.estimate(X_list, Z_list, W, y_list)
+        beta[parameters.eliminated_beta_index] = parameters_list[0].flat
+        xi = u_list[0]
+        if self.K3 == 0:
+            omega = np.zeros((self.N, 0), options.dtype)
+        else:
+            gamma[parameters.eliminated_gamma_index] = parameters_list[1].flat
+            omega = u_list[1]
+
+        # compute the objective value and replace it with its last value if computation failed
+        g_bar = compute_gmm_moments_mean(u_list, Z_list)
+        objective = g_bar.T @ W @ g_bar
         if not np.isfinite(np.squeeze(objective)):
-            objective = last_progress.objective
+            objective = progress.objective
             errors.append(exceptions.ObjectiveReversionError())
 
-        # compute the gradient
+        # compute the gradient and replace any invalid elements with their last values
         gradient = np.full_like(theta, np.nan, options.dtype)
         if compute_gradient:
-            gradient = 2 * ((xi_jacobian.T @ self.products.ZD) @ WD @ demand_moments)
-            if self.K3 > 0:
-                gradient += 2 * ((omega_jacobian.T @ self.products.ZS) @ WS @ supply_moments)
-
-        # replace any invalid elements in the gradient with their last values
-        if compute_gradient:
-            bad_indices = ~np.isfinite(gradient)
-            if np.any(bad_indices):
-                gradient[bad_indices] = last_progress.gradient[bad_indices]
-                errors.append(exceptions.GradientReversionError(bad_indices))
+            G_bar = compute_gmm_moments_jacobian_mean(jacobian_list, Z_list)
+            gradient = 2 * (G_bar.T @ W @ g_bar)
+            bad_gradient_index = ~np.isfinite(gradient)
+            if np.any(bad_gradient_index):
+                gradient[bad_gradient_index] = progress.gradient[bad_gradient_index]
+                errors.append(exceptions.GradientReversionError(bad_gradient_index))
 
         # handle any errors
         if errors:
@@ -580,137 +661,108 @@ class AbstractProblem(AbstractEconomy):
 
         # select the delta that will be used in the next objective evaluation
         if delta_behavior == 'last':
-            next_delta = true_delta
+            next_delta = delta
         else:
             assert delta_behavior == 'first'
-            next_delta = last_progress.next_delta
+            next_delta = progress.next_delta
 
         # structure progress
         return Progress(
-            self, nonlinear_parameters, WD, WS, theta, objective, gradient, next_delta, true_delta, true_tilde_costs,
-            xi_jacobian, omega_jacobian, delta, tilde_costs, true_xi, true_omega, beta, gamma, iterations,
-            evaluations, clipped_costs, errors
+            self, parameters, W, theta, objective, gradient, next_delta, delta, tilde_costs, xi_jacobian,
+            omega_jacobian, xi, omega, beta, gamma, iterations, evaluations, clipped_costs, errors
         )
 
     def _compute_demand_contributions(
-            self, nonlinear_parameters: NonlinearParameters, demand_iv: IV, iteration: Iteration, fp_type: str,
-            sigma: Array, pi: Array, rho: Array, last_progress: 'Progress', compute_gradient: bool) -> (
-            Tuple[Array, Array, Array, Array, Array, Dict[Hashable, int], Dict[Hashable, int], List[Error]]):
-        """Compute delta and the Jacobian of xi (equivalently, of delta) with respect to theta market-by-market. If
-        necessary, revert problematic elements to their last values. Lastly, recover beta and compute xi.
+            self, parameters: Parameters, iteration: Iteration, fp_type: str, sigma: Array, pi: Array, rho: Array,
+            progress: 'InitialProgress', compute_gradient: bool) -> (
+            Tuple[Array, Array, Dict[Hashable, int], Dict[Hashable, int], List[Error]]):
+        """Compute delta and the Jacobian of xi (equivalently, of delta) with respect to theta market-by-market. Revert
+        any problematic elements to their last values.
         """
         errors: List[Error] = []
 
         # initialize delta and its Jacobian along with fixed point information so that they can be filled
         iterations: Dict[Hashable, int] = {}
         evaluations: Dict[Hashable, int] = {}
-        true_delta = np.zeros((self.N, 1), options.dtype)
-        xi_jacobian = np.full((self.N, nonlinear_parameters.P), np.nan, options.dtype)
+        delta = np.zeros((self.N, 1), options.dtype)
+        xi_jacobian = np.zeros((self.N, parameters.P), options.dtype)
 
         # when possible and when a gradient isn't needed, compute delta with a closed-form solution
-        if self.K2 == 0 and (nonlinear_parameters.P == 0 or not compute_gradient):
-            true_delta = self._compute_logit_delta(rho)
+        if self.K2 == 0 and (parameters.P == 0 or not compute_gradient):
+            delta = self._compute_logit_delta(rho)
         else:
             # define a factory for solving the demand side of problem markets
-            def market_factory(s: Hashable) -> Tuple[ProblemMarket, Array, NonlinearParameters, Iteration, str, bool]:
+            def market_factory(s: Hashable) -> Tuple[ProblemMarket, Array, Parameters, Iteration, str, bool]:
                 """Build a market along with arguments used to compute delta and its Jacobian."""
                 market_s = ProblemMarket(self, s, sigma, pi, rho)
-                initial_delta_s = last_progress.next_delta[self._product_market_indices[s]]
-                return market_s, initial_delta_s, nonlinear_parameters, iteration, fp_type, compute_gradient
+                initial_delta_s = progress.next_delta[self._product_market_indices[s]]
+                return market_s, initial_delta_s, parameters, iteration, fp_type, compute_gradient
 
             # compute delta and its Jacobian market-by-market
             generator = generate_items(self.unique_market_ids, market_factory, ProblemMarket.solve_demand)
-            for t, (true_delta_t, xi_jacobian_t, errors_t, iterations[t], evaluations[t]) in generator:
-                true_delta[self._product_market_indices[t]] = true_delta_t
-                xi_jacobian[self._product_market_indices[t]] = xi_jacobian_t
+            for t, (delta_t, xi_jacobian_t, errors_t, iterations[t], evaluations[t]) in generator:
+                delta[self._product_market_indices[t]] = delta_t
+                xi_jacobian[self._product_market_indices[t], :xi_jacobian_t.shape[1]] = xi_jacobian_t
                 errors.extend(errors_t)
 
         # replace invalid elements in delta with their last values
-        bad_indices = ~np.isfinite(true_delta)
-        if np.any(bad_indices):
-            true_delta[bad_indices] = last_progress.true_delta[bad_indices]
-            errors.append(exceptions.DeltaReversionError(bad_indices))
+        bad_delta_index = ~np.isfinite(delta)
+        if np.any(bad_delta_index):
+            delta[bad_delta_index] = progress.delta[bad_delta_index]
+            errors.append(exceptions.DeltaReversionError(bad_delta_index))
 
         # replace invalid elements in its Jacobian with their last values
         if compute_gradient:
-            bad_indices = ~np.isfinite(xi_jacobian)
-            if np.any(bad_indices):
-                xi_jacobian[bad_indices] = last_progress.xi_jacobian[bad_indices]
-                errors.append(exceptions.XiByThetaJacobianReversionError(bad_indices))
-
-        # absorb any demand-side fixed effects
-        delta = true_delta
-        if self._absorb_demand_ids is not None:
-            delta, delta_errors = self._absorb_demand_ids(delta)
-            errors.extend(delta_errors)
-
-        # recover beta and compute xi
-        beta, true_xi = demand_iv.estimate(delta)
-        return true_delta, xi_jacobian, delta, beta, true_xi, iterations, evaluations, errors
+            bad_jacobian_index = ~np.isfinite(xi_jacobian)
+            if np.any(bad_jacobian_index):
+                xi_jacobian[bad_jacobian_index] = progress.xi_jacobian[bad_jacobian_index]
+                errors.append(exceptions.XiByThetaJacobianReversionError(bad_jacobian_index))
+        return delta, xi_jacobian, iterations, evaluations, errors
 
     def _compute_supply_contributions(
-            self, nonlinear_parameters: NonlinearParameters, demand_iv: IV, supply_iv: IV, costs_type: str,
-            costs_bounds: Bounds, beta: Array, sigma: Array, pi: Array, rho: Array, true_delta: Array,
-            xi_jacobian: Array, last_progress: 'Progress', compute_gradient: bool) -> (
-            Tuple[Array, Array, Array, Array, Array, Array, List[Error]]):
+            self, parameters: Parameters, costs_type: str, costs_bounds: Bounds, sigma: Array, pi: Array, rho: Array,
+            beta: Array, delta: Array, xi_jacobian: Array, progress: 'InitialProgress', compute_gradient: bool) -> (
+            Tuple[Array, Array, Array, List[Error]]):
         """Compute transformed marginal costs and the Jacobian of omega (equivalently, of transformed marginal costs)
-        with respect to theta market-by-market. If necessary, revert problematic elements to their last values. Lastly,
-        recover gamma and compute omega.
+        with respect to theta market-by-market. Revert any problematic elements to their last values.
         """
         errors: List[Error] = []
 
-        # compute the Jacobian of beta with respect to theta, which is needed to compute other Jacobians
-        beta_jacobian = np.full((self.K1, nonlinear_parameters.P), np.nan, options.dtype)
-        if compute_gradient:
-            beta_jacobian = demand_iv.estimate(xi_jacobian, residuals=False)
-
         # initialize transformed marginal costs, their Jacobian, and indices of clipped costs so that they can be filled
-        true_tilde_costs = np.zeros((self.N, 1), options.dtype)
-        omega_jacobian = np.full((self.N, nonlinear_parameters.P), np.nan, options.dtype)
+        tilde_costs = np.zeros((self.N, 1), options.dtype)
+        omega_jacobian = np.zeros((self.N, parameters.P), options.dtype)
         clipped_costs = np.zeros((self.N, 1), np.bool)
 
         # define a factory for solving the supply side of problem markets
         def market_factory(
-                s: Hashable) -> Tuple[ProblemMarket, Array, Array, Array, NonlinearParameters, str, Bounds, bool]:
+                s: Hashable) -> Tuple[ProblemMarket, Array, Array, Parameters, str, Bounds, bool]:
             """Build a market along with arguments used to compute transformed marginal costs and their Jacobian."""
-            market_s = ProblemMarket(self, s, sigma, pi, rho, beta, true_delta)
-            last_true_tilde_costs_s = last_progress.true_tilde_costs[self._product_market_indices[s]]
+            market_s = ProblemMarket(self, s, sigma, pi, rho, beta, delta)
+            last_tilde_costs_s = progress.tilde_costs[self._product_market_indices[s]]
             xi_jacobian_s = xi_jacobian[self._product_market_indices[s]]
-            return (
-                market_s, last_true_tilde_costs_s, xi_jacobian_s, beta_jacobian, nonlinear_parameters,
-                costs_type, costs_bounds, compute_gradient
-            )
+            return market_s, last_tilde_costs_s, xi_jacobian_s, parameters, costs_type, costs_bounds, compute_gradient
 
         # compute transformed marginal costs and their Jacobian market-by-market
         generator = generate_items(self.unique_market_ids, market_factory, ProblemMarket.solve_supply)
-        for t, (true_tilde_costs_t, omega_jacobian_t, clipped_costs_t, errors_t) in generator:
-            true_tilde_costs[self._product_market_indices[t]] = true_tilde_costs_t
-            omega_jacobian[self._product_market_indices[t]] = omega_jacobian_t
+        for t, (tilde_costs_t, omega_jacobian_t, clipped_costs_t, errors_t) in generator:
+            tilde_costs[self._product_market_indices[t]] = tilde_costs_t
+            omega_jacobian[self._product_market_indices[t], :omega_jacobian_t.shape[1]] = omega_jacobian_t
             clipped_costs[self._product_market_indices[t]] = clipped_costs_t
             errors.extend(errors_t)
 
         # replace invalid transformed marginal costs with their last values
-        bad_indices = ~np.isfinite(true_tilde_costs)
-        if np.any(bad_indices):
-            true_tilde_costs[bad_indices] = last_progress.true_tilde_costs[bad_indices]
-            errors.append(exceptions.CostsReversionError(bad_indices))
+        bad_tilde_costs_index = ~np.isfinite(tilde_costs)
+        if np.any(bad_tilde_costs_index):
+            tilde_costs[bad_tilde_costs_index] = progress.tilde_costs[bad_tilde_costs_index]
+            errors.append(exceptions.CostsReversionError(bad_tilde_costs_index))
 
         # replace invalid elements in their Jacobian with their last values
         if compute_gradient:
-            bad_indices = ~np.isfinite(omega_jacobian)
-            if np.any(bad_indices):
-                omega_jacobian[bad_indices] = last_progress.omega_jacobian[bad_indices]
-                errors.append(exceptions.OmegaByThetaJacobianReversionError(bad_indices))
-
-        # absorb any supply-side fixed effects
-        tilde_costs = true_tilde_costs
-        if self._absorb_supply_ids is not None:
-            tilde_costs, tilde_costs_errors = self._absorb_supply_ids(tilde_costs)
-            errors.extend(tilde_costs_errors)
-
-        # recover gamma and compute omega
-        gamma, true_omega = supply_iv.estimate(tilde_costs)
-        return true_tilde_costs, omega_jacobian, tilde_costs, gamma, true_omega, clipped_costs, errors
+            bad_jacobian_index = ~np.isfinite(omega_jacobian)
+            if np.any(bad_jacobian_index):
+                omega_jacobian[bad_jacobian_index] = progress.omega_jacobian[bad_jacobian_index]
+                errors.append(exceptions.OmegaByThetaJacobianReversionError(bad_jacobian_index))
+        return tilde_costs, omega_jacobian, clipped_costs, errors
 
     def _compute_logit_delta(self, rho: Array) -> Array:
         """Compute the delta that solves the simple Logit (or nested Logit) model."""
@@ -1007,61 +1059,65 @@ class OptimalInstrumentProblem(AbstractProblem):
         output(self)
 
 
-class Progress(object):
-    """Structured information about estimation progress."""
+class InitialProgress(object):
+    """Structured information about initial estimation progress."""
 
     problem: AbstractProblem
-    nonlinear_parameters: NonlinearParameters
-    WD: Array
-    WS: Array
+    parameters: Parameters
+    W: Array
     theta: Array
     objective: Array
     gradient: Array
     next_delta: Array
-    true_delta: Array
-    true_tilde_costs: Array
+    delta: Array
+    tilde_costs: Array
     xi_jacobian: Array
     omega_jacobian: Array
-    delta: Optional[Array]
-    tilde_costs: Optional[Array]
-    true_xi: Optional[Array]
-    true_omega: Optional[Array]
-    beta: Optional[Array]
-    gamma: Optional[Array]
-    iteration_mapping: Dict[Hashable, int]
-    evaluation_mapping: Dict[Hashable, int]
-    clipped_costs: Optional[Array]
-    errors: List[Error]
-    gradient_norm: Array
 
     def __init__(
-            self, problem: AbstractProblem, nonlinear_parameters: NonlinearParameters, WD: Array, WS: Array,
-            theta: Array, objective: Array, gradient: Array, next_delta: Array, true_delta: Array,
-            true_tilde_costs: Array, xi_jacobian: Array, omega_jacobian: Array, delta: Optional[Array] = None,
-            tilde_costs: Optional[Array] = None, true_xi: Optional[Array] = None, true_omega: Optional[Array] = None,
-            beta: Optional[Array] = None, gamma: Optional[Array] = None,
-            iteration_mapping: Optional[Dict[Hashable, int]] = None,
-            evaluation_mapping: Optional[Dict[Hashable, int]] = None, clipped_costs: Optional[Array] = None,
-            errors: Optional[List[Error]] = None) -> None:
-        """Initialize progress information. Optional parameters will not be specified when preparing for the first
-        objective evaluation.
-        """
+            self, problem: AbstractProblem, parameters: Parameters, W: Array, theta: Array, objective: Array,
+            gradient: Array, next_delta: Array, delta: Array, tilde_costs: Array, xi_jacobian: Array,
+            omega_jacobian: Array) -> None:
+        """Store initial progress information."""
         self.problem = problem
-        self.nonlinear_parameters = nonlinear_parameters
-        self.WD = WD
-        self.WS = WS
+        self.parameters = parameters
+        self.W = W
         self.theta = theta
         self.objective = objective
         self.gradient = gradient
         self.next_delta = next_delta
-        self.true_delta = true_delta
-        self.true_tilde_costs = true_tilde_costs
-        self.xi_jacobian = xi_jacobian
-        self.omega_jacobian = omega_jacobian
         self.delta = delta
         self.tilde_costs = tilde_costs
-        self.true_xi = true_xi
-        self.true_omega = true_omega
+        self.xi_jacobian = xi_jacobian
+        self.omega_jacobian = omega_jacobian
+
+
+class Progress(InitialProgress):
+    """Structured information about estimation progress."""
+
+    xi: Array
+    omega: Array
+    beta: Array
+    gamma: Array
+    iteration_mapping: Dict[Hashable, int]
+    evaluation_mapping: Dict[Hashable, int]
+    clipped_costs: Array
+    errors: List[Error]
+    gradient_norm: Array
+
+    def __init__(
+            self, problem: AbstractProblem, parameters: Parameters, W: Array, theta: Array, objective: Array,
+            gradient: Array, next_delta: Array, delta: Array, tilde_costs: Array, xi_jacobian: Array,
+            omega_jacobian: Array, xi: Array, omega: Array, beta: Array, gamma: Array,
+            iteration_mapping: Dict[Hashable, int], evaluation_mapping: Dict[Hashable, int], clipped_costs: Array,
+            errors: List[Error]) -> None:
+        """Store progress information."""
+        super().__init__(
+            problem, parameters, W, theta, objective, gradient, next_delta, delta, tilde_costs, xi_jacobian,
+            omega_jacobian
+        )
+        self.xi = xi
+        self.omega = omega
         self.beta = beta
         self.gamma = gamma
         self.iteration_mapping = iteration_mapping or {}
@@ -1105,7 +1161,6 @@ class Progress(object):
                 format_number(float(smallest_gradient - self.gradient_norm)) if gradient_improved else "",
             ])
         if np.isfinite(costs_bounds).any():
-            assert self.clipped_costs is not None
             header.append(("Clipped", "Marginal Costs"))
             values.append(self.clipped_costs.sum())
         header.append(("", "Theta"))

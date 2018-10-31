@@ -7,7 +7,6 @@ import numpy as np
 from .market import Market
 from .. import exceptions, options
 from ..configurations.iteration import Iteration
-from ..parameters import NonlinearParameters
 from ..utilities.basics import Array, Error
 
 
@@ -41,18 +40,6 @@ class ResultsMarket(Market):
             mu = self.update_mu_with_variable('prices', prices)
             shares = self.compute_probabilities(delta, mu) @ self.agents.weights
             return prices, shares, delta, errors, iterations, evaluations
-
-    def compute_omega_jacobians(
-            self, tilde_costs: Array, xi_jacobian: Array, beta_jacobian: Array,
-            nonlinear_parameters: NonlinearParameters, costs_type: str) -> Tuple[Array, Array, List[Error]]:
-        """Compute the Jacobians of omega (equivalently, of transformed marginal costs) with respect to theta and
-        beta (but first check if the latter is all zeros).
-        """
-        omega_by_theta_jacobian, theta_errors = self.compute_omega_by_theta_jacobian(
-            tilde_costs, xi_jacobian, beta_jacobian, nonlinear_parameters, costs_type
-        )
-        omega_by_beta_jacobian, beta_errors = self.compute_omega_by_beta_jacobian(tilde_costs, costs_type)
-        return omega_by_theta_jacobian, omega_by_beta_jacobian, theta_errors + beta_errors
 
     def compute_aggregate_elasticity(self, factor: float, name: str) -> Tuple[Array, List[Error]]:
         """Estimate the aggregate elasticity of demand with respect to a variable."""

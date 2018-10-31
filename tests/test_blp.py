@@ -14,7 +14,7 @@ from .conftest import SimulatedProblemFixture
 
 @pytest.mark.usefixtures('simulated_problem')
 @pytest.mark.parametrize('solve_options_update', [
-    pytest.param({'method': '1s'}, id="one-step"),
+    pytest.param({'method': '2s'}, id="two-step"),
     pytest.param({'fp_type': 'nonlinear'}, id="nonlinear fixed point"),
     pytest.param({'delta_behavior': 'first'}, id="conservative starting delta values"),
     pytest.param({'error_behavior': 'punish', 'error_punishment': 1e5}, id="error punishment"),
@@ -26,16 +26,12 @@ def test_accuracy(simulated_problem: SimulatedProblemFixture, solve_options_upda
 
     # update the default options and solve the problem
     updated_solve_options = solve_options.copy()
-    updated_solve_options.update({
-        'sigma': 0.5 * simulation.sigma,
-        'pi': 0.5 * simulation.pi,
-        'rho': 0.5 * simulation.rho,
-        **solve_options_update
-    })
+    updated_solve_options.update(solve_options_update)
+    updated_solve_options.update({k: 0.5 * solve_options[k] for k in ['sigma', 'pi', 'rho', 'beta']})
     results = problem.solve(**updated_solve_options)
 
     # test the accuracy of the estimated parameters
-    keys = ['beta', 'sigma', 'pi', 'rho']
+    keys = ['sigma', 'pi', 'rho', 'beta']
     if problem.K3 > 0:
         keys.append('gamma')
     for key in keys:
@@ -81,11 +77,7 @@ def test_optimal_instruments(simulated_problem: SimulatedProblemFixture, compute
 
     # update the default options and solve the problem
     updated_solve_options = solve_options.copy()
-    updated_solve_options.update({
-        'sigma': 0.5 * simulation.sigma,
-        'pi': 0.5 * simulation.pi,
-        'rho': 0.5 * simulation.rho,
-    })
+    updated_solve_options.update({k: 0.5 * solve_options[k] for k in ['sigma', 'pi', 'rho', 'beta']})
     new_results = new_problem.solve(**updated_solve_options)
 
     # test the accuracy of the estimated parameters
@@ -156,14 +148,14 @@ def test_parallel(simulated_problem: SimulatedProblemFixture) -> None:
     # solve the simulation, solve the problem, and compute costs in parallel
     with parallel(2):
         parallel_simulation_results = simulation.solve()
-        parallel_product_data = parallel_simulation_results.product_data
+        parallel_data = parallel_simulation_results.product_data
         parallel_results = parallel_simulation_results.to_problem(problem.product_formulations).solve(**solve_options)
         parallel_costs = parallel_results.compute_costs()
 
     # test that product data are essentially identical
     for key in product_data.dtype.names:
         if product_data[key].dtype != np.object:
-            np.testing.assert_allclose(product_data[key], parallel_product_data[key], atol=1e-14, rtol=0, err_msg=key)
+            np.testing.assert_allclose(product_data[key], parallel_data[key], atol=1e-14, rtol=0, err_msg=key)
 
     # test that all arrays in the results are essentially identical
     for key, result in results.__dict__.items():
@@ -192,17 +184,10 @@ def test_fixed_effects(
         simulated_problem: SimulatedProblemFixture, ED: int, ES: int,
         absorb_method: Optional[Union[str, Iteration]]) -> None:
     """Test that absorbing different numbers of demand- and supply-side fixed effects gives rise to essentially
-    identical first-stage results as does including indicator variables. Also test that results that should be equal
-    when there aren't any fixed effects are indeed equal, that optimal instruments are equal, and that marginal costs
-    are equal.
+    identical first-stage results as does including indicator variables. Also test that optimal instruments results
+    and marginal costs remain unchanged.
     """
     simulation, product_data, problem, solve_options, problem_results = simulated_problem
-
-    # test that results that should be equal when there aren't any fixed effects are indeed equal
-    for key in ['delta', 'tilde_costs', 'xi', 'omega']:
-        result = getattr(problem_results, key)
-        true_result = getattr(problem_results, f'true_{key}')
-        np.testing.assert_allclose(result, true_result, atol=1e-14, rtol=0, err_msg=key)
 
     # there cannot be supply-side fixed effects if there isn't a supply side
     if problem.K3 == 0:
@@ -213,10 +198,13 @@ def test_fixed_effects(
     # make product data mutable
     product_data = {k: product_data[k] for k in product_data.dtype.names}
 
-    # remove constants
+    # remove constants and delete associated elements in the initial beta
+    solve_options = solve_options.copy()
     product_formulations = list(problem.product_formulations).copy()
     if ED > 0:
         assert product_formulations[0] is not None
+        constant_indices = [i for i, e in enumerate(product_formulations[0]._expressions) if not e.free_symbols]
+        solve_options['beta'] = np.delete(solve_options['beta'], constant_indices, axis=0)
         product_formulations[0] = Formulation(f'{product_formulations[0]._formula} - 1')
     if ES > 0:
         assert product_formulations[2] is not None
@@ -246,6 +234,7 @@ def test_fixed_effects(
     instrument_formula = ' + '.join(instrument_names)
 
     # solve the first stage of a problem in which the fixed effects are absorbed
+    solve_options1 = solve_options.copy()
     product_formulations1 = product_formulations.copy()
     if ED > 0:
         assert product_formulations[0] is not None
@@ -254,9 +243,10 @@ def test_fixed_effects(
         assert product_formulations[2] is not None
         product_formulations1[2] = Formulation(product_formulations[2]._formula, supply_id_formula, absorb_method)
     problem1 = Problem(product_formulations1, product_data, problem.agent_formulation, simulation.agent_data)
-    problem_results1 = problem1.solve(**solve_options)
+    problem_results1 = problem1.solve(**solve_options1)
 
     # solve the first stage of a problem in which fixed effects are included as indicator variables
+    solve_options2 = solve_options.copy()
     product_formulations2 = product_formulations.copy()
     if ED > 0:
         assert product_formulations[0] is not None
@@ -265,13 +255,18 @@ def test_fixed_effects(
         assert product_formulations[2] is not None
         product_formulations2[2] = Formulation(f'{product_formulations[2]._formula} + {supply_id_formula}')
     problem2 = Problem(product_formulations2, product_data, problem.agent_formulation, simulation.agent_data)
-    problem_results2 = problem2.solve(**solve_options)
+    solve_options2['beta'] = np.r_[
+        solve_options2['beta'],
+        np.full((problem2.K1 - solve_options2['beta'].size, 1), np.nan)
+    ]
+    problem_results2 = problem2.solve(**solve_options2)
 
     # solve the first stage of a problem in which some fixed effects are absorbed and some are included as indicators
     if ED == ES == 0:
-        problem_results3 = problem_results2
         product_formulations3 = product_formulations2.copy()
+        problem_results3 = problem_results2
     else:
+        solve_options3 = solve_options.copy()
         product_formulations3 = product_formulations.copy()
         if ED > 0:
             assert product_formulations[0] is not None
@@ -284,7 +279,11 @@ def test_fixed_effects(
                 f'{product_formulations[2]._formula} + {supply_id_names[0]}', ' + '.join(supply_id_names[1:]) or None
             )
         problem3 = Problem(product_formulations3, product_data, problem.agent_formulation, simulation.agent_data)
-        problem_results3 = problem3.solve(**solve_options)
+        solve_options3['beta'] = np.r_[
+            solve_options3['beta'],
+            np.full((problem3.K1 - solve_options3['beta'].size, 1), np.nan)
+        ]
+        problem_results3 = problem3.solve(**solve_options3)
 
     # without a supply side, compute expected prices with a reduced form regression on all exogenous variables
     expected_prices1 = expected_prices2 = expected_prices3 = None
@@ -329,26 +328,23 @@ def test_fixed_effects(
     # test that all problem results expected to be identical are essentially identical
     problem_results_keys = [
         'theta', 'sigma', 'pi', 'rho', 'beta', 'gamma', 'sigma_se', 'pi_se', 'rho_se', 'beta_se', 'gamma_se',
-        'true_delta', 'true_tilde_costs', 'true_xi', 'true_omega', 'xi_by_theta_jacobian', 'omega_by_theta_jacobian',
-        'omega_by_beta_jacobian', 'objective', 'gradient', 'sigma_gradient', 'pi_gradient', 'rho_gradient'
+        'delta', 'tilde_costs', 'xi', 'omega', 'xi_by_theta_jacobian', 'omega_by_theta_jacobian', 'objective',
+        'gradient', 'gradient_norm', 'sigma_gradient', 'pi_gradient', 'rho_gradient', 'beta_gradient', 'gamma_gradient'
     ]
     for key in problem_results_keys:
         result1 = getattr(problem_results1, key)
         result2 = getattr(problem_results2, key)
         result3 = getattr(problem_results3, key)
-        if key in {'beta', 'gamma', 'beta_se', 'gamma_se'}:
+        if key in {'beta', 'gamma', 'beta_se', 'gamma_se', 'beta_gradient', 'gamma_gradient'}:
             result2 = result2[:result1.size]
             result3 = result3[:result1.size]
-        elif key == 'omega_by_beta_jacobian':
-            result2 = np.c_[result2[:, :result1.shape[1]]]
-            result3 = np.c_[result3[:, :result1.shape[1]]]
         np.testing.assert_allclose(result1, result2, atol=atol, rtol=rtol, err_msg=key)
         np.testing.assert_allclose(result1, result3, atol=atol, rtol=rtol, err_msg=key)
 
     # test that all optimal instrument results expected to be identical are essentially identical
     Z_results_keys = [
         'demand_instruments', 'supply_instruments', 'inverse_covariance_matrix', 'expected_xi_by_theta_jacobian',
-        'expected_xi_by_alpha_jacobian', 'expected_omega_by_theta_jacobian', 'expected_omega_by_alpha_jacobian'
+        'expected_omega_by_theta_jacobian'
     ]
     for key in Z_results_keys:
         result1 = getattr(Z_results1, key)
@@ -444,44 +440,6 @@ def test_shares_by_prices_jacobian(simulated_problem: SimulatedProblemFixture) -
 
 
 @pytest.mark.usefixtures('simulated_problem')
-def test_omega_by_beta_jacobian(simulated_problem: SimulatedProblemFixture) -> None:
-    """Use central finite differences to test that analytic values in the Jacobian of omega (equivalently, of
-    transformed marginal costs) with respect to prices are essentially equal.
-    """
-    _, _, problem, solve_options, results = simulated_problem
-
-    # skip problems without a demand side
-    if problem.K3 == 0:
-        return
-
-    # define a function that computes transformed marginal costs under a given beta
-    def compute_tilde_costs(beta: Array) -> Array:
-        """Update beta, compute marginal costs, and apply any transformation."""
-        old_beta = results.beta.copy()
-        try:
-            results.beta = beta
-            costs = results.compute_costs()
-        finally:
-            results.beta = old_beta
-        if solve_options.get('costs_type', 'linear') == 'log':
-            return np.log(costs)
-        return costs
-
-    # estimate the Jacobian with finite differences
-    estimated = np.zeros_like(results.omega_by_beta_jacobian)
-    change = np.sqrt(np.finfo(np.float64).eps)
-    for index in range(estimated.shape[1]):
-        beta1 = results.beta.copy()
-        beta2 = results.beta.copy()
-        beta1[index] += change / 2
-        beta2[index] -= change / 2
-        estimated[:, [index]] = (compute_tilde_costs(beta1) - compute_tilde_costs(beta2)) / change
-
-    # compare the two Jacobians
-    np.testing.assert_allclose(results.omega_by_beta_jacobian, estimated, atol=1e-8, rtol=1e-6)
-
-
-@pytest.mark.usefixtures('simulated_problem')
 @pytest.mark.parametrize('factor', [pytest.param(0.01, id="large"), pytest.param(0.0001, id="small")])
 def test_elasticity_aggregates_and_means(simulated_problem: SimulatedProblemFixture, factor: float) -> None:
     """Test that the magnitude of simulated aggregate elasticities is less than the magnitude of mean elasticities, both
@@ -571,9 +529,9 @@ def test_second_step(simulated_problem: SimulatedProblemFixture) -> None:
         'sigma': results1.sigma,
         'pi': results1.pi,
         'rho': results1.rho,
+        'beta': np.where(np.isnan(solve_options['beta']), np.nan, results1.beta),
         'delta': results1.delta,
-        'WD': results1.updated_WD,
-        'WS': results1.updated_WS
+        'W': results1.updated_W
     })
     results2 = problem.solve(**updated_solve_options2)
     assert results1.last_results is None and results2.last_results is None
@@ -590,8 +548,7 @@ def test_second_step(simulated_problem: SimulatedProblemFixture) -> None:
     pytest.param('l-bfgs-b', id="L-BFGS-B"),
     pytest.param('slsqp', id="SLSQP")
 ])
-def test_gradient_optionality(
-        simulated_problem: SimulatedProblemFixture, scipy_method: str) -> None:
+def test_gradient_optionality(simulated_problem: SimulatedProblemFixture, scipy_method: str) -> None:
     """Test that the option of not computing the gradient for simulated data does not affect estimates when the gradient
     isn't used.
     """
@@ -728,17 +685,16 @@ def test_extra_nodes(simulated_problem: SimulatedProblemFixture) -> None:
     assert simulation.agent_data is not None
     extra_agent_data = {k: simulation.agent_data[k] for k in simulation.agent_data.dtype.names}
     extra_agent_data['nodes'] = np.c_[extra_agent_data['nodes'], extra_agent_data['nodes']]
-    extra_problem = Problem(problem.product_formulations, product_data, problem.agent_formulation, extra_agent_data)
+    new_problem = Problem(problem.product_formulations, product_data, problem.agent_formulation, extra_agent_data)
 
     # test that the agents are essentially identical
     for key in problem.agents.dtype.names:
         if problem.agents[key].dtype != np.object:
-            np.testing.assert_allclose(problem.agents[key], extra_problem.agents[key], atol=1e-14, rtol=0, err_msg=key)
+            np.testing.assert_allclose(problem.agents[key], new_problem.agents[key], atol=1e-14, rtol=0, err_msg=key)
 
 
 @pytest.mark.usefixtures('simulated_problem')
-def test_extra_demographics(
-        simulated_problem: SimulatedProblemFixture) -> None:
+def test_extra_demographics(simulated_problem: SimulatedProblemFixture) -> None:
     """Test that agents in a simulated problem are identical to agents in a problem created with agent data built
     according to the same integration specification and but containing unnecessary rows of demographics.
     """
@@ -752,14 +708,14 @@ def test_extra_demographics(
     assert simulation.agent_data is not None
     agent_data = simulation.agent_data
     extra_agent_data = {k: np.r_[agent_data[k], agent_data[k]] for k in agent_data.dtype.names}
-    extra_problem = Problem(
+    new_problem = Problem(
         problem.product_formulations, product_data, problem.agent_formulation, extra_agent_data, simulation.integration
     )
 
     # test that the agents are essentially identical
     for key in problem.agents.dtype.names:
         if problem.agents[key].dtype != np.object:
-            np.testing.assert_allclose(problem.agents[key], extra_problem.agents[key], atol=1e-14, rtol=0, err_msg=key)
+            np.testing.assert_allclose(problem.agents[key], new_problem.agents[key], atol=1e-14, rtol=0, err_msg=key)
 
 
 @pytest.mark.usefixtures('simulated_problem')
@@ -769,7 +725,7 @@ def test_extra_demographics(
 ])
 def test_objective_gradient(simulated_problem: SimulatedProblemFixture, solve_options_update: Options) -> None:
     """Implement central finite differences in a custom optimization routine to test that analytic gradient values
-    are within 0.1% of estimated values.
+    are close to estimated values.
     """
     simulation, _, problem, solve_options, _ = simulated_problem
 
@@ -793,14 +749,14 @@ def test_objective_gradient(simulated_problem: SimulatedProblemFixture, solve_op
 
     # test the gradient at parameter values slightly different from the true ones so that the objective is sizable
     updated_solve_options = solve_options.copy()
+    updated_solve_options.update(solve_options_update)
+    updated_solve_options.update({k: 0.9 * solve_options[k] for k in ['sigma', 'pi', 'rho', 'beta']})
     updated_solve_options.update({
-        'sigma': 0.9 * simulation.sigma,
-        'pi': 0.9 * simulation.pi,
-        'rho': 0.9 * simulation.rho,
         'method': '1s',
         'optimization': Optimization(test_finite_differences),
-        'iteration': Iteration('squarem', {'tol': 1e-15 if solve_options.get('fp_type') == 'nonlinear' else 1e-14}),
-        **solve_options_update
+        'iteration': Iteration('squarem', {
+            'tol': 1e-16 if solve_options_update.get('fp_type') == 'nonlinear' else 1e-14
+        })
     })
     problem.solve(**updated_solve_options)
 
@@ -851,12 +807,8 @@ def test_logit(
     )
     results2 = model.fit(iter_limit=1 if method == '1s' else 2, cov_type=se_type, **se_options)
 
-    # test that results are essentially identical (the packages are expected to get different unadjusted standard errors
-    #   in the second stage because linearmodels uses a unadjusted sandwich in the robust expression, whereas here the
-    #   more common "optimal" GMM estimator is used)
+    # test that results are essentially identical
     for key1, key2 in [('beta', 'params'), ('xi', 'resids'), ('beta_se', 'std_errors')]:
-        if se_type == 'unadjusted' and method == '2s' and key1 == 'beta_se':
-            continue
         values1 = getattr(results1, key1)
         values2 = np.c_[getattr(results2, key2)]
-        np.testing.assert_allclose(values1, values2, atol=1e-10, rtol=1e-6, err_msg=key1)
+        np.testing.assert_allclose(values1, values2, atol=1e-10, rtol=1e-8, err_msg=key1)

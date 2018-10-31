@@ -7,7 +7,6 @@ from typing import Dict, Hashable, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
-from .. import options
 from ..configurations.formulation import ColumnFormulation, Formulation
 from ..utilities.basics import Array, RecArray, StringRepresentation, TableFormatter
 
@@ -167,18 +166,27 @@ class AbstractEconomy(abc.ABC, StringRepresentation):
         if not isinstance(firms_index, int) or not 0 <= firms_index <= max_firms_index:
             raise ValueError(f"firms_index must be an int between 0 and {firms_index}.")
 
-    def _compute_true_X1(self, data_override: Optional[Mapping] = None) -> Array:
-        """Compute X1 without any absorbed demand-side fixed effects."""
+    def _compute_true_X1(self, data_override: Optional[Mapping] = None, index: Optional[Array] = None) -> Array:
+        """Compute X1 or columns of X1 without any absorbed demand-side fixed effects."""
+        if index is None:
+            index = np.ones(self.K1, np.bool)
         if self.ED == 0 and not data_override:
-            return self.products.X1
-        ones = np.ones((self.N, 1), options.dtype)
-        columns = (ones * f.evaluate(self.products, data_override) for f in self._X1_formulations)
+            return self.products.X1[:, index]
+        columns = []
+        for include, formulation in zip(index, self._X1_formulations):
+            if include:
+                columns.append(formulation.evaluate(self.products, data_override) * np.ones((self.N, 1)))
         return np.column_stack(columns)
 
-    def _compute_true_X3(self, data_override: Optional[Mapping] = None) -> Array:
-        """Compute X3 without any absorbed supply-side fixed effects."""
+    def _compute_true_X3(
+            self, data_override: Optional[Mapping] = None, index: Optional[Array] = None) -> Array:
+        """Compute X3 or columns of X3 without any absorbed supply-side fixed effects."""
+        if index is None:
+            index = np.ones(self.K3, np.bool)
         if self.ES == 0 and not data_override:
-            return self.products.X3
-        ones = np.ones((self.N, 1), options.dtype)
-        columns = (ones * f.evaluate(self.products, data_override) for f in self._X3_formulations)
+            return self.products.X3[:, index]
+        columns = []
+        for include, formulation in zip(index, self._X3_formulations):
+            if include:
+                columns.append(formulation.evaluate(self.products, data_override) * np.ones((self.N, 1)))
         return np.column_stack(columns)
