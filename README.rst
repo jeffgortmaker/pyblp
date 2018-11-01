@@ -69,7 +69,7 @@ Features
 - Support for robust and clustered standard errors.
 - Control over weighting matrix computation.
 - Linear or log-linear marginal cost specifications.
-- Support for non-standard ownership matrices.
+- Support for partial ownership matrices.
 - Functions for building custom ownership matrices and BLP instruments.
 - Computation of analytic gradients.
 - Support for market-by-market parallelization.
