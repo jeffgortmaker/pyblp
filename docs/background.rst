@@ -17,7 +17,7 @@ Observed demand-side product characteristics are contained in the :math:`N \time
 
 In market :math:`t`, observed agent characteristics are a :math:`I_t \times D` matrix called demographics, :math:`d`. Note that in :ref:`references:Nevo (2000)`, :math:`d` refers to the number of demographics and :math:`D` to the matrix; the opposite is employed here so that all numbers are capital letters. Unobserved characteristics are a :math:`I_t \times K_2` matrix, :math:`\nu`, which consists of rows that are usually assumed to be independent draws from a mean-zero multivariate normal distribution.
 
-The indirect utility of agent :math:`i` from consuming product :math:`j` in market :math:`t` is
+The indirect utility of agent :math:`i` from purchasing product :math:`j` in market :math:`t` is
 
 .. math:: U_{jti} = \delta_{jt} + \mu_{jti} + \epsilon_{jti},
    :label: utilities
@@ -34,19 +34,18 @@ and the type-specific portion for all products and agents in a single market is
 
    Unlike some of the existing literature, :math:`X_1` includes endogenous characteristics. That is, it includes characteristics that are functions of prices, :math:`p`, and :math:`\beta` includes parameters on these endogenous characteristics. The notation :math:`X_1^p` is used to denote these endogenous characteristics, and :math:`\alpha` is used to denote the parameters (which are a subset of those in :math:`\beta`) on these endogenous characteristics. Often, :math:`X_1^p` is simply a single column of prices.
 
-The :math:`K_2 \times K_2` matrix :math:`\Sigma` is the Cholesky decomposition of the covariance matrix that defines the multivariate normal distribution from which each :math:`\nu_i` is assumed to be drawn. The :math:`K_2 \times D` matrix :math:`\Pi` measures how agent tastes vary with demographics.
+The model incorporates both observable (demographic) and unobservable taste heterogeneity heterogeneity though random coefficients. For the unobserved heterogeneity, we let :math:`\nu_i` denote draws from a :math:`K_2` vector independent normals. These are scaled by a :math:`K_2 \times K_2` matrix :math:`\Sigma` which denotes Cholesky decomposition of the covariance matrix for the unobserved taste heterogeneity. The :math:`K_2 \times D` matrix :math:`\Pi` denotes how agent tastes vary with demographics.
 
-Random idiosyncratic preferences :math:`\epsilon_{jti}` are assumed to be Type I Extreme Value so that market shares can be approximated with Monte Carlo integration or quadrature rules as in :ref:`references:Heiss and Winschel (2008)` and :ref:`references:Judd and Skrainka (2011)`:
+Random idiosyncratic preferences :math:`\epsilon_{jti}` are assumed to be Type I Extreme Value, so that conditional on the heterogeneous coefficients, marketshares follow the well known logit form. Aggregate marketshares are obtained by integrating out over the distribution of individual heterogeneity.
 
-.. math:: s_{jt} = \sum_{i=1}^{I_t} w_i s_{jti},
+.. math:: s_{jt} = \int s_{jti}(\mu_{ti}) f(\mu_{it}) \partial \mu_{it}  \approx \sum_{i=1}^{I_t} w_i s_{jti},
    :label: shares
 
-in which :math:`w` is a :math:`I_t \times 1` column vector of integration weights and the probability that agent :math:`i` chooses product :math:`j` in market :math:`t` is
+Market shares can be approximated with Monte Carlo integration or quadrature rules as in :ref:`references:Heiss and Winschel (2008)` and :ref:`references:Judd and Skrainka (2011)` in which :math:`w` is a :math:`I_t \times 1` column vector of integration weights and the probability that agent :math:`i` chooses product :math:`j` in market :math:`t` is
 
 .. math:: s_{jti} = \frac{\exp(\delta_{jt} + \mu_{jti})}{1 + \sum_{k=1}^{J_t} \exp(\delta_{kt} + \mu_{kti})}.
    :label: probabilities
-
-
+   
 Supply-Side
 ~~~~~~~~~~~
 
