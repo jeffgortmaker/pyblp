@@ -48,53 +48,29 @@ Market shares can be approximated with Monte Carlo integration or quadrature rul
    
 Supply-Side
 ~~~~~~~~~~~
-
 Observed supply-side product characteristics are the :math:`N \times K_3` matrix of cost characteristics, :math:`X_3`. Prices cannot be cost characteristics, but non-price product characteristics often overlap with the demand-side characteristics in :math:`X_1` and :math:`X_2`. Unobserved supply-side product characteristics, :math:`\omega`, are a :math:`N \times 1` column vector. In contrast to the notation employed by :ref:`references:Berry, Levinsohn, and Pakes (1995)`, the notation for observed cost characteristics here is similar to the notation for demand-side characteristics.
 
-Firms play a differentiated Bertrand-Nash pricing game. Firm :math:`f` produces a subset :math:`\mathscr{J}_{ft} \subset \{1, 2, \ldots, J_t\}` of the products in market :math:`t` and chooses prices to maximize the sum of population-normalized gross expected profits, which for product :math:`j` in market :math:`t` are
+Firms play a differentiated Bertrand-Nash pricing game. Firm :math:`f` produces a subset :math:`\mathscr{J}_{ft} \subset \{1, 2, \ldots, J_t\}` of the products in market :math:`t` and chooses prices to maximize the sum of population-normalized gross expected profits:
+
+.. math:: \sum_{j \in \mathscr{J}_{ft}} \pi_{jt}
+
+, which for product :math:`j` in market :math:`t` are
 
 .. math:: \pi_{jt} = (p_{jt} - c_{jt})s_{jt},
 
-in which marginal costs for all products are defined according to either a linear or a log-linear specification:
+and yields a solution of :math:`\mathscr{J}_t \times \mathscr{J}_t` system of first order conditions (in vector-matrix form):
+
+.. math:: p = c -(O \circ \frac{\partial s}{\partial p})^{-1}s,.
+:label: blp_markup
+
+Here :math:`O` denote's the market level ownership matrix, where :math:`O_{jk}` is simply :math:`1` if the same firm produces products :math:`j` and :math:`k`, and is :math:`0` otherwise.
+
+In order to include a supply side, we must specifcy a functional form for marginal costs which can be either linear or log-linear:
 
 .. math:: \tilde{c} = X_3\gamma + \omega \quad\text{where}\quad \tilde{c} = c \quad\text{or}\quad \tilde{c} = \log c.
    :label: costs
 
-The :math:`K_3 \times 1` column vector :math:`\gamma` measures how marginal costs vary with cost characteristics. Regardless of how marginal costs are specified, the first-order conditions of firms in a market can be rewritten after suppressing market subscripts as
-
-.. math:: p = c + \eta.
-   :label: eta_markup
-
-Called the BLP-markup equation in :ref:`references:Morrow and Skerlos (2011)`, the markup term is
-
-.. math:: \eta = -(O \circ \frac{\partial s}{\partial p})^{-1}s,
-   :label: eta
-
-in which the market's owenership matrix, :math:`O`, is definited in terms of its corresponding cooperation matrix, :math:`\kappa`, by :math:`O_{jk} = \kappa_{fg}` where :math:`j \in \mathscr{J}_{ft}` and :math:`g \in \mathscr{J}_{gt}`. Usually, :math:`\kappa = I`, the identity matrix, so :math:`O_{jk}` is simply :math:`1` if the same firm produces products :math:`j` and :math:`k`, and is :math:`0` otherwise.
-
-The Jacobian in the BLP-markup equation can be decomposed into
-
-.. math:: \frac{\partial s}{\partial p} = \Lambda - \Gamma,
-
-in which :math:`\Lambda` is a diagonal :math:`J_t \times J_t` matrix that can be approximated by
-
-.. math:: \Lambda_{jj} = \sum_{i=1}^{I_t} w_i s_{jti}\frac{\partial U_{jti}}{\partial p_{jt}}
-   :label: capital_lambda
-
-and :math:`\Gamma` is a more dense :math:`J_t \times J_t` matrix that can be approximated by
-
-.. math:: \Gamma_{jk} = \sum_{i=1}^{I_t} w_i s_{jti}s_{kti}\frac{\partial U_{jti}}{\partial p_{jt}}.
-   :label: capital_gamma
-
-Derivatives in these expressions are derived from the definition of :math:`U` in :eq:`utilities`. An alternative form of the first-order conditions is called the :math:`\zeta`-markup equation in :ref:`references:Morrow and Skerlos (2011)`:
-
-.. math:: p = c + \zeta,
-   :label: zeta_markup
-
-in which the markup term is
-
-.. math:: \zeta = \Lambda^{-1}(O \circ \Gamma)'(p - c) - \Lambda^{-1}.
-   :label: zeta
+The :math:`K_3 \times 1` column vector :math:`\gamma` measures how marginal costs vary with cost characteristics and :math:`\omega` denotes the structural error of the supply equation.
 
 
 Identification
@@ -312,3 +288,34 @@ To efficiently compute equilibrium prices, the :math:`\zeta`-markup equation fro
 When computing :math:`\zeta(p)`, shares :math:`s(p)` associated with the candidate equilibrium prices are computed according to their definition in :eq:`shares`.
 
 Of course, marginal costs, :math:`c`, are required to iterate over the contraction. When evaluating counterfactuals, costs are usually computed first according to the BLP-markup equation in :eq:`eta_markup`. When simulating synthetic data, marginal costs are simulated according their specification in :eq:`costs`.
+
+
+Called the BLP-markup equation in :ref:`references:Morrow and Skerlos (2011)`, the markup term is
+
+The Jacobian in the BLP-markup equation can be decomposed into
+
+.. math:: \frac{\partial s}{\partial p} = \Lambda - \Gamma,
+
+in which :math:`\Lambda` is a diagonal :math:`J_t \times J_t` matrix that can be approximated by
+
+.. math:: \Lambda_{jj} = \sum_{i=1}^{I_t} w_i s_{jti}\frac{\partial U_{jti}}{\partial p_{jt}}
+   :label: capital_lambda
+
+and :math:`\Gamma` is a more dense :math:`J_t \times J_t` matrix that can be approximated by
+
+.. math:: \Gamma_{jk} = \sum_{i=1}^{I_t} w_i s_{jti}s_{kti}\frac{\partial U_{jti}}{\partial p_{jt}}.
+   :label: capital_gamma
+
+Derivatives in these expressions are derived from the definition of :math:`U` in :eq:`utilities`. An alternative form of the first-order conditions is called the :math:`\zeta`-markup equation in :ref:`references:Morrow and Skerlos (2011)`:
+
+.. math:: p = c + \zeta,
+   :label: zeta_markup
+
+in which the markup term is
+
+.. math:: \zeta = \Lambda^{-1}(O \circ \Gamma)'(p - c) - \Lambda^{-1}.
+   :label: zeta
+
+Alternative Conduct
+------------------------------
+is definited in terms of its corresponding cooperation matrix, :math:`\kappa`, by :math:`O_{jk} = \kappa_{fg}` where :math:`j \in \mathscr{J}_{ft}` and :math:`g \in \mathscr{J}_{gt}`. Usually, :math:`\kappa = I`, the identity matrix,
