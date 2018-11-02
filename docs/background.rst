@@ -60,8 +60,8 @@ Firms play a differentiated Bertrand-Nash pricing game. Firm :math:`f` produces 
 
 and yields a solution of :math:`\mathscr{J}_t \times \mathscr{J}_t` system of first order conditions (in vector-matrix form):
 
-.. math:: p = c -(O \circ \frac{\partial s}{\partial p})^{-1}s,.
-:label: blp_markup
+.. math:: p = c -\underbrace{(O \circ \frac{\partial s}{\partial p})^{-1}s}_{\eta},.
+   :label: blp_markup
 
 Here :math:`O` denote's the market level ownership matrix, where :math:`O_{jk}` is simply :math:`1` if the same firm produces products :math:`j` and :math:`k`, and is :math:`0` otherwise.
 
@@ -102,30 +102,6 @@ The GMM problem is
 
 in which :math:`\bar{g}` is the sample mean of the moment conditions and :math:`W` is a weighting matrix. The objective value is scaled by :math:`N^2` for comparability's sake.
 
-Conventionally, the 2SLS weighting matrix is used in the first stage:
-
-.. math:: W = \begin{bmatrix} (Z_D'Z_D)^{-1} & 0 \\ 0 & (Z_S'Z_S)^{-1} \end{bmatrix}.
-
-With two-step or iterated GMM, the weighting matrix is updated before each subsequent stage according to :math:`W = S^{-1}`. For robust weighting matrices,
-
-.. math:: S = \frac{1}{N}\sum_{n=1}^N g_ng_n'.
-
-For clustered weighting matrices, which account for arbitrary correlation within :math:`c = 1, 2, \dotsc, C` clusters,
-
-.. math:: S = \frac{1}{N}\sum_{c=1}^C q_cq_c',
-
-where, letting the set :math:`\mathscr{J}_c \subset \{1, 2, \ldots, N\}` denote the products in cluster :math:`c`,
-
-.. math:: q_c = \sum_{j\in\mathscr{J}_c} g_j.
-
-Before being used to update the weighting matrix, the sample moments are often centered.
-
-On the other hand, for unadjusted weighting matrix, the instruments are simply scaled by estimated error term covariances:
-
-.. math:: S = \frac{1}{N} \begin{bmatrix} \sigma_{\xi}^2 Z_D'Z_D & \sigma_{\xi\omega} Z_D'Z_S \\ \sigma_{\xi\omega} Z_S'Z_D & \sigma_{\omega}^2 Z_S'Z_S \end{bmatrix}
-
-where :math:`\sigma_{\xi}^2` and :math:`\sigma_{\omega}^2` are the sample variances of :math:`\xi` and :math:`\omega`, and :math:`\sigma_{\xi\omega}` is their sample covariance.
-
 In each stage, a nonlinear optimizer is used to find values of :math:`\hat{\theta}` that minimize the GMM objective. The gradient of the objective is typically computed to speed up optimization.
 
 
@@ -134,19 +110,19 @@ The Objective
 
 Given a :math:`\hat{\theta}`, the first step towards computing its associated objective value is computing :math:`\delta(\hat{\theta})` in each market with the following standard contraction:
 
-.. math:: \delta \leftarrow \delta + \log s - \log s(\delta, \hat{\theta})
+.. math:: \delta \leftarrow \delta + \log s - \log s(\delta, \theta)
 
-where :math:`s` are the market's observed shares and :math:`s(\hat{\theta}, \delta)` are shares evaluated at :math:`\hat{\theta}` and the current iteration's :math:`\delta`. As noted in the appendix of :ref:`references:Nevo (2000)`, exponentiating both sides of the contraction mapping and iterating over :math:`\exp(\delta)` gives an alternate formulation that can be faster. Conventional starting values are those that solve the Logit model.
+where :math:`s` are the market's observed shares and :math:`s(\theta, \delta)` are shares evaluated at :math:`\theta` and the current iteration's :math:`\delta`. As noted in the appendix of :ref:`references:Nevo (2000)`, exponentiating both sides of the contraction mapping and iterating over :math:`\exp(\delta)` gives an alternate formulation that can be faster. Conventional starting values are those that solve the Logit model.
 
-If the supply side is considered, the BLP-markup equation from :eq:`eta_markup` is employed to compute marginal costs,
+If the supply side is considered, the BLP-markup equation from :eq:`blp_markup` is employed to compute marginal costs,
 
-.. math:: c(\hat{\theta}) = p - \eta(\hat{\theta}).
+.. math:: c(\theta) = p - \eta(\theta).
 
 Unlike when there is only a demand side, :math:`\theta` must contain :math:`\alpha` here because it is needed to compute :math:`\eta`.
 
 The conditional independence assumption in :eq:`moments` is used to recover the concentrated out linear parameters with
 
-.. math:: \begin{bmatrix} \hat{\beta} \\ \hat{\gamma} \end{bmatrix} = (X'ZWZ'X)^{-1}X'ZWZ'y(\hat{\theta}),
+.. math:: \begin{bmatrix} \hat{\beta} \\ \hat{\gamma} \end{bmatrix} = (X'ZWZ'X)^{-1}X'ZWZ'y(\theta),
    :label: iv
 
 where the linear parameters and instruments are stacked in a block diagonal fashion,
@@ -155,18 +131,18 @@ where the linear parameters and instruments are stacked in a block diagonal fash
 
 and the mean utility along with marginal costs according to their specification in :eq:`costs` are stacked as well,
 
-.. math:: y(\hat{\theta}) = \begin{bmatrix} \delta(\hat{\theta}) \\ \tilde{c}(\hat{\theta}) \end{bmatrix}.
+.. math:: y(\theta) = \begin{bmatrix} \delta(\theta) \\ \tilde{c}(\theta) \end{bmatrix}.
 
-If any linear parameters were not concentrated out but rather included in :math:`\theta` (such as :math:`\alpha`, which cannot be concentrated out when there is a supply side), their contributions are subtracted from :math:`y(\hat{\theta})` before it is used to recover the concentrated out parameters.
+If any linear parameters were not concentrated out but rather included in :math:`\theta` (such as :math:`\alpha`, which cannot be concentrated out when there is a supply side), their contributions are subtracted from :math:`y(\theta)` before it is used to recover the concentrated out parameters.
 
 The demand-side linear parameters are used to recover the unobserved demand-side product characteristics,
 
-.. math:: \xi(\hat{\theta}) = \delta(\hat{\theta}) - X_1\hat{\beta},
+.. math:: \xi(\theta) = \delta(\theta) - X_1\hat{\beta},
    :label: xi
 
 and the same is done for the supply side,
 
-.. math:: \omega(\hat{\theta}) = \tilde{c}(\hat{\theta}) - X_3\hat{\gamma}.
+.. math:: \omega(\theta) = \tilde{c}(\theta) - X_3\hat{\gamma}.
    :label: omega
 
 Finally, interacting the estimated unobserved product characteristics with the instruments gives the GMM objective value in :eq:`objective`.
@@ -228,6 +204,34 @@ An alternative is to absorb or partial out fixed effects. If there is only one d
 Estimates and structural error terms computed with the de-meaned or residualized data are guaranteed by the Frish-Waugh-Lovell (FWL) theorem of :ref:`references:Frisch and Waugh (1933)` and :ref:`references:Lovell (1963)` to be the same as results computed when fixed effects are included as indicator variables.
 
 When :math:`E_D > 1` or :math:`E_S > 1`, the iterative de-meaning algorithm of :ref:`references:Rios-Avila (2015)` can be employed to absorb the multiple fixed effects. Iterative de-meaning can be processor-intensive, but for large amounts of data or for large numbers of fixed effects, it is often preferable to including indicator variables. When :math:`E_D = 2` or :math:`E_S = 2`, the more performant algorithm of :ref:`references:Somaini and Wolak (2016)` can be used instead.
+
+
+Standard Errors and Weighting Matrices
+~~~~~~~~~~~~~~~~~~~~~~~
+
+Conventionally, the 2SLS weighting matrix is used in the first stage:
+
+.. math:: W = \begin{bmatrix} (Z_D'Z_D)^{-1} & 0 \\ 0 & (Z_S'Z_S)^{-1} \end{bmatrix}.
+
+With two-step or iterated GMM, the weighting matrix is updated before each subsequent stage according to :math:`W = S^{-1}`. For robust weighting matrices,
+
+.. math:: S = \frac{1}{N}\sum_{n=1}^N g_n\, g_n'.
+
+For clustered weighting matrices, which account for arbitrary correlation within :math:`c = 1, 2, \dotsc, C` clusters,
+
+.. math:: S = \frac{1}{N}\sum_{c=1}^C q_c\, q_c',
+
+where, letting the set :math:`\mathscr{J}_c \subset \{1, 2, \ldots, N\}` denote the products in cluster :math:`c`,
+
+.. math:: q_c = \sum_{j\in\mathscr{J}_c} g_j.
+
+Before being used to update the weighting matrix, the sample moments are often centered.
+
+On the other hand, for unadjusted weighting matrix, the instruments are simply scaled by estimated error term covariances:
+
+.. math:: S = \frac{1}{N} \begin{bmatrix} \sigma_{\xi}^2 Z_D'Z_D & \sigma_{\xi\omega} Z_D'Z_S \\ \sigma_{\xi\omega} Z_S'Z_D & \sigma_{\omega}^2 Z_S'Z_S \end{bmatrix}
+
+where :math:`\sigma_{\xi}^2` and :math:`\sigma_{\omega}^2` are the sample variances of :math:`\xi` and :math:`\omega`, and :math:`\sigma_{\xi\omega}` is their sample covariance.
 
 
 Random Coefficients Nested Logit
