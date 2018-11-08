@@ -103,7 +103,8 @@ class LinearCoefficient(Coefficient):
 
     def get_product_characteristic(self, economy_or_market: Union['AbstractEconomy', 'Market']) -> Array:
         """Get the product characteristic associated with the parameter."""
-        return self.get_product_formulation(economy_or_market).evaluate(economy_or_market.products)
+        x = self.get_product_formulation(economy_or_market).evaluate(economy_or_market.products)
+        return np.broadcast_to(x, (economy_or_market.products.shape[0], 1))
 
 
 class BetaParameter(LinearCoefficient):
@@ -319,8 +320,9 @@ class Parameters(object):
                 raise ValueError(f"The lower bound in {name}_bounds does not have the same shape as {name}.")
             if bounds[1].shape != matrix.shape:
                 raise ValueError(f"The upper bound in {name}_bounds does not have the same shape as {name}.")
-            if ((matrix < bounds[0]) | (matrix > bounds[1])).any():
-                raise ValueError(f"{name} must be within its bounds.")
+            with np.errstate(invalid='ignore'):
+                if ((matrix < bounds[0]) | (matrix > bounds[1])).any():
+                    raise ValueError(f"{name} must be within its bounds.")
 
         # fix parameters set to zero
         zeros = np.where(matrix == 0)

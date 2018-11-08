@@ -175,7 +175,7 @@ class AbstractEconomy(abc.ABC, StringRepresentation):
         columns = []
         for include, formulation in zip(index, self._X1_formulations):
             if include:
-                columns.append(formulation.evaluate(self.products, data_override) * np.ones((self.N, 1)))
+                columns.append(np.broadcast_to(formulation.evaluate(self.products, data_override), (self.N, 1)))
         return np.column_stack(columns)
 
     def _compute_true_X3(
