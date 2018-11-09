@@ -554,10 +554,6 @@ def test_gradient_optionality(simulated_problem: SimulatedProblemFixture, scipy_
     """
     simulation, _, problem, solve_options, _ = simulated_problem
 
-    # skip simulations without gradients
-    if simulation.K2 == simulation.H == 0:
-        return
-
     # define a custom optimization method that doesn't use gradients
     def custom_method(
             initial: Array, bounds: List[Tuple[float, float]], objective_function: Callable, _: Any) -> (
@@ -590,13 +586,10 @@ def test_gradient_optionality(simulated_problem: SimulatedProblemFixture, scipy_
 ])
 def test_bounds(simulated_problem: SimulatedProblemFixture, method: str) -> None:
     """Test that non-binding bounds on parameters in simulated problems do not affect estimates and that binding bounds
-    are respected.
+    are respected. Forcing parameters to be far from their optimal values creates instability problems, so this is also
+    a test of how well estimation handles unstable problems.
     """
     simulation, _, problem, solve_options, _ = simulated_problem
-
-    # skip simulations without nonlinear parameters to bound
-    if simulation.K2 == simulation.H == 0:
-        return
 
     # skip optimization methods that haven't been configured properly
     updated_solve_options = solve_options.copy()
@@ -610,44 +603,55 @@ def test_bounds(simulated_problem: SimulatedProblemFixture, method: str) -> None
     unbounded_solve_options.update({
         'sigma_bounds': (np.full_like(simulation.sigma, -np.inf), np.full_like(simulation.sigma, +np.inf)),
         'pi_bounds': (np.full_like(simulation.pi, -np.inf), np.full_like(simulation.pi, +np.inf)),
-        'rho_bounds': (np.full_like(simulation.rho, -np.inf), np.full_like(simulation.rho, +np.inf))
+        'rho_bounds': (np.full_like(simulation.rho, -np.inf), np.full_like(simulation.rho, +np.inf)),
+        'beta_bounds': (np.full_like(simulation.beta, -np.inf), np.full_like(simulation.beta, +np.inf)),
+        'gamma_bounds': (np.full_like(simulation.gamma, -np.inf), np.full_like(simulation.gamma, +np.inf))
     })
     unbounded_results = problem.solve(**unbounded_solve_options)
 
-    # choose an element in sigma and identify its estimated value
-    sigma_index = sigma_value = None
-    if simulation.K2 > 0:
+    # choose a parameter from each set and identify its estimated value
+    sigma_index = pi_index = rho_index = beta_index = gamma_index = None
+    sigma_value = pi_value = rho_value = beta_value = gamma_value = None
+    if problem.K2 > 0:
         sigma_index = (simulation.sigma.nonzero()[0][0], simulation.sigma.nonzero()[1][0])
         sigma_value = unbounded_results.sigma[sigma_index]
-
-    # do the same for pi
-    pi_index = pi_value = None
-    if simulation.D > 0:
+    if problem.D > 0:
         pi_index = (simulation.pi.nonzero()[0][0], simulation.pi.nonzero()[1][0])
         pi_value = unbounded_results.pi[pi_index]
-
-    # do the same for rho
-    rho_index = rho_value = None
-    if simulation.H > 0:
+    if problem.H > 0:
         rho_index = (simulation.rho.nonzero()[0][0], simulation.rho.nonzero()[1][0])
         rho_value = unbounded_results.rho[rho_index]
+    if problem.K1 > 0:
+        beta_index = (simulation.beta.nonzero()[0][-1], simulation.beta.nonzero()[1][-1])
+        beta_value = unbounded_results.beta[beta_index]
+    if problem.K3 > 0:
+        gamma_index = (simulation.gamma.nonzero()[0][-1], simulation.gamma.nonzero()[1][-1])
+        gamma_value = unbounded_results.gamma[gamma_index]
 
     # use different types of binding bounds
     for lb_scale, ub_scale in [(-0.1, +np.inf), (+1, -0.1), (0, 0)]:
         binding_sigma_bounds = (np.full_like(simulation.sigma, -np.inf), np.full_like(simulation.sigma, +np.inf))
         binding_pi_bounds = (np.full_like(simulation.pi, -np.inf), np.full_like(simulation.pi, +np.inf))
         binding_rho_bounds = (np.full_like(simulation.rho, -np.inf), np.full_like(simulation.rho, +np.inf))
-        if simulation.K2 > 0:
+        binding_beta_bounds = (np.full_like(simulation.beta, -np.inf), np.full_like(simulation.beta, +np.inf))
+        binding_gamma_bounds = (np.full_like(simulation.gamma, -np.inf), np.full_like(simulation.gamma, +np.inf))
+        if problem.K2 > 0:
             binding_sigma_bounds[0][sigma_index] = sigma_value - lb_scale * np.abs(sigma_value)
             binding_sigma_bounds[1][sigma_index] = sigma_value + ub_scale * np.abs(sigma_value)
-        if simulation.D > 0:
+        if problem.D > 0:
             binding_pi_bounds[0][pi_index] = pi_value - lb_scale * np.abs(pi_value)
             binding_pi_bounds[1][pi_index] = pi_value + ub_scale * np.abs(pi_value)
-        if simulation.H > 0:
+        if problem.H > 0:
             binding_rho_bounds[0][rho_index] = rho_value - lb_scale * np.abs(rho_value)
             binding_rho_bounds[1][rho_index] = rho_value + ub_scale * np.abs(rho_value)
+        if problem.K1 > 0:
+            binding_beta_bounds[0][beta_index] = beta_value - lb_scale * np.abs(beta_value)
+            binding_beta_bounds[1][beta_index] = beta_value + ub_scale * np.abs(beta_value)
+        if problem.K3 > 0:
+            binding_gamma_bounds[0][gamma_index] = gamma_value - lb_scale * np.abs(gamma_value)
+            binding_gamma_bounds[1][gamma_index] = gamma_value + ub_scale * np.abs(gamma_value)
 
-        # solve the problem with binding bounds and test that they are essentially respected
+        # update options with the binding bounds
         binding_solve_options = updated_solve_options.copy()
         binding_solve_options.update({
             'sigma': np.clip(binding_solve_options['sigma'], *binding_sigma_bounds),
@@ -655,19 +659,39 @@ def test_bounds(simulated_problem: SimulatedProblemFixture, method: str) -> None
             'rho': np.clip(binding_solve_options['rho'], *binding_rho_bounds),
             'sigma_bounds': binding_sigma_bounds,
             'pi_bounds': binding_pi_bounds,
-            'rho_bounds': binding_rho_bounds
+            'rho_bounds': binding_rho_bounds,
+            'beta_bounds': binding_beta_bounds,
+            'gamma_bounds': binding_gamma_bounds
         })
+        if problem.K1 > 0:
+            binding_solve_options['beta'] = binding_solve_options.get('beta', np.full_like(simulation.beta, np.nan))
+            binding_solve_options['beta'][beta_index] = beta_value
+            with np.errstate(invalid='ignore'):
+                binding_solve_options['beta'] = np.clip(binding_solve_options['beta'], *binding_beta_bounds)
+        if problem.K3 > 0:
+            binding_solve_options['gamma'] = binding_solve_options.get('gamma', np.full_like(simulation.gamma, np.nan))
+            binding_solve_options['gamma'][gamma_index] = gamma_value
+            with np.errstate(invalid='ignore'):
+                binding_solve_options['gamma'] = np.clip(binding_solve_options['gamma'], *binding_gamma_bounds)
+
+        # solve the problem and test that the bounds are respected
         binding_results = problem.solve(**binding_solve_options)
         assert_array_less = lambda a, b: np.testing.assert_array_less(a, b + 1e-14, verbose=True)
-        if simulation.K2 > 0:
+        if problem.K2 > 0:
             assert_array_less(binding_sigma_bounds[0], binding_results.sigma)
             assert_array_less(binding_results.sigma, binding_sigma_bounds[1])
-        if simulation.D > 0:
+        if problem.D > 0:
             assert_array_less(binding_pi_bounds[0], binding_results.pi)
             assert_array_less(binding_results.pi, binding_pi_bounds[1])
-        if simulation.H > 0:
+        if problem.H > 0:
             assert_array_less(binding_rho_bounds[0], binding_results.rho)
             assert_array_less(binding_results.rho, binding_rho_bounds[1])
+        if problem.K1 > 0:
+            assert_array_less(binding_beta_bounds[0], binding_results.beta)
+            assert_array_less(binding_results.beta, binding_beta_bounds[1])
+        if problem.K3 > 0:
+            assert_array_less(binding_gamma_bounds[0], binding_results.gamma)
+            assert_array_less(binding_results.gamma, binding_gamma_bounds[1])
 
 
 @pytest.mark.usefixtures('simulated_problem')
@@ -719,19 +743,20 @@ def test_extra_demographics(simulated_problem: SimulatedProblemFixture) -> None:
 
 
 @pytest.mark.usefixtures('simulated_problem')
+@pytest.mark.parametrize('eliminate', [
+    pytest.param(True, id="linear parameters eliminated"),
+    pytest.param(False, id="linear parameters not eliminated")
+])
 @pytest.mark.parametrize('solve_options_update', [
     pytest.param({}, id="default"),
     pytest.param({'fp_type': 'nonlinear'}, id="nonlinear fixed point")
 ])
-def test_objective_gradient(simulated_problem: SimulatedProblemFixture, solve_options_update: Options) -> None:
+def test_objective_gradient(
+        simulated_problem: SimulatedProblemFixture, eliminate: bool, solve_options_update: Options) -> None:
     """Implement central finite differences in a custom optimization routine to test that analytic gradient values
     are close to estimated values.
     """
     simulation, _, problem, solve_options, _ = simulated_problem
-
-    # skip simulations without gradients
-    if simulation.K2 == simulation.H == 0:
-        return
 
     # define a custom optimization routine that tests central finite differences around starting parameter values
     def test_finite_differences(theta: Array, _: Any, objective_function: Callable, __: Any) -> Tuple[Array, bool]:
@@ -758,6 +783,16 @@ def test_objective_gradient(simulated_problem: SimulatedProblemFixture, solve_op
             'tol': 1e-16 if solve_options_update.get('fp_type') == 'nonlinear' else 1e-14
         })
     })
+
+    # optionally include linear parameters in theta
+    if not eliminate:
+        if problem.K1 > 0:
+            updated_solve_options['beta'][-1] = 0.9 * simulation.beta[-1]
+        if problem.K3 > 0:
+            updated_solve_options['gamma'] = np.full_like(simulation.gamma, np.nan)
+            updated_solve_options['gamma'][-1] = 0.9 * simulation.gamma[-1]
+
+    # test the gradient
     problem.solve(**updated_solve_options)
 
 
