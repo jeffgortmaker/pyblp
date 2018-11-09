@@ -147,14 +147,12 @@ def compute_gmm_moments_mean(u_list: List[Array], Z_list: List[Array]) -> Array:
 def compute_gmm_moments_jacobian_mean(jacobian_list: List[Array], Z_list: List[Array]) -> Array:
     """Compute the Jacobian of GMM moment conditions with respect to parameters, averaged across observations."""
 
-    # count dimensions
-    N, P = jacobian_list[0].shape
-    M = sum(Z.shape[1] for Z in Z_list)
+    # tensors or loops are not needed when there is only one equation
+    if len(jacobian_list) == 1:
+        N = Z_list[0].shape[0]
+        return Z_list[0].T @ jacobian_list[0] / N
 
-    # compute the Jacobian means
-    G_bar = np.zeros((M, P), options.dtype)
-    for n in range(N):
-        Z_n = scipy.linalg.block_diag(*(Z[n] for Z in Z_list))
-        jacobian_n = np.vstack(j[n] for j in jacobian_list)
-        G_bar += Z_n.T @ jacobian_n / N
-    return G_bar
+    # tensors are faster than loops for more than one equation
+    Z_transpose_stack = np.dstack(np.split(scipy.linalg.block_diag(*Z_list), len(jacobian_list)))
+    jacobian_stack = np.dstack(jacobian_list).swapaxes(1, 2)
+    return (Z_transpose_stack @ jacobian_stack).mean(axis=0)
