@@ -303,17 +303,19 @@ class ProblemResults(AbstractProblemResults):
             ])
 
         # update the weighting matrix
-        self.updated_W, W_errors = compute_gmm_weights(
-            u_list, Z_list, W_type, self.problem.products.clustering_ids, center_moments
-        )
+        with np.errstate(invalid='ignore'):
+            self.updated_W, W_errors = compute_gmm_weights(
+                u_list, Z_list, W_type, self.problem.products.clustering_ids, center_moments
+            )
         self._errors.extend(W_errors)
 
         # compute parameter covariances (if this is the first step, an unadjusted weighting matrix needs to be used so
         #   that unadjusted covariances are scaled properly)
         update_W = se_type == 'unadjusted' and self.step == 1
-        self.parameter_covariances, covariance_errors = compute_gmm_parameter_covariances(
-            jacobian_list, u_list, Z_list, self.W, se_type, self.problem.products.clustering_ids, update_W
-        )
+        with np.errstate(all='ignore'):
+            self.parameter_covariances, covariance_errors = compute_gmm_parameter_covariances(
+                jacobian_list, u_list, Z_list, self.W, se_type, self.problem.products.clustering_ids, update_W
+            )
         self._errors.extend(covariance_errors)
 
         # compute standard errors
