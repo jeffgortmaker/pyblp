@@ -51,10 +51,13 @@ Features
 --------
 
 - Straightforward interface for configuring and solving BLP problems with R-style formulas.
+- Support for supply-side moments (multiple equation or system GMM).
+- Support for demographic interactions.
 - Performant absorption of arbitrary fixed effects.
-- Support for demographics and supply-side moments.
 - Support for nonlinear functions and interactions of product characteristics.
-- Customizable parameter matrices and bounds.
+- Customizable parameter matrices.
+- Optional concentrating out of linear parameters.
+- Support for parameter bounds and fixing parameter values during estimation.
 - Support for nesting parameters that can vary between groups in a full random coefficients nested Logit (RCNL) model.
 - Estimation of Logit and nested Logit benchmark models.
 - Support for different methods used to estimate optimal instruments.
