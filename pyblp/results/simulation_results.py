@@ -4,15 +4,15 @@ from typing import Dict, Hashable, Optional, Sequence, TYPE_CHECKING, Union
 
 import numpy as np
 
-from ...configurations.formulation import Formulation
-from ...configurations.integration import Integration
-from ...utilities.basics import Array, Mapping, RecArray, StringRepresentation, TableFormatter, format_seconds
+from ..configurations.formulation import Formulation
+from ..configurations.integration import Integration
+from ..utilities.basics import Array, Mapping, RecArray, StringRepresentation, TableFormatter, format_seconds
 
 
 # only import objects that create import cycles when checking types
 if TYPE_CHECKING:
-    from ..problem import Problem  # noqa
-    from ..simulation import Simulation  # noqa
+    from ..economies.problem import Problem  # noqa
+    from ..economies.simulation import Simulation  # noqa
 
 
 class SimulationResults(StringRepresentation):
@@ -115,7 +115,7 @@ class SimulationResults(StringRepresentation):
             - :doc:`Tutorial </tutorial>`
 
         """
-        from ..problem import Problem  # noqa
+        from ..economies.problem import Problem  # noqa
         if product_formulations is None:
             product_formulations = self.simulation.product_formulations
         if product_data is None:

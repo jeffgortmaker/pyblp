@@ -7,7 +7,6 @@ from typing import Any, Dict, Hashable, List, Mapping, Optional, Sequence, Tuple
 import numpy as np
 
 from .economy import Economy
-from .results.simulation_results import SimulationResults
 from .. import exceptions, options
 from ..configurations.formulation import Formulation
 from ..configurations.integration import Integration
@@ -16,6 +15,7 @@ from ..construction import build_blp_instruments, build_matrix
 from ..markets.simulation_market import SimulationMarket
 from ..parameters import Parameters
 from ..primitives import Agents, Products
+from ..results.simulation_results import SimulationResults
 from ..utilities.basics import (
     Array, Data, Error, RecArray, extract_matrix, format_seconds, generate_items, output, output_progress,
     structure_matrices

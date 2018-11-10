@@ -9,7 +9,6 @@ from typing import Any, Dict, Hashable, List, Mapping, Optional, Sequence, Tuple
 import numpy as np
 
 from .economy import Economy
-from .results.problem_results import ProblemResults
 from .. import exceptions, options
 from ..configurations.formulation import Formulation
 from ..configurations.integration import Integration
@@ -18,6 +17,7 @@ from ..configurations.optimization import Optimization
 from ..markets.problem_market import ProblemMarket
 from ..parameters import Parameters
 from ..primitives import Agents, Products
+from ..results.problem_results import ProblemResults
 from ..utilities.basics import (
     Array, Bounds, Error, Groups, RecArray, TableFormatter, format_number, format_seconds, generate_items, output,
     update_matrices

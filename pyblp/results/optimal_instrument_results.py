@@ -5,14 +5,14 @@ from typing import Hashable, Optional, Sequence, TYPE_CHECKING
 import numpy as np
 
 from .problem_results import ProblemResults
-from ...configurations.formulation import Formulation
-from ...parameters import LinearCoefficient
-from ...utilities.basics import Array, Mapping, StringRepresentation, TableFormatter, format_seconds
+from ..configurations.formulation import Formulation
+from ..parameters import LinearCoefficient
+from ..utilities.basics import Array, Mapping, StringRepresentation, TableFormatter, format_seconds
 
 
 # only import objects that create import cycles when checking types
 if TYPE_CHECKING:
-    from ..problem import OptimalInstrumentProblem  # noqa
+    from ..economies.problem import OptimalInstrumentProblem  # noqa
 
 
 class OptimalInstrumentResults(StringRepresentation):
@@ -280,5 +280,5 @@ class OptimalInstrumentResults(StringRepresentation):
                 ]
 
         # initialize the problem
-        from ..problem import OptimalInstrumentProblem  # noqa
+        from ..economies.problem import OptimalInstrumentProblem  # noqa
         return OptimalInstrumentProblem(self.problem_results.problem, demand_instruments, supply_instruments)

@@ -3,14 +3,14 @@
 import abc
 from typing import Any, Callable, Optional, Sequence, TYPE_CHECKING
 
-from ...configurations.iteration import Iteration
-from ...markets.results_market import ResultsMarket
-from ...utilities.basics import Array, StringRepresentation, output
+from ..configurations.iteration import Iteration
+from ..markets.results_market import ResultsMarket
+from ..utilities.basics import Array, StringRepresentation, output
 
 
 # only import objects that create import cycles when checking types
 if TYPE_CHECKING:
-    from ..problem import ProblemEconomy  # noqa
+    from ..economies.problem import ProblemEconomy  # noqa
 
 
 class Results(abc.ABC, StringRepresentation):

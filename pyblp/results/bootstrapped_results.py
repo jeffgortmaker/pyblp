@@ -8,9 +8,9 @@ import numpy as np
 
 from .problem_results import ProblemResults
 from .results import Results
-from ... import exceptions, options
-from ...markets.results_market import ResultsMarket
-from ...utilities.basics import Array, Error, TableFormatter, format_seconds, generate_items, output, output_progress
+from .. import exceptions, options
+from ..markets.results_market import ResultsMarket
+from ..utilities.basics import Array, Error, TableFormatter, format_seconds, generate_items, output, output_progress
 
 
 class BootstrappedResults(Results):

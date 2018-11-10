@@ -1,0 +1,1 @@
+"""Structuring of BLP results."""

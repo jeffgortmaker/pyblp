@@ -7,22 +7,22 @@ import numpy as np
 import scipy.linalg
 
 from .results import Results
-from ... import exceptions, options
-from ...configurations.iteration import Iteration
-from ...markets.results_market import ResultsMarket
-from ...parameters import Parameters
-from ...utilities.algebra import multiply_matrix_and_tensor
-from ...utilities.basics import (
+from .. import exceptions, options
+from ..configurations.iteration import Iteration
+from ..markets.results_market import ResultsMarket
+from ..parameters import Parameters
+from ..utilities.algebra import multiply_matrix_and_tensor
+from ..utilities.basics import (
     Array, Bounds, Error, TableFormatter, format_number, format_seconds, generate_items, output, output_progress
 )
-from ...utilities.statistics import compute_gmm_parameter_covariances, compute_gmm_weights
+from ..utilities.statistics import compute_gmm_parameter_covariances, compute_gmm_weights
 
 
 # only import objects that create import cycles when checking types
 if TYPE_CHECKING:
     from .bootstrapped_results import BootstrappedResults  # noqa
     from .optimal_instrument_results import OptimalInstrumentResults  # noqa
-    from ..problem import Progress  # noqa
+    from ..economies.problem import Progress  # noqa
 
 
 class ProblemResults(Results):
