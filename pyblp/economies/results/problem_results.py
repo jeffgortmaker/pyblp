@@ -79,7 +79,7 @@ class ProblemResults(Results):
         Estimated covariance matrix of the stacked parameters, from which standard errors are extracted.
     theta : `ndarray`
         Estimated unfixed parameters, :math:`\hat{\theta}` in the following order: :math:`\hat{\Sigma}`,
-        :math:`\hat{\Pi}`, :math:`\hat{\Rho}`, non-concentrated out elements from :math:`\hat{\beta}`, and
+        :math:`\hat{\Pi}`, :math:`\hat{\rho}`, non-concentrated out elements from :math:`\hat{\beta}`, and
         non-concentrated out elements from :math:`\hat{\gamma}`.
     sigma : `ndarray`
         Estimated Cholesky decomposition of the covariance matrix that measures agents' random taste distribution,
