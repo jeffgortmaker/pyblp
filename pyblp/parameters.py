@@ -12,7 +12,7 @@ from .utilities.basics import Array, Bounds, Error, Groups, TableFormatter, form
 
 # only import objects that create import cycles when checking types
 if TYPE_CHECKING:
-    from .economies.abstract_economy import AbstractEconomy  # noqa
+    from .economies.economy import Economy  # noqa
     from .markets.market import Market  # noqa
 
 
@@ -32,34 +32,34 @@ class Coefficient(Parameter):
     """Information about a single coefficient parameter in sigma, pi, beta, or gamma."""
 
     @abc.abstractmethod
-    def get_product_formulation(self, economy_or_market: Union['AbstractEconomy', 'Market']) -> ColumnFormulation:
+    def get_product_formulation(self, economy_or_market: Union['Economy', 'Market']) -> ColumnFormulation:
         """Get the product formulation associated with the parameter."""
 
     @abc.abstractmethod
-    def get_product_characteristic(self, economy_or_market: Union['AbstractEconomy', 'Market']) -> Array:
+    def get_product_characteristic(self, economy_or_market: Union['Economy', 'Market']) -> Array:
         """Get the product characteristic associated with the parameter."""
 
 
 class NonlinearCoefficient(Coefficient):
     """Information about a single nonlinear parameter in sigma or pi."""
 
-    def get_product_formulation(self, economy_or_market: Union['AbstractEconomy', 'Market']) -> ColumnFormulation:
+    def get_product_formulation(self, economy_or_market: Union['Economy', 'Market']) -> ColumnFormulation:
         """Get the product formulation associated with the parameter."""
         return economy_or_market._X2_formulations[self.location[0]]
 
-    def get_product_characteristic(self, economy_or_market: Union['AbstractEconomy', 'Market']) -> Array:
+    def get_product_characteristic(self, economy_or_market: Union['Economy', 'Market']) -> Array:
         """Get the product characteristic associated with the parameter."""
         return economy_or_market.products.X2[:, [self.location[0]]]
 
     @abc.abstractmethod
-    def get_agent_characteristic(self, economy_or_market: Union['AbstractEconomy', 'Market']) -> Array:
+    def get_agent_characteristic(self, economy_or_market: Union['Economy', 'Market']) -> Array:
         """Get the agent characteristic associated with the parameter."""
 
 
 class SigmaParameter(NonlinearCoefficient):
     """Information about a single parameter in sigma."""
 
-    def get_agent_characteristic(self, economy_or_market: Union['AbstractEconomy', 'Market']) -> Array:
+    def get_agent_characteristic(self, economy_or_market: Union['Economy', 'Market']) -> Array:
         """Get the agent characteristic associated with the parameter."""
         return economy_or_market.agents.nodes[:, [self.location[1]]]
 
@@ -67,7 +67,7 @@ class SigmaParameter(NonlinearCoefficient):
 class PiParameter(NonlinearCoefficient):
     """Information about a single parameter in pi."""
 
-    def get_agent_characteristic(self, economy_or_market: Union['AbstractEconomy', 'Market']) -> Array:
+    def get_agent_characteristic(self, economy_or_market: Union['Economy', 'Market']) -> Array:
         """Get the agent characteristic associated with the parameter."""
         return economy_or_market.agents.demographics[:, [self.location[1]]]
 
@@ -101,7 +101,7 @@ class OneGroupRhoParameter(RhoParameter):
 class LinearCoefficient(Coefficient):
     """Information about a single linear parameter in beta or gamma."""
 
-    def get_product_characteristic(self, economy_or_market: Union['AbstractEconomy', 'Market']) -> Array:
+    def get_product_characteristic(self, economy_or_market: Union['Economy', 'Market']) -> Array:
         """Get the product characteristic associated with the parameter."""
         x = self.get_product_formulation(economy_or_market).evaluate(economy_or_market.products)
         return np.broadcast_to(x, (economy_or_market.products.shape[0], 1))
@@ -110,7 +110,7 @@ class LinearCoefficient(Coefficient):
 class BetaParameter(LinearCoefficient):
     """Information about a single linear parameter in beta."""
 
-    def get_product_formulation(self, economy_or_market: Union['AbstractEconomy', 'Market']) -> ColumnFormulation:
+    def get_product_formulation(self, economy_or_market: Union['Economy', 'Market']) -> ColumnFormulation:
         """Get the product formulation associated with the parameter."""
         return economy_or_market._X1_formulations[self.location[0]]
 
@@ -118,7 +118,7 @@ class BetaParameter(LinearCoefficient):
 class GammaParameter(LinearCoefficient):
     """Information about a single linear parameter in gamma."""
 
-    def get_product_formulation(self, economy_or_market: Union['AbstractEconomy', 'Market']) -> ColumnFormulation:
+    def get_product_formulation(self, economy_or_market: Union['Economy', 'Market']) -> ColumnFormulation:
         """Get the product formulation associated with the parameter."""
         return economy_or_market._X3_formulations[self.location[0]]
 
@@ -155,12 +155,11 @@ class Parameters(object):
     errors: List[Error]
 
     def __init__(
-            self, economy: 'AbstractEconomy', sigma: Optional[Any] = None, pi: Optional[Any] = None,
-            rho: Optional[Any] = None, beta: Optional[Any] = None, gamma: Optional[Any] = None,
-            sigma_bounds: Optional[Tuple[Any, Any]] = None, pi_bounds: Optional[Tuple[Any, Any]] = None,
-            rho_bounds: Optional[Tuple[Any, Any]] = None, beta_bounds: Optional[Tuple[Any, Any]] = None,
-            gamma_bounds: Optional[Tuple[Any, Any]] = None, bounded: bool = False,
-            allow_linear_nans: bool = False) -> None:
+            self, economy: 'Economy', sigma: Optional[Any] = None, pi: Optional[Any] = None, rho: Optional[Any] = None,
+            beta: Optional[Any] = None, gamma: Optional[Any] = None, sigma_bounds: Optional[Tuple[Any, Any]] = None,
+            pi_bounds: Optional[Tuple[Any, Any]] = None, rho_bounds: Optional[Tuple[Any, Any]] = None,
+            beta_bounds: Optional[Tuple[Any, Any]] = None, gamma_bounds: Optional[Tuple[Any, Any]] = None,
+            bounded: bool = False, allow_linear_nans: bool = False) -> None:
         """Coerce parameters into usable formats before storing information about fixed (equal bounds) and unfixed
         (unequal bounds) elements of sigma, pi, rho, beta, and gamma. For unfixed parameters, verify that values have
         been chosen such that choice probability computation is unlikely to overflow. If bounds are unspecified,
@@ -340,7 +339,7 @@ class Parameters(object):
                 self.fixed.append(parameter)
 
     def compute_mu_norm(
-            self, economy: 'AbstractEconomy', eliminate_parameter: Optional[NonlinearCoefficient] = None) -> float:
+            self, economy: 'Economy', eliminate_parameter: Optional[NonlinearCoefficient] = None) -> float:
         """Compute the infinity norm of mu under initial parameters, optionally eliminating the contribution of a
         parameter.
         """

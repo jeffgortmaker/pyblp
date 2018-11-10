@@ -6,7 +6,7 @@ from typing import Any, Callable, Dict, Hashable, List, Optional, Sequence, TYPE
 import numpy as np
 import scipy.linalg
 
-from .abstract_problem_results import AbstractProblemResults
+from .results import Results
 from ... import exceptions, options
 from ...configurations.iteration import Iteration
 from ...markets.results_market import ResultsMarket
@@ -20,12 +20,12 @@ from ...utilities.statistics import compute_gmm_parameter_covariances, compute_g
 
 # only import objects that create import cycles when checking types
 if TYPE_CHECKING:
-    from .bootstrapped_problem_results import BootstrappedProblemResults  # noqa
+    from .bootstrapped_results import BootstrappedResults  # noqa
     from .optimal_instrument_results import OptimalInstrumentResults  # noqa
     from ..problem import Progress  # noqa
 
 
-class ProblemResults(AbstractProblemResults):
+class ProblemResults(Results):
     r"""Results of a solved BLP problem.
 
     Many results are class attributes. Other post-estimation outputs be computed by calling class methods.
@@ -397,13 +397,13 @@ class ProblemResults(AbstractProblemResults):
 
     def bootstrap(
             self, draws: int = 1000, seed: Optional[int] = None, iteration: Optional[Iteration] = None) -> (
-            'BootstrappedProblemResults'):
+            'BootstrappedResults'):
         """Use a parametric bootstrap to create an empirical distribution of results.
 
-        The constructed :class:`BootstrappedProblemResults` can be used just like :class:`ProblemResults` to compute
-        various post-estimation outputs. The only difference is that :class:`BootstrappedProblemResults` methods return
-        arrays with an extra first dimension, along which bootstrapped results are stacked. These stacked results can
-        be used to construct, for example, confidence intervals for post-estimation outputs.
+        The constructed :class:`BootstrappedResults` can be used just like :class:`ProblemResults` to compute various
+        post-estimation outputs. The only difference is that :class:`BootstrappedResults` methods return arrays with an
+        extra first dimension, along which bootstrapped results are stacked. These stacked results can be used to
+        construct, for example, confidence intervals for post-estimation outputs.
 
         For each bootstrap draw, parameters are drawn from the estimated multivariate normal distribution of all
         parameters defined by :attr:`ProblemResults.parameters` and :attr:`ProblemResults.parameter_covariances`. Note
@@ -418,8 +418,8 @@ class ProblemResults(AbstractProblemResults):
            By default, the bootstrapping procedure may use a lot of memory. This is because it stores in memory all
            bootstrapped results (for all ``draws``) at the same time. To reduce the memory footprint of the procedure,
            call this method in a loop with ``draws`` set to ``1``. In each iteration of the loop, compute the desired
-           post-estimation output with the proper method of the returned :class:`BootstrappedProblemResults` class and
-           store these outputs.
+           post-estimation output with the proper method of the returned :class:`BootstrappedResults` class and store
+           these outputs.
 
         Parameters
         ----------
@@ -437,8 +437,8 @@ class ProblemResults(AbstractProblemResults):
 
         Returns
         -------
-        `BootstrappedProblemResults`
-            Computed :class:`BootstrappedProblemResults`.
+        `BootstrappedResults`
+            Computed :class:`BootstrappedResults`.
 
         Examples
         --------
@@ -515,8 +515,8 @@ class ProblemResults(AbstractProblemResults):
             errors.extend(errors_d)
 
         # structure the results
-        from .bootstrapped_problem_results import BootstrappedProblemResults  # noqa
-        results = BootstrappedProblemResults(
+        from .bootstrapped_results import BootstrappedResults  # noqa
+        results = BootstrappedResults(
             self, bootstrapped_sigma, bootstrapped_pi, bootstrapped_rho, bootstrapped_beta, bootstrapped_gamma,
             bootstrapped_prices, bootstrapped_shares, bootstrapped_delta, bootstrapped_costs, start_time, time.time(),
             draws, iteration_mappings, evaluation_mappings

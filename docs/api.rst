@@ -152,7 +152,7 @@ Parametric bootstrap computation returns the following class.
    :toctree: _api
    :template: class_without_methods_or_signature.rst
 
-   BootstrappedProblemResults
+   BootstrappedResults
 
 This class has all of the same methods as :class:`ProblemResults`, except for :meth:`ProblemResults.bootstrap` and :meth:`ProblemResults.compute_optimal_instruments`.
 

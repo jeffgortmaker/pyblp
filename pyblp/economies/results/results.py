@@ -10,15 +10,15 @@ from ...utilities.basics import Array, StringRepresentation, output
 
 # only import objects that create import cycles when checking types
 if TYPE_CHECKING:
-    from ..problem import AbstractProblem  # noqa
+    from ..problem import ProblemEconomy  # noqa
 
 
-class AbstractProblemResults(abc.ABC, StringRepresentation):
+class Results(abc.ABC, StringRepresentation):
     """Abstract results of a solved BLP problem."""
 
-    problem: 'AbstractProblem'
+    problem: 'ProblemEconomy'
 
-    def __init__(self, problem: 'AbstractProblem') -> None:
+    def __init__(self, problem: 'ProblemEconomy') -> None:
         """Store the underlying problem."""
         self.problem = problem
 

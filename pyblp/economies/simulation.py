@@ -6,7 +6,7 @@ from typing import Any, Dict, Hashable, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
-from .abstract_economy import AbstractEconomy
+from .economy import Economy
 from .results.simulation_results import SimulationResults
 from .. import exceptions, options
 from ..configurations.formulation import Formulation
@@ -22,7 +22,7 @@ from ..utilities.basics import (
 )
 
 
-class Simulation(AbstractEconomy):
+class Simulation(Economy):
     r"""Simulation of synthetic BLP data.
 
     All data are either loaded or simulated during initialization, except for synthetic prices and shares, which are

@@ -1,4 +1,4 @@
-"""Abstract economy underlying the BLP model."""
+"""Economy underlying the BLP model."""
 
 import abc
 import collections
@@ -11,7 +11,7 @@ from ..configurations.formulation import ColumnFormulation, Formulation
 from ..utilities.basics import Array, RecArray, StringRepresentation, TableFormatter
 
 
-class AbstractEconomy(abc.ABC, StringRepresentation):
+class Economy(abc.ABC, StringRepresentation):
     """An abstract economy underlying the BLP model."""
 
     product_formulations: Sequence[Optional[Formulation]]

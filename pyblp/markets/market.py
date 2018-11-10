@@ -8,7 +8,7 @@ import numpy.lib.recfunctions
 from .. import exceptions, options
 from ..configurations.formulation import ColumnFormulation
 from ..configurations.iteration import Iteration
-from ..economies.abstract_economy import AbstractEconomy
+from ..economies.economy import Economy
 from ..parameters import LinearCoefficient, NonlinearCoefficient, Parameter, Parameters, RhoParameter
 from ..utilities.algebra import (
     approximately_invert, approximately_solve, multiply_matrix_and_tensor, multiply_tensor_and_matrix
@@ -42,7 +42,7 @@ class Market(object):
     mu: Array
 
     def __init__(
-            self, economy: AbstractEconomy, t: Any, sigma: Array, pi: Array, rho: Array, beta: Optional[Array] = None,
+            self, economy: Economy, t: Any, sigma: Array, pi: Array, rho: Array, beta: Optional[Array] = None,
             delta: Optional[Array] = None, data_override: Optional[Dict] = None) -> None:
         """Store or compute information about formulations, data, parameters, and utility."""
 

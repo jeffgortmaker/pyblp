@@ -8,7 +8,7 @@ from typing import Any, Dict, Hashable, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
-from .abstract_economy import AbstractEconomy
+from .economy import Economy
 from .results.problem_results import ProblemResults
 from .. import exceptions, options
 from ..configurations.formulation import Formulation
@@ -25,7 +25,7 @@ from ..utilities.basics import (
 from ..utilities.statistics import IV, compute_2sls_weights, compute_gmm_moments_mean, compute_gmm_moments_jacobian_mean
 
 
-class AbstractProblem(AbstractEconomy):
+class ProblemEconomy(Economy):
     """An abstract BLP problem."""
 
     @abc.abstractmethod
@@ -794,7 +794,7 @@ class AbstractProblem(AbstractEconomy):
             output("")
 
 
-class Problem(AbstractProblem):
+class Problem(ProblemEconomy):
     r"""A BLP problem.
 
     This class is initialized with relevant data and solved with :meth:`Problem.solve`.
@@ -1007,14 +1007,14 @@ class Problem(AbstractProblem):
         output(self)
 
 
-class OptimalInstrumentProblem(AbstractProblem):
+class OptimalInstrumentProblem(ProblemEconomy):
     """A BLP problem updated with optimal excluded instruments.
 
     This class can be used exactly like :class:`Problem`.
 
     """
 
-    def __init__(self, problem: AbstractProblem, demand_instruments: Array, supply_instruments: Array) -> None:
+    def __init__(self, problem: ProblemEconomy, demand_instruments: Array, supply_instruments: Array) -> None:
         """Initialize the underlying economy with updated product data before absorbing fixed effects."""
 
         # keep track of long it takes to re-create the problem
@@ -1064,7 +1064,7 @@ class OptimalInstrumentProblem(AbstractProblem):
 class InitialProgress(object):
     """Structured information about initial estimation progress."""
 
-    problem: AbstractProblem
+    problem: ProblemEconomy
     parameters: Parameters
     W: Array
     theta: Array
@@ -1077,7 +1077,7 @@ class InitialProgress(object):
     omega_jacobian: Array
 
     def __init__(
-            self, problem: AbstractProblem, parameters: Parameters, W: Array, theta: Array, objective: Array,
+            self, problem: ProblemEconomy, parameters: Parameters, W: Array, theta: Array, objective: Array,
             gradient: Array, next_delta: Array, delta: Array, tilde_costs: Array, xi_jacobian: Array,
             omega_jacobian: Array) -> None:
         """Store initial progress information."""
@@ -1108,7 +1108,7 @@ class Progress(InitialProgress):
     gradient_norm: Array
 
     def __init__(
-            self, problem: AbstractProblem, parameters: Parameters, W: Array, theta: Array, objective: Array,
+            self, problem: ProblemEconomy, parameters: Parameters, W: Array, theta: Array, objective: Array,
             gradient: Array, next_delta: Array, delta: Array, tilde_costs: Array, xi_jacobian: Array,
             omega_jacobian: Array, xi: Array, omega: Array, beta: Array, gamma: Array,
             iteration_mapping: Dict[Hashable, int], evaluation_mapping: Dict[Hashable, int], clipped_costs: Array,

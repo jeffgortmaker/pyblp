@@ -6,21 +6,21 @@ from typing import Any, Callable, Dict, Hashable, List, Optional, Sequence, Tupl
 
 import numpy as np
 
-from .abstract_problem_results import AbstractProblemResults
 from .problem_results import ProblemResults
+from .results import Results
 from ... import exceptions, options
 from ...markets.results_market import ResultsMarket
 from ...utilities.basics import Array, Error, TableFormatter, format_seconds, generate_items, output, output_progress
 
 
-class BootstrappedProblemResults(AbstractProblemResults):
+class BootstrappedResults(Results):
     r"""Bootstrapped results of a solved BLP problem.
 
     This class has all of the same methods as :class:`ProblemResults`, for except :meth:`ProblemResults.bootstrap` and
     :meth:`ProblemResults.compute_optimal_instruments`. The only difference is that methods return arrays with an extra
     first dimension, along which bootstrapped results are stacked (these stacked results can be used to construct, for
     example, confidence intervals for post-estimation outputs). Similarly, arrays of data passed as arguments to methods
-    should have an extra first dimension of size :attr:`BootstrappedProblemResults.draws`.
+    should have an extra first dimension of size :attr:`BootstrappedResults.draws`.
 
     Attributes
     ----------

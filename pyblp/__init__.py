@@ -7,7 +7,7 @@ from .configurations.iteration import Iteration
 from .configurations.optimization import Optimization
 from .construction import build_blp_instruments, build_id_data, build_matrix, build_ownership, compute_fitted_values
 from .economies.problem import OptimalInstrumentProblem, Problem
-from .economies.results.bootstrapped_problem_results import BootstrappedProblemResults
+from .economies.results.bootstrapped_results import BootstrappedResults
 from .economies.results.optimal_instrument_results import OptimalInstrumentResults
 from .economies.results.problem_results import ProblemResults
 from .economies.results.simulation_results import SimulationResults
@@ -36,7 +36,7 @@ __all__ = [
     'Optimization',
     'build_blp_instruments', 'build_id_data', 'build_matrix', 'build_ownership', 'compute_fitted_values',
     'OptimalInstrumentProblem', 'Problem',
-    'BootstrappedProblemResults',
+    'BootstrappedResults',
     'OptimalInstrumentResults',
     'ProblemResults',
     'SimulationResults',
