@@ -517,6 +517,7 @@ class ProblemEconomy(Economy):
                 return (progress.objective, progress.gradient) if optimization._compute_gradient else progress.objective
 
             # optimize theta
+            converged = True
             iterations = evaluations = 0
             optimization_start_time = optimization_end_time = time.time()
             if parameters.P > 0:
@@ -538,8 +539,8 @@ class ProblemEconomy(Economy):
             final_progress = compute_step_progress(theta, progress, compute_gradient=parameters.P > 0)
             results = ProblemResults(
                 final_progress, last_results, step_start_time, optimization_start_time, optimization_end_time,
-                iterations, evaluations + 1, iteration_mappings, evaluation_mappings, costs_type, costs_bounds,
-                center_moments, W_type, se_type
+                iterations, evaluations + 1, iteration_mappings, evaluation_mappings, converged, costs_type,
+                costs_bounds, center_moments, W_type, se_type
             )
             self._handle_errors(error_behavior, results._errors)
             output(f"Computed results after {format_seconds(results.total_time - results.optimization_time)}.")

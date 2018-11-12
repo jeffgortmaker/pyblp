@@ -72,6 +72,10 @@ class ProblemResults(Results):
         indices correspond to objective evaluations.
     cumulative_contraction_evaluations : `ndarray`
         Concatenation of :attr:`ProblemResults.contraction_evaluations` for this step and all prior steps.
+    converged : `bool`
+        Whether the optimization routine converged.
+    all_converged : `bool`
+        Whether the optimization routine converged for this step and all prior steps.
     parameters : `ndarray`
         Stacked parameters in the following order: :math:`\hat{\theta}`, concentrated out elements of
         :math:`\hat{\beta}`, and concentrated out elements of :math:`\hat{\gamma}`.
@@ -174,6 +178,8 @@ class ProblemResults(Results):
     cumulative_fp_iterations: Array
     contraction_evaluations: Array
     cumulative_contraction_evaluations: Array
+    converged: bool
+    all_converged: bool
     parameters: Array
     parameter_covariances: Array
     theta: Array
@@ -218,7 +224,8 @@ class ProblemResults(Results):
             self, progress: 'Progress', last_results: Optional['ProblemResults'], step_start_time: float,
             optimization_start_time: float, optimization_end_time: float, iterations: int, evaluations: int,
             iteration_mappings: Sequence[Dict[Hashable, int]], evaluation_mappings: Sequence[Dict[Hashable, int]],
-            costs_type: str, costs_bounds: Bounds, center_moments: bool, W_type: str, se_type: str) -> None:
+            converged: bool, costs_type: str, costs_bounds: Bounds, center_moments: bool, W_type: str,
+            se_type: str) -> None:
         """Compute cumulative progress statistics, update weighting matrices, and estimate standard errors."""
 
         # initialize values from the progress structure
@@ -243,7 +250,7 @@ class ProblemResults(Results):
         self._costs_bounds = costs_bounds
         self.clipped_costs = progress.clipped_costs
 
-        # initialize counts and times
+        # initialize counts, times, and convergence
         self.step = 1
         self.total_time = self.cumulative_total_time = time.time() - step_start_time
         self.optimization_time = self.cumulative_optimization_time = optimization_end_time - optimization_start_time
@@ -255,6 +262,7 @@ class ProblemResults(Results):
         self.contraction_evaluations = self.cumulative_contraction_evaluations = np.array(
             [[m[t] if m else 0 for m in evaluation_mappings] for t in self.problem.unique_market_ids]
         )
+        self.converged = self.all_converged = converged
 
         # initialize last results and add to cumulative values
         self.last_results = last_results
@@ -270,6 +278,7 @@ class ProblemResults(Results):
             self.cumulative_contraction_evaluations = np.c_[
                 last_results.cumulative_contraction_evaluations, self.cumulative_contraction_evaluations
             ]
+            self.all_converged = last_results.converged and converged
 
         # store estimated parameters and information about them (beta and gamma have already been stored above)
         self._parameters = progress.parameters
