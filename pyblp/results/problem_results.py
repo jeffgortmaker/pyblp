@@ -11,7 +11,7 @@ from .. import exceptions, options
 from ..configurations.iteration import Iteration
 from ..markets.results_market import ResultsMarket
 from ..parameters import Parameters
-from ..utilities.algebra import multiply_matrix_and_tensor
+from ..utilities.algebra import multiply_matrix_and_tensor, approximately_solve
 from ..utilities.basics import (
     Array, Bounds, Error, TableFormatter, format_number, format_seconds, generate_items, output, output_progress
 )
@@ -635,10 +635,10 @@ class ProblemResults(Results):
             By default, a seed is not passed to the random number generator.
         expected_prices : `array-like, optional`
             Vector of expected prices conditional on all exogenous variables,
-            :math:`\operatorname{\mathbb{E}}[p \mid Z]`, which is required if a supply side was not estimated. A common
-            way to estimate this vector is with the fitted values from a reduced form regression of endogenous prices
-            onto all exogenous variables, including instruments. An example is given in the documentation for the
-            convenience function :func:`compute_fitted_values`.
+            :math:`\operatorname{\mathbb{E}}[p \mid Z]`. By default, if a supply side was estimated, ``iteration`` is
+            used. If only a demand side was estimated, this is by default estimated with the fitted values from a
+            reduced form regression of endogenous prices onto :math:`Z_D`: all exogenous variables including excluded
+            instruments.
         iteration : `Iteration, optional`
             :class:`Iteration` configuration used to estimate expected prices by iterating over the :math:`\zeta`-markup
             equation from :ref:`references:Morrow and Skerlos (2011)`. By default, if a supply side was estimated, this
@@ -686,6 +686,29 @@ class ProblemResults(Results):
             draws = 1
         if not isinstance(draws, int) or draws < 1:
             raise ValueError("draws must be a positive int.")
+
+        # validate expected prices or their integration configuration (or compute expected prices with a reduced form
+        #   regression if unspecified and only a demand side)
+        if expected_prices is not None:
+            iteration = None
+            expected_prices = np.c_[np.asarray(expected_prices, options.dtype)]
+            if expected_prices.shape != (self.problem.N, 1):
+                raise ValueError(f"expected_prices must be a {self.problem.N}-vector.")
+        elif self.problem.K3 > 0:
+            if iteration is None:
+                iteration = Iteration('simple', {'tol': 1e-12})
+            elif not isinstance(iteration, Iteration):
+                raise TypeError("iteration must be None or an Iteration instance.")
+        else:
+            prices = self.problem.products.prices
+            if self.problem._absorb_demand_ids is not None:
+                prices, absorption_errors = self.problem._absorb_demand_ids(prices)
+                errors.extend(absorption_errors)
+            covariances = self.problem.products.ZD.T @ self.problem.products.ZD
+            parameters, replacement = approximately_solve(covariances, self.problem.products.ZD.T @ prices)
+            if replacement:
+                errors.append(exceptions.FittedValuesInversionError(covariances, replacement))
+            expected_prices = self.problem.products.ZD @ parameters + self.problem.products.prices - prices
 
         # validate expected prices or their iteration configuration
         if expected_prices is None:

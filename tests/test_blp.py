@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 import scipy.optimize
 
-from pyblp import Formulation, Iteration, Optimization, Problem, compute_fitted_values, parallel
+from pyblp import Formulation, Iteration, Optimization, Problem, parallel
 from pyblp.utilities.basics import Array, Options
 from .conftest import SimulatedProblemFixture
 
@@ -50,28 +50,11 @@ def test_optimal_instruments(simulated_problem: SimulatedProblemFixture, compute
     """
     simulation, product_data, problem, solve_options, problem_results = simulated_problem
 
-    # make product data mutable
-    product_data = {k: product_data[k] for k in product_data.dtype.names}
-
-    # split apart the full set of demand-side instruments so they can be included in formulations
-    ZD_names: List[str] = []
-    for index, instrument in enumerate(problem.products.ZD.T):
-        name = f'ZD{index}'
-        product_data[name] = instrument
-        ZD_names.append(name)
-
-    # without a supply side, compute expected prices with a reduced form regression on all instruments
-    expected_prices = None
-    if problem.K3 == 0:
-        ZD_formula = ' + '.join(ZD_names)
-        expected_prices = compute_fitted_values(product_data['prices'], Formulation(f'0 + {ZD_formula}'), product_data)
-
     # compute optimal instruments and update the problem (only use a few draws to speed up the test)
     compute_options = compute_options.copy()
     compute_options.update({
         'draws': 5,
-        'seed': 0,
-        'expected_prices': expected_prices
+        'seed': 0
     })
     new_problem = problem_results.compute_optimal_instruments(**compute_options).to_problem()
 
@@ -228,10 +211,9 @@ def test_fixed_effects(
         product_data[name] = instrument
         instrument_names.append(name)
 
-    # build formulas for the IDs and excluded demand-side instruments
+    # build formulas for the IDs
     demand_id_formula = ' + '.join(demand_id_names)
     supply_id_formula = ' + '.join(supply_id_names)
-    instrument_formula = ' + '.join(instrument_names)
 
     # solve the first stage of a problem in which the fixed effects are absorbed
     solve_options1 = solve_options.copy()
@@ -263,7 +245,6 @@ def test_fixed_effects(
 
     # solve the first stage of a problem in which some fixed effects are absorbed and some are included as indicators
     if ED == ES == 0:
-        product_formulations3 = product_formulations2.copy()
         problem_results3 = problem_results2
     else:
         solve_options3 = solve_options.copy()
@@ -285,33 +266,10 @@ def test_fixed_effects(
         ]
         problem_results3 = problem3.solve(**solve_options3)
 
-    # without a supply side, compute expected prices with a reduced form regression on all exogenous variables
-    expected_prices1 = expected_prices2 = expected_prices3 = None
-    if problem.K3 == 0:
-        assert product_formulations[0] is not None
-        assert product_formulations1[0] is not None
-        assert product_formulations2[0] is not None
-        assert product_formulations3[0] is not None
-        ZD_formulation1 = Formulation(
-            f'{instrument_formula} + {product_formulations1[0]._formula} - ({product_formulations[0]._formula}) - 1',
-            product_formulations1[0]._absorb, product_formulations1[0]._absorb_method
-        )
-        ZD_formulation2 = Formulation(
-            f'{instrument_formula} + {product_formulations2[0]._formula} - ({product_formulations[0]._formula}) - 1',
-            product_formulations2[0]._absorb, product_formulations2[0]._absorb_method
-        )
-        ZD_formulation3 = Formulation(
-            f'{instrument_formula} + {product_formulations3[0]._formula} - ({product_formulations[0]._formula}) - 1',
-            product_formulations3[0]._absorb, product_formulations3[0]._absorb_method
-        )
-        expected_prices1 = compute_fitted_values(product_data['prices'], ZD_formulation1, product_data)
-        expected_prices2 = compute_fitted_values(product_data['prices'], ZD_formulation2, product_data)
-        expected_prices3 = compute_fitted_values(product_data['prices'], ZD_formulation3, product_data)
-
     # compute optimal instruments (use only two draws for speed; accuracy is not a concern here)
-    Z_results1 = problem_results1.compute_optimal_instruments(draws=2, seed=0, expected_prices=expected_prices1)
-    Z_results2 = problem_results2.compute_optimal_instruments(draws=2, seed=0, expected_prices=expected_prices2)
-    Z_results3 = problem_results3.compute_optimal_instruments(draws=2, seed=0, expected_prices=expected_prices3)
+    Z_results1 = problem_results1.compute_optimal_instruments(draws=2, seed=0)
+    Z_results2 = problem_results2.compute_optimal_instruments(draws=2, seed=0)
+    Z_results3 = problem_results3.compute_optimal_instruments(draws=2, seed=0)
 
     # compute marginal costs
     costs1 = problem_results1.compute_costs()

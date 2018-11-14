@@ -7,7 +7,7 @@ import scipy.linalg
 
 from .algebra import approximately_invert
 from .basics import Array, Error, Groups
-from .. import exceptions, options
+from .. import exceptions
 
 
 class IV(object):

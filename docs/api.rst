@@ -34,7 +34,6 @@ There are also a number of convenience functions that can be used to construct c
    build_ownership
    build_blp_instruments
    build_matrix
-   compute_fitted_values
 
 
 Simulation Class

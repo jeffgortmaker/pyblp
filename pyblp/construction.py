@@ -5,10 +5,9 @@ from typing import Any, Callable, Dict, Sequence, List, Mapping, Optional
 
 import numpy as np
 
-from . import exceptions, options
+from . import options
 from .configurations.formulation import Formulation
 from .utilities.basics import Array, Groups, RecArray, extract_matrix, structure_matrices
-from .utilities.algebra import precisely_solve
 
 
 def build_id_data(T: int, J: int, F: int, mergers: Sequence[Dict[int, int]] = ()) -> RecArray:
@@ -273,54 +272,3 @@ def build_matrix(formulation: Formulation, data: Mapping) -> Array:
     if formulation._absorbed_terms:
         raise ValueError("formulation does not support fixed effect absorption.")
     return formulation._build_matrix(data)[0]
-
-
-def compute_fitted_values(variable: Any, formulation: Formulation, data: Mapping) -> Array:
-    """Compute the fitted values from a regression.
-
-    Parameters
-    ----------
-    variable : `array-like`
-        The variable that will be regressed onto the formulated set of regressors.
-    formulation : `Formulation`
-        :class:`Formulation` configuration for the regressors. The ``absorb`` argument of :class:`Formulation` can be
-        used to absorb fixed effects.
-    data : `structured array-like`
-        Fields can be used as variables in ``formulation``.
-
-    Returns
-    -------
-    `ndarray`
-        The fitted values.
-
-    Examples
-    --------
-    .. toctree::
-
-       /_notebooks/api/compute_fitted_values.ipynb
-
-    """
-
-    # formulate the regressors and compare sizes
-    if not isinstance(formulation, Formulation):
-        raise TypeError("formulation must be a Formulation instance.")
-    X = formulation._build_matrix(data)[0]
-    true_y = np.c_[np.asarray(variable, options.dtype)]
-    if true_y.shape != (X.shape[0], 1):
-        raise ValueError(f"variable must be a vector with as many elements as regressor rows, {X.shape[0]}.")
-
-    # absorb any fixed effects
-    y = true_y
-    if formulation._absorbed_terms:
-        absorb = formulation._build_absorb(formulation._build_ids(data))
-        y, y_errors = absorb(y)
-        X, X_errors = absorb(X)
-        if y_errors or X_errors:
-            raise exceptions.MultipleErrors(y_errors + X_errors)
-
-    # compute the fitted values
-    covariances = X.T @ X
-    parameters, successful = precisely_solve(covariances, X.T @ y)
-    if not successful:
-        raise exceptions.FittedValuesInversionError(covariances)
-    return X @ parameters + true_y - y

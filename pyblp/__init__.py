@@ -5,7 +5,7 @@ from .configurations.formulation import Formulation
 from .configurations.integration import Integration
 from .configurations.iteration import Iteration
 from .configurations.optimization import Optimization
-from .construction import build_blp_instruments, build_id_data, build_matrix, build_ownership, compute_fitted_values
+from .construction import build_blp_instruments, build_id_data, build_matrix, build_ownership
 from .economies.problem import OptimalInstrumentProblem, Problem
 from .economies.simulation import Simulation
 from .exceptions import (
@@ -34,7 +34,7 @@ __all__ = [
     'Integration',
     'Iteration',
     'Optimization',
-    'build_blp_instruments', 'build_id_data', 'build_matrix', 'build_ownership', 'compute_fitted_values',
+    'build_blp_instruments', 'build_id_data', 'build_matrix', 'build_ownership',
     'OptimalInstrumentProblem', 'Problem',
     'Simulation',
     'AbsorptionConvergenceError', 'AbsorptionInversionError', 'CostsFloatingPointError', 'CostsReversionError',

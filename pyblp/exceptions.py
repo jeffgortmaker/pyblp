@@ -265,7 +265,7 @@ class AbsorptionInversionError(_InversionError):
     """
 
 
-class FittedValuesInversionError(_InversionError):
+class FittedValuesInversionError(_InversionReplacementError):
     """Failed to invert an estimated covariance when computing fitted values.
 
     There are probably collinearity issues.
