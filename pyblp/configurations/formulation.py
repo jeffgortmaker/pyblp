@@ -171,7 +171,7 @@ class Formulation(StringRepresentation):
         data_mapping: Data = {}
         for name in self._names:
             try:
-                data_mapping[name] = np.asarray(data[name])
+                data_mapping[name] = np.asarray(data[name]).flatten()
             except Exception as exception:
                 origin = patsy.origin.Origin(self._formula, 0, len(self._formula))
                 raise patsy.PatsyError(f"Failed to load data for '{name}'.", origin) from exception
@@ -225,7 +225,7 @@ class Formulation(StringRepresentation):
         data_mapping: Data = {}
         for name in self._absorbed_names:
             try:
-                data_mapping[name] = np.asarray(data[name])
+                data_mapping[name] = np.asarray(data[name]).flatten()
             except Exception as exception:
                 assert self._absorb is not None
                 origin = patsy.origin.Origin(self._absorb, 0, len(self._absorb))
