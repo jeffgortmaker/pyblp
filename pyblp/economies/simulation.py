@@ -40,19 +40,19 @@ class Simulation(Economy):
 
     Next, simple excluded demand-side instruments are constructed according to
 
-    .. math:: [X_{S \setminus D}, \mathrm{BLP}(X)],
+    .. math:: [\mathrm{BLP}(X_1), X_{3 \setminus 1}],
 
-    in which :math:`X_{S \setminus D}` is all variables used to formulate :math:`X_3` that were not used to formulate
-    :math:`X_1` and :math:`X_2`, :math:`X_D` is all variables used to formulate :math:`X_1` and :math:`X_2`, and
-    :math:`\mathrm{BLP}(X)` is defined in :func:`build_blp_instruments`, which is used to construct traditional excluded
-    BLP instruments.
+    in which :math:`\mathrm{BLP}(X_1)` are traditional excluded demand-side BLP instruments (defined as in
+    :func:`build_blp_instruments`) and :math:`X_{3 \setminus 1}` is all variables used formulate :math:`X_3` that were
+    not used to formulate :math:`X_1`.
 
     Similarly, simple excluded supply-side instruments are constructed according to
 
-    .. math:: [X_{D \setminus S}, \mathrm{BLP}(X)],
+    .. math:: [\mathrm{BLP}(X_3), X_{1 \setminus 3}],
 
-    in which :math:`X_{D \setminus S}` is all variables used to formulate :math:`X_1` and :math:`X_2` that were not used
-    to formulate :math:`X_3`, and :math:`X_S` is all variables used to formulate :math:`X_3`.
+    in which :math:`\mathrm{BLP}(X_3)` are traditional excluded supply-side BLP instruments (defined as in
+    :func:`build_blp_instruments`) and :math:`X_{1 \setminus 3}` is all variables used formulate :math:`X_1` that were
+    not used to formulate :math:`X_3`.
 
     .. note::
 
@@ -113,8 +113,8 @@ class Simulation(Economy):
             - **nesting_ids** (`object, optional`) - IDs that associate products with nesting groups. When these IDs are
               specified, ``rho`` must be specified as well.
 
-        Along with ``market_ids``, ``firm_ids``, and ``nesting_ids``, the names of any additional fields can be used as
-        variables in ``product_formulations``.
+        Along with ``market_ids``, ``firm_ids``, ``nesting_ids``, and ``clustering_ids``, the names of any additional
+        fields can be used as variables in ``product_formulations``.
 
     agent_formulation : `Formulation, optional`
         :class:`Formulation` configuration for the matrix of observed agent characteristics called demographics,
@@ -312,7 +312,10 @@ class Simulation(Economy):
         categorical_mapping: Data = {}
         for formulation in product_formulations:
             if formulation is not None:
-                for name in sorted(formulation._names - set(numerical_mapping) - set(categorical_mapping) - {'prices'}):
+                exogenous_names = formulation._names - set(numerical_mapping) - set(categorical_mapping) - {
+                    'prices', 'market_ids', 'firm_ids', 'nesting_ids', 'clustering_ids'
+                }
+                for name in sorted(exogenous_names):
                     variable = extract_matrix(product_data, name)
                     if variable is None:
                         variable = state.uniform(size=market_ids.size).astype(options.dtype)
@@ -323,15 +326,11 @@ class Simulation(Economy):
                     else:
                         categorical_mapping[name] = variable
 
-        # identify demand-side numerical variables
+        # identify numerical variables
         demand_names = set(numerical_mapping) & product_formulations[0]._names
-        if product_formulations[1] is not None:
-            demand_names |= set(numerical_mapping) & product_formulations[1]._names
-        if not demand_names:
-            raise ValueError("The formulations for X1 and X2 must have at least one non-price numerical variable.")
-
-        # identify supply-side numerical variables
         supply_names = set(numerical_mapping) & product_formulations[2]._names
+        if not demand_names:
+            raise ValueError("The formulation for X1 must have at least one non-price numerical variable.")
         if not supply_names:
             raise ValueError("The formulation for X3 must have at least one numerical variable.")
 
@@ -345,14 +344,16 @@ class Simulation(Economy):
             'firm_ids': firm_ids,
             **numerical_mapping
         }
-        demand_instruments = np.c_[
-            build_matrix(Formulation(' + '.join(['0'] + sorted(only_supply_names))), numerical_mapping),
-            build_blp_instruments(Formulation(' + '.join(['0'] + sorted(demand_names))), instrument_data)
-        ]
-        supply_instruments = np.c_[
-            build_matrix(Formulation(' + '.join(['0'] + sorted(only_demand_names))), numerical_mapping),
-            build_blp_instruments(Formulation(' + '.join(['0'] + sorted(supply_names))), instrument_data)
-        ]
+        demand_blp_formula = ' + '.join(['0'] + sorted(demand_names))
+        supply_blp_formula = ' + '.join(['0'] + sorted(supply_names))
+        demand_instruments = build_blp_instruments(Formulation(demand_blp_formula), instrument_data)
+        supply_instruments = build_blp_instruments(Formulation(supply_blp_formula), instrument_data)
+        if only_supply_names:
+            supply_formula = ' + '.join(['0'] + sorted(only_supply_names))
+            demand_instruments = np.c_[demand_instruments, build_matrix(Formulation(supply_formula), numerical_mapping)]
+        if only_demand_names:
+            demand_formula = ' + '.join(['0'] + sorted(only_demand_names))
+            supply_instruments = np.c_[supply_instruments, build_matrix(Formulation(demand_formula), numerical_mapping)]
 
         # structure product data fields as a mapping
         product_data_mapping = {
