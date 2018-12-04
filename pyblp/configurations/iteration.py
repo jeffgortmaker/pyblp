@@ -36,6 +36,9 @@ class Iteration(StringRepresentation):
         number of major iterations), ``options`` are specified below, ``final`` is an array of final values, and
         ``converged`` is a flag for whether the routine converged.
 
+        Regardless of the chosen routine, if there are any computational issues that create infinities or null values,
+        ``final`` will be the second to last iteration's values.
+
     method_options : `dict, optional`
         Options for the fixed point iteration routine. Non-custom routines other than ``'return'`` support the following
         options:
@@ -149,9 +152,10 @@ class Iteration(StringRepresentation):
         return f"Configured to iterate using {self._description} with options {format_options(self._method_options)}."
 
     def _iterate(self, initial: Array, contraction: Callable[[Array], Any]) -> Tuple[Array, bool, int, int]:
-        """Solve a fixed point iteration problem."""
+        """Solve a fixed point iteration problem. If there are computational problems, return the last valid values."""
 
-        # initialize counters
+        # initialize values and counters
+        last = initial
         iterations = evaluations = 0
 
         # define an iteration callback
@@ -165,11 +169,11 @@ class Iteration(StringRepresentation):
             """Normalize arrays so they work with all types of routines. Also count the total number of contraction
             evaluations.
             """
-            nonlocal evaluations
+            nonlocal last, evaluations
             evaluations += 1
             if not isinstance(raw_values, np.ndarray):
                 raw_values = np.asarray(raw_values)
-            values = raw_values.reshape(initial.shape).astype(initial.dtype, copy=False)
+            last = values = raw_values.reshape(initial.shape).astype(initial.dtype, copy=False)
             return contraction(values).astype(np.float64, copy=False).reshape(raw_values.shape)
 
         # normalize the starting values
@@ -182,6 +186,10 @@ class Iteration(StringRepresentation):
         if not isinstance(raw_final, np.ndarray):
             raw_final = np.asarray(raw_final)
         final = raw_final.reshape(initial.shape).astype(initial.dtype, copy=False)
+
+        # if there were computational problems, return the last valid values
+        if not np.isfinite(final).all():
+            final = last
         return final, converged, iterations, evaluations
 
 
