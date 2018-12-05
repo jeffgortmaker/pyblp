@@ -152,10 +152,9 @@ class Iteration(StringRepresentation):
         return f"Configured to iterate using {self._description} with options {format_options(self._method_options)}."
 
     def _iterate(self, initial: Array, contraction: Callable[[Array], Any]) -> Tuple[Array, bool, int, int]:
-        """Solve a fixed point iteration problem. If there are computational problems, return the last valid values."""
+        """Solve a fixed point iteration problem."""
 
-        # initialize values and counters
-        last = initial
+        # initialize counters
         iterations = evaluations = 0
 
         # define an iteration callback
@@ -169,11 +168,11 @@ class Iteration(StringRepresentation):
             """Normalize arrays so they work with all types of routines. Also count the total number of contraction
             evaluations.
             """
-            nonlocal last, evaluations
+            nonlocal evaluations
             evaluations += 1
             if not isinstance(raw_values, np.ndarray):
                 raw_values = np.asarray(raw_values)
-            last = values = raw_values.reshape(initial.shape).astype(initial.dtype, copy=False)
+            values = raw_values.reshape(initial.shape).astype(initial.dtype, copy=False)
             return contraction(values).astype(np.float64, copy=False).reshape(raw_values.shape)
 
         # normalize the starting values
@@ -186,10 +185,6 @@ class Iteration(StringRepresentation):
         if not isinstance(raw_final, np.ndarray):
             raw_final = np.asarray(raw_final)
         final = raw_final.reshape(initial.shape).astype(initial.dtype, copy=False)
-
-        # if there were computational problems, return the last valid values
-        if not np.isfinite(final).all():
-            final = last
         return final, converged, iterations, evaluations
 
 
@@ -210,20 +205,33 @@ def squarem_iterator(
         step_factor: float) -> Tuple[Array, bool]:
     """Apply the SQUAREM acceleration method for fixed point iteration."""
     x = initial
+    failed = False
     evaluations = 0
     while True:
         # first step
         x0, x = x, contraction(x)
+        if not np.isfinite(x).all():
+            x = x0
+            failed = True
+            break
+
+        # check for convergence
         g0 = x - x0
         evaluations += 1
-        if evaluations >= max_evaluations or safe_norm(norm, g0) < tol:
+        if evaluations >= max_evaluations or norm(g0) < tol:
             break
 
         # second step
         x1, x = x, contraction(x)
+        if not np.isfinite(x).all():
+            x = x1
+            failed = True
+            break
+
+        # check for convergence
         g1 = x - x1
         evaluations += 1
-        if evaluations >= max_evaluations or safe_norm(norm, g1) < tol:
+        if evaluations >= max_evaluations or norm(g1) < tol:
             break
 
         # compute the step length
@@ -244,25 +252,24 @@ def squarem_iterator(
             step_min *= step_factor
 
         # acceleration step
-        with np.errstate(all='ignore'):
-            x2, x = x, x0 - 2 * alpha * r + alpha**2 * v
-            x3, x = x, contraction(x)
+        x2, x = x, x0 - 2 * alpha * r + alpha**2 * v
+        x3, x = x, contraction(x)
+        if not np.isfinite(x).all():
+            x = x2
+            failed = True
+            break
 
         # record the completion of a major iteration
         iteration_callback()
 
-        # revert to the last evaluation if there were errors
-        if not np.isfinite(x).all():
-            x = x2
-            continue
-
         # check for convergence
         evaluations += 1
-        if evaluations >= max_evaluations or safe_norm(norm, x - x3) < tol:
+        if evaluations >= max_evaluations or norm(x - x3) < tol:
             break
 
     # determine whether there was convergence
-    return x, evaluations < max_evaluations and np.isfinite(x).all()
+    converged = not failed and evaluations < max_evaluations
+    return x, converged
 
 
 def simple_iterator(
@@ -270,21 +277,24 @@ def simple_iterator(
         max_evaluations: int, tol: float, norm: Callable[[Array], float]) -> Tuple[Array, bool]:
     """Apply simple fixed point iteration with no acceleration."""
     x = initial
+    failed = False
     evaluations = 0
     while True:
-        # for simple iteration, a contraction evaluation is the same as a major iteration
+        # contraction step
         x0, x = x, contraction(x)
+        if not np.isfinite(x).all():
+            x = x0
+            failed = True
+            break
+
+        # record the completion of a major iteration, which is the same here as a contraction evaluation
         iteration_callback()
+
+        # check for convergence
         evaluations += 1
-        if evaluations >= max_evaluations or safe_norm(norm, x - x0) < tol:
+        if evaluations >= max_evaluations or norm(x - x0) < tol:
             break
 
     # determine whether there was convergence
-    return x, evaluations < max_evaluations and np.isfinite(x).all()
-
-
-def safe_norm(norm: Callable[[Array], float], x: Array) -> float:
-    """Compute the norm of an array. Return zero if the norm is not finite."""
-    with np.errstate(all='ignore'):
-        value = norm(x)
-    return value if np.isfinite(value) else 0
+    converged = not failed and evaluations < max_evaluations
+    return x, converged
