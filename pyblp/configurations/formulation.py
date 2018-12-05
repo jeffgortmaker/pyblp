@@ -556,7 +556,7 @@ def parse_expression(string: str, mark_categorical: bool = False) -> sp.Expr:
         transformed: List[Tuple[int, str]] = []
         symbol_candidate = None
         for code, value in tokens:
-            if code not in {token.NAME, token.OP, token.NUMBER, token.ENDMARKER}:
+            if code not in {token.NAME, token.OP, token.NUMBER, token.NEWLINE, token.ENDMARKER}:
                 raise ValueError(f"The token '{value}' is invalid.")
             if code == token.OP and value not in {'+', '-', '*', '/', '**', '(', ')'}:
                 raise ValueError(f"The operation '{value}' is invalid.")
