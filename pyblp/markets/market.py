@@ -36,6 +36,7 @@ class Market(object):
     sigma: Array
     pi: Array
     beta: Array
+    rho_size: int
     group_rho: Array
     rho: Array
     delta: Array
@@ -85,7 +86,8 @@ class Market(object):
         self.sigma = sigma
         self.pi = pi
         self.beta = beta
-        if rho.size == 1:
+        self.rho_size = rho.size
+        if self.rho_size == 1:
             self.group_rho = np.full((self.H, 1), float(rho))
             self.rho = np.full((self.J, 1), float(rho))
         else:
@@ -202,20 +204,25 @@ class Market(object):
         if self.K2 == 0:
             mu = int(not linear)
 
-        # compute exponentiated utilities
-        scale = 1
+        # compute exponentiated utilities, optionally re-scaling the logit expression
+        scale = scale_weights = 1
         if not linear:
             exp_utilities = np.array(delta * mu)
             if self.H > 0:
                 exp_utilities **= 1 / (1 - self.rho)
         else:
             utilities = delta + mu
+            if self.H > 0:
+                utilities /= 1 - self.rho
             if safe:
                 max_utilities = np.max(utilities, axis=0, keepdims=True)
                 utilities -= max_utilities
-                scale = np.exp(-max_utilities)
-            if self.H > 0:
-                utilities /= 1 - self.rho
+                if self.H == 0:
+                    scale = np.exp(-max_utilities)
+                else:
+                    scale = np.exp(-max_utilities * (1 - self.group_rho))
+                    if self.rho_size > 1:
+                        scale_weights = np.exp(-max_utilities[None] * (self.group_rho.T - self.group_rho)[..., None])
             exp_utilities = np.exp(utilities)
 
         # optionally eliminate a product from the choice set
@@ -232,7 +239,7 @@ class Market(object):
             exp_inclusives = self.groups.sum(exp_utilities)
             exp_weighted_inclusives = np.exp(np.log(exp_inclusives) * (1 - self.group_rho))
             conditionals = np.nan_to_num(exp_utilities / self.groups.expand(exp_inclusives))
-            marginals = exp_weighted_inclusives / (scale + exp_weighted_inclusives.sum(axis=0, keepdims=True))
+            marginals = exp_weighted_inclusives / (scale + (scale_weights * exp_weighted_inclusives[None]).sum(axis=1))
             probabilities = conditionals * self.groups.expand(marginals)
 
         # return either probabilities and their conditional counterparts or just probabilities
