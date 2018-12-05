@@ -237,8 +237,11 @@ class Market(object):
             probabilities = numerator / (scale + exp_utilities.sum(axis=0, keepdims=True))
         else:
             exp_inclusives = self.groups.sum(exp_utilities)
-            exp_weighted_inclusives = np.exp(np.log(exp_inclusives) * (1 - self.group_rho))
-            conditionals = np.nan_to_num(exp_utilities / self.groups.expand(exp_inclusives))
+            with np.errstate(divide='ignore', invalid='ignore'):
+                exp_weighted_inclusives = np.exp(np.log(exp_inclusives) * (1 - self.group_rho))
+                conditionals = exp_utilities / self.groups.expand(exp_inclusives)
+            exp_weighted_inclusives[~np.isfinite(exp_weighted_inclusives)] = 0
+            conditionals[~np.isfinite(conditionals)] = 0
             marginals = exp_weighted_inclusives / (scale + (scale_weights * exp_weighted_inclusives[None]).sum(axis=1))
             probabilities = conditionals * self.groups.expand(marginals)
 
@@ -410,11 +413,13 @@ class Market(object):
 
             # compute the tangent of marginal probabilities with respect to the parameter (re-scale for robustness)
             max_utilities = np.max(weighted_utilities, axis=0, keepdims=True)
-            B = marginals * (
-                A_sums * (1 - self.group_rho) -
-                (np.log(self.groups.sum(np.exp(weighted_utilities - max_utilities))) + max_utilities)
-            )
-            marginals_tangent = group_associations * B - marginals * (group_associations.T @ B)
+            with np.errstate(divide='ignore', invalid='ignore'):
+                B = marginals * (
+                    A_sums * (1 - self.group_rho) -
+                    (np.log(self.groups.sum(np.exp(weighted_utilities - max_utilities))) + max_utilities)
+                )
+                marginals_tangent = group_associations * B - marginals * (group_associations.T @ B)
+            marginals_tangent[~np.isfinite(marginals_tangent)] = 0
 
         # compute the tangent of probabilities with respect to the parameter
         probabilities_tangent = (
