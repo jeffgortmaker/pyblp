@@ -16,7 +16,7 @@ from .conftest import SimulatedProblemFixture
 @pytest.mark.parametrize('solve_options_update', [
     pytest.param({'method': '2s'}, id="two-step"),
     pytest.param({'fp_type': 'nonlinear'}, id="nonlinear fixed point"),
-    pytest.param({'delta_behavior': 'first'}, id="conservative starting delta values"),
+    pytest.param({'delta_behavior': 'last'}, id="faster starting delta values"),
     pytest.param({'error_behavior': 'punish', 'error_punishment': 1e5}, id="error punishment"),
     pytest.param({'center_moments': False, 'W_type': 'unadjusted', 'se_type': 'clustered'}, id="complex covariances")
 ])

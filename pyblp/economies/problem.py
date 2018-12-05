@@ -42,7 +42,7 @@ class ProblemEconomy(Economy):
             beta_bounds: Optional[Tuple[Any, Any]] = None, gamma_bounds: Optional[Tuple[Any, Any]] = None,
             delta: Optional[Any] = None, W: Optional[Any] = None, method: str = '2s',
             optimization: Optional[Optimization] = None, error_behavior: str = 'revert', error_punishment: float = 1,
-            delta_behavior: str = 'last', iteration: Optional[Iteration] = None, fp_type: str = 'linear',
+            delta_behavior: str = 'first', iteration: Optional[Iteration] = None, fp_type: str = 'linear',
             costs_type: str = 'linear', costs_bounds: Optional[Tuple[Any, Any]] = None, center_moments: bool = True,
             W_type: str = 'robust', se_type: str = 'robust') -> ProblemResults:
         r"""Solve the problem.
@@ -260,14 +260,12 @@ class ProblemEconomy(Economy):
             market will start. This configuration is only relevant if there are unfixed nonlinear parameters over which
             to optimize. The following behaviors are supported:
 
-                - ``'last'`` (default) - Start at the values of :math:`\delta(\hat{\theta})` computed during the last
-                  objective evaluation, or, if this is the first evaluation, at the values configured by ``delta``. This
-                  behavior tends to speed up computation but may introduce noise into gradient computation, especially
-                  when the fixed point iteration tolerance is low.
+                - ``'first'`` (default) - Start at the values configured by ``delta`` during the first GMM step, and at
+                  the values computed by the last GMM step for each subsequent step.
 
-                - ``'first'`` - Start at the values configured by ``delta`` during the first GMM step, and at the values
-                  computed by the last GMM step for each subsequent step. This behavior is more conservative and will
-                  often be slower.
+                - ``'last'`` - Start at the values of :math:`\delta(\hat{\theta})` computed during the last objective
+                  evaluation, or, if this is the first evaluation, at the values configured by ``delta``. This behavior
+                  tends to speed up computation but may introduce some instability into estimation.
 
         iteration : `Iteration, optional`
             :class:`Iteration` configuration for how to solve the fixed point problem used to compute
