@@ -190,9 +190,12 @@ class ResultsMarket(Market):
             mu = 0
 
         # compute the exponentiated utilities that will be summed in the expression for consume surplus
-        exp_utilities = np.exp(delta + mu)
+        utilities = delta + mu
         if self.H > 0:
-            exp_utilities = self.groups.sum(exp_utilities**(1 / (1 - self.rho)))**(1 - self.group_rho)
+            utilities /= 1 - self.rho
+        exp_utilities = np.exp(utilities)
+        if self.H > 0:
+            exp_utilities = np.exp(np.log(self.groups.sum(exp_utilities)) * (1 - self.group_rho))
 
         # compute the derivatives of utility with respect to prices, which are assumed to be constant across products
         derivatives = -self.compute_utility_derivatives('prices')[0]
