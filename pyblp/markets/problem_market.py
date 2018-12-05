@@ -38,9 +38,10 @@ class ProblemMarket(Market):
                 if self.H > 0:
                     group_shares = self.products.shares / self.groups.expand(self.groups.sum(self.products.shares))
                     delta -= self.rho * np.log(group_shares)
-            elif fp_type == 'linear':
+            elif fp_type in {'safe', 'linear'}:
                 log_shares = np.log(self.products.shares)
-                contraction = lambda d: d + log_shares - np.log(self.compute_probabilities(d) @ self.agents.weights)
+                compute_probabilities = functools.partial(self.compute_probabilities, safe=fp_type == 'safe')
+                contraction = lambda d: d + log_shares - np.log(compute_probabilities(d) @ self.agents.weights)
                 delta, converged, iterations, evaluations = iteration._iterate(initial_delta, contraction)
             else:
                 assert fp_type == 'nonlinear'

@@ -184,12 +184,13 @@ class Market(object):
         return derivatives
 
     def compute_probabilities(
-            self, delta: Array = None, mu: Optional[Array] = None, linear: bool = True,
+            self, delta: Array = None, mu: Optional[Array] = None, linear: bool = True, safe: bool = True,
             numerator: Optional[Array] = None, eliminate_product: Optional[int] = None,
             keep_conditionals: bool = False) -> Union[Tuple[Array, Optional[Array]], Array]:
         """Compute choice probabilities. By default, use unchanged delta and mu values. If linear is False, delta and mu
-        must be specified and already be exponentiated. If the numerator is specified, it will be used as the numerator
-        in the non-nested Logit expression. If eliminate_product is specified, eliminate the product associated with the
+        must be specified and already be exponentiated. If safe is True, scale the logit equation by the exponential of
+        negative the maximum utility for each agent. If the numerator is specified, it will be used as the numerator in
+        the non-nested logit expression. If eliminate_product is specified, eliminate the product associated with the
         specified index from the choice set. If keep_conditionals is True, return a tuple in which if there is nesting,
         the second element are conditional probabilities given that an alternative in a nest is chosen.
         """
@@ -201,23 +202,37 @@ class Market(object):
         if self.K2 == 0:
             mu = int(not linear)
 
-        # compute exponentiated utilities, optionally eliminating a product from the choice set
-        exp_utilities = np.exp(delta + mu) if linear else np.array(delta * mu)
+        # compute exponentiated utilities
+        scale = 1
+        if not linear:
+            exp_utilities = np.array(delta * mu)
+            if self.H > 0:
+                exp_utilities **= 1 / (1 - self.rho)
+        else:
+            utilities = delta + mu
+            if safe:
+                max_utilities = np.max(utilities, axis=0, keepdims=True)
+                utilities -= max_utilities
+                scale = np.exp(-max_utilities)
+            if self.H > 0:
+                utilities /= 1 - self.rho
+            exp_utilities = np.exp(utilities)
+
+        # optionally eliminate a product from the choice set
         if eliminate_product is not None:
             exp_utilities[eliminate_product] = 0
 
-        # compute standard or nested probabilities
+        # compute probabilities
         if self.H == 0:
             conditionals = None
             if numerator is None:
                 numerator = exp_utilities
-            probabilities = numerator / (1 + exp_utilities.sum(axis=0))
+            probabilities = numerator / (scale + exp_utilities.sum(axis=0, keepdims=True))
         else:
-            exp_weighted_utilities = exp_utilities**(1 / (1 - self.rho))
-            exp_inclusives = self.groups.sum(exp_weighted_utilities)
-            exp_weighted_inclusives = exp_inclusives**(1 - self.group_rho)
-            conditionals = exp_weighted_utilities / self.groups.expand(exp_inclusives)
-            marginals = exp_weighted_inclusives / (1 + exp_weighted_inclusives.sum(axis=0))
+            exp_inclusives = self.groups.sum(exp_utilities)
+            exp_weighted_inclusives = np.exp(np.log(exp_inclusives) * (1 - self.group_rho))
+            conditionals = np.nan_to_num(exp_utilities / self.groups.expand(exp_inclusives))
+            marginals = exp_weighted_inclusives / (scale + exp_weighted_inclusives.sum(axis=0, keepdims=True))
             probabilities = conditionals * self.groups.expand(marginals)
 
         # return either probabilities and their conditional counterparts or just probabilities
@@ -360,7 +375,7 @@ class Market(object):
 
             # compute the tangent of marginal probabilities with respect to the parameter
             B = marginals * A_sums
-            marginals_tangent = B - marginals * B.sum(axis=0)
+            marginals_tangent = B - marginals * B.sum(axis=0, keepdims=True)
         elif isinstance(parameter, NonlinearCoefficient):
             v = parameter.get_agent_characteristic(self)
             x = parameter.get_product_characteristic(self)
@@ -372,7 +387,7 @@ class Market(object):
 
             # compute the tangent of marginal probabilities with respect to the parameter
             B = marginals * A_sums * v.T
-            marginals_tangent = B - marginals * B.sum(axis=0)
+            marginals_tangent = B - marginals * B.sum(axis=0, keepdims=True)
         else:
             assert isinstance(parameter, RhoParameter)
             group_associations = parameter.get_group_associations(self.groups)
@@ -386,8 +401,12 @@ class Market(object):
             A_sums = self.groups.sum(A)
             conditionals_tangent = associations * (A - conditionals * self.groups.expand(A_sums))
 
-            # compute the tangent of marginal probabilities with respect to the parameter
-            B = marginals * (A_sums * (1 - self.group_rho) - np.log(self.groups.sum(np.exp(weighted_utilities))))
+            # compute the tangent of marginal probabilities with respect to the parameter (re-scale for robustness)
+            max_utilities = np.max(weighted_utilities, axis=0, keepdims=True)
+            B = marginals * (
+                A_sums * (1 - self.group_rho) -
+                (np.log(self.groups.sum(np.exp(weighted_utilities - max_utilities))) + max_utilities)
+            )
             marginals_tangent = group_associations * B - marginals * (group_associations.T @ B)
 
         # compute the tangent of probabilities with respect to the parameter
