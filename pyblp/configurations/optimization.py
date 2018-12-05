@@ -198,7 +198,7 @@ class Optimization(StringRepresentation):
         if method == 'knitro':
             knitro_dir = self._method_options.pop('knitro_dir')
             if not isinstance(knitro_dir, (Path, str)):
-                raise ValueError(
+                raise OSError(
                     "If specified, the knitro_dir optimization option must point to the Knitro installation directory."
                     "Otherwise, the KNITRODIR environment variable must be configured."
                 )
