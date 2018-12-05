@@ -60,6 +60,12 @@ class ProblemResults(Results):
         Number of GMM objective evaluations.
     cumulative_objective_evaluations : `int`
         Sum of :attr:`ProblemResults.objective_evaluations` for this step and all prior steps.
+    fp_convergence : `ndarray`
+        Flags for convergence of the iteration routine used to compute :math:`\delta(\hat{\theta})` in each market
+        during each objective evaluation. Rows are in the same order as :attr:`Problem.unique_market_ids` and column
+        indices correspond to objective evaluations.
+    cumualtive_fp_convergence : `ndarray`
+        Concatenation of :attr:`ProblemResults.fp_convergence` for this step and all prior steps.
     fp_iterations : `ndarray`
         Number of major iterations completed by the iteration routine used to compute :math:`\delta(\hat{\theta})` in
         each market during each objective evaluation. Rows are in the same order as
@@ -174,6 +180,8 @@ class ProblemResults(Results):
     cumulative_optimization_iterations: int
     objective_evaluations: int
     cumulative_objective_evaluations: int
+    fp_convergence: Array
+    cumulative_fp_convergence: Array
     fp_iterations: Array
     cumulative_fp_iterations: Array
     contraction_evaluations: Array
@@ -223,9 +231,9 @@ class ProblemResults(Results):
     def __init__(
             self, progress: 'Progress', last_results: Optional['ProblemResults'], step_start_time: float,
             optimization_start_time: float, optimization_end_time: float, iterations: int, evaluations: int,
-            iteration_mappings: Sequence[Dict[Hashable, int]], evaluation_mappings: Sequence[Dict[Hashable, int]],
-            converged: bool, costs_type: str, costs_bounds: Bounds, center_moments: bool, W_type: str,
-            se_type: str) -> None:
+            converged_mappings: Sequence[Dict[Hashable, bool]], iteration_mappings: Sequence[Dict[Hashable, int]],
+            evaluation_mappings: Sequence[Dict[Hashable, int]], converged: bool, costs_type: str, costs_bounds: Bounds,
+            center_moments: bool, W_type: str, se_type: str) -> None:
         """Compute cumulative progress statistics, update weighting matrices, and estimate standard errors."""
 
         # initialize values from the progress structure
@@ -256,6 +264,9 @@ class ProblemResults(Results):
         self.optimization_time = self.cumulative_optimization_time = optimization_end_time - optimization_start_time
         self.optimization_iterations = self.cumulative_optimization_iterations = iterations
         self.objective_evaluations = self.cumulative_objective_evaluations = evaluations
+        self.fp_convergence = self.cumulative_fp_convergence = np.array(
+            [[m[t] if m else True for m in converged_mappings] for t in self.problem.unique_market_ids]
+        )
         self.fp_iterations = self.cumulative_fp_iterations = np.array(
             [[m[t] if m else 0 for m in iteration_mappings] for t in self.problem.unique_market_ids]
         )
@@ -272,6 +283,9 @@ class ProblemResults(Results):
             self.cumulative_optimization_time += last_results.cumulative_optimization_time
             self.cumulative_optimization_iterations += last_results.cumulative_optimization_iterations
             self.cumulative_objective_evaluations += last_results.cumulative_objective_evaluations
+            self.cumulative_fp_convergence = np.c_[
+                last_results.cumulative_fp_convergence, self.cumulative_fp_convergence
+            ]
             self.cumulative_fp_iterations = np.c_[
                 last_results.cumulative_fp_iterations, self.cumulative_fp_iterations
             ]

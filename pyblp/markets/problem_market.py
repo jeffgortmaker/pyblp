@@ -17,7 +17,7 @@ class ProblemMarket(Market):
 
     def solve_demand(
             self, initial_delta: Array, parameters: Parameters, iteration: Iteration, fp_type: str,
-            compute_gradient: bool) -> Tuple[Array, Array, List[Error], int, int]:
+            compute_gradient: bool) -> Tuple[Array, Array, List[Error], bool, int, int]:
         """Compute the mean utility for this market that equates market shares to observed values by solving a fixed
         point problem. Then, if compute_gradient is True, compute the Jacobian of xi (equivalently, of delta) with
         respect to theta. If necessary, replace null elements in delta with their last values before computing its
@@ -66,7 +66,7 @@ class ProblemMarket(Market):
             valid_delta[bad_delta_index] = initial_delta[bad_delta_index]
             xi_jacobian, jacobian_errors = self.compute_xi_by_theta_jacobian(parameters, valid_delta)
             errors.extend(jacobian_errors)
-        return delta, xi_jacobian, errors, iterations, evaluations
+        return delta, xi_jacobian, errors, converged, iterations, evaluations
 
     def solve_supply(
             self, initial_tilde_costs: Array, xi_jacobian: Array, parameters: Parameters, costs_type: str,

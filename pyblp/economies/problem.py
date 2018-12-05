@@ -490,6 +490,7 @@ class ProblemEconomy(Economy):
             )
 
             # initialize optimization progress
+            converged_mappings: List[Dict[Hashable, bool]] = []
             iteration_mappings: List[Dict[Hashable, int]] = []
             evaluation_mappings: List[Dict[Hashable, int]] = []
             smallest_objective = smallest_gradient = np.inf
@@ -502,11 +503,13 @@ class ProblemEconomy(Economy):
                     new_theta: Array, current_iterations: int, current_evaluations: int) -> (
                     Union[float, Tuple[float, Array]]):
                 """Compute and output progress associated with a single objective evaluation."""
-                nonlocal iteration_mappings, evaluation_mappings, smallest_objective, smallest_gradient, progress
+                nonlocal converged_mappings, iteration_mappings, evaluation_mappings
+                nonlocal smallest_objective, smallest_gradient, progress
                 assert optimization is not None and costs_bounds is not None
                 progress = progress = compute_step_progress(
                     new_theta, progress, optimization._compute_gradient
                 )
+                converged_mappings.append(progress.converged_mapping)
                 iteration_mappings.append(progress.iteration_mapping)
                 evaluation_mappings.append(progress.evaluation_mapping)
                 formatted_progress = progress.format(
@@ -542,8 +545,8 @@ class ProblemEconomy(Economy):
             final_progress = compute_step_progress(theta, progress, compute_gradient=parameters.P > 0)
             results = ProblemResults(
                 final_progress, last_results, step_start_time, optimization_start_time, optimization_end_time,
-                iterations, evaluations + 1, iteration_mappings, evaluation_mappings, converged, costs_type,
-                costs_bounds, center_moments, W_type, se_type
+                iterations, evaluations + 1, converged_mappings, iteration_mappings, evaluation_mappings, converged,
+                costs_type, costs_bounds, center_moments, W_type, se_type
             )
             self._handle_errors(error_behavior, results._errors)
             output(f"Computed results after {format_seconds(results.total_time - results.optimization_time)}.")
@@ -578,7 +581,7 @@ class ProblemEconomy(Economy):
         sigma, pi, rho, beta, gamma = parameters.expand(theta)
 
         # compute demand-side contributions
-        delta, xi_jacobian, iterations, evaluations, demand_errors = self._compute_demand_contributions(
+        delta, xi_jacobian, converged, iterations, evaluations, demand_errors = self._compute_demand_contributions(
             parameters, iteration, fp_type, sigma, pi, rho, progress, compute_gradient
         )
         errors.extend(demand_errors)
@@ -675,19 +678,20 @@ class ProblemEconomy(Economy):
         # structure progress
         return Progress(
             self, parameters, W, theta, objective, gradient, next_delta, delta, tilde_costs, xi_jacobian,
-            omega_jacobian, xi, omega, beta, gamma, iterations, evaluations, clipped_costs, errors
+            omega_jacobian, xi, omega, beta, gamma, converged, iterations, evaluations, clipped_costs, errors
         )
 
     def _compute_demand_contributions(
             self, parameters: Parameters, iteration: Iteration, fp_type: str, sigma: Array, pi: Array, rho: Array,
             progress: 'InitialProgress', compute_gradient: bool) -> (
-            Tuple[Array, Array, Dict[Hashable, int], Dict[Hashable, int], List[Error]]):
+            Tuple[Array, Array, Dict[Hashable, bool], Dict[Hashable, int], Dict[Hashable, int], List[Error]]):
         """Compute delta and the Jacobian of xi (equivalently, of delta) with respect to theta market-by-market. Revert
         any problematic elements to their last values.
         """
         errors: List[Error] = []
 
         # initialize delta and its Jacobian along with fixed point information so that they can be filled
+        converged: Dict[Hashable, bool] = {}
         iterations: Dict[Hashable, int] = {}
         evaluations: Dict[Hashable, int] = {}
         delta = np.zeros((self.N, 1), options.dtype)
@@ -706,7 +710,7 @@ class ProblemEconomy(Economy):
 
             # compute delta and its Jacobian market-by-market
             generator = generate_items(self.unique_market_ids, market_factory, ProblemMarket.solve_demand)
-            for t, (delta_t, xi_jacobian_t, errors_t, iterations[t], evaluations[t]) in generator:
+            for t, (delta_t, xi_jacobian_t, errors_t, converged[t], iterations[t], evaluations[t]) in generator:
                 delta[self._product_market_indices[t]] = delta_t
                 xi_jacobian[self._product_market_indices[t], :xi_jacobian_t.shape[1]] = xi_jacobian_t
                 errors.extend(errors_t)
@@ -723,7 +727,7 @@ class ProblemEconomy(Economy):
             if np.any(bad_jacobian_index):
                 xi_jacobian[bad_jacobian_index] = progress.xi_jacobian[bad_jacobian_index]
                 errors.append(exceptions.XiByThetaJacobianReversionError(bad_jacobian_index))
-        return delta, xi_jacobian, iterations, evaluations, errors
+        return delta, xi_jacobian, converged, iterations, evaluations, errors
 
     def _compute_supply_contributions(
             self, parameters: Parameters, costs_type: str, costs_bounds: Bounds, sigma: Array, pi: Array, rho: Array,
@@ -1105,6 +1109,7 @@ class Progress(InitialProgress):
     omega: Array
     beta: Array
     gamma: Array
+    converged_mapping: Dict[Hashable, bool]
     iteration_mapping: Dict[Hashable, int]
     evaluation_mapping: Dict[Hashable, int]
     clipped_costs: Array
@@ -1115,8 +1120,8 @@ class Progress(InitialProgress):
             self, problem: ProblemEconomy, parameters: Parameters, W: Array, theta: Array, objective: Array,
             gradient: Array, next_delta: Array, delta: Array, tilde_costs: Array, xi_jacobian: Array,
             omega_jacobian: Array, xi: Array, omega: Array, beta: Array, gamma: Array,
-            iteration_mapping: Dict[Hashable, int], evaluation_mapping: Dict[Hashable, int], clipped_costs: Array,
-            errors: List[Error]) -> None:
+            converged_mapping: Dict[Hashable, bool], iteration_mapping: Dict[Hashable, int],
+            evaluation_mapping: Dict[Hashable, int], clipped_costs: Array, errors: List[Error]) -> None:
         """Store progress information."""
         super().__init__(
             problem, parameters, W, theta, objective, gradient, next_delta, delta, tilde_costs, xi_jacobian,
@@ -1126,6 +1131,7 @@ class Progress(InitialProgress):
         self.omega = omega
         self.beta = beta
         self.gamma = gamma
+        self.converged_mapping = converged_mapping or {}
         self.iteration_mapping = iteration_mapping or {}
         self.evaluation_mapping = evaluation_mapping or {}
         self.clipped_costs = clipped_costs
