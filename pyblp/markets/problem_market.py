@@ -41,17 +41,24 @@ class ProblemMarket(Market):
             elif fp_type in {'safe', 'linear'}:
                 log_shares = np.log(self.products.shares)
                 compute_probabilities = functools.partial(self.compute_probabilities, safe=fp_type == 'safe')
-                contraction = lambda d: d + log_shares - np.log(compute_probabilities(d) @ self.agents.weights)
+                compute_log_shares = lambda d: np.log(compute_probabilities(d) @ self.agents.weights)
+                if self.H == 0:
+                    contraction = lambda d: d + log_shares - compute_log_shares(d)
+                else:
+                    dampener = 1 - self.rho
+                    contraction = lambda d: d + (log_shares - compute_log_shares(d)) * dampener
                 delta, converged, iterations, evaluations = iteration._iterate(initial_delta, contraction)
             else:
                 assert fp_type == 'nonlinear'
                 exp_mu = np.exp(self.mu)
                 compute_probabilities = functools.partial(self.compute_probabilities, mu=exp_mu, linear=False)
-                if self.H > 0:
-                    contraction = lambda d: d * self.products.shares / (compute_probabilities(d) @ self.agents.weights)
-                else:
+                if self.H == 0:
                     compute_quotient = functools.partial(compute_probabilities, numerator=exp_mu)
                     contraction = lambda d: self.products.shares / (compute_quotient(d) @ self.agents.weights)
+                else:
+                    dampener = 1 - self.rho
+                    compute_shares = lambda d: compute_probabilities(d) @ self.agents.weights
+                    contraction = lambda d: d * (self.products.shares / compute_shares(d))**dampener
                 exp_delta, converged, iterations, evaluations = iteration._iterate(np.exp(initial_delta), contraction)
                 delta = np.log(exp_delta)
             if not converged:

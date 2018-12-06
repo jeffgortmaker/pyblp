@@ -301,6 +301,10 @@ class ProblemEconomy(Economy):
             This option is only relevant if there are nonlinear parameters, since :math:`\delta` can be estimated
             analytically in the Logit model.
 
+            Also note that when there are nesting parameters, the contraction is dampened by :math:`1 - \rho` as in
+            :ref:`references:Grigolon and Verboven (2014)`. Although necessary, this dampening implies a slower rate of
+            convergence, especially for large values of :math:`\rho`.
+
         costs_type : `str, optional`
             Marginal cost specification. The following specifications are supported:
 

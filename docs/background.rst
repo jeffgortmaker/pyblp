@@ -259,7 +259,7 @@ and
 
 .. math:: V_{hti} = (1 - \rho_h)\log\sum_{k\in\mathscr{J}_{ht}} \exp[V_{kti} / (1 - \rho_h)].
 
-During estimation, unknown elements in :math:`\rho` are included in :math:`\theta`. Otherwise, estimation proceeds exactly as described in the above sections, except that expressions derived from definitions of :math:`U` in :eq:`utilities` and :math:`s` in :eq:`shares` are more complicated. In particular, Jacobians are much simpler when :math:`\rho = 0`.
+During estimation, unknown elements in :math:`\rho` are included in :math:`\theta`. Otherwise, estimation proceeds exactly as described in the above sections, except that expressions derived from definitions of :math:`U` in :eq:`utilities` and :math:`s` in :eq:`shares` are more complicated. In particular, Jacobians are much simpler when :math:`\rho = 0`. :ref:`references:Grigolon and Verboven (2014)` also show that the contraction for :math:`\delta` must be dampened by :math:`1 - \rho`. Although necessary, this dampening implies a slower rate of convergence, especially for large values of :math:`\rho`.
 
 
 Logit and Nested Logit Benchmarks
