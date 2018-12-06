@@ -64,7 +64,7 @@ class ProblemResults(Results):
         Flags for convergence of the iteration routine used to compute :math:`\delta(\hat{\theta})` in each market
         during each objective evaluation. Rows are in the same order as :attr:`Problem.unique_market_ids` and column
         indices correspond to objective evaluations.
-    cumualtive_fp_convergence : `ndarray`
+    cumulative_fp_convergence : `ndarray`
         Concatenation of :attr:`ProblemResults.fp_convergence` for this step and all prior steps.
     fp_iterations : `ndarray`
         Number of major iterations completed by the iteration routine used to compute :math:`\delta(\hat{\theta})` in
