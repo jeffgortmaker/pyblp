@@ -190,17 +190,27 @@ class ResultsMarket(Market):
         if self.K2 == 0:
             mu = 0
 
-        # compute the exponentiated utilities that will be summed in the expression for consume surplus
+        # compute the exponentiated utilities that will be summed in the expression for consumer surplus (re-scale for
+        #   robustness to overflow)
         utilities = delta + mu
         if self.H > 0:
             utilities /= 1 - self.rho
-        exp_utilities = np.exp(utilities)
-        if self.H > 0:
+        max_utilities = np.max(utilities, axis=0, keepdims=True)
+        exp_utilities = np.exp(utilities - max_utilities)
+        scale_weights = 1
+        if self.H == 0:
+            log_scale = -max_utilities
+        else:
             exp_utilities = np.exp(np.log(self.groups.sum(exp_utilities)) * (1 - self.group_rho))
+            min_rho = np.min(self.group_rho)
+            log_scale = -max_utilities * (1 - min_rho)
+            if self.rho_size > 1:
+                scale_weights = np.exp(-max_utilities * (self.group_rho - min_rho))
 
         # compute the derivatives of utility with respect to prices, which are assumed to be constant across products
         derivatives = -self.compute_utility_derivatives('prices')[0]
 
         # compute consumer surplus
-        consumer_surplus = (np.log1p(exp_utilities.sum(axis=0)) / derivatives) @ self.agents.weights
+        numerator = np.log(np.exp(log_scale) + (scale_weights * exp_utilities).sum(axis=0, keepdims=True)) - log_scale
+        consumer_surplus = (numerator / derivatives) @ self.agents.weights
         return consumer_surplus, []
