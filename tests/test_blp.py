@@ -503,6 +503,36 @@ def test_second_step(simulated_problem: SimulatedProblemFixture) -> None:
 
 
 @pytest.mark.usefixtures('simulated_problem')
+def test_return(simulated_problem: SimulatedProblemFixture) -> None:
+    """Test that using a trivial optimization and fixed point iteration routines that just return initial values yield
+    results that are the same as the specified initial values.
+    """
+    simulation, _, problem, solve_options, _ = simulated_problem
+
+    # specify initial values and the trivial routines
+    initial_values = {
+        'sigma': simulation.sigma,
+        'pi': simulation.pi,
+        'rho': simulation.rho,
+        'beta': simulation.beta,
+        'gamma': simulation.gamma if problem.K3 > 0 else None,
+        'delta': problem.products.X1 @ simulation.beta + simulation.xi
+    }
+    updated_solve_options = solve_options.copy()
+    updated_solve_options.update({
+        'optimization': Optimization('return'),
+        'iteration': Iteration('return'),
+        **initial_values
+    })
+
+    # obtain problem results and test that initial values are the same
+    results = problem.solve(**updated_solve_options)
+    for key, initial in initial_values.items():
+        if initial is not None:
+            np.testing.assert_allclose(initial, getattr(results, key), atol=1e-14, rtol=0, err_msg=key)
+
+
+@pytest.mark.usefixtures('simulated_problem')
 @pytest.mark.parametrize('scipy_method', [
     pytest.param('l-bfgs-b', id="L-BFGS-B"),
     pytest.param('slsqp', id="SLSQP")
