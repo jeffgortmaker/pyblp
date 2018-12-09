@@ -60,12 +60,12 @@ class ProblemResults(Results):
         Number of GMM objective evaluations.
     cumulative_objective_evaluations : `int`
         Sum of :attr:`ProblemResults.objective_evaluations` for this step and all prior steps.
-    fp_convergence : `ndarray`
+    fp_converged : `ndarray`
         Flags for convergence of the iteration routine used to compute :math:`\delta(\hat{\theta})` in each market
         during each objective evaluation. Rows are in the same order as :attr:`Problem.unique_market_ids` and column
         indices correspond to objective evaluations.
-    cumulative_fp_convergence : `ndarray`
-        Concatenation of :attr:`ProblemResults.fp_convergence` for this step and all prior steps.
+    cumulative_fp_converged : `ndarray`
+        Concatenation of :attr:`ProblemResults.fp_converged` for this step and all prior steps.
     fp_iterations : `ndarray`
         Number of major iterations completed by the iteration routine used to compute :math:`\delta(\hat{\theta})` in
         each market during each objective evaluation. Rows are in the same order as
@@ -80,7 +80,7 @@ class ProblemResults(Results):
         Concatenation of :attr:`ProblemResults.contraction_evaluations` for this step and all prior steps.
     converged : `bool`
         Whether the optimization routine converged.
-    all_converged : `bool`
+    cumulative_converged : `bool`
         Whether the optimization routine converged for this step and all prior steps.
     parameters : `ndarray`
         Stacked parameters in the following order: :math:`\hat{\theta}`, concentrated out elements of
@@ -180,14 +180,14 @@ class ProblemResults(Results):
     cumulative_optimization_iterations: int
     objective_evaluations: int
     cumulative_objective_evaluations: int
-    fp_convergence: Array
-    cumulative_fp_convergence: Array
+    fp_converged: Array
+    cumulative_fp_converged: Array
     fp_iterations: Array
     cumulative_fp_iterations: Array
     contraction_evaluations: Array
     cumulative_contraction_evaluations: Array
     converged: bool
-    all_converged: bool
+    cumulative_converged: bool
     parameters: Array
     parameter_covariances: Array
     theta: Array
@@ -264,7 +264,7 @@ class ProblemResults(Results):
         self.optimization_time = self.cumulative_optimization_time = optimization_end_time - optimization_start_time
         self.optimization_iterations = self.cumulative_optimization_iterations = iterations
         self.objective_evaluations = self.cumulative_objective_evaluations = evaluations
-        self.fp_convergence = self.cumulative_fp_convergence = np.array(
+        self.fp_converged = self.cumulative_fp_converged = np.array(
             [[m[t] if m else True for m in converged_mappings] for t in self.problem.unique_market_ids]
         )
         self.fp_iterations = self.cumulative_fp_iterations = np.array(
@@ -273,7 +273,7 @@ class ProblemResults(Results):
         self.contraction_evaluations = self.cumulative_contraction_evaluations = np.array(
             [[m[t] if m else 0 for m in evaluation_mappings] for t in self.problem.unique_market_ids]
         )
-        self.converged = self.all_converged = converged
+        self.converged = self.cumulative_converged = converged
 
         # initialize last results and add to cumulative values
         self.last_results = last_results
@@ -283,8 +283,8 @@ class ProblemResults(Results):
             self.cumulative_optimization_time += last_results.cumulative_optimization_time
             self.cumulative_optimization_iterations += last_results.cumulative_optimization_iterations
             self.cumulative_objective_evaluations += last_results.cumulative_objective_evaluations
-            self.cumulative_fp_convergence = np.c_[
-                last_results.cumulative_fp_convergence, self.cumulative_fp_convergence
+            self.cumulative_fp_converged = np.c_[
+                last_results.cumulative_fp_converged, self.cumulative_fp_converged
             ]
             self.cumulative_fp_iterations = np.c_[
                 last_results.cumulative_fp_iterations, self.cumulative_fp_iterations
@@ -292,7 +292,7 @@ class ProblemResults(Results):
             self.cumulative_contraction_evaluations = np.c_[
                 last_results.cumulative_contraction_evaluations, self.cumulative_contraction_evaluations
             ]
-            self.all_converged = last_results.converged and converged
+            self.cumulative_converged = last_results.converged and converged
 
         # store estimated parameters and information about them (beta and gamma have already been stored above)
         self._parameters = progress.parameters
