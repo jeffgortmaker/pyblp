@@ -173,10 +173,15 @@ class ProblemEconomy(Economy):
             upper bound fixes the corresponding element, removing it from :math:`\theta`. Both ``None`` and
             ``numpy.nan`` are converted to ``-numpy.inf`` in ``lb`` and to ``numpy.inf`` in ``ub``.
 
-        beta_bounds: `tuple, optional`
+        beta_bounds : `tuple, optional`
             Configuration for :math:`\beta` bounds of the form ``(lb, ub)``, in which both ``lb`` and ``ub`` are of the
             same size as ``beta``. Each element in ``lb`` and ``ub`` determines the lower and upper bound for its
             counterpart in ``beta``. If ``optimization`` does not support bounds, these will be ignored.
+
+            Usually, this is left unspecified, unless there is a supply side, in which case parameters on endogenous
+            product characteristics cannot be concentrated out of the problem. It is generally a good idea to constrain
+            such parameters to be nonzero so that the intra-firm Jacobian of shares with respect to prices does not
+            become singular.
 
             By default, all non-concentrated out parameters are unbounded. Bounds should only be specified for
             parameters that are included in :math:`\theta`; that is, those with initial values specified in ``beta``.
@@ -185,7 +190,7 @@ class ProblemEconomy(Economy):
             upper bound fixes the corresponding element, removing it from :math:`\theta`. Both ``None`` and
             ``numpy.nan`` are converted to ``-numpy.inf`` in ``lb`` and to ``numpy.inf`` in ``ub``.
 
-        gamma_bounds: `tuple, optional`
+        gamma_bounds : `tuple, optional`
             Configuration for :math:`\gamma` bounds of the form ``(lb, ub)``, in which both ``lb`` and ``ub`` are of the
             same size as ``gamma``. Each element in ``lb`` and ``ub`` determines the lower and upper bound for its
             counterpart in ``gamma``. If ``optimization`` does not support bounds, these will be ignored.
