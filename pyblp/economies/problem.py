@@ -497,7 +497,7 @@ class ProblemEconomy(Economy):
             converged_mappings: List[Dict[Hashable, bool]] = []
             iteration_mappings: List[Dict[Hashable, int]] = []
             evaluation_mappings: List[Dict[Hashable, int]] = []
-            smallest_objective = smallest_gradient = np.inf
+            smallest_objective = np.inf
             progress = InitialProgress(
                 self, parameters, W, theta, objective, gradient, delta, delta, tilde_costs, xi_jacobian, omega_jacobian
             )
@@ -507,8 +507,7 @@ class ProblemEconomy(Economy):
                     new_theta: Array, current_iterations: int, current_evaluations: int) -> (
                     Union[float, Tuple[float, Array]]):
                 """Compute and output progress associated with a single objective evaluation."""
-                nonlocal converged_mappings, iteration_mappings, evaluation_mappings
-                nonlocal smallest_objective, smallest_gradient, progress
+                nonlocal converged_mappings, iteration_mappings, evaluation_mappings, smallest_objective, progress
                 assert optimization is not None and costs_bounds is not None
                 progress = progress = compute_step_progress(
                     new_theta, progress, optimization._compute_gradient
@@ -517,13 +516,11 @@ class ProblemEconomy(Economy):
                 iteration_mappings.append(progress.iteration_mapping)
                 evaluation_mappings.append(progress.evaluation_mapping)
                 formatted_progress = progress.format(
-                    optimization, costs_bounds, step, current_iterations, current_evaluations, smallest_objective,
-                    smallest_gradient
+                    optimization, costs_bounds, step, current_iterations, current_evaluations, smallest_objective
                 )
                 if formatted_progress:
                     output(formatted_progress)
                 smallest_objective = min(smallest_objective, progress.objective)
-                smallest_gradient = min(smallest_gradient, progress.gradient_norm)
                 return (progress.objective, progress.gradient) if optimization._compute_gradient else progress.objective
 
             # optimize theta
@@ -554,12 +551,12 @@ class ProblemEconomy(Economy):
             )
             self._handle_errors(error_behavior, results._errors)
             output(f"Computed results after {format_seconds(results.total_time - results.optimization_time)}.")
-            output("")
-            output(results)
 
             # store the last results and return results from the final step
             last_results = results
             if method != '2s' or step == 2:
+                output("")
+                output(results)
                 return results
 
             # update vectors and matrices
@@ -1145,7 +1142,7 @@ class Progress(InitialProgress):
 
     def format(
             self, optimization: Optimization, costs_bounds: Bounds, step: int, current_iterations: int,
-            current_evaluations: int, smallest_objective: Array, smallest_gradient: Array) -> str:
+            current_evaluations: int, smallest_objective: Array) -> str:
         """Format a universal display of optimization progress as a string. The first iteration will include the
         progress table header. If there are any errors, information about them will be formatted as well, regardless of
         whether or not a universal display is to be used. The smallest_objective is the smallest objective value
@@ -1160,7 +1157,6 @@ class Progress(InitialProgress):
             ("Objective", "Improvement")
         ]
         objective_improved = np.isfinite(smallest_objective) and self.objective < smallest_objective
-        gradient_improved = np.isfinite(smallest_gradient) and self.gradient_norm < smallest_gradient
         values = [
             step,
             current_iterations,
@@ -1171,11 +1167,8 @@ class Progress(InitialProgress):
             format_number(float(smallest_objective - self.objective)) if objective_improved else "",
         ]
         if optimization._compute_gradient:
-            header.extend([("Gradient", "Infinity Norm"), ("Gradient", "Improvement")])
-            values.extend([
-                format_number(float(self.gradient_norm)),
-                format_number(float(smallest_gradient - self.gradient_norm)) if gradient_improved else "",
-            ])
+            header.append(("Gradient", "Infinity Norm"))
+            values.append(format_number(float(self.gradient_norm)))
         if np.isfinite(costs_bounds).any():
             header.append(("Clipped", "Marginal Costs"))
             values.append(self.clipped_costs.sum())
