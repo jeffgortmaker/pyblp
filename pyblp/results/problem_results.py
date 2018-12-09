@@ -265,13 +265,16 @@ class ProblemResults(Results):
         self.optimization_iterations = self.cumulative_optimization_iterations = iterations
         self.objective_evaluations = self.cumulative_objective_evaluations = evaluations
         self.fp_converged = self.cumulative_fp_converged = np.array(
-            [[m[t] if m else True for m in converged_mappings] for t in self.problem.unique_market_ids]
+            [[m[t] if m else True for m in converged_mappings] for t in self.problem.unique_market_ids],
+            dtype=np.int
         )
         self.fp_iterations = self.cumulative_fp_iterations = np.array(
-            [[m[t] if m else 0 for m in iteration_mappings] for t in self.problem.unique_market_ids]
+            [[m[t] if m else 0 for m in iteration_mappings] for t in self.problem.unique_market_ids],
+            dtype=np.int
         )
         self.contraction_evaluations = self.cumulative_contraction_evaluations = np.array(
-            [[m[t] if m else 0 for m in evaluation_mappings] for t in self.problem.unique_market_ids]
+            [[m[t] if m else 0 for m in evaluation_mappings] for t in self.problem.unique_market_ids],
+            dtype=np.int
         )
         self.converged = self.cumulative_converged = converged
 
@@ -518,6 +521,7 @@ class ProblemResults(Results):
             bootstrapped_gamma[d] = np.clip(bootstrapped_gamma[d], *self.gamma_bounds)
 
         # compute bootstrapped prices, shares, delta and marginal costs
+        converged_mappings: List[Dict[Hashable, bool]] = []
         iteration_mappings: List[Dict[Hashable, int]] = []
         evaluation_mappings: List[Dict[Hashable, int]] = []
         bootstrapped_prices = np.zeros((draws, self.problem.N, 1), options.dtype)
@@ -525,14 +529,17 @@ class ProblemResults(Results):
         bootstrapped_delta = np.zeros((draws, self.problem.N, 1), options.dtype)
         bootstrapped_costs = np.zeros((draws, self.problem.N, int(self.problem.K3 > 0)), options.dtype)
         for d in output_progress(range(draws), draws, start_time):
-            prices_d, shares_d, delta_d, costs_d, iterations_d, evaluations_d, errors_d = self._compute_bootstrap(
-                iteration, bootstrapped_sigma[d], bootstrapped_pi[d], bootstrapped_rho[d], bootstrapped_beta[d],
-                bootstrapped_gamma[d]
+            prices_d, shares_d, delta_d, costs_d, converged_d, iterations_d, evaluations_d, errors_d = (
+                self._compute_bootstrap(
+                    iteration, bootstrapped_sigma[d], bootstrapped_pi[d], bootstrapped_rho[d], bootstrapped_beta[d],
+                    bootstrapped_gamma[d]
+                )
             )
             bootstrapped_prices[d] = prices_d
             bootstrapped_shares[d] = shares_d
             bootstrapped_delta[d] = delta_d
             bootstrapped_costs[d] = costs_d
+            converged_mappings.append(converged_d)
             iteration_mappings.append(iterations_d)
             evaluation_mappings.append(evaluations_d)
             errors.extend(errors_d)
@@ -542,7 +549,7 @@ class ProblemResults(Results):
         results = BootstrappedResults(
             self, bootstrapped_sigma, bootstrapped_pi, bootstrapped_rho, bootstrapped_beta, bootstrapped_gamma,
             bootstrapped_prices, bootstrapped_shares, bootstrapped_delta, bootstrapped_costs, start_time, time.time(),
-            draws, iteration_mappings, evaluation_mappings
+            draws, converged_mappings, iteration_mappings, evaluation_mappings
         )
         output(f"Bootstrapped results after {format_seconds(results.computation_time)}.")
         output("")
@@ -551,7 +558,9 @@ class ProblemResults(Results):
 
     def _compute_bootstrap(
             self, iteration: Optional[Iteration], sigma: Array, pi: Array, rho: Array, beta: Array, gamma: Array) -> (
-            Tuple[Array, Array, Array, Array, Dict[Hashable, int], Dict[Hashable, int], List[Error]]):
+            Tuple[
+                Array, Array, Array, Array, Dict[Hashable, bool], Dict[Hashable, int], Dict[Hashable, int], List[Error]
+            ]):
         """Compute the equilibrium prices, shares, marginal costs, and delta associated with bootstrapped parameters
         market-by-market
         """
@@ -575,21 +584,26 @@ class ProblemResults(Results):
             return market_s, costs_s, prices_s, iteration
 
         # compute bootstrapped prices, shares, and delta market-by-market
+        converged_mapping: Dict[Hashable, bool] = {}
         iteration_mapping: Dict[Hashable, int] = {}
         evaluation_mapping: Dict[Hashable, int] = {}
         equilibrium_prices = np.zeros_like(self.problem.products.prices)
         equilibrium_shares = np.zeros_like(self.problem.products.shares)
         generator = generate_items(self.problem.unique_market_ids, market_factory, ResultsMarket.solve_equilibrium)
-        for t, (prices_t, shares_t, delta_t, errors_t, iterations_t, evaluations_t) in generator:
+        for t, (prices_t, shares_t, delta_t, errors_t, converged_t, iterations_t, evaluations_t) in generator:
             equilibrium_prices[self.problem._product_market_indices[t]] = prices_t
             equilibrium_shares[self.problem._product_market_indices[t]] = shares_t
             delta[self.problem._product_market_indices[t]] = delta_t
             errors.extend(errors_t)
+            converged_mapping[t] = converged_t
             iteration_mapping[t] = iterations_t
             evaluation_mapping[t] = evaluations_t
 
         # return all of the information associated with this bootstrap draw
-        return equilibrium_prices, equilibrium_shares, delta, costs, iteration_mapping, evaluation_mapping, errors
+        return (
+            equilibrium_prices, equilibrium_shares, delta, costs, converged_mapping, iteration_mapping,
+            evaluation_mapping, errors
+        )
 
     def compute_optimal_instruments(
             self, method: str = 'normal', draws: int = 100, seed: Optional[int] = None,
@@ -739,16 +753,18 @@ class ProblemResults(Results):
                 raise ValueError(f"expected_prices must be a {self.problem.N}-vector.")
 
         # average over Jacobian realizations
+        converged_mappings: List[Dict[Hashable, bool]] = []
         iteration_mappings: List[Dict[Hashable, int]] = []
         evaluation_mappings: List[Dict[Hashable, int]] = []
         expected_xi_jacobian = np.zeros_like(self.xi_by_theta_jacobian)
         expected_omega_jacobian = np.zeros_like(self.omega_by_theta_jacobian)
         for _ in output_progress(range(draws), draws, start_time):
-            xi_jacobian_i, omega_jacobian_i, iterations_i, evaluations_i, errors_i = self._compute_realizations(
-                expected_prices, iteration, *sample()
+            xi_jacobian_i, omega_jacobian_i, converged_i, iterations_i, evaluations_i, errors_i = (
+                self._compute_realizations(expected_prices, iteration, *sample())
             )
             expected_xi_jacobian += xi_jacobian_i / draws
             expected_omega_jacobian += omega_jacobian_i / draws
+            converged_mappings.append(converged_i)
             iteration_mappings.append(iterations_i)
             evaluation_mappings.append(evaluations_i)
             errors.extend(errors_i)
@@ -776,8 +792,8 @@ class ProblemResults(Results):
         from .optimal_instrument_results import OptimalInstrumentResults  # noqa
         results = OptimalInstrumentResults(
             self, demand_instruments, supply_instruments, inverse_covariance_matrix, expected_xi_jacobian,
-            expected_omega_jacobian, expected_prices, start_time, time.time(), draws, iteration_mappings,
-            evaluation_mappings
+            expected_omega_jacobian, expected_prices, start_time, time.time(), draws, converged_mappings,
+            iteration_mappings, evaluation_mappings
         )
         output(f"Computed optimal instruments after {format_seconds(results.computation_time)}.")
         output("")
@@ -786,7 +802,7 @@ class ProblemResults(Results):
 
     def _compute_realizations(
             self, expected_prices: Optional[Array], iteration: Optional[Iteration], xi: Array, omega: Array) -> (
-            Tuple[Array, Array, Dict[Hashable, int], Dict[Hashable, int], List[Error]]):
+            Tuple[Array, Array, Dict[Hashable, bool], Dict[Hashable, int], Dict[Hashable, int], List[Error]]):
         """If they have not already been estimated, compute the equilibrium prices, shares, and delta associated with a
         realization of xi and omega market-by-market. Then, compute realizations of Jacobians of xi and omega with
         respect to theta.
@@ -808,16 +824,18 @@ class ProblemResults(Results):
             return market_s, costs_s, prices_s, iteration
 
         # compute realizations of prices, shares, and delta market-by-market
+        converged_mapping: Dict[Hashable, bool] = {}
         iteration_mapping: Dict[Hashable, int] = {}
         evaluation_mapping: Dict[Hashable, int] = {}
         equilibrium_prices = np.zeros_like(self.problem.products.prices)
         equilibrium_shares = np.zeros_like(self.problem.products.shares)
         generator = generate_items(self.problem.unique_market_ids, market_factory, ResultsMarket.solve_equilibrium)
-        for t, (prices_t, shares_t, delta_t, errors_t, iterations_t, evaluations_t) in generator:
+        for t, (prices_t, shares_t, delta_t, errors_t, converged_t, iterations_t, evaluations_t) in generator:
             equilibrium_prices[self.problem._product_market_indices[t]] = prices_t
             equilibrium_shares[self.problem._product_market_indices[t]] = shares_t
             delta[self.problem._product_market_indices[t]] = delta_t
             errors.extend(errors_t)
+            converged_mapping[t] = converged_t
             iteration_mapping[t] = iterations_t
             evaluation_mapping[t] = evaluations_t
 
@@ -834,7 +852,7 @@ class ProblemResults(Results):
             errors.extend(supply_errors)
 
         # return all of the information associated with this realization
-        return xi_jacobian, omega_jacobian, iteration_mapping, evaluation_mapping, errors
+        return xi_jacobian, omega_jacobian, converged_mapping, iteration_mapping, evaluation_mapping, errors
 
     def _compute_demand_realization(
             self, equilibrium_prices: Array, equilibrium_shares: Array, delta: Array) -> Tuple[Array, List[Error]]:

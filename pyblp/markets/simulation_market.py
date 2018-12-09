@@ -15,7 +15,7 @@ class SimulationMarket(Market):
 
     def solve(
             self, costs: Array, prices: Array, iteration: Iteration, firms_index: int = 0) -> (
-            Tuple[Array, Array, List[Error], int, int]):
+            Tuple[Array, Array, List[Error], bool, int, int]):
         """Solve for synthetic prices and shares. By default, use unchanged firm IDs."""
         errors: List[Error] = []
 
@@ -37,4 +37,4 @@ class SimulationMarket(Market):
             delta = self.update_delta_with_variable('prices', prices)
             mu = self.update_mu_with_variable('prices', prices)
             shares = self.compute_probabilities(delta, mu) @ self.agents.weights
-            return prices, shares, errors, iterations, evaluations
+            return prices, shares, errors, converged, iterations, evaluations

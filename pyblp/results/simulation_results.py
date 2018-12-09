@@ -32,11 +32,14 @@ class SimulationResults(StringRepresentation):
         Simulated :attr:`Simulation.product_data` that are updated with synthetic prices and shares.
     computation_time : `float`
         Number of seconds it took to compute synthetic prices and shares.
+    fp_converged : `ndarray`
+        Flags for convergence of the iteration routine used to compute synthetic prices in each market. Flags are in
+        the same order as :attr:`Simulation.unique_market_ids`.
     fp_iterations : `ndarray`
         Number of major iterations completed by the iteration routine used to compute synthetic prices in each market.
-        Rows are in the same order as :attr:`Simulation.unique_market_ids`.
+        Counts are in the same order as :attr:`Simulation.unique_market_ids`.
     contraction_evaluations : `ndarray`
-        Number of times the contraction used to compute synthetic prices was evaluated in each market. Rows are in the
+        Number of times the contraction used to compute synthetic prices was evaluated in each market. Counts are in the
         same order as :attr:`Simulation.unique_market_ids`.
 
     Examples
@@ -49,12 +52,14 @@ class SimulationResults(StringRepresentation):
     firms_index: int
     product_data: RecArray
     computation_time: float
+    fp_converged: Array
     fp_iterations: Array
     contraction_evaluations: Array
 
     def __init__(
             self, simulation: 'Simulation', firms_index: int, prices: Array, shares: Array, start_time: float,
-            end_time: float, iteration_mapping: Dict[Hashable, int], evaluation_mapping: Dict[Hashable, int]) -> None:
+            end_time: float, converged_mapping: Dict[Hashable, bool], iteration_mapping: Dict[Hashable, int],
+            evaluation_mapping: Dict[Hashable, int]) -> None:
         """Structure simulation results."""
         self.simulation = simulation
         self.firms_index = firms_index
@@ -62,8 +67,11 @@ class SimulationResults(StringRepresentation):
         self.product_data.prices = prices
         self.product_data.shares = shares
         self.computation_time = end_time - start_time
-        self.fp_iterations = np.array([iteration_mapping[t] for t in simulation.unique_market_ids])
-        self.contraction_evaluations = np.array([evaluation_mapping[t] for t in simulation.unique_market_ids])
+        self.fp_converged = np.array([converged_mapping[t] for t in simulation.unique_market_ids], dtype=np.int)
+        self.fp_iterations = np.array([iteration_mapping[t] for t in simulation.unique_market_ids], dtype=np.int)
+        self.contraction_evaluations = np.array(
+            [evaluation_mapping[t] for t in simulation.unique_market_ids], dtype=np.int
+        )
 
     def __str__(self) -> str:
         """Format simulation results as a string."""

@@ -560,6 +560,7 @@ class Simulation(Economy):
             return market_s, costs_s, prices_s, iteration, firms_index
 
         # compute prices and shares market-by-market
+        converged_mapping: Dict[Hashable, bool] = {}
         iteration_mapping: Dict[Hashable, int] = {}
         evaluation_mapping: Dict[Hashable, int] = {}
         synthetic_prices = np.full_like(self.products.prices, np.nan)
@@ -567,10 +568,11 @@ class Simulation(Economy):
         generator = output_progress(
             generate_items(self.unique_market_ids, market_factory, SimulationMarket.solve), self.T, start_time
         )
-        for t, (prices_t, shares_t, errors_t, iterations_t, evaluations_t) in generator:
+        for t, (prices_t, shares_t, errors_t, converged_t, iterations_t, evaluations_t) in generator:
             synthetic_prices[self._product_market_indices[t]] = prices_t
             synthetic_shares[self._product_market_indices[t]] = shares_t
             errors.extend(errors_t)
+            converged_mapping[t] = converged_t
             iteration_mapping[t] = iterations_t
             evaluation_mapping[t] = evaluations_t
 
@@ -585,8 +587,8 @@ class Simulation(Economy):
 
         # structure the results
         results = SimulationResults(
-            self, firms_index, synthetic_prices, synthetic_shares, start_time, time.time(), iteration_mapping,
-            evaluation_mapping
+            self, firms_index, synthetic_prices, synthetic_shares, start_time, time.time(), converged_mapping,
+            iteration_mapping, evaluation_mapping
         )
         output(f"Computed synthetic prices and shares after {format_seconds(results.computation_time)}.")
         output("")

@@ -15,7 +15,7 @@ class ResultsMarket(Market):
 
     def solve_equilibrium(
             self, costs: Array, prices: Optional[Array], iteration: Optional[Iteration]) -> (
-            Tuple[Array, Array, Array, List[Error], int, int]):
+            Tuple[Array, Array, Array, List[Error], bool, int, int]):
         """If not already estimated, compute equilibrium prices along with associated delta and shares."""
         errors: List[Error] = []
 
@@ -24,9 +24,10 @@ class ResultsMarket(Market):
             np.seterrcall(lambda *_: errors.append(exceptions.EquilibriumPricesFloatingPointError()))
 
             # solve the fixed point problem if prices haven't already been estimated
-            iterations = evaluations = 0
             if iteration is None:
                 assert prices is not None
+                converged = True
+                iterations = evaluations = 0
             else:
                 prices, converged, iterations, evaluations = self.compute_equilibrium_prices(costs, iteration)
                 if not converged:
@@ -39,7 +40,7 @@ class ResultsMarket(Market):
             delta = self.update_delta_with_variable('prices', prices)
             mu = self.update_mu_with_variable('prices', prices)
             shares = self.compute_probabilities(delta, mu) @ self.agents.weights
-            return prices, shares, delta, errors, iterations, evaluations
+            return prices, shares, delta, errors, converged, iterations, evaluations
 
     def compute_aggregate_elasticity(self, factor: float, name: str) -> Tuple[Array, List[Error]]:
         """Estimate the aggregate elasticity of demand with respect to a variable."""

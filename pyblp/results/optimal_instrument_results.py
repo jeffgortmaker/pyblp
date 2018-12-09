@@ -55,6 +55,9 @@ class OptimalInstrumentResults(StringRepresentation):
         Number of seconds it took to compute optimal excluded instruments.
     draws : `int`
         Number of draws used to approximate the integral over the error term density.
+    fp_converged : `ndarray`
+        Flags for convergence of the iteration routine used to equilibrium prices in each market. Rows are in the same
+        order as :attr:`Problem.unique_market_ids` and column indices correspond to draws.
     fp_iterations : `ndarray`
         Number of major iterations completed by the iteration routine used to compute equilibrium prices in each market
         for each error term draw. Rows are in the same order as :attr:`Problem.unique_market_ids` and column indices
@@ -81,6 +84,7 @@ class OptimalInstrumentResults(StringRepresentation):
     expected_prices: Array
     computation_time: float
     draws: int
+    fp_converged: Array
     fp_iterations: Array
     contraction_evaluations: Array
 
@@ -88,7 +92,7 @@ class OptimalInstrumentResults(StringRepresentation):
             self, problem_results: ProblemResults, demand_instruments: Array, supply_instruments: Array,
             inverse_covariance_matrix: Array, expected_xi_jacobian: Array, expected_omega_jacobian: Array,
             expected_prices: Array, start_time: float, end_time: float, draws: int,
-            iteration_mappings: Sequence[Mapping[Hashable, int]],
+            converged_mappings: Sequence[Mapping[Hashable, bool]], iteration_mappings: Sequence[Mapping[Hashable, int]],
             evaluation_mappings: Sequence[Mapping[Hashable, int]]) -> None:
         """Structure optimal excluded instrument computation results. Also identify supply and demand shifters that will
         be added to the optimal instruments when converting them into a problem.
@@ -102,11 +106,17 @@ class OptimalInstrumentResults(StringRepresentation):
         self.expected_prices = expected_prices
         self.computation_time = end_time - start_time
         self.draws = draws
-        self.fp_iterations = self.cumulative_fp_iterations = np.array(
-            [[m[t] if m else 0 for m in iteration_mappings] for t in problem_results.problem.unique_market_ids]
+        self.fp_converged = np.array(
+            [[m[t] if m else True for m in converged_mappings] for t in problem_results.problem.unique_market_ids],
+            dtype=np.int
         )
-        self.contraction_evaluations = self.cumulative_contraction_evaluations = np.array(
-            [[m[t] if m else 0 for m in evaluation_mappings] for t in problem_results.problem.unique_market_ids]
+        self.fp_iterations = np.array(
+            [[m[t] if m else 0 for m in iteration_mappings] for t in problem_results.problem.unique_market_ids],
+            dtype=np.int
+        )
+        self.contraction_evaluations = np.array(
+            [[m[t] if m else 0 for m in evaluation_mappings] for t in problem_results.problem.unique_market_ids],
+            dtype=np.int
         )
 
         # construct default supply and demand shifter formulations
