@@ -320,6 +320,8 @@ in which the markup term is
 .. math:: \zeta = \Lambda^{-1}(O \circ \Gamma)'(p - c) - \Lambda^{-1}.
    :label: zeta
 
+
 Alternative Conduct
-------------------------------
-is definited in terms of its corresponding cooperation matrix, :math:`\kappa`, by :math:`O_{jk} = \kappa_{fg}` where :math:`j \in \mathscr{J}_{ft}` and :math:`g \in \mathscr{J}_{gt}`. Usually, :math:`\kappa = I`, the identity matrix,
+-------------------
+
+Alternative firm conduct is defined in terms of its corresponding cooperation matrix, :math:`\kappa`, by :math:`O_{jk} = \kappa_{fg}` where :math:`j \in \mathscr{J}_{ft}` and :math:`g \in \mathscr{J}_{gt}`. Usually, :math:`\kappa = I`, the identity matrix,

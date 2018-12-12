@@ -20,11 +20,11 @@ pyblp
 
 .. description-start
 
-An overview of the model, examples, and other documentation can be found on `Read the Docs <https://pyblp.readthedocs.io/en/stable/>`_.
+An overview of the model, examples, references, and other documentation can be found on `Read the Docs <https://pyblp.readthedocs.io/en/stable/>`_.
 
 .. docs-start
 
-The pyblp package is a Python 3 implementation of the nested fixed point algorithm for BLP demand estimation. The author of this package is `Jeff Gortmaker <http://jeffgortmaker.com/>`_. At the moment, the only other contributer is `Chris Conlon <https://chrisconlon.github.io/>`_. Development of the package has been guided by the BLP code made publicly available by many researchers and practitioners. Views expressed in the documentation of this package are those of the contributers and do not necessarily reflect the views of any institution to which they belong.
+The pyblp package is a Python 3 implementation of routines for estimating demand with BLP-type random coefficients logit models. The author of this package is `Jeff Gortmaker <https://jeffgortmaker.com/>`_. At the moment, the only other contributer is `Chris Conlon <https://chrisconlon.github.io/>`_. Development of the package has been guided by code made publicly available by many researchers and practitioners. Views expressed in the documentation of this package are those of the contributers and do not necessarily reflect the views of any institution at which they are employed.
 
 
 Installation
@@ -50,47 +50,48 @@ Alternatively, you can download a wheel or source archive from `PyPI <https://py
 Features
 --------
 
-- Straightforward interface for configuring and solving BLP problems with R-style formulas.
-- Support for supply-side moments (multiple equation or system GMM).
-- Support for demographic interactions.
-- Performant absorption of arbitrary fixed effects.
-- Support for nonlinear functions and interactions of product characteristics.
-- Customizable parameter matrices.
-- Optional concentrating out of linear parameters.
-- Support for parameter bounds and fixing parameter values during estimation.
-- Support for nesting parameters that can vary between groups in a full random coefficients nested Logit (RCNL) model.
-- Estimation of Logit and nested Logit benchmark models.
-- Support for different methods used to estimate optimal instruments.
-- Post-estimation computation of elasticities, diversion ratios, marginal costs, markups, profits, HHI, and consumer surplus.
-- Post-estimation merger (or any type of firm ID changes) simulation.
-- Parametric bootstrapping of post-estimation outputs.
-- Flexible interface for simulating synthetic data under Bertrand-Nash competition.
-- Optimization with Artleys Knitro, SciPy, or custom routines.
-- Fixed point iteration with SQUAREM acceleration or custom routines.
-- Integration with Monte Carlo, Gauss-Hermite/Kronrod-Patterson product rules, sparse grids, or custom specifications.
-- One-step, two-step, or iterated GMM.
-- Support for robust and clustered standard errors.
-- Control over weighting matrix computation.
-- Linear or log-linear marginal cost specifications.
-- Support for partial ownership matrices.
-- Functions for building custom ownership matrices and BLP instruments.
-- Computation of analytic gradients.
-- Support for market-by-market parallelization.
-- Support for extended floating point precision.
-- Robust handling of computational errors.
-- Informative and configurable progress updates.
+- R-style formula interface
+- Bertrand-Nash supply-side moments
+- Multiple equation GMM
+- Demographic interactions
+- Fixed effect absorption
+- Nonlinear functions of product characteristics
+- Concentrating out of linear parameters
+- Parameter bounds and constraints
+- Random coefficients nested logit (RCNL)
+- Varying nesting parameters across groups
+- Logit and nested logit benchmarks
+- Classic BLP instruments
+- Optimal instruments
+- Elasticities and diversion ratios
+- Marginal costs and markups
+- Profits and consumer surplus
+- Merger simulation
+- Parametric boostrapping of post-estimation outputs
+- Synthetic data construction
+- SciPy or Artleys Knitro optimization
+- Fixed point acceleration
+- Monte Carlo, product rule, or sparse grid integration
+- Custom optimization and iteration routines
+- Robust and clustered errors
+- Linear or log-linear marginal costs
+- Partial ownership matrices
+- Analytic gradients
+- Market-by-market parallelization
+- Extended floating point precision
+- Robust error handling
 
 
 Features Slated for Future Versions
 -----------------------------------
 
-- Hessian computation.
-- Mathematical Program with Equilibrium Constraints (MPEC) formulation of the GMM objective function.
-- Generalized Empirical Likelihood (GEL) formulation of the problem.
-- Support for micro moments.
-- Built-in IPOPT support.
-- Built-in support for more fixed point routines.
-- Nonlinear optimization alternatives to fixed point iteration when computing Bertrand-Nash prices and shares.
+- Hessian computation
+- Mathematical Program with Equilibrium Constraints (MPEC)
+- Generalized Empirical Likelihood (GEL)
+- Micro moments
+- Perfect competition
+- Agent type mixtures
+- More optimization and iteration routines
 
 
 Bugs and Requests
