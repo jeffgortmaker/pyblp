@@ -23,7 +23,7 @@ from ..utilities.basics import Array, Data, Error, Groups, StringRepresentation,
 
 
 class Formulation(StringRepresentation):
-    """Configuration for designing matrices and absorbing fixed effects.
+    r"""Configuration for designing matrices and absorbing fixed effects.
 
     Internally, the `patsy <https://patsy.readthedocs.io/en/stable/>`_ package is used to convert data and R-style
     formulas into matrices. All of the standard
@@ -54,7 +54,7 @@ class Formulation(StringRepresentation):
 
     .. warning::
 
-       There is no explicit checking for collinearity. For example, if two variables in included in the formulation but
+       There is no explicit checking for collinearity. For example, if two variables are included in the formulation but
        are collinear, or if absorbed fixed effects make one or more variables redundant, no errors will be immediately
        raised. However, formulated collinearity often gives rise to matrix inversion errors during estimation if the
        formulated matrix is used in a regression.
@@ -91,9 +91,17 @@ class Formulation(StringRepresentation):
 
     Examples
     --------
+    .. raw:: latex
+
+       \begin{examplenotebook}
+
     .. toctree::
 
        /_notebooks/api/formulation.ipynb
+
+    .. raw:: latex
+
+       \end{examplenotebook}
 
     """
 

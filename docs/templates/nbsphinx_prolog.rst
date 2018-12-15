@@ -6,6 +6,10 @@
 
       Download the `Jupyter Notebook <http://jupyter.org/>`_ for this section: :download:`{{ path.rsplit('/', 1)[1] }} </{{ path.replace('_notebooks', '_downloads') }}>`
 
+.. raw:: latex
+
+   \begin{landscape}
+
 .. only:: latex
 
    .. nbinfo::

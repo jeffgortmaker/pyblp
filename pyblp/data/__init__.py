@@ -1,4 +1,4 @@
-"""Locations of example data that are included in the package for convenience.
+r"""Locations of example data that are included in the package for convenience.
 
 Attributes
 ----------
@@ -69,9 +69,17 @@ BLP_AGENTS_LOCATION : `str`
 
 Examples
 --------
+.. raw:: latex
+
+   \begin{examplenotebook}
+
 .. toctree::
 
    /_notebooks/api/data.ipynb
+
+.. raw:: latex
+
+   \end{examplenotebook}
 
 """
 

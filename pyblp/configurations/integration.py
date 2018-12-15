@@ -12,7 +12,7 @@ from ..utilities.basics import Array, StringRepresentation
 
 
 class Integration(StringRepresentation):
-    """Configuration for building integration nodes and weights.
+    r"""Configuration for building integration nodes and weights.
 
     For more information pertaining to the supported quadrature rules, refer to
     :ref:`references:Heiss and Winschel (2008)` and :ref:`references:Judd and Skrainka (2011)`. Sparse grids are
@@ -46,9 +46,17 @@ class Integration(StringRepresentation):
 
     Examples
     --------
+    .. raw:: latex
+
+       \begin{examplenotebook}
+
     .. toctree::
 
        /_notebooks/api/integration.ipynb
+
+    .. raw:: latex
+
+       \end{examplenotebook}
 
     """
 

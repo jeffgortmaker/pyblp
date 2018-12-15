@@ -11,7 +11,7 @@ from .utilities.basics import Array, Groups, RecArray, extract_matrix, structure
 
 
 def build_id_data(T: int, J: int, F: int, mergers: Sequence[Dict[int, int]] = ()) -> RecArray:
-    """Build a balanced panel of market and firm IDs.
+    r"""Build a balanced panel of market and firm IDs.
 
     This function can be used to build ``id_data`` for :class:`Simulation` initialization.
 
@@ -41,9 +41,17 @@ def build_id_data(T: int, J: int, F: int, mergers: Sequence[Dict[int, int]] = ()
 
     Examples
     --------
+    .. raw:: latex
+
+       \begin{examplenotebook}
+
     .. toctree::
 
        /_notebooks/api/build_id_data.ipynb
+
+    .. raw:: latex
+
+       \end{examplenotebook}
 
     """
 
@@ -124,9 +132,17 @@ def build_ownership(product_data: Mapping, kappa_specification: Optional[Callabl
 
     Examples
     --------
+    .. raw:: latex
+
+       \begin{examplenotebook}
+
     .. toctree::
 
        /_notebooks/api/build_ownership.ipynb
+
+    .. raw:: latex
+
+       \end{examplenotebook}
 
     """
 
@@ -211,9 +227,17 @@ def build_blp_instruments(formulation: Formulation, product_data: Mapping, firms
 
     Examples
     --------
+    .. raw:: latex
+
+       \begin{examplenotebook}
+
     .. toctree::
 
        /_notebooks/api/build_blp_instruments.ipynb
+
+    .. raw:: latex
+
+       \end{examplenotebook}
 
     """
 
@@ -246,7 +270,7 @@ def build_blp_instruments(formulation: Formulation, product_data: Mapping, firms
 
 
 def build_matrix(formulation: Formulation, data: Mapping) -> Array:
-    """Construct a matrix according to a formulation.
+    r"""Construct a matrix according to a formulation.
 
     Parameters
     ----------
@@ -262,9 +286,17 @@ def build_matrix(formulation: Formulation, data: Mapping) -> Array:
 
     Examples
     --------
+    .. raw:: latex
+
+       \begin{examplenotebook}
+
     .. toctree::
 
        /_notebooks/api/build_matrix.ipynb
+
+    .. raw:: latex
+
+       \end{examplenotebook}
 
     """
     if not isinstance(formulation, Formulation):

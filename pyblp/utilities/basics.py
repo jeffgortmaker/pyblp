@@ -28,7 +28,7 @@ pool = None
 
 @contextlib.contextmanager
 def parallel(processes: int) -> Iterator[None]:
-    """Context manager used for parallel processing in a ``with`` statement context.
+    r"""Context manager used for parallel processing in a ``with`` statement context.
 
     This manager creates a a context in which a pool of Python processes will be used by any of the following methods,
     which all support parallel processing:
@@ -53,9 +53,17 @@ def parallel(processes: int) -> Iterator[None]:
 
     Examples
     --------
+    .. raw:: latex
+
+       \begin{examplenotebook}
+
     .. toctree::
 
        /_notebooks/api/parallel.ipynb
+
+    .. raw:: latex
+
+       \end{examplenotebook}
 
     """
 

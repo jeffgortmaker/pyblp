@@ -70,9 +70,17 @@ class Iteration(StringRepresentation):
 
     Examples
     --------
+    .. raw:: latex
+
+       \begin{examplenotebook}
+
     .. toctree::
 
        /_notebooks/api/iteration.ipynb
+
+    .. raw:: latex
+
+       \end{examplenotebook}
 
     """
 

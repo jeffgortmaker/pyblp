@@ -69,6 +69,7 @@ autosummary_generate = True
 numpydoc_show_class_members = False
 autosectionlabel_prefix_document = True
 nbsphinx_prolog = read('templates/nbsphinx_prolog.rst')
+nbsphinx_epilog = read('templates/nbsphinx_epilog.rst')
 
 # configure HTML information
 html_theme = 'sphinx_rtd_theme'

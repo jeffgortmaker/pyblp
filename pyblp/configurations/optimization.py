@@ -16,7 +16,7 @@ from ..utilities.basics import Array, Options, StringRepresentation, format_opti
 
 
 class Optimization(StringRepresentation):
-    """Configuration for solving optimization problems.
+    r"""Configuration for solving optimization problems.
 
     Parameters
     ----------
@@ -112,9 +112,17 @@ class Optimization(StringRepresentation):
 
     Examples
     --------
+    .. raw:: latex
+
+       \begin{examplenotebook}
+
     .. toctree::
 
        /_notebooks/api/optimization.ipynb
+
+    .. raw:: latex
+
+       \end{examplenotebook}
 
     """
 
