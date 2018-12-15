@@ -161,11 +161,11 @@ The demand-side Jacobian can be computed by writing :math:`\delta` as an implici
 
 Derivatives in this expression are derived directly from the definition of :math:`s` in :eq:`shares`.
 
-The supply-side Jacobian can be derived from the BLP-markup equation in :eq:`eta_markup`,
+The supply-side Jacobian can be derived from the BLP-markup equation in :eq:`blp_markup`,
 
 .. math:: \frac{\partial\tilde{c}}{\partial\theta_p} = -\frac{\partial\tilde{c}}{\partial c}\frac{\partial\eta}{\partial\theta}.
 
-The first term in this expression depends on whether marginal costs are defined according either to a linear or a log-linear specification, and the second term is derived from the definition of :math:`\eta` in :eq:`eta`. Specifically, letting :math:`A = O \circ (\Gamma - \Lambda)`,
+The first term in this expression depends on whether marginal costs are defined according either to a linear or a log-linear specification, and the second term is derived from the definition of :math:`\eta` in :eq:`blp_markup`. Specifically, letting :math:`A = O \circ (\Gamma - \Lambda)`,
 
 .. math:: \frac{\partial\eta}{\partial\theta} = -A^{-1}\left(\frac{\partial A}{\partial\theta}\eta + \frac{\partial A}{\partial\xi}\eta\frac{\partial\xi}{\partial\theta}\right),
 
@@ -207,7 +207,7 @@ When :math:`E_D > 1` or :math:`E_S > 1`, the iterative de-meaning algorithm of :
 
 
 Standard Errors and Weighting Matrices
-~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Conventionally, the 2SLS weighting matrix is used in the first stage:
 
@@ -291,7 +291,7 @@ To efficiently compute equilibrium prices, the :math:`\zeta`-markup equation fro
 
 When computing :math:`\zeta(p)`, shares :math:`s(p)` associated with the candidate equilibrium prices are computed according to their definition in :eq:`shares`.
 
-Of course, marginal costs, :math:`c`, are required to iterate over the contraction. When evaluating counterfactuals, costs are usually computed first according to the BLP-markup equation in :eq:`eta_markup`. When simulating synthetic data, marginal costs are simulated according their specification in :eq:`costs`.
+Of course, marginal costs, :math:`c`, are required to iterate over the contraction. When evaluating counterfactuals, costs are usually computed first according to the BLP-markup equation in :eq:`blp_markup`. When simulating synthetic data, marginal costs are simulated according their specification in :eq:`costs`.
 
 
 Called the BLP-markup equation in :ref:`references:Morrow and Skerlos (2011)`, the markup term is
@@ -319,9 +319,3 @@ in which the markup term is
 
 .. math:: \zeta = \Lambda^{-1}(O \circ \Gamma)'(p - c) - \Lambda^{-1}.
    :label: zeta
-
-
-Alternative Conduct
--------------------
-
-Alternative firm conduct is defined in terms of its corresponding cooperation matrix, :math:`\kappa`, by :math:`O_{jk} = \kappa_{fg}` where :math:`j \in \mathscr{J}_{ft}` and :math:`g \in \mathscr{J}_{gt}`. Usually, :math:`\kappa = I`, the identity matrix,
