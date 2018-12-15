@@ -95,8 +95,7 @@ class DeltaFloatingPointError(Error):
 
     This problem is often due to prior problems, overflow, or nonpositive shares, and can sometimes be mitigated by
     choosing smaller initial parameter values, setting more conservative bounds, rescaling data, removing outliers,
-    changing the floating point precision, using different iteration and integration configurations, or using a
-    different fixed point formulation.
+    changing the floating point precision, or using different optimization, iteration, or integration configurations.
 
     """
 
@@ -106,8 +105,8 @@ class XiByThetaJacobianFloatingPointError(Error):
     with respect to :math:`\theta`.
 
     This problem is often due to prior problems, overflow, or nonpositive shares, and can sometimes be mitigated by
-    choosing smaller initial parameter values, setting more conservative bounds, rescaling data, removing outliers, or
-    changing the floating point precision.
+    choosing smaller initial parameter values, setting more conservative bounds, rescaling data, removing outliers,
+    changing the floating point precision, or using different optimization, iteration, or integration configurations.
 
     """
 
@@ -116,8 +115,8 @@ class CostsFloatingPointError(Error):
     """Encountered floating point issues when computing marginal costs.
 
     This problem is often due to prior problems or overflow and can sometimes be mitigated by choosing smaller initial
-    parameter values, setting more conservative bounds, rescaling data, removing outliers, or changing the floating
-    point precision.
+    parameter values, setting more conservative bounds, rescaling data, removing outliers, changing the floating point
+    precision, or using different optimization or cost configurations.
 
     """
 
@@ -126,9 +125,9 @@ class OmegaByThetaJacobianFloatingPointError(Error):
     r"""Encountered floating point issues when computing the Jacobian of :math:`\omega` (equivalently, of transformed
     marginal costs) with respect to :math:`\theta`.
 
-    This problem is often due to prior problems or overflow, and can sometimes be mitigated by  choosing smaller initial
-    parameter values, setting more conservative bounds, rescaling data, removing outliers, or changing the floating
-    point precision.
+    This problem is often due to prior problems or overflow, and can sometimes be mitigated by choosing smaller initial
+    parameter values, setting more conservative bounds, rescaling data, removing outliers, changing the floating point
+    precision, or using different optimization or cost configurations.
 
     """
 
@@ -193,7 +192,8 @@ class DeltaConvergenceError(Error):
     r"""The fixed point computation of :math:`\delta` failed to converge.
 
     This problem can sometimes be mitigated by increasing the maximum number of fixed point iterations, increasing the
-    fixed point tolerance, or configuring other iteration settings.
+    fixed point tolerance, choosing more reasonable initial parameter values, setting more conservative bounds, or using
+    different iteration or optimization configurations.
 
     """
 
@@ -248,8 +248,8 @@ class OmegaByThetaJacobianReversionError(_MultipleReversionError):
 
 
 class AbsorptionInversionError(_InversionError):
-    """Failed to invert the A matrix from :ref:`references:Somaini and Wolak (2016)` when absorbing two-way fixed
-    effects.
+    """Failed to invert the :math:`A` matrix from :ref:`references:Somaini and Wolak (2016)` when absorbing two-way
+    fixed effects.
 
     The formulated fixed effects may be highly collinear.
 
@@ -276,7 +276,7 @@ class IntraFirmJacobianInversionError(_InversionReplacementError):
 
 
 class LinearParameterCovariancesInversionError(_InversionReplacementError):
-    """Failed to invert an estimated covariance matrix of linear IV parameters.
+    """Failed to invert an estimated covariance matrix of linear parameters.
 
     One or more data matrices may be highly collinear.
 
