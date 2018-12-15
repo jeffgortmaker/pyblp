@@ -233,7 +233,6 @@ When errors occur, they will either be displayed as warnings or raised as except
    :template: class_without_signature.rst
 
    MultipleErrors
-   LargeInitialParametersError
    NonpositiveCostsError
    InvalidParameterCovariancesError
    InvalidMomentCovariancesError

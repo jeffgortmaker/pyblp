@@ -14,11 +14,11 @@ from .exceptions import (
     EquilibriumPricesFloatingPointError, EquilibriumSharesFloatingPointError,
     FittedValuesInversionError, GMMMomentCovariancesInversionError, GMMParameterCovariancesInversionError,
     GradientReversionError, IntraFirmJacobianInversionError, InvalidMomentCovariancesError,
-    InvalidParameterCovariancesError, LargeInitialParametersError, LinearParameterCovariancesInversionError,
-    MultipleErrors, NonpositiveCostsError, ObjectiveReversionError,
-    OmegaByThetaJacobianFloatingPointError, OmegaByThetaJacobianReversionError, SharesByXiJacobianInversionError,
-    SyntheticPricesConvergenceError, SyntheticPricesFloatingPointError, SyntheticSharesFloatingPointError,
-    ThetaConvergenceError, XiByThetaJacobianFloatingPointError, XiByThetaJacobianReversionError
+    InvalidParameterCovariancesError, LinearParameterCovariancesInversionError, MultipleErrors, NonpositiveCostsError,
+    ObjectiveReversionError, OmegaByThetaJacobianFloatingPointError, OmegaByThetaJacobianReversionError,
+    SharesByXiJacobianInversionError, SyntheticPricesConvergenceError, SyntheticPricesFloatingPointError,
+    SyntheticSharesFloatingPointError, ThetaConvergenceError, XiByThetaJacobianFloatingPointError,
+    XiByThetaJacobianReversionError
 )
 from .primitives import Agents, Products
 from .results.bootstrapped_results import BootstrappedResults
@@ -42,11 +42,11 @@ __all__ = [
     'EquilibriumPricesFloatingPointError', 'EquilibriumSharesFloatingPointError',
     'FittedValuesInversionError', 'GMMMomentCovariancesInversionError', 'GMMParameterCovariancesInversionError',
     'GradientReversionError', 'IntraFirmJacobianInversionError', 'InvalidMomentCovariancesError',
-    'InvalidParameterCovariancesError', 'LargeInitialParametersError', 'LinearParameterCovariancesInversionError',
-    'MultipleErrors', 'NonpositiveCostsError', 'ObjectiveReversionError',
-    'OmegaByThetaJacobianFloatingPointError', 'OmegaByThetaJacobianReversionError', 'SharesByXiJacobianInversionError',
-    'SyntheticPricesConvergenceError', 'SyntheticPricesFloatingPointError', 'SyntheticSharesFloatingPointError',
-    'ThetaConvergenceError', 'XiByThetaJacobianFloatingPointError', 'XiByThetaJacobianReversionError',
+    'InvalidParameterCovariancesError', 'LinearParameterCovariancesInversionError', 'MultipleErrors',
+    'NonpositiveCostsError', 'ObjectiveReversionError', 'OmegaByThetaJacobianFloatingPointError',
+    'OmegaByThetaJacobianReversionError', 'SharesByXiJacobianInversionError', 'SyntheticPricesConvergenceError',
+    'SyntheticPricesFloatingPointError', 'SyntheticSharesFloatingPointError', 'ThetaConvergenceError',
+    'XiByThetaJacobianFloatingPointError', 'XiByThetaJacobianReversionError',
     'Agents', 'Products',
     'BootstrappedResults',
     'OptimalInstrumentResults',

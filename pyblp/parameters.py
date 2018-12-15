@@ -5,9 +5,9 @@ from typing import Any, Type, Iterable, List, Optional, Sequence, Set, TYPE_CHEC
 
 import numpy as np
 
-from . import exceptions, options
+from . import options
 from .configurations.formulation import ColumnFormulation
-from .utilities.basics import Array, Bounds, Error, Groups, TableFormatter, format_number, format_se
+from .utilities.basics import Array, Bounds, Groups, TableFormatter, format_number, format_se
 
 
 # only import objects that create import cycles when checking types
@@ -152,7 +152,6 @@ class Parameters(object):
     fixed: List[Parameter]
     unfixed: List[Parameter]
     P: int
-    errors: List[Error]
 
     def __init__(
             self, economy: 'Economy', sigma: Optional[Any] = None, pi: Optional[Any] = None, rho: Optional[Any] = None,
@@ -166,7 +165,6 @@ class Parameters(object):
         determine reasonable bounds as well. If allow_linear_nans is True, allow null linear parameters in order to
         denote those parameters that will be concentrated out.
         """
-        self.errors: List[Error] = []
 
         # store labels
         self.sigma_labels = [str(f) for f in economy._X2_formulations]
@@ -231,12 +229,6 @@ class Parameters(object):
         if not bounded:
             return
 
-        # verify that parameters have been chosen such that choice probability computation is unlikely to overflow
-        mu_norm = self.compute_mu_norm(economy)
-        mu_max = np.log(np.finfo(np.float64).max)
-        if mu_norm > mu_max or (economy.H > 0 and mu_norm > mu_max * (1 - self.rho.max())):
-            self.errors.append(exceptions.LargeInitialParametersError())
-
         # identify which parameters need default bounds
         unbounded_parameters = []
         bounds_mapping = {
@@ -252,7 +244,9 @@ class Parameters(object):
                     break
 
         # compute default bounds for unbounded parameters such that conditional on reasonable values for all other
-        #   parameters, choice probability computation is unlikely to overflow
+        #   parameters, choice probability computation is unlikely to require overflow safety precautions
+        mu_norm = self.compute_mu_norm(economy)
+        mu_max = np.log(np.finfo(np.float64).max)
         for parameter in unbounded_parameters:
             location = parameter.location
             if isinstance(parameter, NonlinearCoefficient):
@@ -365,10 +359,10 @@ class Parameters(object):
 
     @staticmethod
     def normalize_default_bound(bound: float) -> float:
-        """Reduce an initial parameter bound by 5% and round it to two significant figures."""
+        """Reduce an initial parameter bound by 1% and round it to two significant figures."""
         if not np.isfinite(bound) or bound == 0:
             return bound
-        reduced = 0.95 * bound
+        reduced = 0.99 * bound
         return np.round(reduced, 1 + int(reduced < 1) - int(np.log10(reduced)))
 
     def format(self, title: str) -> str:

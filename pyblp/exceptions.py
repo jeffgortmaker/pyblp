@@ -73,15 +73,6 @@ class MultipleErrors(Error):
         return "\n".join(str(e) for e in self._errors)
 
 
-class LargeInitialParametersError(Error):
-    """Specified initial nonlinear parameters are likely to give rise to overflow during choice probability computation.
-
-    Consider choosing smaller initial values, rescaling data, removing outliers, or changing the floating point
-    precision.
-
-    """
-
-
 class NonpositiveCostsError(Error):
     """Encountered nonpositive marginal costs in a log-linear specification.
 

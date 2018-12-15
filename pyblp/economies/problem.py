@@ -141,7 +141,7 @@ class ProblemEconomy(Economy):
 
             By default, if bounds are supported, the diagonal of ``sigma`` is bounded from below by zero. Conditional on
             :math:`X_2`, :math:`\mu`, and an initial estimate of :math:`\mu`, default bounds for off-diagonal parameters
-            are chosen to reduce the chance of overflow.
+            are chosen to reduce the need for overflow safety precautions.
 
             Values below the diagonal are ignored. Lower and upper bounds corresponding to zeros in ``sigma`` are set to
             zero. Setting a lower bound equal to an upper bound fixes the corresponding element, removing it from
@@ -154,7 +154,7 @@ class ProblemEconomy(Economy):
             counterpart in ``pi``. If ``optimization`` does not support bounds, these will be ignored.
 
             By default, if bounds are supported, conditional on :math:`X_2`, :math:`d`, and an initial estimate of
-            :math:`\mu`, default bounds are chosen to reduce the chance of overflow.
+            :math:`\mu`, default bounds are chosen to reduce the need for overflow safety precautions.
 
             Lower and upper bounds corresponding to zeros in ``pi`` are set to zero. Setting a lower bound equal to an
             upper bound fixes the corresponding element, removing it from :math:`\theta`. Both ``None`` and
@@ -167,7 +167,8 @@ class ProblemEconomy(Economy):
 
             By default, if bounds are supported, all elements are bounded from below by ``0``, which corresponds to the
             simple Logit model. Conditional on an initial estimate of :math:`\mu`, upper bounds are chosen to reduce the
-            chance of overflow and are less than ``1`` because larger values are inconsistent with utility maximization.
+            need for overflow safety precautions, and are less than ``1`` because larger values are inconsistent with
+            utility maximization.
 
             Lower and upper bounds corresponding to zeros in ``rho`` are set to zero. Setting a lower bound equal to an
             upper bound fixes the corresponding element, removing it from :math:`\theta`. Both ``None`` and
@@ -423,7 +424,6 @@ class ProblemEconomy(Economy):
             self, sigma, pi, rho, beta, gamma, sigma_bounds, pi_bounds, rho_bounds, beta_bounds, gamma_bounds,
             bounded=optimization._supports_bounds, allow_linear_nans=True
         )
-        self._handle_errors(error_behavior, parameters.errors)
         theta = parameters.compress()
         theta_bounds = parameters.compress_bounds()
 
