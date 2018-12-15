@@ -258,24 +258,27 @@ def medium_blp_simulation() -> SimulationFixture:
 
 @pytest.fixture(scope='session')
 def large_blp_simulation() -> SimulationFixture:
-    """Solve a simulation with ten markets, a linear constant, linear/nonlinear prices, a linear/nonlinear/cost
-    characteristic, another two linear characteristics, another three cost characteristics, demographics interacted with
-    prices and the linear/nonlinear/cost characteristic, dense parameter matrices, an acquisition, a triple acquisition,
-    and a log-linear cost specification.
+    """Solve a simulation with 20 markets, varying numbers of products per market, a linear constant, linear/nonlinear
+    prices, a linear/nonlinear/cost characteristic, another two linear characteristics, another three cost
+    characteristics, demographics interacted with prices and the linear/nonlinear/cost characteristic, dense parameter
+    matrices, an acquisition, a triple acquisition, and a log-linear cost specification.
     """
-    id_data = build_id_data(T=10, J=20, F=9, mergers=[{f: 4 + int(f > 0) for f in range(4)}])
+    id_data = build_id_data(T=20, J=20, F=9, mergers=[{f: 4 + int(f > 0) for f in range(4)}])
+    keep = np.arange(id_data.size)
+    np.random.RandomState(0).shuffle(keep)
+    id_data = id_data[keep[:int(0.5 * id_data.size)]]
     simulation = Simulation(
         product_formulations=(
             Formulation('1 + prices + x + y + z + q'),
             Formulation('0 + prices + x'),
-            Formulation('0 + log(x) + a + b + c')
+            Formulation('0 + log(x) + log(a) + log(b)')
         ),
         beta=[1, -10, 1, 2, 3, 1],
         sigma=[
             [1, -0.1],
             [0, +2.0]
         ],
-        gamma=[0.1, 0.2, 0.3, 0.5],
+        gamma=[0.1, 0.2, 0.3],
         product_data={
             'market_ids': id_data.market_ids,
             'firm_ids': id_data.firm_ids,
@@ -330,24 +333,27 @@ def small_nested_blp_simulation() -> SimulationFixture:
 
 @pytest.fixture(scope='session')
 def large_nested_blp_simulation() -> SimulationFixture:
-    """Solve a simulation with ten markets, a linear constant, linear/nonlinear prices, a linear/nonlinear/cost
-    characteristic, another three linear characteristics, another four cost characteristics, demographics interacted
-    with prices and the linear/nonlinear/cost characteristic, three nesting groups with the same nesting parameter, an
-    acquisition, a triple acquisition, and a log-linear cost specification.
+    """Solve a simulation with 20 markets, varying numbers of products per market, a linear constant, linear/nonlinear
+    prices, a linear/nonlinear/cost characteristic, another three linear characteristics, another four cost
+    characteristics, demographics interacted with prices and the linear/nonlinear/cost characteristic, three nesting
+    groups with the same nesting parameter, an acquisition, a triple acquisition, and a log-linear cost specification.
     """
-    id_data = build_id_data(T=10, J=20, F=9, mergers=[{f: 4 + int(f > 0) for f in range(4)}])
+    id_data = build_id_data(T=20, J=20, F=9, mergers=[{f: 4 + int(f > 0) for f in range(4)}])
+    keep = np.arange(id_data.size)
+    np.random.RandomState(0).shuffle(keep)
+    id_data = id_data[keep[:int(0.5 * id_data.size)]]
     simulation = Simulation(
         product_formulations=(
             Formulation('1 + prices + x + y + z + q'),
             Formulation('0 + prices + x'),
-            Formulation('0 + log(x) + a + b + c + d')
+            Formulation('0 + log(x) + log(a) + log(b)')
         ),
         beta=[1, -10, 1, 2, 3, 1],
         sigma=[
             [1, 0],
             [0, 2]
         ],
-        gamma=[0.1, 0.2, 0.3, 0.1, 0.3],
+        gamma=[0.1, 0.2, 0.3],
         product_data={
             'market_ids': id_data.market_ids,
             'firm_ids': id_data.firm_ids,

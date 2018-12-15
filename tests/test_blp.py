@@ -18,7 +18,6 @@ from .conftest import SimulatedProblemFixture
     pytest.param({'fp_type': 'linear'}, id="non-safe linear fixed point"),
     pytest.param({'fp_type': 'nonlinear'}, id="nonlinear fixed point"),
     pytest.param({'delta_behavior': 'last'}, id="faster starting delta values"),
-    pytest.param({'error_behavior': 'punish', 'error_punishment': 1e5}, id="error punishment"),
     pytest.param({'center_moments': False, 'W_type': 'unadjusted', 'se_type': 'clustered'}, id="complex covariances")
 ])
 def test_accuracy(simulated_problem: SimulatedProblemFixture, solve_options_update: Options) -> None:
@@ -376,7 +375,7 @@ def test_shares_by_prices_jacobian(simulated_problem: SimulatedProblemFixture) -
     for t in simulation.unique_market_ids:
         prices_t = product_data.prices[product_data.market_ids.flat == t]
         shares_t = product_data.shares[product_data.market_ids.flat == t]
-        exact[product_data.market_ids.flat == t] /= prices_t.T / shares_t
+        exact[product_data.market_ids.flat == t, :prices_t.size] /= prices_t.T / shares_t
 
     # estimate the Jacobian with central finite differences
     estimated = np.zeros_like(exact)
@@ -395,7 +394,7 @@ def test_shares_by_prices_jacobian(simulated_problem: SimulatedProblemFixture) -
         estimated[:, [index]] = (results.compute_shares(prices1) - results.compute_shares(prices2)) / change
 
     # compare the two sets of elasticity matrices
-    np.testing.assert_allclose(exact, estimated, atol=1e-8, rtol=0)
+    np.testing.assert_allclose(exact, estimated, atol=1e-7, rtol=0)
 
 
 @pytest.mark.usefixtures('simulated_problem')
@@ -429,14 +428,14 @@ def test_diversion_ratios(simulated_problem: SimulatedProblemFixture) -> None:
     simulation, _, _, _, results = simulated_problem
 
     # test price-based ratios
-    ratios = results.compute_diversion_ratios()
-    long_run_ratios = results.compute_long_run_diversion_ratios()
+    ratios = np.nan_to_num(results.compute_diversion_ratios())
+    long_run_ratios = np.nan_to_num(results.compute_long_run_diversion_ratios())
     np.testing.assert_allclose(ratios.sum(axis=1), 1, atol=1e-14, rtol=0)
     np.testing.assert_allclose(long_run_ratios.sum(axis=1), 1, atol=1e-14, rtol=0)
 
     # test ratios based on other variables
     for name in {n for f in simulation._X1_formulations + simulation._X2_formulations for n in f.names} - {'prices'}:
-        ratios = results.compute_diversion_ratios(name)
+        ratios = np.nan_to_num(results.compute_diversion_ratios(name))
         np.testing.assert_allclose(ratios.sum(axis=1), 1, atol=1e-14, rtol=0, err_msg=name)
 
 
@@ -450,12 +449,13 @@ def test_result_positivity(simulated_problem: SimulatedProblemFixture) -> None:
     changed_shares = results.compute_shares(changed_prices)
 
     # compute surpluses and test positivity
-    np.testing.assert_array_less(0, results.compute_markups(), verbose=True)
-    np.testing.assert_array_less(0, results.compute_profits(), verbose=True)
-    np.testing.assert_array_less(0, results.compute_consumer_surpluses(), verbose=True)
-    np.testing.assert_array_less(0, results.compute_markups(changed_prices), verbose=True)
-    np.testing.assert_array_less(0, results.compute_profits(changed_prices, changed_shares), verbose=True)
-    np.testing.assert_array_less(0, results.compute_consumer_surpluses(changed_prices), verbose=True)
+    test_positive = lambda x: np.testing.assert_array_less(-1e-14, x, verbose=True)
+    test_positive(results.compute_markups())
+    test_positive(results.compute_profits())
+    test_positive(results.compute_consumer_surpluses())
+    test_positive(results.compute_markups(changed_prices))
+    test_positive(results.compute_profits(changed_prices, changed_shares))
+    test_positive(results.compute_consumer_surpluses(changed_prices))
 
 
 @pytest.mark.usefixtures('simulated_problem')
