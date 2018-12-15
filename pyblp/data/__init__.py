@@ -69,17 +69,9 @@ BLP_AGENTS_LOCATION : `str`
 
 Examples
 --------
-.. raw:: latex
-
-   \begin{examplenotebook}
-
 .. toctree::
 
    /_notebooks/api/data.ipynb
-
-.. raw:: latex
-
-   \end{examplenotebook}
 
 """
 

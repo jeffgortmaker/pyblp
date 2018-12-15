@@ -374,31 +374,36 @@ class ProblemResults(Results):
         """Format problem results as a string."""
 
         # construct a section containing summary information
+        floats_index = 4
         header = [
-            ("Cumulative", "Total Time"), ("GMM", "Step"), ("Optimization", "Iterations"),
-            ("Objective", "Evaluations"), ("Total Fixed Point", "Iterations"), ("Total Contraction", "Evaluations"),
-            ("Objective", "Value"), ("Gradient", "Infinity Norm"),
+            ("", "Cumulative", "Time"), ("", "GMM", "Step"), ("Cumulative", "Optimization", "Iterations"),
+            ("Cumulative", "Optimization", "Evaluations"), ("Final", "Objective", "Value")
         ]
         values = [
             format_seconds(self.cumulative_total_time),
             self.step,
-            self.optimization_iterations,
-            self.objective_evaluations,
-            self.fp_iterations.sum(),
-            self.contraction_evaluations.sum(),
-            format_number(float(self.objective)),
-            format_number(float(self.gradient_norm))
+            self.cumulative_optimization_iterations,
+            self.cumulative_objective_evaluations,
+            format_number(float(self.objective))
         ]
+        if np.any(self.cumulative_contraction_evaluations > 0):
+            floats_index += 2
+            header.extend([("Cumulative", "Fixed Point", "Iterations"), ("Cumulative", "Contraction", "Evaluations")])
+            values.extend([self.cumulative_fp_iterations.sum(), self.cumulative_contraction_evaluations.sum()])
+        if np.isfinite(self.gradient_norm):
+            header.append(("Gradient", "Infinity", "Norm"))
+            values.append(format_number(float(self.gradient_norm)))
         if np.isfinite(self._costs_bounds).any():
-            header.append(("Clipped", "Marginal Costs"))
+            header.append(("Clipped", "Marginal", "Costs"))
             values.append(self.clipped_costs.sum())
-        widths = [max(len(k1), len(k2), options.digits + 6 if i > 5 else 0) for i, (k1, k2) in enumerate(header)]
+        widths = [max(options.digits + 6 if i >= floats_index else 0, *map(len, k)) for i, k in enumerate(header)]
         formatter = TableFormatter(widths)
         sections = [[
             "Problem Results Summary:",
             formatter.line(),
             formatter([k[0] for k in header]),
-            formatter([k[1] for k in header], underline=True),
+            formatter([k[1] for k in header]),
+            formatter([k[2] for k in header], underline=True),
             formatter(values),
             formatter.line()
         ]]
