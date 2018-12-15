@@ -13,6 +13,12 @@ Armstrong (2016)
 Armstrong, Timothy B. (2016). `Large market asymptotics for differentiated product demand estimators with economic models of supply <https://ideas.repec.org/a/wly/emetrp/v84y2016ip1961-1980.html>`_. *Econometrica, 84* (5), 1961-1980.
 
 
+Berry (1994)
+------------
+
+Berry, Steven (1994). `Estimating discrete-choice models of product  differentiation <https://ideas.repec.org/a/rje/randje/v25y1994isummerp242-262.html>`_. *RAND Journal of Economics, 25* (2), 242-262.
+
+
 Berry, Levinsohn, and Pakes (1995)
 ----------------------------------
 
@@ -31,10 +37,22 @@ Brunner, Heiss, Romahn, and Weiser (2017)
 Brunner, Daniel, Florian Heiss, André Romahn, and Constantin Weiser (2017) `Reliable estimation of random coefficient logit demand models <https://ideas.repec.org/p/zbw/dicedp/267.html>`_. DICE Discussion Paper 267.
 
 
+Cardell (1997)
+--------------
+
+Cardell, N. Scott (1997). `Variance components structures for the extreme-value and logistic distributions with application to models of heterogeneity <https://ideas.repec.org/a/cup/etheor/v13y1997i02p185-213_00.html>`_. *Econometric Theory, 13* (2), 185-213.
+
+
 Chamberlain (1987)
 ------------------
 
 Chamberlain, Gary (1987) `Asymptotic efficiency in estimation with conditional moment restrictions <https://ideas.repec.org/a/eee/econom/v34y1987i3p305-334.html>`_. *Journal of Econometrics, 34* (3), 305-334.
+
+
+Conlon and Mortimer (2018)
+--------------------------
+
+Conlon, Christopher T., and Julie H. Mortimer (2018). `Empirical properties of diversion ratios <https://ideas.repec.org/p/nbr/nberwo/24816.html>`_. NBER working paper 24816.
 
 
 Frisch and Waugh (1933)
