@@ -429,7 +429,7 @@ class ProblemResults(Results):
     def bootstrap(
             self, draws: int = 1000, seed: Optional[int] = None, iteration: Optional[Iteration] = None) -> (
             'BootstrappedResults'):
-        """Use a parametric bootstrap to create an empirical distribution of results.
+        r"""Use a parametric bootstrap to create an empirical distribution of results.
 
         The constructed :class:`BootstrappedResults` can be used just like :class:`ProblemResults` to compute various
         post-estimation outputs. The only difference is that :class:`BootstrappedResults` methods return arrays with an
