@@ -91,7 +91,7 @@ class InvalidMomentCovariancesError(Error):
 
 
 class DeltaFloatingPointError(Error):
-    r"""Encountered floating point issues when computing :math:`\delta` or its Jacobian with respect to :math:`\theta`.
+    r"""Encountered floating point issues when computing :math:`\delta`.
 
     This problem is often due to prior problems, overflow, or nonpositive shares, and can sometimes be mitigated by
     choosing smaller initial parameter values, setting more conservative bounds, rescaling data, removing outliers,
