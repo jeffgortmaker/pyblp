@@ -7,6 +7,7 @@ from typing import Dict, Hashable, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
+from .. import options
 from ..configurations.formulation import ColumnFormulation, Formulation
 from ..utilities.basics import Array, RecArray, StringRepresentation, TableFormatter
 
@@ -175,7 +176,8 @@ class Economy(abc.ABC, StringRepresentation):
         columns = []
         for include, formulation in zip(index, self._X1_formulations):
             if include:
-                columns.append(np.broadcast_to(formulation.evaluate(self.products, data_override), (self.N, 1)))
+                column = formulation.evaluate(self.products, data_override)
+                columns.append(np.broadcast_to(column, (self.N, 1)).astype(options.dtype))
         return np.column_stack(columns)
 
     def _compute_true_X3(

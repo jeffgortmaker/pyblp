@@ -104,7 +104,7 @@ class LinearCoefficient(Coefficient):
     def get_product_characteristic(self, economy_or_market: Union['Economy', 'Market']) -> Array:
         """Get the product characteristic associated with the parameter."""
         x = self.get_product_formulation(economy_or_market).evaluate(economy_or_market.products)
-        return np.broadcast_to(x, (economy_or_market.products.shape[0], 1))
+        return np.broadcast_to(x, (economy_or_market.products.shape[0], 1)).astype(options.dtype)
 
 
 class BetaParameter(LinearCoefficient):
