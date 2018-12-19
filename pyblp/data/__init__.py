@@ -24,13 +24,13 @@ BLP_PRODUCTS_LOCATION : `str`
         1. Traditional excluded BLP instruments from the original paper were computed with
            :func:`~pyblp.build_blp_instruments`. As in the original paper, the ``mpd`` variable was added to the set of
            excluded supply-side instruments.
-        2. Each set of excluded instruments was interacted up to the second degree, standardized, and replaced with the
-           minimum set of principal components that explained at least 99% of the variance.
+        2. Each set of excluded instruments was interacted up to the third degree, standardized, replaced with the
+           minimum set of principal components that explained at least 99% of the variance, and standardized again.
         3. These two sets of principal components were used as excluded demand- and supply-side instruments when solving
            the first GMM stage of a :class:`~pyblp.Problem` configured as in the
-           `tutorial </notebooks/tutorial/blp.ipynb>`_. (but with non-optimal instruments).
+           `tutorial </notebooks/tutorial/blp.ipynb>`_, but with non-optimal instruments.
         4. The :meth:`~pyblp.ProblemResults.compute_optimal_instruments` method was used to estimate the optimal
-           excluded instruments for the problem.
+           excluded instruments for the problem, which were standardized.
 
 BLP_AGENTS_LOCATION : `str`
     Location of a CSV file containing automobile agent data. Included in the file are 200 Monte Carlo weights and draws
