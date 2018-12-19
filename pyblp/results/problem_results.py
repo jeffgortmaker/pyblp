@@ -377,19 +377,20 @@ class ProblemResults(Results):
         floats_index = 4
         header = [
             ("", "Cumulative", "Time"), ("", "GMM", "Step"), ("Cumulative", "Optimization", "Iterations"),
-            ("Cumulative", "Optimization", "Evaluations"), ("Final", "Objective", "Value")
+            ("Cumulative", "Optimization", "Evaluations")
         ]
         values = [
             format_seconds(self.cumulative_total_time),
             self.step,
             self.cumulative_optimization_iterations,
-            self.cumulative_objective_evaluations,
-            format_number(float(self.objective))
+            self.cumulative_objective_evaluations
         ]
         if np.any(self.cumulative_contraction_evaluations > 0):
             floats_index += 2
             header.extend([("Cumulative", "Fixed Point", "Iterations"), ("Cumulative", "Contraction", "Evaluations")])
             values.extend([self.cumulative_fp_iterations.sum(), self.cumulative_contraction_evaluations.sum()])
+        header.append(("Final", "Objective", "Value"))
+        values.append(format_number(float(self.objective)))
         if np.isfinite(self.gradient_norm):
             header.append(("Gradient", "Infinity", "Norm"))
             values.append(format_number(float(self.gradient_norm)))
