@@ -191,9 +191,10 @@ def large_nested_logit_simulation() -> SimulationFixture:
 @pytest.fixture(scope='session')
 def small_blp_simulation() -> SimulationFixture:
     """Solve a simulation with three markets, linear prices, a linear/nonlinear characteristic, two cost
-    characteristics, and an acquisition.
+    characteristics, uniform unobserved product characteristics, and an acquisition.
     """
     id_data = build_id_data(T=3, J=18, F=3, mergers=[{1: 0}])
+    uniform = 0.001 * np.random.RandomState(0).uniform(size=(id_data.size, 3))
     simulation = Simulation(
         product_formulations=(
             Formulation('0 + prices + x'),
@@ -209,9 +210,8 @@ def small_blp_simulation() -> SimulationFixture:
             'clustering_ids': np.random.RandomState(0).choice(range(10), id_data.size)
         },
         integration=Integration('product', 3),
-        xi_variance=0.001,
-        omega_variance=0.001,
-        correlation=0.7,
+        xi=uniform[:, 0] + uniform[:, 1],
+        omega=uniform[:, 0] + uniform[:, 2],
         seed=0
     )
     return simulation, simulation.solve()

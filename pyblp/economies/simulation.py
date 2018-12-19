@@ -158,12 +158,21 @@ class Simulation(Economy):
         corresponds to all groups defined by the ``nesting_ids`` field of ``product_data``. If there is more than one
         element, there must be as many elements as :math:`H`, the number of distinct nesting groups, and elements
         correspond to group IDs in the sorted order given by :attr:`Simulation.unique_nesting_ids`.
+    xi : `array-like, optional`
+        Unobserved demand-side product characteristics, :math:`\xi`. By default, :math:`\xi` and :math:`\omega`, are
+        drawn from a mean-zero bivariate normal distribution. This must be specified if `omega` is specified.
+    omega : `array-like, optional`
+        Unobserved supply-side product characteristics, :math:`\omega`. By default, :math:`\xi` and :math:`\omega`, are
+        drawn from a mean-zero bivariate normal distribution. This must be specified if `xi` is specified.
     xi_variance : `float, optional`
-        Variance of the unobserved demand-side product characteristics, :math:`\xi`. The default value is ``1.0``.
+        Variance of the unobserved demand-side product characteristics, :math:`\xi`. The default value is ``1.0``. This
+        is ignored if `xi` and `omega` are specified.
     omega_variance : `float, optional`
         Variance of the unobserved supply-side product characteristics, :math:`\omega`. The default value is ``1.0``.
+        This is ignored if `xi` and `omega` are specified.
     correlation : `float, optional`
-        Correlation between :math:`\xi` and :math:`\omega`. The default value is ``0.9``.
+        Correlation between :math:`\xi` and :math:`\omega`. The default value is ``0.9``. This is ignored if `xi` and
+        `omega` are specified.
     costs_type : `str, optional`
         Marginal cost specification. The following specifications are supported:
 
@@ -268,8 +277,8 @@ class Simulation(Economy):
             self, product_formulations: Sequence[Optional[Formulation]], beta: Any, sigma: Any, gamma: Any,
             product_data: Mapping, agent_formulation: Optional[Formulation] = None, pi: Optional[Any] = None,
             agent_data: Optional[Mapping] = None, integration: Optional[Integration] = None, rho: Optional[Any] = None,
-            xi_variance: float = 1, omega_variance: float = 1, correlation: float = 0.9, costs_type: str = 'linear',
-            seed: Optional[int] = None) -> None:
+            xi: Optional[Any] = None, omega: Optional[Any] = None, xi_variance: float = 1, omega_variance: float = 1,
+            correlation: float = 0.9, costs_type: str = 'linear', seed: Optional[int] = None) -> None:
         """Load or simulate all data except for synthetic prices and shares."""
 
         # keep track of long it takes to initialize the simulation
@@ -463,15 +472,29 @@ class Simulation(Economy):
         self.beta = self._parameters.beta
         self.gamma = self._parameters.gamma
 
-        # simulate xi and omega
-        covariance = correlation * np.sqrt(xi_variance * omega_variance)
-        covariances = [[xi_variance, covariance], [covariance, omega_variance]]
-        try:
-            errors = state.multivariate_normal([0, 0], covariances, self.N, check_valid='raise').astype(options.dtype)
-        except ValueError:
-            raise ValueError("xi_variance, omega_variance, and correlation must give a positive-semidefinite matrix.")
-        self.xi = errors[:, [0]]
-        self.omega = errors[:, [1]]
+        # simulate or load xi and omega
+        if xi is None and omega is None:
+            covariance = correlation * np.sqrt(xi_variance * omega_variance)
+            covariances = [[xi_variance, covariance], [covariance, omega_variance]]
+            try:
+                errors = state.multivariate_normal([0, 0], covariances, self.N, check_valid='raise')
+            except ValueError:
+                raise ValueError(
+                    "xi_variance, omega_variance, and correlation must give a positive-semidefinite matrix."
+                )
+            self.xi = errors[:, [0]].astype(options.dtype)
+            self.omega = errors[:, [1]].astype(options.dtype)
+        elif xi is None:
+            raise ValueError("omega is specified so xi must be specified as well.")
+        elif omega is None:
+            raise ValueError("xi is specified so omega must be specified as well.")
+        else:
+            self.xi = np.c_[np.asarray(xi, options.dtype)]
+            self.omega = np.c_[np.asarray(omega, options.dtype)]
+            if self.xi.shape != (self.N, 1):
+                raise ValueError(f"xi must be a vector with {self.N} elements.")
+            if self.omega.shape != (self.N, 1):
+                raise ValueError(f"omega must be a vector with {self.N} elements.")
 
         # compute marginal costs
         if costs_type not in {'linear', 'log'}:
