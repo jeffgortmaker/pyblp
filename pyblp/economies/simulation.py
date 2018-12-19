@@ -1,6 +1,7 @@
 """Economy-level simulation of synthetic BLP data."""
 
 import collections
+import patsy.desc
 import time
 from typing import Any, Dict, Hashable, List, Mapping, Optional, Sequence, Tuple
 
@@ -53,6 +54,11 @@ class Simulation(Economy):
     in which :math:`\mathrm{BLP}(X_3)` are traditional excluded supply-side BLP instruments (defined as in
     :func:`build_blp_instruments`) and :math:`X_{1 \setminus 3}` is all variables used formulate :math:`X_1` that were
     not used to formulate :math:`X_3`.
+
+    .. note::
+
+       Traditional excluded BLP instruments for constant characteristics are constructed only if there is variation in
+       the number of products and firms per market.
 
     .. note::
 
@@ -326,6 +332,10 @@ class Simulation(Economy):
                     else:
                         categorical_mapping[name] = variable
 
+        # identify intercepts
+        demand_intercept = any(t == patsy.desc.INTERCEPT for t in product_formulations[0]._terms)
+        supply_intercept = any(t == patsy.desc.INTERCEPT for t in product_formulations[2]._terms)
+
         # identify numerical variables
         demand_names = set(numerical_mapping) & product_formulations[0]._names
         supply_names = set(numerical_mapping) & product_formulations[2]._names
@@ -338,14 +348,22 @@ class Simulation(Economy):
         only_demand_names = demand_names - supply_names
         only_supply_names = supply_names - demand_names
 
+        # determine whether there is variation in the number of products and firms per market
+        J_set = set()
+        F_set = set()
+        for t in np.unique(market_ids):
+            J_set.add((market_ids == t).sum())
+            F_set.add(np.unique(firm_ids[market_ids.flat == t]).size)
+
         # construct excluded instruments
         instrument_data = {
             'market_ids': market_ids,
             'firm_ids': firm_ids,
             **numerical_mapping
         }
-        demand_blp_formula = ' + '.join(['0'] + sorted(demand_names))
-        supply_blp_formula = ' + '.join(['0'] + sorted(supply_names))
+        id_variation = len(J_set) > 1 and len(F_set) > 1
+        demand_blp_formula = ' + '.join(['1' if id_variation and demand_intercept else '0'] + sorted(demand_names))
+        supply_blp_formula = ' + '.join(['1' if id_variation and supply_intercept else '0'] + sorted(supply_names))
         demand_instruments = build_blp_instruments(Formulation(demand_blp_formula), instrument_data)
         supply_instruments = build_blp_instruments(Formulation(supply_blp_formula), instrument_data)
         if only_supply_names:
