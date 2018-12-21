@@ -52,20 +52,20 @@ Observed supply-side product characteristics are the :math:`N \times K_3` matrix
 
 Firms play a differentiated Bertrand-Nash pricing game. Firm :math:`f` produces a subset :math:`\mathscr{J}_{ft} \subset \{1, 2, \ldots, J_t\}` of the products in market :math:`t` and chooses prices to maximize the sum of population-normalized gross expected profits:
 
-.. math:: \sum_{j \in \mathscr{J}_{ft}} \pi_{jt}
+.. math:: \sum_{j \in \mathscr{J}_{ft}} \pi_{jt},
 
-, which for product :math:`j` in market :math:`t` are
+which for product :math:`j` in market :math:`t` are
 
 .. math:: \pi_{jt} = (p_{jt} - c_{jt})s_{jt},
 
-and yields a solution of :math:`\mathscr{J}_t \times \mathscr{J}_t` system of first order conditions (in vector-matrix form):
+and yields a solution of a :math:`J_t \times J_t` system of first order conditions (in vector-matrix form):
 
-.. math:: p = c -\underbrace{(O \circ \frac{\partial s}{\partial p})^{-1}s}_{\eta},.
+.. math:: p = c -\underbrace{(O \circ \frac{\partial s}{\partial p})^{-1}s}_{\eta}.
    :label: blp_markup
 
-Here :math:`O` denote's the market level ownership matrix, where :math:`O_{jk}` is simply :math:`1` if the same firm produces products :math:`j` and :math:`k`, and is :math:`0` otherwise.
+Here :math:`O` denotes the market-level ownership matrix, where :math:`O_{jk}` is simply :math:`1` if the same firm produces products :math:`j` and :math:`k`, and is :math:`0` otherwise.
 
-In order to include a supply side, we must specifcy a functional form for marginal costs which can be either linear or log-linear:
+In order to include a supply side, we must specify a functional form for marginal costs which can be either linear or log-linear:
 
 .. math:: \tilde{c} = X_3\gamma + \omega \quad\text{where}\quad \tilde{c} = c \quad\text{or}\quad \tilde{c} = \log c.
    :label: costs
