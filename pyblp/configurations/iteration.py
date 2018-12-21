@@ -4,6 +4,7 @@ import functools
 from typing import Any, Callable, Optional, Tuple, Union
 
 import numpy as np
+import scipy.optimize
 
 from ..utilities.basics import Array, Options, StringRepresentation, format_options
 
@@ -17,6 +18,8 @@ class Iteration(StringRepresentation):
         The fixed point iteration routine that will be used. One of the following:
 
             - ``'simple'`` - Non-accelerated iteration.
+
+            - ``'anderson'`` - Uses the :func:`scipy.optimize.root` Anderson method.
 
             - ``'squarem'`` - SQUAREM acceleration method of :ref:`references:Varadhan and Roland (2008)` and considered
               in the context of the BLP problem in :ref:`references:Reynaerts, Varadhan, and Nash (2012)`. This
@@ -40,8 +43,12 @@ class Iteration(StringRepresentation):
         ``final`` will be the second to last iteration's values.
 
     method_options : `dict, optional`
-        Options for the fixed point iteration routine. Non-custom routines other than ``'return'`` support the following
-        options:
+        Options for the fixed point iteration routine.
+
+        For the ``'anderson'`` method`, these options will be passed to ``options`` in :func:`scipy.optimize.root`.
+        Refer to the SciPy documentation for information about which options are available.
+
+        The ``'simple'`` and ``'anderson'`` methods support the following options:
 
             - **max_evaluations** : (`int`) - Maximum number of contraction mapping evaluations. The default value is
               ``5000``.
@@ -91,8 +98,9 @@ class Iteration(StringRepresentation):
     def __init__(self, method: Union[str, Callable], method_options: Optional[Options] = None) -> None:
         """Validate the method and configure default options."""
         methods = {
-            'squarem': (functools.partial(squarem_iterator), "the SQUAREM acceleration method"),
             'simple': (functools.partial(simple_iterator), "no acceleration"),
+            'anderson': (functools.partial(scipy_iterator), "the Anderson method implemented in SciPy"),
+            'squarem': (functools.partial(squarem_iterator), "the SQUAREM acceleration method"),
             'return': (functools.partial(return_iterator), "a trivial routine that returns the initial values")
         }
 
@@ -116,33 +124,37 @@ class Iteration(StringRepresentation):
         # identify the non-custom iterator and set default options
         self._iterator, self._description = methods[method]
         self._method_options: Options = {}
-        if method != 'return':
+        if method in {'simple', 'squarem'}:
             self._method_options.update({
                 'tol': 1e-14,
                 'max_evaluations': 5000,
                 'norm': infinity_norm
             })
-        if method == 'squarem':
-            self._method_options.update({
-                'scheme': 3,
-                'step_min': 1.0,
-                'step_max': 1.0,
-                'step_factor': 4.0
-            })
+            if method == 'squarem':
+                self._method_options.update({
+                    'scheme': 3,
+                    'step_min': 1.0,
+                    'step_max': 1.0,
+                    'step_factor': 4.0
+                })
+        elif method != 'return':
+            self._iterator = functools.partial(self._iterator, method=method)
 
-        # validate options for non-custom methods
-        invalid = [k for k in method_options if k not in self._method_options]
-        if invalid:
-            raise KeyError(f"The following are not valid iteration options: {invalid}.")
-        if method == 'return':
-            return
+        # update the default options
         self._method_options.update(method_options)
-        if not isinstance(self._method_options['tol'], float) or self._method_options['tol'] <= 0:
-            raise ValueError("The iteration option tol must be a positive float.")
-        if not isinstance(self._method_options['max_evaluations'], int) or self._method_options['max_evaluations'] < 1:
-            raise ValueError("The iteration option max_evaluations must be a positive int.")
-        if not callable(self._method_options['norm']):
-            raise ValueError("The iteration option norm must be callable.")
+
+        # validate options for non-SciPy routines
+        if method == 'return' and self._method_options:
+            raise ValueError("The return method does not support any options.")
+        if method in {'simple', 'squarem'}:
+            if not isinstance(self._method_options['tol'], float) or self._method_options['tol'] <= 0:
+                raise ValueError("The iteration option tol must be a positive float.")
+            if not isinstance(self._method_options['max_evaluations'], int):
+                raise ValueError("The iteration option max_evaluations must be an int.")
+            if self._method_options['max_evaluations'] < 1:
+                raise ValueError("The iteration option max_evaluations must be a positive int.")
+            if not callable(self._method_options['norm']):
+                raise ValueError("The iteration option norm must be callable.")
         if method == 'squarem':
             if self._method_options['scheme'] not in {1, 2, 3}:
                 raise ValueError("The iteration option scheme must be 1, 2, or 3.")
@@ -205,6 +217,45 @@ def return_iterator(initial: Array, *_: Any, **__: Any) -> Tuple[Array, bool]:
     """Assume the initial values are the optimal ones."""
     success = True
     return initial, success
+
+
+def scipy_iterator(
+        initial: Array, contraction: Callable[[Array], Array], iteration_callback: Callable[[], None], method: str,
+        **scipy_options: Any) -> Tuple[Array, bool]:
+    """Apply a SciPy root finding method."""
+    results = scipy.optimize.root(
+        lambda x: x - contraction(x), initial, method=method, callback=lambda *_: iteration_callback(),
+        options=scipy_options
+    )
+    return results.x, results.success
+
+
+def simple_iterator(
+        initial: Array, contraction: Callable[[Array], Array], iteration_callback: Callable[[], None],
+        max_evaluations: int, tol: float, norm: Callable[[Array], float]) -> Tuple[Array, bool]:
+    """Apply simple fixed point iteration with no acceleration."""
+    x = initial
+    failed = False
+    evaluations = 0
+    while True:
+        # contraction step
+        x0, x = x, contraction(x)
+        if not np.isfinite(x).all():
+            x = x0
+            failed = True
+            break
+
+        # record the completion of a major iteration, which is the same here as a contraction evaluation
+        iteration_callback()
+
+        # check for convergence
+        evaluations += 1
+        if evaluations >= max_evaluations or norm(x - x0) < tol:
+            break
+
+    # determine whether there was convergence
+    converged = not failed and evaluations < max_evaluations
+    return x, converged
 
 
 def squarem_iterator(
@@ -273,34 +324,6 @@ def squarem_iterator(
         # check for convergence
         evaluations += 1
         if evaluations >= max_evaluations or norm(x - x3) < tol:
-            break
-
-    # determine whether there was convergence
-    converged = not failed and evaluations < max_evaluations
-    return x, converged
-
-
-def simple_iterator(
-        initial: Array, contraction: Callable[[Array], Array], iteration_callback: Callable[[], None],
-        max_evaluations: int, tol: float, norm: Callable[[Array], float]) -> Tuple[Array, bool]:
-    """Apply simple fixed point iteration with no acceleration."""
-    x = initial
-    failed = False
-    evaluations = 0
-    while True:
-        # contraction step
-        x0, x = x, contraction(x)
-        if not np.isfinite(x).all():
-            x = x0
-            failed = True
-            break
-
-        # record the completion of a major iteration, which is the same here as a contraction evaluation
-        iteration_callback()
-
-        # check for convergence
-        evaluations += 1
-        if evaluations >= max_evaluations or norm(x - x0) < tol:
             break
 
     # determine whether there was convergence

@@ -11,8 +11,9 @@ from pyblp.utilities.basics import Array, Options
 
 
 @pytest.mark.parametrize(['method', 'method_options'], [
-    pytest.param('simple', {}, id="simple"),
+    pytest.param('simple', {}, id="Simple"),
     pytest.param('simple', {'norm': lambda x: np.linalg.norm(x, np.inf)}, id="simple with infinity norm"),
+    pytest.param('anderson', {}, id="Anderson"),
     pytest.param('squarem', {'scheme': 1, 'step_min': 0.9, 'step_max': 1.1, 'step_factor': 3.0}, id="SQUAREM S1"),
     pytest.param('squarem', {'scheme': 2, 'step_min': 0.8, 'step_max': 1.2, 'step_factor': 4.0}, id="SQUAREM S2"),
     pytest.param('squarem', {'scheme': 3, 'step_min': 0.7, 'step_max': 1.3, 'step_factor': 5.0}, id="SQUAREM S3"),
@@ -32,7 +33,10 @@ def test_scipy(method: Union[str, Callable], method_options: Options, tol: float
     # test that the configuration can be formatted
     if method != 'return':
         method_options = method_options.copy()
-        method_options['tol'] = tol
+        if method == 'anderson':
+            method_options['ftol'] = tol
+        else:
+            method_options['tol'] = tol
     iteration = Iteration(method, method_options)
     assert str(iteration)
 
@@ -40,7 +44,8 @@ def test_scipy(method: Union[str, Callable], method_options: Options, tol: float
     contraction = lambda x: np.sqrt(np.array([10, 12]) / (x + np.array([3, 5])))
     exact_values = np.array([1.4920333, 1.37228132])
     start_values = exact_values if method == 'return' else np.ones_like(exact_values)
-    computed_values = iteration._iterate(start_values, contraction)[0]
+    computed_values, converged = iteration._iterate(start_values, contraction)[:2]
+    assert converged
     np.testing.assert_allclose(exact_values, computed_values, rtol=0, atol=10 * tol)
 
 

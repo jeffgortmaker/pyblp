@@ -201,8 +201,12 @@ class Optimization(StringRepresentation):
                 if method in {'l-bfgs-b', 'slsqp'}:
                     self._method_options['iprint'] = 2
 
-        # validate options for non-custom methods and make sure that Knitro works
+        # update the default options
         self._method_options.update(method_options)
+
+        # validate options for non-SciPy routines
+        if method == 'return' and self._method_options:
+            raise ValueError("The return method does not support any options.")
         if method == 'knitro':
             knitro_dir = self._method_options.pop('knitro_dir')
             if not isinstance(knitro_dir, (Path, str)):
@@ -278,7 +282,7 @@ def return_optimizer(initial_values: Array, *_: Any, **__: Any) -> Tuple[Array, 
 def scipy_optimizer(
         initial_values: Array, bounds: Optional[Iterable[Tuple[float, float]]],
         objective_function: Callable[[Array], Union[Tuple[float, Array], float]],
-        iteration_callback: Callable[[], None], method: str, compute_gradient: bool, **scipy_options: dict) -> (
+        iteration_callback: Callable[[], None], method: str, compute_gradient: bool, **scipy_options: Any) -> (
         Tuple[Array, bool]):
     """Optimize with a SciPy method."""
     results = scipy.optimize.minimize(
@@ -291,7 +295,7 @@ def scipy_optimizer(
 def knitro_optimizer(
         initial_values: Array, bounds: Optional[Iterable[Tuple[float, float]]],
         objective_function: Callable[[Array], Union[Tuple[float, Array], float]],
-        iteration_callback: Callable[[], None], compute_gradient: bool, **knitro_options: dict) -> (
+        iteration_callback: Callable[[], None], compute_gradient: bool, **knitro_options: Any) -> (
         Tuple[Array, bool]):
     """Optimize with Knitro."""
     with knitro_context_manager() as (knitro, knitro_context):
