@@ -11,7 +11,7 @@ from .. import exceptions, options
 from ..configurations.iteration import Iteration
 from ..markets.results_market import ResultsMarket
 from ..parameters import Parameters
-from ..utilities.algebra import multiply_matrix_and_tensor, approximately_solve
+from ..utilities.algebra import approximately_solve, multiply_matrix_and_tensor, precisely_compute_eigenvalues
 from ..utilities.basics import (
     Array, Bounds, Error, TableFormatter, format_number, format_seconds, generate_items, output, output_progress
 )
@@ -145,10 +145,8 @@ class ProblemResults(Results):
     omega_by_theta_jacobian : `ndarray`
         Estimated :math:`\partial\omega / \partial\theta = \partial\tilde{c} / \partial\theta`.
     gradient : `ndarray`
-        Estimated gradient of the GMM objective with respect to :math:`\theta`. This is still computed once at the end
-        of an optimization routine that was configured to not use analytic gradients.
-    gradient_norm : `ndarray`
-        Infinity norm of :attr:`ProblemResults.gradient`.
+        Estimated gradient of the GMM objective with respect to :math:`\theta`, which is computed after the optimization
+        routine finishes even if the routine was configured to not use analytic gradients.
     sigma_gradient : `ndarray`
         Estimated gradient of the GMM objective with respect to :math:`\Sigma` elements in :math:`\theta`.
     pi_gradient : `ndarray`
@@ -159,6 +157,13 @@ class ProblemResults(Results):
         Estimated gradient of the GMM objective with respect to :math:`\beta` elements in :math:`\theta`.
     gamma_gradient : `ndarray`
         Estimated gradient of the GMM objective with respect to :math:`\gamma` elements in :math:`\theta`.
+    gradient_norm : `ndarray`
+        Infinity norm of :attr:`ProblemResults.gradient`.
+    hessian : `ndarray`
+        Estimated Hessian of the GMM objective with respect to :math:`\theta`. By default, this is computed with finite
+        central differences after the optimization routine finishes.
+    hessian_eigenvalues : `ndarray`
+        Eigenvalues of :attr:`ProblemResults.hessian`.
     W : `ndarray`
         Weighting matrix, :math:`W`, used to compute these results.
     updated_W : `ndarray`
@@ -216,6 +221,8 @@ class ProblemResults(Results):
     omega_by_theta_jacobian: Array
     gradient: Array
     gradient_norm: Array
+    hessian: Array
+    hessian_eigenvalues: Array
     sigma_gradient: Array
     pi_gradient: Array
     rho_gradient: Array
@@ -253,6 +260,14 @@ class ProblemResults(Results):
         self.objective = progress.objective
         self.gradient = progress.gradient
         self.gradient_norm = progress.gradient_norm
+        self.hessian = progress.hessian
+
+        # if the Hessian was computed, compute its eigenvalues and the ratio of the smallest to largest ones
+        self.hessian_eigenvalues = np.full(progress.parameters.P, np.nan, options.dtype)
+        if progress.parameters.P > 0 and np.isfinite(self.hessian).all():
+            self.hessian_eigenvalues, successful = precisely_compute_eigenvalues(self.hessian)
+            if not successful:
+                self._errors.append(exceptions.HessianEigenvaluesError(self.hessian))
 
         # store information about cost bounds
         self._costs_bounds = costs_bounds
@@ -394,6 +409,19 @@ class ProblemResults(Results):
         if np.isfinite(self.gradient_norm):
             header.append(("Gradient", "Infinity", "Norm"))
             values.append(format_number(float(self.gradient_norm)))
+        if np.isfinite(self.hessian_eigenvalues).any():
+            if self.hessian_eigenvalues.size == 1:
+                header.append(("", "Hessian", "Eigenvalue"))
+                values.append(format_number(float(self.hessian_eigenvalues)))
+            else:
+                header.extend([
+                    ("Smallest", "Hessian", "Eigenvalue"),
+                    ("Largest", "Hessian", "Eigenvalue")
+                ])
+                values.extend([
+                    format_number(float(np.min(self.hessian_eigenvalues))),
+                    format_number(float(np.max(self.hessian_eigenvalues)))
+                ])
         if np.isfinite(self._costs_bounds).any():
             header.append(("Clipped", "Marginal", "Costs"))
             values.append(self.clipped_costs.sum())

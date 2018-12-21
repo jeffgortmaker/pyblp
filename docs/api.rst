@@ -256,6 +256,7 @@ When errors occur, they will either be displayed as warnings or raised as except
    XiByThetaJacobianReversionError
    OmegaByThetaJacobianReversionError
    AbsorptionInversionError
+   HessianEigenvaluesError
    FittedValuesInversionError
    SharesByXiJacobianInversionError
    IntraFirmJacobianInversionError

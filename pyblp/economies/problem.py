@@ -41,10 +41,10 @@ class ProblemEconomy(Economy):
             pi_bounds: Optional[Tuple[Any, Any]] = None, rho_bounds: Optional[Tuple[Any, Any]] = None,
             beta_bounds: Optional[Tuple[Any, Any]] = None, gamma_bounds: Optional[Tuple[Any, Any]] = None,
             delta: Optional[Any] = None, W: Optional[Any] = None, method: str = '2s',
-            optimization: Optional[Optimization] = None, error_behavior: str = 'revert', error_punishment: float = 1,
-            delta_behavior: str = 'first', iteration: Optional[Iteration] = None, fp_type: str = 'safe',
-            costs_type: str = 'linear', costs_bounds: Optional[Tuple[Any, Any]] = None, center_moments: bool = True,
-            W_type: str = 'robust', se_type: str = 'robust') -> ProblemResults:
+            optimization: Optional[Optimization] = None, check_optimality: str = 'both', error_behavior: str = 'revert',
+            error_punishment: float = 1, delta_behavior: str = 'first', iteration: Optional[Iteration] = None,
+            fp_type: str = 'safe', costs_type: str = 'linear', costs_bounds: Optional[Tuple[Any, Any]] = None,
+            center_moments: bool = True, W_type: str = 'robust', se_type: str = 'robust') -> ProblemResults:
         r"""Solve the problem.
 
         The problem is solved in one or more GMM steps. During each step, any parameters in :math:`\hat{\theta}` are
@@ -238,6 +238,20 @@ class ProblemEconomy(Economy):
             ``Optimization('slsqp', {'ftol': 1e-12})`` is used. Routines that do not support bounds will ignore
             ``sigma_bounds`` and ``pi_bounds``. Choosing a routine that does not use analytic gradients will slow down
             estimation.
+        check_optimality : `str, optional`
+            How to check for optimality after the optimization routine finishes. The following configurations are
+            supported:
+
+                - ``'gradient'`` - Analytically compute the gradient after optimization finishes, but do not compute the
+                  Hessian. Since Jacobians needed to compute standard errors will already be computed, gradient
+                  computation will not take a long time. This option may be useful it Hessian computation takes a long
+                  time when, for example, there are a large number of parameters.
+
+                - ``'both'`` (default) - Also compute the Hessian with central finite differences after optimization
+                  finishes. Specifically, analytically compute the gradient :math:`2P` times, perturbing each of the
+                  :math:`P` parameters by :math:`\pm\epsilon / 2` where :math:`\epsilon` is the square root of the
+                  machine precision.
+
         error_behavior : `str, optional`
             How to handle any errors. For example, it is common to encounter overflow when computing
             :math:`\delta(\hat{\theta})` at a large :math:`\hat{\theta}`. The following behaviors are supported:
@@ -388,6 +402,8 @@ class ProblemEconomy(Economy):
             raise TypeError("iteration must be None or an Iteration instance.")
 
         # validate behaviors and types
+        if check_optimality not in {'gradient', 'both'}:
+            raise ValueError("check_optimality must be 'gradient' or 'both'.")
         if error_behavior not in {'revert', 'punish', 'raise'}:
             raise ValueError("error_behavior must be 'revert', 'punish', or 'raise'.")
         if delta_behavior not in {'last', 'first'}:
@@ -472,10 +488,11 @@ class ProblemEconomy(Economy):
         xi_jacobian = np.zeros((self.N, parameters.P), options.dtype)
         omega_jacobian = np.full_like(xi_jacobian, 0 if self.K3 > 0 else np.nan, options.dtype)
 
-        # initialize the objective as a large number and its gradient as all zeros, which will only be used if there are
-        #   computation errors during the first objective evaluation
+        # initialize the objective as a large number and its gradient and hessian as all zeros, which will only be used
+        #   if there are computation errors during the first objective evaluation
         objective = np.array(1e10, options.dtype)
         gradient = np.zeros((parameters.P, 1), options.dtype)
+        hessian = np.zeros((parameters.P, parameters.P), options.dtype)
 
         # iterate over each GMM step
         step = 1
@@ -504,7 +521,8 @@ class ProblemEconomy(Economy):
             evaluation_mappings: List[Dict[Hashable, int]] = []
             smallest_objective = np.inf
             progress = InitialProgress(
-                self, parameters, W, theta, objective, gradient, delta, delta, tilde_costs, xi_jacobian, omega_jacobian
+                self, parameters, W, theta, objective, gradient, hessian, delta, delta, tilde_costs, xi_jacobian,
+                omega_jacobian
             )
 
             # define the objective function
@@ -515,7 +533,7 @@ class ProblemEconomy(Economy):
                 nonlocal converged_mappings, iteration_mappings, evaluation_mappings, smallest_objective, progress
                 assert optimization is not None and costs_bounds is not None
                 progress = progress = compute_step_progress(
-                    new_theta, progress, optimization._compute_gradient
+                    new_theta, progress, optimization._compute_gradient, compute_hessian=False
                 )
                 converged_mappings.append(progress.converged_mapping)
                 iteration_mappings.append(progress.iteration_mapping)
@@ -548,7 +566,9 @@ class ProblemEconomy(Economy):
             # use progress information computed at the optimal theta to compute results for the step
             output("")
             output(f"Computing results for step {step} ...")
-            final_progress = compute_step_progress(theta, progress, compute_gradient=parameters.P > 0)
+            compute_gradient = parameters.P > 0
+            compute_hessian = compute_gradient and check_optimality == 'both'
+            final_progress = compute_step_progress(theta, progress, compute_gradient, compute_hessian)
             results = ProblemResults(
                 final_progress, last_results, step_start_time, optimization_start_time, optimization_end_time,
                 iterations, evaluations + 1, converged_mappings, iteration_mappings, evaluation_mappings, converged,
@@ -576,7 +596,7 @@ class ProblemEconomy(Economy):
     def _compute_progress(
             self, parameters: Parameters, iv: IV, W: Array, error_behavior: str, error_punishment: float,
             delta_behavior: str, iteration: Iteration, fp_type: str, costs_type: str, costs_bounds: Bounds,
-            theta: Array, progress: 'InitialProgress', compute_gradient: bool) -> 'Progress':
+            theta: Array, progress: 'InitialProgress', compute_gradient: bool, compute_hessian: bool) -> 'Progress':
         """Compute demand- and supply-side contributions before recovering the linear parameters and structural error
         terms. Then, form the GMM objective value and its gradient. Finally, handle any errors that were encountered
         before structuring relevant progress information.
@@ -594,7 +614,7 @@ class ProblemEconomy(Economy):
 
         # compute supply-side contributions
         if self.K3 == 0:
-            tilde_costs = np.zeros((self.N, 0), options.dtype)
+            tilde_costs = np.full((self.N, 0), np.nan, options.dtype)
             omega_jacobian = np.full((self.N, parameters.P), np.nan, options.dtype)
             clipped_costs = np.zeros((self.N, 1), np.bool)
         else:
@@ -638,7 +658,7 @@ class ProblemEconomy(Economy):
         beta[parameters.eliminated_beta_index] = parameters_list[0].flat
         xi = u_list[0]
         if self.K3 == 0:
-            omega = np.zeros((self.N, 0), options.dtype)
+            omega = np.full((self.N, 0), np.nan, options.dtype)
         else:
             gamma[parameters.eliminated_gamma_index] = parameters_list[1].flat
             omega = u_list[1]
@@ -681,15 +701,33 @@ class ProblemEconomy(Economy):
             assert delta_behavior == 'first'
             next_delta = progress.next_delta
 
+        # compute the hessian with central finite differences
+        hessian = np.full((parameters.P, parameters.P), np.nan, options.dtype)
+        if compute_hessian:
+            compute_progress = lambda x: self._compute_progress(
+                parameters, iv, W, error_behavior, error_punishment, delta_behavior, iteration, fp_type, costs_type,
+                costs_bounds, x, progress, compute_gradient=True, compute_hessian=False
+            )
+            change = np.sqrt(np.finfo(np.float64).eps)
+            for p in range(parameters.P):
+                theta1 = theta.copy()
+                theta2 = theta.copy()
+                theta1[p] += change / 2
+                theta2[p] -= change / 2
+                hessian[:, [p]] = (compute_progress(theta1).gradient - compute_progress(theta2).gradient) / change
+
+            # enforce shape and symmetry
+            hessian = np.c_[hessian + hessian.T] / 2
+
         # structure progress
         return Progress(
-            self, parameters, W, theta, objective, gradient, next_delta, delta, tilde_costs, xi_jacobian,
+            self, parameters, W, theta, objective, gradient, hessian, next_delta, delta, tilde_costs, xi_jacobian,
             omega_jacobian, xi, omega, beta, gamma, converged, iterations, evaluations, clipped_costs, errors
         )
 
     def _compute_demand_contributions(
             self, parameters: Parameters, iteration: Iteration, fp_type: str, sigma: Array, pi: Array, rho: Array,
-            progress: 'InitialProgress', compute_gradient: bool) -> (
+            progress: 'InitialProgress', compute_jacobian: bool) -> (
             Tuple[Array, Array, Dict[Hashable, bool], Dict[Hashable, int], Dict[Hashable, int], List[Error]]):
         """Compute delta and the Jacobian of xi (equivalently, of delta) with respect to theta market-by-market. Revert
         any problematic elements to their last values.
@@ -701,10 +739,10 @@ class ProblemEconomy(Economy):
         iterations: Dict[Hashable, int] = {}
         evaluations: Dict[Hashable, int] = {}
         delta = np.zeros((self.N, 1), options.dtype)
-        xi_jacobian = np.zeros((self.N, parameters.P), options.dtype)
+        xi_jacobian = np.full((self.N, parameters.P), np.nan, options.dtype)
 
         # when possible and when a gradient isn't needed, compute delta with a closed-form solution
-        if self.K2 == 0 and (parameters.P == 0 or not compute_gradient):
+        if self.K2 == 0 and (parameters.P == 0 or not compute_jacobian):
             delta = self._compute_logit_delta(rho)
         else:
             # define a factory for solving the demand side of problem markets
@@ -712,7 +750,7 @@ class ProblemEconomy(Economy):
                 """Build a market along with arguments used to compute delta and its Jacobian."""
                 market_s = ProblemMarket(self, s, sigma, pi, rho)
                 initial_delta_s = progress.next_delta[self._product_market_indices[s]]
-                return market_s, initial_delta_s, parameters, iteration, fp_type, compute_gradient
+                return market_s, initial_delta_s, parameters, iteration, fp_type, compute_jacobian
 
             # compute delta and its Jacobian market-by-market
             generator = generate_items(self.unique_market_ids, market_factory, ProblemMarket.solve_demand)
@@ -728,7 +766,7 @@ class ProblemEconomy(Economy):
             errors.append(exceptions.DeltaReversionError(bad_delta_index))
 
         # replace invalid elements in its Jacobian with their last values
-        if compute_gradient:
+        if compute_jacobian:
             bad_jacobian_index = ~np.isfinite(xi_jacobian)
             if np.any(bad_jacobian_index):
                 xi_jacobian[bad_jacobian_index] = progress.xi_jacobian[bad_jacobian_index]
@@ -737,7 +775,7 @@ class ProblemEconomy(Economy):
 
     def _compute_supply_contributions(
             self, parameters: Parameters, costs_type: str, costs_bounds: Bounds, sigma: Array, pi: Array, rho: Array,
-            beta: Array, delta: Array, xi_jacobian: Array, progress: 'InitialProgress', compute_gradient: bool) -> (
+            beta: Array, delta: Array, xi_jacobian: Array, progress: 'InitialProgress', compute_jacobian: bool) -> (
             Tuple[Array, Array, Array, List[Error]]):
         """Compute transformed marginal costs and the Jacobian of omega (equivalently, of transformed marginal costs)
         with respect to theta market-by-market. Revert any problematic elements to their last values.
@@ -745,8 +783,8 @@ class ProblemEconomy(Economy):
         errors: List[Error] = []
 
         # initialize transformed marginal costs, their Jacobian, and indices of clipped costs so that they can be filled
-        tilde_costs = np.zeros((self.N, 1), options.dtype)
-        omega_jacobian = np.zeros((self.N, parameters.P), options.dtype)
+        tilde_costs = np.full((self.N, 1), np.nan, options.dtype)
+        omega_jacobian = np.full((self.N, parameters.P), np.nan, options.dtype)
         clipped_costs = np.zeros((self.N, 1), np.bool)
 
         # define a factory for solving the supply side of problem markets
@@ -756,7 +794,7 @@ class ProblemEconomy(Economy):
             market_s = ProblemMarket(self, s, sigma, pi, rho, beta, delta)
             last_tilde_costs_s = progress.tilde_costs[self._product_market_indices[s]]
             xi_jacobian_s = xi_jacobian[self._product_market_indices[s]]
-            return market_s, last_tilde_costs_s, xi_jacobian_s, parameters, costs_type, costs_bounds, compute_gradient
+            return market_s, last_tilde_costs_s, xi_jacobian_s, parameters, costs_type, costs_bounds, compute_jacobian
 
         # compute transformed marginal costs and their Jacobian market-by-market
         generator = generate_items(self.unique_market_ids, market_factory, ProblemMarket.solve_supply)
@@ -773,7 +811,7 @@ class ProblemEconomy(Economy):
             errors.append(exceptions.CostsReversionError(bad_tilde_costs_index))
 
         # replace invalid elements in their Jacobian with their last values
-        if compute_gradient:
+        if compute_jacobian:
             bad_jacobian_index = ~np.isfinite(omega_jacobian)
             if np.any(bad_jacobian_index):
                 omega_jacobian[bad_jacobian_index] = progress.omega_jacobian[bad_jacobian_index]
@@ -1084,6 +1122,7 @@ class InitialProgress(object):
     theta: Array
     objective: Array
     gradient: Array
+    hessian: Array
     next_delta: Array
     delta: Array
     tilde_costs: Array
@@ -1092,7 +1131,7 @@ class InitialProgress(object):
 
     def __init__(
             self, problem: ProblemEconomy, parameters: Parameters, W: Array, theta: Array, objective: Array,
-            gradient: Array, next_delta: Array, delta: Array, tilde_costs: Array, xi_jacobian: Array,
+            gradient: Array, hessian: Array, next_delta: Array, delta: Array, tilde_costs: Array, xi_jacobian: Array,
             omega_jacobian: Array) -> None:
         """Store initial progress information."""
         self.problem = problem
@@ -1101,6 +1140,7 @@ class InitialProgress(object):
         self.theta = theta
         self.objective = objective
         self.gradient = gradient
+        self.hessian = hessian
         self.next_delta = next_delta
         self.delta = delta
         self.tilde_costs = tilde_costs
@@ -1124,13 +1164,13 @@ class Progress(InitialProgress):
 
     def __init__(
             self, problem: ProblemEconomy, parameters: Parameters, W: Array, theta: Array, objective: Array,
-            gradient: Array, next_delta: Array, delta: Array, tilde_costs: Array, xi_jacobian: Array,
+            gradient: Array, hessian: Array, next_delta: Array, delta: Array, tilde_costs: Array, xi_jacobian: Array,
             omega_jacobian: Array, xi: Array, omega: Array, beta: Array, gamma: Array,
             converged_mapping: Dict[Hashable, bool], iteration_mapping: Dict[Hashable, int],
             evaluation_mapping: Dict[Hashable, int], clipped_costs: Array, errors: List[Error]) -> None:
         """Store progress information."""
         super().__init__(
-            problem, parameters, W, theta, objective, gradient, next_delta, delta, tilde_costs, xi_jacobian,
+            problem, parameters, W, theta, objective, gradient, hessian, next_delta, delta, tilde_costs, xi_jacobian,
             omega_jacobian
         )
         self.xi = xi

@@ -17,9 +17,9 @@ class ProblemMarket(Market):
 
     def solve_demand(
             self, initial_delta: Array, parameters: Parameters, iteration: Iteration, fp_type: str,
-            compute_gradient: bool) -> Tuple[Array, Array, List[Error], bool, int, int]:
+            compute_jacobian: bool) -> Tuple[Array, Array, List[Error], bool, int, int]:
         """Compute the mean utility for this market that equates market shares to observed values by solving a fixed
-        point problem. Then, if compute_gradient is True, compute the Jacobian of xi (equivalently, of delta) with
+        point problem. Then, if compute_jacobian is True, compute the Jacobian of xi (equivalently, of delta) with
         respect to theta. If necessary, replace null elements in delta with their last values before computing its
         Jacobian.
         """
@@ -67,7 +67,7 @@ class ProblemMarket(Market):
         # if the gradient is to be computed, replace invalid values in delta with the last computed values before
         #   computing its Jacobian
         xi_jacobian = np.full((self.J, parameters.P), np.nan, options.dtype)
-        if compute_gradient:
+        if compute_jacobian:
             valid_delta = delta.copy()
             bad_delta_index = ~np.isfinite(delta)
             valid_delta[bad_delta_index] = initial_delta[bad_delta_index]
@@ -77,8 +77,8 @@ class ProblemMarket(Market):
 
     def solve_supply(
             self, initial_tilde_costs: Array, xi_jacobian: Array, parameters: Parameters, costs_type: str,
-            costs_bounds: Bounds, compute_gradient: bool) -> Tuple[Array, Array, Array, List[Error]]:
-        """Compute transformed marginal costs for this market. Then, if compute_gradient is True, compute the Jacobian
+            costs_bounds: Bounds, compute_jacobian: bool) -> Tuple[Array, Array, Array, List[Error]]:
+        """Compute transformed marginal costs for this market. Then, if compute_jacobian is True, compute the Jacobian
         of omega (equivalently, of transformed marginal costs) with respect to theta. If necessary, replace null
         elements in transformed marginal costs with their last values before computing their Jacobian.
         """
@@ -111,7 +111,7 @@ class ProblemMarket(Market):
         # if the gradient is to be computed, replace invalid transformed marginal costs with their last computed
         #   values before computing their Jacobian, which is zero for clipped marginal costs
         omega_jacobian = np.full((self.J, parameters.P), np.nan, options.dtype)
-        if compute_gradient:
+        if compute_jacobian:
             valid_tilde_costs = tilde_costs.copy()
             bad_tilde_costs_index = ~np.isfinite(tilde_costs)
             valid_tilde_costs[bad_tilde_costs_index] = initial_tilde_costs[bad_tilde_costs_index]

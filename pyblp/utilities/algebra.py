@@ -27,6 +27,19 @@ def multiply_matrix_and_tensor(a: Array, b: Array) -> Array:
     return multiplied
 
 
+def precisely_compute_eigenvalues(x: Array) -> Tuple[Array, bool]:
+    """Compute the eigenvalues of a real symmetric matrix."""
+    try:
+        with warnings.catch_warnings():
+            warnings.filterwarnings('error')
+            eigenvalues = scipy.linalg.eigvalsh(x) if x.size > 0 else x.flatten()
+            successful = True
+    except (ValueError, scipy.linalg.LinAlgError, scipy.linalg.LinAlgWarning):
+        eigenvalues = np.full_like(np.diag(x), np.nan)
+        successful = False
+    return eigenvalues, successful
+
+
 def precisely_solve(a: Array, b: Array) -> Tuple[Array, bool]:
     """Attempt to precisely solve a system of equations."""
     try:

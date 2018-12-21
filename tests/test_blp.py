@@ -99,7 +99,8 @@ def test_bootstrap(simulated_problem: SimulatedProblemFixture) -> None:
 
 @pytest.mark.usefixtures('simulated_problem')
 @pytest.mark.parametrize('solve_options_update', [
-    pytest.param({'costs_bounds': (-1e10, 1e10)}, id="non-binding costs bounds")
+    pytest.param({'costs_bounds': (-1e10, 1e10)}, id="non-binding costs bounds"),
+    pytest.param({'check_optimality': 'gradient'}, id="no Hessian computation")
 ])
 def test_trivial_changes(simulated_problem: SimulatedProblemFixture, solve_options_update: Dict) -> None:
     """Test that solving a problem with arguments that shouldn't give rise to meaningful differences doesn't give rise
@@ -115,6 +116,8 @@ def test_trivial_changes(simulated_problem: SimulatedProblemFixture, solve_optio
     # test that all arrays in the results are essentially identical
     for key, result in results.__dict__.items():
         if isinstance(result, np.ndarray) and result.dtype != np.object:
+            if solve_options_update.get('check_optimality', 'both') == 'gradient' and 'hessian' in key:
+                continue
             np.testing.assert_allclose(result, getattr(updated_results, key), atol=1e-14, rtol=0, err_msg=key)
 
 

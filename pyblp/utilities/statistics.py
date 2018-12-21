@@ -99,7 +99,7 @@ def compute_gmm_moment_covariances(
         S = sum(np.c_[g_n] @ np.c_[g_n].T for g_n in g) / N
 
     # enforce shape and symmetry
-    return np.c_[(S + S.T) / 2]
+    return np.c_[S + S.T] / 2
 
 
 def compute_gmm_parameter_covariances(
@@ -126,7 +126,7 @@ def compute_gmm_parameter_covariances(
         covariances = covariances @ G_bar.T @ W @ S @ W @ G_bar @ covariances
 
     # enforce shape and symmetry
-    return np.c_[(covariances + covariances.T) / 2], errors
+    return np.c_[covariances + covariances.T] / 2, errors
 
 
 def compute_gmm_error_covariance(u1: Array, u2: Array) -> Array:
