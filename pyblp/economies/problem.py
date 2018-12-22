@@ -985,6 +985,10 @@ class Problem(ProblemEconomy):
         Number of products across all markets, :math:`N`.
     T : `int`
         Number of markets, :math:`T`.
+    F : `int`
+        Number of firms, :math:`F`.
+    I : `int`
+        Number of agents across all markets, :math:`\sum_t I_t`.
     K1 : `int`
         Number of linear product characteristics, :math:`K_1`.
     K2 : `int`

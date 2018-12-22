@@ -20,9 +20,12 @@ class Economy(abc.ABC, StringRepresentation):
     products: RecArray
     agents: RecArray
     unique_market_ids: Array
+    unique_firm_ids: Array
     unique_nesting_ids: Array
     N: int
     T: int
+    F: int
+    I: int
     K1: int
     K2: int
     K3: int
@@ -57,11 +60,14 @@ class Economy(abc.ABC, StringRepresentation):
 
         # identify unique markets and nests
         self.unique_market_ids = np.unique(self.products.market_ids).flatten()
+        self.unique_firm_ids = np.unique(self.products.firm_ids).flatten()
         self.unique_nesting_ids = np.unique(self.products.nesting_ids).flatten()
 
         # count dimensions
         self.N = self.products.shape[0]
         self.T = self.unique_market_ids.size
+        self.F = self.unique_firm_ids.size
+        self.I = self.agents.shape[0] if self.products.X2.shape[1] > 0 else 0
         self.K1 = self.products.X1.shape[1]
         self.K2 = self.products.X2.shape[1]
         self.K3 = self.products.X3.shape[1]
@@ -102,6 +108,8 @@ class Economy(abc.ABC, StringRepresentation):
         dimension_mapping = collections.OrderedDict([
             ("N", self.N),
             ("T", self.T),
+            ("F", self.F),
+            ("I", self.I),
             ("K1", self.K1),
             ("K2", self.K2),
             ("K3", self.K3),
