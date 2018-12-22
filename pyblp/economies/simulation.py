@@ -529,6 +529,12 @@ class Simulation(Economy):
 
         .. note::
 
+           To create a simulation under perfect competition (instead of Bertrand-Nash), use an :class:`Iteration`
+           configuration with ``method='return'``. This will set prices equal to the default starting values for the
+           iteration routine, which are marginal costs.
+
+        .. note::
+
            This method supports :func:`parallel` processing. If multiprocessing is used, market-by-market computation of
            prices and shares will be distributed among the processes.
 
