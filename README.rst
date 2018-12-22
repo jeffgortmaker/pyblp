@@ -77,6 +77,7 @@ Features
 - Linear or log-linear marginal costs
 - Partial ownership matrices
 - Analytic gradients
+- Finite difference Hessians
 - Market-by-market parallelization
 - Extended floating point precision
 - Robust error handling
@@ -85,11 +86,10 @@ Features
 Features Slated for Future Versions
 -----------------------------------
 
-- Hessian computation
+- Analytic Hessian computation
 - Mathematical Program with Equilibrium Constraints (MPEC)
 - Generalized Empirical Likelihood (GEL)
 - Micro moments
-- Perfect competition
 - Agent type mixtures
 - More optimization and iteration routines
 
