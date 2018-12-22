@@ -563,11 +563,21 @@ class ProblemEconomy(Economy):
                 output("")
                 output(f"Optimization {status} after {format_seconds(optimization_time)}.")
 
-            # use progress information computed at the optimal theta to compute results for the step
-            output("")
-            output(f"Computing results for step {step} ...")
+            # identify what will be done when computing results
             compute_gradient = parameters.P > 0
             compute_hessian = compute_gradient and check_optimality == 'both'
+            last_step = method != '2s' or step == 2
+
+            # use progress information computed at the optimal theta to compute results for the step
+            output("")
+            if compute_hessian and not last_step:
+                output("Computing the Hessian, estimating standard errors, and updating weights ...")
+            elif compute_hessian:
+                output("Computing the Hessian and estimating standard errors ...")
+            elif not last_step:
+                output("Estimating standard errors and updating weights ...")
+            else:
+                output("Estimating standard errors ...")
             final_progress = compute_step_progress(theta, progress, compute_gradient, compute_hessian)
             results = ProblemResults(
                 final_progress, last_results, step_start_time, optimization_start_time, optimization_end_time,
@@ -579,7 +589,7 @@ class ProblemEconomy(Economy):
 
             # store the last results and return results from the final step
             last_results = results
-            if method != '2s' or step == 2:
+            if last_step:
                 output("")
                 output(results)
                 return results
