@@ -3,7 +3,7 @@
 import abc
 import collections
 import functools
-from typing import Dict, Hashable, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, Hashable, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -161,11 +161,21 @@ class Economy(abc.ABC, StringRepresentation):
         if name not in names:
             raise NameError(f"The name '{name}' is not one of the underlying variables, {list(sorted(names))}.")
 
-    def _validate_firms_index(self, firms_index: int) -> None:
-        """Validate a firm IDs index."""
-        max_firms_index = self.products.firm_ids.shape[1]
-        if not isinstance(firms_index, int) or not 0 <= firms_index <= max_firms_index:
-            raise ValueError(f"firms_index must be an int between 0 and {firms_index}.")
+    def _coerce_optional_firm_ids(self, firm_ids: Optional[Any]) -> Array:
+        """Coerce optional array-like firm IDs into a column vector and validate it."""
+        if firm_ids is not None:
+            firm_ids = np.c_[np.asarray(firm_ids, options.dtype)]
+            if firm_ids.shape != (self.N, 1):
+                raise ValueError(f"firm_ids must be None or a {self.N}-vector.")
+        return firm_ids
+
+    def _coerce_optional_ownership(self, ownership: Optional[Any]) -> Array:
+        """Coerce optional array-like firm IDs into a column vector and validate it."""
+        if ownership is not None:
+            ownership = np.c_[np.asarray(ownership, options.dtype)]
+            if ownership.shape != (self.N, self._max_J):
+                raise ValueError(f"ownership must be None or a {self.N} by {self._max_J} matrix.")
+        return ownership
 
     def _compute_true_X1(self, data_override: Optional[Mapping] = None, index: Optional[Array] = None) -> Array:
         """Compute X1 or columns of X1 without any absorbed demand-side fixed effects."""

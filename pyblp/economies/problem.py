@@ -905,8 +905,7 @@ class Problem(ProblemEconomy):
         If a formulation for :math:`X_3` is specified in ``product_formulations``, the following fields are also
         required, since they will be used to estimate the supply side of the problem:
 
-            - **firm_ids** : (`object, optional`) - IDs that associate products with firms. Any columns after the first
-              can be used to compute post-estimation outputs for firm changes, such as mergers.
+            - **firm_ids** : (`object, optional`) - IDs that associate products with firms.
 
             - **supply_instruments** : (`numeric, optional`) - Excluded supply-side instruments, which together with the
               formulated cost characteristics, :math:`X_3`, constitute the full set of supply-side instruments,
@@ -917,9 +916,9 @@ class Problem(ProblemEconomy):
 
             - **ownership** : (`numeric, optional`) - Custom stacked :math:`J_t \times J_t` ownership matrices,
               :math:`O`, for each market :math:`t`, which can be built with :func:`build_ownership`. By default,
-              standard ownership matrices are built only when they are needed. If specified, each stack is associated
-              with a ``firm_ids`` column and must have as many columns as there are products in the market with the most
-              products.
+              standard ownership matrices are built only when they are needed. If specified, there should be as many
+              columns as there are products in the market with the most products. Rightmost columns in markets with
+              fewer products will be ignored.
 
         To estimate a nested Logit or random coefficients nested Logit (RCNL) model, nesting groups must be specified:
 

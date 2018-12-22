@@ -103,16 +103,16 @@ class Market(object):
         tiled_ids = np.tile(self.products.nesting_ids, self.J)
         return np.where(tiled_ids == tiled_ids.T, 1, 0)
 
-    def get_ownership_matrix(self, firms_index: int = 0) -> Array:
+    def get_ownership_matrix(self, firm_ids: Optional[Array] = None, ownership: Optional[Array] = None) -> Array:
         """Get a pre-computed ownership matrix or build one. By default, use unchanged firm IDs."""
-
-        # get a pre-computed ownership matrix
+        if ownership is not None:
+            return ownership[:, :self.J]
+        if firm_ids is not None:
+            tiled_ids = np.tile(firm_ids, self.J)
+            return np.where(tiled_ids == tiled_ids.T, 1, 0)
         if self.products.ownership.shape[1] > 0:
-            offset = firms_index * self.products.ownership.shape[1] // self.products.firm_ids.shape[1]
-            return self.products.ownership[:, offset:offset + self.J]
-
-        # build a standard ownership matrix
-        tiled_ids = np.tile(self.products.firm_ids[:, [firms_index]], self.J)
+            return self.products.ownership[:, :self.J]
+        tiled_ids = np.tile(self.products.firm_ids, self.J)
         return np.where(tiled_ids == tiled_ids.T, 1, 0)
 
     def compute_random_coefficients(self) -> Array:
@@ -316,11 +316,13 @@ class Market(object):
         return tilde_capital_omega @ (prices - costs) - capital_lamda_inverse @ shares
 
     def compute_equilibrium_prices(
-            self, costs: Array, iteration: Iteration, firms_index: int = 0, prices: Optional[Array] = None) -> (
-            Tuple[Array, bool, int, int]):
+            self, costs: Array, iteration: Iteration, ownership_matrix: Optional[Array] = None,
+            prices: Optional[Array] = None) -> Tuple[Array, bool, int, int]:
         """Compute equilibrium prices by iterating over the zeta-markup equation. By default, use unchanged firm IDs
         and use unchanged prices as initial values.
         """
+        if ownership_matrix is None:
+            ownership_matrix = self.get_ownership_matrix()
         if prices is None:
             prices = self.products.prices
 
@@ -333,7 +335,6 @@ class Market(object):
             get_derivatives = lambda _: derivatives
 
         # solve the fixed point problem
-        ownership_matrix = self.get_ownership_matrix(firms_index)
         contraction = lambda p: costs + self.compute_zeta(costs, ownership_matrix, get_derivatives(p), p)
         prices, converged, iterations, evaluations = iteration._iterate(prices, contraction)
         return prices, converged, iterations, evaluations

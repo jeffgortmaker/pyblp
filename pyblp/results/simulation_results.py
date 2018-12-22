@@ -25,9 +25,6 @@ class SimulationResults(StringRepresentation):
     ----------
     simulation: `Simulation`
         :class:`Simulation` that created these results.
-    firms_index : `int`
-        Column index of the firm IDs in the ``firm_ids`` field of ``product_data`` in :class:`Simulation` that defined
-        which firms produce which products during computation of synthetic prices and shares.
     product_data : `recarray`
         Simulated :attr:`Simulation.product_data` that are updated with synthetic prices and shares.
     computation_time : `float`
@@ -49,7 +46,6 @@ class SimulationResults(StringRepresentation):
     """
 
     simulation: 'Simulation'
-    firms_index: int
     product_data: RecArray
     computation_time: float
     fp_converged: Array
@@ -57,12 +53,11 @@ class SimulationResults(StringRepresentation):
     contraction_evaluations: Array
 
     def __init__(
-            self, simulation: 'Simulation', firms_index: int, prices: Array, shares: Array, start_time: float,
-            end_time: float, converged_mapping: Dict[Hashable, bool], iteration_mapping: Dict[Hashable, int],
+            self, simulation: 'Simulation', prices: Array, shares: Array, start_time: float, end_time: float,
+            converged_mapping: Dict[Hashable, bool], iteration_mapping: Dict[Hashable, int],
             evaluation_mapping: Dict[Hashable, int]) -> None:
         """Structure simulation results."""
         self.simulation = simulation
-        self.firms_index = firms_index
         self.product_data = simulation.product_data.copy()
         self.product_data.prices = prices
         self.product_data.shares = shares

@@ -995,7 +995,8 @@ class ProblemResults(Results):
                 raise ValueError(f"shares must be None or a {self.problem.N}-vector.")
         return shares
 
-    def _combine_arrays(self, compute_market_results: Callable, fixed_args: Sequence, market_args: Sequence) -> Array:
+    def _combine_arrays(
+            self, compute_market_results: Callable, fixed_args: Sequence = (), market_args: Sequence = ()) -> Array:
         """Compute an array for each market and stack them into a single matrix. An array for a single market is
         computed by passing fixed_args (identical for all markets) and market_args (matrices with as many rows as there
         are products that are restricted to the market) to compute_market_results, a ResultsMarket method that returns
@@ -1009,8 +1010,9 @@ class ProblemResults(Results):
         # define a factory for computing arrays in markets
         def market_factory(s: Hashable) -> tuple:
             """Build a market along with arguments used to compute arrays."""
+            indices_s = self.problem._product_market_indices[s]
             market_s = ResultsMarket(self.problem, s, self.sigma, self.pi, self.rho, self.beta, self.delta)
-            args_s = [None if a is None else a[self.problem._product_market_indices[s]] for a in market_args]
+            args_s = [None if a is None else a[indices_s] for a in market_args]
             return (market_s, *fixed_args, *args_s)
 
         # construct a mapping from market IDs to market-specific arrays

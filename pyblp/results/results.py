@@ -39,7 +39,8 @@ class Results(abc.ABC, StringRepresentation):
         """Coerce optional array-like shares into an array and validate it."""
 
     @abc.abstractmethod
-    def _combine_arrays(self, compute_market_results: Callable, fixed_args: Sequence, market_args: Sequence) -> Array:
+    def _combine_arrays(
+            self, compute_market_results: Callable, fixed_args: Sequence = (), market_args: Sequence = ()) -> Array:
         """Combine arrays for each market, which are computed by passing fixed_args (identical for all markets) and
         market_args (arrays that need to be restricted to markets) to compute_market_results, a ResultsMarket method
         that returns the output for the market and a set of any errors encountered during computation.
@@ -77,7 +78,7 @@ class Results(abc.ABC, StringRepresentation):
         if not isinstance(factor, float):
             raise ValueError("factor must be a float.")
         self.problem._validate_name(name)
-        return self._combine_arrays(ResultsMarket.compute_aggregate_elasticity, [factor, name], [])
+        return self._combine_arrays(ResultsMarket.compute_aggregate_elasticity, fixed_args=[factor, name])
 
     def compute_elasticities(self, name: str = 'prices') -> Array:
         r"""Estimate matrices of elasticities of demand, :math:`\varepsilon`, with respect to a variable, :math:`x`.
@@ -105,7 +106,7 @@ class Results(abc.ABC, StringRepresentation):
         """
         output(f"Computing elasticities with respect to {name} ...")
         self.problem._validate_name(name)
-        return self._combine_arrays(ResultsMarket.compute_elasticities, [name], [])
+        return self._combine_arrays(ResultsMarket.compute_elasticities, fixed_args=[name])
 
     def compute_diversion_ratios(self, name: str = 'prices') -> Array:
         r"""Estimate matrices of diversion ratios, :math:`\mathscr{D}`, with respect to a variable, :math:`x`.
@@ -136,7 +137,7 @@ class Results(abc.ABC, StringRepresentation):
         """
         output(f"Computing diversion ratios with respect to {name} ...")
         self.problem._validate_name(name)
-        return self._combine_arrays(ResultsMarket.compute_diversion_ratios, [name], [])
+        return self._combine_arrays(ResultsMarket.compute_diversion_ratios, fixed_args=[name])
 
     def compute_long_run_diversion_ratios(self) -> Array:
         r"""Estimate matrices of long-run diversion ratios, :math:`\bar{\mathscr{D}}`.
@@ -165,7 +166,7 @@ class Results(abc.ABC, StringRepresentation):
 
         """
         output("Computing long run mean diversion ratios ...")
-        return self._combine_arrays(ResultsMarket.compute_long_run_diversion_ratios, [], [])
+        return self._combine_arrays(ResultsMarket.compute_long_run_diversion_ratios)
 
     def extract_diagonals(self, matrices: Any) -> Array:
         r"""Extract diagonals from stacked :math:`J_t \times J_t` matrices for each market :math:`t`.
@@ -192,7 +193,7 @@ class Results(abc.ABC, StringRepresentation):
         """
         output("Extracting diagonals ...")
         matrices = self._coerce_matrices(matrices)
-        return self._combine_arrays(ResultsMarket.extract_diagonal, [], [matrices])
+        return self._combine_arrays(ResultsMarket.extract_diagonal, market_args=[matrices])
 
     def extract_diagonal_means(self, matrices: Any) -> Array:
         r"""Extract means of diagonals from stacked :math:`J_t \times J_t` matrices for each market :math:`t`.
@@ -220,7 +221,7 @@ class Results(abc.ABC, StringRepresentation):
         """
         output("Extracting diagonal means ...")
         matrices = self._coerce_matrices(matrices)
-        return self._combine_arrays(ResultsMarket.extract_diagonal_mean, [], [matrices])
+        return self._combine_arrays(ResultsMarket.extract_diagonal_mean, market_args=[matrices])
 
     def compute_costs(self) -> Array:
         r"""Estimate marginal costs, :math:`c`.
@@ -240,11 +241,13 @@ class Results(abc.ABC, StringRepresentation):
 
         """
         output("Computing marginal costs ...")
-        return self._combine_arrays(ResultsMarket.compute_costs, [], [])
+        return self._combine_arrays(ResultsMarket.compute_costs)
 
-    def compute_approximate_prices(self, firms_index: int = 1, costs: Optional[Any] = None) -> Array:
-        r"""Estimate approximate equilibrium prices after firm ID changes, :math:`p^a`, under the assumption that
-        shares and their price derivatives are unaffected by such changes.
+    def compute_approximate_prices(
+            self, firm_ids: Optional[Any] = None, ownership: Optional[Any] = None, costs: Optional[Any] = None) -> (
+            Array):
+        r"""Estimate approximate equilibrium prices after firm changes, :math:`p^a`, under the assumption that shares
+        and their price derivatives are unaffected by such changes.
 
         This approximation is discussed in, for example, :ref:`references:Nevo (1997)`. Prices in each market are
         computed according to the BLP-markup equation,
@@ -255,13 +258,15 @@ class Results(abc.ABC, StringRepresentation):
 
         .. math:: \eta^a = -\left(O^* \circ \frac{\partial s}{\partial p}\right)^{-1}s
 
-        where :math:`O^*` is the ownership matrix associated with specified firm IDs.
+        where :math:`O^*` is the ownership matrix associated with firm changes.
 
         Parameters
         ----------
-        firms_index : `int, optional`
-            Column index of the firm IDs in the ``firm_ids`` field of ``product_data`` in :class:`Problem`. If an
-            ``ownership`` field was specified, the corresponding stack of ownership matrices will be used.
+        firm_ids : `array-like, optional`
+            Changed firm IDs. By default, the ``firm_ids`` field of ``product_data`` in :class:`Problem` will be used.
+        ownership : `array-like, optional`
+            Changed ownership matrices. By default, standard ownership matrices based on ``firm_ids`` will be used
+            unless the ``ownership`` field of ``product_data`` in :class:`Problem` was specified.
         costs : `array-like, optional`
             Marginal costs, :math:`c`, computed by :meth:`ProblemResults.compute_costs`. By default, marginal costs are
             computed.
@@ -277,14 +282,15 @@ class Results(abc.ABC, StringRepresentation):
 
         """
         output("Solving for approximate equilibrium prices ...")
-        self.problem._validate_firms_index(firms_index)
+        firm_ids = self.problem._coerce_optional_firm_ids(firm_ids)
+        ownership = self.problem._coerce_optional_ownership(ownership)
         costs = self._coerce_optional_costs(costs)
-        return self._combine_arrays(ResultsMarket.compute_approximate_prices, [firms_index], [costs])
+        return self._combine_arrays(ResultsMarket.compute_approximate_prices, market_args=[firm_ids, ownership, costs])
 
     def compute_prices(
-            self, iteration: Optional[Iteration] = None, firms_index: int = 1, prices: Optional[Any] = None,
-            costs: Optional[Any] = None) -> Array:
-        r"""Estimate equilibrium prices after firm ID changes, :math:`p^*`.
+            self, firm_ids: Optional[Any] = None, ownership: Optional[Any] = None, costs: Optional[Any] = None,
+            prices: Optional[Any] = None, iteration: Optional[Iteration] = None) -> Array:
+        r"""Estimate equilibrium prices after firm changes, :math:`p^*`.
 
         Prices are computed in each market by iterating over the :math:`\zeta`-markup equation from
         :ref:`references:Morrow and Skerlos (2011)`,
@@ -299,19 +305,21 @@ class Results(abc.ABC, StringRepresentation):
 
         Parameters
         ----------
-        iteration : `Iteration, optional`
-            :class:`Iteration` configuration for how to solve the fixed point problem in each market. By default,
-            ``Iteration('simple', {'tol': 1e-12})`` is used.
-        firms_index : `int, optional`
-            Column index of the firm IDs in the ``firm_ids`` field of ``product_data`` in :class:`Problem`. If an
-            ``ownership`` field was specified, the corresponding stack of ownership matrices will be used.
+        firm_ids : `array-like, optional`
+            Changed firm IDs. By default, the ``firm_ids`` field of ``product_data`` in :class:`Problem` will be used.
+        ownership : `array-like, optional`
+            Changed ownership matrices. By default, standard ownership matrices based on ``firm_ids`` will be used
+            unless the ``ownership`` field of ``product_data`` in :class:`Problem` was specified.
+        costs : `array-like`
+            Marginal costs, :math:`c`, computed by :meth:`ProblemResults.compute_costs`. By default, marginal costs are
+            computed.
         prices : `array-like, optional`
             Prices at which the fixed point iteration routine will start. By default, unchanged prices, :math:`p`, are
             used as starting values. Other reasonable starting prices include :math:`p^a`, computed by
             :meth:`ProblemResults.compute_approximate_prices`.
-        costs : `array-like`
-            Marginal costs, :math:`c`, computed by :meth:`ProblemResults.compute_costs`. By default, marginal costs are
-            computed.
+        iteration : `Iteration, optional`
+            :class:`Iteration` configuration for how to solve the fixed point problem in each market. By default,
+            ``Iteration('simple', {'tol': 1e-12})`` is used.
 
         Returns
         -------
@@ -324,14 +332,17 @@ class Results(abc.ABC, StringRepresentation):
 
         """
         output("Solving for equilibrium prices ...")
+        firm_ids = self.problem._coerce_optional_firm_ids(firm_ids)
+        ownership = self.problem._coerce_optional_ownership(ownership)
+        costs = self._coerce_optional_costs(costs)
+        prices = self._coerce_optional_prices(prices)
         if iteration is None:
             iteration = Iteration('simple', {'tol': 1e-12})
         elif not isinstance(iteration, Iteration):
             raise ValueError("iteration must None or an Iteration instance.")
-        self.problem._validate_firms_index(firms_index)
-        prices = self._coerce_optional_prices(prices)
-        costs = self._coerce_optional_costs(costs)
-        return self._combine_arrays(ResultsMarket.compute_prices, [iteration, firms_index], [prices, costs])
+        return self._combine_arrays(
+            ResultsMarket.compute_prices, fixed_args=[iteration], market_args=[firm_ids, ownership, costs, prices]
+        )
 
     def compute_shares(self, prices: Optional[Any] = None) -> Array:
         r"""Estimate shares evaluated at specified prices.
@@ -355,9 +366,9 @@ class Results(abc.ABC, StringRepresentation):
         """
         output("Computing shares ...")
         prices = self._coerce_optional_prices(prices)
-        return self._combine_arrays(ResultsMarket.compute_shares, [], [prices])
+        return self._combine_arrays(ResultsMarket.compute_shares, market_args=[prices])
 
-    def compute_hhi(self, firms_index: int = 0, shares: Optional[Any] = None) -> Array:
+    def compute_hhi(self, firm_ids: Optional[Any] = None, shares: Optional[Any] = None) -> Array:
         r"""Estimate Herfindahl-Hirschman Indices, :math:`\text{HHI}`.
 
         The index in market :math:`t` is
@@ -368,9 +379,8 @@ class Results(abc.ABC, StringRepresentation):
 
         Parameters
         ----------
-        firms_index : `int, optional`
-            Column index of the firm IDs in the ``firm_ids`` field of ``product_data`` in :class:`Problem`. By default,
-            unchanged firm IDs are used.
+        firm_ids : `array-like, optional`
+            Changed firm IDs. By default, the ``firm_ids`` field of ``product_data`` in :class:`Problem` will be used.
         shares : `array-like, optional`
             Shares, :math:`s`, such as those computed by :meth:`ProblemResults.compute_shares`. By default, unchanged
             shares are used.
@@ -387,9 +397,9 @@ class Results(abc.ABC, StringRepresentation):
 
         """
         output("Computing HHI ...")
-        self.problem._validate_firms_index(firms_index)
+        firm_ids = self.problem._coerce_optional_firm_ids(firm_ids)
         shares = self._coerce_optional_shares(shares)
-        return self._combine_arrays(ResultsMarket.compute_hhi, [firms_index], [shares])
+        return self._combine_arrays(ResultsMarket.compute_hhi, market_args=[firm_ids, shares])
 
     def compute_markups(self, prices: Optional[Any] = None, costs: Optional[Any] = None) -> Array:
         r"""Estimate markups, :math:`\mathscr{M}`.
@@ -421,7 +431,7 @@ class Results(abc.ABC, StringRepresentation):
         output("Computing markups ...")
         prices = self._coerce_optional_prices(prices)
         costs = self._coerce_optional_costs(costs)
-        return self._combine_arrays(ResultsMarket.compute_markups, [], [prices, costs])
+        return self._combine_arrays(ResultsMarket.compute_markups, market_args=[prices, costs])
 
     def compute_profits(
             self, prices: Optional[Any] = None, shares: Optional[Any] = None, costs: Optional[Any] = None) -> Array:
@@ -458,7 +468,7 @@ class Results(abc.ABC, StringRepresentation):
         prices = self._coerce_optional_prices(prices)
         shares = self._coerce_optional_shares(shares)
         costs = self._coerce_optional_costs(costs)
-        return self._combine_arrays(ResultsMarket.compute_profits, [], [prices, shares, costs])
+        return self._combine_arrays(ResultsMarket.compute_profits, market_args=[prices, shares, costs])
 
     def compute_consumer_surpluses(self, prices: Optional[Any] = None) -> Array:
         r"""Estimate population-normalized consumer surpluses, :math:`\text{CS}`.
@@ -511,4 +521,4 @@ class Results(abc.ABC, StringRepresentation):
         """
         output("Computing consumer surpluses with the equation that assumes away nonlinear income effects ...")
         prices = self._coerce_optional_prices(prices)
-        return self._combine_arrays(ResultsMarket.compute_consumer_surplus, [], [prices])
+        return self._combine_arrays(ResultsMarket.compute_consumer_surplus, market_args=[prices])

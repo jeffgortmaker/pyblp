@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 import scipy.optimize
 
-from pyblp import Formulation, Iteration, Optimization, Problem, parallel
+from pyblp import Formulation, Iteration, Optimization, Problem, build_ownership, parallel
 from pyblp.utilities.basics import Array, Options
 from .conftest import SimulatedProblemFixture
 
@@ -74,17 +74,18 @@ def test_optimal_instruments(simulated_problem: SimulatedProblemFixture, compute
 @pytest.mark.usefixtures('simulated_problem')
 def test_bootstrap(simulated_problem: SimulatedProblemFixture) -> None:
     """Test that post-estimation output medians are within 95% parametric bootstrap confidence intervals."""
-    _, _, _, _, results = simulated_problem
+    _, product_data, _, _, results = simulated_problem
 
     # create bootstrapped results (use only a few draws for speed)
     bootstrapped_results = results.bootstrap(draws=100, seed=0)
 
     # test that post-estimation outputs are within 95% confidence intervals
+    merger_ids = np.where(product_data.firm_ids == 1, 0, product_data.firm_ids)
     method_mapping = {
         'aggregate_elasticities': lambda r: r.compute_aggregate_elasticities(),
         'own_elasticity_means': lambda r: r.extract_diagonal_means(r.compute_elasticities()),
         'own_long_run_diversion_ratios': lambda r: r.extract_diagonals(r.compute_long_run_diversion_ratios()),
-        'approximate_prices': lambda r: r.compute_approximate_prices(firms_index=1),
+        'approximate_prices': lambda r: r.compute_approximate_prices(merger_ids),
         'consumer_surpluses': lambda r: r.compute_consumer_surpluses()
     }
     for name, method in method_mapping.items():
@@ -93,8 +94,8 @@ def test_bootstrap(simulated_problem: SimulatedProblemFixture) -> None:
         median = np.median(values)
         bootstrapped_medians = np.median(bootstrapped_values, axis=range(1, bootstrapped_values.ndim))
         lb, ub = np.percentile(bootstrapped_medians, [5, 95])
-        np.testing.assert_array_less(np.squeeze(lb), np.squeeze(median), err_msg=name)
-        np.testing.assert_array_less(np.squeeze(median), np.squeeze(ub), err_msg=name)
+        np.testing.assert_array_less(np.squeeze(lb), np.squeeze(median) + 1e-14, err_msg=name)
+        np.testing.assert_array_less(np.squeeze(median), np.squeeze(ub) + 1e-14, err_msg=name)
 
 
 @pytest.mark.usefixtures('simulated_problem')
@@ -320,25 +321,36 @@ def test_fixed_effects(
 
 
 @pytest.mark.usefixtures('simulated_problem')
+@pytest.mark.parametrize('ownership', [
+    pytest.param(False, id="firm IDs change"),
+    pytest.param(True, id="ownership change")
+])
 @pytest.mark.parametrize('compute_prices_options', [
     pytest.param({}, id="defaults"),
     pytest.param({'iteration': Iteration('simple')}, id="configured iteration")
 ])
-def test_merger(simulated_problem: SimulatedProblemFixture, compute_prices_options: Options) -> None:
+def test_merger(simulated_problem: SimulatedProblemFixture, ownership: bool, compute_prices_options: Options) -> None:
     """Test that prices and shares simulated under changed firm IDs are reasonably close to prices and shares computed
     from the results of a solved problem. In particular, test that unchanged prices and shares are farther from their
     simulated counterparts than those computed by approximating a merger, which in turn are farther from their simulated
     counterparts than those computed by fully solving a merger. Also test that simple acquisitions increase HHI. These
     inequalities are only guaranteed because of the way in which the simulations are configured.
     """
-    simulation, _, _, _, results = simulated_problem
+    simulation, product_data, _, _, results = simulated_problem
+
+    # create changed ownership or firm IDs associated with a merger
+    merger_ids = merger_ownership = None
+    if ownership:
+        merger_ownership = build_ownership(product_data, lambda f, g: 1 if f == g or (f < 2 and g < 2) else 0)
+    else:
+        merger_ids = np.where(product_data.firm_ids < 2, 0, product_data.firm_ids)
 
     # get changed prices and shares
-    changed_product_data = simulation.solve(firms_index=1).product_data
+    changed_product_data = simulation.solve(merger_ids, merger_ownership).product_data
 
     # solve for approximate and actual changed prices and shares
-    approximated_prices = results.compute_approximate_prices()
-    estimated_prices = results.compute_prices(**compute_prices_options)
+    approximated_prices = results.compute_approximate_prices(merger_ids, merger_ownership)
+    estimated_prices = results.compute_prices(merger_ids, merger_ownership, **compute_prices_options)
     approximated_shares = results.compute_shares(approximated_prices)
     estimated_shares = results.compute_shares(estimated_prices)
 
@@ -352,10 +364,11 @@ def test_merger(simulated_problem: SimulatedProblemFixture, compute_prices_optio
     estimated_shares_error = np.linalg.norm(changed_product_data.shares - estimated_shares)
     np.testing.assert_array_less(estimated_shares_error, approximated_shares_error, verbose=True)
 
-    # test that HHI increases
-    hhi = results.compute_hhi()
-    changed_hhi = results.compute_hhi(firms_index=1, shares=estimated_shares)
-    np.testing.assert_array_less(hhi, changed_hhi, verbose=True)
+    # test that median HHI increases
+    if not ownership:
+        hhi = results.compute_hhi()
+        changed_hhi = results.compute_hhi(merger_ids, estimated_shares)
+        np.testing.assert_array_less(np.median(hhi), np.median(changed_hhi), verbose=True)
 
 
 @pytest.mark.usefixtures('simulated_problem')

@@ -102,17 +102,15 @@ class Simulation(Economy):
 
             - **market_ids** : (`object`) - IDs that associate products with markets.
 
-            - **firm_ids** : (`object`) - IDs that associate products with firms. Any columns after the first can be
-              used in :meth:`Simulation.solve` to compute synthetic prices and shares after firm changes, such as
-              mergers.
+            - **firm_ids** : (`object`) - IDs that associate products with firms.
 
         Custom ownership matrices can be specified as well:
 
             - **ownership** : (`numeric, optional') - Custom stacked :math:`J_t \times J_t` ownership matrices,
               :math:`O`, for each market :math:`t`, which can be built with :func:`build_ownership`. By default,
-              standard ownership matrices are built only when they are needed. If specified, each stack is associated
-              with a ``firm_ids`` column and must have as many columns as there are products in the market with the most
-              products.
+              standard ownership matrices are built only when they are needed. If specified, there should be as many
+              columns as there are products in the market with the most products. Rightmost columns in markets with
+              fewer products will be ignored.
 
         To simulate a nested Logit or random coefficients nested Logit (RCNL) model, nesting groups must be specified:
 
@@ -315,6 +313,8 @@ class Simulation(Economy):
             raise KeyError("product_data must have a firm_ids field.")
         if market_ids.shape[1] > 1:
             raise ValueError("The market_ids field of product_data must be one-dimensional.")
+        if firm_ids.shape[1] > 1:
+            raise ValueError("The firm_ids field of product_data must be one-dimensional.")
 
         # load ownership matrices
         ownership = extract_matrix(product_data, 'ownership')
@@ -514,8 +514,8 @@ class Simulation(Economy):
         return "\n\n".join([super().__str__(), self._parameters.format("True Values")])
 
     def solve(
-            self, firms_index: int = 0, prices: Optional[Any] = None, iteration: Optional[Iteration] = None,
-            error_behavior: str = 'raise') -> SimulationResults:
+            self, firm_ids: Optional[Any] = None, ownership: Optional[Any] = None, prices: Optional[Any] = None,
+            iteration: Optional[Iteration] = None, error_behavior: str = 'raise') -> SimulationResults:
         r"""Compute synthetic prices and shares.
 
         Prices and shares are computed by iterating market-by-market over the :math:`\zeta`-markup equation from
@@ -530,10 +530,12 @@ class Simulation(Economy):
 
         Parameters
         ----------
-        firms_index : `int, optional`
-            Column index of the firm IDs in the ``firm_ids`` field of ``product_data`` in :class:`Simulation` that
-            defines which firms produce which products. If an ``ownership`` field was specified, the corresponding stack
-            of ownership matrices will be used. By default, unchanged firm IDs are used.
+        firm_ids : `array-like, optional`
+            Firms IDs that define which firms produce which products. By default, the ``firm_ids`` field of
+            ``product_data`` in :class:`Simulation` will be used.
+        ownership : `array-like, optional`
+            Custom ownership matrices. By default, standard ownership matrices based on ``firm_ids`` will be used unless
+            the ``ownership`` field of ``product_data`` in :class:`Simulation` was specified.
         prices : `array-like, optional`
             Prices at which the fixed point iteration routine will start. By default, marginal costs, :math:`c`, are
             used as starting values.
@@ -567,8 +569,9 @@ class Simulation(Economy):
         output("Computing synthetic prices and shares ...")
         start_time = time.time()
 
-        # validate the firms index
-        self._validate_firms_index(firms_index)
+        # validate the firm IDs and ownership
+        firm_ids = self._coerce_optional_firm_ids(firm_ids)
+        ownership = self._coerce_optional_ownership(ownership)
 
         # choose or validate initial prices
         if prices is None:
@@ -592,13 +595,15 @@ class Simulation(Economy):
         delta = self.products.X1 @ self.beta + self.xi
 
         # define a factory for solving simulation markets
-        def market_factory(s: Hashable) -> Tuple[SimulationMarket, Array, Array, Iteration, int]:
+        def market_factory(s: Hashable) -> Tuple[SimulationMarket, Array, Array, Array, Array, Iteration]:
             """Build a market along with arguments used to compute prices and shares."""
             assert prices is not None and iteration is not None
             market_s = SimulationMarket(self, s, self.sigma, self.pi, self.rho, self.beta, delta)
+            firm_ids_s = firm_ids[self._product_market_indices[s]] if firm_ids is not None else None
+            ownership_s = ownership[self._product_market_indices[s]] if ownership is not None else None
             costs_s = self.costs[self._product_market_indices[s]]
             prices_s = prices[self._product_market_indices[s]]
-            return market_s, costs_s, prices_s, iteration, firms_index
+            return market_s, firm_ids_s, ownership_s, costs_s, prices_s, iteration
 
         # compute prices and shares market-by-market
         converged_mapping: Dict[Hashable, bool] = {}
@@ -628,8 +633,8 @@ class Simulation(Economy):
 
         # structure the results
         results = SimulationResults(
-            self, firms_index, synthetic_prices, synthetic_shares, start_time, time.time(), converged_mapping,
-            iteration_mapping, evaluation_mapping
+            self, synthetic_prices, synthetic_shares, start_time, time.time(), converged_mapping, iteration_mapping,
+            evaluation_mapping
         )
         output(f"Computed synthetic prices and shares after {format_seconds(results.computation_time)}.")
         output("")

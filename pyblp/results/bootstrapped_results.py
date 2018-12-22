@@ -19,8 +19,9 @@ class BootstrappedResults(Results):
     This class has all of the same methods as :class:`ProblemResults`, for except :meth:`ProblemResults.bootstrap` and
     :meth:`ProblemResults.compute_optimal_instruments`. The only difference is that methods return arrays with an extra
     first dimension, along which bootstrapped results are stacked (these stacked results can be used to construct, for
-    example, confidence intervals for post-estimation outputs). Similarly, arrays of data passed as arguments to methods
-    should have an extra first dimension of size :attr:`BootstrappedResults.draws`.
+    example, confidence intervals for post-estimation outputs). Similarly, arrays of data (except for firm IDs and
+    ownership matrices) passed as arguments to methods should have an extra first dimension of size
+    :attr:`BootstrappedResults.draws`.
 
     Attributes
     ----------
@@ -165,7 +166,8 @@ class BootstrappedResults(Results):
                 raise ValueError(f"shares must be None or {self.draws} by {self.problem.N}.")
         return shares
 
-    def _combine_arrays(self, compute_market_results: Callable, fixed_args: Sequence, market_args: Sequence) -> Array:
+    def _combine_arrays(
+            self, compute_market_results: Callable, fixed_args: Sequence = (), market_args: Sequence = ()) -> Array:
         """Compute an array for each market and stack them into a single tensor. An array for a single market is
         computed by passing fixed_args (identical for all markets) and market_args (matrices with as many rows as there
         are products that are restricted to the market) to compute_market_results, a ResultsMarket method that returns
@@ -188,7 +190,15 @@ class BootstrappedResults(Results):
                 self.problem, s, self.bootstrapped_sigma[c], self.bootstrapped_pi[c], self.bootstrapped_rho[c],
                 self.bootstrapped_beta[c], self.bootstrapped_delta[c], data_override_cs
             )
-            args_cs = [None if a is None else a[c, self.problem._product_market_indices[s][0]] for a in market_args]
+            args_cs: List[Optional[Array]] = []
+            for market_arg in market_args:
+                if market_arg is None:
+                    args_cs.append(market_arg)
+                elif len(market_arg.shape) == 2:
+                    args_cs.append(market_arg[self.problem._product_market_indices[s]])
+                else:
+                    assert len(market_arg.shape) == 3
+                    args_cs.append(market_arg[c, self.problem._product_market_indices[s][0]])
             return (market_js, *fixed_args, *args_cs)
 
         # construct a mapping from draws and market IDs to market-specific arrays and compute the full matrix size

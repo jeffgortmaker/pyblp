@@ -1,6 +1,6 @@
 """Market-level simulation of synthetic BLP data."""
 
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 import numpy as np
 
@@ -14,10 +14,11 @@ class SimulationMarket(Market):
     """A market in a simulation of synthetic BLP data."""
 
     def solve(
-            self, costs: Array, prices: Array, iteration: Iteration, firms_index: int = 0) -> (
-            Tuple[Array, Array, List[Error], bool, int, int]):
+            self, firm_ids: Optional[Array], ownership: Optional[Array], costs: Array, prices: Array,
+            iteration: Iteration) -> Tuple[Array, Array, List[Error], bool, int, int]:
         """Solve for synthetic prices and shares. By default, use unchanged firm IDs."""
         errors: List[Error] = []
+        ownership_matrix = self.get_ownership_matrix(firm_ids, ownership)
 
         # configure NumPy to identify floating point errors
         with np.errstate(divide='call', over='call', under='ignore', invalid='call'):
@@ -25,7 +26,7 @@ class SimulationMarket(Market):
 
             # solve the fixed point problem
             prices, converged, iterations, evaluations = self.compute_equilibrium_prices(
-                costs, iteration, firms_index, prices
+                costs, iteration, ownership_matrix, prices
             )
             if not converged:
                 errors.append(exceptions.SyntheticPricesConvergenceError())

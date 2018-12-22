@@ -20,7 +20,7 @@ class Products(object):
     market_ids : `ndarray`
         IDs that associate products with markets.
     firm_ids : `ndarray`
-        IDs that associate products with firms. Any columns after the first represent changes such as mergers.
+        IDs that associate products with firms.
     demand_ids : `ndarray`
         IDs used to create demand-side fixed effects.
     supply_ids : `ndarray`
@@ -30,8 +30,7 @@ class Products(object):
     clustering_ids : `ndarray`
         IDs used to compute clustered standard errors.
     ownership : `ndarray`
-        Stacked :math:`J_t \times J_t` ownership matrices, :math:`O`, for each market :math:`t`. Each stack is
-        associated with a `firm_ids` column.
+        Stacked :math:`J_t \times J_t` ownership matrices, :math:`O`, for each market :math:`t`.
     shares : `ndarray`
         Market shares, :math:`s`.
     prices : `ndarray`
@@ -139,6 +138,8 @@ class Products(object):
             raise ValueError("The market_ids field of product_data must be one-dimensional.")
         if firm_ids is None and X3 is not None:
             raise KeyError("product_data must have a firm_ids field when X3 is formulated.")
+        if firm_ids is not None and firm_ids.shape[1] > 1:
+            raise ValueError("The firm_ids field of product_data must be one-dimensional.")
         if nesting_ids is not None and nesting_ids.shape[1] > 1:
             raise ValueError("The nesting_ids field of product_data must be one-dimensional.")
         if clustering_ids is not None:
@@ -152,9 +153,12 @@ class Products(object):
         if firm_ids is not None:
             ownership = extract_matrix(product_data, 'ownership')
             if ownership is not None:
-                columns = np.unique(market_ids, return_counts=True)[1].max() * firm_ids.shape[1]
-                if ownership.shape[1] != columns:
-                    raise ValueError(f"The ownership field of product_data must have {columns} columns.")
+                max_J = np.unique(market_ids, return_counts=True)[1].max()
+                if ownership.shape[1] != max_J:
+                    raise ValueError(
+                        f"The ownership field of product_data must have {max_J} columns, which is the number of "
+                        f"products in the market with the most products."
+                    )
 
         # load shares
         shares = extract_matrix(product_data, 'shares')

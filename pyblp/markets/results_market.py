@@ -102,26 +102,28 @@ class ResultsMarket(Market):
         return costs, errors
 
     def compute_approximate_prices(
-            self, firms_index: int = 0, costs: Optional[Array] = None) -> Tuple[Array, List[Error]]:
+            self, firm_ids: Optional[Array], ownership: Optional[Array], costs: Optional[Array]) -> (
+            Tuple[Array, List[Error]]):
         """Estimate approximate equilibrium prices under the assumption that shares and their price derivatives are
         unaffected by firm ID changes. By default, use unchanged firm IDs and compute marginal costs.
         """
         errors: List[Error] = []
+        ownership_matrix = self.get_ownership_matrix(firm_ids, ownership)
         if costs is None:
             costs, errors = self.compute_costs()
-        ownership_matrix = self.get_ownership_matrix(firms_index)
         eta, eta_errors = self.compute_eta(ownership_matrix)
         errors.extend(eta_errors)
         prices = costs + eta
         return prices, errors
 
     def compute_prices(
-            self, iteration: Iteration, firms_index: int = 0, prices: Optional[Array] = None,
-            costs: Optional[Array] = None) -> Tuple[Array, List[Error]]:
+            self, iteration: Iteration, firm_ids: Optional[Array], ownership: Optional[Array], costs: Optional[Array],
+            prices: Optional[Array]) -> Tuple[Array, List[Error]]:
         """Estimate equilibrium prices. By default, use unchanged firm IDs, use unchanged prices as starting values,
         and compute marginal costs.
         """
         errors: List[Error] = []
+        ownership_matrix = self.get_ownership_matrix(firm_ids, ownership)
         if costs is None:
             costs, errors = self.compute_costs()
 
@@ -130,12 +132,12 @@ class ResultsMarket(Market):
             np.seterrcall(lambda *_: errors.append(exceptions.EquilibriumPricesFloatingPointError()))
 
             # compute equilibrium prices
-            prices, converged = self.compute_equilibrium_prices(costs, iteration, firms_index, prices)[:2]
+            prices, converged, *_ = self.compute_equilibrium_prices(costs, iteration, ownership_matrix, prices)
             if not converged:
                 errors.append(exceptions.EquilibriumPricesConvergenceError())
             return prices, errors
 
-    def compute_shares(self, prices: Optional[Array] = None) -> Tuple[Array, List[Error]]:
+    def compute_shares(self, prices: Optional[Array]) -> Tuple[Array, List[Error]]:
         """Estimate shares evaluated at specified prices. By default, use unchanged prices."""
         if prices is None:
             prices = self.products.prices
@@ -144,16 +146,16 @@ class ResultsMarket(Market):
         shares = self.compute_probabilities(delta, mu) @ self.agents.weights
         return shares, []
 
-    def compute_hhi(self, firms_index: int = 0, shares: Optional[Array] = None) -> Tuple[Array, List[Error]]:
+    def compute_hhi(self, firm_ids: Optional[Array], shares: Optional[Array]) -> Tuple[Array, List[Error]]:
         """Estimate HHI. By default, use unchanged firm IDs and shares."""
+        if firm_ids is None:
+            firm_ids = self.products.firm_ids
         if shares is None:
             shares = self.products.shares
-        firm_ids = self.products.firm_ids[:, [firms_index]]
         hhi = 1e4 * sum((shares[firm_ids == f].sum() / shares.sum())**2 for f in np.unique(firm_ids))
         return hhi, []
 
-    def compute_markups(
-            self, prices: Optional[Array] = None, costs: Optional[Array] = None) -> Tuple[Array, List[Error]]:
+    def compute_markups(self, prices: Optional[Array], costs: Optional[Array]) -> Tuple[Array, List[Error]]:
         """Estimate markups. By default, use unchanged prices and compute marginal costs."""
         errors: List[Error] = []
         if prices is None:
@@ -164,7 +166,7 @@ class ResultsMarket(Market):
         return markups, errors
 
     def compute_profits(
-            self, prices: Optional[Array] = None, shares: Optional[Array] = None, costs: Optional[Array] = None) -> (
+            self, prices: Optional[Array], shares: Optional[Array], costs: Optional[Array]) -> (
             Tuple[Array, List[Error]]):
         """Estimate population-normalized gross expected profits. By default, use unchanged prices, use unchanged
         shares, and compute marginal costs.
@@ -179,7 +181,7 @@ class ResultsMarket(Market):
         profits = (prices - costs) * shares
         return profits, errors
 
-    def compute_consumer_surplus(self, prices: Optional[Array] = None) -> Tuple[Array, List[Error]]:
+    def compute_consumer_surplus(self, prices: Optional[Array]) -> Tuple[Array, List[Error]]:
         """Estimate population-normalized consumer surplus. By default, use unchanged prices."""
         if prices is None:
             delta = self.delta
