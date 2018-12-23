@@ -1,7 +1,6 @@
 """Basic functionality."""
 
 import contextlib
-import datetime
 import inspect
 import multiprocessing.pool
 import re
@@ -207,7 +206,9 @@ def output_progress(iterable: Iterable, length: int, start_time: float) -> Itera
 
 def format_seconds(seconds: float) -> str:
     """Prepare a number of seconds to be displayed as a string."""
-    return str(datetime.timedelta(seconds=int(round(seconds))))
+    hours, remainder = divmod(int(round(seconds)), 60**2)
+    minutes, seconds = divmod(remainder, 60)
+    return f'{hours:02}:{minutes:02}:{seconds:02}'
 
 
 def format_number(number: Optional[float]) -> str:
