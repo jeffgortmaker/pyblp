@@ -585,6 +585,7 @@ def test_gradient_optionality(simulated_problem: SimulatedProblemFixture, scipy_
 @pytest.mark.usefixtures('simulated_problem')
 @pytest.mark.parametrize('method', [
     pytest.param('l-bfgs-b', id="L-BFGS-B"),
+    pytest.param('trust-constr', id="trust-region"),
     pytest.param('tnc', id="TNC"),
     pytest.param('slsqp', id="SLSQP"),
     pytest.param('knitro', id="Knitro")

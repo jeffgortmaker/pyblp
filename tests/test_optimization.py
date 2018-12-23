@@ -26,6 +26,7 @@ from pyblp.utilities.basics import Array, Options
     pytest.param('knitro', {'hessopt': 4}, id="Knitro hessopt 4"),
     pytest.param('slsqp', {}, id="SLSQP"),
     pytest.param('l-bfgs-b', {}, id="L-BFGS-B"),
+    pytest.param('trust-constr', {}, id="trust-region"),
     pytest.param('tnc', {}, id="TNC"),
     pytest.param('nelder-mead', {}, id="Nelder-Mead"),
     pytest.param('powell', {}, id="Powell"),

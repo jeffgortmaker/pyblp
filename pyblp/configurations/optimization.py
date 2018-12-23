@@ -31,9 +31,11 @@ class Optimization(StringRepresentation):
               OS X). For more information, refer to the
               `Knitro installation guide <https://www.artelys.com/tools/knitro_doc/1_introduction/installation.html>`_.
 
-            - ``'l-bfgs-b'`` - Uses the :func:`scipy.optimize.minimize` L-BFGS-B routine.
-
             - ``'slsqp'`` - Uses the :func:`scipy.optimize.minimize` SLSQP routine.
+
+            - ``'trust-constr'`` - Uses the :func:`scipy.optimize.minimize` trust-region routine.
+
+            - ``'l-bfgs-b'`` - Uses the :func:`scipy.optimize.minimize` L-BFGS-B routine.
 
             - ``'tnc'`` - Uses the :func:`scipy.optimize.minimize` TNC routine.
 
@@ -150,6 +152,7 @@ class Optimization(StringRepresentation):
             'l-bfgs-b': (functools.partial(scipy_optimizer), "the L-BFGS-B algorithm implemented in SciPy"),
             'tnc': (functools.partial(scipy_optimizer), "the truncated Newton algorithm implemented in SciPy"),
             'slsqp': (functools.partial(scipy_optimizer), "Sequential Least SQuares Programming implemented in SciPy"),
+            'trust-constr': (functools.partial(scipy_optimizer), "trust-region routine implemented in SciPy"),
             'knitro': (functools.partial(knitro_optimizer), "an installed version of Artleys Knitro"),
             'return': (functools.partial(return_optimizer), "a trivial routine that returns the initial parameters")
         }
@@ -200,6 +203,8 @@ class Optimization(StringRepresentation):
                 self._method_options['disp'] = True
                 if method in {'l-bfgs-b', 'slsqp'}:
                     self._method_options['iprint'] = 2
+                elif method == 'trust-constr':
+                    self._method_options['verbose'] = 3
 
         # update the default options
         self._method_options.update(method_options)
@@ -285,8 +290,9 @@ def scipy_optimizer(
         iteration_callback: Callable[[], None], method: str, compute_gradient: bool, **scipy_options: Any) -> (
         Tuple[Array, bool]):
     """Optimize with a SciPy method."""
+    hess = scipy_options.get('hess', scipy.optimize.BFGS() if method == 'trust-constr' else None)
     results = scipy.optimize.minimize(
-        objective_function, initial_values, method=method, jac=compute_gradient, bounds=bounds,
+        objective_function, initial_values, method=method, jac=compute_gradient, hess=hess, bounds=bounds,
         callback=lambda *_: iteration_callback(), options=scipy_options
     )
     return results.x, results.success
