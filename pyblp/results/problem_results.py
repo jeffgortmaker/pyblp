@@ -386,28 +386,55 @@ class ProblemResults(Results):
         self._se_type = se_type
 
     def __str__(self) -> str:
-        """Format problem results as a string."""
+        """Format problem results (including parameters estimates) as a string."""
 
-        # construct a section containing summary information
-        floats_index = 4
-        header = [
-            ("", "Cumulative", "Time"), ("", "GMM", "Step"), ("Cumulative", "Optimization", "Iterations"),
-            ("Cumulative", "Optimization", "Evaluations")
-        ]
-        values = [
-            format_seconds(self.cumulative_total_time),
-            self.step,
-            self.cumulative_optimization_iterations,
-            self.cumulative_objective_evaluations
-        ]
+        # construct a standard error description
+        if self._se_type == 'unadjusted':
+            se_description = "Unadjusted SEs"
+        elif self._se_type == 'robust':
+            se_description = "Robust SEs"
+        else:
+            assert self._se_type == 'clustered'
+            se_description = f'Robust SEs Adjusted for {np.unique(self.problem.products.clustering_ids).size} Clusters'
+
+        # combine a summary table section and another with formatted estimates into one string
+        return "\n\n".join([
+            self._format_summary(),
+            self._parameters.format_estimates(
+                f"Estimates ({se_description} in Parentheses)", self.sigma, self.pi, self.rho, self.beta, self.gamma,
+                self.sigma_se, self.pi_se, self.rho_se, self.beta_se, self.gamma_se
+            )
+        ])
+
+    def _format_summary(self) -> str:
+        """Format a summary table of problem results."""
+
+        # at a minimum include time and the GMM step
+        floats_index = 3
+        header = [("", "Computation", "Time"), ("", "GMM", "Step")]
+        values = [format_seconds(self.cumulative_total_time), self.step]
+
+        # include any optimization information
+        if self._parameters.P > 0:
+            floats_index += 1
+            header.append(("", "Optimization", "Iterations"))
+            values.append(self.cumulative_optimization_iterations)
+
+        # include objective evaluation information
+        header.append(("", "Objective", "Evaluations"))
+        values.append(self.cumulative_objective_evaluations)
+
+        # include any fixed point information
         if np.any(self.cumulative_contraction_evaluations > 0):
             floats_index += 2
-            header.extend([("Cumulative", "Fixed Point", "Iterations"), ("Cumulative", "Contraction", "Evaluations")])
+            header.extend([("", "Fixed Point", "Iterations"), ("", "Contraction", "Evaluations")])
             values.extend([self.cumulative_fp_iterations.sum(), self.cumulative_contraction_evaluations.sum()])
-        header.append(("Final", "Objective", "Value"))
+
+        # include any information about the final objective value
+        header.append(("", "Objective", "Value"))
         values.append(format_number(float(self.objective)))
         if np.isfinite(self.gradient_norm):
-            header.append(("Gradient", "Infinity", "Norm"))
+            header.append(("", "Gradient", "Infinity Norm"))
             values.append(format_number(float(self.gradient_norm)))
         if np.isfinite(self.hessian_eigenvalues).any():
             if self.hessian_eigenvalues.size == 1:
@@ -422,38 +449,28 @@ class ProblemResults(Results):
                     format_number(float(np.min(self.hessian_eigenvalues))),
                     format_number(float(np.max(self.hessian_eigenvalues)))
                 ])
+
+        # include any information about clipped marginal costs
         if np.isfinite(self._costs_bounds).any():
             header.append(("Clipped", "Marginal", "Costs"))
             values.append(self.clipped_costs.sum())
+
+        # format the table
         widths = [max(options.digits + 6 if i >= floats_index else 0, *map(len, k)) for i, k in enumerate(header)]
         formatter = TableFormatter(widths)
-        sections = [[
+        lines = [
             "Problem Results Summary:",
-            formatter.line(),
-            formatter([k[0] for k in header]),
+            formatter.line()
+        ]
+        if any(k[0] for k in header):
+            lines.append(formatter([k[0] for k in header]))
+        lines.extend([
             formatter([k[1] for k in header]),
             formatter([k[2] for k in header], underline=True),
             formatter(values),
             formatter.line()
-        ]]
-
-        # construct a standard error description
-        if self._se_type == 'unadjusted':
-            se_description = "Unadjusted SEs"
-        elif self._se_type == 'robust':
-            se_description = "Robust SEs"
-        else:
-            assert self._se_type == 'clustered'
-            se_description = f'Robust SEs Adjusted for {np.unique(self.problem.products.clustering_ids).size} Clusters'
-
-        # construct a section containing estimates and their standard errors
-        sections.append([self._parameters.format_estimates(
-            f"Estimates ({se_description} in Parentheses)", self.sigma, self.pi, self.rho, self.beta, self.gamma,
-            self.sigma_se, self.pi_se, self.rho_se, self.beta_se, self.gamma_se
-        )])
-
-        # combine the sections into one string
-        return "\n\n".join("\n".join(s) for s in sections)
+        ])
+        return "\n".join(lines)
 
     def bootstrap(
             self, draws: int = 1000, seed: Optional[int] = None, iteration: Optional[Iteration] = None) -> (

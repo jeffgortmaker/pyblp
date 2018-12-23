@@ -552,7 +552,7 @@ class ProblemEconomy(Economy):
             optimization_start_time = optimization_end_time = time.time()
             if parameters.P > 0:
                 output("")
-                output(f"Starting optimization for step {step} ...")
+                output(f"Starting optimization ...")
                 output("")
                 theta, converged, iterations, evaluations = optimization._optimize(theta, theta_bounds, wrapper)
                 status = "completed" if converged else "failed"
@@ -589,8 +589,10 @@ class ProblemEconomy(Economy):
 
             # store the last results and return results from the final step
             last_results = results
-            if last_step:
-                output("")
+            output("")
+            if not last_step:
+                output(results._format_summary())
+            else:
                 output(results)
                 return results
 
