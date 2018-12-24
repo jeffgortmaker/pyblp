@@ -19,7 +19,7 @@ import sympy.parsing.sympy_parser
 from .iteration import Iteration
 from .. import exceptions, options
 from ..utilities.algebra import precisely_invert
-from ..utilities.basics import Array, Data, Error, Groups, StringRepresentation, extract_size
+from ..utilities.basics import Array, Data, Error, Groups, StringRepresentation, extract_size, interact_ids
 
 
 class Formulation(StringRepresentation):
@@ -249,12 +249,7 @@ class Formulation(StringRepresentation):
                     raise patsy.PatsyError("Only categorical variables can be absorbed.", factor.origin)
                 symbol = parse_expression(factor.name())
                 factor_columns.append(data_mapping[symbol.name])
-
-            # store interactions as tuples
-            column = factor_columns[0].astype(np.object)
-            if len(factor_columns) > 1:
-                column[:] = list(zip(*factor_columns))
-            ids_columns.append(column)
+            ids_columns.append(interact_ids(*factor_columns))
 
         # build the matrix of IDs
         return np.column_stack(ids_columns)

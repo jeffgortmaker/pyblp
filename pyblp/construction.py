@@ -6,7 +6,7 @@ import numpy as np
 
 from . import options
 from .configurations.formulation import Formulation
-from .utilities.basics import Array, Groups, RecArray, extract_matrix, structure_matrices
+from .utilities.basics import Array, Groups, RecArray, extract_matrix, interact_ids, structure_matrices
 
 
 def build_id_data(T: int, J: int, F: int) -> RecArray:
@@ -218,13 +218,9 @@ def build_blp_instruments(formulation: Formulation, product_data: Mapping) -> Ar
     if firm_ids.shape[1] > 1:
         raise ValueError("The firm_ids field of product_data must be one-dimensional.")
 
-    # construct a set of market-firm pair IDs
-    paired_ids = market_ids.flatten().astype(np.object)
-    paired_ids[:] = list(zip(market_ids, firm_ids))
-
     # initialize grouping objects
-    paired_groups = Groups(paired_ids)
     market_groups = Groups(market_ids)
+    paired_groups = Groups(interact_ids(market_ids, firm_ids))
 
     # build the instruments
     X = build_matrix(formulation, product_data)

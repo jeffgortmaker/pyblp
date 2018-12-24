@@ -184,6 +184,14 @@ def extract_size(structured_array_like: Mapping) -> int:
     )
 
 
+def interact_ids(*columns: Array) -> Array:
+    """Create interactions of ID columns."""
+    interacted = columns[0].flatten().astype(np.object)
+    if len(columns) > 1:
+        interacted[:] = list(zip(*columns))
+    return interacted
+
+
 def output(message: Any) -> None:
     """Print a message if verbosity is turned on."""
     if options.verbose:
