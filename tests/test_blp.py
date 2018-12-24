@@ -124,25 +124,18 @@ def test_trivial_changes(simulated_problem: SimulatedProblemFixture, solve_optio
 
 @pytest.mark.usefixtures('simulated_problem')
 def test_parallel(simulated_problem: SimulatedProblemFixture) -> None:
-    """Test that solving simulations, solving problems, and computing results with parallelization gives rise to the
-    same results as when using serial processing.
+    """Test that solving problems and computing results in parallel gives rise to the same results as when using serial
+    processing.
     """
-    simulation, product_data, problem, solve_options, results = simulated_problem
+    _, _, problem, solve_options, results = simulated_problem
 
     # compute marginal costs as a test of results (everything else has already been computed without parallelization)
     costs = results.compute_costs()
 
-    # solve the simulation, solve the problem, and compute costs in parallel
+    # solve the problem and compute costs in parallel
     with parallel(2):
-        parallel_simulation_results = simulation.solve()
-        parallel_data = parallel_simulation_results.product_data
-        parallel_results = parallel_simulation_results.to_problem(problem.product_formulations).solve(**solve_options)
+        parallel_results = problem.solve(**solve_options)
         parallel_costs = parallel_results.compute_costs()
-
-    # test that product data are essentially identical
-    for key in product_data.dtype.names:
-        if product_data[key].dtype != np.object:
-            np.testing.assert_allclose(product_data[key], parallel_data[key], atol=1e-14, rtol=0, err_msg=key)
 
     # test that all arrays in the results are essentially identical
     for key, result in results.__dict__.items():

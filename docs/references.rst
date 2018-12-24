@@ -61,6 +61,12 @@ Frisch and Waugh (1933)
 Frisch, Ragnar, and Frederick V. Waugh (1933). `Partial time regressions as compared with individual trends <https://www.econometricsociety.org/publications/econometrica/1933/10/01/partial-time-regressions-compared-individual-trends>`_. *Econometrica, 1* (4), 387-401.
 
 
+Gandhi and Houde (2017)
+-----------------------
+
+Gandhi, Amit, and Jean-François Houde (2017). `Measuring substitution patterns in differentiated products industries <https://jfhoude.wiscweb.wisc.edu/wp-content/uploads/sites/769/2018/08/GH_v6.pdf>`_. Working paper.
+
+
 Grigolon and Verboven (2014)
 ----------------------------
 

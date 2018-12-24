@@ -1,6 +1,6 @@
 """Data construction."""
 
-from typing import Any, Callable, List, Mapping, Optional
+from typing import Any, Callable, Dict, Hashable, Iterator, List, Mapping, Optional
 
 import numpy as np
 
@@ -155,20 +155,21 @@ def build_blp_instruments(formulation: Formulation, product_data: Mapping) -> Ar
 
     Traditional excluded BLP instruments are
 
-    .. math:: \mathrm{BLP}(X) = [\mathrm{Other}(X), \mathrm{Rival}(X)],
+    .. math:: \text{BLP}(X) = [\text{BLP Other}(X), \text{BLP Rival}(X)],
 
-    in which :math:`X` is a matrix of product characteristics, :math:`\mathrm{Rival}(X)` consists of sums over
-    characteristics of rival goods, and :math:`\mathrm{Other}(X)` consists of sums over characteristics of other
-    non-rival goods. All three matrices have the same dimensions.
+    in which :math:`X` is a matrix of product characteristics, :math:`\text{BLP Other}(X)` is a second matrix that
+    consists of sums over characteristics of non-rival goods, and :math:`\text{BLP Rival}(X)` is a third matrix that
+    consists of sums over rival goods. All three matrices have the same dimensions.
 
     Let :math:`x_{jt}` be the vector of characteristics in :math:`X` for product :math:`j` in market :math:`t`, which is
-    produced by firm :math:`f`. That is, :math:`j \in \mathscr{J}_{ft}`. Its counterpart in :math:`\mathrm{Rival}(X)` is
-
-    .. math:: \sum_{r \notin \mathscr{J}_{ft}} x_{rt},
-
-    and its counterpart in :math:`\mathrm{Other}(X)` is
+    produced by firm :math:`f`. That is, :math:`j \in \mathscr{J}_{ft}`. Its counterpart in :math:`\text{BLP Other}(X)`
+    is
 
     .. math:: \sum_{r \in \mathscr{J}_{ft} \setminus \{j\}} x_{rt}.
+
+    Its counterpart in :math:`\text{BLP Rival}(X)` is
+
+    .. math:: \sum_{r \notin \mathscr{J}_{ft}} x_{rt}.
 
     Parameters
     ----------
@@ -189,7 +190,7 @@ def build_blp_instruments(formulation: Formulation, product_data: Mapping) -> Ar
     Returns
     -------
     `ndarray`
-        Traditional excluded BLP instruments :math:`\mathrm{BLP}(X)`.
+        Traditional excluded BLP instruments, :math:`\text{BLP}(X)`.
 
     Examples
     --------
@@ -230,6 +231,166 @@ def build_blp_instruments(formulation: Formulation, product_data: Mapping) -> Ar
     other = paired_groups.expand(paired_groups.sum(X)) - X
     rival = market_groups.expand(market_groups.sum(X)) - X - other
     return np.ascontiguousarray(np.c_[other, rival])
+
+
+def build_differentiation_instruments(
+        formulation: Formulation, product_data: Mapping, version: str = 'local', interact: bool = False) -> Array:
+    r"""Construct excluded differentiation instruments.
+
+    Differentiation instruments in the spirit of :ref:`references:Gandhi and Houde (2017)` are
+
+    .. math:: \text{Diff}(X) = [\text{Diff Other}(X), \text{Diff Rival}(X)],
+
+    in which :math:`X` is a matrix of product characteristics, :math:`\text{Diff Other}(X)` is a second matrix that
+    consists of sums over functions of differences between non-rival goods, and :math:`\text{Diff Rival}(X)` is a third
+    matrix that consists of sums over rival goods. Without optional interaction terms, all three matrices have the same
+    dimensions.
+
+    .. note::
+
+       To construct simpler, firm agnostic instruments that are sums over functions of differences between all different
+       goods, specify a constant column of firm IDs and keep only the first half of instrument columns.
+
+    Let :math:`x_{jtk}` be characteristic :math:`k` in :math:`X` for product :math:`j` in market :math:`t`, which is
+    produced by firm :math:`f`. That is, :math:`j \in \mathscr{J}_{ft}`. Its counterpart in the "local" version of
+    :math:`\text{Diff Other}(X)` is
+
+    .. math:: \sum_{r \in \mathscr{J}_{ft} \setminus \{j\}} 1(|d_{jrtk}| < \text{SD}_k)
+
+    where :math:`d_{jrtk} = x_{rtk} - x_{jtk}` is the difference between products :math:`j` and :math:`r` along
+    dimension :math:`k`, :math:`\text{SD}_k` is the standard deviation of these pairwise differences computed across all
+    markets, and :math:`1(|d_{jrtk}| < \text{SD}_k)` indicates that products :math:`j` and :math:`r` are close to each
+    other in terms of characteristic :math:`k`.
+
+    The intuition behind this "local" version is that demand for products is often most influenced by a small number of
+    other goods that are very similar. For the "quadratic" version of :math:`\text{Diff Other}(X)`, which uses a more
+    continuous measure of the distance between goods, we instead have
+
+    .. math:: \sum_{r \in \mathscr{J}_{ft} \setminus \{j\}} d_{jrtk}^2.
+
+    Counterparts for the "local" and "quadratic" versions of :math:`\text{Diff Rival}(X)` are
+
+    .. math:: \sum_{r \notin \mathscr{J}_{ft}} 1(|d_{jrtk}| < \text{SD}_k)
+
+    and
+
+    .. math:: \sum_{r \notin \mathscr{J}_{ft}} d_{jrtk}^2.
+
+    With interaction terms, which reflect covariances between different characteristics, the summands for the "local"
+    versions are :math:`1(|d_{jrtk}| < \text{SD}_k) \times d_{jrt\ell}` for all characteristics :math:`\ell`, and the
+    summands for the "quadratic" versions are :math:`d_{jrtk} \times d_{jrt\ell}` for all :math:`\ell \geq k`.
+
+    Parameters
+    ----------
+    formulation : `Formulation`
+        :class:`Formulation` configuration for :math:`X`, the matrix of product characteristics used to build excluded
+        instruments. Variable names should correspond to fields in ``product_data``.
+    product_data : `structured array-like`
+        Each row corresponds to a product. Markets can have differing numbers of products. The following fields are
+        required:
+
+            - **market_ids** : (`object`) - IDs that associate products with markets.
+
+            - **firm_ids** : (`object`) - IDs that associate products with firms.
+
+        Along with ``market_ids`` and ``firm_ids``, the names of any additional fields can be used as variables in
+        ``formulation``.
+
+    version : `str, optional`
+        The version of differentiation instruments to construct:
+
+            - ``'local'`` (default) - Construct instruments that consider only the characteristics of "close" products
+              in each market.
+
+            - ``'quadratic'`` - Construct more continuous instruments that consider all products in each market.
+
+    interact : `bool, optional`
+        Whether to include interaction terms between different product characteristics, which can help capture
+        covariances between product characteristics.
+
+    Returns
+    -------
+    `ndarray`
+        Excluded differentiation instruments, :math:`\text{Diff}(X)`.
+
+    Examples
+    --------
+    .. raw:: latex
+
+       \begin{examplenotebook}
+
+    .. toctree::
+
+       /_notebooks/api/build_differentiation_instruments.ipynb
+
+    .. raw:: latex
+
+       \end{examplenotebook}
+
+    """
+
+    # load IDs
+    market_ids = extract_matrix(product_data, 'market_ids')
+    firm_ids = extract_matrix(product_data, 'firm_ids')
+    if market_ids is None or firm_ids is None:
+        raise KeyError("product_data must have market_ids and firm_ids fields.")
+    if market_ids.shape[1] > 1:
+        raise ValueError("The market_ids field of product_data must be one-dimensional.")
+    if firm_ids.shape[1] > 1:
+        raise ValueError("The firm_ids field of product_data must be one-dimensional.")
+
+    # identify markets
+    market_indices = {t: np.where(market_ids.flat == t) for t in np.unique(market_ids)}
+
+    # build the matrix and count its dimensions
+    X = build_matrix(formulation, product_data)
+    N, K = X.shape
+
+    # build distance matrices for each characteristic and market, nullifying distances between the same products
+    distances_mapping: Dict[int, Array] = {}
+    for k in range(K):
+        distances_mapping[k] = {}
+        for t, indices in market_indices.items():
+            x = X[indices, [k]]
+            distances = x - x.T
+            np.fill_diagonal(distances, np.nan)
+            distances_mapping[k][t] = distances
+
+    # compute standard deviations of pairwise differences across all markets
+    sd_mapping: Dict[int, Array] = {}
+    if version == 'local':
+        for k in range(K):
+            sd_mapping[k] = np.nanstd(np.hstack(d.flatten() for d in distances_mapping[k].values()))
+
+    # define a function that generates market-level terms used to create instruments
+    def generate_instrument_terms(t: Hashable) -> Iterator[Array]:
+        """Generate terms for a market that will be summed to create instruments."""
+        for k1 in range(K):
+            if version == 'quadratic':
+                for k2 in range(k1, K if interact else k1 + 1):
+                    yield np.nan_to_num(distances_mapping[k1][t]) * np.nan_to_num(distances_mapping[k2][t])
+            elif version == 'local':
+                with np.errstate(invalid='ignore'):
+                    close = np.nan_to_num(np.abs(distances_mapping[k1][t]) < sd_mapping[k1])
+                if not interact:
+                    yield close
+                else:
+                    for k2 in range(K):
+                        yield close * np.nan_to_num(distances_mapping[k2][t])
+            else:
+                raise ValueError("version must be 'local' or 'quadratic'.")
+
+    # create the instruments
+    other_blocks: List[List[Array]] = []
+    rival_blocks: List[List[Array]] = []
+    for t, indices in market_indices.items():
+        other_blocks.append([])
+        rival_blocks.append([])
+        ownership = firm_ids[indices] == firm_ids[indices].T
+        for term in generate_instrument_terms(t):
+            other_blocks[-1].append((ownership * term).sum(axis=1, keepdims=True))
+            rival_blocks[-1].append((~ownership * term).sum(axis=1, keepdims=True))
+    return np.c_[np.block(other_blocks), np.block(rival_blocks)]
 
 
 def build_matrix(formulation: Formulation, data: Mapping) -> Array:

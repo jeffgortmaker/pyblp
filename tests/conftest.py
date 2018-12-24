@@ -10,10 +10,10 @@ import pytest
 import scipy.linalg
 
 from pyblp import (
-    Formulation, Integration, Problem, ProblemResults, Simulation, SimulationResults, build_id_data, build_ownership,
-    options
+    Formulation, Integration, Problem, ProblemResults, Simulation, SimulationResults, build_differentiation_instruments,
+    build_id_data, build_matrix, build_ownership, options
 )
-from pyblp.utilities.basics import Array, Data, Options, RecArray
+from pyblp.utilities.basics import update_matrices, Array, Data, Options, RecArray
 
 
 # define common types
@@ -259,7 +259,7 @@ def large_blp_simulation() -> SimulationFixture:
     """Solve a simulation with 20 markets, varying numbers of products per market, a linear constant, linear/nonlinear
     prices, a linear/nonlinear/cost characteristic, another three linear characteristics, another two cost
     characteristics, demographics interacted with prices and the linear/nonlinear/cost characteristic, dense parameter
-    matrices, and a log-linear cost specification.
+    matrices, a log-linear cost specification, and local differentiation instruments on the demand side.
     """
     id_data = build_id_data(T=20, J=20, F=9)
     keep = np.arange(id_data.size)
@@ -294,7 +294,15 @@ def large_blp_simulation() -> SimulationFixture:
         costs_type='log',
         seed=2
     )
-    return simulation, simulation.solve()
+    simulation_results = simulation.solve()
+    differentiation_instruments = np.c_[
+        build_differentiation_instruments(Formulation('0 + x + y + z + q'), simulation_results.product_data),
+        build_matrix(Formulation('0 + a + b'), simulation_results.product_data)
+    ]
+    simulation_results.product_data = update_matrices(simulation_results.product_data, {
+        'demand_instruments': (differentiation_instruments, simulation_results.product_data.demand_instruments.dtype)
+    })
+    return simulation, simulation_results
 
 
 @pytest.fixture(scope='session')

@@ -30,10 +30,11 @@ There are also a number of convenience functions that can be used to construct c
 .. autosummary::
    :toctree: _api
 
+   build_matrix
+   build_blp_instruments
+   build_differentiation_instruments
    build_id_data
    build_ownership
-   build_blp_instruments
-   build_matrix
 
 
 Simulation Class

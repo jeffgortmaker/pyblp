@@ -41,17 +41,17 @@ class Simulation(Economy):
 
     Next, simple excluded demand-side instruments are constructed according to
 
-    .. math:: [\mathrm{BLP}(X_1), X_{3 \setminus 1}],
+    .. math:: [\text{BLP}(X_1), X_{3 \setminus 1}],
 
-    in which :math:`\mathrm{BLP}(X_1)` are traditional excluded demand-side BLP instruments (defined as in
+    in which :math:`\text{BLP}(X_1)` are traditional excluded demand-side BLP instruments (defined as in
     :func:`build_blp_instruments`) and :math:`X_{3 \setminus 1}` is all variables used formulate :math:`X_3` that were
     not used to formulate :math:`X_1`.
 
     Similarly, simple excluded supply-side instruments are constructed according to
 
-    .. math:: [\mathrm{BLP}(X_3), X_{1 \setminus 3}],
+    .. math:: [\text{BLP}(X_3), X_{1 \setminus 3}],
 
-    in which :math:`\mathrm{BLP}(X_3)` are traditional excluded supply-side BLP instruments (defined as in
+    in which :math:`\text{BLP}(X_3)` are traditional excluded supply-side BLP instruments (defined as in
     :func:`build_blp_instruments`) and :math:`X_{1 \setminus 3}` is all variables used formulate :math:`X_1` that were
     not used to formulate :math:`X_3`.
 
