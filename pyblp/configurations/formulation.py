@@ -52,13 +52,6 @@ class Formulation(StringRepresentation):
     Internally, mathematical operations are parsed and evaluated by the `SymPy <https://www.sympy.org/en/index.html>`_
     package, which is also used to symbolically differentiate terms when their derivatives are required.
 
-    .. warning::
-
-       There is no explicit checking for collinearity. For example, if two variables are included in the formulation but
-       are collinear, or if absorbed fixed effects make one or more variables redundant, no errors will be immediately
-       raised. However, formulated collinearity often gives rise to matrix inversion errors during estimation if the
-       formulated matrix is used in a regression.
-
     Parameters
     ----------
     formula : `str`

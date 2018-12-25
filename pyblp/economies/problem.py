@@ -1068,6 +1068,9 @@ class Problem(ProblemEconomy):
             if X3_errors or ZS_errors:
                 raise exceptions.MultipleErrors(X3_errors + ZS_errors)
 
+        # detect any collinearity issues
+        self._detect_collinearity()
+
         # output information about the initialized problem
         output(f"Initialized the problem after {format_seconds(time.time() - start_time)}.")
         output("")
@@ -1121,6 +1124,9 @@ class OptimalInstrumentProblem(ProblemEconomy):
             self.products.ZS, ZS_errors = self._absorb_supply_ids(self.products.ZS)
             if ZS_errors:
                 raise exceptions.MultipleErrors(ZS_errors)
+
+        # detect any collinearity issues
+        self._detect_collinearity()
 
         # output information about the re-created problem
         output(f"Re-created the problem after {format_seconds(time.time() - start_time)}.")

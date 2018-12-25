@@ -27,6 +27,22 @@ def multiply_matrix_and_tensor(a: Array, b: Array) -> Array:
     return multiplied
 
 
+def precisely_identify_collinearity(x: Array, atol: float, rtol: float) -> Tuple[Array, bool]:
+    """Compute the QR decomposition of a matrix and identify which diagonal elements of the upper diagonal matrix are
+    within absolute and relative tolerances.
+    """
+    try:
+        with warnings.catch_warnings():
+            warnings.filterwarnings('error')
+            r = scipy.linalg.qr(x, mode='r')[0] if x.size > 0 else x
+            collinear = np.abs(r.diagonal()) < atol + rtol * x.std(axis=0)
+            successful = True
+    except (ValueError, scipy.linalg.LinAlgError, scipy.linalg.LinAlgWarning):
+        collinear = np.zeros(x.shape[1], np.bool)
+        successful = False
+    return collinear, successful
+
+
 def precisely_compute_eigenvalues(x: Array) -> Tuple[Array, bool]:
     """Compute the eigenvalues of a real symmetric matrix."""
     try:

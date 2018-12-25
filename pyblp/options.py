@@ -35,6 +35,20 @@ dtype : `dtype`
     Windows, it is often easier to install Linux in a virtual machine than it is to build NumPy from source with a
     non-standard compiler.
 
+collinear_atol : `float`
+    Absolute tolerance for detecting collinear columns in each matrix of product characteristics and instruments:
+    :math:`X_1`, :math:`X_2`, :math:`X_3`, :math:`Z_D`, and :math:`Z_S`.
+
+    Each matrix is decomposed into a :math:`QR` decomposition and an error is raised for any column whose diagonal
+    element in :math:`R` has a magnitude less than ``collinear_atol + collinear_rtol * sd`` where ``sd`` is the column's
+    standard deviation.
+
+    The default absolute tolerance is ``1e-14``. To disable collinearity checks, set
+    ``pyblp.options.collinear_atol = pyblp.options.collinear_rtol = 0``.
+
+collinear_rtol : `float`
+    Relative tolerance for detecting collinear columns, which is by default also ``1e-14``.
+
 """
 
 import numpy as np
@@ -44,3 +58,4 @@ digits = 10
 verbose = True
 verbose_output = print
 dtype = np.float64
+collinear_atol = collinear_rtol = 1e-14

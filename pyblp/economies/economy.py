@@ -9,6 +9,7 @@ import numpy as np
 
 from .. import options
 from ..configurations.formulation import ColumnFormulation, Formulation
+from ..utilities.algebra import precisely_identify_collinearity
 from ..utilities.basics import Array, RecArray, StringRepresentation, TableFormatter
 
 
@@ -161,6 +162,46 @@ class Economy(abc.ABC, StringRepresentation):
 
         # combine the sections into one string
         return "\n\n".join("\n".join(s) for s in [dimension_section, formulation_section])
+
+    def _detect_collinearity(self) -> None:
+        """Detect any collinearity issues in product data matrices."""
+
+        # skip collinearity checking when it is disabled via zero tolerances
+        if max(options.collinear_atol, options.collinear_rtol) <= 0:
+            return
+
+        # collect labels for columns of matrices that will be checked for collinearity issues
+        matrix_labels = {
+            'X1': [str(f) for f in self._X1_formulations],
+            'X2': [str(f) for f in self._X2_formulations],
+            'X3': [str(f) for f in self._X3_formulations],
+            'ZD': [str(f) for f in self._X1_formulations if 'prices' not in f.names],
+            'ZS': [str(f) for f in self._X3_formulations]
+        }
+        matrix_labels.update({
+            'ZD': [f'demand_instruments{i}' for i in range(self.MD - len(matrix_labels['ZD']))] + matrix_labels['ZD'],
+            'ZS': [f'demand_instruments{i}' for i in range(self.MD - len(matrix_labels['ZS']))] + matrix_labels['ZS']
+        })
+
+        # check each matrix for collinearity
+        for name, labels in matrix_labels.items():
+            collinear, successful = precisely_identify_collinearity(
+                self.products[name], options.collinear_atol, options.collinear_rtol
+            )
+            common_message = "To disable collinearity checks, set options.collinear_atol = options.collinear_rtol = 0."
+            if (self.ED > 0 and name in {'X1', 'ZD'}) or (self.ES > 0 and name in {'X3', 'ZS'}):
+                common_message = f"Absorbed fixed effects may be creating collinearity problems. {common_message}"
+            if not successful:
+                raise ValueError(
+                    f"Failed to compute the QR decomposition of {name} while checking for collinearity issues. "
+                    f"{common_message}"
+                )
+            if collinear.any():
+                collinear_labels = ", ".join(l for l, c in zip(labels, collinear) if c)
+                raise ValueError(
+                    f"Detected collinearity issues with [{collinear_labels}] and at least one other column in {name}. "
+                    f"{common_message}"
+                )
 
     def _validate_name(self, name: str) -> None:
         """Validate that a name corresponds to a variable in X1, X2, or X3."""
