@@ -15,11 +15,18 @@ from .conftest import SimulatedProblemFixture
 @pytest.mark.usefixtures('simulated_problem')
 @pytest.mark.parametrize('solve_options_update', [
     pytest.param({'method': '2s'}, id="two-step"),
+    pytest.param({'center_moments': False, 'W_type': 'unadjusted', 'se_type': 'clustered'}, id="complex covariances"),
+    pytest.param({'delta_behavior': 'last'}, id="faster starting delta values"),
     pytest.param({'fp_type': 'linear'}, id="non-safe linear fixed point"),
     pytest.param({'fp_type': 'nonlinear'}, id="nonlinear fixed point"),
-    pytest.param({'iteration': Iteration('hybr', {'xtol': 1e-12}, compute_jacobian=True)}, id="Newton iteration"),
-    pytest.param({'delta_behavior': 'last'}, id="faster starting delta values"),
-    pytest.param({'center_moments': False, 'W_type': 'unadjusted', 'se_type': 'clustered'}, id="complex covariances")
+    pytest.param(
+        {'iteration': Iteration('hybr', {'xtol': 1e-12}, compute_jacobian=True)},
+        id="linear Newton fixed point"
+    ),
+    pytest.param(
+        {'fp_type': 'nonlinear', 'iteration': Iteration('hybr', {'xtol': 1e-12}, compute_jacobian=True)},
+        id="nonlinear Newton fixed point"
+    ),
 ])
 def test_accuracy(simulated_problem: SimulatedProblemFixture, solve_options_update: Options) -> None:
     """Test that starting parameters that are half their true values give rise to errors of less than 10%."""

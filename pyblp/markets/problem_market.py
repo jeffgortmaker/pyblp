@@ -1,6 +1,5 @@
 """Market-level BLP problem functionality."""
 
-import functools
 from typing import List, Tuple, Union
 
 import numpy as np
@@ -39,70 +38,86 @@ class ProblemMarket(Market):
                     group_shares = self.products.shares / self.groups.expand(self.groups.sum(self.products.shares))
                     delta -= self.rho * np.log(group_shares)
             elif fp_type in {'safe', 'linear'}:
-                log_shares = np.log(self.products.shares)
-                compute_probabilities = functools.partial(self.compute_probabilities, safe=fp_type == 'safe')
                 if self.H == 0:
-                    if not iteration._compute_jacobian:
-                        def contraction(next_delta: Array) -> Union[Tuple[Array, Array], Array]:
-                            """Compute the next linear delta."""
-                            shares = compute_probabilities(next_delta)[0] @ self.agents.weights
-                            return next_delta + log_shares - np.log(shares)
-                    else:
-                        # pre-compute a Jacobian component
-                        eye = np.eye(self.J)
+                    # pre-compute components
+                    log_shares = np.log(self.products.shares)
 
-                        # define the contraction to also return the Jacobian
-                        def contraction(next_delta: Array) -> Union[Tuple[Array, Array], Array]:
-                            """Compute the next linear delta and its Jacobian."""
-                            probabilities = compute_probabilities(next_delta)[0]
-                            shares = probabilities @ self.agents.weights
-                            weighted_probabilities = self.agents.weights * probabilities.T
-                            return (
-                                next_delta + log_shares - np.log(shares),
-                                -eye + (probabilities @ weighted_probabilities) / shares
-                            )
+                    # define the contraction
+                    def contraction(x: Array) -> Union[Tuple[Array, Array], Array]:
+                        """Compute the next linear delta and optionally its Jacobian."""
+                        probabilities = self.compute_probabilities(x, safe=fp_type == 'safe')[0]
+                        shares = probabilities @ self.agents.weights
+                        x = x + log_shares - np.log(shares)
+                        if not iteration._compute_jacobian:
+                            return x
+                        weighted_probabilities = self.agents.weights * probabilities.T
+                        jacobian = (probabilities @ weighted_probabilities) / shares
+                        return x, jacobian
                 else:
-                    if not iteration._compute_jacobian:
-                        def contraction(next_delta: Array) -> Union[Tuple[Array, Array], Array]:
-                            """Compute the next linear delta under nesting."""
-                            shares = compute_probabilities(next_delta)[0] @ self.agents.weights
-                            return next_delta + (log_shares - np.log(shares)) * (1 - self.rho)
-                    else:
-                        # pre-compute Jacobian components
-                        membership = self.get_membership_matrix()
-                        weighted_eye = (1 + self.rho) * np.eye(self.J)
+                    # pre-compute components
+                    log_shares = np.log(self.products.shares)
+                    dampener = 1 - self.rho
+                    rho_eye = self.rho * np.eye(self.J)
+                    rho_membership = self.rho * self.get_membership_matrix()
+                    rho_membership_eye = rho_membership * np.eye(self.J)
 
-                        # define the contraction to also return the Jacobian
-                        def contraction(next_delta: Array) -> Union[Tuple[Array, Array], Array]:
-                            """Compute the next linear delta and its Jacobian under nesting."""
-                            probabilities, conditionals = compute_probabilities(next_delta)
-                            shares = probabilities @ self.agents.weights
-                            weighted_probabilities = self.agents.weights * probabilities.T / shares.T
-                            return (
-                                next_delta + (log_shares - np.log(shares)) * (1 - self.rho),
-                                -weighted_eye + probabilities @ weighted_probabilities + self.rho * membership * (
-                                    conditionals @ weighted_probabilities
-                                )
-                            )
+                    # define the contraction
+                    def contraction(x: Array) -> Union[Tuple[Array, Array], Array]:
+                        """Compute the next linear delta and optionally its Jacobian under nesting."""
+                        probabilities, conditionals = self.compute_probabilities(x, safe=fp_type == 'safe')
+                        shares = probabilities @ self.agents.weights
+                        x = x + (log_shares - np.log(shares)) * dampener
+                        if not iteration._compute_jacobian:
+                            return x
+                        weighted_probabilities = self.agents.weights * probabilities.T
+                        jacobian = (
+                            rho_eye + dampener * (probabilities @ weighted_probabilities) / shares +
+                            rho_membership_eye - rho_membership * (conditionals @ weighted_probabilities) / shares
+                        )
+                        return x, jacobian
 
                 # solve the linear contraction mapping
                 delta, converged, iterations, evaluations = iteration._iterate(initial_delta, contraction)
             else:
-                assert fp_type == 'nonlinear' and not iteration._compute_jacobian
-                exp_mu = np.exp(self.mu)
-                compute_probabilities = functools.partial(self.compute_probabilities, mu=exp_mu, linear=False)
-
-                # define the nonlinear contraction mapping
+                assert fp_type == 'nonlinear'
                 if self.H == 0:
-                    def contraction(next_delta: Array) -> Union[Tuple[Array, Array], Array]:
-                        """Compute the next exponentiated delta."""
-                        quotient = compute_probabilities(next_delta, numerator=exp_mu)[0]
-                        return self.products.shares / (quotient @ self.agents.weights)
+                    # pre-compute components
+                    exp_mu = np.exp(self.mu)
+
+                    # define the contraction
+                    def contraction(x: Array) -> Union[Tuple[Array, Array], Array]:
+                        """Compute the next exponentiated delta and optionally its Jacobian."""
+                        probability_ratios = self.compute_probabilities(x, exp_mu, numerator=exp_mu, linear=False)[0]
+                        share_ratios = probability_ratios @ self.agents.weights
+                        x0, x = x, self.products.shares / share_ratios
+                        if not iteration._compute_jacobian:
+                            return x
+                        probabilities = x0 * probability_ratios
+                        weighted_probabilities = self.agents.weights * probabilities.T
+                        jacobian = x * (probabilities @ weighted_probabilities) / share_ratios
+                        return x, jacobian
                 else:
-                    def contraction(next_delta: Array) -> Union[Tuple[Array, Array], Array]:
-                        """Compute the next exponentiated delta under nesting."""
-                        shares = compute_probabilities(next_delta)[0] @ self.agents.weights
-                        return next_delta * (self.products.shares / shares)**(1 - self.rho)
+                    # pre-compute components
+                    exp_mu = np.exp(self.mu)
+                    dampener = 1 - self.rho
+                    rho_eye = self.rho * np.eye(self.J)
+                    rho_membership = self.rho * self.get_membership_matrix()
+                    rho_membership_eye = rho_membership * np.eye(self.J)
+
+                    # define the contraction
+                    def contraction(x: Array) -> Union[Tuple[Array, Array], Array]:
+                        """Compute the next exponentiated delta and optionally its Jacobian under nesting."""
+                        probabilities, conditionals = self.compute_probabilities(x, exp_mu, linear=False)
+                        shares = probabilities @ self.agents.weights
+                        x0, x = x, x * (self.products.shares / shares)**dampener
+                        if not iteration._compute_jacobian:
+                            return x
+                        weighted_probabilities = self.agents.weights * probabilities.T
+                        jacobian = x / x0 * (
+                            rho_eye + (probabilities @ weighted_probabilities) / shares +
+                            rho_membership_eye - rho_membership * (conditionals @ weighted_probabilities) / shares
+                        )
+                        return x, jacobian
 
                 # solve the nonlinear contraction mapping
                 exp_delta, converged, iterations, evaluations = iteration._iterate(np.exp(initial_delta), contraction)

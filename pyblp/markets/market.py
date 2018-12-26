@@ -403,19 +403,19 @@ class Market(object):
             associations = self.groups.expand(group_associations)
 
             # utilities are needed to compute tangents with respect to rho
-            weighted_utilities = (delta + mu) / (1 - self.rho)
+            utilities = (delta + mu) / (1 - self.rho)
 
             # compute the tangent of conditional probabilities with respect to the parameter
-            A = conditionals * weighted_utilities / (1 - self.rho)
+            A = conditionals * utilities / (1 - self.rho)
             A_sums = self.groups.sum(A)
             conditionals_tangent = associations * (A - conditionals * self.groups.expand(A_sums))
 
             # compute the tangent of marginal probabilities with respect to the parameter (re-scale for robustness)
-            max_utilities = np.max(weighted_utilities, axis=0, keepdims=True)
+            max_utilities = np.max(utilities, axis=0, keepdims=True)
             with np.errstate(divide='ignore', invalid='ignore'):
                 B = marginals * (
                     A_sums * (1 - self.group_rho) -
-                    (np.log(self.groups.sum(np.exp(weighted_utilities - max_utilities))) + max_utilities)
+                    (np.log(self.groups.sum(np.exp(utilities - max_utilities))) + max_utilities)
                 )
                 marginals_tangent = group_associations * B - marginals * (group_associations.T @ B)
             marginals_tangent[~np.isfinite(marginals_tangent)] = 0

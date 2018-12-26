@@ -264,6 +264,9 @@ def scipy_iterator(
         Tuple[Array, bool]):
     """Apply a SciPy root finding method."""
 
+    # wrap the callback if the method supports iteration callbacks
+    callback = None if method in {'hybr', 'lm'} else lambda *_: iteration_callback()
+
     # record whether non-finite values were encountered during fixed point iteration
     failed = False
 
@@ -288,18 +291,17 @@ def scipy_iterator(
             failed = True
 
         # record the completion of an iteration if the method doesn't support iteration callbacks
-        if method in {'hybr', 'lm'}:
+        if callback is None:
             iteration_callback()
 
         # transform the fixed point into a root-finding problem
         if jacobian is not None:
-            return x0 - x, -jacobian
+            return x0 - x, np.eye(x.size) - jacobian
         return x0 - x
 
     # call the routine
     results = scipy.optimize.root(
-        contraction_wrapper, initial, method=method, jac=compute_jacobian, callback=lambda *_: iteration_callback(),
-        options=scipy_options
+        contraction_wrapper, initial, method=method, jac=compute_jacobian, callback=callback, options=scipy_options
     )
     return results.x, not failed and results.success
 

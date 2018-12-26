@@ -291,9 +291,10 @@ def scipy_optimizer(
         Tuple[Array, bool]):
     """Optimize with a SciPy method."""
     hess = scipy_options.get('hess', scipy.optimize.BFGS() if method == 'trust-constr' else None)
+    callback = lambda *_: iteration_callback()
     results = scipy.optimize.minimize(
         objective_function, initial_values, method=method, jac=compute_gradient, hess=hess, bounds=bounds,
-        callback=lambda *_: iteration_callback(), options=scipy_options
+        callback=callback, options=scipy_options
     )
     return results.x, results.success
 
