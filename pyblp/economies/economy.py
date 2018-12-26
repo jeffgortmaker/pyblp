@@ -163,6 +163,15 @@ class Economy(abc.ABC, StringRepresentation):
         # combine the sections into one string
         return "\n\n".join("\n".join(s) for s in [dimension_section, formulation_section])
 
+    def _validate_shares(self) -> None:
+        """Validate the integrity of product shares."""
+        shares = self.products.shares
+        if (shares <= 0).any() or (shares >= 1).any():
+            raise ValueError("Product shares must be between zero and one, exclusive.")
+        bad_markets = [t for t, indices in self._product_market_indices.items() if shares[indices].sum() >= 1]
+        if bad_markets:
+            raise ValueError(f"Shares in the following markets do not sum to less than one: {bad_markets}.")
+
     def _detect_collinearity(self) -> None:
         """Detect any collinearity issues in product data matrices."""
 

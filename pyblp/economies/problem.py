@@ -910,7 +910,9 @@ class Problem(ProblemEconomy):
 
             - **market_ids** : (`object`) - IDs that associate products with markets.
 
-            - **shares** : (`numeric`) - Market shares, :math:`s`.
+            - **shares** : (`numeric`) - Market shares, :math:`s`, which should be between zero and one, exclusive.
+              Outside shares should also be between zero and one. That is, shares in each market should sum to a value
+              that is less than one.
 
             - **prices** : (`numeric`) - Product prices, :math:`p`.
 
@@ -1072,7 +1074,8 @@ class Problem(ProblemEconomy):
             if X3_errors or ZS_errors:
                 raise exceptions.MultipleErrors(X3_errors + ZS_errors)
 
-        # detect any collinearity issues
+        # detect any problems with the product data
+        self._validate_shares()
         self._detect_collinearity()
 
         # output information about the initialized problem
@@ -1129,7 +1132,7 @@ class OptimalInstrumentProblem(ProblemEconomy):
             if ZS_errors:
                 raise exceptions.MultipleErrors(ZS_errors)
 
-        # detect any collinearity issues
+        # detect any collinearity issues with the updated instruments
         self._detect_collinearity()
 
         # output information about the re-created problem
