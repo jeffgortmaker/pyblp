@@ -15,7 +15,7 @@ class Iteration(StringRepresentation):
     Parameters
     ----------
     method : `str or callable`
-        The fixed point iteration routine that will be used. One of the following:
+        The fixed point iteration routine that will be used. The following routines do not use analytic Jacobians:
 
             - ``'simple'`` - Non-accelerated iteration.
 
@@ -26,6 +26,14 @@ class Iteration(StringRepresentation):
               implementation uses a first-order squared non-monotone extrapolation scheme. If there are any errors
               during the acceleration step, it uses the last values for the next iteration of the algorithm.
 
+        The following routines can use analytic Jacobians:
+
+            - ``'hybr'`` - Uses the :func:`scipy.optimize.root` modification of the Powell hybrid method implemented in
+              MINIPACK.
+
+            - ``'lm'`` - Uses the :func:`scipy.optimize.root` modification of the Levenberg-Marquardt algorithm
+              implemented in MINIPACK.
+
         The following trivial routine can be used to simply return the initial values:
 
             - ``'return'`` - Assume that the initial values are the optimal ones.
@@ -34,10 +42,12 @@ class Iteration(StringRepresentation):
 
             method(initial, contraction, callback, **options) -> (final, converged)
 
-        where ``initial`` is an array of initial values, ``contraction`` is a callable contraction mapping, ``callback``
-        is a function that should be called without any arguments after each major iteration (it is used to record the
-        number of major iterations), ``options`` are specified below, ``final`` is an array of final values, and
-        ``converged`` is a flag for whether the routine converged.
+        where ``initial`` is an array of initial values, ``contraction`` is a callable contraction mapping that accepts
+        an array of values and returns either the next values if ``compute_jacobian`` is ``False`` or a tuple of the
+        next values and the Jacobian if ``compute_jacobian`` is ``True``, ``callback`` is a function that should be
+        called without any arguments after each major iteration (it is used to record the number of major iterations),
+        ``options`` are specified below, ``final`` is an array of final values, and ``converged`` is a flag for whether
+        the routine converged.
 
         Regardless of the chosen routine, if there are any computational issues that create infinities or null values,
         ``final`` will be the second to last iteration's values.
@@ -45,10 +55,10 @@ class Iteration(StringRepresentation):
     method_options : `dict, optional`
         Options for the fixed point iteration routine.
 
-        For the ``'anderson'`` method`, these options will be passed to ``options`` in :func:`scipy.optimize.root`.
-        Refer to the SciPy documentation for information about which options are available.
+        For the ``'anderson'``, ``'hybr'``, and ``'lm'`` methods, these options will be passed to ``options`` in
+        :func:`scipy.optimize.root`. Refer to the SciPy documentation for information about which options are available.
 
-        The ``'simple'`` and ``'anderson'`` methods support the following options:
+        The ``'simple'`` and ``'squarem'`` methods support the following options:
 
             - **max_evaluations** : (`int`) - Maximum number of contraction mapping evaluations. The default value is
               ``5000``.
@@ -75,6 +85,11 @@ class Iteration(StringRepresentation):
               below ``step_min``, it is set equal to ``step_min`` and ``step_min`` is scaled by this factor. The default
               value is ``4.0``.
 
+    compute_jacobian : `bool, optional`
+        Whether to compute an analytic Jacobian during iteration, which must be ``False`` if ``method`` does not use
+        analytic Jacobians. By default, analytic Jacobians are not computed, and if a ``method`` is selected that
+        supports analytic Jacobians, they will by default be numerically approximated.
+
     Examples
     --------
     .. raw:: latex
@@ -94,21 +109,39 @@ class Iteration(StringRepresentation):
     _iterator: functools.partial
     _description: str
     _method_options: Options
+    _compute_jacobian: bool
 
-    def __init__(self, method: Union[str, Callable], method_options: Optional[Options] = None) -> None:
+    def __init__(self, method: Union[str, Callable], method_options: Optional[Options] = None,
+                 compute_jacobian: bool = False) -> None:
         """Validate the method and configure default options."""
-        methods = {
+        simple_methods = {
             'simple': (functools.partial(simple_iterator), "no acceleration"),
             'anderson': (functools.partial(scipy_iterator), "the Anderson method implemented in SciPy"),
-            'squarem': (functools.partial(squarem_iterator), "the SQUAREM acceleration method"),
+            'squarem': (functools.partial(squarem_iterator), "the SQUAREM acceleration method")
+        }
+        complex_methods = {
+            'hybr': (
+                functools.partial(scipy_iterator),
+                "modification of the Powell hybrid method implemented in MINIPACK via SciPy"
+            ),
+            'lm': (
+                functools.partial(scipy_iterator),
+                "modification of the Levenberg-Marquardt algorithm implemented in MINIPACK via SciPy"
+            ),
             'return': (functools.partial(return_iterator), "a trivial routine that returns the initial values")
         }
+        methods = {**simple_methods, **complex_methods}
 
         # validate the configuration
         if method not in methods and not callable(method):
             raise ValueError(f"method must be one of {list(methods.keys())} or a callable object.")
         if method_options is not None and not isinstance(method_options, dict):
             raise ValueError("method_options must be None or a dict.")
+        if method in simple_methods and compute_jacobian:
+            raise ValueError(f"compute_jacobian must be False when method is '{method}'.")
+
+        # initialize class attributes
+        self._compute_jacobian = compute_jacobian
 
         # options are by default empty
         if method_options is None:
@@ -122,8 +155,8 @@ class Iteration(StringRepresentation):
             return
 
         # identify the non-custom iterator and set default options
-        self._iterator, self._description = methods[method]
         self._method_options: Options = {}
+        self._iterator, self._description = methods[method]
         if method in {'simple', 'squarem'}:
             self._method_options.update({
                 'tol': 1e-14,
@@ -138,7 +171,7 @@ class Iteration(StringRepresentation):
                     'step_factor': 4.0
                 })
         elif method != 'return':
-            self._iterator = functools.partial(self._iterator, method=method)
+            self._iterator = functools.partial(self._iterator, method=method, compute_jacobian=compute_jacobian)
 
         # update the default options
         self._method_options.update(method_options)
@@ -169,7 +202,8 @@ class Iteration(StringRepresentation):
 
     def __str__(self) -> str:
         """Format the configuration as a string."""
-        return f"Configured to iterate using {self._description} with options {format_options(self._method_options)}."
+        description = f"{self._description} {'with' if self._compute_jacobian else 'without'} analytic Jacobians"
+        return f"Configured to iterate using {description} with options {format_options(self._method_options)}."
 
     def _iterate(self, initial: Array, contraction: Callable[[Array], Any]) -> Tuple[Array, bool, int, int]:
         """Solve a fixed point iteration problem."""
@@ -184,7 +218,7 @@ class Iteration(StringRepresentation):
             iterations += 1
 
         # define a contraction wrapper
-        def contraction_wrapper(raw_values: Any) -> Array:
+        def contraction_wrapper(raw_values: Any) -> Union[Tuple[Array, Array], Array]:
             """Normalize arrays so they work with all types of routines. Also count the total number of contraction
             evaluations.
             """
@@ -193,7 +227,14 @@ class Iteration(StringRepresentation):
             if not isinstance(raw_values, np.ndarray):
                 raw_values = np.asarray(raw_values)
             values = raw_values.reshape(initial.shape).astype(initial.dtype, copy=False)
-            return contraction(values).astype(np.float64, copy=False).reshape(raw_values.shape)
+            results = contraction(values)
+            if isinstance(results, tuple):
+                values, jacobian = results
+                return (
+                    values.astype(raw_values.dtype, copy=False).reshape(raw_values.shape),
+                    jacobian.astype(raw_values.dtype, copy=False).reshape((raw_values.size, raw_values.size))
+                )
+            return results.astype(raw_values.dtype, copy=False).reshape(raw_values.shape)
 
         # normalize the starting values
         raw_initial = initial.astype(np.float64, copy=False).flatten()
@@ -202,9 +243,7 @@ class Iteration(StringRepresentation):
         raw_final, converged = self._iterator(
             raw_initial, contraction_wrapper, iteration_callback, **self._method_options
         )
-        if not isinstance(raw_final, np.ndarray):
-            raw_final = np.asarray(raw_final)
-        final = raw_final.reshape(initial.shape).astype(initial.dtype, copy=False)
+        final = np.asarray(raw_final).astype(initial.dtype, copy=False).reshape(initial.shape)
         return final, converged, iterations, evaluations
 
 
@@ -220,14 +259,49 @@ def return_iterator(initial: Array, *_: Any, **__: Any) -> Tuple[Array, bool]:
 
 
 def scipy_iterator(
-        initial: Array, contraction: Callable[[Array], Array], iteration_callback: Callable[[], None], method: str,
-        **scipy_options: Any) -> Tuple[Array, bool]:
+        initial: Array, contraction: Callable[[Array], Union[Tuple[Array, Array], Array]],
+        iteration_callback: Callable[[], None], method: str, compute_jacobian: bool, **scipy_options: Any) -> (
+        Tuple[Array, bool]):
     """Apply a SciPy root finding method."""
+
+    # record whether non-finite values were encountered during fixed point iteration
+    failed = False
+
+    # wrap the contraction
+    def contraction_wrapper(x: Array) -> Union[Tuple[Array, Array], Array]:
+        """Transform the fixed point into a root-finding problem, check for errors, and call the callback function here
+        if calling it isn't supported by the routine.
+        """
+        nonlocal failed
+
+        # attempt to evaluate the contraction and check for bad values
+        result = contraction(x)
+        if isinstance(result, tuple):
+            x0, (x, jacobian) = x, result
+        else:
+            x0, x = x, result
+            jacobian = None
+        if not np.isfinite(x).all() or (jacobian is not None and not np.isfinite(jacobian).all()):
+            x = x0
+            if jacobian is not None:
+                jacobian = np.zeros_like(jacobian)
+            failed = True
+
+        # record the completion of an iteration if the method doesn't support iteration callbacks
+        if method in {'hybr', 'lm'}:
+            iteration_callback()
+
+        # transform the fixed point into a root-finding problem
+        if jacobian is not None:
+            return x0 - x, -jacobian
+        return x0 - x
+
+    # call the routine
     results = scipy.optimize.root(
-        lambda x: x - contraction(x), initial, method=method, callback=lambda *_: iteration_callback(),
+        contraction_wrapper, initial, method=method, jac=compute_jacobian, callback=lambda *_: iteration_callback(),
         options=scipy_options
     )
-    return results.x, results.success
+    return results.x, not failed and results.success
 
 
 def simple_iterator(

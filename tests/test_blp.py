@@ -17,6 +17,7 @@ from .conftest import SimulatedProblemFixture
     pytest.param({'method': '2s'}, id="two-step"),
     pytest.param({'fp_type': 'linear'}, id="non-safe linear fixed point"),
     pytest.param({'fp_type': 'nonlinear'}, id="nonlinear fixed point"),
+    pytest.param({'iteration': Iteration('hybr', {'xtol': 1e-12}, compute_jacobian=True)}, id="Newton iteration"),
     pytest.param({'delta_behavior': 'last'}, id="faster starting delta values"),
     pytest.param({'center_moments': False, 'W_type': 'unadjusted', 'se_type': 'clustered'}, id="complex covariances")
 ])

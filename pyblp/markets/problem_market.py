@@ -1,7 +1,7 @@
 """Market-level BLP problem functionality."""
 
 import functools
-from typing import List, Tuple
+from typing import List, Tuple, Union
 
 import numpy as np
 
@@ -41,28 +41,76 @@ class ProblemMarket(Market):
             elif fp_type in {'safe', 'linear'}:
                 log_shares = np.log(self.products.shares)
                 compute_probabilities = functools.partial(self.compute_probabilities, safe=fp_type == 'safe')
-                compute_log_shares = lambda d: np.log(compute_probabilities(d) @ self.agents.weights)
                 if self.H == 0:
-                    contraction = lambda d: d + log_shares - compute_log_shares(d)
+                    if not iteration._compute_jacobian:
+                        def contraction(next_delta: Array) -> Union[Tuple[Array, Array], Array]:
+                            """Compute the next linear delta."""
+                            shares = compute_probabilities(next_delta)[0] @ self.agents.weights
+                            return next_delta + log_shares - np.log(shares)
+                    else:
+                        # pre-compute a Jacobian component
+                        eye = np.eye(self.J)
+
+                        # define the contraction to also return the Jacobian
+                        def contraction(next_delta: Array) -> Union[Tuple[Array, Array], Array]:
+                            """Compute the next linear delta and its Jacobian."""
+                            probabilities = compute_probabilities(next_delta)[0]
+                            shares = probabilities @ self.agents.weights
+                            weighted_probabilities = self.agents.weights * probabilities.T
+                            return (
+                                next_delta + log_shares - np.log(shares),
+                                -eye + (probabilities @ weighted_probabilities) / shares
+                            )
                 else:
-                    dampener = 1 - self.rho
-                    contraction = lambda d: d + (log_shares - compute_log_shares(d)) * dampener
+                    if not iteration._compute_jacobian:
+                        def contraction(next_delta: Array) -> Union[Tuple[Array, Array], Array]:
+                            """Compute the next linear delta under nesting."""
+                            shares = compute_probabilities(next_delta)[0] @ self.agents.weights
+                            return next_delta + (log_shares - np.log(shares)) * (1 - self.rho)
+                    else:
+                        # pre-compute Jacobian components
+                        membership = self.get_membership_matrix()
+                        weighted_eye = (1 + self.rho) * np.eye(self.J)
+
+                        # define the contraction to also return the Jacobian
+                        def contraction(next_delta: Array) -> Union[Tuple[Array, Array], Array]:
+                            """Compute the next linear delta and its Jacobian under nesting."""
+                            probabilities, conditionals = compute_probabilities(next_delta)
+                            shares = probabilities @ self.agents.weights
+                            weighted_probabilities = self.agents.weights * probabilities.T / shares.T
+                            return (
+                                next_delta + (log_shares - np.log(shares)) * (1 - self.rho),
+                                -weighted_eye + probabilities @ weighted_probabilities + self.rho * membership * (
+                                    conditionals @ weighted_probabilities
+                                )
+                            )
+
+                # solve the linear contraction mapping
                 delta, converged, iterations, evaluations = iteration._iterate(initial_delta, contraction)
             else:
-                assert fp_type == 'nonlinear'
+                assert fp_type == 'nonlinear' and not iteration._compute_jacobian
                 exp_mu = np.exp(self.mu)
                 compute_probabilities = functools.partial(self.compute_probabilities, mu=exp_mu, linear=False)
+
+                # define the nonlinear contraction mapping
                 if self.H == 0:
-                    compute_quotient = functools.partial(compute_probabilities, numerator=exp_mu)
-                    contraction = lambda d: self.products.shares / (compute_quotient(d) @ self.agents.weights)
+                    def contraction(next_delta: Array) -> Union[Tuple[Array, Array], Array]:
+                        """Compute the next exponentiated delta."""
+                        quotient = compute_probabilities(next_delta, numerator=exp_mu)[0]
+                        return self.products.shares / (quotient @ self.agents.weights)
                 else:
-                    dampener = 1 - self.rho
-                    compute_shares = lambda d: compute_probabilities(d) @ self.agents.weights
-                    contraction = lambda d: d * (self.products.shares / compute_shares(d))**dampener
+                    def contraction(next_delta: Array) -> Union[Tuple[Array, Array], Array]:
+                        """Compute the next exponentiated delta under nesting."""
+                        shares = compute_probabilities(next_delta)[0] @ self.agents.weights
+                        return next_delta * (self.products.shares / shares)**(1 - self.rho)
+
+                # solve the nonlinear contraction mapping
                 exp_delta, converged, iterations, evaluations = iteration._iterate(np.exp(initial_delta), contraction)
                 delta = np.log(exp_delta)
-            if not converged:
-                errors.append(exceptions.DeltaConvergenceError())
+
+        # check for convergence
+        if not converged:
+            errors.append(exceptions.DeltaConvergenceError())
 
         # if the gradient is to be computed, replace invalid values in delta with the last computed values before
         #   computing its Jacobian

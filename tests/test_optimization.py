@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 import scipy.optimize
 
-from pyblp import Optimization, options
+from pyblp import Optimization
 from pyblp.utilities.basics import Array, Options
 
 
@@ -57,15 +57,17 @@ def test_entropy(
         log_Z = np.log(np.exp(F @ x).sum())
         p = np.exp(F @ x - log_Z)
         objective = log_Z - K @ x
+        if not compute_gradient:
+            return objective
         gradient = F.T @ p - K
-        return (objective, gradient) if compute_gradient else objective
+        return objective, gradient
 
     # simple methods do not accept an analytic gradient
-    if compute_gradient is True and method in {'nelder-mead', 'powell'}:
+    if compute_gradient and method in {'nelder-mead', 'powell'}:
         return
 
     # Newton CG requires an analytic gradient
-    if compute_gradient is False and method == 'newton-cg':
+    if not compute_gradient and method == 'newton-cg':
         return
 
     # the custom method needs to know if an analytic gradient will be computed
@@ -83,10 +85,10 @@ def test_entropy(
     assert str(optimization)
 
     # define the exact solution
-    exact_values = np.array([0, -0.524869316, 0.487525860], options.dtype)
+    exact_values = np.array([0, -0.524869316, 0.487525860])
 
     # estimate the solution (use the exact values if the optimization routine will just return them)
-    start_values = exact_values if method == 'return' else np.array([0, 0, 0], options.dtype)
+    start_values = exact_values if method == 'return' else np.zeros_like(exact_values)
     bounds = 3 * [(lb, ub)]
     estimated_values, converged = optimization._optimize(start_values, bounds, lambda x, *_: objective_function(x))[:2]
     assert converged

@@ -274,8 +274,8 @@ class Optimization(StringRepresentation):
         raw_final, converged = self._optimizer(
             raw_initial, raw_bounds, objective_wrapper, iteration_callback, **self._method_options
         )
-        final_values = np.asanyarray(raw_final).astype(initial.dtype).reshape(initial.shape)
-        return final_values, converged, iterations, evaluations
+        final = np.asanyarray(raw_final).astype(initial.dtype, copy=False).reshape(initial.shape)
+        return final, converged, iterations, evaluations
 
 
 def return_optimizer(initial_values: Array, *_: Any, **__: Any) -> Tuple[Array, bool]:

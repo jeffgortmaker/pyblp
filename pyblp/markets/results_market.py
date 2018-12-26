@@ -39,7 +39,7 @@ class ResultsMarket(Market):
             # compute the associated shares
             delta = self.update_delta_with_variable('prices', prices)
             mu = self.update_mu_with_variable('prices', prices)
-            shares = self.compute_probabilities(delta, mu) @ self.agents.weights
+            shares = self.compute_probabilities(delta, mu)[0] @ self.agents.weights
             return prices, shares, delta, errors, converged, iterations, evaluations
 
     def compute_aggregate_elasticity(self, factor: float, name: str) -> Tuple[Array, List[Error]]:
@@ -47,7 +47,7 @@ class ResultsMarket(Market):
         scaled_variable = (1 + factor) * self.products[name]
         delta = self.update_delta_with_variable(name, scaled_variable)
         mu = self.update_mu_with_variable(name, scaled_variable)
-        shares = self.compute_probabilities(delta, mu) @ self.agents.weights
+        shares = self.compute_probabilities(delta, mu)[0] @ self.agents.weights
         aggregate_elasticities = (shares - self.products.shares).sum() / factor
         return aggregate_elasticities, []
 
@@ -77,7 +77,7 @@ class ResultsMarket(Market):
         # compute share differences when products are excluded and store outside share differences on the diagonal
         changes = np.zeros((self.J, self.J), options.dtype)
         for j in range(self.J):
-            shares_without_j = self.compute_probabilities(eliminate_product=j) @ self.agents.weights
+            shares_without_j = self.compute_probabilities(eliminate_product=j)[0] @ self.agents.weights
             changes[j] = (shares_without_j - self.products.shares).flat
             changes[j, j] = -changes[j].sum()
 
@@ -143,7 +143,7 @@ class ResultsMarket(Market):
             prices = self.products.prices
         delta = self.update_delta_with_variable('prices', prices)
         mu = self.update_mu_with_variable('prices', prices)
-        shares = self.compute_probabilities(delta, mu) @ self.agents.weights
+        shares = self.compute_probabilities(delta, mu)[0] @ self.agents.weights
         return shares, []
 
     def compute_hhi(self, firm_ids: Optional[Array], shares: Optional[Array]) -> Tuple[Array, List[Error]]:

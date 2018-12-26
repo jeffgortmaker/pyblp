@@ -509,8 +509,8 @@ class ProblemResults(Results):
         iteration : `Iteration, optional`
             :class:`Iteration` configuration used to compute bootstrapped prices by iterating over the
             :math:`\zeta`-markup equation from :ref:`references:Morrow and Skerlos (2011)`. By default, if a supply side
-            was estimated, this is ``Iteration('simple', {'tol': 1e-12})``. It is not used if a supply side was not
-            estimated.
+            was estimated, this is ``Iteration('simple', {'tol': 1e-12})``. Analytic Jacobians are not supported for
+            this contraction mapping and this configuration is not used if a supply side was not estimated.
 
         Returns
         -------
@@ -539,6 +539,8 @@ class ProblemResults(Results):
             iteration = Iteration('simple', {'tol': 1e-12})
         elif not isinstance(iteration, Iteration):
             raise TypeError("iteration must be None or an iteration instance.")
+        elif iteration._compute_jacobian:
+            raise ValueError("Analytic Jacobians are not supported for this contraction mapping.")
 
         # draw from the asymptotic distribution implied by the estimated parameters
         state = np.random.RandomState(seed)
@@ -721,7 +723,8 @@ class ProblemResults(Results):
         iteration : `Iteration, optional`
             :class:`Iteration` configuration used to estimate expected prices by iterating over the :math:`\zeta`-markup
             equation from :ref:`references:Morrow and Skerlos (2011)`. By default, if a supply side was estimated, this
-            is ``Iteration('simple', {'tol': 1e-12})``. It is not used if ``expected_prices`` is specified.
+            is ``Iteration('simple', {'tol': 1e-12})``. Analytic Jacobians are not supported for this contraction
+            mapping and this configuration is not used if ``expected_prices`` is specified.
 
         Returns
         -------
@@ -797,6 +800,8 @@ class ProblemResults(Results):
                 iteration = Iteration('simple', {'tol': 1e-12})
             elif not isinstance(iteration, Iteration):
                 raise TypeError("iteration must be None or an Iteration instance.")
+            elif iteration._compute_jacobian:
+                raise ValueError("Analytic Jacobians are not supported for this contraction mapping.")
         else:
             iteration = None
             expected_prices = np.c_[np.asarray(expected_prices, options.dtype)]

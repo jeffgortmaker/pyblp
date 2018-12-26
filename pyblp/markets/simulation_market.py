@@ -37,5 +37,5 @@ class SimulationMarket(Market):
             # compute the associated shares
             delta = self.update_delta_with_variable('prices', prices)
             mu = self.update_mu_with_variable('prices', prices)
-            shares = self.compute_probabilities(delta, mu) @ self.agents.weights
+            shares = self.compute_probabilities(delta, mu)[0] @ self.agents.weights
             return prices, shares, errors, converged, iterations, evaluations

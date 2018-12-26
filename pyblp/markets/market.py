@@ -1,6 +1,6 @@
 """Market underlying the BLP model."""
 
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import numpy.lib.recfunctions
@@ -187,14 +187,13 @@ class Market(object):
 
     def compute_probabilities(
             self, delta: Array = None, mu: Optional[Array] = None, linear: bool = True, safe: bool = True,
-            numerator: Optional[Array] = None, eliminate_product: Optional[int] = None,
-            keep_conditionals: bool = False) -> Union[Tuple[Array, Optional[Array]], Array]:
+            numerator: Optional[Array] = None, eliminate_product: Optional[int] = None) -> (
+            Tuple[Array, Optional[Array]]):
         """Compute choice probabilities. By default, use unchanged delta and mu values. If linear is False, delta and mu
         must be specified and already be exponentiated. If safe is True, scale the logit equation by the exponential of
         negative the maximum utility for each agent. If the numerator is specified, it will be used as the numerator in
         the non-nested logit expression. If eliminate_product is specified, eliminate the product associated with the
-        specified index from the choice set. If keep_conditionals is True, return a tuple in which if there is nesting,
-        the second element are conditional probabilities given that an alternative in a nest is chosen.
+        specified index from the choice set.
         """
         if delta is None:
             assert self.delta is not None
@@ -229,24 +228,23 @@ class Market(object):
         if eliminate_product is not None:
             exp_utilities[eliminate_product] = 0
 
-        # compute probabilities
+        # compute standard probabilities
         if self.H == 0:
-            conditionals = None
             if numerator is None:
                 numerator = exp_utilities
             probabilities = numerator / (scale + exp_utilities.sum(axis=0, keepdims=True))
-        else:
-            exp_inclusives = self.groups.sum(exp_utilities)
-            with np.errstate(divide='ignore', invalid='ignore'):
-                exp_weighted_inclusives = np.exp(np.log(exp_inclusives) * (1 - self.group_rho))
-                conditionals = exp_utilities / self.groups.expand(exp_inclusives)
-            exp_weighted_inclusives[~np.isfinite(exp_weighted_inclusives)] = 0
-            conditionals[~np.isfinite(conditionals)] = 0
-            marginals = exp_weighted_inclusives / (scale + (scale_weights * exp_weighted_inclusives[None]).sum(axis=1))
-            probabilities = conditionals * self.groups.expand(marginals)
+            return probabilities, None
 
-        # return either probabilities and their conditional counterparts or just probabilities
-        return (probabilities, conditionals) if keep_conditionals else probabilities
+        # compute nested probabilities
+        exp_inclusives = self.groups.sum(exp_utilities)
+        with np.errstate(divide='ignore', invalid='ignore'):
+            exp_weighted_inclusives = np.exp(np.log(exp_inclusives) * (1 - self.group_rho))
+            conditionals = exp_utilities / self.groups.expand(exp_inclusives)
+        exp_weighted_inclusives[~np.isfinite(exp_weighted_inclusives)] = 0
+        conditionals[~np.isfinite(conditionals)] = 0
+        marginals = exp_weighted_inclusives / (scale + (scale_weights * exp_weighted_inclusives[None]).sum(axis=1))
+        probabilities = conditionals * self.groups.expand(marginals)
+        return probabilities, conditionals
 
     def compute_capital_lamda(self, value_derivatives: Array) -> Array:
         """Compute the diagonal capital lambda matrix used to decompose markups."""
@@ -277,7 +275,7 @@ class Market(object):
         if utility_derivatives is None:
             utility_derivatives = self.compute_utility_derivatives('prices')
         if prices is None:
-            probabilities, conditionals = self.compute_probabilities(keep_conditionals=True)
+            probabilities, conditionals = self.compute_probabilities()
             shares = self.products.shares
         else:
             delta = self.update_delta_with_variable('prices', prices)
@@ -302,12 +300,12 @@ class Market(object):
         if utility_derivatives is None:
             utility_derivatives = self.compute_utility_derivatives('prices')
         if prices is None:
-            probabilities, conditionals = self.compute_probabilities(keep_conditionals=True)
+            probabilities, conditionals = self.compute_probabilities()
             shares = self.products.shares
         else:
             delta = self.update_delta_with_variable('prices', prices)
             mu = self.update_mu_with_variable('prices', prices)
-            probabilities, conditionals = self.compute_probabilities(delta, mu, keep_conditionals=True)
+            probabilities, conditionals = self.compute_probabilities(delta, mu)
             shares = probabilities @ self.agents.weights
         value_derivatives = probabilities * utility_derivatives
         capital_lamda_inverse = np.diag(1 / self.compute_capital_lamda(value_derivatives).diagonal())
@@ -459,7 +457,7 @@ class Market(object):
         probabilities.
         """
         if probabilities is None or conditionals is None:
-            probabilities, conditionals = self.compute_probabilities(keep_conditionals=True)
+            probabilities, conditionals = self.compute_probabilities()
         value_derivatives = probabilities * utility_derivatives
         capital_lamda = self.compute_capital_lamda(value_derivatives)
         capital_gamma = self.compute_capital_gamma(value_derivatives, probabilities, conditionals)
@@ -558,7 +556,7 @@ class Market(object):
         errors: List[Error] = []
 
         # compute derivatives of aggregate inclusive values with respect to prices
-        probabilities, conditionals = self.compute_probabilities(keep_conditionals=True)
+        probabilities, conditionals = self.compute_probabilities()
         utility_derivatives = self.compute_utility_derivatives('prices')
         value_derivatives = probabilities * utility_derivatives
 
@@ -641,7 +639,7 @@ class Market(object):
             np.seterrcall(lambda *_: errors.append(exceptions.XiByThetaJacobianFloatingPointError()))
 
             # compute the Jacobian
-            probabilities, conditionals = self.compute_probabilities(delta, keep_conditionals=True)
+            probabilities, conditionals = self.compute_probabilities(delta)
             shares_by_xi_jacobian = self.compute_shares_by_xi_jacobian(probabilities, conditionals)
             shares_by_theta_jacobian = self.compute_shares_by_theta_jacobian(
                 parameters, delta, probabilities, conditionals

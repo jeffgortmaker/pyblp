@@ -1,6 +1,6 @@
 """Tests of fixed point iteration routines."""
 
-from typing import Callable, Union
+from typing import Callable, Tuple, Union
 
 import numpy as np
 import pytest
@@ -17,6 +17,8 @@ from pyblp.utilities.basics import Array, Options
     pytest.param('squarem', {'scheme': 1, 'step_min': 0.9, 'step_max': 1.1, 'step_factor': 3.0}, id="SQUAREM S1"),
     pytest.param('squarem', {'scheme': 2, 'step_min': 0.8, 'step_max': 1.2, 'step_factor': 4.0}, id="SQUAREM S2"),
     pytest.param('squarem', {'scheme': 3, 'step_min': 0.7, 'step_max': 1.3, 'step_factor': 5.0}, id="SQUAREM S3"),
+    pytest.param('hybr', {}, id="Powell hybrid method"),
+    pytest.param('lm', {}, id="Levenberg-Marquardt"),
     pytest.param('return', {}, id="Return"),
     pytest.param(lambda x, f, _, tol: (scipy.optimize.fixed_point(f, x, xtol=tol), True), {}, id="custom")
 ])
@@ -25,24 +27,41 @@ from pyblp.utilities.basics import Array, Options
     pytest.param(1e-4, id="medium"),
     pytest.param(1e-8, id="small")
 ])
-def test_scipy(method: Union[str, Callable], method_options: Options, tol: float) -> None:
+@pytest.mark.parametrize('compute_jacobian', [
+    pytest.param(True, id="analytic Jacobian"),
+    pytest.param(False, id="no analytic Jacobian")
+])
+def test_scipy(method: Union[str, Callable], method_options: Options, tol: float, compute_jacobian: bool) -> None:
     """Test that the solution to the example fixed point problem from scipy.optimize.fixed_point is reasonably close to
     the exact solution. Also verify that the configuration can be formatted.
     """
+    def contraction(x: Array) -> Union[Array, Tuple[Array, Array]]:
+        """Evaluate the contraction."""
+        c1 = np.array([10, 12])
+        c2 = np.array([3, 5])
+        x0, x = x, np.sqrt(c1 / (x + c2))
+        if not compute_jacobian:
+            return x
+        jacobian = -0.5 * np.eye(2) * x / (x0 + c2)
+        return x, jacobian
 
-    # test that the configuration can be formatted
+    # simple methods do not accept an analytic Jacobian
+    if compute_jacobian and (callable(method) or method in {'simple', 'anderson', 'squarem'}):
+        return
+
+    # update the configuration tolerance
     if method != 'return':
         method_options = method_options.copy()
-        if method == 'anderson':
-            method_options['ftol'] = tol
-        else:
-            method_options['tol'] = tol
-    iteration = Iteration(method, method_options)
+        method_options['ftol' if method == 'anderson' else 'tol'] = tol
+
+    # initialize the configuration and test that it can be formatted
+    iteration = Iteration(method, method_options, compute_jacobian)
     assert str(iteration)
 
-    # test that the solution is reasonably close (use the exact values if the iteration routine will just return them)
-    contraction = lambda x: np.sqrt(np.array([10, 12]) / (x + np.array([3, 5])))
+    # define the exact solution
     exact_values = np.array([1.4920333, 1.37228132])
+
+    # test that the solution is reasonably close (use the exact values if the iteration routine will just return them)
     start_values = exact_values if method == 'return' else np.ones_like(exact_values)
     computed_values, converged = iteration._iterate(start_values, contraction)[:2]
     assert converged

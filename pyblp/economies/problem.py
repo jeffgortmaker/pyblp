@@ -291,7 +291,9 @@ class ProblemEconomy(Economy):
             :class:`Iteration` configuration for how to solve the fixed point problem used to compute
             :math:`\delta(\hat{\theta})` in each market. This configuration is only relevant if there are nonlinear
             parameters, since :math:`\delta` can be estimated analytically in the Logit model. By default,
-            ``Iteration('squarem', {'tol': 1e-14})`` is used.
+            ``Iteration('squarem', {'tol': 1e-14})`` is used. Generally, non-Jacobian routines such as SQUAREM will be
+            fastest. Jacobian routines may be useful, for example, when the fixed point is heavily dampened due to a
+            large nesting parameter.
         fp_type : `str, optional`
             Configuration for the type of contraction mapping used to compute :math:`\delta(\hat{\theta})`. The
             following types of contraction mappings are supported:
@@ -316,7 +318,7 @@ class ProblemEconomy(Economy):
                   :math:`\exp(\delta)` is cancelled out of the numerator in the expression for
                   :math:`s(\delta, \hat{\theta})`, which slightly reduces the computational burden. This formulation can
                   also help mitigate problems stemming from any negative integration weights; however, it is generally
-                  less stable than the linear versions.
+                  less stable than the linear versions. Jacobian computation is not supported for this version.
 
             This option is only relevant if there are nonlinear parameters, since :math:`\delta` can be estimated
             analytically in the Logit model.
@@ -410,6 +412,8 @@ class ProblemEconomy(Economy):
             raise ValueError("delta_behavior must be 'last' or 'first'.")
         if fp_type not in {'safe', 'linear', 'nonlinear'}:
             raise ValueError("fp_type must be 'safe', 'linear', or 'nonlinear'.")
+        if fp_type == 'nonlinear' and iteration._compute_jacobian:
+            raise ValueError("Jacobian computation is not supported for the 'nonlinear' fp_type.")
         if costs_type not in {'linear', 'log'}:
             raise ValueError("costs_type must be 'linear' or 'log'.")
         if W_type not in {'robust', 'unadjusted', 'clustered'}:
