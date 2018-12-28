@@ -19,12 +19,24 @@ class Iteration(StringRepresentation):
 
             - ``'simple'`` - Non-accelerated iteration.
 
-            - ``'anderson'`` - Uses the :func:`scipy.optimize.root` Anderson method.
-
             - ``'squarem'`` - SQUAREM acceleration method of :ref:`references:Varadhan and Roland (2008)` and considered
               in the context of the BLP problem in :ref:`references:Reynaerts, Varadhan, and Nash (2012)`. This
               implementation uses a first-order squared non-monotone extrapolation scheme. If there are any errors
               during the acceleration step, it uses the last values for the next iteration of the algorithm.
+
+            - ``'broyden1'`` - Uses the :func:`scipy.optimize.root` Broyden's first Jacobian approximation method, known
+              as Broyden's good method.
+
+            - ``'broyden2'`` - Uses the :func:`scipy.optimize.root` Broyden's second Jacobian approximation method,
+              known as Broyden's bad method.
+
+            - ``'anderson'`` - Uses the :func:`scipy.optimize.root` Anderson method.
+
+            - ``'krylov'`` - Uses the :func:`scipy.optimize.root` Krylov approximation for inverse Jacobian method.
+
+            - ``'diagbroyden'`` - Uses the :func:`scipy.optimize.root` diagonal Broyden Jacobian approximation method.
+
+            - ``'df-sane'`` - Uses the :func:`scipy.optimize.root` derivative-free spectral method.
 
         The following routines can use analytic Jacobians:
 
@@ -116,8 +128,13 @@ class Iteration(StringRepresentation):
         """Validate the method and configure default options."""
         simple_methods = {
             'simple': (functools.partial(simple_iterator), "no acceleration"),
-            'anderson': (functools.partial(scipy_iterator), "the Anderson method implemented in SciPy"),
-            'squarem': (functools.partial(squarem_iterator), "the SQUAREM acceleration method")
+            'squarem': (functools.partial(squarem_iterator), "the SQUAREM acceleration method"),
+            'broyden1': (functools.partial(scipy_iterator), "Broyden's good method implemented in SciPy"),
+            'broyden2': (functools.partial(scipy_iterator), "Broyden's bad method implemented in SciPy"),
+            'anderson': (functools.partial(scipy_iterator), "Anderson's method implemented in SciPy"),
+            'diagbroyden': (functools.partial(scipy_iterator), "Broyden's diagonal method implemented in SciPy"),
+            'krylov': (functools.partial(scipy_iterator), "Krylov method implemented in SciPy"),
+            'df-sane': (functools.partial(scipy_iterator), "the derivative-free spectral method implemented in SciPy"),
         }
         complex_methods = {
             'hybr': (

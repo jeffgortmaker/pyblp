@@ -13,7 +13,12 @@ from pyblp.utilities.basics import Array, Options
 @pytest.mark.parametrize(['method', 'method_options'], [
     pytest.param('simple', {}, id="Simple"),
     pytest.param('simple', {'norm': lambda x: np.linalg.norm(x, np.inf)}, id="simple with infinity norm"),
+    pytest.param('broyden1', {}, id="Broyden 1"),
+    pytest.param('broyden2', {}, id="Broyden 2"),
     pytest.param('anderson', {}, id="Anderson"),
+    pytest.param('diagbroyden', {}, id="diagonal Broyden"),
+    pytest.param('krylov', {}, id="Krylov"),
+    pytest.param('df-sane', {}, id="DF-SANE"),
     pytest.param('squarem', {'scheme': 1, 'step_min': 0.9, 'step_max': 1.1, 'step_factor': 3.0}, id="SQUAREM S1"),
     pytest.param('squarem', {'scheme': 2, 'step_min': 0.8, 'step_max': 1.2, 'step_factor': 4.0}, id="SQUAREM S2"),
     pytest.param('squarem', {'scheme': 3, 'step_min': 0.7, 'step_max': 1.3, 'step_factor': 5.0}, id="SQUAREM S3"),
@@ -25,7 +30,7 @@ from pyblp.utilities.basics import Array, Options
 @pytest.mark.parametrize('tol', [
     pytest.param(1e-2, id="large"),
     pytest.param(1e-4, id="medium"),
-    pytest.param(1e-8, id="small")
+    pytest.param(1e-6, id="small")
 ])
 @pytest.mark.parametrize('compute_jacobian', [
     pytest.param(True, id="analytic Jacobian"),
@@ -46,7 +51,7 @@ def test_scipy(method: Union[str, Callable], method_options: Options, tol: float
         return x, jacobian
 
     # simple methods do not accept an analytic Jacobian
-    if compute_jacobian and (callable(method) or method in {'simple', 'anderson', 'squarem'}):
+    if compute_jacobian and method not in {'hybr', 'lm'}:
         return
 
     # update the configuration tolerance
