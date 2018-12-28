@@ -57,9 +57,7 @@ class ProblemMarket(Market):
                     # pre-compute components
                     log_shares = np.log(self.products.shares)
                     dampener = 1 - self.rho
-                    rho_eye = self.rho * np.eye(self.J)
                     rho_membership = self.rho * self.get_membership_matrix()
-                    rho_membership_eye = rho_membership * np.eye(self.J)
 
                     # define the contraction
                     def contraction(x: Array) -> Union[Tuple[Array, Array], Array]:
@@ -70,10 +68,9 @@ class ProblemMarket(Market):
                         if not iteration._compute_jacobian:
                             return x
                         weighted_probabilities = self.agents.weights * probabilities.T
-                        jacobian = (
-                            rho_eye + dampener * (probabilities @ weighted_probabilities) / shares +
-                            rho_membership_eye - rho_membership * (conditionals @ weighted_probabilities) / shares
-                        )
+                        probabilities_part = dampener * (probabilities @ weighted_probabilities)
+                        conditionals_part = rho_membership * (conditionals @ weighted_probabilities)
+                        jacobian = (probabilities_part + conditionals_part) / shares
                         return x, jacobian
 
                 # solve the linear contraction mapping
@@ -92,17 +89,16 @@ class ProblemMarket(Market):
                         x0, x = x, self.products.shares / share_ratios
                         if not iteration._compute_jacobian:
                             return x
+                        shares = x0 * share_ratios
                         probabilities = x0 * probability_ratios
                         weighted_probabilities = self.agents.weights * probabilities.T
-                        jacobian = x * (probabilities @ weighted_probabilities) / share_ratios
+                        jacobian = x / x0.T * (probabilities @ weighted_probabilities) / shares
                         return x, jacobian
                 else:
                     # pre-compute components
                     exp_mu = np.exp(self.mu)
                     dampener = 1 - self.rho
-                    rho_eye = self.rho * np.eye(self.J)
                     rho_membership = self.rho * self.get_membership_matrix()
-                    rho_membership_eye = rho_membership * np.eye(self.J)
 
                     # define the contraction
                     def contraction(x: Array) -> Union[Tuple[Array, Array], Array]:
@@ -113,10 +109,9 @@ class ProblemMarket(Market):
                         if not iteration._compute_jacobian:
                             return x
                         weighted_probabilities = self.agents.weights * probabilities.T
-                        jacobian = x / x0 * (
-                            rho_eye + (probabilities @ weighted_probabilities) / shares +
-                            rho_membership_eye - rho_membership * (conditionals @ weighted_probabilities) / shares
-                        )
+                        probabilities_part = dampener * (probabilities @ weighted_probabilities)
+                        conditionals_part = rho_membership * (conditionals @ weighted_probabilities)
+                        jacobian = x / x0.T * (probabilities_part + conditionals_part) / shares
                         return x, jacobian
 
                 # solve the nonlinear contraction mapping
