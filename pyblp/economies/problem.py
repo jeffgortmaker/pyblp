@@ -43,7 +43,7 @@ class ProblemEconomy(Economy):
             delta: Optional[Any] = None, W: Optional[Any] = None, method: str = '2s',
             optimization: Optional[Optimization] = None, check_optimality: str = 'both', error_behavior: str = 'revert',
             error_punishment: float = 1, delta_behavior: str = 'first', iteration: Optional[Iteration] = None,
-            fp_type: str = 'safe', costs_type: str = 'linear', costs_bounds: Optional[Tuple[Any, Any]] = None,
+            fp_type: str = 'safe_linear', costs_type: str = 'linear', costs_bounds: Optional[Tuple[Any, Any]] = None,
             center_moments: bool = True, W_type: str = 'robust', se_type: str = 'robust') -> ProblemResults:
         r"""Solve the problem.
 
@@ -298,7 +298,7 @@ class ProblemEconomy(Economy):
             Configuration for the type of contraction mapping used to compute :math:`\delta(\hat{\theta})`. The
             following types of contraction mappings are supported:
 
-                - ``'safe'`` (default) - The standard linear contraction mapping,
+                - ``'safe_linear'`` (default) - The standard linear contraction mapping,
 
                   .. math:: \delta_{jt} \leftarrow \delta_{jt} + \log s_{jt} - \log s_{jt}(\delta, \hat{\theta}),
 
@@ -307,9 +307,9 @@ class ProblemEconomy(Economy):
                   expression is re-scaled accordingly.
 
                 - ``'linear'`` - Standard linear contraction mapping, but without safeguards against numerical overflow.
-                  This option may be preferable to ``'safe'`` if utilities are reasonably small.
+                  This option may be preferable to ``'safe_linear'`` if utilities are reasonably small.
 
-                - ``'nonlinear'`` - Exponentiated version,
+                - ``'safe_nonlinear'`` - Exponentiated version,
 
                   .. math:: \exp(\delta_{jt}) \leftarrow \exp(\delta_{jt})s_{jt} / s_{jt}(\delta, \hat{\theta}),
 
@@ -318,7 +318,10 @@ class ProblemEconomy(Economy):
                   :math:`\exp(\delta)` is cancelled out of the numerator in the expression for
                   :math:`s(\delta, \hat{\theta})`, which slightly reduces the computational burden. This formulation can
                   also help mitigate problems stemming from any negative integration weights; however, it is generally
-                  less stable than the linear versions.
+                  less stable than the linear version. For example, it is only possible to subtract the maximum of
+                  :math:`\mu` from each agent before utilities are exponentiated, not the combined :math:`\delta + \mu`.
+
+                - ``'nonlinear'`` - Exponentiated version, but without safeguards against numerical overflow.
 
             This option is only relevant if there are nonlinear parameters, since :math:`\delta` can be estimated
             analytically in the Logit model.
@@ -410,8 +413,8 @@ class ProblemEconomy(Economy):
             raise ValueError("error_behavior must be 'revert', 'punish', or 'raise'.")
         if delta_behavior not in {'last', 'first'}:
             raise ValueError("delta_behavior must be 'last' or 'first'.")
-        if fp_type not in {'safe', 'linear', 'nonlinear'}:
-            raise ValueError("fp_type must be 'safe', 'linear', or 'nonlinear'.")
+        if fp_type not in {'safe_linear', 'linear', 'safe_nonlinear', 'nonlinear'}:
+            raise ValueError("fp_type must be 'safe_linear', 'linear', 'safe_nonlinear', or 'nonlinear'.")
         if costs_type not in {'linear', 'log'}:
             raise ValueError("costs_type must be 'linear' or 'log'.")
         if W_type not in {'robust', 'unadjusted', 'clustered'}:

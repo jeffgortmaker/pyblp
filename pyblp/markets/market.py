@@ -187,13 +187,14 @@ class Market(object):
 
     def compute_probabilities(
             self, delta: Array = None, mu: Optional[Array] = None, linear: bool = True, safe: bool = True,
-            numerator: Optional[Array] = None, eliminate_product: Optional[int] = None) -> (
-            Tuple[Array, Optional[Array]]):
+            utility_reduction: Optional[Array] = None, numerator: Optional[Array] = None,
+            eliminate_product: Optional[int] = None) -> Tuple[Array, Optional[Array]]:
         """Compute choice probabilities. By default, use unchanged delta and mu values. If linear is False, delta and mu
         must be specified and already be exponentiated. If safe is True, scale the logit equation by the exponential of
-        negative the maximum utility for each agent. If the numerator is specified, it will be used as the numerator in
-        the non-nested logit expression. If eliminate_product is specified, eliminate the product associated with the
-        specified index from the choice set.
+        negative the maximum utility for each agent, and if utility_reduction is specified, it should be values that
+        have already been subtracted from the specified utility for each agent. If the numerator is specified, it will
+        be used as the numerator in the non-nested logit expression. If eliminate_product is specified, eliminate the
+        product associated with the specified index from the choice set.
         """
         if delta is None:
             assert self.delta is not None
@@ -204,7 +205,6 @@ class Market(object):
             mu = int(not linear)
 
         # compute exponentiated utilities, optionally re-scaling the logit expression
-        scale = scale_weights = 1
         if not linear:
             exp_utilities = np.array(delta * mu)
             if self.H > 0:
@@ -214,15 +214,19 @@ class Market(object):
             if self.H > 0:
                 utilities /= 1 - self.rho
             if safe:
-                max_utilities = np.max(utilities, axis=0, keepdims=True)
-                utilities -= max_utilities
-                if self.H == 0:
-                    scale = np.exp(-max_utilities)
-                else:
-                    scale = np.exp(-max_utilities * (1 - self.group_rho))
-                    if self.rho_size > 1:
-                        scale_weights = np.exp(-max_utilities[None] * (self.group_rho.T - self.group_rho)[..., None])
+                utility_reduction = np.max(utilities, axis=0, keepdims=True)
+                utilities -= utility_reduction
             exp_utilities = np.exp(utilities)
+
+        # compute any components used to re-scale the logit expression
+        scale = scale_weights = 1
+        if utility_reduction is not None:
+            if self.H == 0:
+                scale = np.exp(-utility_reduction)
+            else:
+                scale = np.exp(-utility_reduction * (1 - self.group_rho))
+                if self.rho_size > 1:
+                    scale_weights = np.exp(-utility_reduction[None] * (self.group_rho.T - self.group_rho)[..., None])
 
         # optionally eliminate a product from the choice set
         if eliminate_product is not None:
