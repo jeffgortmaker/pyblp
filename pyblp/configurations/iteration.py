@@ -77,8 +77,10 @@ class Iteration(StringRepresentation):
     method_options : `dict, optional`
         Options for the fixed point iteration routine.
 
-        For the ``'anderson'``, ``'hybr'``, and ``'lm'`` methods, these options will be passed to ``options`` in
-        :func:`scipy.optimize.root`. Refer to the SciPy documentation for information about which options are available.
+        For routines other and ``'simple'``, ``'squarem'``, and ``'return'``, these options will be passed to
+        ``options`` in :func:`scipy.optimize.root`. Refer to the SciPy documentation for information about which options
+        are available. By default, the ``tol_norm`` option is configured to use the infinity norm for SciPy methods
+        other than ``'hybr'`` and ``'lm'``, for which a norm cannot be specified.
 
         The ``'simple'`` and ``'squarem'`` methods support the following options:
 
@@ -199,6 +201,8 @@ class Iteration(StringRepresentation):
                 })
         elif method != 'return':
             self._iterator = functools.partial(self._iterator, method=method, compute_jacobian=compute_jacobian)
+            if method in {'broyden1', 'broyden2', 'anderson', 'diagbroyden', 'krylov', 'df-sane'}:
+                self._method_options['tol_norm'] = infinity_norm
 
         # update the default options
         self._method_options.update(method_options)
@@ -289,8 +293,16 @@ def scipy_iterator(
         compute_jacobian: bool, **scipy_options: Any) -> Tuple[Array, bool]:
     """Apply a SciPy root finding method."""
 
-    # wrap the callback if the method supports iteration callbacks
-    callback = None if method in {'hybr', 'lm'} else lambda *_: iteration_callback()
+    # define method-specific options so iteration callbacks and norm weighting works properly
+    weights_cache = np.ones_like(initial)
+    scipy_options = scipy_options.copy()
+    if method in {'hybr', 'lm'}:
+        callback = None
+        scipy_options['diag'] = weights_cache
+    else:
+        callback = lambda *_: iteration_callback()
+        norm = scipy_options.get('tol_norm', infinity_norm)
+        scipy_options['tol_norm'] = lambda x: norm(weights_cache * x)
 
     # record whether non-finite values were encountered during fixed point iteration
     failed = False
@@ -300,7 +312,7 @@ def scipy_iterator(
         """Transform the fixed point into a root-finding problem, check for errors, and call the callback function here
         if calling it isn't supported by the routine.
         """
-        nonlocal failed
+        nonlocal failed, weights_cache
 
         # attempt to evaluate the contraction and check for bad values
         x0, (x, weights, jacobian) = x, contraction(x)
@@ -315,12 +327,14 @@ def scipy_iterator(
         if callback is None:
             iteration_callback()
 
+        # update the weights
+        if weights is not None:
+            weights_cache[:] = weights
+
         # transform the fixed point into a root-finding problem
-        difference = weight(x0 - x, weights)
         if jacobian is None:
-            return difference
-        difference_jacobian = weight(np.eye(x.size) - jacobian, weights)
-        return difference, difference_jacobian
+            return x0 - x
+        return x0 - x, np.eye(x.size) - jacobian
 
     # call the routine
     results = scipy.optimize.root(
