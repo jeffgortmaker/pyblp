@@ -293,7 +293,6 @@ When computing :math:`\zeta(p)`, shares :math:`s(p)` associated with the candida
 
 Of course, marginal costs, :math:`c`, are required to iterate over the contraction. When evaluating counterfactuals, costs are usually computed first according to the BLP-markup equation in :eq:`blp_markup`. When simulating synthetic data, marginal costs are simulated according their specification in :eq:`costs`.
 
-
 Called the BLP-markup equation in :ref:`references:Morrow and Skerlos (2011)`, the markup term is
 
 The Jacobian in the BLP-markup equation can be decomposed into
@@ -319,3 +318,5 @@ in which the markup term is
 
 .. math:: \zeta = \Lambda^{-1}(O \circ \Gamma)'(p - c) - \Lambda^{-1}.
    :label: zeta
+
+One last note is that when iterating over the :math:`\zeta`-markup contraction, the difference in prices is weighted by the diagonal of :math:`\Lambda` before computing the norm of the vector and comparing it to the chosen fixed point termination tolerance. This guarantees that iteration is terminated according to the proper numerical simultaneous stationarity condition described by :ref:`references:Morrow and Skerlos (2011)`.

@@ -1,12 +1,10 @@
 """Tests of optimization routines."""
 
-from typing import Callable, Tuple, Union
-
 import numpy as np
 import pytest
-import scipy.optimize
 
 from pyblp import Optimization
+from pyblp.configurations.optimization import ObjectiveResults
 from pyblp.utilities.basics import Array, Options
 
 
@@ -33,8 +31,7 @@ from pyblp.utilities.basics import Array, Options
     pytest.param('cg', {}, id="CG"),
     pytest.param('bfgs', {}, id="BFGS"),
     pytest.param('newton-cg', {}, id="Newton-CG"),
-    pytest.param('return', {}, id="Return"),
-    pytest.param(lambda i, b, f, _, **o: (scipy.optimize.minimize(f, i, bounds=b, **o).x, True), {}, id="custom")
+    pytest.param('return', {}, id="Return")
 ])
 @pytest.mark.parametrize('compute_gradient', [
     pytest.param(True, id="analytic gradient"),
@@ -45,21 +42,19 @@ from pyblp.utilities.basics import Array, Options
     pytest.param(False, id="default display")
 ])
 def test_entropy(
-        lb: float, ub: float, method: Union[str, Callable], method_options: Options, compute_gradient: bool,
+        lb: float, ub: float, method: str, method_options: Options, compute_gradient: bool,
         universal_display: bool) -> None:
     """Test that solutions to the entropy maximization problem from Berger, Pietra, and Pietra (1996) are reasonably
     close to the exact solution (this is based on a subset of testing methods from scipy.optimize.tests.test_optimize).
     """
-    def objective_function(x: Array) -> Union[Array, Tuple[Array, Array]]:
+    def objective_function(x: Array) -> ObjectiveResults:
         """Evaluate the objective."""
         K = np.array([1, 0.3, 0.5])
         F = np.array([[1, 1, 1], [1, 1, 0], [1, 0, 1], [1, 0, 0], [1, 0, 0]])
         log_Z = np.log(np.exp(F @ x).sum())
         p = np.exp(F @ x - log_Z)
         objective = log_Z - K @ x
-        if not compute_gradient:
-            return objective
-        gradient = F.T @ p - K
+        gradient = F.T @ p - K if compute_gradient else None
         return objective, gradient
 
     # simple methods do not accept an analytic gradient
@@ -69,11 +64,6 @@ def test_entropy(
     # Newton CG requires an analytic gradient
     if not compute_gradient and method == 'newton-cg':
         return
-
-    # the custom method needs to know if an analytic gradient will be computed
-    if callable(method):
-        method_options = method_options.copy()
-        method_options['jac'] = compute_gradient
 
     # skip optimization methods that haven't been configured properly
     try:
@@ -94,8 +84,6 @@ def test_entropy(
     assert converged
 
     # test that the estimated objective is reasonably close to the exact objective
-    exact_results = objective_function(exact_values)
-    estimated_results = objective_function(estimated_values)
-    exact_objective = exact_results[0] if compute_gradient else exact_results
-    estimated_objective = estimated_results[0] if compute_gradient else estimated_results
-    np.testing.assert_allclose(estimated_objective, exact_objective, rtol=1e-5, atol=0)
+    exact = objective_function(exact_values)[0]
+    estimated = objective_function(estimated_values)[0]
+    np.testing.assert_allclose(estimated, exact, rtol=1e-5, atol=0)

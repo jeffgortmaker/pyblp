@@ -13,7 +13,7 @@ from .. import exceptions, options
 from ..configurations.formulation import Formulation
 from ..configurations.integration import Integration
 from ..configurations.iteration import Iteration
-from ..configurations.optimization import Optimization
+from ..configurations.optimization import ObjectiveResults, Optimization
 from ..markets.problem_market import ProblemMarket
 from ..parameters import Parameters
 from ..primitives import Agents, Products
@@ -531,9 +531,7 @@ class ProblemEconomy(Economy):
             )
 
             # define the objective function
-            def wrapper(
-                    new_theta: Array, current_iterations: int, current_evaluations: int) -> (
-                    Union[float, Tuple[float, Array]]):
+            def wrapper(new_theta: Array, current_iterations: int, current_evaluations: int) -> ObjectiveResults:
                 """Compute and output progress associated with a single objective evaluation."""
                 nonlocal converged_mappings, iteration_mappings, evaluation_mappings, smallest_objective, progress
                 assert optimization is not None and costs_bounds is not None
@@ -549,7 +547,7 @@ class ProblemEconomy(Economy):
                 if formatted_progress:
                     output(formatted_progress)
                 smallest_objective = min(smallest_objective, progress.objective)
-                return (progress.objective, progress.gradient) if optimization._compute_gradient else progress.objective
+                return progress.objective, progress.gradient if optimization._compute_gradient else None
 
             # optimize theta
             converged = True

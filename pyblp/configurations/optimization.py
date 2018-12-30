@@ -15,6 +15,11 @@ from .. import options
 from ..utilities.basics import Array, Options, StringRepresentation, format_options
 
 
+# objective function types
+ObjectiveResults = Tuple[float, Optional[Array]]
+ObjectiveFunction = Callable[[Array], ObjectiveResults]
+
+
 class Optimization(StringRepresentation):
     r"""Configuration for solving optimization problems.
 
@@ -62,15 +67,16 @@ class Optimization(StringRepresentation):
             method(initial, bounds, objective_function, iteration_callback, **options) -> (final, converged)
 
         where ``initial`` is an array of initial parameter values, ``bounds`` is a list of ``(min, max)`` pairs for each
-        element in ``initial``, ``objective_function`` is a callable objective function that accepts an array of
-        parameter values and returns either the objective value if ``compute_gradient`` is ``False`` or a tuple of the
-        objective value and its gradient if ``True``, ``iteration_callback`` is a function that should be called without
-        any arguments after each major iteration (it is used to record the number of major iterations), ``options`` are
-        specified below, ``final`` is an array of optimized parameter values, and ``converged`` is a flag for whether
-        the routine converged.
+        element in ``initial``, ``objective_function`` is a callable objective function of the form specified below,
+        ``iteration_callback`` is a function that should be called without any arguments after each major iteration (it
+        is used to record the number of major iterations), ``options`` are specified below, ``final`` is an array of
+        optimized parameter values, and ``converged`` is a flag for whether the routine converged.
 
-        To simply evaluate a problem's objective at the initial parameter values, the trivial custom method
-        ``lambda x, *_: (x, True)`` can be used.
+        The ``objective_function`` has the following form:
+
+            objective_function(theta) -> (objective, gradient)
+
+        where ``gradient`` is ``None`` if ``compute_gradient is ``False``.
 
     method_options : `dict, optional`
         Options for the optimization routine.
@@ -238,7 +244,7 @@ class Optimization(StringRepresentation):
 
     def _optimize(
             self, initial: Array, bounds: Optional[Iterable[Tuple[float, float]]],
-            verbose_objective_function: Callable[[Array, int, int], Union[Tuple[float, Array], float]]) -> (
+            verbose_objective_function: Callable[[Array, int, int], ObjectiveResults]) -> (
             Tuple[Array, bool, int, int]):
         """Optimize parameters to minimize a scalar objective."""
 
@@ -252,7 +258,7 @@ class Optimization(StringRepresentation):
             iterations += 1
 
         # define a contraction wrapper
-        def objective_wrapper(raw_values: Any) -> Union[Tuple[float, Array], float]:
+        def objective_wrapper(raw_values: Any) -> ObjectiveResults:
             """Normalize arrays so they work with all types of routines. Also count the total number of contraction
             evaluations.
             """
@@ -260,11 +266,11 @@ class Optimization(StringRepresentation):
             evaluations += 1
             raw_values = np.asanyarray(raw_values)
             values = raw_values.reshape(initial.shape).astype(initial.dtype, copy=False)
-            result = verbose_objective_function(values, iterations, evaluations)
-            if isinstance(result, tuple):
-                objective, gradient = result
-                return float(objective), gradient.astype(raw_values.dtype, copy=False).flatten()
-            return float(result)
+            objective, gradient = verbose_objective_function(values, iterations, evaluations)
+            return (
+                float(objective),
+                None if gradient is None else gradient.astype(raw_values.dtype, copy=False).flatten()
+            )
 
         # normalize values
         raw_initial = initial.astype(np.float64, copy=False).flatten()
@@ -285,30 +291,38 @@ def return_optimizer(initial_values: Array, *_: Any, **__: Any) -> Tuple[Array, 
 
 
 def scipy_optimizer(
-        initial_values: Array, bounds: Optional[Iterable[Tuple[float, float]]],
-        objective_function: Callable[[Array], Union[Tuple[float, Array], float]],
+        initial_values: Array, bounds: Optional[Iterable[Tuple[float, float]]], objective_function: ObjectiveFunction,
         iteration_callback: Callable[[], None], method: str, compute_gradient: bool, **scipy_options: Any) -> (
         Tuple[Array, bool]):
     """Optimize with a SciPy method."""
+
+    # wrap the objective function
+    def wrapper(x: Array) -> Union[float, Tuple[float, Array]]:
+        """Either return the objective value or a tuple including the gradient."""
+        if compute_gradient:
+            return objective_function(x)
+        return objective_function(x)[0]
+
+    # by default use the BFGS approximation for the Hessian
     hess = scipy_options.get('hess', scipy.optimize.BFGS() if method == 'trust-constr' else None)
+
+    # call the SciPy function
     callback = lambda *_: iteration_callback()
     results = scipy.optimize.minimize(
-        objective_function, initial_values, method=method, jac=compute_gradient, hess=hess, bounds=bounds,
-        callback=callback, options=scipy_options
+        wrapper, initial_values, method=method, jac=compute_gradient, hess=hess, bounds=bounds, callback=callback,
+        options=scipy_options
     )
     return results.x, results.success
 
 
 def knitro_optimizer(
-        initial_values: Array, bounds: Optional[Iterable[Tuple[float, float]]],
-        objective_function: Callable[[Array], Union[Tuple[float, Array], float]],
-        iteration_callback: Callable[[], None], compute_gradient: bool, **knitro_options: Any) -> (
-        Tuple[Array, bool]):
+        initial_values: Array, bounds: Optional[Iterable[Tuple[float, float]]], objective_function: ObjectiveFunction,
+        iteration_callback: Callable[[], None], compute_gradient: bool, **knitro_options: Any) -> Tuple[Array, bool]:
     """Optimize with Knitro."""
     with knitro_context_manager() as (knitro, knitro_context):
         # initialize an iteration counter and and empty cache
         iterations = 0
-        cache: Optional[Tuple[Array, Union[float, Tuple[float, Array]]]] = None
+        cache: Optional[Tuple[Array, ObjectiveResults]] = None
 
         # define a callback for objective and gradient computation
         def combined_callback(
@@ -326,26 +340,16 @@ def knitro_optimizer(
                 iterations += 1
 
             # compute the objective or used cached values
-            if cache is not None and np.array_equal(values, cache[0]):
-                result = cache[1]
-            else:
-                result = objective_function(values)
-                cache = (values.copy(), result)
-
-            # extract the objective and its gradient
-            if compute_gradient:
-                assert isinstance(result, tuple)
-                objective, gradient = result
-            else:
-                assert isinstance(result, float)
-                objective = result
-                gradient = None
+            if cache is None or not np.array_equal(values, cache[0]):
+                cache = (values.copy(), objective_function(values))
+            objective, gradient = cache[1]
 
             # handle request codes
             if request_code == knitro.KTR_RC_EVALFC:
                 objective_store[:] = objective
                 return knitro.KTR_RC_BEGINEND
             if request_code == knitro.KTR_RC_EVALGA:
+                assert compute_gradient and gradient is not None
                 gradient_store[:] = gradient
                 return knitro.KTR_RC_BEGINEND
             return knitro.KTR_RC_CALLBACK_ERR

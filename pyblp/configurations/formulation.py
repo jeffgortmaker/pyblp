@@ -281,7 +281,7 @@ class Formulation(StringRepresentation):
                 """Iteratively de-mean a matrix until convergence."""
                 assert isinstance(method, Iteration)
                 errors: List[Error] = []
-                matrix, converged = method._iterate(matrix, demean)[:2]
+                matrix, converged = method._iterate(matrix, lambda m: (demean(m), None, None))[:2]
                 if not converged:
                     errors.append(exceptions.AbsorptionConvergenceError())
                 return matrix, errors

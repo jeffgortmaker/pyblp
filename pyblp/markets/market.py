@@ -7,7 +7,7 @@ import numpy.lib.recfunctions
 
 from .. import exceptions, options
 from ..configurations.formulation import ColumnFormulation
-from ..configurations.iteration import Iteration
+from ..configurations.iteration import ContractionResults, Iteration
 from ..economies.economy import Economy
 from ..parameters import LinearCoefficient, NonlinearCoefficient, Parameter, Parameters, RhoParameter
 from ..utilities.algebra import (
@@ -295,9 +295,10 @@ class Market(object):
 
     def compute_zeta(
             self, costs: Array, ownership_matrix: Optional[Array] = None, utility_derivatives: Optional[Array] = None,
-            prices: Optional[Array] = None) -> Tuple[Array, List[Error]]:
+            prices: Optional[Array] = None) -> Tuple[Array, Array]:
         """Compute the markup term in the zeta-markup equation. By default, get an unchanged ownership matrix, compute
-        derivatives of utilities with respect to prices, and use unchanged prices.
+        derivatives of utilities with respect to prices, and use unchanged prices. Also return the intermediate
+        diagonal of the capital lambda matrix, which is used for weighting during fixed point iteration.
         """
         if ownership_matrix is None:
             ownership_matrix = self.get_ownership_matrix()
@@ -312,10 +313,12 @@ class Market(object):
             probabilities, conditionals = self.compute_probabilities(delta, mu)
             shares = probabilities @ self.agents.weights
         value_derivatives = probabilities * utility_derivatives
-        capital_lamda_inverse = np.diag(1 / self.compute_capital_lamda(value_derivatives).diagonal())
+        capital_lamda_diagonal = self.compute_capital_lamda(value_derivatives).diagonal()
+        capital_lamda_inverse = np.diag(1 / capital_lamda_diagonal)
         capital_gamma = self.compute_capital_gamma(value_derivatives, probabilities, conditionals)
         tilde_capital_omega = capital_lamda_inverse @ (ownership_matrix * capital_gamma).T
-        return tilde_capital_omega @ (prices - costs) - capital_lamda_inverse @ shares
+        zeta = tilde_capital_omega @ (prices - costs) - capital_lamda_inverse @ shares
+        return zeta, capital_lamda_diagonal
 
     def compute_equilibrium_prices(
             self, costs: Array, iteration: Iteration, ownership_matrix: Optional[Array] = None,
@@ -336,8 +339,14 @@ class Market(object):
             derivatives = self.compute_utility_derivatives('prices')
             get_derivatives = lambda _: derivatives
 
+        # define the contraction
+        def contraction(x: Array) -> ContractionResults:
+            """Compute the next equilibrium prices."""
+            zeta, capital_lamda_diagonal = self.compute_zeta(costs, ownership_matrix, get_derivatives(x), x)
+            x = costs + zeta
+            return x, capital_lamda_diagonal, None
+
         # solve the fixed point problem
-        contraction = lambda p: costs + self.compute_zeta(costs, ownership_matrix, get_derivatives(p), p)
         prices, converged, iterations, evaluations = iteration._iterate(prices, contraction)
         return prices, converged, iterations, evaluations
 

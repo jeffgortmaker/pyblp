@@ -9,6 +9,11 @@ import scipy.optimize
 from ..utilities.basics import Array, Options, StringRepresentation, format_options
 
 
+# define contraction function types
+ContractionResults = Tuple[Array, Optional[Array], Optional[Array]]
+ContractionFunction = Callable[[Array], ContractionResults]
+
+
 class Iteration(StringRepresentation):
     r"""Configuration for solving fixed point problems.
 
@@ -54,12 +59,17 @@ class Iteration(StringRepresentation):
 
             method(initial, contraction, callback, **options) -> (final, converged)
 
-        where ``initial`` is an array of initial values, ``contraction`` is a callable contraction mapping that accepts
-        an array of values and returns either the next values if ``compute_jacobian`` is ``False`` or a tuple of the
-        next values and the Jacobian if ``compute_jacobian`` is ``True``, ``callback`` is a function that should be
-        called without any arguments after each major iteration (it is used to record the number of major iterations),
-        ``options`` are specified below, ``final`` is an array of final values, and ``converged`` is a flag for whether
-        the routine converged.
+        where ``initial`` is an array of initial values, ``contraction`` is a callable contraction mapping of the form
+        specified below, ``callback`` is a function that should be called without any arguments after each major
+        iteration (it is used to record the number of major iterations), ``options`` are specified below, ``final`` is
+        an array of final values, and ``converged`` is a flag for whether the routine converged.
+
+        The ``contraction`` function has the following form:
+
+            contraction(x0) -> (x1, weights, jacobian)
+
+        where ``weights`` are either ``None`` or a vector of weights that should multiply ``x1 - x`` before computing
+        the norm of the differences, and ``jacobian`` is ``None`` if ``compute_jacobian`` is ``False``.
 
         Regardless of the chosen routine, if there are any computational issues that create infinities or null values,
         ``final`` will be the second to last iteration's values.
@@ -222,7 +232,8 @@ class Iteration(StringRepresentation):
         description = f"{self._description} {'with' if self._compute_jacobian else 'without'} analytic Jacobians"
         return f"Configured to iterate using {description} with options {format_options(self._method_options)}."
 
-    def _iterate(self, initial: Array, contraction: Callable[[Array], Any]) -> Tuple[Array, bool, int, int]:
+    def _iterate(
+            self, initial: Array, contraction: ContractionFunction) -> Tuple[Array, bool, int, int]:
         """Solve a fixed point iteration problem."""
 
         # initialize counters
@@ -235,7 +246,7 @@ class Iteration(StringRepresentation):
             iterations += 1
 
         # define a contraction wrapper
-        def contraction_wrapper(raw_values: Any) -> Union[Tuple[Array, Array], Array]:
+        def contraction_wrapper(raw_values: Any) -> ContractionResults:
             """Normalize arrays so they work with all types of routines. Also count the total number of contraction
             evaluations.
             """
@@ -244,14 +255,12 @@ class Iteration(StringRepresentation):
             if not isinstance(raw_values, np.ndarray):
                 raw_values = np.asarray(raw_values)
             values = raw_values.reshape(initial.shape).astype(initial.dtype, copy=False)
-            results = contraction(values)
-            if isinstance(results, tuple):
-                values, jacobian = results
-                return (
-                    values.astype(raw_values.dtype, copy=False).reshape(raw_values.shape),
-                    jacobian.astype(raw_values.dtype, copy=False).reshape((raw_values.size, raw_values.size))
-                )
-            return results.astype(raw_values.dtype, copy=False).reshape(raw_values.shape)
+            values, weights, jacobian = contraction(values)
+            return (
+                values.astype(raw_values.dtype, copy=False).reshape(raw_values.shape),
+                None if weights is None else weights.astype(raw_values.dtype, copy=False).reshape(raw_values.shape),
+                None if jacobian is None else jacobian.astype(raw_values.dtype, copy=False)
+            )
 
         # normalize the starting values
         raw_initial = initial.astype(np.float64, copy=False).flatten()
@@ -276,9 +285,8 @@ def return_iterator(initial: Array, *_: Any, **__: Any) -> Tuple[Array, bool]:
 
 
 def scipy_iterator(
-        initial: Array, contraction: Callable[[Array], Union[Tuple[Array, Array], Array]],
-        iteration_callback: Callable[[], None], method: str, compute_jacobian: bool, **scipy_options: Any) -> (
-        Tuple[Array, bool]):
+        initial: Array, contraction: ContractionFunction, iteration_callback: Callable[[], None], method: str,
+        compute_jacobian: bool, **scipy_options: Any) -> Tuple[Array, bool]:
     """Apply a SciPy root finding method."""
 
     # wrap the callback if the method supports iteration callbacks
@@ -295,14 +303,10 @@ def scipy_iterator(
         nonlocal failed
 
         # attempt to evaluate the contraction and check for bad values
-        result = contraction(x)
-        if isinstance(result, tuple):
-            x0, (x, jacobian) = x, result
-        else:
-            x0, x = x, result
-            jacobian = None
-        if not np.isfinite(x).all() or (jacobian is not None and not np.isfinite(jacobian).all()):
+        x0, (x, weights, jacobian) = x, contraction(x)
+        if not all_finite(x, weights, jacobian):
             x = x0
+            weights = None
             if jacobian is not None:
                 jacobian = np.zeros_like(jacobian)
             failed = True
@@ -312,28 +316,31 @@ def scipy_iterator(
             iteration_callback()
 
         # transform the fixed point into a root-finding problem
-        if jacobian is not None:
-            return x0 - x, np.eye(x.size) - jacobian
-        return x0 - x
+        difference = weight(x0 - x, weights)
+        if jacobian is None:
+            return difference
+        difference_jacobian = weight(np.eye(x.size) - jacobian, weights)
+        return difference, difference_jacobian
 
     # call the routine
     results = scipy.optimize.root(
-        contraction_wrapper, initial, method=method, jac=compute_jacobian, callback=callback, options=scipy_options
+        contraction_wrapper, initial, method=method, jac=compute_jacobian or None, callback=callback,
+        options=scipy_options
     )
     return results.x, not failed and results.success
 
 
 def simple_iterator(
-        initial: Array, contraction: Callable[[Array], Array], iteration_callback: Callable[[], None],
-        max_evaluations: int, tol: float, norm: Callable[[Array], float]) -> Tuple[Array, bool]:
+        initial: Array, contraction: ContractionFunction, iteration_callback: Callable[[], None], max_evaluations: int,
+        tol: float, norm: Callable[[Array], float]) -> Tuple[Array, bool]:
     """Apply simple fixed point iteration with no acceleration."""
     x = initial
     failed = False
     evaluations = 0
     while True:
         # contraction step
-        x0, x = x, contraction(x)
-        if not np.isfinite(x).all():
+        x0, (x, weights) = x, contraction(x)[:2]
+        if not all_finite(x, weights):
             x = x0
             failed = True
             break
@@ -343,7 +350,7 @@ def simple_iterator(
 
         # check for convergence
         evaluations += 1
-        if evaluations >= max_evaluations or norm(x - x0) < tol:
+        if evaluations >= max_evaluations or norm(weight(x - x0, weights)) < tol:
             break
 
     # determine whether there was convergence
@@ -352,8 +359,8 @@ def simple_iterator(
 
 
 def squarem_iterator(
-        initial: Array, contraction: Callable[[Array], Array], iteration_callback: Callable[[], None],
-        max_evaluations: int, tol: float, norm: Callable[[Array], float], scheme: int, step_min: float, step_max: float,
+        initial: Array, contraction: ContractionFunction, iteration_callback: Callable[[], None], max_evaluations: int,
+        tol: float, norm: Callable[[Array], float], scheme: int, step_min: float, step_max: float,
         step_factor: float) -> Tuple[Array, bool]:
     """Apply the SQUAREM acceleration method for fixed point iteration."""
     x = initial
@@ -361,8 +368,8 @@ def squarem_iterator(
     evaluations = 0
     while True:
         # first step
-        x0, x = x, contraction(x)
-        if not np.isfinite(x).all():
+        x0, (x, weights) = x, contraction(x)[:2]
+        if not all_finite(x, weights):
             x = x0
             failed = True
             break
@@ -370,12 +377,12 @@ def squarem_iterator(
         # check for convergence
         g0 = x - x0
         evaluations += 1
-        if evaluations >= max_evaluations or norm(g0) < tol:
+        if evaluations >= max_evaluations or norm(weight(g0, weights)) < tol:
             break
 
         # second step
-        x1, x = x, contraction(x)
-        if not np.isfinite(x).all():
+        x1, (x, weights) = x, contraction(x)[:2]
+        if not all_finite(x, weights):
             x = x1
             failed = True
             break
@@ -383,7 +390,7 @@ def squarem_iterator(
         # check for convergence
         g1 = x - x1
         evaluations += 1
-        if evaluations >= max_evaluations or norm(g1) < tol:
+        if evaluations >= max_evaluations or norm(weight(g1, weights)) < tol:
             break
 
         # compute the step length
@@ -405,8 +412,8 @@ def squarem_iterator(
 
         # acceleration step
         x2, x = x, x0 - 2 * alpha * r + alpha**2 * v
-        x3, x = x, contraction(x)
-        if not np.isfinite(x).all():
+        x3, (x, weights) = x, contraction(x)[:2]
+        if not all_finite(x, weights):
             x = x2
             failed = True
             break
@@ -416,9 +423,21 @@ def squarem_iterator(
 
         # check for convergence
         evaluations += 1
-        if evaluations >= max_evaluations or norm(x - x3) < tol:
+        if evaluations >= max_evaluations or norm(weight(x - x3, weights)) < tol:
             break
 
     # determine whether there was convergence
     converged = not failed and evaluations < max_evaluations
     return x, converged
+
+
+def all_finite(*arrays: Optional[Array]) -> bool:
+    """Validate that multiple arrays are either None or all finite."""
+    return all(a is None or np.isfinite(a).all() for a in arrays)
+
+
+def weight(x: Array, weights: Optional[Array]) -> Array:
+    """Optionally weight an array."""
+    if weights is None:
+        return x
+    return weights * x
