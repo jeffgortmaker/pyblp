@@ -105,19 +105,15 @@ class Products(object):
 
         # load excluded demand-side instruments and supplement them with exogenous characteristics in X1
         ZD = extract_matrix(product_data, 'demand_instruments')
-        if ZD is None:
-            raise KeyError("product_data must have a demand_instruments field.")
         for index, formulation in enumerate(X1_formulations):
             if 'prices' not in formulation.names:
-                ZD = np.c_[ZD, X1[:, [index]]]
+                ZD = X1[:, [index]] if ZD is None else np.c_[ZD, X1[:, [index]]]
 
         # load excluded supply-side instruments and supplement them with all characteristics in X3
         ZS = None
         if X3 is not None:
             ZS = extract_matrix(product_data, 'supply_instruments')
-            if ZS is None:
-                raise KeyError("Since X3 is formulated, product_data must have a supply_instruments field.")
-            ZS = np.c_[ZS, X3]
+            ZS = X3 if ZS is None else np.c_[ZS, X3]
 
         # load fixed effect IDs
         demand_ids = None

@@ -915,21 +915,22 @@ class Problem(ProblemEconomy):
 
             - **prices** : (`numeric`) - Product prices, :math:`p`.
 
-            - **demand_instruments** : (`numeric`) - Excluded demand-side instruments, which together with the
-              formulated exogenous linear product characteristics (:math:`X_1` except for characteristics involving
-              ``prices``, :math:`X_1^p`), constitute the full set of demand-side instruments, :math:`Z_D`.
-
         If a formulation for :math:`X_3` is specified in ``product_formulations``, the following fields are also
         required, since they will be used to estimate the supply side of the problem:
 
             - **firm_ids** : (`object, optional`) - IDs that associate products with firms.
 
+        Excluded instruments should generally be specified with the following fields:
+
+            - **demand_instruments** : (`numeric`) - Excluded demand-side instruments, which together with the
+              formulated exogenous linear product characteristics (:math:`X_1` except for characteristics involving
+              ``prices``, :math:`X_1^p`), constitute the full set of demand-side instruments, :math:`Z_D`.
+
             - **supply_instruments** : (`numeric, optional`) - Excluded supply-side instruments, which together with the
               formulated cost characteristics, :math:`X_3`, constitute the full set of supply-side instruments,
               :math:`Z_S`.
 
-        In addition to supply-side estimation, the ``firm_ids`` field is also needed to compute some post-estimation
-        outputs. If ``firm_ids`` are specified, custom ownership matrices can be specified as well:
+        If ``firm_ids`` are specified, custom ownership matrices can be specified as well:
 
             - **ownership** : (`numeric, optional`) - Custom stacked :math:`J_t \times J_t` ownership matrices,
               :math:`O`, for each market :math:`t`, which can be built with :func:`build_ownership`. By default,
