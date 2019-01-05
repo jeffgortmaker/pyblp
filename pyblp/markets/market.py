@@ -66,7 +66,7 @@ class Market(object):
         self.K2 = economy.K2
         self.K3 = economy.K3
         self.D = economy.D
-        self.H = self.groups.unique.size
+        self.H = self.groups.group_count
 
         # identify column formulations
         self._X1_formulations = economy._X1_formulations

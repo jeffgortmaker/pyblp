@@ -286,32 +286,46 @@ class StringRepresentation(object):
 class Groups(object):
     """Computation of grouped statistics."""
 
-    sort: Array
-    undo: Array
+    sort_indices: Array
+    reduce_indices: Array
     unique: Array
-    index: Array
-    inverse: Array
+    codes: Array
     counts: Array
+    group_count: int
 
     def __init__(self, ids: Array) -> None:
         """Sort and index IDs that define groups."""
-        self.sort = ids.flatten().argsort()
-        self.undo = self.sort.argsort()
-        self.unique, self.index, self.inverse, self.counts = np.unique(
-            ids[self.sort], return_index=True, return_inverse=True, return_counts=True
-        )
+
+        # sort the IDs
+        flat = ids.flatten()
+        self.sort_indices = flat.argsort()
+        sorted_ids = flat[self.sort_indices]
+
+        # identify groups
+        changes = np.ones(flat.shape, np.bool)
+        changes[1:] = sorted_ids[1:] != sorted_ids[:-1]
+        self.reduce_indices = np.nonzero(changes)[0]
+        self.unique = sorted_ids[self.reduce_indices]
+
+        # encode the groups
+        sorted_codes = np.cumsum(changes) - 1
+        self.codes = sorted_codes[self.sort_indices.argsort()]
+
+        # compute counts
+        self.group_count = self.reduce_indices.size
+        self.counts = np.diff(np.append(self.reduce_indices, self.codes.size))
 
     def sum(self, matrix: Array) -> Array:
         """Compute the sum of each group."""
-        return np.add.reduceat(matrix[self.sort], self.index)
+        return np.add.reduceat(matrix[self.sort_indices], self.reduce_indices)
 
     def mean(self, matrix: Array) -> Array:
         """Compute the mean of each group."""
-        return self.sum(matrix) / self.counts[:, np.newaxis]
+        return self.sum(matrix) / self.counts[:, None]
 
     def expand(self, statistics: Array) -> Array:
         """Expand statistics for each group to the size of the original matrix."""
-        return statistics[self.inverse][self.undo]
+        return statistics[self.codes]
 
 
 class Error(Exception):

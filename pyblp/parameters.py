@@ -85,7 +85,7 @@ class AllGroupsRhoParameter(RhoParameter):
 
     def get_group_associations(self, groups: Groups) -> Array:
         """Get an indicator for all groups."""
-        return np.ones((groups.unique.size, 1), options.dtype)
+        return np.ones((groups.group_count, 1), options.dtype)
 
 
 class OneGroupRhoParameter(RhoParameter):
@@ -93,7 +93,7 @@ class OneGroupRhoParameter(RhoParameter):
 
     def get_group_associations(self, groups: Groups) -> Array:
         """Get an indicator for the group associated with the parameter."""
-        group_associations = np.zeros((groups.unique.size, 1), options.dtype)
+        group_associations = np.zeros((groups.group_count, 1), options.dtype)
         group_associations[self.location] = 1
         return group_associations
 
