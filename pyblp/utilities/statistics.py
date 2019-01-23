@@ -136,7 +136,7 @@ def compute_gmm_error_covariance(u1: Array, u2: Array) -> Array:
 
 def compute_gmm_moments(u_list: List[Array], Z_list: List[Array]) -> Array:
     """Compute GMM moment conditions."""
-    return np.hstack(u * Z for u, Z in zip(u_list, Z_list))
+    return np.hstack([u * Z for u, Z in zip(u_list, Z_list)])
 
 
 def compute_gmm_moments_mean(u_list: List[Array], Z_list: List[Array]) -> Array:
