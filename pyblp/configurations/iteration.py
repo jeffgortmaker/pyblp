@@ -207,7 +207,7 @@ class Iteration(StringRepresentation):
         elif method != 'return':
             self._iterator = functools.partial(self._iterator, method=method, compute_jacobian=compute_jacobian)
             if method in {'broyden1', 'broyden2', 'anderson', 'diagbroyden', 'krylov', 'df-sane'}:
-                self._method_options['tol_norm'] = infinity_norm
+                self._method_options['fnorm' if method == 'df-sane' else 'tol_norm'] = infinity_norm
 
         # update the default options
         self._method_options.update(method_options)
@@ -310,8 +310,9 @@ def scipy_iterator(
         scipy_options['diag'] = weights_cache
     else:
         callback = lambda *_: iteration_callback()
-        norm = scipy_options.get('tol_norm', infinity_norm)
-        scipy_options['tol_norm'] = lambda x: norm(weights_cache * x)
+        norm_key = 'fnorm' if method == 'df-sane' else 'tol_norm'
+        norm = scipy_options.get(norm_key, infinity_norm)
+        scipy_options[norm_key] = lambda x: norm(weights_cache * x)
 
     # record whether non-finite values were encountered during fixed point iteration
     failed = False
