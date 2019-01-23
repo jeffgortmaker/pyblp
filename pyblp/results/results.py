@@ -319,7 +319,7 @@ class Results(abc.ABC, StringRepresentation):
             :meth:`ProblemResults.compute_approximate_prices`.
         iteration : `Iteration, optional`
             :class:`Iteration` configuration for how to solve the fixed point problem in each market. By default,
-            ``Iteration('simple', {'tol': 1e-12})`` is used. Analytic Jacobians are not supported for this contraction
+            ``Iteration('simple', {'atol': 1e-12})`` is used. Analytic Jacobians are not supported for this contraction
             mapping.
 
         Returns
@@ -338,7 +338,7 @@ class Results(abc.ABC, StringRepresentation):
         costs = self._coerce_optional_costs(costs)
         prices = self._coerce_optional_prices(prices)
         if iteration is None:
-            iteration = Iteration('simple', {'tol': 1e-12})
+            iteration = Iteration('simple', {'atol': 1e-12})
         elif not isinstance(iteration, Iteration):
             raise ValueError("iteration must None or an Iteration instance.")
         elif iteration._compute_jacobian:

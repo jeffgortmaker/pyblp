@@ -291,7 +291,7 @@ class ProblemEconomy(Economy):
             :class:`Iteration` configuration for how to solve the fixed point problem used to compute
             :math:`\delta(\hat{\theta})` in each market. This configuration is only relevant if there are nonlinear
             parameters, since :math:`\delta` can be estimated analytically in the Logit model. By default,
-            ``Iteration('squarem', {'tol': 1e-14})`` is used. Generally, non-Jacobian routines such as SQUAREM will be
+            ``Iteration('squarem', {'atol': 1e-14})`` is used. Generally, non-Jacobian routines such as SQUAREM will be
             fastest. Jacobian routines may be useful, for example, when the fixed point is heavily dampened due to a
             large nesting parameter.
         fp_type : `str, optional`
@@ -400,7 +400,7 @@ class ProblemEconomy(Economy):
         if optimization is None:
             optimization = Optimization('slsqp', {'ftol': 1e-12})
         if iteration is None:
-            iteration = Iteration('squarem', {'tol': 1e-14})
+            iteration = Iteration('squarem', {'atol': 1e-14})
         if not isinstance(optimization, Optimization):
             raise TypeError("optimization must be None or an Optimization instance.")
         if not isinstance(iteration, Iteration):

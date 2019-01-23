@@ -78,7 +78,7 @@ class Formulation(StringRepresentation):
 
             - ``Iteration`` (default for more than two fixed effects) - Use the iterative de-meaning algorithm of
               :ref:`references:Rios-Avila (2015)` and configure the fixed point iteration with a :class:`Iteration`
-              configuration. By default, ``Iteration('simple', {'tol': 1e-14})`` is used. This method is equivalent to
+              configuration. By default, ``Iteration('simple', {'atol': 1e-12})`` is used. This method is equivalent to
               ``'simple'`` for one fixed effect, and it will also work for two fixed effects, although either variant of
               the :ref:`references:Somaini and Wolak (2016)` algorithm is usually more performant.
 
@@ -258,7 +258,7 @@ class Formulation(StringRepresentation):
             elif ids.shape[1] == 2:
                 method = 'memory'
             else:
-                method = Iteration('simple', {'tol': 1e-12})
+                method = Iteration('simple', {'atol': 1e-12})
 
         # simple and iterated de-meaning both require group information for each fixed effect
         if method == 'simple' or isinstance(method, Iteration):

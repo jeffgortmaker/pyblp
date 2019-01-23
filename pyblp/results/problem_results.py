@@ -509,7 +509,7 @@ class ProblemResults(Results):
         iteration : `Iteration, optional`
             :class:`Iteration` configuration used to compute bootstrapped prices by iterating over the
             :math:`\zeta`-markup equation from :ref:`references:Morrow and Skerlos (2011)`. By default, if a supply side
-            was estimated, this is ``Iteration('simple', {'tol': 1e-12})``. Analytic Jacobians are not supported for
+            was estimated, this is ``Iteration('simple', {'atol': 1e-12})``. Analytic Jacobians are not supported for
             this contraction mapping and this configuration is not used if a supply side was not estimated.
 
         Returns
@@ -536,7 +536,7 @@ class ProblemResults(Results):
         if self.problem.K3 == 0:
             iteration = None
         elif iteration is None:
-            iteration = Iteration('simple', {'tol': 1e-12})
+            iteration = Iteration('simple', {'atol': 1e-12})
         elif not isinstance(iteration, Iteration):
             raise TypeError("iteration must be None or an iteration instance.")
         elif iteration._compute_jacobian:
@@ -723,7 +723,7 @@ class ProblemResults(Results):
         iteration : `Iteration, optional`
             :class:`Iteration` configuration used to estimate expected prices by iterating over the :math:`\zeta`-markup
             equation from :ref:`references:Morrow and Skerlos (2011)`. By default, if a supply side was estimated, this
-            is ``Iteration('simple', {'tol': 1e-12})``. Analytic Jacobians are not supported for this contraction
+            is ``Iteration('simple', {'atol': 1e-12})``. Analytic Jacobians are not supported for this contraction
             mapping and this configuration is not used if ``expected_prices`` is specified.
 
         Returns
@@ -778,7 +778,7 @@ class ProblemResults(Results):
                 raise ValueError(f"expected_prices must be a {self.problem.N}-vector.")
         elif self.problem.K3 > 0:
             if iteration is None:
-                iteration = Iteration('simple', {'tol': 1e-12})
+                iteration = Iteration('simple', {'atol': 1e-12})
             elif not isinstance(iteration, Iteration):
                 raise TypeError("iteration must be None or an Iteration instance.")
         else:
@@ -791,22 +791,6 @@ class ProblemResults(Results):
             if replacement:
                 errors.append(exceptions.FittedValuesInversionError(covariances, replacement))
             expected_prices = self.problem.products.ZD @ parameters + self.problem.products.prices - prices
-
-        # validate expected prices or their iteration configuration
-        if expected_prices is None:
-            if self.problem.K3 == 0:
-                raise TypeError("A supply side was not estimated, so expected_prices must be specified.")
-            if iteration is None:
-                iteration = Iteration('simple', {'tol': 1e-12})
-            elif not isinstance(iteration, Iteration):
-                raise TypeError("iteration must be None or an Iteration instance.")
-            elif iteration._compute_jacobian:
-                raise ValueError("Analytic Jacobians are not supported for this contraction mapping.")
-        else:
-            iteration = None
-            expected_prices = np.c_[np.asarray(expected_prices, options.dtype)]
-            if expected_prices.shape != (self.problem.N, 1):
-                raise ValueError(f"expected_prices must be a {self.problem.N}-vector.")
 
         # average over Jacobian realizations
         converged_mappings: List[Dict[Hashable, bool]] = []

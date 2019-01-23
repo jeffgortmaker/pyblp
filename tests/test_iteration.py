@@ -87,7 +87,7 @@ def test_hasselblad(scheme: int) -> None:
 
     # solve the problem with SQUAREM and verify that the solution is reasonably close to the true solution
     method_options = {
-        'tol': 1e-8,
+        'atol': 1e-8,
         'max_evaluations': 100,
         'scheme': scheme
     }

@@ -167,7 +167,7 @@ def test_parallel(simulated_problem: SimulatedProblemFixture) -> None:
     pytest.param(0, 3, None, id="3 supply-side FEs"),
     pytest.param(3, 3, None, id="3 demand- and 3 supply-side FEs, default method"),
     pytest.param(2, 1, None, id="2 demand- and 1 supply-side FEs, default method"),
-    pytest.param(1, 2, Iteration('simple', {'tol': 1e-12}), id="1 demand- and 2 supply-side FEs, iteration")
+    pytest.param(1, 2, Iteration('simple', {'atol': 1e-12}), id="1 demand- and 2 supply-side FEs, iteration")
 ])
 def test_fixed_effects(
         simulated_problem: SimulatedProblemFixture, ED: int, ES: int,
@@ -788,7 +788,7 @@ def test_objective_gradient(
         'method': '1s',
         'optimization': Optimization(test_finite_differences),
         'iteration': Iteration('squarem', {
-            'tol': 1e-16 if solve_options_update.get('fp_type') == 'nonlinear' else 1e-14
+            'atol': 1e-16 if solve_options_update.get('fp_type') == 'nonlinear' else 1e-14
         })
     })
 

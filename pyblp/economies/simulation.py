@@ -551,7 +551,7 @@ class Simulation(Economy):
             used as starting values.
         iteration : `Iteration, optional`
             :class:`Iteration` configuration for how to solve the fixed point problem. By default,
-            ``Iteration('simple', {'tol': 1e-12})`` is used. Analytic Jacobians are not supported for this contraction
+            ``Iteration('simple', {'atol': 1e-12})`` is used. Analytic Jacobians are not supported for this contraction
             mapping.
         error_behavior : `str, optional`
             How to handle errors when computing prices and shares. For example, the fixed point routine may not converge
@@ -594,7 +594,7 @@ class Simulation(Economy):
 
         # configure or validate integration
         if iteration is None:
-            iteration = Iteration('simple', {'tol': 1e-12})
+            iteration = Iteration('simple', {'atol': 1e-12})
         elif not isinstance(iteration, Iteration):
             raise ValueError("iteration must be None or an Iteration.")
         elif iteration._compute_jacobian:

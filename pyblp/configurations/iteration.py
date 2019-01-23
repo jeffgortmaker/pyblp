@@ -87,7 +87,11 @@ class Iteration(StringRepresentation):
             - **max_evaluations** : (`int`) - Maximum number of contraction mapping evaluations. The default value is
               ``5000``.
 
-            - **tol** : (`float`) - Tolerance for convergence of the configured norm. The default value is ``1e-14``.
+            - **atol** : (`float`) - Absolute tolerance for convergence of the configured norm. The default value is
+              ``1e-14``. To use only a relative tolerance, set this to zero.
+
+            - **rtol** (`float`) - Relative tolerance for convergence of the configured norm. The default value is zero;
+              that is, only absolute tolerance is used by default.
 
             - **norm** : (`callable`) - The norm to be used. By default, the :math:`\ell^\infty`-norm is used. If
               specified, this should be a function that accepts an array of differences and that returns a scalar norm.
@@ -188,7 +192,8 @@ class Iteration(StringRepresentation):
         self._iterator, self._description = methods[method]
         if method in {'simple', 'squarem'}:
             self._method_options.update({
-                'tol': 1e-14,
+                'atol': 1e-14,
+                'rtol': 0,
                 'max_evaluations': 5000,
                 'norm': infinity_norm
             })
@@ -211,8 +216,12 @@ class Iteration(StringRepresentation):
         if method == 'return' and self._method_options:
             raise ValueError("The return method does not support any options.")
         if method in {'simple', 'squarem'}:
-            if not isinstance(self._method_options['tol'], float) or self._method_options['tol'] <= 0:
-                raise ValueError("The iteration option tol must be a positive float.")
+            if not isinstance(self._method_options['atol'], (float, int)) or self._method_options['atol'] < 0:
+                raise ValueError("The iteration option atol must be a nonnegative float.")
+            if not isinstance(self._method_options['rtol'], (float, int)) or self._method_options['rtol'] < 0:
+                raise ValueError("The iteration option rtol must be a nonnegative float.")
+            if self._method_options['atol'] == self._method_options['rtol'] == 0:
+                raise ValueError("atol and rtol cannot both be zero.")
             if not isinstance(self._method_options['max_evaluations'], int):
                 raise ValueError("The iteration option max_evaluations must be an int.")
             if self._method_options['max_evaluations'] < 1:
@@ -346,7 +355,7 @@ def scipy_iterator(
 
 def simple_iterator(
         initial: Array, contraction: ContractionFunction, iteration_callback: Callable[[], None], max_evaluations: int,
-        tol: float, norm: Callable[[Array], float]) -> Tuple[Array, bool]:
+        atol: float, rtol: float, norm: Callable[[Array], float]) -> Tuple[Array, bool]:
     """Apply simple fixed point iteration with no acceleration."""
     x = initial
     failed = False
@@ -364,7 +373,7 @@ def simple_iterator(
 
         # check for convergence
         evaluations += 1
-        if evaluations >= max_evaluations or norm(weight(x - x0, weights)) < tol:
+        if evaluations >= max_evaluations or termination_check(x, x - x0, weights, atol, rtol, norm):
             break
 
     # determine whether there was convergence
@@ -374,7 +383,7 @@ def simple_iterator(
 
 def squarem_iterator(
         initial: Array, contraction: ContractionFunction, iteration_callback: Callable[[], None], max_evaluations: int,
-        tol: float, norm: Callable[[Array], float], scheme: int, step_min: float, step_max: float,
+        atol: float, rtol: float, norm: Callable[[Array], float], scheme: int, step_min: float, step_max: float,
         step_factor: float) -> Tuple[Array, bool]:
     """Apply the SQUAREM acceleration method for fixed point iteration."""
     x = initial
@@ -391,7 +400,7 @@ def squarem_iterator(
         # check for convergence
         g0 = x - x0
         evaluations += 1
-        if evaluations >= max_evaluations or norm(weight(g0, weights)) < tol:
+        if evaluations >= max_evaluations or termination_check(x, g0, weights, atol, rtol, norm):
             break
 
         # second step
@@ -404,7 +413,7 @@ def squarem_iterator(
         # check for convergence
         g1 = x - x1
         evaluations += 1
-        if evaluations >= max_evaluations or norm(weight(g1, weights)) < tol:
+        if evaluations >= max_evaluations or termination_check(x, g1, weights, atol, rtol, norm):
             break
 
         # compute the step length
@@ -437,7 +446,7 @@ def squarem_iterator(
 
         # check for convergence
         evaluations += 1
-        if evaluations >= max_evaluations or norm(weight(x - x3, weights)) < tol:
+        if evaluations >= max_evaluations or termination_check(x, x - x3, weights, atol, rtol, norm):
             break
 
     # determine whether there was convergence
@@ -448,6 +457,16 @@ def squarem_iterator(
 def all_finite(*arrays: Optional[Array]) -> bool:
     """Validate that multiple arrays are either None or all finite."""
     return all(a is None or np.isfinite(a).all() for a in arrays)
+
+
+def termination_check(
+        x: Array, residual: Array, weights: Optional[Array], atol: float, rtol: float,
+        norm: Callable[[Array], float]) -> bool:
+    """Check whether the residual indicates that iteration should be terminated."""
+    tol = atol
+    if rtol > 0:
+        tol += rtol * norm(weight(x, weights))
+    return norm(weight(residual, weights)) < tol
 
 
 def weight(x: Array, weights: Optional[Array]) -> Array:
