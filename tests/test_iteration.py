@@ -22,7 +22,8 @@ from pyblp.utilities.basics import Array, Options
     pytest.param('squarem', {'scheme': 3, 'step_min': 0.7, 'step_max': 1.3, 'step_factor': 5.0}, id="SQUAREM S3"),
     pytest.param('hybr', {}, id="Powell hybrid method"),
     pytest.param('lm', {}, id="Levenberg-Marquardt"),
-    pytest.param('return', {}, id="Return")
+    pytest.param('newton', {}, id="Newton"),
+    pytest.param('return', {}, id="Return"),
 ])
 @pytest.mark.parametrize('compute_jacobian', [
     pytest.param(True, id="analytic Jacobian"),
@@ -45,8 +46,10 @@ def test_scipy(method: str, method_options: Options, compute_jacobian: bool, use
         jacobian = -0.5 * np.eye(2) * x / (x0 + c2) if compute_jacobian else None
         return x, weights, jacobian
 
-    # simple methods do not accept an analytic Jacobian
-    if compute_jacobian and method not in {'hybr', 'lm'}:
+    # some methods either do not support or require a Jacobian
+    if compute_jacobian and method not in {'hybr', 'lm', 'newton'}:
+        return
+    if not compute_jacobian and method == 'newton':
         return
 
     # initialize the configuration and test that it can be formatted

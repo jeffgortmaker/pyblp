@@ -6,6 +6,7 @@ from typing import Any, Callable, Optional, Tuple, Union
 import numpy as np
 import scipy.optimize
 
+from ..utilities.algebra import precisely_solve
 from ..utilities.basics import Array, Options, StringRepresentation, format_options
 
 
@@ -43,13 +44,17 @@ class Iteration(StringRepresentation):
 
             - ``'df-sane'`` - Uses the :func:`scipy.optimize.root` derivative-free spectral method.
 
-        The following routines can use analytic Jacobians:
+        The following routines can optionally use analytic Jacobians:
 
             - ``'hybr'`` - Uses the :func:`scipy.optimize.root` modification of the Powell hybrid method implemented in
               MINIPACK.
 
             - ``'lm'`` - Uses the :func:`scipy.optimize.root` modification of the Levenberg-Marquardt algorithm
               implemented in MINIPACK.
+
+        The following routine requires an analytic Jacobian:
+
+            - ``'newton'`` - Newton's method.
 
         The following trivial routine can be used to simply return the initial values:
 
@@ -77,12 +82,12 @@ class Iteration(StringRepresentation):
     method_options : `dict, optional`
         Options for the fixed point iteration routine.
 
-        For routines other and ``'simple'``, ``'squarem'``, and ``'return'``, these options will be passed to
-        ``options`` in :func:`scipy.optimize.root`. Refer to the SciPy documentation for information about which options
-        are available. By default, the ``tol_norm`` option is configured to use the infinity norm for SciPy methods
-        other than ``'hybr'`` and ``'lm'``, for which a norm cannot be specified.
+        For routines other and ``'simple'``, ``'squarem'``, ``'newton'``, and ``'return'``, these options will be passed
+        to ``options`` in :func:`scipy.optimize.root`. Refer to the SciPy documentation for information about which
+        options are available. By default, the ``tol_norm`` (``fnorm`` for ``'df-sane'``) option is configured to use
+        the infinity norm for SciPy methods other than ``'hybr'`` and ``'lm'``, for which a norm cannot be specified.
 
-        The ``'simple'`` and ``'squarem'`` methods support the following options:
+        The ``'simple'``, ``'squarem'``, and ``'newton'`` methods support the following options:
 
             - **max_evaluations** : (`int`) - Maximum number of contraction mapping evaluations. The default value is
               ``5000``.
@@ -116,7 +121,7 @@ class Iteration(StringRepresentation):
     compute_jacobian : `bool, optional`
         Whether to compute an analytic Jacobian during iteration, which must be ``False`` if ``method`` does not use
         analytic Jacobians. By default, analytic Jacobians are not computed, and if a ``method`` is selected that
-        supports analytic Jacobians, they will by default be numerically approximated.
+        optionally supports analytic Jacobians, they will by default be numerically approximated.
 
     Examples
     --------
@@ -152,7 +157,10 @@ class Iteration(StringRepresentation):
             'krylov': (functools.partial(scipy_iterator), "Krylov method implemented in SciPy"),
             'df-sane': (functools.partial(scipy_iterator), "the derivative-free spectral method implemented in SciPy"),
         }
-        complex_methods = {
+        jacobian_methods = {
+            'newton': (functools.partial(newton_iterator), "Newton's method")
+        }
+        optional_methods = {
             'hybr': (
                 functools.partial(scipy_iterator),
                 "modification of the Powell hybrid method implemented in MINIPACK via SciPy"
@@ -163,7 +171,7 @@ class Iteration(StringRepresentation):
             ),
             'return': (functools.partial(return_iterator), "a trivial routine that returns the initial values")
         }
-        methods = {**simple_methods, **complex_methods}
+        methods = {**simple_methods, **jacobian_methods, **optional_methods}
 
         # validate the configuration
         if method not in methods and not callable(method):
@@ -172,6 +180,8 @@ class Iteration(StringRepresentation):
             raise ValueError("method_options must be None or a dict.")
         if method in simple_methods and compute_jacobian:
             raise ValueError(f"compute_jacobian must be False when method is '{method}'.")
+        if method in jacobian_methods and not compute_jacobian:
+            raise ValueError(f"compute_jacobian must be True when method is '{method}'.")
 
         # initialize class attributes
         self._compute_jacobian = compute_jacobian
@@ -190,7 +200,7 @@ class Iteration(StringRepresentation):
         # identify the non-custom iterator and set default options
         self._method_options: Options = {}
         self._iterator, self._description = methods[method]
-        if method in {'simple', 'squarem'}:
+        if method in {'simple', 'squarem', 'newton'}:
             self._method_options.update({
                 'atol': 1e-14,
                 'rtol': 0,
@@ -215,7 +225,7 @@ class Iteration(StringRepresentation):
         # validate options for non-SciPy routines
         if method == 'return' and self._method_options:
             raise ValueError("The return method does not support any options.")
-        if method in {'simple', 'squarem'}:
+        if method in {'simple', 'squarem', 'newton'}:
             if not isinstance(self._method_options['atol'], (float, int)) or self._method_options['atol'] < 0:
                 raise ValueError("The iteration option atol must be a nonnegative float.")
             if not isinstance(self._method_options['rtol'], (float, int)) or self._method_options['rtol'] < 0:
@@ -448,6 +458,42 @@ def squarem_iterator(
         # check for convergence
         evaluations += 1
         if evaluations >= max_evaluations or termination_check(x, x - x3, weights, atol, rtol, norm):
+            break
+
+    # determine whether there was convergence
+    converged = not failed and evaluations < max_evaluations
+    return x, converged
+
+
+def newton_iterator(
+        initial: Array, contraction: ContractionFunction, iteration_callback: Callable[[], None], max_evaluations: int,
+        atol: float, rtol: float, norm: Callable[[Array], float]) -> Tuple[Array, bool]:
+    """Apply Newton's method."""
+    x = initial
+    failed = False
+    evaluations = 0
+    eye = np.eye(x.size)
+    while True:
+        # first step
+        x0, (x, weights, jacobian) = x, contraction(x)
+        if not all_finite(x, weights, jacobian):
+            x = x0
+            failed = True
+            break
+
+        # Newton step
+        g, successful = precisely_solve(eye - jacobian, x - x0)
+        if not successful:
+            failed = True
+            break
+
+        # record the completion of a major iteration, which is the same here as a contraction evaluation
+        iteration_callback()
+
+        # update the value and check for convergence
+        x -= g
+        evaluations += 1
+        if evaluations >= max_evaluations or termination_check(x, g, weights, atol, rtol, norm):
             break
 
     # determine whether there was convergence
