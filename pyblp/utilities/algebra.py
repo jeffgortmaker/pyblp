@@ -9,24 +9,6 @@ import scipy.linalg
 from .basics import Array
 
 
-def multiply_tensor_and_matrix(a: Array, b: Array) -> Array:
-    """Multiply a 3D tensor with a 2D matrix in a loop to exploit speed gains from optimized 2D multiplication."""
-    n1, n2, n3 = a.shape[0], a.shape[1], b.shape[1]
-    multiplied = np.zeros((n1, n2, n3), a.dtype)
-    for i in range(n1):
-        multiplied[i] = a[i] @ b
-    return multiplied
-
-
-def multiply_matrix_and_tensor(a: Array, b: Array) -> Array:
-    """Multiply a 2D matrix with a 3D tensor in a loop to exploit speed gains from optimized 2D multiplication."""
-    n1, n2, n3 = b.shape[0], a.shape[0], b.shape[2]
-    multiplied = np.zeros((n1, n2, n3), a.dtype)
-    for i in range(n1):
-        multiplied[i] = a @ b[i]
-    return multiplied
-
-
 def precisely_identify_collinearity(x: Array, atol: float, rtol: float) -> Tuple[Array, bool]:
     """Compute the QR decomposition of a matrix and identify which diagonal elements of the upper diagonal matrix are
     within absolute and relative tolerances.

@@ -11,7 +11,7 @@ from .. import exceptions, options
 from ..configurations.iteration import Iteration
 from ..markets.results_market import ResultsMarket
 from ..parameters import Parameters
-from ..utilities.algebra import approximately_solve, multiply_matrix_and_tensor, precisely_compute_eigenvalues
+from ..utilities.algebra import approximately_solve, precisely_compute_eigenvalues
 from ..utilities.basics import (
     Array, Bounds, Error, TableFormatter, format_number, format_seconds, generate_items, output, output_progress
 )
@@ -822,10 +822,7 @@ class ProblemResults(Results):
             supply_instruments = np.full((self.problem.N, 0), np.nan, options.dtype)
         else:
             inverse_covariance_matrix = np.c_[scipy.linalg.inv(np.cov(self.xi, self.omega, rowvar=False))]
-            instruments = multiply_matrix_and_tensor(
-                inverse_covariance_matrix,
-                np.stack([expected_xi_jacobian, expected_omega_jacobian], axis=1)
-            )
+            instruments = inverse_covariance_matrix @ np.stack([expected_xi_jacobian, expected_omega_jacobian], axis=1)
             demand_instruments, supply_instruments = np.split(instruments.reshape((self.problem.N, -1)), 2, axis=1)
 
         # structure the results

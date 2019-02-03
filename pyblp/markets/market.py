@@ -10,9 +10,7 @@ from ..configurations.formulation import ColumnFormulation
 from ..configurations.iteration import ContractionResults, Iteration
 from ..economies.economy import Economy
 from ..parameters import LinearCoefficient, NonlinearCoefficient, Parameter, Parameters, RhoParameter
-from ..utilities.algebra import (
-    approximately_invert, approximately_solve, multiply_matrix_and_tensor, multiply_tensor_and_matrix
-)
+from ..utilities.algebra import approximately_invert, approximately_solve
 from ..utilities.basics import Array, Error, Groups, RecArray
 
 
@@ -512,7 +510,7 @@ class Market(object):
         """Compute the tensor derivative of the diagonal capital lambda matrix with respect to xi, indexed by the first
         axis.
         """
-        diagonal = np.squeeze(multiply_tensor_and_matrix(value_derivatives_tensor, self.agents.weights))
+        diagonal = np.squeeze(value_derivatives_tensor @ self.agents.weights)
         if self.H > 0:
             diagonal /= 1 - self.rho
         tensor = np.zeros((self.J, self.J, self.J), options.dtype)
@@ -551,16 +549,16 @@ class Market(object):
         weighted_value_derivatives = self.agents.weights * value_derivatives.T
         weighted_probabilities = self.agents.weights.T * probabilities
         tensor = (
-            multiply_tensor_and_matrix(probabilities_tensor, weighted_value_derivatives) +
-            multiply_matrix_and_tensor(weighted_probabilities, value_derivatives_tensor.swapaxes(1, 2))
+            probabilities_tensor @ weighted_value_derivatives +
+            weighted_probabilities @ value_derivatives_tensor.swapaxes(1, 2)
         )
         if self.H > 0:
             assert conditionals is not None and conditionals_tensor is not None
             membership = self.get_membership_matrix()
             weighted_conditionals = self.agents.weights.T * conditionals
             tensor += membership[None] * self.rho[None] / (1 - self.rho[None]) * (
-                multiply_tensor_and_matrix(conditionals_tensor, weighted_value_derivatives) +
-                multiply_matrix_and_tensor(weighted_conditionals, value_derivatives_tensor.swapaxes(1, 2))
+                conditionals_tensor @ weighted_value_derivatives +
+                weighted_conditionals @ value_derivatives_tensor.swapaxes(1, 2)
             )
         return tensor
 
@@ -600,7 +598,7 @@ class Market(object):
         A_tensor = -ownership[None] * (capital_lamda_tensor - capital_gamma_tensor)
 
         # compute the product of the tensor and eta
-        A_tensor_times_eta = np.squeeze(multiply_tensor_and_matrix(A_tensor, eta))
+        A_tensor_times_eta = np.squeeze(A_tensor @ eta)
 
         # compute derivatives of X1 and X2 with respect to prices
         X1_derivatives = self.compute_X1_derivatives('prices')
