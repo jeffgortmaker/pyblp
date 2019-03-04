@@ -31,6 +31,12 @@ Berry, Levinsohn, and Pakes (1999)
 Berry, Steven, James Levinsohn, and Ariel Pakes (1999). `Voluntary export restraints on automobiles: Evaluating a trade policy <https://ideas.repec.org/a/aea/aecrev/v89y1999i3p400-430.html>`_. *American Economic Review, 83* (9), 400-430.
 
 
+Brenkers and Verboven (2006)
+----------------------------
+
+Brenkers, Randy, and Frank Verboven (2006). `Liberalizing a distribution system: The European car market <https://ideas.repec.org/a/tpr/jeurec/v4y2006i1p216-251.html>`_. *Journal of the European Economic Association, 4* (1), 216-251.
+
+
 Brunner, Heiss, Romahn, and Weiser (2017)
 -----------------------------------------
 
