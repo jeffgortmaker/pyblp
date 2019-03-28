@@ -24,7 +24,15 @@ An overview of the model, examples, references, and other documentation can be f
 
 .. docs-start
 
-The pyblp package is a Python 3 implementation of routines for estimating demand with BLP-type random coefficients logit models. The author of this package is `Jeff Gortmaker <https://jeffgortmaker.com/>`_. At the moment, the only other contributer is `Chris Conlon <https://chrisconlon.github.io/>`_. Development of the package has been guided by code made publicly available by many researchers and practitioners. Views expressed in the documentation of this package are those of the contributers and do not necessarily reflect the views of any institution at which they are employed.
+The pyblp package is a Python 3 implementation of routines for estimating the demand for differentiated products with BLP-type random coefficients logit models. This package was created by `Jeff Gortmaker <https://jeffgortmaker.com/>`_ in collaboration with `Chris Conlon <https://chrisconlon.github.io/>`_.
+
+Development of the package has been guided by the work of many researchers and practitioners. For a full list of references, including the original work of `Berry, Levinsohn, and Pakes (1995) <https://ideas.repec.org/a/ecm/emetrp/v63y1995i4p841-90.html>`_, refer to the `references <https://pyblp.readthedocs.io/en/stable/references.html>`_ section of the documentation.
+
+
+Citation
+--------
+
+If you use pyblp in your research, we ask that you also cite `Conlon and Gortmaker (2019) <https://jeffgortmaker.com/files/pyblp.pdf>`_, which describes the advances implemented in the package.
 
 
 Installation

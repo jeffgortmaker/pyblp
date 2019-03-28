@@ -11,6 +11,7 @@ pyblp
 
 .. toctree::
    :caption: User Documentation
+   :maxdepth: 2
 
    introduction
    notation
@@ -26,6 +27,7 @@ pyblp
 
 .. toctree::
    :caption: Developer Documentation
+   :maxdepth: 2
 
    contributing
    testing
