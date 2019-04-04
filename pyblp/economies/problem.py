@@ -291,9 +291,10 @@ class ProblemEconomy(Economy):
             :class:`Iteration` configuration for how to solve the fixed point problem used to compute
             :math:`\delta(\hat{\theta})` in each market. This configuration is only relevant if there are nonlinear
             parameters, since :math:`\delta` can be estimated analytically in the Logit model. By default,
-            ``Iteration('squarem', {'atol': 1e-14})`` is used. Generally, non-Jacobian routines such as SQUAREM will be
-            fastest. Jacobian routines may be useful, for example, when the fixed point is heavily dampened due to a
-            large nesting parameter.
+            ``Iteration('squarem', {'atol': 1e-14})`` is used. Newton-based routines that compute the Jacobian can often
+            be faster (especially when there are nesting parameters), but the non-Jacobian SQUAREM routine is used by
+            default because it speed is often comparable and in practice it can be slightly more stable. If speed is a
+            concern, trying ``'lm'`` is recommended.
         fp_type : `str, optional`
             Configuration for the type of contraction mapping used to compute :math:`\delta(\hat{\theta})`. The
             following types of contraction mappings are supported:
