@@ -98,12 +98,14 @@ Features
 Features Slated for Future Versions
 -----------------------------------
 
-- Analytic Hessian computation
+- Micro moments
+- Fast, "Robust," and Approximately Correct (FRAC) estimation
+- Analytic Hessians
 - Mathematical Program with Equilibrium Constraints (MPEC)
 - Generalized Empirical Likelihood (GEL)
-- Micro moments
-- Agent type mixtures
-- More optimization and iteration routines
+- Discrete types
+- Pure characteristics model
+- Newton methods for computing equilibrium prices
 
 
 Bugs and Requests
