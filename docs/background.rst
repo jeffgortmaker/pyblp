@@ -1,7 +1,7 @@
 Background
 ==========
 
-The following sections provide a brief overview of the BLP model and how it is estimated.
+The following sections provide a brief overview of the BLP model and how it is estimated. For a more in-depth overview, refer to :ref:`references:Conlon and Gortmaker (2019)`.
 
 
 The Model
@@ -60,7 +60,7 @@ which for product :math:`j` in market :math:`t` are
 
 and yields a solution of a :math:`J_t \times J_t` system of first order conditions (in vector-matrix form):
 
-.. math:: p = c -\underbrace{(O \circ \frac{\partial s}{\partial p})^{-1}s}_{\eta}.
+.. math:: p = c \underbrace{-(O \circ \frac{\partial s}{\partial p})^{-1}s}_{\eta}.
    :label: blp_markup
 
 Here :math:`O` denotes the market-level ownership matrix, where :math:`O_{jk}` is simply :math:`1` if the same firm produces products :math:`j` and :math:`k`, and is :math:`0` otherwise.
@@ -88,6 +88,48 @@ The moment conditions are
    :label: moments
 
 The full set of demand-side instruments include excluded demand-side instruments along with include all exogenous product characteristics from :math:`X_1` (and hence :math:`X_2`), except for those including price, :math:`X_1^p`. Similarly, the full set of supply-side instruments include excluded supply-side instruments along with :math:`X_3`.
+
+
+Equilibrium Prices and Shares
+-----------------------------
+
+Computing equilibrium prices and shares is necessary during post-estimation to evaluate counterfactuals such as mergers. Similarly, synthetic data can be simulated in a straightforward manner according to a demand-side specification, but if the data are to simultaneously conform to a supply-side specification as well, it is necessary to compute equilibrium prices and shares that are implied by the other synthetic data.
+
+To efficiently compute equilibrium prices, the :math:`\zeta`-markup equation from :ref:`references:Morrow and Skerlos (2011)` in :eq:`zeta_markup` is employed in the following contraction:
+
+.. math:: p \leftarrow c + \zeta(p).
+
+When computing :math:`\zeta(p)`, shares :math:`s(p)` associated with the candidate equilibrium prices are computed according to their definition in :eq:`shares`.
+
+Of course, marginal costs, :math:`c`, are required to iterate over the contraction. When evaluating counterfactuals, costs are usually computed first according to the BLP-markup equation in :eq:`blp_markup`. When simulating synthetic data, marginal costs are simulated according their specification in :eq:`costs`.
+
+Called the BLP-markup equation in :ref:`references:Morrow and Skerlos (2011)`, the markup term is
+
+The Jacobian in the BLP-markup equation can be decomposed into
+
+.. math:: \frac{\partial s}{\partial p} = \Lambda - \Gamma,
+
+in which :math:`\Lambda` is a diagonal :math:`J_t \times J_t` matrix that can be approximated by
+
+.. math:: \Lambda_{jj} = \sum_{i=1}^{I_t} w_i s_{jti}\frac{\partial U_{jti}}{\partial p_{jt}}
+   :label: capital_lambda
+
+and :math:`\Gamma` is a more dense :math:`J_t \times J_t` matrix that can be approximated by
+
+.. math:: \Gamma_{jk} = \sum_{i=1}^{I_t} w_i s_{jti}s_{kti}\frac{\partial U_{jti}}{\partial p_{jt}}.
+   :label: capital_gamma
+
+Derivatives in these expressions are derived from the definition of :math:`U` in :eq:`utilities`. An alternative form of the first-order conditions is called the :math:`\zeta`-markup equation in :ref:`references:Morrow and Skerlos (2011)`:
+
+.. math:: p = c + \zeta,
+   :label: zeta_markup
+
+in which the markup term is
+
+.. math:: \zeta = \Lambda^{-1}(O \circ \Gamma)'(p - c) - \Lambda^{-1}.
+   :label: zeta
+
+One last note is that when iterating over the :math:`\zeta`-markup contraction, the difference in prices is weighted by the diagonal of :math:`\Lambda` before computing the norm of the vector and comparing it to the chosen fixed point termination tolerance. This guarantees that iteration is terminated according to the proper numerical simultaneous stationarity condition described by :ref:`references:Morrow and Skerlos (2011)`.
 
 
 Estimation
@@ -165,7 +207,7 @@ The supply-side Jacobian can be derived from the BLP-markup equation in :eq:`blp
 
 .. math:: \frac{\partial\tilde{c}}{\partial\theta_p} = -\frac{\partial\tilde{c}}{\partial c}\frac{\partial\eta}{\partial\theta}.
 
-The first term in this expression depends on whether marginal costs are defined according either to a linear or a log-linear specification, and the second term is derived from the definition of :math:`\eta` in :eq:`blp_markup`. Specifically, letting :math:`A = O \circ (\Gamma - \Lambda)`,
+The first term in this expression depends on whether marginal costs are defined according either to a linear or a log-linear specification, and the second term is derived from the definition of :math:`\eta` in :eq:`blp_markup`. Specifically, letting :math:`A = -O \circ (\Lambda - \Gamma)`,
 
 .. math:: \frac{\partial\eta}{\partial\theta} = -A^{-1}\left(\frac{\partial A}{\partial\theta}\eta + \frac{\partial A}{\partial\xi}\eta\frac{\partial\xi}{\partial\theta}\right),
 
@@ -278,45 +320,3 @@ where
 .. math:: s_{h(j)t} = \sum_{k\in\mathscr{J}_{h(j)t}} s_{kt}.
 
 In the simple Logit model, a lack of nonlinear parameters means that optimization is not required either. Importantly, a supply side can still be estimated jointly with demand. The only difference in the above sections, other than the absence of nonlinear characteristics and parameters, is that there is simply a single, representative agent in each market. That is, each :math:`I_t = 1` with :math:`w_1 = 1`.
-
-
-Bertrand-Nash Prices and Shares
--------------------------------
-
-Computing equilibrium prices and shares is necessary during post-estimation to evaluate counterfactuals such as mergers. Similarly, synthetic data can be simulated in a straightforward manner according to a demand-side specification, but if the data are to simultaneously conform to a supply-side specification as well, it is necessary to compute equilibrium prices and shares that are implied by the other synthetic data.
-
-To efficiently compute equilibrium prices, the :math:`\zeta`-markup equation from :ref:`references:Morrow and Skerlos (2011)` in :eq:`zeta_markup` is employed in the following contraction:
-
-.. math:: p \leftarrow c + \zeta(p).
-
-When computing :math:`\zeta(p)`, shares :math:`s(p)` associated with the candidate equilibrium prices are computed according to their definition in :eq:`shares`.
-
-Of course, marginal costs, :math:`c`, are required to iterate over the contraction. When evaluating counterfactuals, costs are usually computed first according to the BLP-markup equation in :eq:`blp_markup`. When simulating synthetic data, marginal costs are simulated according their specification in :eq:`costs`.
-
-Called the BLP-markup equation in :ref:`references:Morrow and Skerlos (2011)`, the markup term is
-
-The Jacobian in the BLP-markup equation can be decomposed into
-
-.. math:: \frac{\partial s}{\partial p} = \Lambda - \Gamma,
-
-in which :math:`\Lambda` is a diagonal :math:`J_t \times J_t` matrix that can be approximated by
-
-.. math:: \Lambda_{jj} = \sum_{i=1}^{I_t} w_i s_{jti}\frac{\partial U_{jti}}{\partial p_{jt}}
-   :label: capital_lambda
-
-and :math:`\Gamma` is a more dense :math:`J_t \times J_t` matrix that can be approximated by
-
-.. math:: \Gamma_{jk} = \sum_{i=1}^{I_t} w_i s_{jti}s_{kti}\frac{\partial U_{jti}}{\partial p_{jt}}.
-   :label: capital_gamma
-
-Derivatives in these expressions are derived from the definition of :math:`U` in :eq:`utilities`. An alternative form of the first-order conditions is called the :math:`\zeta`-markup equation in :ref:`references:Morrow and Skerlos (2011)`:
-
-.. math:: p = c + \zeta,
-   :label: zeta_markup
-
-in which the markup term is
-
-.. math:: \zeta = \Lambda^{-1}(O \circ \Gamma)'(p - c) - \Lambda^{-1}.
-   :label: zeta
-
-One last note is that when iterating over the :math:`\zeta`-markup contraction, the difference in prices is weighted by the diagonal of :math:`\Lambda` before computing the norm of the vector and comparing it to the chosen fixed point termination tolerance. This guarantees that iteration is terminated according to the proper numerical simultaneous stationarity condition described by :ref:`references:Morrow and Skerlos (2011)`.
