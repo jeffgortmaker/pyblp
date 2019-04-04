@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 
 class SimulationResults(StringRepresentation):
-    """Results of a solved simulation of synthetic BLP data.
+    r"""Results of a solved simulation of synthetic BLP data.
 
     The :meth:`SimulationResults.to_problem` method can be used to convert the full set of simulated data and configured
     information into a :class:`Problem`.
@@ -27,6 +27,8 @@ class SimulationResults(StringRepresentation):
         :class:`Simulation` that created these results.
     product_data : `recarray`
         Simulated :attr:`Simulation.product_data` that are updated with synthetic prices and shares.
+    delta : `ndarray`
+        Simulated mean utility, :math:`\delta`.
     computation_time : `float`
         Number of seconds it took to compute synthetic prices and shares.
     fp_converged : `ndarray`
@@ -47,6 +49,7 @@ class SimulationResults(StringRepresentation):
 
     simulation: 'Simulation'
     product_data: RecArray
+    delta: Array
     computation_time: float
     fp_converged: Array
     fp_iterations: Array
@@ -61,6 +64,7 @@ class SimulationResults(StringRepresentation):
         self.product_data = simulation.product_data.copy()
         self.product_data.prices = prices
         self.product_data.shares = shares
+        self.delta = simulation._compute_true_X1({'prices': prices}) @ simulation.beta + simulation.xi
         self.computation_time = end_time - start_time
         self.fp_converged = np.array([converged_mapping[t] for t in simulation.unique_market_ids], dtype=np.int)
         self.fp_iterations = np.array([iteration_mapping[t] for t in simulation.unique_market_ids], dtype=np.int)

@@ -57,7 +57,7 @@ def test_optimal_instruments(simulated_problem: SimulatedProblemFixture, compute
     """Test that starting parameters that are half their true values also give rise to errors of less than 10% under
     optimal instruments.
     """
-    simulation, product_data, problem, solve_options, problem_results = simulated_problem
+    simulation, _, problem, solve_options, problem_results = simulated_problem
 
     # compute optimal instruments and update the problem (only use a few draws to speed up the test)
     compute_options = compute_options.copy()
@@ -83,13 +83,13 @@ def test_optimal_instruments(simulated_problem: SimulatedProblemFixture, compute
 @pytest.mark.usefixtures('simulated_problem')
 def test_bootstrap(simulated_problem: SimulatedProblemFixture) -> None:
     """Test that post-estimation output medians are within 95% parametric bootstrap confidence intervals."""
-    _, product_data, _, _, results = simulated_problem
+    _, simulation_results, _, _, results = simulated_problem
 
     # create bootstrapped results (use only a few draws for speed)
     bootstrapped_results = results.bootstrap(draws=100, seed=0)
 
     # test that post-estimation outputs are within 95% confidence intervals
-    merger_ids = np.where(product_data.firm_ids == 1, 0, product_data.firm_ids)
+    merger_ids = np.where(simulation_results.product_data.firm_ids == 1, 0, simulation_results.product_data.firm_ids)
     method_mapping = {
         'aggregate_elasticities': lambda r: r.compute_aggregate_elasticities(),
         'own_elasticity_means': lambda r: r.extract_diagonal_means(r.compute_elasticities()),
@@ -176,7 +176,7 @@ def test_fixed_effects(
     identical first-stage results as does including indicator variables. Also test that optimal instruments results
     and marginal costs remain unchanged.
     """
-    simulation, product_data, problem, solve_options, problem_results = simulated_problem
+    simulation, simulation_results, problem, solve_options, problem_results = simulated_problem
 
     # there cannot be supply-side fixed effects if there isn't a supply side
     if problem.K3 == 0:
@@ -185,7 +185,7 @@ def test_fixed_effects(
         return
 
     # make product data mutable
-    product_data = {k: product_data[k] for k in product_data.dtype.names}
+    product_data = {k: simulation_results.product_data[k] for k in simulation_results.product_data.dtype.names}
 
     # remove constants and delete associated elements in the initial beta
     solve_options = solve_options.copy()
@@ -338,10 +338,11 @@ def test_merger(simulated_problem: SimulatedProblemFixture, ownership: bool, com
     counterparts than those computed by fully solving a merger. Also test that simple acquisitions increase HHI. These
     inequalities are only guaranteed because of the way in which the simulations are configured.
     """
-    simulation, product_data, _, _, results = simulated_problem
+    simulation, simulation_results, _, _, results = simulated_problem
 
     # create changed ownership or firm IDs associated with a merger
     merger_ids = merger_ownership = None
+    product_data = simulation_results.product_data
     if ownership:
         merger_ownership = build_ownership(product_data, lambda f, g: 1 if f == g or (f < 2 and g < 2) else 0)
     else:
@@ -376,9 +377,9 @@ def test_merger(simulated_problem: SimulatedProblemFixture, ownership: bool, com
 @pytest.mark.usefixtures('simulated_problem')
 def test_shares(simulated_problem: SimulatedProblemFixture) -> None:
     """Test that shares computed from estimated parameters are essentially equal to actual shares."""
-    _, product_data, _, _, results = simulated_problem
+    _, simulation_results, _, _, results = simulated_problem
     shares = results.compute_shares()
-    np.testing.assert_allclose(product_data.shares, shares, atol=1e-14, rtol=0)
+    np.testing.assert_allclose(simulation_results.product_data.shares, shares, atol=1e-14, rtol=0)
 
 
 @pytest.mark.usefixtures('simulated_problem')
@@ -386,7 +387,8 @@ def test_shares_by_prices_jacobian(simulated_problem: SimulatedProblemFixture) -
     """Use central finite differences to test that analytic values in the Jacobian of shares with respect to prices are
     essentially equal..
     """
-    simulation, product_data, _, _, results = simulated_problem
+    simulation, simulation_results, _, _, results = simulated_problem
+    product_data = simulation_results.product_data
 
     # extract the Jacobian from the analytic expression for elasticities
     exact = np.nan_to_num(results.compute_elasticities())
@@ -525,7 +527,7 @@ def test_return(simulated_problem: SimulatedProblemFixture) -> None:
     """Test that using a trivial optimization and fixed point iteration routines that just return initial values yield
     results that are the same as the specified initial values.
     """
-    simulation, _, problem, solve_options, _ = simulated_problem
+    simulation, simulation_results, problem, solve_options, _ = simulated_problem
 
     # specify initial values and the trivial routines
     initial_values = {
@@ -534,7 +536,7 @@ def test_return(simulated_problem: SimulatedProblemFixture) -> None:
         'rho': simulation.rho,
         'beta': simulation.beta,
         'gamma': simulation.gamma if problem.K3 > 0 else None,
-        'delta': problem.products.X1 @ simulation.beta + simulation.xi
+        'delta': simulation_results.delta
     }
     updated_solve_options = solve_options.copy()
     updated_solve_options.update({
@@ -707,7 +709,7 @@ def test_extra_nodes(simulated_problem: SimulatedProblemFixture) -> None:
     """Test that agents in a simulated problem are identical to agents in a problem created with agent data built
     according to the same integration specification but containing unnecessary columns of nodes.
     """
-    simulation, product_data, problem, _, _ = simulated_problem
+    simulation, simulation_results, problem, _, _ = simulated_problem
 
     # skip simulations without agents
     if simulation.K2 == 0:
@@ -715,6 +717,7 @@ def test_extra_nodes(simulated_problem: SimulatedProblemFixture) -> None:
 
     # reconstruct the problem with unnecessary columns of nodes
     assert simulation.agent_data is not None
+    product_data = simulation_results.product_data
     extra_agent_data = {k: simulation.agent_data[k] for k in simulation.agent_data.dtype.names}
     extra_agent_data['nodes'] = np.c_[extra_agent_data['nodes'], extra_agent_data['nodes']]
     new_problem = Problem(problem.product_formulations, product_data, problem.agent_formulation, extra_agent_data)
@@ -730,7 +733,7 @@ def test_extra_demographics(simulated_problem: SimulatedProblemFixture) -> None:
     """Test that agents in a simulated problem are identical to agents in a problem created with agent data built
     according to the same integration specification and but containing unnecessary rows of demographics.
     """
-    simulation, product_data, problem, _, _ = simulated_problem
+    simulation, simulation_results, problem, _, _ = simulated_problem
 
     # skip simulations without demographics
     if simulation.D == 0:
@@ -738,6 +741,7 @@ def test_extra_demographics(simulated_problem: SimulatedProblemFixture) -> None:
 
     # reconstruct the problem with unnecessary rows of demographics
     assert simulation.agent_data is not None
+    product_data = simulation_results.product_data
     agent_data = simulation.agent_data
     extra_agent_data = {k: np.r_[agent_data[k], agent_data[k]] for k in agent_data.dtype.names}
     new_problem = Problem(
@@ -821,7 +825,8 @@ def test_logit(
         simulated_problem: SimulatedProblemFixture, method: str, center_moments: bool, W_type: str, se_type: str) -> (
         None):
     """Test that Logit estimates are the same as those from the the linearmodels package."""
-    _, product_data, problem, _, _ = simulated_problem
+    _, simulation_results, problem, _, _ = simulated_problem
+    product_data = simulation_results.product_data
 
     # skip more complicated simulations
     if problem.K2 > 0 or problem.K3 > 0 or problem.H > 0:
@@ -830,11 +835,11 @@ def test_logit(
     # solve the problem
     results1 = problem.solve(method=method, center_moments=center_moments, W_type=W_type, se_type=se_type)
 
-    # compute delta
-    delta = np.log(product_data['shares'])
+    # compute the delta from the logit problem
+    delta = np.log(product_data.shares)
     for t in problem.unique_market_ids:
-        shares_t = product_data['shares'][product_data['market_ids'] == t]
-        delta[product_data['market_ids'] == t] -= np.log(1 - shares_t.sum())
+        shares_t = product_data.shares[product_data.market_ids == t]
+        delta[product_data.market_ids == t] -= np.log(1 - shares_t.sum())
 
     # configure covariance options
     W_options = {'clusters': product_data.clustering_ids} if W_type == 'clustered' else {}

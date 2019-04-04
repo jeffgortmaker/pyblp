@@ -13,12 +13,12 @@ from pyblp import (
     Formulation, Integration, Problem, ProblemResults, Simulation, SimulationResults, build_differentiation_instruments,
     build_id_data, build_matrix, build_ownership, options
 )
-from pyblp.utilities.basics import update_matrices, Array, Data, Options, RecArray
+from pyblp.utilities.basics import update_matrices, Array, Data, Options
 
 
 # define common types
 SimulationFixture = Tuple[Simulation, SimulationResults]
-SimulatedProblemFixture = Tuple[Simulation, RecArray, Problem, Options, ProblemResults]
+SimulatedProblemFixture = Tuple[Simulation, SimulationResults, Problem, Options, ProblemResults]
 
 
 @pytest.fixture(scope='session', autouse=True)
@@ -418,7 +418,7 @@ def simulated_problem(request: Any) -> SimulatedProblemFixture:
         'method': '1s'
     }
     problem_results = problem.solve(**solve_options)
-    return simulation, simulation_results.product_data, problem, solve_options, problem_results
+    return simulation, simulation_results, problem, solve_options, problem_results
 
 
 @pytest.fixture(scope='session', params=[pytest.param(1, id="1 observation"), pytest.param(10, id="10 observations")])
