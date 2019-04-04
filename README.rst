@@ -9,8 +9,8 @@ pyblp
 .. |pypi-badge| image:: https://img.shields.io/pypi/v/pyblp.svg
 .. _pypi-badge: https://pypi.org/project/pyblp/
 
-.. |downloads-badge| image:: https://pepy.tech/badge/pyblp
-.. _downloads-badge: https://pepy.tech/project/pyblp
+.. |downloads-badge| image:: https://img.shields.io/pypi/dm/pyblp.svg
+.. _downloads-badge: https://pypistats.org/packages/pyblp
 
 .. |python-badge| image:: https://img.shields.io/pypi/pyversions/pyblp.svg
 .. _python-badge: https://pypi.org/project/pyblp/
