@@ -77,7 +77,8 @@ class ProblemEconomy(Economy):
             specified, since the Logit model will be estimated.
 
             Values below the diagonal are ignored. Zeros are assumed to be zero throughout estimation and nonzeros are,
-            if not fixed by ``sigma_bounds``, starting values for unknown elements in :math:`\theta`.
+            if not fixed by ``sigma_bounds``, starting values for unknown elements in :math:`\theta`. If any columns are
+            fixed at zero, only the first few columns of integration nodes (specified in :class:`Problem`) will be used.
 
         pi : `array-like, optional`
             Configuration for which elements in the matrix of parameters that measures how agent tastes vary with
@@ -762,11 +763,11 @@ class ProblemEconomy(Economy):
             delta = self._compute_logit_delta(rho)
         else:
             # define a factory for solving the demand side of problem markets
-            def market_factory(s: Hashable) -> Tuple[ProblemMarket, Array, Parameters, Iteration, str, bool]:
+            def market_factory(s: Hashable) -> Tuple[ProblemMarket, Array, Iteration, str, bool]:
                 """Build a market along with arguments used to compute delta and its Jacobian."""
-                market_s = ProblemMarket(self, s, sigma, pi, rho)
+                market_s = ProblemMarket(self, s, parameters, sigma, pi, rho)
                 initial_delta_s = progress.next_delta[self._product_market_indices[s]]
-                return market_s, initial_delta_s, parameters, iteration, fp_type, compute_jacobian
+                return market_s, initial_delta_s, iteration, fp_type, compute_jacobian
 
             # compute delta and its Jacobian market-by-market
             generator = generate_items(self.unique_market_ids, market_factory, ProblemMarket.solve_demand)
@@ -805,12 +806,12 @@ class ProblemEconomy(Economy):
 
         # define a factory for solving the supply side of problem markets
         def market_factory(
-                s: Hashable) -> Tuple[ProblemMarket, Array, Array, Parameters, str, Bounds, bool]:
+                s: Hashable) -> Tuple[ProblemMarket, Array, Array, str, Bounds, bool]:
             """Build a market along with arguments used to compute transformed marginal costs and their Jacobian."""
-            market_s = ProblemMarket(self, s, sigma, pi, rho, beta, delta)
+            market_s = ProblemMarket(self, s, parameters, sigma, pi, rho, beta, delta)
             last_tilde_costs_s = progress.tilde_costs[self._product_market_indices[s]]
             xi_jacobian_s = xi_jacobian[self._product_market_indices[s]]
-            return market_s, last_tilde_costs_s, xi_jacobian_s, parameters, costs_type, costs_bounds, compute_jacobian
+            return market_s, last_tilde_costs_s, xi_jacobian_s, costs_type, costs_bounds, compute_jacobian
 
         # compute transformed marginal costs and their Jacobian market-by-market
         generator = generate_items(self.unique_market_ids, market_factory, ProblemMarket.solve_supply)
@@ -969,20 +970,27 @@ class Problem(ProblemEconomy):
               the same as the set of IDs in ``product_data``. If ``integration`` is specified, there must be at least as
               many rows in each market as the number of nodes and weights that are built for each market.
 
-        If ``integration`` is not specified, the following fields are required:
+        If ``integration`` is not specified, the following fields are required (the convenience function
+        :func:`build_integration` can be useful when constructing custom nodes and weights for integration over agent
+        choice probabilities):
 
             - **weights** : (`numeric, optional`) - Integration weights, :math:`w`.
 
             - **nodes** : (`numeric, optional`) - Unobserved agent characteristics called integration nodes,
-              :math:`\nu`. If there are more than :math:`K_2` columns, only the first :math:`K_2` will be used.
+              :math:`\nu`. If there are more than :math:`K_2` columns (the number of nonlinear product characteristics),
+              only the first :math:`K_2` will be retained.
 
         Along with ``market_ids``, the names of any additional fields can be used as variables in ``agent_formulation``.
 
     integration : `Integration, optional`
-        :class:`Integration` configuration for how to build nodes and weights for integration over agent utilities,
-        which will replace any ``nodes`` and ``weights`` fields in ``agent_data``. This configuration is required if
-        ``nodes`` and ``weights`` in ``agent_data`` are not specified. It should not be specified if :math:`X_2` is not
-        formulated in ``product_formulations``.
+        :class:`Integration` configuration for how to build nodes and weights for integration over agent choice
+        probabilities, which will replace any ``nodes`` and ``weights`` fields in ``agent_data``. This configuration is
+        required if ``nodes`` and ``weights`` in ``agent_data`` are not specified. It should not be specified if
+        :math:`X_2` is not formulated in ``product_formulations``.
+
+        If this configuration is specified, :math:`K_2` columns of nodes (the number of nonlinear product
+        characteristics) will be built. However, if ``sigma`` in :meth:`Problem.solve` is left unspecified or
+        specified with columns fixed at zero, fewer columns will be used.
 
     Attributes
     ----------

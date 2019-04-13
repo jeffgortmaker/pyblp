@@ -10,7 +10,6 @@ from .results import Results
 from .. import exceptions, options
 from ..configurations.iteration import Iteration
 from ..markets.results_market import ResultsMarket
-from ..parameters import Parameters
 from ..utilities.algebra import approximately_solve, precisely_compute_eigenvalues
 from ..utilities.basics import (
     Array, Bounds, Error, TableFormatter, format_number, format_seconds, generate_items, output, output_progress
@@ -233,7 +232,6 @@ class ProblemResults(Results):
     _costs_type: str
     _se_type: str
     _errors: List[Error]
-    _parameters: Parameters
 
     def __init__(
             self, progress: 'Progress', last_results: Optional['ProblemResults'], step_start_time: float,
@@ -244,7 +242,7 @@ class ProblemResults(Results):
         """Compute cumulative progress statistics, update weighting matrices, and estimate standard errors."""
 
         # initialize values from the progress structure
-        super().__init__(progress.problem)
+        super().__init__(progress.problem, progress.parameters)
         self._errors = progress.errors
         self.problem = progress.problem
         self.W = progress.W
@@ -313,7 +311,6 @@ class ProblemResults(Results):
             self.cumulative_converged = last_results.converged and converged
 
         # store estimated parameters and information about them (beta and gamma have already been stored above)
-        self._parameters = progress.parameters
         self.sigma, self.pi, self.rho, _, _ = self._parameters.expand(self.theta)
         self.parameters = np.c_[np.r_[
             self.theta,
@@ -631,7 +628,7 @@ class ProblemResults(Results):
         # define a factory for computing bootstrapped prices, shares, and delta in markets
         def market_factory(s: Hashable) -> Tuple[ResultsMarket, Array, Optional[Array], Optional[Iteration]]:
             """Build a market along with arguments used to compute equilibrium prices and shares along with delta."""
-            market_s = ResultsMarket(self.problem, s, sigma, pi, rho, beta, delta)
+            market_s = ResultsMarket(self.problem, s, self._parameters, sigma, pi, rho, beta, delta)
             costs_s = costs[self.problem._product_market_indices[s]]
             prices_s = prices[self.problem._product_market_indices[s]] if prices is not None else None
             return market_s, costs_s, prices_s, iteration
@@ -855,7 +852,7 @@ class ProblemResults(Results):
         # define a factory for computing realizations of prices, shares, and delta in markets
         def market_factory(s: Hashable) -> Tuple[ResultsMarket, Array, Optional[Array], Optional[Iteration]]:
             """Build a market along with arguments used to compute equilibrium prices and shares along with delta."""
-            market_s = ResultsMarket(self.problem, s, self.sigma, self.pi, self.rho, self.beta, delta)
+            market_s = ResultsMarket(self.problem, s, self._parameters, self.sigma, self.pi, self.rho, self.beta, delta)
             costs_s = costs[self.problem._product_market_indices[s]]
             prices_s = expected_prices[self.problem._product_market_indices[s]] if expected_prices is not None else None
             return market_s, costs_s, prices_s, iteration
@@ -904,14 +901,16 @@ class ProblemResults(Results):
             return xi_jacobian, errors
 
         # define a factory for computing the Jacobian of xi with respect to theta in markets
-        def market_factory(s: Hashable) -> Tuple[ResultsMarket, Parameters]:
+        def market_factory(s: Hashable) -> Tuple[ResultsMarket]:
             """Build a market with the data realization along with arguments used to compute the Jacobian."""
             data_override_s = {
                 'prices': equilibrium_prices[self.problem._product_market_indices[s]],
                 'shares': equilibrium_shares[self.problem._product_market_indices[s]]
             }
-            market_s = ResultsMarket(self.problem, s, self.sigma, self.pi, self.rho, self.beta, delta, data_override_s)
-            return market_s, self._parameters
+            market_s = ResultsMarket(
+                self.problem, s, self._parameters, self.sigma, self.pi, self.rho, self.beta, delta, data_override_s
+            )
+            return market_s,
 
         # compute the Jacobian market-by-market
         generator = generate_items(
@@ -937,16 +936,18 @@ class ProblemResults(Results):
         errors: List[Error] = []
 
         # define a factory for computing the Jacobian of omega with respect to theta in markets
-        def market_factory(s: Hashable) -> Tuple[ResultsMarket, Array, Array, Parameters, str]:
+        def market_factory(s: Hashable) -> Tuple[ResultsMarket, Array, Array, str]:
             """Build a market with the data realization along with arguments used to compute the Jacobians."""
             data_override_s = {
                 'prices': equilibrium_prices[self.problem._product_market_indices[s]],
                 'shares': equilibrium_shares[self.problem._product_market_indices[s]]
             }
-            market_s = ResultsMarket(self.problem, s, self.sigma, self.pi, self.rho, self.beta, delta, data_override_s)
+            market_s = ResultsMarket(
+                self.problem, s, self._parameters, self.sigma, self.pi, self.rho, self.beta, delta, data_override_s
+            )
             tilde_costs_s = tilde_costs[self.problem._product_market_indices[s]]
             xi_jacobian_s = xi_jacobian[self.problem._product_market_indices[s]]
-            return market_s, tilde_costs_s, xi_jacobian_s, self._parameters, self._costs_type
+            return market_s, tilde_costs_s, xi_jacobian_s, self._costs_type
 
         # compute the Jacobian market-by-market
         omega_jacobian = np.full((self.problem.N, self._parameters.P), np.nan, options.dtype)
@@ -1014,7 +1015,9 @@ class ProblemResults(Results):
         def market_factory(s: Hashable) -> tuple:
             """Build a market along with arguments used to compute arrays."""
             indices_s = self.problem._product_market_indices[s]
-            market_s = ResultsMarket(self.problem, s, self.sigma, self.pi, self.rho, self.beta, self.delta)
+            market_s = ResultsMarket(
+                self.problem, s, self._parameters, self.sigma, self.pi, self.rho, self.beta, self.delta
+            )
             args_s = [None if a is None else a[indices_s] for a in market_args]
             return (market_s, *fixed_args, *args_s)
 

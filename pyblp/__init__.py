@@ -6,7 +6,8 @@ from .configurations.integration import Integration
 from .configurations.iteration import Iteration
 from .configurations.optimization import Optimization
 from .construction import (
-    build_blp_instruments, build_id_data, build_differentiation_instruments, build_matrix, build_ownership
+    build_blp_instruments, build_differentiation_instruments, build_id_data, build_integration, build_matrix,
+    build_ownership
 )
 from .economies.problem import OptimalInstrumentProblem, Problem
 from .economies.simulation import Simulation
@@ -36,7 +37,8 @@ __all__ = [
     'Integration',
     'Iteration',
     'Optimization',
-    'build_blp_instruments', 'build_id_data', 'build_differentiation_instruments', 'build_matrix', 'build_ownership',
+    'build_blp_instruments', 'build_differentiation_instruments', 'build_id_data', 'build_integration', 'build_matrix',
+    'build_ownership',
     'OptimalInstrumentProblem', 'Problem',
     'Simulation',
     'AbsorptionConvergenceError', 'AbsorptionInversionError', 'CostsFloatingPointError', 'CostsReversionError',

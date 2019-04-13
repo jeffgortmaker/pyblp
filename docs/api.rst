@@ -25,7 +25,7 @@ Various components of the package require configurations for how to approximate 
 Data Construction Functions
 ---------------------------
 
-There are also a number of convenience functions that can be used to construct common components of product data.
+There are also a number of convenience functions that can be used to construct common components of product and agent data.
 
 .. autosummary::
    :toctree: _api
@@ -35,6 +35,7 @@ There are also a number of convenience functions that can be used to construct c
    build_differentiation_instruments
    build_id_data
    build_ownership
+   build_integration
 
 
 Simulation Class

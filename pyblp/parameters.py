@@ -141,14 +141,11 @@ class Parameters(object):
     rho_bounds: Bounds
     beta_bounds: Bounds
     gamma_bounds: Bounds
+    nonzero_sigma_index: Array
     alpha_index: Array
     eliminated_alpha_index: Array
     eliminated_beta_index: Array
     eliminated_gamma_index: Array
-    alpha_indices: List[int]
-    eliminated_alpha_indices: List[int]
-    eliminated_beta_indices: List[int]
-    eliminated_gamma_indices: List[int]
     fixed: List[Parameter]
     unfixed: List[Parameter]
     P: int
@@ -180,6 +177,12 @@ class Parameters(object):
         self.beta = self.initialize_matrix("beta", "X1 was formulated", beta, [(economy.K1, 1)], allow_linear_nans)
         self.gamma = self.initialize_matrix("gamma", "X3 was formulated", gamma, [(economy.K3, 1)], allow_linear_nans)
 
+        # fill the lower triangle of sigma with zeros
+        self.sigma[np.tril_indices(economy.K2, -1)] = 0
+
+        # identify the index of nonzero columns in sigma
+        self.nonzero_sigma_index = np.sum(self.sigma, axis=0) > 0
+
         # identify the index of alpha in beta
         self.alpha_index = np.zeros_like(self.beta, np.bool)
         for k, formulation in enumerate(economy._X1_formulations):
@@ -191,8 +194,12 @@ class Parameters(object):
         self.eliminated_beta_index = np.isnan(self.beta)
         self.eliminated_gamma_index = np.isnan(self.gamma)
 
-        # fill the lower triangle of sigma with zeros
-        self.sigma[np.tril_indices(economy.K2, -1)] = 0
+        # there should be at least as many integration node columns as nonzero sigma columns
+        if economy.agents.nodes.shape[1] < self.nonzero_sigma_index.sum():
+            raise ValueError(
+                f"The number of columns of integration nodes, {economy.agents.nodes.shape[1]}, is smaller than the "
+                f"number of columns in sigma with at least one nonzero parameter, {self.nonzero_sigma_index.sum()}."
+            )
 
         # alpha cannot be concentrated out if there's a supply side
         if economy.K3 > 0:
@@ -350,9 +357,12 @@ class Parameters(object):
         norm = 0
         if economy.K2 > 0:
             for t in economy.unique_market_ids:
-                coefficients_t = sigma @ economy.agents.nodes[economy._agent_market_indices[t]].T
+                agents_t = economy.agents[economy._agent_market_indices[t]]
+                nodes_t = np.zeros((agents_t.shape[0], economy.K2), agents_t.nodes.dtype)
+                nodes_t[:, self.nonzero_sigma_index] = agents_t.nodes[:, :self.nonzero_sigma_index.sum()]
+                coefficients_t = sigma @ nodes_t.T
                 if economy.D > 0:
-                    coefficients_t += pi @ economy.agents.demographics[economy._agent_market_indices[t]].T
+                    coefficients_t += pi @ agents_t.demographics.T
                 mu_t = economy.products.X2[economy._product_market_indices[t]] @ coefficients_t
                 norm = max(norm, np.abs(mu_t).max())
         return norm

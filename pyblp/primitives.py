@@ -287,8 +287,6 @@ class Agents(object):
                 weights = extract_matrix(agent_data, 'weights')
                 if nodes is None or weights is None:
                     raise KeyError("Since integration is None, agent_data must have both weights and nodes fields.")
-                if nodes.shape[1] < K2:
-                    raise ValueError(f"The number of columns in the nodes field of agent_data must be at least {K2}.")
                 if weights.shape[1] != 1:
                     raise ValueError("The weights field of agent_data must be one-dimensional.")
 

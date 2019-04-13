@@ -6,6 +6,7 @@ import numpy as np
 
 from . import options
 from .configurations.formulation import Formulation
+from .configurations.integration import Integration
 from .utilities.basics import Array, Groups, RecArray, extract_matrix, interact_ids, structure_matrices
 
 
@@ -387,6 +388,66 @@ def build_differentiation_instruments(
             other_blocks[-1].append((ownership * term).sum(axis=1, keepdims=True))
             rival_blocks[-1].append((~ownership * term).sum(axis=1, keepdims=True))
     return np.c_[np.block(other_blocks), np.block(rival_blocks)]
+
+
+def build_integration(integration: Integration, dimensions: int) -> RecArray:
+    r"""Build nodes and weights for integration over agent choice probabilities.
+
+    This function can be used to build custom ``agent_data`` for :class:`Problem` initialization. Specifically, this
+    function affords more flexibility than passing an :class:`Integration` configuration directly to :class:`Problem`.
+    For example, if agents have unobserved tastes over only a subset of nonlinear product characteristics (i.e., if
+    there are zeros on the diagonal of ``sigma`` in :meth:`Problem.solve`), this function can be used to build agent
+    data with fewer columns of integration nodes than the number of unobserved product characteristics, :math:`K_2`.
+    This function can also be used to construct nodes that are transformed into demographic variables.
+
+    To build nodes and weights for multiple markets, this function can be called multiple times, once for each market.
+
+    Parameters
+    ----------
+    integration : `Integration`
+        :class:`Integration` configuration for how to build nodes and weights for integration.
+    dimensions : `int`
+        Number of dimensions over which to integrate, or equivalently, the number of columns of integration nodes.
+        When an :class:`Integration` configuration is passed directly to :class:`Problem`, this is the number of
+        nonlinear product characteristics, :math:`K_2`.
+
+    Returns
+    -------
+    `recarray`
+        Nodes and weights for integration over agent utilities. Fields:
+
+            - **weights** : (`numeric`) - Integration weights, :math:`w`.
+
+            - **nodes** : (`numeric`) - Unobserved agent characteristics called integration nodes, :math:`\nu`.
+
+    Examples
+    --------
+    .. raw:: latex
+
+       \begin{examplenotebook}
+
+    .. toctree::
+
+       /_notebooks/api/build_integration.ipynb
+
+    .. raw:: latex
+
+       \end{examplenotebook}
+
+    """
+
+    # validate the arguments
+    if not isinstance(integration, Integration):
+        raise TypeError("integration must be an Integration instance.")
+    if not isinstance(dimensions, int) or dimensions < 1:
+        raise ValueError("dimensions must be a positive integer.")
+
+    # build and structure the nodes and weights
+    nodes, weights = integration._build(dimensions)
+    return structure_matrices({
+        'weights': (weights, options.dtype),
+        'nodes': (nodes, options.dtype)
+    })
 
 
 def build_matrix(formulation: Formulation, data: Mapping) -> Array:

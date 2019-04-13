@@ -137,12 +137,15 @@ class Simulation(Economy):
               should be the same as the set of IDs in ``product_data``. If ``integration`` is specified, there must be
               at least as many rows in each market as the number of nodes and weights that are built for each market.
 
-        If ``integration`` is not specified, the following fields are required:
+        If ``integration`` is not specified, the following fields are required (the convenience function
+        :func:`build_integration` can be useful when constructing custom nodes and weights for integration over agent
+        choice probabilities):
 
             - **weights** : (`numeric, optional`) - Integration weights, :math:`w`.
 
             - **nodes** : (`numeric, optional`) - Unobserved agent characteristics called integration nodes,
-              :math:`\nu`. If there are more than :math:`K_2` columns, only the first :math:`K_2` will be used.
+              :math:`\nu`. If there are more than :math:`K_2` columns (the number of nonlinear product characteristics),
+              only the first :math:`K_2` will be used.
 
         Along with ``market_ids``, the names of any additional fields can be used as variables in ``agent_formulation``.
 
@@ -151,6 +154,11 @@ class Simulation(Economy):
         which will replace any ``nodes`` and ``weights`` fields in ``agent_data``. This configuration is required if
         ``nodes`` and ``weights`` in ``agent_data`` are not specified. It should not be specified if :math:`X_2` is not
         formulated in ``product_formulations``.
+
+        If this configuration is specified, :math:`K_2` columns of nodes (the number of nonlinear product
+        characteristics) will be built. However, if ``sigma`` is left unspecified or is specified with columns fixed at
+        zero, fewer columns will be used.
+
     rho : `array-like, optional`
         Parameters that measure within nesting group correlation, :math:`\rho`. If there is only one element, it
         corresponds to all groups defined by the ``nesting_ids`` field of ``product_data``. If there is more than one
@@ -611,7 +619,7 @@ class Simulation(Economy):
         def market_factory(s: Hashable) -> Tuple[SimulationMarket, Array, Array, Array, Array, Iteration]:
             """Build a market along with arguments used to compute prices and shares."""
             assert prices is not None and iteration is not None
-            market_s = SimulationMarket(self, s, self.sigma, self.pi, self.rho, self.beta, delta)
+            market_s = SimulationMarket(self, s, self._parameters, self.sigma, self.pi, self.rho, self.beta, delta)
             firm_ids_s = firm_ids[self._product_market_indices[s]] if firm_ids is not None else None
             ownership_s = ownership[self._product_market_indices[s]] if ownership is not None else None
             costs_s = self.costs[self._product_market_indices[s]]

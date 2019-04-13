@@ -3,7 +3,6 @@
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
-import numpy.lib.recfunctions
 
 from .. import exceptions, options
 from ..configurations.formulation import ColumnFormulation
@@ -11,7 +10,7 @@ from ..configurations.iteration import ContractionResults, Iteration
 from ..economies.economy import Economy
 from ..parameters import LinearCoefficient, NonlinearCoefficient, Parameter, Parameters, RhoParameter
 from ..utilities.algebra import approximately_invert, approximately_solve
-from ..utilities.basics import Array, Error, Groups, RecArray
+from ..utilities.basics import Array, Error, Groups, RecArray, structure_matrices
 
 
 class Market(object):
@@ -41,18 +40,27 @@ class Market(object):
     mu: Array
 
     def __init__(
-            self, economy: Economy, t: Any, sigma: Array, pi: Array, rho: Array, beta: Optional[Array] = None,
-            delta: Optional[Array] = None, data_override: Optional[Dict] = None) -> None:
+            self, economy: Economy, t: Any, parameters: Parameters, sigma: Array, pi: Array, rho: Array,
+            beta: Optional[Array] = None, delta: Optional[Array] = None, data_override: Optional[Dict] = None) -> None:
         """Store or compute information about formulations, data, parameters, and utility."""
 
-        # store data
-        self.products = numpy.lib.recfunctions.rec_drop_fields(
-            economy.products[economy._product_market_indices[t]],
-            set(economy.products.dtype.names) & {'market_ids', 'X1', 'X3', 'ZD', 'ZS', 'demand_ids', 'supply_ids'}
-        )
-        self.agents = numpy.lib.recfunctions.rec_drop_fields(
-            economy.agents[economy._agent_market_indices[t]], 'market_ids'
-        )
+        # structure relevant product data
+        products = economy.products[economy._product_market_indices[t]]
+        products_mapping = {}
+        for key in products.dtype.names:
+            if key not in {'market_ids', 'demand_ids', 'supply_ids', 'clustering_ids', 'X1', 'X3', 'ZD', 'ZS'}:
+                products_mapping[key] = (products[key], products[key].dtype)
+        self.products = structure_matrices(products_mapping)
+
+        # structure relevant agent data
+        agents = economy.agents[economy._agent_market_indices[t]]
+        nodes = np.zeros((agents.shape[0], economy.K2), agents.nodes.dtype)
+        nodes[:, parameters.nonzero_sigma_index] = agents.nodes[:, :parameters.nonzero_sigma_index.sum()]
+        self.agents = structure_matrices({
+            'nodes': (nodes, nodes.dtype),
+            'weights': (agents.weights, agents.weights.dtype),
+            'demographics': (agents.demographics, agents.demographics.dtype)
+        })
 
         # create nesting groups
         self.groups = Groups(self.products.nesting_ids)
@@ -81,6 +89,7 @@ class Market(object):
                     self.products.X2[:, [index]] = formulation.evaluate(self.products)
 
         # store parameters (expand rho to all groups and all products)
+        self.parameters = parameters
         self.sigma = sigma
         self.pi = pi
         self.beta = beta
@@ -487,10 +496,10 @@ class Market(object):
         return jacobian
 
     def compute_shares_by_theta_jacobian(
-            self, parameters: Parameters, delta: Array, probabilities: Array, conditionals: Optional[Array]) -> Array:
+            self, delta: Array, probabilities: Array, conditionals: Optional[Array]) -> Array:
         """Compute the Jacobian of shares with respect to theta."""
-        jacobian = np.zeros((self.J, parameters.P), options.dtype)
-        for p, parameter in enumerate(parameters.unfixed):
+        jacobian = np.zeros((self.J, self.parameters.P), options.dtype)
+        for p, parameter in enumerate(self.parameters.unfixed):
             tangent, _ = self.compute_probabilities_by_parameter_tangent(parameter, probabilities, conditionals, delta)
             jacobian[:, [p]] = tangent @ self.agents.weights
         return jacobian
@@ -562,7 +571,7 @@ class Market(object):
             )
         return tensor
 
-    def compute_eta_by_theta_jacobian(self, xi_jacobian: Array, parameters: Parameters) -> Tuple[Array, List[Error]]:
+    def compute_eta_by_theta_jacobian(self, xi_jacobian: Array) -> Tuple[Array, List[Error]]:
         """Compute the Jacobian of the markup term in the BLP-markup equation with respect to theta."""
         errors: List[Error] = []
 
@@ -605,8 +614,8 @@ class Market(object):
         X2_derivatives = self.compute_X2_derivatives('prices')
 
         # fill the Jacobian of eta with respect to theta parameter-by-parameter
-        eta_jacobian = np.zeros((self.J, parameters.P), options.dtype)
-        for p, parameter in enumerate(parameters.unfixed):
+        eta_jacobian = np.zeros((self.J, self.parameters.P), options.dtype)
+        for p, parameter in enumerate(self.parameters.unfixed):
             # compute the tangent with respect to the parameter of derivatives of aggregate inclusive values
             probabilities_tangent, conditionals_tangent = self.compute_probabilities_by_parameter_tangent(
                 parameter, probabilities, conditionals
@@ -635,8 +644,7 @@ class Market(object):
         # return the filled Jacobian
         return eta_jacobian, errors
 
-    def compute_xi_by_theta_jacobian(
-            self, parameters: Parameters, delta: Optional[Array] = None) -> Tuple[Array, List[Error]]:
+    def compute_xi_by_theta_jacobian(self, delta: Optional[Array] = None) -> Tuple[Array, List[Error]]:
         """Use the Implicit Function Theorem to compute the Jacobian of xi (equivalently, of delta) with respect to
         theta. By default, use unchanged delta values.
         """
@@ -652,17 +660,14 @@ class Market(object):
             # compute the Jacobian
             probabilities, conditionals = self.compute_probabilities(delta)
             shares_by_xi_jacobian = self.compute_shares_by_xi_jacobian(probabilities, conditionals)
-            shares_by_theta_jacobian = self.compute_shares_by_theta_jacobian(
-                parameters, delta, probabilities, conditionals
-            )
+            shares_by_theta_jacobian = self.compute_shares_by_theta_jacobian(delta, probabilities, conditionals)
             xi_by_theta_jacobian, replacement = approximately_solve(shares_by_xi_jacobian, -shares_by_theta_jacobian)
             if replacement:
                 errors.append(exceptions.SharesByXiJacobianInversionError(shares_by_xi_jacobian, replacement))
             return xi_by_theta_jacobian, errors
 
     def compute_omega_by_theta_jacobian(
-            self, tilde_costs: Array, xi_jacobian: Array, parameters: Parameters, costs_type: str) -> (
-            Tuple[Array, List[Error]]):
+            self, tilde_costs: Array, xi_jacobian: Array, costs_type: str) -> Tuple[Array, List[Error]]:
         """Compute the Jacobian of omega (equivalently, of transformed marginal costs) with respect to theta."""
         errors: List[Error] = []
 
@@ -671,7 +676,7 @@ class Market(object):
             np.seterrcall(lambda *_: errors.append(exceptions.OmegaByThetaJacobianFloatingPointError()))
 
             # compute the Jacobian
-            eta_jacobian, eta_jacobian_errors = self.compute_eta_by_theta_jacobian(xi_jacobian, parameters)
+            eta_jacobian, eta_jacobian_errors = self.compute_eta_by_theta_jacobian(xi_jacobian)
             errors.extend(eta_jacobian_errors)
             if costs_type == 'linear':
                 omega_jacobian = -eta_jacobian
