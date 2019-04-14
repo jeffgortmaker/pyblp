@@ -1,9 +1,16 @@
+.. only:: html
+
+   .. nbinfo::
+
+      Download a PDF version of the documentation: :pdf:`pyblp.pdf <>`
+
+
 pyblp
 =====
 
 .. only:: html
 
-   The documentation can be navigated with the sidebar, the links below, or the :ref:`index <genindex>`. There is also a PDF version, which you can download by clicking the Read the Docs button on the bottom left of the sidebar.
+   The documentation can be navigated with the sidebar, the links below, or the :ref:`index <genindex>`.
 
 .. raw:: latex
 

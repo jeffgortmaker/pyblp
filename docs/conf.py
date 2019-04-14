@@ -37,9 +37,10 @@ nitpicky = True
 tls_verify = False
 master_doc = 'index'
 
-# construct a RTD URL that will be used in absolute links and make it available to included files
+# identify the RTD version that's being built and associated URLs
 rtd_version = os.environ.get('READTHEDOCS_VERSION', 'latest')
 rtd_url = f'https://{project}.readthedocs.io/{language}/{rtd_version}'
+pdf_url = f'https://readthedocs.org/projects/{project}/downloads/pdf/{rtd_version}'
 
 # configure extensions
 extensions = [
@@ -62,7 +63,8 @@ intersphinx_mapping = {
     'pandas': ('http://pandas.pydata.org/pandas-docs/stable/', None)
 }
 extlinks = {
-    'rtd': (f'{rtd_url}/%s', None)
+    'rtd': (f'{rtd_url}/%s', None),
+    'pdf': (f'{pdf_url}/%s', None)
 }
 math_number_all = True
 autosummary_generate = True
