@@ -182,9 +182,7 @@ class Economy(Container, StringRepresentation):
 
         # check each matrix for collinearity
         for name, labels in matrix_labels.items():
-            collinear, successful = precisely_identify_collinearity(
-                self.products[name], options.collinear_atol, options.collinear_rtol
-            )
+            collinear, successful = precisely_identify_collinearity(self.products[name])
             common_message = "To disable collinearity checks, set options.collinear_atol = options.collinear_rtol = 0."
             if (self.ED > 0 and name in {'X1', 'ZD'}) or (self.ES > 0 and name in {'X3', 'ZS'}):
                 common_message = f"Absorbed fixed effects may be creating collinearity problems. {common_message}"
