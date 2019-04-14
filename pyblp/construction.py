@@ -156,21 +156,24 @@ def build_blp_instruments(formulation: Formulation, product_data: Mapping) -> Ar
 
     Traditional excluded BLP instruments are
 
-    .. math:: \text{BLP}(X) = [\text{BLP Other}(X), \text{BLP Rival}(X)],
+    .. math:: Z^\textit{BLP}(X) = [Z^\textit{BLP,Other}(X), Z^\textit{BLP,Rival}(X)],
 
-    in which :math:`X` is a matrix of product characteristics, :math:`\text{BLP Other}(X)` is a second matrix that
-    consists of sums over characteristics of non-rival goods, and :math:`\text{BLP Rival}(X)` is a third matrix that
+    in which :math:`X` is a matrix of product characteristics, :math:`Z^\textit{BLP,Other}(X)` is a second matrix that
+    consists of sums over characteristics of non-rival goods, and :math:`Z^\textit{BLP,Rival}(X)` is a third matrix that
     consists of sums over rival goods. All three matrices have the same dimensions.
 
     Let :math:`x_{jt}` be the vector of characteristics in :math:`X` for product :math:`j` in market :math:`t`, which is
-    produced by firm :math:`f`. That is, :math:`j \in \mathscr{J}_{ft}`. Its counterpart in :math:`\text{BLP Other}(X)`
-    is
+    produced by firm :math:`f`. That is, :math:`j \in \mathscr{J}_{ft}`. Then,
 
-    .. math:: \sum_{r \in \mathscr{J}_{ft} \setminus \{j\}} x_{rt}.
+    .. math::
 
-    Its counterpart in :math:`\text{BLP Rival}(X)` is
+       Z_{jt}^\textit{BLP,Other}(X) = \sum_{r\in\mathscr{J}_{ft}\setminus\{j\}} x_{rt}, \\
+       Z_{jt}^\textit{BLP,Rival}(X) = \sum_{r\notin\mathscr{J}_{ft}} x_{rt}.
 
-    .. math:: \sum_{r \notin \mathscr{J}_{ft}} x_{rt}.
+    .. note::
+
+       Usually, any supply or demand shifters are added to these excluded instruments, depending on whether they are
+       meant to be used for demand- or supply-side estimation.
 
     Parameters
     ----------
@@ -191,7 +194,7 @@ def build_blp_instruments(formulation: Formulation, product_data: Mapping) -> Ar
     Returns
     -------
     `ndarray`
-        Traditional excluded BLP instruments, :math:`\text{BLP}(X)`.
+        Traditional excluded BLP instruments, :math:`Z^\textit{BLP}(X)`.
 
     Examples
     --------
@@ -236,23 +239,26 @@ def build_differentiation_instruments(
 
     Differentiation instruments in the spirit of :ref:`references:Gandhi and Houde (2017)` are
 
-    .. math:: \text{Diff}(X) = [\text{Diff Other}(X), \text{Diff Rival}(X)],
+    .. math:: Z^\textit{Diff}(X) = [Z^\textit{Diff,Other}(X), Z^\textit{Diff,Rival}(X)],
 
-    in which :math:`X` is a matrix of product characteristics, :math:`\text{Diff Other}(X)` is a second matrix that
-    consists of sums over functions of differences between non-rival goods, and :math:`\text{Diff Rival}(X)` is a third
-    matrix that consists of sums over rival goods. Without optional interaction terms, all three matrices have the same
-    dimensions.
+    in which :math:`X` is a matrix of product characteristics, :math:`Z^\textit{Diff,Other}(X)` is a second matrix that
+    consists of sums over functions of differences between non-rival goods, and :math:`Z^\textit{Diff,Rival}(X)` is a
+    third matrix that consists of sums over rival goods. Without optional interaction terms, all three matrices have the
+    same dimensions.
 
     .. note::
 
-       To construct simpler, firm agnostic instruments that are sums over functions of differences between all different
-       goods, specify a constant column of firm IDs and keep only the first half of instrument columns.
+       To construct simpler, firm-agnostic instruments that are sums over functions of differences between all different
+       goods, specify a constant column of firm IDs and keep only the first half of the instrument columns.
 
     Let :math:`x_{jtk}` be characteristic :math:`k` in :math:`X` for product :math:`j` in market :math:`t`, which is
-    produced by firm :math:`f`. That is, :math:`j \in \mathscr{J}_{ft}`. Its counterpart in the "local" version of
-    :math:`\text{Diff Other}(X)` is
+    produced by firm :math:`f`. That is, :math:`j \in \mathscr{J}_{ft}`. Then in the "local" version of
+    :math:`Z^\textit{Diff}(X)`,
 
-    .. math:: \sum_{r \in \mathscr{J}_{ft} \setminus \{j\}} 1(|d_{jrtk}| < \text{SD}_k)
+    .. math::
+
+       Z_{jtk}^\textit{Diff,Other,Local}(X) = \sum_{r\in\mathscr{J}_{ft}\setminus\{j\}} 1(|d_{jrtk}| < \text{SD}_k), \\
+       Z_{jtk}^\textit{Diff,Rival,Local}(X) = \sum_{r\notin\mathscr{J}_{ft}} 1(|d_{jrtk}| < \text{SD}_k),
 
     where :math:`d_{jrtk} = x_{rtk} - x_{jtk}` is the difference between products :math:`j` and :math:`r` along
     dimension :math:`k`, :math:`\text{SD}_k` is the standard deviation of these pairwise differences computed across all
@@ -260,22 +266,22 @@ def build_differentiation_instruments(
     other in terms of characteristic :math:`k`.
 
     The intuition behind this "local" version is that demand for products is often most influenced by a small number of
-    other goods that are very similar. For the "quadratic" version of :math:`\text{Diff Other}(X)`, which uses a more
-    continuous measure of the distance between goods, we instead have
+    other goods that are very similar. For the "quadratic" version of :math:`Z^\textit{Diff}(X)`, which uses a more
+    continuous measure of the distance between goods,
 
-    .. math:: \sum_{r \in \mathscr{J}_{ft} \setminus \{j\}} d_{jrtk}^2.
+    .. math::
 
-    Counterparts for the "local" and "quadratic" versions of :math:`\text{Diff Rival}(X)` are
-
-    .. math:: \sum_{r \notin \mathscr{J}_{ft}} 1(|d_{jrtk}| < \text{SD}_k)
-
-    and
-
-    .. math:: \sum_{r \notin \mathscr{J}_{ft}} d_{jrtk}^2.
+       Z_{jtk}^\textit{Diff,Other,Quad}(X) = \sum_{r\in\mathscr{J}_{ft}\setminus\{j\}} d_{jrtk}^2, \\
+       Z_{jtk}^\textit{Diff,Rival,Quad}(X) = \sum_{r\notin\mathscr{J}_{ft}} d_{jrtk}^2.
 
     With interaction terms, which reflect covariances between different characteristics, the summands for the "local"
     versions are :math:`1(|d_{jrtk}| < \text{SD}_k) \times d_{jrt\ell}` for all characteristics :math:`\ell`, and the
     summands for the "quadratic" versions are :math:`d_{jrtk} \times d_{jrt\ell}` for all :math:`\ell \geq k`.
+
+    .. note::
+
+       Usually, any supply or demand shifters are added to these excluded instruments, depending on whether they are
+       meant to be used for demand- or supply-side estimation.
 
     Parameters
     ----------
@@ -308,7 +314,7 @@ def build_differentiation_instruments(
     Returns
     -------
     `ndarray`
-        Excluded differentiation instruments, :math:`\text{Diff}(X)`.
+        Excluded differentiation instruments, :math:`Z^\textit{Diff}(X)`.
 
     Examples
     --------

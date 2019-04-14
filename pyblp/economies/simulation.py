@@ -39,26 +39,11 @@ class Simulation(Economy):
     After variables are loaded or simulated, any unspecified nodes and weights are constructed according to an
     integration configuration.
 
-    Next, simple excluded demand-side instruments are constructed according to
-
-    .. math:: [\text{BLP}(X_1), X_{3 \setminus 1}],
-
-    in which :math:`\text{BLP}(X_1)` are traditional excluded demand-side BLP instruments (defined as in
-    :func:`build_blp_instruments`) and :math:`X_{3 \setminus 1}` is all variables used formulate :math:`X_3` that were
-    not used to formulate :math:`X_1`.
-
-    Similarly, simple excluded supply-side instruments are constructed according to
-
-    .. math:: [\text{BLP}(X_3), X_{1 \setminus 3}],
-
-    in which :math:`\text{BLP}(X_3)` are traditional excluded supply-side BLP instruments (defined as in
-    :func:`build_blp_instruments`) and :math:`X_{1 \setminus 3}` is all variables used formulate :math:`X_1` that were
-    not used to formulate :math:`X_3`.
-
-    .. note::
-
-       Traditional excluded BLP instruments for constant characteristics are constructed only if there is variation in
-       :math:`J_t`, the number of products per market.
+    Next, traditional excluded BLP instruments are constructed. Demand-side instruments are BLP instruments constructed
+    by :func:`build_blp_instruments` from non-price variables in :math:`X_1`, along with any supply shifters (variables
+    in :math:`X_3` but not :math:`X_1`. Supply side instruments are BLP instruments constructed from :math:`X_3`, along
+    with any demand shifters (variables in :math:`X_1` but not :math:`X_3`). BLP instruments for constant
+    characteristics are constructed only if there is variation in :math:`J_t`, the number of products per market.
 
     .. note::
 
