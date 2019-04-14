@@ -51,11 +51,11 @@ collinear_rtol : `float`
 
 """
 
-import numpy as np
+import numpy as _np
 
 
 digits = 10
 verbose = True
 verbose_output = print
-dtype = np.float64
+dtype = _np.float64
 collinear_atol = collinear_rtol = 1e-14
