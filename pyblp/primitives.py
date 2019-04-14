@@ -1,5 +1,6 @@
 """Primitive data structures that constitute the foundation of the BLP model."""
 
+import abc
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple, Union
 
 import numpy as np
@@ -301,3 +302,24 @@ class Agents(object):
             'nodes': (nodes, options.dtype),
             (tuple(demographics_formulations), 'demographics'): (demographics, options.dtype)
         })
+
+
+class Container(abc.ABC):
+    """An abstract container for structured product and agent data."""
+
+    products: RecArray
+    agents: RecArray
+    _X1_formulations: Tuple[ColumnFormulation, ...]
+    _X2_formulations: Tuple[ColumnFormulation, ...]
+    _X3_formulations: Tuple[ColumnFormulation, ...]
+    _demographics_formulations: Tuple[ColumnFormulation, ...]
+
+    @abc.abstractmethod
+    def __init__(self, products: RecArray, agents: RecArray) -> None:
+        """Store data and column formulations."""
+        self.products = products
+        self.agents = agents
+        self._X1_formulations = self.products.dtype.fields['X1'][2]
+        self._X2_formulations = self.products.dtype.fields['X2'][2]
+        self._X3_formulations = self.products.dtype.fields['X3'][2]
+        self._demographics_formulations = self.agents.dtype.fields['demographics'][2]

@@ -7,13 +7,13 @@ import numpy as np
 
 from . import options
 from .configurations.formulation import ColumnFormulation
+from .primitives import Container
 from .utilities.basics import Array, Bounds, Groups, TableFormatter, format_number, format_se
 
 
 # only import objects that create import cycles when checking types
 if TYPE_CHECKING:
     from .economies.economy import Economy  # noqa
-    from .markets.market import Market  # noqa
 
 
 class Parameter(abc.ABC):
@@ -32,44 +32,44 @@ class Coefficient(Parameter):
     """Information about a single coefficient parameter in sigma, pi, beta, or gamma."""
 
     @abc.abstractmethod
-    def get_product_formulation(self, economy_or_market: Union['Economy', 'Market']) -> ColumnFormulation:
+    def get_product_formulation(self, container: Container) -> ColumnFormulation:
         """Get the product formulation associated with the parameter."""
 
     @abc.abstractmethod
-    def get_product_characteristic(self, economy_or_market: Union['Economy', 'Market']) -> Array:
+    def get_product_characteristic(self, container: Container) -> Array:
         """Get the product characteristic associated with the parameter."""
 
 
 class NonlinearCoefficient(Coefficient):
     """Information about a single nonlinear parameter in sigma or pi."""
 
-    def get_product_formulation(self, economy_or_market: Union['Economy', 'Market']) -> ColumnFormulation:
+    def get_product_formulation(self, container: Container) -> ColumnFormulation:
         """Get the product formulation associated with the parameter."""
-        return economy_or_market._X2_formulations[self.location[0]]
+        return container._X2_formulations[self.location[0]]
 
-    def get_product_characteristic(self, economy_or_market: Union['Economy', 'Market']) -> Array:
+    def get_product_characteristic(self, container: Container) -> Array:
         """Get the product characteristic associated with the parameter."""
-        return economy_or_market.products.X2[:, [self.location[0]]]
+        return container.products.X2[:, [self.location[0]]]
 
     @abc.abstractmethod
-    def get_agent_characteristic(self, economy_or_market: Union['Economy', 'Market']) -> Array:
+    def get_agent_characteristic(self, container: Container) -> Array:
         """Get the agent characteristic associated with the parameter."""
 
 
 class SigmaParameter(NonlinearCoefficient):
     """Information about a single parameter in sigma."""
 
-    def get_agent_characteristic(self, economy_or_market: Union['Economy', 'Market']) -> Array:
+    def get_agent_characteristic(self, container: Container) -> Array:
         """Get the agent characteristic associated with the parameter."""
-        return economy_or_market.agents.nodes[:, [self.location[1]]]
+        return container.agents.nodes[:, [self.location[1]]]
 
 
 class PiParameter(NonlinearCoefficient):
     """Information about a single parameter in pi."""
 
-    def get_agent_characteristic(self, economy_or_market: Union['Economy', 'Market']) -> Array:
+    def get_agent_characteristic(self, container: Container) -> Array:
         """Get the agent characteristic associated with the parameter."""
-        return economy_or_market.agents.demographics[:, [self.location[1]]]
+        return container.agents.demographics[:, [self.location[1]]]
 
 
 class RhoParameter(Parameter):
@@ -101,26 +101,26 @@ class OneGroupRhoParameter(RhoParameter):
 class LinearCoefficient(Coefficient):
     """Information about a single linear parameter in beta or gamma."""
 
-    def get_product_characteristic(self, economy_or_market: Union['Economy', 'Market']) -> Array:
+    def get_product_characteristic(self, container: Container) -> Array:
         """Get the product characteristic associated with the parameter."""
-        x = self.get_product_formulation(economy_or_market).evaluate(economy_or_market.products)
-        return np.broadcast_to(x, (economy_or_market.products.shape[0], 1)).astype(options.dtype)
+        x = self.get_product_formulation(container).evaluate(container.products)
+        return np.broadcast_to(x, (container.products.shape[0], 1)).astype(options.dtype)
 
 
 class BetaParameter(LinearCoefficient):
     """Information about a single linear parameter in beta."""
 
-    def get_product_formulation(self, economy_or_market: Union['Economy', 'Market']) -> ColumnFormulation:
+    def get_product_formulation(self, container: Container) -> ColumnFormulation:
         """Get the product formulation associated with the parameter."""
-        return economy_or_market._X1_formulations[self.location[0]]
+        return container._X1_formulations[self.location[0]]
 
 
 class GammaParameter(LinearCoefficient):
     """Information about a single linear parameter in gamma."""
 
-    def get_product_formulation(self, economy_or_market: Union['Economy', 'Market']) -> ColumnFormulation:
+    def get_product_formulation(self, container: Container) -> ColumnFormulation:
         """Get the product formulation associated with the parameter."""
-        return economy_or_market._X3_formulations[self.location[0]]
+        return container._X3_formulations[self.location[0]]
 
 
 class Parameters(object):

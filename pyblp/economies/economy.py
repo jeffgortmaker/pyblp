@@ -3,23 +3,22 @@
 import abc
 import collections
 import functools
-from typing import Any, Dict, Hashable, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, Hashable, Mapping, Optional, Sequence
 
 import numpy as np
 
 from .. import options
-from ..configurations.formulation import ColumnFormulation, Formulation
+from ..configurations.formulation import Formulation
+from ..primitives import Container
 from ..utilities.algebra import precisely_identify_collinearity
 from ..utilities.basics import Array, RecArray, StringRepresentation, TableFormatter
 
 
-class Economy(abc.ABC, StringRepresentation):
+class Economy(Container, StringRepresentation):
     """An abstract economy underlying the BLP model."""
 
     product_formulations: Sequence[Optional[Formulation]]
     agent_formulation: Optional[Formulation]
-    products: RecArray
-    agents: RecArray
     unique_market_ids: Array
     unique_firm_ids: Array
     unique_nesting_ids: Array
@@ -40,10 +39,6 @@ class Economy(abc.ABC, StringRepresentation):
     _agent_market_indices: Dict[Hashable, Array]
     _max_J: int
     _max_I: int
-    _X1_formulations: Tuple[ColumnFormulation, ...]
-    _X2_formulations: Tuple[ColumnFormulation, ...]
-    _X3_formulations: Tuple[ColumnFormulation, ...]
-    _demographics_formulations: Tuple[ColumnFormulation, ...]
     _absorb_demand_ids: Optional[functools.partial]
     _absorb_supply_ids: Optional[functools.partial]
 
@@ -53,11 +48,10 @@ class Economy(abc.ABC, StringRepresentation):
             products: RecArray, agents: RecArray) -> None:
         """Store information about formulations and data. Any fixed effects should be absorbed after initialization."""
 
-        # store formulations and data
+        # store data and formulations
+        super().__init__(products, agents)
         self.product_formulations = product_formulations
         self.agent_formulation = agent_formulation
-        self.products = products
-        self.agents = agents
 
         # identify unique markets and nests
         self.unique_market_ids = np.unique(self.products.market_ids).flatten()
@@ -86,12 +80,6 @@ class Economy(abc.ABC, StringRepresentation):
         # identify the largest number of products and agents in a market
         self._max_J = max(v[0].size for v in self._product_market_indices.values())
         self._max_I = max(v[0].size for v in self._agent_market_indices.values())
-
-        # identify column formulations
-        self._X1_formulations = self.products.dtype.fields['X1'][2]
-        self._X2_formulations = self.products.dtype.fields['X2'][2]
-        self._X3_formulations = self.products.dtype.fields['X3'][2]
-        self._demographics_formulations = self.agents.dtype.fields['demographics'][2]
 
         # construct fixed effect absorption functions
         self._absorb_demand_ids = self._absorb_supply_ids = None

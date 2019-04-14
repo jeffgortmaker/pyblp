@@ -5,19 +5,17 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 
 from .. import exceptions, options
-from ..configurations.formulation import ColumnFormulation
 from ..configurations.iteration import ContractionResults, Iteration
 from ..economies.economy import Economy
 from ..parameters import LinearCoefficient, NonlinearCoefficient, Parameter, Parameters, RhoParameter
+from ..primitives import Container
 from ..utilities.algebra import approximately_invert, approximately_solve
-from ..utilities.basics import Array, Error, Groups, RecArray, structure_matrices
+from ..utilities.basics import Array, Error, Groups, update_matrices
 
 
-class Market(object):
+class Market(Container):
     """A market underlying the BLP model."""
 
-    products: RecArray
-    agents: RecArray
     groups: Groups
     J: int
     I: int
@@ -26,10 +24,6 @@ class Market(object):
     K3: int
     D: int
     H: int
-    X1_formulations: Tuple[ColumnFormulation, ...]
-    X2_formulations: Tuple[ColumnFormulation, ...]
-    X3_formulations: Tuple[ColumnFormulation, ...]
-    demographics_formulations: Tuple[ColumnFormulation, ...]
     sigma: Array
     pi: Array
     beta: Array
@@ -44,23 +38,26 @@ class Market(object):
             beta: Optional[Array] = None, delta: Optional[Array] = None, data_override: Optional[Dict] = None) -> None:
         """Store or compute information about formulations, data, parameters, and utility."""
 
-        # structure relevant product data
-        products = economy.products[economy._product_market_indices[t]]
-        products_mapping = {}
-        for key in products.dtype.names:
-            if key not in {'market_ids', 'demand_ids', 'supply_ids', 'clustering_ids', 'X1', 'X3', 'ZD', 'ZS'}:
-                products_mapping[key] = (products[key], products[key].dtype)
-        self.products = structure_matrices(products_mapping)
+        # structure relevant data
+        super().__init__(
+            economy.products[economy._product_market_indices[t]],
+            economy.agents[economy._agent_market_indices[t]]
+        )
 
-        # structure relevant agent data
-        agents = economy.agents[economy._agent_market_indices[t]]
-        nodes = np.zeros((agents.shape[0], economy.K2), agents.nodes.dtype)
-        nodes[:, parameters.nonzero_sigma_index] = agents.nodes[:, :parameters.nonzero_sigma_index.sum()]
-        self.agents = structure_matrices({
-            'nodes': (nodes, nodes.dtype),
-            'weights': (agents.weights, agents.weights.dtype),
-            'demographics': (agents.demographics, agents.demographics.dtype)
-        })
+        # drop unneeded product data fields to save memory
+        products_update_mapping = {}
+        for key in ['market_ids', 'demand_ids', 'supply_ids', 'clustering_ids', 'X1', 'X3', 'ZD', 'ZS']:
+            products_update_mapping[key] = (None, self.products[key].dtype)
+        self.products = update_matrices(self.products, products_update_mapping)
+
+        # drop unneeded agent data fields and fill missing columns of integration nodes (associated with zeros in sigma)
+        #   with zeros
+        agents_update_mapping = {'market_ids': (None, self.agents.market_ids.dtype)}
+        if not parameters.nonzero_sigma_index.all():
+            nodes = np.zeros((self.agents.shape[0], economy.K2), self.agents.nodes.dtype)
+            nodes[:, parameters.nonzero_sigma_index] = self.agents.nodes[:, :parameters.nonzero_sigma_index.sum()]
+            agents_update_mapping['nodes'] = (nodes, nodes.dtype)
+        self.agents = update_matrices(self.agents, agents_update_mapping)
 
         # create nesting groups
         self.groups = Groups(self.products.nesting_ids)
@@ -73,12 +70,6 @@ class Market(object):
         self.K3 = economy.K3
         self.D = economy.D
         self.H = self.groups.group_count
-
-        # identify column formulations
-        self._X1_formulations = economy._X1_formulations
-        self._X2_formulations = economy._X2_formulations
-        self._X3_formulations = economy._X3_formulations
-        self._demographics_formulations = economy._demographics_formulations
 
         # override any data
         if data_override is not None:
