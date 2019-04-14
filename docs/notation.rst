@@ -63,6 +63,7 @@ Symbol                                                 Dimensions               
 :math:`O^*`                                            :math:`J_t \times J_t`                               Ownership matrix in market :math:`t` after firm ID changes.
 :math:`\kappa`                                         :math:`F_t \times F_t`                               Cooperation matrix in market :math:`t`.
 :math:`\kappa^*`                                       :math:`F_t \times F_t`                               Cooperation matrix in market :math:`t` after firm ID changes.
+:math:`\Delta`                                         :math:`J_t \times J_t`                               Intra-firm matrix of (negative) demand derivatives in market :math:`t`.
 :math:`\Lambda`                                        :math:`J_t \times J_t`                               Diagonal matrix used to decompose :math:`\eta` and :math:`\zeta` in market :math:`t`.
 :math:`\Gamma`                                         :math:`J_t \times J_t`                               Another matrix used to decompose :math:`\eta` and :math:`\zeta` in market :math:`t`.
 :math:`d`                                              :math:`I_t \times D`                                 Observed agent characteristics called demographics in market :math:`t`.

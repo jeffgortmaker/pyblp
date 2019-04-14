@@ -52,20 +52,24 @@ Observed supply-side product characteristics are the :math:`N \times K_3` matrix
 
 Firms play a differentiated Bertrand-Nash pricing game. Firm :math:`f` produces a subset :math:`\mathscr{J}_{ft} \subset \{1, 2, \ldots, J_t\}` of the products in market :math:`t` and chooses prices to maximize the sum of population-normalized gross expected profits:
 
-.. math:: \sum_{j \in \mathscr{J}_{ft}} \pi_{jt},
+.. math:: \pi_{ft} = \sum_{j \in \mathscr{J}_{ft}} \pi_{jt},
 
 which for product :math:`j` in market :math:`t` are
 
-.. math:: \pi_{jt} = (p_{jt} - c_{jt})s_{jt},
+.. math:: \pi_{jt} = (p_{jt} - c_{jt})s_{jt}.
 
-and yields a solution of a :math:`J_t \times J_t` system of first order conditions (in vector-matrix form):
+This :math:`J_t \times J_t` system yields the following solution of first order conditions (in vector-matrix form):
 
-.. math:: p = c \underbrace{-(O \circ \frac{\partial s}{\partial p})^{-1}s}_{\eta}.
+.. math:: p - c = \underbrace{\Delta^{-1}s}_{\eta},
    :label: blp_markup
 
-Here :math:`O` denotes the market-level ownership matrix, where :math:`O_{jk}` is simply :math:`1` if the same firm produces products :math:`j` and :math:`k`, and is :math:`0` otherwise.
+where the multi-product Bertrand markup :math:`\eta` depends on :math:`\Delta`, a :math:`J_t \times J_t` matrix of intra-firm (negative) demand derivatives given by
 
-In order to include a supply side, we must specify a functional form for marginal costs which can be either linear or log-linear:
+.. math:: \Delta = -O \circ \frac{\partial s}{\partial p}.
+
+Here :math:`O` denotes the market-level ownership matrix, where :math:`O_{jk}` is typically :math:`1` if the same firm produces products :math:`j` and :math:`k`, and is :math:`0` otherwise.
+
+To include a supply side, we must specify a functional form for marginal costs, which can be either linear or log-linear:
 
 .. math:: \tilde{c} = X_3\gamma + \omega \quad\text{where}\quad \tilde{c} = c \quad\text{or}\quad \tilde{c} = \log c.
    :label: costs
@@ -207,13 +211,13 @@ The supply-side Jacobian can be derived from the BLP-markup equation in :eq:`blp
 
 .. math:: \frac{\partial\tilde{c}}{\partial\theta_p} = -\frac{\partial\tilde{c}}{\partial c}\frac{\partial\eta}{\partial\theta}.
 
-The first term in this expression depends on whether marginal costs are defined according either to a linear or a log-linear specification, and the second term is derived from the definition of :math:`\eta` in :eq:`blp_markup`. Specifically, letting :math:`A = -O \circ (\Lambda - \Gamma)`,
+The first term in this expression depends on whether marginal costs are defined according either to a linear or a log-linear specification, and the second term is derived from the definition of :math:`\eta` in :eq:`blp_markup`:
 
-.. math:: \frac{\partial\eta}{\partial\theta} = -A^{-1}\left(\frac{\partial A}{\partial\theta}\eta + \frac{\partial A}{\partial\xi}\eta\frac{\partial\xi}{\partial\theta}\right),
+.. math:: \frac{\partial\eta}{\partial\theta} = -\Delta^{-1}\left(\frac{\partial\Delta}{\partial\theta}\eta + \frac{\partial\Delta}{\partial\xi}\eta\frac{\partial\xi}{\partial\theta}\right).
 
-in which
+Here,
 
-.. math:: \frac{\partial A}{\partial\theta} = O \circ \left(\frac{\partial\Gamma}{\partial\theta} - \frac{\partial\Lambda}{\partial\theta}\right) \quad\text{and}\quad \frac{\partial A}{\partial\xi} = O \circ \left(\frac{\partial\Gamma}{\partial\xi} - \frac{\partial\Lambda}{\partial\xi}\right)
+.. math:: \frac{\partial\Delta}{\partial\theta} = O \circ \left(\frac{\partial\Gamma}{\partial\theta} - \frac{\partial\Lambda}{\partial\theta}\right) \quad\text{and}\quad \frac{\partial\Delta}{\partial\xi} = O \circ \left(\frac{\partial\Gamma}{\partial\xi} - \frac{\partial\Lambda}{\partial\xi}\right)
 
 are derived from the definitions of :math:`\Gamma` and :math:`\Lambda` in :eq:`capital_gamma` and :eq:`capital_lambda`.
 

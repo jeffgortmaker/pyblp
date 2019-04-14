@@ -571,34 +571,33 @@ class Market(Container):
         utility_derivatives = self.compute_utility_derivatives('prices')
         value_derivatives = probabilities * utility_derivatives
 
-        # compute the matrix A, which, when inverted and multiplied by shares, gives eta (negative the intra-firm
-        #   Jacobian of shares with respect to prices)
+        # compute the capital delta matrix, which, when inverted and multiplied by shares, gives eta
         ownership = self.get_ownership_matrix()
         capital_lamda = self.compute_capital_lamda(value_derivatives)
         capital_gamma = self.compute_capital_gamma(value_derivatives, probabilities, conditionals)
-        A = -ownership * (capital_lamda - capital_gamma)
+        capital_delta = -ownership * (capital_lamda - capital_gamma)
 
-        # compute the inverse of A and use it to compute eta
-        A_inverse, replacement = approximately_invert(A)
+        # compute the inverse of capital delta and use it to compute eta
+        capital_delta_inverse, replacement = approximately_invert(capital_delta)
         if replacement:
-            errors.append(exceptions.IntraFirmJacobianInversionError(A, replacement))
-        eta = A_inverse @ self.products.shares
+            errors.append(exceptions.IntraFirmJacobianInversionError(capital_delta, replacement))
+        eta = capital_delta_inverse @ self.products.shares
 
         # compute the tensor derivative with respect to xi (equivalently, to delta), indexed with the first axis, of
         #   derivatives of aggregate inclusive values
         probabilities_tensor, conditionals_tensor = self.compute_probabilities_by_xi_tensor(probabilities, conditionals)
         value_derivatives_tensor = probabilities_tensor * utility_derivatives
 
-        # compute the tensor derivative of A with respect to xi (equivalently, to delta)
+        # compute the tensor derivative of capital delta with respect to xi (equivalently, to delta)
         capital_lamda_tensor = self.compute_capital_lamda_by_xi_tensor(value_derivatives_tensor)
         capital_gamma_tensor = self.compute_capital_gamma_by_xi_tensor(
             value_derivatives, value_derivatives_tensor, probabilities, probabilities_tensor, conditionals,
             conditionals_tensor
         )
-        A_tensor = -ownership[None] * (capital_lamda_tensor - capital_gamma_tensor)
+        capital_delta_tensor = -ownership[None] * (capital_lamda_tensor - capital_gamma_tensor)
 
         # compute the product of the tensor and eta
-        A_tensor_times_eta = np.squeeze(A_tensor @ eta)
+        capital_delta_tensor_times_eta = np.squeeze(capital_delta_tensor @ eta)
 
         # compute derivatives of X1 and X2 with respect to prices
         X1_derivatives = self.compute_X1_derivatives('prices')
@@ -619,7 +618,7 @@ class Market(Container):
                 probabilities * utility_derivatives_tangent
             )
 
-            # compute the tangent of A with respect to the parameter
+            # compute the tangent of capital delta with respect to the parameter
             capital_lamda_tangent = self.compute_capital_lamda_by_parameter_tangent(
                 parameter, value_derivatives, value_derivatives_tangent
             )
@@ -627,10 +626,12 @@ class Market(Container):
                 parameter, value_derivatives, value_derivatives_tangent, probabilities, probabilities_tangent,
                 conditionals, conditionals_tangent
             )
-            A_tangent = -ownership * (capital_lamda_tangent - capital_gamma_tangent)
+            capital_delta_tangent = -ownership * (capital_lamda_tangent - capital_gamma_tangent)
 
             # extract the tangent of xi with respect to the parameter and compute the associated tangent of eta
-            eta_jacobian[:, [p]] = -A_inverse @ (A_tangent @ eta + A_tensor_times_eta.T @ xi_jacobian[:, [p]])
+            eta_jacobian[:, [p]] = -capital_delta_inverse @ (
+                capital_delta_tangent @ eta + capital_delta_tensor_times_eta.T @ xi_jacobian[:, [p]]
+            )
 
         # return the filled Jacobian
         return eta_jacobian, errors
