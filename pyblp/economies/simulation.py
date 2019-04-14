@@ -58,12 +58,13 @@ class Simulation(Economy):
     .. note::
 
        Traditional excluded BLP instruments for constant characteristics are constructed only if there is variation in
-       the number of products and firms per market.
+       :math:`J_t`, the number of products per market.
 
     .. note::
 
        These excluded instruments are constructed only for convenience. Especially for more complicated formulations,
-       instruments in simulated product data should be replaced with better instruments.
+       instruments in simulated product data should be replaced with better instruments. For example, instruments
+       constructed with :func:`build_differentiation_instruments` may be preferable.
 
     In both ``product_data`` and ``agent_data``, fields with multiple columns can be either matrices or can be broken up
     into multiple one-dimensional fields with column index suffixes that start at zero. For example, if there are two
@@ -353,45 +354,36 @@ class Simulation(Economy):
                     else:
                         categorical_mapping[name] = variable
 
-        # identify intercepts
-        demand_intercept = any(t == patsy.desc.INTERCEPT for t in product_formulations[0]._terms)
-        supply_intercept = any(t == patsy.desc.INTERCEPT for t in product_formulations[2]._terms)
-
         # identify numerical variables
-        demand_names = set(numerical_mapping) & product_formulations[0]._names
-        supply_names = set(numerical_mapping) & product_formulations[2]._names
-        if not demand_names:
+        X1_names = set(numerical_mapping) & product_formulations[0]._names
+        X3_names = set(numerical_mapping) & product_formulations[2]._names
+        if not X1_names:
             raise ValueError("The formulation for X1 must have at least one non-price numerical variable.")
-        if not supply_names:
+        if not X3_names:
             raise ValueError("The formulation for X3 must have at least one numerical variable.")
 
-        # identify numerical variables that are only on either the demand or supply side
-        only_demand_names = demand_names - supply_names
-        only_supply_names = supply_names - demand_names
-
-        # determine whether there is variation in the number of products and firms per market
-        J_set = set()
-        F_set = set()
-        for t in np.unique(market_ids):
-            J_set.add((market_ids == t).sum())
-            F_set.add(np.unique(firm_ids[market_ids.flat == t]).size)
-
-        # construct excluded instruments
+        # construct excluded BLP instruments
         instrument_data = {
             'market_ids': market_ids,
             'firm_ids': firm_ids,
             **numerical_mapping
         }
-        id_variation = len(J_set) > 1 and len(F_set) > 1
-        demand_blp_formula = ' + '.join(['1' if id_variation and demand_intercept else '0'] + sorted(demand_names))
-        supply_blp_formula = ' + '.join(['1' if id_variation and supply_intercept else '0'] + sorted(supply_names))
+        J_variation = len({(market_ids == t).sum() for t in np.unique(market_ids)}) > 1
+        demand_intercept = any(t == patsy.desc.INTERCEPT for t in product_formulations[0]._terms)
+        supply_intercept = any(t == patsy.desc.INTERCEPT for t in product_formulations[2]._terms)
+        demand_blp_formula = ' + '.join(['1' if J_variation and demand_intercept else '0'] + sorted(X1_names))
+        supply_blp_formula = ' + '.join(['1' if J_variation and supply_intercept else '0'] + sorted(X3_names))
         demand_instruments = build_blp_instruments(Formulation(demand_blp_formula), instrument_data)
         supply_instruments = build_blp_instruments(Formulation(supply_blp_formula), instrument_data)
-        if only_supply_names:
-            supply_formula = ' + '.join(['0'] + sorted(only_supply_names))
+
+        # add any supply or demand shifters
+        supply_shifter_names = X3_names - X1_names
+        demand_shifter_names = X1_names - X3_names
+        if supply_shifter_names:
+            supply_formula = ' + '.join(['0'] + sorted(supply_shifter_names))
             demand_instruments = np.c_[demand_instruments, build_matrix(Formulation(supply_formula), numerical_mapping)]
-        if only_demand_names:
-            demand_formula = ' + '.join(['0'] + sorted(only_demand_names))
+        if demand_shifter_names:
+            demand_formula = ' + '.join(['0'] + sorted(demand_shifter_names))
             supply_instruments = np.c_[supply_instruments, build_matrix(Formulation(demand_formula), numerical_mapping)]
 
         # structure product data fields as a mapping
