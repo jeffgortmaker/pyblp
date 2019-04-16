@@ -689,7 +689,7 @@ class ProblemEconomy(Economy):
             errors.append(exceptions.ObjectiveReversionError())
 
         # compute the gradient and replace any invalid elements with their last values
-        gradient = np.full_like(theta, np.nan, options.dtype)
+        gradient = np.full_like(progress.gradient, np.nan)
         if compute_gradient:
             with np.errstate(all='ignore'):
                 G_bar = compute_gmm_moments_jacobian_mean(jacobian_list, Z_list)
@@ -709,7 +709,7 @@ class ProblemEconomy(Economy):
                 assert error_behavior == 'punish'
                 objective = np.array(error_punishment)
                 if compute_gradient:
-                    gradient = np.zeros_like(theta)
+                    gradient = np.zeros_like(progress.gradient)
 
         # select the delta that will be used in the next objective evaluation
         if delta_behavior == 'last':
@@ -719,7 +719,7 @@ class ProblemEconomy(Economy):
             next_delta = progress.next_delta
 
         # compute the hessian with central finite differences
-        hessian = np.full((parameters.P, parameters.P), np.nan, options.dtype)
+        hessian = np.full_like(progress.hessian, np.nan)
         if compute_hessian:
             compute_progress = lambda x: self._compute_progress(
                 parameters, iv, W, error_behavior, error_punishment, delta_behavior, iteration, fp_type, costs_type,
