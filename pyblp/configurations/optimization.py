@@ -344,13 +344,17 @@ def knitro_optimizer(
                 cache = (values.copy(), objective_function(values))
             objective, gradient = cache[1]
 
+            # define a function that normalizes values so they can be digested by Knitro
+            normalize = lambda x: min(max(float(x), -sys.maxsize), sys.maxsize)
+
             # handle request codes
             if request_code == knitro.KTR_RC_EVALFC:
-                objective_store[:] = objective
+                objective_store[0] = normalize(objective)
                 return knitro.KTR_RC_BEGINEND
             if request_code == knitro.KTR_RC_EVALGA:
                 assert compute_gradient and gradient is not None
-                gradient_store[:] = gradient
+                for index, value in enumerate(gradient.flatten()):
+                    gradient_store[index] = normalize(value)
                 return knitro.KTR_RC_BEGINEND
             return knitro.KTR_RC_CALLBACK_ERR
 
