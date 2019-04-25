@@ -371,7 +371,7 @@ def large_nested_blp_simulation() -> SimulationFixture:
             [0, 2]
         ],
         integration=Integration('product', 4),
-        rho=0.05,
+        rho=0.1,
         xi_variance=0.00001,
         omega_variance=0.00001,
         correlation=0.9,
@@ -415,7 +415,8 @@ def simulated_problem(request: Any) -> SimulatedProblemFixture:
         'beta': np.where(simulation._parameters.alpha_index, simulation.beta if supply else np.nan, np.nan),
         'rho_bounds': (np.zeros_like(simulation.rho), np.minimum(0.9, 1.5 * simulation.rho)),
         'costs_type': simulation.costs_type,
-        'method': '1s'
+        'method': '1s',
+        'check_optimality': 'gradient'
     }
     problem_results = problem.solve(**solve_options)
     return simulation, simulation_results, problem, solve_options, problem_results

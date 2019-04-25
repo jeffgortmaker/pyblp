@@ -1,6 +1,7 @@
 """Primary tests."""
 
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+import warnings
 
 import linearmodels
 import numpy as np
@@ -110,7 +111,7 @@ def test_bootstrap(simulated_problem: SimulatedProblemFixture) -> None:
 @pytest.mark.usefixtures('simulated_problem')
 @pytest.mark.parametrize('solve_options_update', [
     pytest.param({'costs_bounds': (-1e10, 1e10)}, id="non-binding costs bounds"),
-    pytest.param({'check_optimality': 'gradient'}, id="no Hessian computation")
+    pytest.param({'check_optimality': 'both'}, id="Hessian computation")
 ])
 def test_trivial_changes(simulated_problem: SimulatedProblemFixture, solve_options_update: Dict) -> None:
     """Test that solving a problem with arguments that shouldn't give rise to meaningful differences doesn't give rise
@@ -126,9 +127,8 @@ def test_trivial_changes(simulated_problem: SimulatedProblemFixture, solve_optio
     # test that all arrays in the results are essentially identical
     for key, result in results.__dict__.items():
         if isinstance(result, np.ndarray) and result.dtype != np.object:
-            if solve_options_update.get('check_optimality', 'both') == 'gradient' and 'hessian' in key:
-                continue
-            np.testing.assert_allclose(result, getattr(updated_results, key), atol=1e-14, rtol=0, err_msg=key)
+            if 'hessian' not in key:
+                np.testing.assert_allclose(result, getattr(updated_results, key), atol=1e-14, rtol=0, err_msg=key)
 
 
 @pytest.mark.usefixtures('simulated_problem')
@@ -163,8 +163,6 @@ def test_parallel(simulated_problem: SimulatedProblemFixture) -> None:
     pytest.param(2, 0, None, id="2 demand-side FEs, default method"),
     pytest.param(2, 0, 'memory', id="2 demand-side FEs, memory"),
     pytest.param(2, 2, 'speed', id="2 demand- and 2 supply-side FEs, speed"),
-    pytest.param(3, 0, None, id="3 demand-side FEs"),
-    pytest.param(0, 3, None, id="3 supply-side FEs"),
     pytest.param(3, 3, None, id="3 demand- and 3 supply-side FEs, default method"),
     pytest.param(2, 1, None, id="2 demand- and 1 supply-side FEs, default method"),
     pytest.param(1, 2, Iteration('simple', {'atol': 1e-12}), id="1 demand- and 2 supply-side FEs, iteration")
@@ -684,8 +682,10 @@ def test_bounds(simulated_problem: SimulatedProblemFixture, method: str) -> None
             with np.errstate(invalid='ignore'):
                 binding_solve_options['gamma'] = np.clip(binding_solve_options['gamma'], *binding_gamma_bounds)
 
-        # solve the problem and test that the bounds are respected
-        binding_results = problem.solve(**binding_solve_options)
+        # solve the problem and test that the bounds are respected (ignore a warning about minimal gradient changes)
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', category=UserWarning)
+            binding_results = problem.solve(**binding_solve_options)
         assert_array_less = lambda a, b: np.testing.assert_array_less(a, b + 1e-14, verbose=True)
         if problem.K2 > 0:
             assert_array_less(binding_sigma_bounds[0], binding_results.sigma)
