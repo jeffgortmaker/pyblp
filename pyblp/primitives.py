@@ -33,12 +33,11 @@ class Products(object):
     ownership : `ndarray`
         Stacked :math:`J_t \times J_t` ownership matrices, :math:`O`, for each market :math:`t`.
     shares : `ndarray`
-        Market shares, :math:`s`.
+        Marketshares, :math:`s`.
     prices : `ndarray`
         Product prices, :math:`p`.
     ZD : `ndarray`
-        Full set of demand-side instruments, :math:`Z_D`: excluded demand-side instruments and :math:`X_1`, except for
-        :math:`X_1^p`.
+        Full set of demand-side instruments, :math:`Z_D`: excluded demand-side instruments and :math:`X_1^x`.
     ZS : `ndarray`
         Full set of supply-side instruments, :math:`Z_S`: excluded supply-side instruments and :math:`X_3`.
     X1 : `ndarray`

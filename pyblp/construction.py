@@ -162,13 +162,18 @@ def build_blp_instruments(formulation: Formulation, product_data: Mapping) -> Ar
     consists of sums over characteristics of non-rival goods, and :math:`Z^\textit{BLP,Rival}(X)` is a third matrix that
     consists of sums over rival goods. All three matrices have the same dimensions.
 
+    .. note::
+
+       To construct simpler, firm-agnostic instruments that are sums over characteristics of other goods, specify a
+       constant column of firm IDs and keep only the first half of the instrument columns.
+
     Let :math:`x_{jt}` be the vector of characteristics in :math:`X` for product :math:`j` in market :math:`t`, which is
     produced by firm :math:`f`. That is, :math:`j \in \mathscr{J}_{ft}`. Then,
 
     .. math::
 
-       Z_{jt}^\textit{BLP,Other}(X) = \sum_{r\in\mathscr{J}_{ft}\setminus\{j\}} x_{rt}, \\
-       Z_{jt}^\textit{BLP,Rival}(X) = \sum_{r\notin\mathscr{J}_{ft}} x_{rt}.
+       Z_{jt}^\textit{BLP,Other}(X) = \sum_{k \in \mathscr{J}_{ft} \setminus \{j\}} x_{kt}, \\
+       Z_{jt}^\textit{BLP,Rival}(X) = \sum_{k \notin \mathscr{J}_{ft}} x_{kt}.
 
     .. note::
 
@@ -251,32 +256,37 @@ def build_differentiation_instruments(
        To construct simpler, firm-agnostic instruments that are sums over functions of differences between all different
        goods, specify a constant column of firm IDs and keep only the first half of the instrument columns.
 
-    Let :math:`x_{jtk}` be characteristic :math:`k` in :math:`X` for product :math:`j` in market :math:`t`, which is
-    produced by firm :math:`f`. That is, :math:`j \in \mathscr{J}_{ft}`. Then in the "local" version of
+    Let :math:`x_{jt\ell}` be characteristic :math:`\ell` in :math:`X` for product :math:`j` in market :math:`t`, which
+    is produced by firm :math:`f`. That is, :math:`j \in \mathscr{J}_{ft}`. Then in the "local" version of
     :math:`Z^\textit{Diff}(X)`,
 
     .. math::
+       :label: local_instruments
 
-       Z_{jtk}^\textit{Diff,Other,Local}(X) = \sum_{r\in\mathscr{J}_{ft}\setminus\{j\}} 1(|d_{jrtk}| < \text{SD}_k), \\
-       Z_{jtk}^\textit{Diff,Rival,Local}(X) = \sum_{r\notin\mathscr{J}_{ft}} 1(|d_{jrtk}| < \text{SD}_k),
+       Z_{jt\ell}^\textit{Diff,Other,Local}(X) =
+       \sum_{k \in \mathscr{J}_{ft} \setminus \{j\}} 1(|d_{jkt\ell}| < \text{SD}_\ell), \\
+       Z_{jt\ell}^\textit{Diff,Rival,Local}(X) =
+       \sum_{k \notin \mathscr{J}_{ft}} 1(|d_{jkt\ell}| < \text{SD}_\ell),
 
-    where :math:`d_{jrtk} = x_{rtk} - x_{jtk}` is the difference between products :math:`j` and :math:`r` along
-    dimension :math:`k`, :math:`\text{SD}_k` is the standard deviation of these pairwise differences computed across all
-    markets, and :math:`1(|d_{jrtk}| < \text{SD}_k)` indicates that products :math:`j` and :math:`r` are close to each
-    other in terms of characteristic :math:`k`.
+    where :math:`d_{jkt\ell} = x_{kt\ell} - x_{jt\ell}` is the difference between products :math:`j` and :math:`k` in
+    terms of characteristic :math:`\ell`, :math:`\text{SD}_\ell` is the standard deviation of these pairwise differences
+    computed across all markets, and :math:`1(|d_{jkt\ell}| < \text{SD}_\ell)` indicates that products :math:`j` and
+    :math:`k` are close to each other in terms of characteristic :math:`\ell`.
 
     The intuition behind this "local" version is that demand for products is often most influenced by a small number of
     other goods that are very similar. For the "quadratic" version of :math:`Z^\textit{Diff}(X)`, which uses a more
     continuous measure of the distance between goods,
 
     .. math::
+       :label: quadratic_instruments
 
-       Z_{jtk}^\textit{Diff,Other,Quad}(X) = \sum_{r\in\mathscr{J}_{ft}\setminus\{j\}} d_{jrtk}^2, \\
-       Z_{jtk}^\textit{Diff,Rival,Quad}(X) = \sum_{r\notin\mathscr{J}_{ft}} d_{jrtk}^2.
+       Z_{jtk}^\textit{Diff,Other,Quad}(X) = \sum_{k \in \mathscr{J}_{ft} \setminus\{j\}} d_{jkt\ell}^2, \\
+       Z_{jtk}^\textit{Diff,Rival,Quad}(X) = \sum_{k \notin \mathscr{J}_{ft}} d_{jkt\ell}^2.
 
     With interaction terms, which reflect covariances between different characteristics, the summands for the "local"
-    versions are :math:`1(|d_{jrtk}| < \text{SD}_k) \times d_{jrt\ell}` for all characteristics :math:`\ell`, and the
-    summands for the "quadratic" versions are :math:`d_{jrtk} \times d_{jrt\ell}` for all :math:`\ell \geq k`.
+    versions are :math:`1(|d_{jkt\ell}| < \text{SD}_\ell) \times d_{jkt\ell'}` for all characteristics :math:`\ell'`,
+    and the summands for the "quadratic" versions are :math:`d_{jkt\ell} \times d_{jkt\ell'}` for all
+    :math:`\ell' \geq \ell`.
 
     .. note::
 
@@ -302,10 +312,11 @@ def build_differentiation_instruments(
     version : `str, optional`
         The version of differentiation instruments to construct:
 
-            - ``'local'`` (default) - Construct instruments that consider only the characteristics of "close" products
-              in each market.
+            - ``'local'`` (default) - Construct the instruments in :eq:`local_instruments` that consider only the
+              characteristics of "close" products in each market.
 
-            - ``'quadratic'`` - Construct more continuous instruments that consider all products in each market.
+            - ``'quadratic'`` - Construct the more continuous instruments in :eq:`quadratic_instruments` that consider
+              all products in each market.
 
     interact : `bool, optional`
         Whether to include interaction terms between different product characteristics, which can help capture
@@ -402,9 +413,9 @@ def build_integration(integration: Integration, dimensions: int) -> RecArray:
     This function can be used to build custom ``agent_data`` for :class:`Problem` initialization. Specifically, this
     function affords more flexibility than passing an :class:`Integration` configuration directly to :class:`Problem`.
     For example, if agents have unobserved tastes over only a subset of nonlinear product characteristics (i.e., if
-    there are zeros on the diagonal of ``sigma`` in :meth:`Problem.solve`), this function can be used to build agent
-    data with fewer columns of integration nodes than the number of unobserved product characteristics, :math:`K_2`.
-    This function can also be used to construct nodes that are transformed into demographic variables.
+    ``sigma`` in :meth:`Problem.solve` has columns of zeros), this function can be used to build agent data with fewer
+    columns of integration nodes than the number of unobserved product characteristics, :math:`K_2`. This function can
+    also be used to construct nodes that can be transformed into demographic variables.
 
     To build nodes and weights for multiple markets, this function can be called multiple times, once for each market.
 

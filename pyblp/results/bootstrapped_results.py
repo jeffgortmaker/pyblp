@@ -14,22 +14,21 @@ from ..utilities.basics import Array, Error, TableFormatter, format_seconds, gen
 
 
 class BootstrappedResults(Results):
-    r"""Bootstrapped results of a solved BLP problem.
+    r"""Bootstrapped results of a solved problem.
 
-    This class has all of the same methods as :class:`ProblemResults`, for except :meth:`ProblemResults.bootstrap` and
-    :meth:`ProblemResults.compute_optimal_instruments`. The only difference is that methods return arrays with an extra
-    first dimension, along which bootstrapped results are stacked (these stacked results can be used to construct, for
-    example, confidence intervals for post-estimation outputs). Similarly, arrays of data (except for firm IDs and
+    This class has all of the same methods as :class:`ProblemResults` except for :meth:`ProblemResults.bootstrap` and
+    :meth:`ProblemResults.compute_optimal_instruments`. The only other difference is that methods return arrays with an
+    extra first dimension along which bootstrapped results are stacked (these stacked results can be used to construct,
+    for example, confidence intervals for post-estimation outputs). Similarly, arrays of data (except for firm IDs and
     ownership matrices) passed as arguments to methods should have an extra first dimension of size
     :attr:`BootstrappedResults.draws`.
 
     Attributes
     ----------
     problem_results : `ProblemResults`
-        :class:`ProblemResults` that was used to compute these optimal instrument results.
+        :class:`ProblemResults` that was used to compute these bootstrapped results.
     bootstrapped_sigma : `ndarray`
-        Bootstrapped Cholesky decomposition of the covariance matrix that measures agents' random taste distribution,
-        :math:`\Sigma`.
+        Bootstrapped Cholesky decomposition of the covariance matrix for unobserved taste heterogeneity, :math:`\Sigma`.
     bootstrapped_pi : `ndarray`
         Bootstrapped parameters that measures how agent tastes vary with demographics, :math:`\Pi`.
     bootstrapped_rho : `ndarray`
@@ -39,10 +38,10 @@ class BootstrappedResults(Results):
     bootstrapped_gamma : `ndarray`
         Bootstrapped supply-side linear parameters, :math:`\gamma`.
     bootstrapped_prices : `ndarray`
-        Bootstrapped prices, :math:`p`. If a supply-side was not estimated, these are unchanged prices. Otherwise, they
+        Bootstrapped prices, :math:`p`. If a supply side was not estimated, these are unchanged prices. Otherwise, they
         are equilibrium prices implied by each draw.
     bootstrapped_shares : `ndarray`
-        Bootstrapped shares, :math:`p`, implied by each draw.
+        Bootstrapped marketshares, :math:`s`, implied by each draw.
     bootstrapped_delta : `ndarray`
         Bootstrapped mean utility, :math:`\delta`, implied by each draw.
     bootstrapped_costs : `ndarray`
@@ -52,8 +51,8 @@ class BootstrappedResults(Results):
     draws : `int`
         Number of bootstrap draws.
     fp_converged : `ndarray`
-        Flags for convergence of the iteration routine used to equilibrium prices in each market. Rows are in the same
-        order as :attr:`Problem.unique_market_ids` and column indices correspond to draws.
+        Flags for convergence of the iteration routine used to compute equilibrium prices in each market. Rows are in
+        the same order as :attr:`Problem.unique_market_ids` and column indices correspond to draws.
     fp_iterations : `ndarray`
         Number of major iterations completed by the iteration routine used to compute equilibrium prices in each market
         for each draw. Rows are in the same order as :attr:`Problem.unique_market_ids` and column indices correspond to

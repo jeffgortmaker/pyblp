@@ -7,8 +7,7 @@ NEVO_PRODUCTS_LOCATION : `str`
     the same pre-computed excluded instruments used in the original paper.
 NEVO_AGENTS_LOCATION : `str`
     Location of a CSV file containing the fake cereal agent data. Included in the file are Monte Carlo weights and
-    draws along with demographics, which collectively are used by :ref:`references:Nevo (2000)` to solve the fake cereal
-    problem.
+    draws along with demographics, which are used by :ref:`references:Nevo (2000)` to solve the fake cereal problem.
 BLP_PRODUCTS_LOCATION : `str`
     Location of a CSV file containing the automobile product data extracted by
     :ref:`references:Andrews, Gentzkow, and Shapiro (2017)` from the original GAUSS code for

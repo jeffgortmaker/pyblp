@@ -26,38 +26,37 @@ class OptimalInstrumentResults(StringRepresentation):
     problem_results : `ProblemResults`
         :class:`ProblemResults` that was used to compute these optimal instrument results.
     demand_instruments: `ndarray`
-        Estimated optimal demand-side instruments for :math:`\theta`, :math:`\mathscr{Z}_D`.
+        Estimated optimal demand-side instruments for :math:`\theta`, :math:`Z_D^\textit{Opt}`.
     supply_instruments: `ndarray`
-        Estimated optimal supply-side instruments for :math:`\theta`, :math:`\mathscr{Z}_S`.
+        Estimated optimal supply-side instruments for :math:`\theta`, :math:`Z_S^\textit{Opt}`.
     supply_shifter_formulation : `Formulation or None`
         :class:`Formulation` configuration for supply shifters that will by default be included in the full set of
         optimal demand-side instruments. This is only constructed if a supply side was estimated, and it can be changed
-        in :meth:`OptimalInstrumentResults.to_problem`. By default, it is the formulation for :math:`X_3` from
-        :class:`Problem` except for any variables in the formulation for :math:`X_1`.
+        in :meth:`OptimalInstrumentResults.to_problem`. By default, this is the formulation for :math:`X_3` from
+        :class:`Problem` excluding any variables in the formulation for :math:`X_1`.
     demand_shifter_formulation : `Formulation or None`
-         :class:`Formulation` configuration for demand shifters that will by default be included in the full set of
+        :class:`Formulation` configuration for demand shifters that will by default be included in the full set of
         optimal supply-side instruments. This is only constructed if a supply side was estimated, and it can be changed
-        in :meth:`OptimalInstrumentResults.to_problem`. By default, it is the formulation for :math:`X_1` from
-        :class:`Problem` except for any variables in the formulation for :math:`X_1` and any endogenous variables,
-        :math:`X_1^p`.
+        in :meth:`OptimalInstrumentResults.to_problem`. By default, this is the formulation for :math:`X_1^x` from
+        :class:`Problem` excluding any variables in the formulation for :math:`X_3`.
     inverse_covariance_matrix: `ndarray`
         Inverse of the sample covariance matrix of the estimated :math:`\xi` and :math:`\omega`, which is used to
         normalize the expected Jacobians. If a supply side was not estimated, this is simply the sample estimate of
         :math:`1 / \text{Var}(\xi)`.
     expected_xi_by_theta_jacobian: `ndarray`
-        Estimated :math:`\operatorname{\mathbb{E}}[\partial\xi / \partial\theta \mid Z]`.
+        Estimated :math:`E[\frac{\partial\xi}{\partial\theta} \mid Z]`.
     expected_omega_by_theta_jacobian: `ndarray`
-        Estimated :math:`\operatorname{\mathbb{E}}[\partial\omega / \partial\theta \mid Z]`.
+        Estimated :math:`E[\frac{\partial\omega}{\partial\theta} \mid Z]`.
     expected_prices : `ndarray`
-        Vector of expected prices conditional on all exogenous variables, :math:`\operatorname{\mathbb{E}}[p \mid Z]`,
-        which may have been specified in :meth:`ProblemResults.compute_optimal_instruments`.
+        Vector of expected prices conditional on all exogenous variables, :math:`E[p \mid Z]`, which may have been
+        specified in :meth:`ProblemResults.compute_optimal_instruments`.
     computation_time : `float`
         Number of seconds it took to compute optimal excluded instruments.
     draws : `int`
         Number of draws used to approximate the integral over the error term density.
     fp_converged : `ndarray`
-        Flags for convergence of the iteration routine used to equilibrium prices in each market. Rows are in the same
-        order as :attr:`Problem.unique_market_ids` and column indices correspond to draws.
+        Flags for convergence of the iteration routine used to compute equilibrium prices in each market. Rows are in
+        the same order as :attr:`Problem.unique_market_ids` and column indices correspond to draws.
     fp_iterations : `ndarray`
         Number of major iterations completed by the iteration routine used to compute equilibrium prices in each market
         for each error term draw. Rows are in the same order as :attr:`Problem.unique_market_ids` and column indices
@@ -156,19 +155,19 @@ class OptimalInstrumentResults(StringRepresentation):
     def to_problem(
             self, supply_shifter_formulation: Optional[Formulation] = None,
             demand_shifter_formulation: Optional[Formulation] = None) -> 'OptimalInstrumentProblem':
-        r"""Re-create the problem with estimated optimal instruments.
+        r"""Re-create the problem with estimated feasible optimal instruments.
 
         The re-created problem will be exactly the same, except that instruments will be replaced with estimated
-        optimal instruments.
+        feasible optimal instruments.
 
         .. note::
 
-           The shifter arguments and most of the explanation here is only relevant if a supply side was estimated.
+           Most of the explanation here is only important if a supply side was estimated.
 
-        Specifically, the optimal excluded demand-side instruments consist of the following:
+        The optimal excluded demand-side instruments consist of the following:
 
-            1. Estimated optimal demand-side instruments for :math:`\theta`, :math:`\mathscr{Z}_D`, excluding columns of
-               instruments for any exogenous linear parameters that were not concentrated out, but rather included in
+            1. Estimated optimal demand-side instruments for :math:`\theta`, :math:`Z_D^\textit{Opt}`, excluding columns
+               of instruments for any exogenous linear parameters that were not concentrated out, but rather included in
                :math:`\theta` by :meth:`Problem.solve`.
 
             2. Optimal instruments for any linear demand-side parameters on endogenous product characteristics,
@@ -176,32 +175,32 @@ class OptimalInstrumentResults(StringRepresentation):
                instruments are simply an integral of the endogenous product characteristics, :math:`X_1^p`, over the
                joint density of :math:`\xi` and :math:`\omega`. It is only possible to concentrate out :math:`\alpha`
                when there isn't a supply side, so the approximation of these optimal instruments is simply :math:`X_1^p`
-               evaluated at the constant vector of expected prices, :math:`\operatorname{\mathbb{E}}[p \mid Z]`,
-               specified in :meth:`ProblemResults.compute_optimal_instruments`.
+               evaluated at the constant vector of expected prices, :math:`E[p \mid Z]`, specified in
+               :meth:`ProblemResults.compute_optimal_instruments`.
 
             3. If a supply side was estimated, any supply shifters, which are by default formulated by
-               :attr:`OptimalInstrumentResults.supply_shifter_formulation`: characteristics in :math:`X_3` not in
+               :attr:`OptimalInstrumentResults.supply_shifter_formulation`: all characteristics in :math:`X_3` not in
                :math:`X_1`.
 
         Similarly, if a supply side was estimated, the optimal excluded supply-side instruments consist of the
         following:
 
-            1. Estimated optimal supply-side instruments for :math:`\theta`, :math:`\mathscr{Z}_S`, excluding columns of
-               instruments for any exogenous linear parameters that were not concentrated out, but rather included in
+            1. Estimated optimal supply-side instruments for :math:`\theta`, :math:`Z_S^\textit{Opt}`, excluding columns
+               of instruments for any exogenous linear parameters that were not concentrated out, but rather included in
                :math:`\theta` by :meth:`Problem.solve`.
 
             2. If a supply side was estimated, any demand shifters, which are by default formulated by
-               :attr:`OptimalInstrumentResults.demand_shifter_formulation`: all characteristics in :math:`X_1` not in
-               :math:`X_3`, except for endogenous characteristics, :math:`X_1^p`.
+               :attr:`OptimalInstrumentResults.demand_shifter_formulation`: all characteristics in :math:`X_1^x` not in
+               :math:`X_3`.
 
-        As usual, the excluded demand-side instruments will be supplemented with all characteristics in :math:`X_1`
-        except for :math:`X_1^p`, and the excluded supply-side instruments will be supplemented with all characteristics
-        in :math:`X_3`. The same fixed effects configured in :class:`Problem` will be absorbed.
+        As usual, the excluded demand-side instruments will be supplemented with :math:`X_1^x` and the excluded
+        supply-side instruments will be supplemented with :math:`X_3`. The same fixed effects configured in
+        :class:`Problem` will be absorbed.
 
         .. warning::
 
            If a supply side was estimated, the addition of supply- and demand-shifters may create collinearity issues.
-           Make sure to check that shifters and exogenous product characteristics are not collinear.
+           Make sure to check that shifters and other product characteristics are not collinear.
 
         Parameters
         ----------

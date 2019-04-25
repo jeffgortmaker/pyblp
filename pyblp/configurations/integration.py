@@ -14,11 +14,6 @@ from ..utilities.basics import Array, StringRepresentation
 class Integration(StringRepresentation):
     r"""Configuration for building integration nodes and weights.
 
-    For more information pertaining to the supported quadrature rules, refer to
-    :ref:`references:Heiss and Winschel (2008)` and :ref:`references:Judd and Skrainka (2011)`. Sparse grids are
-    constructed in analogously to the Matlab function `nwspgr <http://www.sparse-grids.de/>`_ created by Florian Heiss
-    and Viktor Winschel.
-
     Parameters
     ----------
     specification : `str`
@@ -37,6 +32,14 @@ class Integration(StringRepresentation):
 
             - ``'nested_grid'`` - Generate a sparse grid of nodes and weights according to the level ``size`` nested
               Gauss-Hermite quadrature rule. Weights can be negative.
+
+        Best practice for low dimensions is probably to use ``'product'`` to a relatively high degree of polynomial
+        accuracy. In higher dimensions, ``'grid'`` appears to scale the best. For more information, see
+        :ref:`references:Judd and Skrainka (2011)` and :ref:`references:Conlon and Gortmaker (2019)`.
+
+        Sparse grids are constructed in analogously to the Matlab function `nwspgr <http://www.sparse-grids.de/>`_
+        created by Florian Heiss and Viktor Winschel. For more information, see
+        :ref:`references:Heiss and Winschel (2008)`.
 
     size : `int`
         The number of draws if ``specification`` is ``'monte_carlo'``, and the level of the quadrature rule otherwise.

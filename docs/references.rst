@@ -13,6 +13,12 @@ Conlon, Christopher T., and Jeff Gortmaker (2019). `Best practices for different
 Other References
 ----------------
 
+Amemiya (1977)
+~~~~~~~~~~~~~~
+
+Amemiya, Takeshi (1977). `A note on a heteroscedastic model <https://ideas.repec.org/a/eee/econom/v6y1977i3p365-370.html>`_. *Journal of Econometrics, 6* (3), 365-370.
+
+
 Andrews, Gentzkow, and Shapiro (2017)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -89,6 +95,12 @@ Grigolon and Verboven (2014)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Grigolon, Laura, and Frank Verboven (2014). `Nested logit or random coefficients logit? A comparison of alternative discrete choice models of product differentiation <https://ideas.repec.org/a/tpr/restat/v96y2014i5p916-935.html>`_. *Review of Economics and Statistics, 96* (5), 916-935.
+
+
+Guimarães and Portugal (2010)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Guimarães, Paulo, and Pedro Portugal (2010). `A simple feasible procedure to fit models with high-dimensional fixed effects <https://ideas.repec.org/a/tsj/stataj/v10y2010i4p628-649.html>`_. *Stata Journal, 10* (4), 628-649.
 
 
 Heiss and Winschel (2008)

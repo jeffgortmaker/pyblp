@@ -49,11 +49,11 @@ class ProblemEconomy(Economy):
 
         The problem is solved in one or more GMM steps. During each step, any parameters in :math:`\hat{\theta}` are
         optimized to minimize the GMM objective value. If there are no parameters in :math:`\hat{\theta}` (for example,
-        in the Logit model there are no nonlinear parameters and all linear parameters can be concentrated out), the
+        in the logit model there are no nonlinear parameters and all linear parameters can be concentrated out), the
         objective is evaluated once during the step.
 
         If there are nonlinear parameters, the mean utility, :math:`\delta(\hat{\theta})` is computed market-by-market
-        with fixed point iteration. Otherwise, it is computed analytically according to the solution of the Logit model.
+        with fixed point iteration. Otherwise, it is computed analytically according to the solution of the logit model.
         If a supply side is to be estimated, marginal costs, :math:`c(\hat{\theta})`, are also computed
         market-by-market. Linear parameters are then estimated, which are used to recover structural error terms, which
         in turn are used to form the objective value. By default, the objective gradient is computed as well.
@@ -61,20 +61,19 @@ class ProblemEconomy(Economy):
         .. note::
 
            This method supports :func:`parallel` processing. If multiprocessing is used, market-by-market computation of
-           :math:`\delta(\hat{\theta})` and, if :math:`X_3` was formulated by ``product_formulations`` in
-           :class:`Problem`, of :math:`\tilde{c}(\hat{\theta})`, along with associated Jacobians, will be distributed
-           among the processes.
+           :math:`\delta(\hat{\theta})` (and :math:`\tilde{c}(\hat{\theta})` if a supply side is estimated), along with
+           associated Jacobians, will be distributed among the processes.
 
         Parameters
         ----------
         sigma : `array-like, optional`
-            Configuration for which elements in the Cholesky decomposition of the covariance matrix that measures
-            agents' random taste distribution, :math:`\Sigma`, are fixed at zero and starting values for the other
-            elements, which, if not fixed by ``sigma_bounds``, are in the vector of unknown elements, :math:`\theta`.
+            Configuration for which elements in the Cholesky root of the covariance matrix for unobserved taste
+            heterogeneity, :math:`\Sigma`, are fixed at zero and starting values for the other elements, which, if not
+            fixed by ``sigma_bounds``, are in the vector of unknown elements, :math:`\theta`.
 
             Rows and columns correspond to columns in :math:`X_2`, which is formulated according
             ``product_formulations`` in :class:`Problem`. If :math:`X_2` was not formulated, this should not be
-            specified, since the Logit model will be estimated.
+            specified, since the logit model will be estimated.
 
             Values below the diagonal are ignored. Zeros are assumed to be zero throughout estimation and nonzeros are,
             if not fixed by ``sigma_bounds``, starting values for unknown elements in :math:`\theta`. If any columns are
@@ -97,11 +96,10 @@ class ProblemEconomy(Economy):
             :math:`\rho`, are fixed at zero and starting values for the other elements, which, if not fixed by
             ``rho_bounds``, are in the vector of unknown elements, :math:`\theta`.
 
-            If there is only one element, it corresponds to all groups defined by the ``nesting_ids`` field of
-            ``product_data`` in :class:`Problem`. If there is more than one element, there must be as many elements as
-            :math:`H`, the number of distinct nesting groups, and elements correspond to group IDs in the sorted order
-            given by :attr:`Problem.unique_nesting_ids`. If nesting IDs were not specified, this should not be specified
-            either.
+            If this is a scalar, it corresponds to all groups defined by the ``nesting_ids`` field of ``product_data``
+            in :class:`Problem`. If this is a vector, it must have :math:`H` elements, one for each nesting group.
+            Elements correspond to group IDs in the sorted order of :attr:`Problem.unique_nesting_ids`. If nesting IDs
+            were not specified, this should not be specified either.
 
             Zeros are assumed to be zero throughout estimation and nonzeros are, if not fixed by ``rho_bounds``,
             starting values for unknown elements in :math:`\theta`.
@@ -167,7 +165,7 @@ class ProblemEconomy(Economy):
             counterpart in ``rho``. If ``optimization`` does not support bounds, these will be ignored.
 
             By default, if bounds are supported, all elements are bounded from below by ``0``, which corresponds to the
-            simple Logit model. Conditional on an initial estimate of :math:`\mu`, upper bounds are chosen to reduce the
+            simple logit model. Conditional on an initial estimate of :math:`\mu`, upper bounds are chosen to reduce the
             need for overflow safety precautions, and are less than ``1`` because larger values are inconsistent with
             utility maximization.
 
@@ -207,21 +205,11 @@ class ProblemEconomy(Economy):
         delta : `array-like, optional`
             Initial values for the mean utility, :math:`\delta`. If there are any nonlinear parameters, these are the
             values at which the fixed point iteration routine will start during the first objective evaluation. By
-            default, the solution to the sample Logit model is used:
-
-            .. math:: \delta_{jt} = \log s_{jt} - \log s_{0t}.
-
-            If there is nesting, the solution to the nested Logit model under the initial ``rho`` is used instead:
-
-            .. math:: \delta_{jt} = \log s_{jt} - \log s_{0t} - \rho_{h(j)}\log\frac{s_{jt}}{s_{h(j)t}}
-
-            where
-
-            .. math:: s_{h(j)t} = \sum_{k\in\mathscr{J}_{h(j)t}} s_{kt}.
-
+            default, the solution to the logit model in :eq:`logit_delta` is used. If :math:`\rho` is specified, the
+            solution to the nested logit model in :eq:`nested_logit_delta` under the initial ``rho`` is used instead.
         W : `array-like, optional`
-            Starting values for the weighting matrix, :math:`W`. By default, the 2SLS weighting matrix,
-            :math:`(Z'Z)^{-1}`, is used.
+            Starting values for the weighting matrix, :math:`W`. By default, the 2SLS weighting matrix in :eq:`2sls_W`
+            is used.
         method : `str, optional`
             The estimation routine that will be used. The following methods are supported:
 
@@ -236,16 +224,18 @@ class ProblemEconomy(Economy):
         optimization : `Optimization, optional`
             :class:`Optimization` configuration for how to solve the optimization problem in each GMM step, which is
             only used if there are unfixed nonlinear parameters over which to optimize. By default,
-            ``Optimization('slsqp', {'ftol': 1e-12})`` is used. Routines that do not support bounds will ignore
-            ``sigma_bounds`` and ``pi_bounds``. Choosing a routine that does not use analytic gradients will slow down
-            estimation.
+            ``Optimization('l-bfgs-b')`` is used. If available, ``Optimization('knitro')`` may be preferable. Generally,
+            it is recommended to consider a number of different optimization routines and starting values, verifying
+            that :math:`\hat{\theta}` satisfies both the first and second order conditions. Routines that do not support
+            bounds will ignore ``sigma_bounds`` and ``pi_bounds``. Choosing a routine that  does not use analytic
+            gradients will often down estimation.
         check_optimality : `str, optional`
-            How to check for optimality after the optimization routine finishes. The following configurations are
-            supported:
+            How to check for optimality (first and second order conditions) after the optimization routine finishes.
+            The following configurations are supported:
 
                 - ``'gradient'`` - Analytically compute the gradient after optimization finishes, but do not compute the
                   Hessian. Since Jacobians needed to compute standard errors will already be computed, gradient
-                  computation will not take a long time. This option may be useful it Hessian computation takes a long
+                  computation will not take a long time. This option may be useful if Hessian computation takes a long
                   time when, for example, there are a large number of parameters.
 
                 - ``'both'`` (default) - Also compute the Hessian with central finite differences after optimization
@@ -254,16 +244,16 @@ class ProblemEconomy(Economy):
                   machine precision.
 
         error_behavior : `str, optional`
-            How to handle any errors. For example, it is common to encounter overflow when computing
+            How to handle any errors. For example, there can sometimes be overflow or underflow when computing
             :math:`\delta(\hat{\theta})` at a large :math:`\hat{\theta}`. The following behaviors are supported:
 
                 - ``'revert'`` (default) - Revert problematic :math:`\delta(\hat{\theta})` elements to their last
-                  computed values and use reverted values to compute :math:`\partial\xi / \partial\theta`, and, if the
-                  supply side is considered, to compute both :math:`\tilde{c}(\hat{\theta})` and
-                  :math:`\partial\omega / \partial\theta` as well. If there are problematic elements in
-                  :math:`\partial\xi / \partial\theta`, :math:`\tilde{c}(\hat{\theta})`, or
-                  :math:`\partial\omega / \partial\theta`, revert these to their last computed values as well. If there
-                  are problematic elements in the first objective evaluation, revert values in
+                  computed values and use reverted values to compute :math:`\frac{\partial\xi}{\partial\theta}`, and, if
+                  there is a supply side, to compute both :math:`\tilde{c}(\hat{\theta})` and
+                  :math:`\frac{\partial\omega}{\partial\theta}` as well. If there are problematic elements in
+                  :math:`\frac{\partial\xi}{\partial\theta}`, :math:`\tilde{c}(\hat{\theta})`, or
+                  :math:`\frac{\partial\omega}{\partial\theta}`, revert these to their last computed values as well. If
+                  there are problematic elements after the first objective evaluation, revert values in
                   :math:`\delta(\hat{\theta})` to their starting values; in :math:`\tilde{c}(\hat{\theta})`, to prices;
                   and in Jacobians, to zeros. In the unlikely event that the gradient or its objective have problematic
                   elements, revert them as well, and if this happens during the first objective evaluation, revert the
@@ -291,49 +281,45 @@ class ProblemEconomy(Economy):
         iteration : `Iteration, optional`
             :class:`Iteration` configuration for how to solve the fixed point problem used to compute
             :math:`\delta(\hat{\theta})` in each market. This configuration is only relevant if there are nonlinear
-            parameters, since :math:`\delta` can be estimated analytically in the Logit model. By default,
-            ``Iteration('squarem', {'atol': 1e-14})`` is used. Newton-based routines that compute the Jacobian can often
-            be faster (especially when there are nesting parameters), but the non-Jacobian SQUAREM routine is used by
-            default because it speed is often comparable and in practice it can be slightly more stable. If speed is a
-            concern, trying ``'lm'`` is recommended.
+            parameters, since :math:`\delta` can be estimated analytically in the logit model. By default,
+            ``Iteration('squarem', {'atol': 1e-14})`` is used. Newton-based routines such as ``Iteration('lm'`)`` that
+            compute the Jacobian can often be faster (especially when there are nesting parameters), but the
+            non-Jacobian SQUAREM routine is used by default because it speed is often comparable and in practice it can
+            be slightly more stable.
         fp_type : `str, optional`
             Configuration for the type of contraction mapping used to compute :math:`\delta(\hat{\theta})`. The
-            following types of contraction mappings are supported:
+            following types are supported:
 
-                - ``'safe_linear'`` (default) - The standard linear contraction mapping,
+                - ``'safe_linear'`` (default) - The standard linear contraction mapping in :eq:`contraction` (or
+                  :eq:`nested_contraction` when there is nesting) with safeguards against numerical overflow.
+                  Specifically, :math:`\max_j V_{jti}` (or :math:`\max_j V_{jti} / (1 - \rho_{h(j)}) when there is
+                  nesting) is subtracted from :math:`V_{jti}` and the logit expression for choice probabilities in
+                  :eq:`probabilities` (or :eq:`nested_probabilities`) is re-scaled accordingly. Such re-scaling is known
+                  as the log-sum-exp trick.
 
-                  .. math:: \delta_{jt} \leftarrow \delta_{jt} + \log s_{jt} - \log s_{jt}(\delta, \hat{\theta}),
+                - ``'linear'`` - The standard linear contraction mapping without safeguards against numerical overflow.
+                  This option may be preferable to ``'safe_linear'`` if utilities are reasonably small and unlikely to
+                  create overflow problems.
 
-                  with safeguards against numerical overflow. Specifically, during choice probability computation, the
-                  maximum utility of each agent is subtracted away before utilities are exponentiated, and the logit
-                  expression is re-scaled accordingly.
+                - ``'nonlinear'`` - Iteration over :math:`\exp(\delta_{jt})` instead of :math:`\delta_{jt}`. This can be
+                  faster than ``'linear'`` because it involves fewer logarithms. Also, following
+                  :ref:`references:Brunner, Heiss, Romahn, and Weiser (2017)`, the :math:`\exp(\delta_{jt})` term can be
+                  cancelled out of the expression because it also appears in the numerator of :eq:`probabilities` in the
+                  definition of :math:`s_{jt}(\delta, \hat{\theta})`. This second trick only works when there are no
+                  nesting parameters.
 
-                - ``'linear'`` - Standard linear contraction mapping, but without safeguards against numerical overflow.
-                  This option may be preferable to ``'safe_linear'`` if utilities are reasonably small.
+                - ``'safe_nonlinear'`` - Exponentiated version with minimal safeguards against numerical overflow.
+                  Specifically, :math:`\max_j \mu_{jti}` is subtracted from :math:`\mu_{jti}`. This helps with stability
+                  but is less helpful than subtracting from the full :math:`V_{jti}`, so this version is less stable
+                  than ``'safe_linear'``.
 
-                - ``'safe_nonlinear'`` - Exponentiated version,
-
-                  .. math:: \exp(\delta_{jt}) \leftarrow \exp(\delta_{jt})s_{jt} / s_{jt}(\delta, \hat{\theta}),
-
-                  which can be faster because fewer logarithms need to be calculated. Additionally, when there are no
-                  nesting parameters, as in :ref:`references:Brunner, Heiss, Romahn, and Weiser (2017)`,
-                  :math:`\exp(\delta)` is cancelled out of the numerator in the expression for
-                  :math:`s(\delta, \hat{\theta})`, which slightly reduces the computational burden. This formulation can
-                  also help mitigate problems stemming from any negative integration weights; however, it is generally
-                  less stable than the linear version. For example, it is only possible to subtract the maximum of
-                  :math:`\mu` from each agent before utilities are exponentiated, not the combined :math:`\delta + \mu`.
-
-                - ``'nonlinear'`` - Exponentiated version, but without safeguards against numerical overflow.
-
-            This option is only relevant if there are nonlinear parameters, since :math:`\delta` can be estimated
-            analytically in the Logit model.
-
-            Also note that when there are nesting parameters, the contraction is dampened by :math:`1 - \rho` as in
-            :ref:`references:Grigolon and Verboven (2014)`. Although necessary, this dampening implies a slower rate of
-            convergence, especially for large values of :math:`\rho`.
+            This option is only relevant if ``sigma`` or ``pi`` are specified because :math:`\delta` can be estimated
+            analytically in the logit model with :eq:`logit_delta` and in the nested logit model with
+            :eq:`nested_logit_delta`.
 
         costs_type : `str, optional`
-            Marginal cost specification. The following specifications are supported:
+            Specification of the marginal cost function :math:`\tilde{c} = f(c)` in :eq:`costs`. The following
+            specifications are supported:
 
                 - ``'linear'`` (default) - Linear specification: :math:`\tilde{c} = c`.
 
@@ -354,30 +340,31 @@ class ProblemEconomy(Economy):
             Both ``None`` and ``numpy.nan`` are converted to ``-numpy.inf`` in ``lb`` and to ``numpy.inf`` in ``ub``.
 
         center_moments : `bool, optional`
-            Whether to center the sample moments before using them to update weighting matrices. By default, sample
-            moments are centered. This has no effect if ``W_type`` is ``'unadjusted'``.
+            Whether to center each column of the sample moments :math:`g` before updating the weighting matrix
+            :math:`W`. By default, sample moments are centered. This has no effect if ``W_type`` is ``'unadjusted'``.
         W_type : `str, optional`
             How to update the weighting matrix. This has no effect if ``method`` is ``'1s'``. Often, ``se_type`` should
             be the same. The following types are supported:
 
-                - ``'robust'`` (default) - Heteroscedasticity robust weighting matrices.
+                - ``'robust'`` (default) - Heteroscedasticity robust weighting matrix defined in :eq:`W` and
+                  :eq:`robust_S`.
 
-                - ``'unadjusted'`` - Homoskedastic weighting matrices. Errors are always centered when computing this
-                  type of weighting matrix, so ``center_moments`` has no effect.
+                - ``'clustered'`` - Clustered weighting matrix defined in :eq:`W` and :eq:`clustered_S`. Clusters must
+                  be defined by the ``clustering_ids`` field of ``product_data`` in :class:`Problem`.
 
-                - ``'clustered'`` - Clustered weighting matrices, which account for arbitrary within-group correlation.
-                  Clusters must be defined by the ``clustering_ids`` field of ``product_data`` in :class:`Problem`.
+                - ``'unadjusted'`` - Homoskedastic weighting matrix defined in :eq:`W` and :eq:`unadjusted_S`.
 
         se_type : `str, optional`
-            How to compute standard errors. Often, ``W_type`` should be the same. The following types are supported:
+            How to compute standard errors. Typically, ``W_type`` should be the same. The following types are supported:
 
-                - ``'robust'`` (default) - Heteroscedasticity robust standard errors.
+                - ``'robust'`` (default) - Heteroscedasticity robust standard errors defined in :eq:`covariances` and
+                  :eq:`robust_S`.
 
-                - ``'unadjusted'`` - Homoskedastic standard errors. Unadjusted standard errors are computed under the
-                  assumption that weighting matrices are optimal.
-
-                - ``'clustered'`` - Clustered standard errors, which account for arbitrary within-group correlation.
+                - ``'clustered'`` - Clustered standard errors defined in :eq:`covariances` and :eq:`clustered_S`.
                   Clusters must be defined by the ``clustering_ids`` field of ``product_data`` in :class:`Problem`.
+
+                  - ``'unadjusted'`` - Homoskedastic standard errors defined in :eq:`unadjusted_covariances`, which are
+                    computed under the assumption that the weighting matrix is optimal.
 
         Returns
         -------
@@ -400,7 +387,7 @@ class ProblemEconomy(Economy):
 
         # configure or validate configurations
         if optimization is None:
-            optimization = Optimization('slsqp', {'ftol': 1e-12})
+            optimization = Optimization('l-bfgs-b')
         if iteration is None:
             iteration = Iteration('squarem', {'atol': 1e-14})
         if not isinstance(optimization, Optimization):
@@ -693,7 +680,7 @@ class ProblemEconomy(Economy):
         if compute_gradient:
             with np.errstate(all='ignore'):
                 G_bar = compute_gmm_moments_jacobian_mean(jacobian_list, Z_list)
-                gradient = self.N**2 * 2 * (G_bar.T @ W @ g_bar)
+                gradient = 2 * self.N**2 * (G_bar.T @ W @ g_bar)
             bad_gradient_index = ~np.isfinite(gradient)
             if np.any(bad_gradient_index):
                 gradient[bad_gradient_index] = progress.gradient[bad_gradient_index]
@@ -836,20 +823,22 @@ class ProblemEconomy(Economy):
         return tilde_costs, omega_jacobian, clipped_costs, errors
 
     def _compute_logit_delta(self, rho: Array) -> Array:
-        """Compute the delta that solves the simple Logit (or nested Logit) model."""
-        delta = np.log(self.products.shares)
+        """Compute the delta that solves the simple logit (or nested logit) model."""
+        log_shares = np.log(self.products.shares)
+        delta = log_shares.copy()
         for t in self.unique_market_ids:
             shares_t = self.products.shares[self._product_market_indices[t]]
-            outside_share_t = 1 - shares_t.sum()
-            delta[self._product_market_indices[t]] -= np.log(outside_share_t)
+            log_outside_share_t = np.log(1 - shares_t.sum())
+            delta[self._product_market_indices[t]] -= log_outside_share_t
             if self.H > 0:
+                log_shares_t = log_shares[self._product_market_indices[t]]
                 groups_t = Groups(self.products.nesting_ids[self._product_market_indices[t]])
-                group_shares_t = shares_t / groups_t.expand(groups_t.sum(shares_t))
+                log_group_shares_t = np.log(groups_t.expand(groups_t.sum(shares_t)))
                 if rho.size == 1:
                     rho_t = np.full_like(shares_t, float(rho))
                 else:
                     rho_t = groups_t.expand(rho[np.searchsorted(self.unique_nesting_ids, groups_t.unique)])
-                delta[self._product_market_indices[t]] -= rho_t * np.log(group_shares_t)
+                delta[self._product_market_indices[t]] -= rho_t * (log_shares_t - log_group_shares_t)
         return delta
 
     @staticmethod
@@ -864,15 +853,9 @@ class ProblemEconomy(Economy):
 
 
 class Problem(ProblemEconomy):
-    r"""A BLP problem.
+    r"""A BLP-type problem.
 
     This class is initialized with relevant data and solved with :meth:`Problem.solve`.
-
-    In both ``product_data`` and ``agent_data``, fields with multiple columns can be either matrices or can be broken up
-    into multiple one-dimensional fields with column index suffixes that start at zero. For example, if there are three
-    columns of excluded demand-side instruments, the ``demand_instruments`` field in ``product_data``, which in this
-    case should be a matrix with three columns, can be replaced by three one-dimensional fields:
-    ``demand_instruments0``, ``demand_instruments1``, and ``demand_instruments2``.
 
     Parameters
     ----------
@@ -881,29 +864,28 @@ class Problem(ProblemEconomy):
         of linear product characteristics, :math:`X_1`, for the matrix of nonlinear product characteristics,
         :math:`X_2`, and for the matrix of cost characteristics, :math:`X_3`, respectively. If the formulation for
         :math:`X_3` is not specified or is ``None``, a supply side will not be estimated. Similarly, if the formulation
-        for :math:`X_2` is not specified or is ``None``, the Logit model will be estimated.
+        for :math:`X_2` is not specified or is ``None``, the logit (or nested logit) model will be estimated.
 
         Variable names should correspond to fields in ``product_data``. The ``shares`` variable should not be included
         in any of the formulations and ``prices`` should be included in the formulation for :math:`X_1` or :math:`X_2`
         (or both). The ``absorb`` argument of :class:`Formulation` can be used to absorb fixed effects into :math:`X_1`
-        and :math:`X_3`, but not :math:`X_2`. Generally speaking, all exogenous characteristics in :math:`X_2` should
-        also be included in :math:`X_1`. The exception is characteristics that are collinear with fixed effects in
-        :math:`X_1`.
+        and :math:`X_3`, but not :math:`X_2`. Characteristics in :math:`X_2` should generally be included in
+        :math:`X_1`. The typical exception is characteristics that are collinear with fixed effects that have been
+        absorbed into :math:`X_1`.
 
-        Characteristics in :math:`X_1` that do not involve ``prices`` will be combined with the below specified excluded
-        demand-side instruments to create the full set of demand-side instruments, :math:`Z_D`. Any fixed effects
-        absorbed into :math:`X_1` will also be absorbed into :math:`Z_D`. Similarly, characteristics in :math:`X_3` will
-        be combined with the excluded supply-side instruments to create :math:`Z_S`, and any fixed effects absorbed into
-        :math:`X_3` will also be absorbed into :math:`Z_S`.
+        Characteristics in :math:`X_1` that do not involve ``prices``, :math:`X_1^x`, will be combined with excluded
+        demand-side instruments (specified below) to create the full set of demand-side instruments, :math:`Z_D`. Any
+        fixed effects absorbed into :math:`X_1` will also be absorbed into :math:`Z_D`. Similarly, characteristics in
+        :math:`X_3` will be combined with the excluded supply-side instruments to create :math:`Z_S`, and any fixed
+        effects absorbed into :math:`X_3` will also be absorbed into :math:`Z_S`.
 
         .. warning::
 
            Characteristics that involve prices, :math:`p`, should always be formulated with the ``prices`` variable. If
-           another name is used, :class:`Problem` will not understand that the characteristic is endogenous, so it may
-           be erroneously included in :math:`Z_D`, and derivatives computed with respect to prices (which are computed
-           during supply-side estimation and post-estimation routines) will likely be wrong. For example, to include a
-           :math:`p^2` characteristic, include ``I(prices**2)`` in a formula instead of manually including a
-           ``prices_squared`` variable in ``product_data`` and a formula.
+           another name is used, :class:`Problem` will not understand that the characteristic is endogenous, so it will
+           be erroneously included in :math:`Z_D`, and derivatives computed with respect to prices will likely be wrong.
+           For example, to include a :math:`p^2` characteristic, include ``I(prices**2)`` in a formula instead of
+           manually including a ``prices_squared`` variable in ``product_data`` and a formula.
 
     product_data : `structured array-like`
         Each row corresponds to a product. Markets can have differing numbers of products. The following fields are
@@ -911,49 +893,61 @@ class Problem(ProblemEconomy):
 
             - **market_ids** : (`object`) - IDs that associate products with markets.
 
-            - **shares** : (`numeric`) - Market shares, :math:`s`, which should be between zero and one, exclusive.
-              Outside shares should also be between zero and one. That is, shares in each market should sum to a value
-              that is less than one.
+            - **shares** : (`numeric`) - Marketshares, :math:`s`, which should be between zero and one, exclusive.
+              Outside shares should also be between zero and one. Shares in each market should sum to less than one.
 
             - **prices** : (`numeric`) - Product prices, :math:`p`.
 
-        If a formulation for :math:`X_3` is specified in ``product_formulations``, the following fields are also
-        required, since they will be used to estimate the supply side of the problem:
+        If a formulation for :math:`X_3` is specified in ``product_formulations``, firm IDs are also required, since
+        they will be used to estimate the supply side of the problem:
 
             - **firm_ids** : (`object, optional`) - IDs that associate products with firms.
 
         Excluded instruments should generally be specified with the following fields:
 
-            - **demand_instruments** : (`numeric`) - Excluded demand-side instruments, which together with the
-              formulated exogenous linear product characteristics (:math:`X_1` except for characteristics involving
-              ``prices``, :math:`X_1^p`), constitute the full set of demand-side instruments, :math:`Z_D`.
+            - **demand_instruments** : (`numeric`) - Excluded demand-side instruments, which, together with the
+              formulated exogenous linear product characteristics, :math:`X_1^x`, constitute the full set of demand-side
+              instruments, :math:`Z_D`.
 
-            - **supply_instruments** : (`numeric, optional`) - Excluded supply-side instruments, which together with the
-              formulated cost characteristics, :math:`X_3`, constitute the full set of supply-side instruments,
+            - **supply_instruments** : (`numeric, optional`) - Excluded supply-side instruments, which, together with
+              the formulated cost characteristics, :math:`X_3`, constitute the full set of supply-side instruments,
               :math:`Z_S`.
+
+        The recommendation in :ref:`references:Conlon and Gortmaker (2019)` is to start with differentiation instruments
+        of :ref:`references:Gandhi and Houde (2017)`, which can be built with :func:`build_differentiation_instruments`,
+        and then compute feasible optimal instruments with :func:`ProblemResults.compute_optimal_instruments` in the
+        second stage.
 
         If ``firm_ids`` are specified, custom ownership matrices can be specified as well:
 
             - **ownership** : (`numeric, optional`) - Custom stacked :math:`J_t \times J_t` ownership matrices,
               :math:`O`, for each market :math:`t`, which can be built with :func:`build_ownership`. By default,
-              standard ownership matrices are built only when they are needed. If specified, there should be as many
-              columns as there are products in the market with the most products. Rightmost columns in markets with
-              fewer products will be ignored.
+              standard ownership matrices are built only when they are needed to reduce memory usage. If specified,
+              there should be as many columns as there are products in the market with the most products. Rightmost
+              columns in markets with fewer products will be ignored.
 
-        To estimate a nested Logit or random coefficients nested Logit (RCNL) model, nesting groups must be specified:
+        .. note::
+
+           Fields that can have multiple columns (``demand_instruments``, ``supply_instruments``, and ``ownership``) can
+           either be matrices or can be broken up into multiple one-dimensional fields with column index suffixes that
+           start at zero. For example, if there are three columns of excluded demand-side instruments, a
+           ``demand_instruments`` field with three columns can be replaced by three one-dimensional fields:
+           ``demand_instruments0``, ``demand_instruments1``, and ``demand_instruments2``.
+
+        To estimate a nested logit or random coefficients nested logit (RCNL) model, nesting groups must be specified:
 
             - **nesting_ids** (`object, optional`) - IDs that associate products with nesting groups. When these IDs are
-              specified, ``rho`` in :meth:`Problem.solve`, the vector of parameters that measure within nesting group
-              correlation, must be specified as well.
+              specified, ``rho`` must be specified in :meth:`Problem.solve` as well.
 
-        Finally, clustering groups can be specified to account for arbitrary within-group correlation while computing
-        standard errors and weighting matrices:
+        Finally, clustering groups can be specified to account for within-group correlation while updating the weighting
+        matrix and estimating standard errors:
 
-            - **clustering_ids** (`object, optional`) - Cluster group IDs, which will be used when estimating standard
-              errors and updating weighting matrices if ``covariance_type`` in :meth:`Problem.solve` is ``'clustered'``.
+            - **clustering_ids** (`object, optional`) - Cluster group IDs, which will be used if ``W_type`` or
+              ``se_type`` in :meth:`Problem.solve` is ``'clustered'``.
 
         Along with ``market_ids``, ``firm_ids``, ``nesting_ids``, ``clustering_ids``, and ``prices``, the names of any
-        additional fields can be used as variables in ``product_formulations``.
+        additional fields can typically be used as variables in ``product_formulations``. However, there are a few
+        variable names such as ``'X1'``, which are reserved for use by :class:`Products`.
 
     agent_formulation : `Formulation, optional`
         :class:`Formulation` configuration for the matrix of observed agent characteristics called demographics,
@@ -967,20 +961,30 @@ class Problem(ProblemEconomy):
         formulated in ``product_formulations``. If agent data are specified, market IDs are required:
 
             - **market_ids** : (`object`) - IDs that associate agents with markets. The set of distinct IDs should be
-              the same as the set of IDs in ``product_data``. If ``integration`` is specified, there must be at least as
-              many rows in each market as the number of nodes and weights that are built for each market.
+              the same as the set in ``product_data``. If ``integration`` is specified, there must be at least as many
+              rows in each market as the number of nodes and weights that are built for the market.
 
-        If ``integration`` is not specified, the following fields are required (the convenience function
-        :func:`build_integration` can be useful when constructing custom nodes and weights for integration over agent
-        choice probabilities):
+        If ``integration`` is not specified, the following fields are required:
 
-            - **weights** : (`numeric, optional`) - Integration weights, :math:`w`.
+            - **weights** : (`numeric, optional`) - Integration weights, :math:`w`, for integration over agent choice
+              probabilities.
 
             - **nodes** : (`numeric, optional`) - Unobserved agent characteristics called integration nodes,
               :math:`\nu`. If there are more than :math:`K_2` columns (the number of nonlinear product characteristics),
               only the first :math:`K_2` will be retained.
 
-        Along with ``market_ids``, the names of any additional fields can be used as variables in ``agent_formulation``.
+        The convenience function :func:`build_integration` can be useful when constructing custom nodes and weights.
+
+        .. note::
+
+           If ``nodes`` has multiple columns, it can be specified as a matrix or broken up into multiple one-dimensional
+           fields with column index suffixes that start at zero. For example, if there are three columns of nodes, a
+           ``nodes`` field with three columns can be replaced by three one-dimensional fields: ``nodes0``, ``nodes1``,
+           and ``nodes2``.
+
+        Along with ``market_ids``, the names of any additional fields can be typically be used as variables in
+        ``agent_formulation``. The exception is the name ``'demographics'``, which is reserved for use by
+        :class:`Agents`.
 
     integration : `Integration, optional`
         :class:`Integration` configuration for how to build nodes and weights for integration over agent choice
@@ -1000,22 +1004,24 @@ class Problem(ProblemEconomy):
         :class:`Formulation` configuration for :math:`d`.
     products : `Products`
         Product data structured as :class:`Products`, which consists of data taken from ``product_data`` along with
-        matrices build according to :attr:`Problem.product_formulations`.
+        matrices built according to :attr:`Problem.product_formulations`.
     agents : `Agents`
         Agent data structured as :class:`Agents`, which consists of data taken from ``agent_data`` or built by
-        ``integration`` along with any demographics formulated by ``agent_formulation``.
+        ``integration`` along with any demographics built according to :attr:`Problem.agent_formulation`.
     unique_market_ids : `ndarray`
         Unique market IDs in product and agent data.
+    unique_firm_ids : `ndarray`
+        Unique firm IDs in product data.
     unique_nesting_ids : `ndarray`
-        Unique nesting IDs in product data.
-    N : `int`
-        Number of products across all markets, :math:`N`.
+        Unique nesting group IDs in product data.
     T : `int`
         Number of markets, :math:`T`.
+    N : `int`
+        Number of products across all markets, :math:`N`.
     F : `int`
-        Number of firms, :math:`F`.
+        Number of firms across all markets, :math:`F`.
     I : `int`
-        Number of agents across all markets, :math:`\sum_t I_t`.
+        Number of agents across all markets, :math:`I`.
     K1 : `int`
         Number of linear product characteristics, :math:`K_1`.
     K2 : `int`
@@ -1026,14 +1032,14 @@ class Problem(ProblemEconomy):
         Number of demographic variables, :math:`D`.
     MD : `int`
         Number of demand-side instruments, :math:`M_D`, which is the number of excluded demand-side instruments plus
-        :math:`K_1 - K_1^p`.
+        the number of exogenous linear product characteristics, :math:`K_1^x`.
     MS : `int`
         Number of supply-side instruments, :math:`M_S`, which is the number of excluded supply-side instruments plus
-        :math:`K_3`.
+        the number of cost product characteristics, :math:`K_3`.
     ED : `int`
-        Number of absorbed demand-side fixed effects, :math:`E_D`.
+        Number of absorbed dimensions of demand-side fixed effects, :math:`E_D`.
     ES : `int`
-        Number of absorbed supply-side fixed effects, :math:`E_S`.
+        Number of absorbed dimensions of supply-side fixed effects, :math:`E_S`.
     H : `int`
         Number of nesting groups, :math:`H`.
 

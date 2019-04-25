@@ -87,12 +87,11 @@ class ProblemResults(Results):
     parameter_covariances : `ndarray`
         Estimated covariance matrix of the stacked parameters, from which standard errors are extracted.
     theta : `ndarray`
-        Estimated unfixed parameters, :math:`\hat{\theta}` in the following order: :math:`\hat{\Sigma}`,
+        Estimated unfixed parameters, :math:`\hat{\theta}`, in the following order: :math:`\hat{\Sigma}`,
         :math:`\hat{\Pi}`, :math:`\hat{\rho}`, non-concentrated out elements from :math:`\hat{\beta}`, and
         non-concentrated out elements from :math:`\hat{\gamma}`.
     sigma : `ndarray`
-        Estimated Cholesky decomposition of the covariance matrix that measures agents' random taste distribution,
-        :math:`\hat{\Sigma}`.
+        Estimated Cholesky root of the covariance matrix for unobserved taste heterogeneity, :math:`\hat{\Sigma}`.
     pi : `ndarray`
         Estimated parameters that measures how agent tastes vary with demographics, :math:`\hat{\Pi}`.
     rho : `ndarray`
@@ -124,28 +123,28 @@ class ProblemResults(Results):
     delta : `ndarray`
         Estimated mean utility, :math:`\delta(\hat{\theta})`.
     tilde_costs : `ndarray`
-        Estimated transformed marginal costs, :math:`\tilde{c}(\hat{\theta})`. Transformed marginal costs are simply
-        :math:`\tilde{c} = c`, marginal costs, under a linear cost specification, and are :math:`\tilde{c} = \log c`
-        under a log-linear specification. If ``costs_bounds`` were specified in :meth:`Problem.solve`, :math:`c` may
-        have been clipped.
+        Estimated transformed marginal costs, :math:`\tilde{c}(\hat{\theta})` from :eq:`costs`. If ``costs_bounds`` were
+        specified in :meth:`Problem.solve`, :math:`c` may have been clipped.
     clipped_costs : `ndarray`
         Vector of booleans indicating whether the associated marginal costs were clipped. All elements will be ``False``
         if ``costs_bounds`` in :meth:`Problem.solve` was not specified.
     xi : `ndarray`
         Estimated unobserved demand-side product characteristics, :math:`\xi(\hat{\theta})`, or equivalently, the
-        demand-side structural error term.
+        demand-side structural error term. When there are demand-side fixed effects, this is
+        :math:`\Delta\xi(\hat{\theta})` in :eq:`fe`. That is, fixed effects are not included.
     omega : `ndarray`
         Estimated unobserved supply-side product characteristics, :math:`\omega(\hat{\theta})`, or equivalently, the
-        supply-side structural error term.
+        supply-side structural error term. When there are supply-side fixed effects, this is
+        :math:`\Delta\omega(\hat{\theta})` in :eq:`fe`. That is, fixed effects are not included.
     objective : `float`
-        GMM objective value.
+        GMM objective value, :math:`q(\hat{\theta})`, defined in :eq:`objective`.
     xi_by_theta_jacobian : `ndarray`
-        Estimated :math:`\partial\xi / \partial\theta = \partial\delta / \partial\theta`.
+        Estimated :math:`\frac{\partial\xi}{\partial\theta} = \frac{\partial\delta}{\partial\theta}`.
     omega_by_theta_jacobian : `ndarray`
-        Estimated :math:`\partial\omega / \partial\theta = \partial\tilde{c} / \partial\theta`.
+        Estimated :math:`\frac{\partial\omega}{\partial\theta} = \frac{\partial\tilde{c}}{\partial\theta}`.
     gradient : `ndarray`
-        Estimated gradient of the GMM objective with respect to :math:`\theta`, which is computed after the optimization
-        routine finishes even if the routine was configured to not use analytic gradients.
+        Gradient of the GMM objective, :math:`\nabla q(\hat{\theta})`, defined in :eq:`gradient`. This is computed after
+        the optimization routine finishes even if the routine was configured to not use analytic gradients.
     sigma_gradient : `ndarray`
         Estimated gradient of the GMM objective with respect to :math:`\Sigma` elements in :math:`\theta`.
     pi_gradient : `ndarray`
@@ -159,14 +158,14 @@ class ProblemResults(Results):
     gradient_norm : `ndarray`
         Infinity norm of :attr:`ProblemResults.gradient`.
     hessian : `ndarray`
-        Estimated Hessian of the GMM objective with respect to :math:`\theta`. By default, this is computed with finite
-        central differences after the optimization routine finishes.
+        Estimated Hessian of the GMM objective. By default, this is computed with finite central differences after the
+        optimization routine finishes.
     hessian_eigenvalues : `ndarray`
         Eigenvalues of :attr:`ProblemResults.hessian`.
     W : `ndarray`
         Weighting matrix, :math:`W`, used to compute these results.
     updated_W : `ndarray`
-        Updated weighting matrix.
+        Weighting matrix updated according to :eq:`W`.
 
     Examples
     --------
@@ -480,34 +479,32 @@ class ProblemResults(Results):
         construct, for example, confidence intervals for post-estimation outputs.
 
         For each bootstrap draw, parameters are drawn from the estimated multivariate normal distribution of all
-        parameters defined by :attr:`ProblemResults.parameters` and :attr:`ProblemResults.parameter_covariances`. Note
-        that any bounds configured during the optimization routine will be used to bound parameter draws. These
-        parameters are used to compute the implied mean utility, :math:`\delta`, and shares, :math:`s`. If a supply side
-        was estimated, the implied marginal costs, :math:`c`, and prices, :math:`p`, are computed as well. Specifically,
-        if a supply side was estimated, equilibrium prices and shares are computed by iterating over the
-        :math:`\zeta`-markup equation from :ref:`references:Morrow and Skerlos (2011)`.
+        parameters defined by :attr:`ProblemResults.parameters` and :attr:`ProblemResults.parameter_covariances`. Any
+        bounds configured in :meth:`Problem.solve` will also bound parameter draws. Each parameter draw is used to
+        compute the implied mean utility, :math:`\delta`, and shares, :math:`s`. If a supply side was estimated, the
+        implied marginal costs, :math:`c`, and prices, :math:`p`, are computed as well by iterating over the
+        :math:`\zeta`-markup contraction in :eq:`zeta_contraction`.
 
         .. note::
 
-           By default, the bootstrapping procedure may use a lot of memory. This is because it stores in memory all
-           bootstrapped results (for all ``draws``) at the same time. To reduce the memory footprint of the procedure,
-           call this method in a loop with ``draws`` set to ``1``. In each iteration of the loop, compute the desired
-           post-estimation output with the proper method of the returned :class:`BootstrappedResults` class and store
-           these outputs.
+           By default, parametric bootstrapping may use a lot of memory. This is because all bootstrapped results (for
+           all ``draws``) are stored in memory at the same time. Memory usage can be reduced by calling this method in a
+           loop with ``draws = 1``. In each iteration of the loop, compute the desired post-estimation output with the
+           proper method of the returned :class:`BootstrappedResults` class and store these outputs.
 
         Parameters
         ----------
         draws : `int, optional`
-            The number of draws that will be taken from the joint distribution of the parameters. The default is
+            The number of draws that will be taken from the joint distribution of the parameters. The default value is
             ``1000``.
         seed : `int, optional`
             Passed to :class:`numpy.random.RandomState` to seed the random number generator before any draws are taken.
             By default, a seed is not passed to the random number generator.
         iteration : `Iteration, optional`
             :class:`Iteration` configuration used to compute bootstrapped prices by iterating over the
-            :math:`\zeta`-markup equation from :ref:`references:Morrow and Skerlos (2011)`. By default, if a supply side
-            was estimated, this is ``Iteration('simple', {'atol': 1e-12})``. Analytic Jacobians are not supported for
-            this contraction mapping and this configuration is not used if a supply side was not estimated.
+            :math:`\zeta`-markup equation in :eq:`zeta_contraction`. By default, if a supply side was estimated, this
+            is ``Iteration('simple', {'atol': 1e-12})``. Analytic Jacobians are not supported for solving this system.
+            This configuration is not used if a supply side was not estimated.
 
         Returns
         -------
@@ -537,7 +534,7 @@ class ProblemResults(Results):
         elif not isinstance(iteration, Iteration):
             raise TypeError("iteration must be None or an iteration instance.")
         elif iteration._compute_jacobian:
-            raise ValueError("Analytic Jacobians are not supported for this contraction mapping.")
+            raise ValueError("Analytic Jacobians are not supported for solving this system.")
 
         # draw from the asymptotic distribution implied by the estimated parameters
         state = np.random.RandomState(seed)
@@ -656,72 +653,86 @@ class ProblemResults(Results):
         )
 
     def compute_optimal_instruments(
-            self, method: str = 'normal', draws: int = 100, seed: Optional[int] = None,
+            self, method: str = 'approximate', draws: int = 1, seed: Optional[int] = None,
             expected_prices: Optional[Any] = None, iteration: Optional[Iteration] = None) -> 'OptimalInstrumentResults':
-        r"""Estimate optimal or efficient instruments, :math:`\mathscr{Z}_D` and :math:`\mathscr{Z}_S`.
+        r"""Estimate feasible optimal or efficient instruments, :math:`Z_D^\textit{Opt}` and :math:`Z_S^\textit{Opt}`.
 
-        Optimal instruments have been shown, for example, by :ref:`references:Reynaert and Verboven (2014)`, to reduce
-        bias, improve efficiency, and enhance stability of BLP estimates.
+        Optimal instruments have been shown, for example, by :ref:`references:Reynaert and Verboven (2014)` and
+        :ref:`references:Conlon and Gortmaker (2019)`, to reduce bias, improve efficiency, and enhance stability of BLP
+        estimates.
 
-        In the spirit of :ref:`references:Chamberlain (1987)`, optimal instruments for :math:`\theta` are
+        Optimal instruments in the spirit of :ref:`references:Amemiya (1977)` or :ref:`references:Chamberlain (1987)`
+        are defined by
 
         .. math::
+           :label: optimal_instruments
 
            \begin{bmatrix}
-               \mathscr{Z}_D \\
-               \mathscr{Z}_S
-           \end{bmatrix}_{jt}
-           = \text{Var}(\xi, \omega)^{-1}\operatorname{\mathbb{E}}\left[
+               Z_{D,jt}^\textit{Opt} \\
+               Z_{S,jt}^\textit{Opt}
+           \end{bmatrix}
+           = \text{Var}(\xi, \omega)^{-1}E\left[
            \begin{matrix}
                \frac{\partial\xi_{jt}}{\partial\theta} \\
                \frac{\partial\omega_{jt}}{\partial\theta}
            \end{matrix}
            \mathrel{\Bigg|} Z \right],
 
-        The expectation is taken by integrating over the joint density of :math:`\xi` and :math:`\omega`. For each error
-        term realization, if not already estimated, equilibrium prices are computed via iteration over the
-        :math:`\zeta`-markup equation from :ref:`references:Morrow and Skerlos (2011)`. Associated shares and
-        :math:`\delta` are then computed before each Jacobian is evaluated.
+        in which :math:`Z` are all exogenous variables.
 
-        The expected Jacobians are estimated with the average over all computed Jacobian realizations. The normalizing
-        matrix :math:`\text{Var}(\xi, \omega)^{-1}` is estimated with the sample covariance matrix of the error terms.
+        Feasible optimal instruments are estimated by evaluating this expression at an estimated :math:`\hat{\theta}`.
+        The expectation is taken by approximating an integral over the joint density of :math:`\xi` and :math:`\omega`.
+        For each error term realization, if not already estimated, equilibrium prices and shares are computed by
+        iterating over the :math:`\zeta`-markup contraction in :eq:`zeta_contraction`.
+
+        The expected Jacobians are estimated with the average over all computed Jacobian realizations. The
+        :math:`2 \times 2` normalizing matrix :math:`\text{Var}(\xi, \omega)` is estimated with the sample covariance
+        matrix of the error terms.
 
         Optimal instruments for linear parameters not included in :math:`\theta` are simple product characteristics, so
-        they are not computed here but are rather included in the set of instruments by
+        they are not computed here but are rather included in the final set of instruments by
         :meth:`OptimalInstrumentResults.to_problem`.
+
+        .. note::
+
+           When both a supply and demand side are estimated, there are usually collinear rows in
+           :eq:`optimal_instruments` because of overlapping product characteristics in :math:`X_1` and :math:`X_3`. The
+           expression can be corrected by multiplying it with a conformable matrix of ones and zeros that remove the
+           collinearity problem. The question of which rows to exclude is addressed in
+           :meth:`OptimalInstrumentResults.to_problem`.
 
         Parameters
         ----------
         method : `str, optional`
-            The method by which the integral over the joint density of :math:`\xi` and :math:`\omega` is computed. The
-            following methods are supported:
+            The method by which the integral over the joint density of :math:`\xi` and :math:`\omega` is approximated.
+            The following methods are supported:
 
-                - ``'normal'`` (default) - Draw from the normal approximation to the joint distribution of the error
-                  terms and take the average over the computed Jacobians (``draws`` determines the number of draws).
+                - ``'approximate'`` (default) - Evaluate the Jacobians at the expected value of the error terms: zero
+                  (``draws`` will be ignored).
+
+                - ``'normal'`` - Draw from the normal approximation to the joint distribution of the error terms and
+                  take the average over the computed Jacobians (``draws`` determines the number of draws).
 
                 - ``'empirical'`` - Draw with replacement from the empirical joint distribution of the error terms and
                   take the average over the computed Jacobians (``draws`` determines the number of draws).
 
-                - ``'approximate'`` - Evaluate the Jacobians at the expected value of the error terms: zero (``draws``
-                  will be ignored).
-
         draws : `int, optional`
             The number of draws that will be taken from the joint distribution of the error terms. This is ignored if
-            ``method`` is ``'approximate'``. The default is ``100``.
+            ``method`` is ``'approximate'``. Because the default ``method`` is ``'approximate'``, the default number of
+            draws is ``1``, even though it will be ignored. For ``'normal'`` or empirical, larger numbers such as
+            ``100`` or ``1000`` are recommended.
         seed : `int, optional`
             Passed to :class:`numpy.random.RandomState` to seed the random number generator before any draws are taken.
             By default, a seed is not passed to the random number generator.
         expected_prices : `array-like, optional`
-            Vector of expected prices conditional on all exogenous variables,
-            :math:`\operatorname{\mathbb{E}}[p \mid Z]`. By default, if a supply side was estimated, ``iteration`` is
-            used. If only a demand side was estimated, this is by default estimated with the fitted values from a
-            reduced form regression of endogenous prices onto :math:`Z_D`: all exogenous variables including excluded
-            instruments.
+            Vector of expected prices conditional on all exogenous variables, :math:`E[p \mid Z]`. By default, if a
+            supply side was estimated, ``iteration`` is used. If only a demand side was estimated, this is by default
+            estimated with the fitted values from a reduced form regression of endogenous prices onto :math:`Z_D`.
         iteration : `Iteration, optional`
             :class:`Iteration` configuration used to estimate expected prices by iterating over the :math:`\zeta`-markup
-            equation from :ref:`references:Morrow and Skerlos (2011)`. By default, if a supply side was estimated, this
-            is ``Iteration('simple', {'atol': 1e-12})``. Analytic Jacobians are not supported for this contraction
-            mapping and this configuration is not used if ``expected_prices`` is specified.
+            contraction in :eq:`zeta_contraction`. By default, if a supply side was estimated, this is
+            ``Iteration('simple', {'atol': 1e-12})``. Analytic Jacobians are not supported for solving this system.
+            This configuration is not used if ``expected_prices`` is specified.
 
         Returns
         -------
@@ -778,6 +789,8 @@ class ProblemResults(Results):
                 iteration = Iteration('simple', {'atol': 1e-12})
             elif not isinstance(iteration, Iteration):
                 raise TypeError("iteration must be None or an Iteration instance.")
+            elif iteration._compute_jacobian:
+                raise ValueError("Analytic Jacobians are not supported for solving this system.")
         else:
             prices = self.problem.products.prices
             if self.problem._absorb_demand_ids is not None:

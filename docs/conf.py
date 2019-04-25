@@ -2,8 +2,9 @@
 
 import ast
 import copy
-import os
+import datetime
 import json
+import os
 from pathlib import Path
 import re
 import shutil
@@ -29,7 +30,7 @@ exclude_patterns = ['_build', '_downloads', 'notebooks', 'templates', '**.ipynb_
 language = 'en'
 project = 'pyblp'
 author = 'Jeff Gortmaker'
-copyright = f'2018, {author}'
+copyright = f'{datetime.datetime.now().year}, {author}'
 release = version = pyblp.__version__
 
 # configure build information
@@ -66,7 +67,15 @@ extlinks = {
     'rtd': (f'{rtd_url}/%s', None),
     'pdf': (f'{pdf_url}/%s', None)
 }
+mathjax_config = {
+    'HTML-CSS': {
+        'matchFontHeight': False,
+        'fonts': ['Latin-Modern', 'TeX']
+    }
+}
+math_numfig = True
 math_number_all = True
+numfig_secnum_depth = 0
 autosummary_generate = True
 numpydoc_show_class_members = False
 autosectionlabel_prefix_document = True

@@ -22,8 +22,8 @@ class Economy(Container, StringRepresentation):
     unique_market_ids: Array
     unique_firm_ids: Array
     unique_nesting_ids: Array
-    N: int
     T: int
+    N: int
     F: int
     I: int
     K1: int
@@ -95,8 +95,8 @@ class Economy(Container, StringRepresentation):
 
         # associate dimensions and formulations with names
         dimension_mapping = collections.OrderedDict([
-            ("N", self.N),
             ("T", self.T),
+            ("N", self.N),
             ("F", self.F),
             ("I", self.I),
             ("K1", self.K1),

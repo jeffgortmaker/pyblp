@@ -50,14 +50,14 @@ class Formulation(StringRepresentation):
     multiplies, ``/`` divides, and ``**`` exponentiates.
 
     Internally, mathematical operations are parsed and evaluated by the `SymPy <https://www.sympy.org/en/index.html>`_
-    package, which is also used to symbolically differentiate terms when their derivatives are required.
+    package, which is also used to symbolically differentiate terms when derivatives are needed.
 
     Parameters
     ----------
     formula : `str`
-        R-style formula used to design a matrix. Variable names will be validated when this formulation along with
-        data are passed to a function that uses them. By default, an intercept is included, which can be removed with
-        ``0`` or ``-1``. If ``absorb`` is specified, intercepts are ignored.
+        R-style formula used to design a matrix. Variable names will be validated when this formulation and data are
+        passed to a function that uses them. By default, an intercept is included, which can be removed with ``0`` or
+        ``-1``. If ``absorb`` is specified, intercepts are ignored.
     absorb : `str, optional`
         R-style formula used to design a matrix of categorical variables representing fixed effects, which will be
         absorbed into the matrix designed by ``formula``. Fixed effect absorption is only supported for some matrices.
@@ -76,11 +76,12 @@ class Formulation(StringRepresentation):
               :math:`A` matrix, which is a dense matrix with dimensions equal to the larger number of fixed effect
               groups. Again, this method only works for two-way fixed effects.
 
-            - ``Iteration`` (default for more than two fixed effects) - Use the iterative de-meaning algorithm of
-              :ref:`references:Rios-Avila (2015)` and configure the fixed point iteration with a :class:`Iteration`
-              configuration. By default, ``Iteration('simple', {'atol': 1e-12})`` is used. This method is equivalent to
-              ``'simple'`` for one fixed effect, and it will also work for two fixed effects, although either variant of
-              the :ref:`references:Somaini and Wolak (2016)` algorithm is usually more performant.
+            - ``Iteration`` (default for more than two fixed effects) - Use the method of alternating projections
+              described, for example, in :ref:`references:Guimarães and Portugal (2010)`. By default,
+              ``Iteration('simple', {'atol': 1e-12})`` is used to iteratively de-mean the matrix within each fixed
+              effect level until convergence. This method is equivalent to ``'simple'`` for one fixed effect, and it
+              will also work for two fixed effects, although either variant of the
+              :ref:`references:Somaini and Wolak (2016)` algorithm is often more performant.
 
     Examples
     --------

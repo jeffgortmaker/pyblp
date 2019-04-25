@@ -29,23 +29,23 @@ class Iteration(StringRepresentation):
               implementation uses a first-order squared non-monotone extrapolation scheme. If there are any errors
               during the acceleration step, it uses the last values for the next iteration of the algorithm.
 
-            - ``'broyden1'`` - Uses the :func:`scipy.optimize.root` Broyden's first Jacobian approximation method, known
+            - ``'broyden1'`` - Use the :func:`scipy.optimize.root` Broyden's first Jacobian approximation method, known
               as Broyden's good method.
 
-            - ``'broyden2'`` - Uses the :func:`scipy.optimize.root` Broyden's second Jacobian approximation method,
-              known as Broyden's bad method.
+            - ``'broyden2'`` - Use the :func:`scipy.optimize.root` Broyden's second Jacobian approximation method, known
+              as Broyden's bad method.
 
-            - ``'anderson'`` - Uses the :func:`scipy.optimize.root` Anderson method.
+            - ``'anderson'`` - Use the :func:`scipy.optimize.root` Anderson method.
 
-            - ``'krylov'`` - Uses the :func:`scipy.optimize.root` Krylov approximation for inverse Jacobian method.
+            - ``'krylov'`` - Use the :func:`scipy.optimize.root` Krylov approximation for inverse Jacobian method.
 
-            - ``'diagbroyden'`` - Uses the :func:`scipy.optimize.root` diagonal Broyden Jacobian approximation method.
+            - ``'diagbroyden'`` - Use the :func:`scipy.optimize.root` diagonal Broyden Jacobian approximation method.
 
-            - ``'df-sane'`` - Uses the :func:`scipy.optimize.root` derivative-free spectral method.
+            - ``'df-sane'`` - Use the :func:`scipy.optimize.root` derivative-free spectral method.
 
         The following routines can use analytic Jacobians:
 
-            - ``'hybr'`` - Uses the :func:`scipy.optimize.root` modification of the Powell hybrid method implemented in
+            - ``'hybr'`` - Use the :func:`scipy.optimize.root` modification of the Powell hybrid method implemented in
               MINIPACK.
 
             - ``'lm'`` - Uses the :func:`scipy.optimize.root` modification of the Levenberg-Marquardt algorithm

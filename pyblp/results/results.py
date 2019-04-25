@@ -50,11 +50,11 @@ class Results(abc.ABC, StringRepresentation):
         """
 
     def compute_aggregate_elasticities(self, factor: float = 0.1, name: str = 'prices') -> Array:
-        r"""Estimate aggregate elasticities of demand, :math:`E`, with respect to a variable, :math:`x`.
+        r"""Estimate aggregate elasticities of demand, :math:`\mathscr{E}`, with respect to a variable, :math:`x`.
 
         In market :math:`t`, the aggregate elasticity of demand is
 
-        .. math:: E = \sum_{j=1}^{J_t} \frac{s_{jt}(x + \Delta x) - s_{jt}}{\Delta},
+        .. math:: \mathscr{E} = \sum_{j=1}^{J_t} \frac{s_{jt}(x + \Delta x) - s_{jt}}{\Delta},
 
         in which :math:`\Delta` is a scalar factor and :math:`s_{jt}(x + \Delta x)` is the share of product :math:`j` in
         market :math:`t`, evaluated at the scaled values of the variable.
@@ -69,8 +69,8 @@ class Results(abc.ABC, StringRepresentation):
         Returns
         -------
         `ndarray`
-            Estimates of aggregate elasticities of demand, :math:`E`, for all markets. Rows are in the same order as
-            :attr:`Problem.unique_market_ids`.
+            Estimates of aggregate elasticities of demand, :math:`\mathscr{E}`, for all markets. Rows are in the same
+            order as :attr:`Problem.unique_market_ids`.
 
         Examples
         --------
@@ -117,7 +117,7 @@ class Results(abc.ABC, StringRepresentation):
         Diversion ratios to the outside good are reported on diagonals. For each market, the value in row :math:`j` and
         column :math:`k` is
 
-        .. math:: \mathscr{D}_{jk} = -\frac{\partial s_{k(j)} / \partial x_j}{\partial s_j / \partial x_j},
+        .. math:: \mathscr{D}_{jk} = -\frac{\partial s_{k(j)}}{\partial x_j} \Big/ \frac{\partial s_j}{\partial x_j},
 
         in which :math:`s_{k(j)}` is :math:`s_0 = 1 - \sum_j s_j` if :math:`j = k`, and is :math:`s_k` otherwise.
 
@@ -229,7 +229,7 @@ class Results(abc.ABC, StringRepresentation):
     def compute_costs(self) -> Array:
         r"""Estimate marginal costs, :math:`c`.
 
-        Marginal costs are computed with the BLP-markup equation,
+        Marginal costs are computed with the :math:`\eta`-markup equation in :eq:`eta`:
 
         .. math:: c = p - \eta.
 
@@ -249,35 +249,36 @@ class Results(abc.ABC, StringRepresentation):
     def compute_approximate_prices(
             self, firm_ids: Optional[Any] = None, ownership: Optional[Any] = None, costs: Optional[Any] = None) -> (
             Array):
-        r"""Estimate approximate equilibrium prices after firm changes, :math:`p^a`, under the assumption that shares
-        and their price derivatives are unaffected by such changes.
+        r"""Approximate equilibrium prices after firm or cost changes, :math:`p^*`, under the assumption that shares and
+        their price derivatives are unaffected by such changes.
 
         This approximation is discussed in, for example, :ref:`references:Nevo (1997)`. Prices in each market are
-        computed according to the BLP-markup equation,
+        computed according to the :math:`\eta`-markup equation in :eq:`eta`:
 
-        .. math:: p^a = c + \eta^a,
+        .. math:: p^* = c^* + \eta^*,
 
-        in which the approximate markup term is
+        in which the markup term is approximated with
 
-        .. math:: \eta^a = -\left(O^* \circ \frac{\partial s}{\partial p}\right)^{-1}s
+        .. math:: \eta^* \approx -\left(O^* \odot \frac{\partial s}{\partial p}\right)^{-1}s
 
         where :math:`O^*` is the ownership matrix associated with firm changes.
 
         Parameters
         ----------
         firm_ids : `array-like, optional`
-            Changed firm IDs. By default, the ``firm_ids`` field of ``product_data`` in :class:`Problem` will be used.
+            Potentially changed firm IDs. By default, the unchanged ``firm_ids`` field of ``product_data`` in
+            :class:`Problem` will be used.
         ownership : `array-like, optional`
-            Changed ownership matrices. By default, standard ownership matrices based on ``firm_ids`` will be used
-            unless the ``ownership`` field of ``product_data`` in :class:`Problem` was specified.
+            Potentially changed ownership matrices. By default, standard ownership matrices based on ``firm_ids`` will
+            be used unless the ``ownership`` field of ``product_data`` in :class:`Problem` was specified.
         costs : `array-like, optional`
-            Marginal costs, :math:`c`, computed by :meth:`ProblemResults.compute_costs`. By default, marginal costs are
-            computed.
+            Potentially changed marginal costs, :math:`c^*`. By default, unchanged marginal costs are computed with
+            :meth:`ProblemResults.compute_costs`.
 
         Returns
         -------
         `ndarray`
-            Estimates of approximate equilibrium prices after any firm ID changes, :math:`p^a`.
+            Approximation of equilibrium prices after any firm or cost changes, :math:`p^*`.
 
         Examples
         --------
@@ -293,42 +294,43 @@ class Results(abc.ABC, StringRepresentation):
     def compute_prices(
             self, firm_ids: Optional[Any] = None, ownership: Optional[Any] = None, costs: Optional[Any] = None,
             prices: Optional[Any] = None, iteration: Optional[Iteration] = None) -> Array:
-        r"""Estimate equilibrium prices after firm changes, :math:`p^*`.
+        r"""Estimate equilibrium prices after firm or cost changes, :math:`p^*`.
 
-        Prices are computed in each market by iterating over the :math:`\zeta`-markup equation from
-        :ref:`references:Morrow and Skerlos (2011)`,
+        Prices are computed in each market by iterating over the :math:`\zeta`-markup contraction in
+        :eq:`zeta_contraction`:
 
-        .. math:: p^* \leftarrow c + \zeta^*(p^*),
+        .. math:: p^* \leftarrow c^* + \zeta^*(p^*),
 
-        in which the markup term is
+        in which the markup term from :eq:`zeta` is
 
-        .. math:: \zeta^*(p^*) = \Lambda^{-1}(p^*)[O^* \circ \Gamma(p^*)]'(p^* - c) - \Lambda^{-1}(p^*)
+        .. math:: \zeta^*(p^*) = \Lambda^{-1}(p^*)[O^* \odot \Gamma(p^*)]'(p^* - c^*) - \Lambda^{-1}(p^*)
 
-        where :math:`O^*` is the ownership matrix associated with specified firm IDs.
+        where :math:`O^*` is the ownership matrix associated with firm changes.
 
         Parameters
         ----------
         firm_ids : `array-like, optional`
-            Changed firm IDs. By default, the ``firm_ids`` field of ``product_data`` in :class:`Problem` will be used.
+            Potentially changed firm IDs. By default, the unchanged ``firm_ids`` field of ``product_data`` in
+            :class:`Problem` will be used.
         ownership : `array-like, optional`
-            Changed ownership matrices. By default, standard ownership matrices based on ``firm_ids`` will be used
-            unless the ``ownership`` field of ``product_data`` in :class:`Problem` was specified.
+            Potentially changed ownership matrices. By default, standard ownership matrices based on ``firm_ids`` will
+            be used unless the ``ownership`` field of ``product_data`` in :class:`Problem` was specified.
         costs : `array-like`
-            Marginal costs, :math:`c`, computed by :meth:`ProblemResults.compute_costs`. By default, marginal costs are
-            computed.
+            Potentially changed marginal costs, :math:`c^*`. By default, unchanged marginal costs are computed with
+            :meth:`ProblemResults.compute_costs`.
         prices : `array-like, optional`
             Prices at which the fixed point iteration routine will start. By default, unchanged prices, :math:`p`, are
-            used as starting values. Other reasonable starting prices include :math:`p^a`, computed by
-            :meth:`ProblemResults.compute_approximate_prices`.
+            used as starting values. Other reasonable starting prices include the approximate equilibrium prices
+            computed by :meth:`ProblemResults.compute_approximate_prices`.
         iteration : `Iteration, optional`
             :class:`Iteration` configuration for how to solve the fixed point problem in each market. By default,
-            ``Iteration('simple', {'atol': 1e-12})`` is used. Analytic Jacobians are not supported for this contraction
-            mapping.
+            ``Iteration('simple', {'atol': 1e-12})`` is used. Analytic Jacobians are not supported for solving this
+            system.
 
         Returns
         -------
         `ndarray`
-            Estimates of equilibrium prices after any firm ID changes, :math:`p^*`.
+            Estimates of equilibrium prices after any firm or cost changes, :math:`p^*`.
 
         Examples
         --------
@@ -345,7 +347,7 @@ class Results(abc.ABC, StringRepresentation):
         elif not isinstance(iteration, Iteration):
             raise ValueError("iteration must None or an Iteration instance.")
         elif iteration._compute_jacobian:
-            raise ValueError("Analytic Jacobians are not supported for this contraction mapping.")
+            raise ValueError("Analytic Jacobians are not supported for solving this system.")
         return self._combine_arrays(
             ResultsMarket.compute_prices, fixed_args=[iteration], market_args=[firm_ids, ownership, costs, prices]
         )
@@ -357,8 +359,7 @@ class Results(abc.ABC, StringRepresentation):
         ----------
         prices : `array-like`
             Prices at which to evaluate shares, such as equilibrium prices, :math:`p^*`, computed by
-            :meth:`ProblemResults.compute_prices`, or approximate equilibrium prices, :math:`p^a`, computed by
-            :meth:`ProblemResults.compute_approximate_prices`. By default, unchanged prices are used.
+            :meth:`ProblemResults.compute_prices`. By default, unchanged prices are used.
 
         Returns
         -------
@@ -379,14 +380,12 @@ class Results(abc.ABC, StringRepresentation):
 
         The index in market :math:`t` is
 
-        .. math:: \text{HHI} = 10,000 \times \sum_{f=1}^{F_t} \left(\sum_{j \in \mathscr{J}_{ft}} s_j\right)^2,
-
-        in which :math:`\mathscr{J}_{ft}` is the set of products produced by firm :math:`f` in market :math:`t`.
+        .. math:: \text{HHI} = 10,000 \times \sum_{f=1}^{F_t} \left(\sum_{j \in \mathscr{J}_{ft}} s_j\right)^2.
 
         Parameters
         ----------
         firm_ids : `array-like, optional`
-            Changed firm IDs. By default, the ``firm_ids`` field of ``product_data`` in :class:`Problem` will be used.
+            Firm IDs. By default, the unchanged ``firm_ids`` field of ``product_data`` in :class:`Problem` will be used.
         shares : `array-like, optional`
             Shares, :math:`s`, such as those computed by :meth:`ProblemResults.compute_shares`. By default, unchanged
             shares are used.
@@ -418,11 +417,10 @@ class Results(abc.ABC, StringRepresentation):
         ----------
         prices : `array-like, optional`
             Prices, :math:`p`, such as equilibrium prices, :math:`p^*`, computed by
-            :meth:`ProblemResults.compute_prices`, or approximate equilibrium prices, :math:`p^a`, computed by
-            :meth:`ProblemResults.compute_approximate_prices`. By default, unchanged prices are used.
+            :meth:`ProblemResults.compute_prices`. By default, unchanged prices are used.
         costs : `array-like`
-            Marginal costs, :math:`c`, computed by :meth:`ProblemResults.compute_costs`. By default, marginal costs are
-            computed.
+            Marginal costs, :math:`c`. By default, marginal costs are computed with
+            :meth:`ProblemResults.compute_costs`.
 
         Returns
         -------
@@ -443,22 +441,21 @@ class Results(abc.ABC, StringRepresentation):
             self, prices: Optional[Any] = None, shares: Optional[Any] = None, costs: Optional[Any] = None) -> Array:
         r"""Estimate population-normalized gross expected profits, :math:`\pi`.
 
-        The profit of product :math:`j` in market :math:`t` is
+        The profit from product :math:`j` in market :math:`t` is
 
-        .. math:: \pi_{jt} = p_{jt} - c_{jt}s_{jt}.
+        .. math:: \pi_{jt} = (p_{jt} - c_{jt})s_{jt}.
 
         Parameters
         ----------
         prices : `array-like, optional`
             Prices, :math:`p`, such as equilibrium prices, :math:`p^*`, computed by
-            :meth:`ProblemResults.compute_prices`, or approximate equilibrium prices, :math:`p^a`, computed by
-            :meth:`ProblemResults.compute_approximate_prices`. By default, unchanged prices are used.
+            :meth:`ProblemResults.compute_prices`. By default, unchanged prices are used.
         shares : `array-like, optional`
             Shares, :math:`s`, such as those computed by :meth:`ProblemResults.compute_shares`. By default, unchanged
             shares are used.
         costs : `array-like`
-            Marginal costs, :math:`c`, computed by :meth:`ProblemResults.compute_costs`. By default, marginal costs are
-            computed.
+            Marginal costs, :math:`c`. By default, marginal costs are computed with
+            :meth:`ProblemResults.compute_costs`.
 
         Returns
         -------
@@ -483,36 +480,34 @@ class Results(abc.ABC, StringRepresentation):
 
         .. math:: \text{CS} = \sum_{i=1}^{I_t} w_i\text{CS}_i,
 
-        in which, if there is no nesting, the consumer surplus for individual :math:`i` is
+        in which the consumer surplus for individual :math:`i` is
 
-        .. math:: \text{CS}_i = \frac{\log\left(1 + \sum_{j=1}^{J_t} \exp V_{jti}\right)}{\partial U_{i1}/\partial p_1}
+        .. math::
 
-        where
+           \text{CS}_i =
+           \log\left(1 + \sum_{j=1}^{J_t} \exp V_{jti}\right) \Big/ \frac{\partial V_{1ti}}{\partial p_{1t}},
 
-        .. math:: V_{jti} = \delta_{jt} + \mu_{jti}.
+        or with nesting parameters,
 
-        If there is nesting,
+        .. math::
 
-        .. math:: \text{CS}_i = \frac{\log\left(1 + \sum_{h=1}^H \exp V_{hti}\right)}{\partial U_{i1}/\partial p_1}
+           \text{CS}_i =
+           \log\left(1 + \sum_{h=1}^H \exp V_{hti}\right) \Big/ \frac{\partial V_{1ti}}{\partial p_{1t}}
 
-        where
-
-        .. math:: V_{hti} = (1 - \rho_h)\log\sum_{j\in\mathscr{J}_{ht}} \exp[V_{jti} / (1 - \rho_h)].
+        where :math:`V_{jti}` is defined in :eq:`utilities` and :math:`V_{hti}` is defined in :eq:`inclusive_value`.
 
         .. warning::
 
-           Note that :math:`\partial U_{i1} / \partial p_1` is the derivative of utility for the first product with
-           respect to its price. The first product is chosen arbitrarily because the consumer surpluses computed by this
-           method assumes that there are not nonlinear income effects, which implies that this derivative is the same
-           for all products. Computed consumer surpluses will be incorrect if a formulation contains, for example,
-           ``log(prices)``.
+           :math:`\frac{\partial V_{1ti}}{\partial p_{1t}}` is the derivative of utility for the first product with
+           respect to its price. The first product is chosen arbitrarily because this method assumes that there are no
+           nonlinear income effects, which implies that this derivative is the same for all products. Computed consumer
+           surpluses will likely be incorrect if prices are formulated in a nonlinear fashion like ``log(prices)``.
 
         Parameters
         ----------
         prices : `array-like, optional`
             Prices at which utilities and price derivatives will be evaluated, such as equilibrium prices, :math:`p^*`,
-            computed by :meth:`ProblemResults.compute_prices`, or approximate equilibrium prices, :math:`p^a`, computed
-            by :meth:`ProblemResults.compute_approximate_prices`. By default, unchanged prices are used.
+            computed by :meth:`ProblemResults.compute_prices`. By default, unchanged prices are used.
 
         Returns
         -------

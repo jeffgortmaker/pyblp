@@ -32,11 +32,12 @@ class ProblemMarket(Market):
             if self.K2 == 0:
                 converged = True
                 iterations = evaluations = 0
-                outside_share = 1 - self.products.shares.sum()
-                delta = np.log(self.products.shares) - np.log(outside_share)
+                log_shares = np.log(self.products.shares)
+                log_outside_share = np.log(1 - self.products.shares.sum())
+                delta = log_shares - log_outside_share
                 if self.H > 0:
-                    group_shares = self.products.shares / self.groups.expand(self.groups.sum(self.products.shares))
-                    delta -= self.rho * np.log(group_shares)
+                    log_group_shares = np.log(self.groups.expand(self.groups.sum(self.products.shares)))
+                    delta -= self.rho * (log_shares - log_group_shares)
             elif 'linear' in fp_type:
                 # set up components common to both types of linear contraction
                 log_shares = np.log(self.products.shares)
