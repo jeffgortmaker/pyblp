@@ -374,7 +374,7 @@ def build_differentiation_instruments(
     sd_mapping: Dict[int, Array] = {}
     if version == 'local':
         for k in range(K):
-            sd_mapping[k] = np.nanstd(np.hstack(d.flatten() for d in distances_mapping[k].values()))
+            sd_mapping[k] = np.nanstd([np.hstack(d.flatten() for d in distances_mapping[k].values())])
 
     # define a function that generates market-level terms used to create instruments
     def generate_instrument_terms(t: Hashable) -> Iterator[Array]:
