@@ -4,7 +4,7 @@
 
    .. nbinfo::
 
-      Download the `Jupyter Notebook <http://jupyter.org/>`_ for this section: :download:`{{ path.rsplit('/', 1)[1] }} </{{ path.replace('_notebooks', '_downloads') }}>`
+      Download the `Jupyter Notebook <https://jupyter.org/>`_ for this section: :download:`{{ path.rsplit('/', 1)[1] }} </{{ path.replace('_notebooks', '_downloads') }}>`
 
 .. raw:: latex
 
