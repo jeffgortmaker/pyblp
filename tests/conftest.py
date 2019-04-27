@@ -10,8 +10,8 @@ import pytest
 import scipy.linalg
 
 from pyblp import (
-    Formulation, Integration, Problem, ProblemResults, Simulation, SimulationResults, build_differentiation_instruments,
-    build_id_data, build_matrix, build_ownership, options
+    Formulation, Integration, Optimization, Problem, ProblemResults, Simulation, SimulationResults,
+    build_differentiation_instruments, build_id_data, build_matrix, build_ownership, options
 )
 from pyblp.utilities.basics import update_matrices, Array, Data, Options
 
@@ -416,7 +416,8 @@ def simulated_problem(request: Any) -> SimulatedProblemFixture:
         'rho_bounds': (np.zeros_like(simulation.rho), np.minimum(0.9, 1.5 * simulation.rho)),
         'costs_type': simulation.costs_type,
         'method': '1s',
-        'check_optimality': 'gradient'
+        'check_optimality': 'gradient',
+        'optimization': Optimization('slsqp', {'ftol': 1e-10})
     }
     problem_results = problem.solve(**solve_options)
     return simulation, simulation_results, problem, solve_options, problem_results
