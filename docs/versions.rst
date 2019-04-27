@@ -4,6 +4,17 @@ Version Notes
 These notes will only include major changes.
 
 
+0.7
+---
+
+- Support more fixed point and optimization solvers
+- Hessian computation with finite differences
+- Simplified interface for firm changes
+- Construction of differentiation instruments
+- Add collinearity checks
+- Update notation and explanations
+
+
 0.6
 ---
 
