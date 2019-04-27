@@ -1,7 +1,7 @@
 Tutorial
 ========
 
-This section uses a series of `Jupyter Notebooks <http://jupyter.org/>`_ to explain how pyblp can be used to solve example problems, compute post-estimation outputs, and simulate problems. Other examples can be found in the :ref:`api:API Documentation`.
+This section uses a series of `Jupyter Notebooks <https://jupyter.org/>`_ to explain how pyblp can be used to solve example problems, compute post-estimation outputs, and simulate problems. Other examples can be found in the :ref:`api:API Documentation`.
 
 .. toctree::
    :maxdepth: 2
