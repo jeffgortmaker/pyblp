@@ -757,7 +757,7 @@ class ProblemResults(Results):
                Z_{D,jt}^\textit{Opt} \\
                Z_{S,jt}^\textit{Opt}
            \end{bmatrix}
-           = \text{Var}(\xi, \omega)^{-1}E\left[
+           = \Sigma_{\xi\omega}^{-1}E\left[
            \begin{matrix}
                \frac{\partial\xi_{jt}}{\partial\theta} \\
                \frac{\partial\omega_{jt}}{\partial\theta}
@@ -772,8 +772,8 @@ class ProblemResults(Results):
         iterating over the :math:`\zeta`-markup contraction in :eq:`zeta_contraction`.
 
         The expected Jacobians are estimated with the average over all computed Jacobian realizations. The
-        :math:`2 \times 2` normalizing matrix :math:`\text{Var}(\xi, \omega)` is estimated with the sample covariance
-        matrix of the error terms.
+        :math:`2 \times 2` normalizing matrix :math:`\Sigma_{\xi\omega}` is estimated with the sample covariance matrix
+        of the error terms.
 
         Optimal instruments for linear parameters not included in :math:`\theta` are simple product characteristics, so
         they are not computed here but are rather included in the final set of instruments by

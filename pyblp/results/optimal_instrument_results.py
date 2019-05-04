@@ -42,7 +42,7 @@ class OptimalInstrumentResults(StringRepresentation):
     inverse_covariance_matrix: `ndarray`
         Inverse of the sample covariance matrix of the estimated :math:`\xi` and :math:`\omega`, which is used to
         normalize the expected Jacobians. If a supply side was not estimated, this is simply the sample estimate of
-        :math:`1 / \text{Var}(\xi)`.
+        :math:`1 / \sigma_{\xi}^2`.
     expected_xi_by_theta_jacobian: `ndarray`
         Estimated :math:`E[\frac{\partial\xi}{\partial\theta} \mid Z]`.
     expected_omega_by_theta_jacobian: `ndarray`

@@ -187,8 +187,12 @@ where, letting the set :math:`\mathscr{J}_c \subset \{1, 2, \ldots, N\}` denote 
 
 For unadjusted weighting matrices,
 
-.. math:: S = \frac{1}{N} \begin{bmatrix} \text{Var}(\xi)Z_D'Z_D & \text{Cov}(\xi, \omega)Z_D'Z_S \\ \text{Cov}(\xi, \omega)Z_S'Z_D & \text{Var}(\omega)Z_S'Z_S \end{bmatrix}.
+.. math:: S = \frac{1}{N} \begin{bmatrix} \sigma_\xi^2 Z_D'Z_D & \sigma_{\xi\omega} Z_D'Z_S \\ \sigma_{\xi\omega} Z_S'Z_D & \sigma_\omega^2 Z_S'Z_S \end{bmatrix}
    :label: unadjusted_S
+
+where
+
+.. math:: \text{Var}(\xi, \omega) = \begin{bmatrix} \sigma_\xi^2 & \sigma_{\xi\omega} \\ \sigma_{\xi\omega} \\ \sigma_\omega^2 \end{bmatrix}.
 
 
 Standard Errors
