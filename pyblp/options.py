@@ -1,4 +1,4 @@
-"""Global options.
+r"""Global options.
 
 Attributes
 ----------
@@ -48,6 +48,19 @@ collinear_atol : `float`
 
 collinear_rtol : `float`
     Relative tolerance for detecting collinear columns, which is by default also ``1e-14``.
+psd_atol : `float`
+    Absolute tolerance for detecting non-positive semidefinite matrices. For example, this check is applied to any
+    custom weighting matrix, :math:`W`.
+
+    Singular value decomposition factorizes the matrix into :math:`U \Sigma V` and an error is raised if any element in
+    the original matrix differs in absolute value from :math:`V' \Sigma V` by more than ``psd_atol + psd_rtol * abs``
+    where ``abs`` is the element's absolute value.
+
+    The default tolerance is ``1e-8``. To disable positive semidefinite checks, set
+    ``pyblp.options.psd_atol = pyblp.options.psd_rtol = np.inf``.
+
+psd_rtol : `float`
+    Relative tolerance for detecting non-positive definite matrices, which is by default also ``1e-8``.
 
 """
 
@@ -59,3 +72,4 @@ verbose = True
 verbose_output = print
 dtype = _np.float64
 collinear_atol = collinear_rtol = 1e-14
+psd_atol = psd_rtol = 1e-8

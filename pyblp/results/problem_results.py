@@ -9,12 +9,17 @@ import scipy.linalg
 from .results import Results
 from .. import exceptions, options
 from ..configurations.iteration import Iteration
+from ..markets.market import Market
 from ..markets.results_market import ResultsMarket
+from ..parameters import BetaParameter
 from ..utilities.algebra import approximately_solve, precisely_compute_eigenvalues
 from ..utilities.basics import (
     Array, Bounds, Error, TableFormatter, format_number, format_seconds, generate_items, output, output_progress
 )
-from ..utilities.statistics import compute_gmm_parameter_covariances, compute_gmm_weights
+from ..utilities.statistics import (
+    compute_gmm_moment_covariances, compute_gmm_parameter_covariances, compute_gmm_moments_jacobian_mean,
+    compute_gmm_weights
+)
 
 
 # only import objects that create import cycles when checking types
@@ -136,12 +141,24 @@ class ProblemResults(Results):
         Estimated unobserved supply-side product characteristics, :math:`\omega(\hat{\theta})`, or equivalently, the
         supply-side structural error term. When there are supply-side fixed effects, this is
         :math:`\Delta\omega(\hat{\theta})` in :eq:`fe`. That is, fixed effects are not included.
+    micro : `ndarray`
+        Averaged micro moments, :math:`\bar{g}_M`, in :eq:`averaged_micro_moments`.
     objective : `float`
         GMM objective value, :math:`q(\hat{\theta})`, defined in :eq:`objective`.
     xi_by_theta_jacobian : `ndarray`
-        Estimated :math:`\frac{\partial\xi}{\partial\theta} = \frac{\partial\delta}{\partial\theta}`.
+        Estimated :math:`\frac{\partial\xi}{\partial\theta} = \frac{\partial\delta}{\partial\theta}`, which is used to
+        compute the gradient and standard errors.
     omega_by_theta_jacobian : `ndarray`
-        Estimated :math:`\frac{\partial\omega}{\partial\theta} = \frac{\partial\tilde{c}}{\partial\theta}`.
+        Estimated :math:`\frac{\partial\omega}{\partial\theta} = \frac{\partial\tilde{c}}{\partial\theta}`, which is
+        used to compute the gradient and standard errors.
+    micro_by_theta_jacobian : `ndarray`
+        Estimated :math:`\frac{\partial\bar{g}_M}{\partial\theta}`, which is used to compute the gradient and standard
+        errors.
+    micro_by_beta_jacobian : `ndarray`
+        Estimated :math:`\frac{\partial\bar{g}_M}{\partial\beta}`, which is needed to compute standard errors because
+        linear parameters cannot be concentrated out of micro moments' contribution to the GMM objective. This Jacobian
+        does not account for absorbed demand-side fixed effects, so standard errors computed under absorbed fixed
+        effects may be different than standard errors computed under fixed effects that are included as dummy variables.
     gradient : `ndarray`
         Gradient of the GMM objective, :math:`\nabla q(\hat{\theta})`, defined in :eq:`gradient`. This is computed after
         the optimization routine finishes even if the routine was configured to not use analytic gradients.
@@ -214,9 +231,12 @@ class ProblemResults(Results):
     clipped_costs: Array
     xi: Array
     omega: Array
+    micro: Array
     objective: Array
     xi_by_theta_jacobian: Array
     omega_by_theta_jacobian: Array
+    micro_by_theta_jacobian: Array
+    micro_by_beta_jacobian: Array
     gradient: Array
     gradient_norm: Array
     hessian: Array
@@ -237,19 +257,21 @@ class ProblemResults(Results):
             optimization_start_time: float, optimization_end_time: float, iterations: int, evaluations: int,
             converged_mappings: Sequence[Dict[Hashable, bool]], iteration_mappings: Sequence[Dict[Hashable, int]],
             evaluation_mappings: Sequence[Dict[Hashable, int]], converged: bool, costs_type: str, costs_bounds: Bounds,
-            center_moments: bool, W_type: str, se_type: str) -> None:
+            micro_covariances: Optional[Callable], center_moments: bool, W_type: str, se_type: str) -> None:
         """Compute cumulative progress statistics, update weighting matrices, and estimate standard errors."""
 
         # initialize values from the progress structure
-        super().__init__(progress.problem, progress.parameters)
+        super().__init__(progress.problem, progress.parameters, progress.moments)
         self._errors = progress.errors
         self.problem = progress.problem
         self.W = progress.W
         self.theta = progress.theta
         self.delta = progress.delta
         self.tilde_costs = progress.tilde_costs
+        self.micro = progress.micro
         self.xi_by_theta_jacobian = progress.xi_jacobian
         self.omega_by_theta_jacobian = progress.omega_jacobian
+        self.micro_by_theta_jacobian = progress.micro_jacobian
         self.xi = progress.xi
         self.omega = progress.omega
         self.beta = progress.beta
@@ -260,8 +282,8 @@ class ProblemResults(Results):
         self.hessian = progress.hessian
 
         # if the Hessian was computed, compute its eigenvalues and the ratio of the smallest to largest ones
-        self.hessian_eigenvalues = np.full(progress.parameters.P, np.nan, options.dtype)
-        if progress.parameters.P > 0 and np.isfinite(self.hessian).all():
+        self.hessian_eigenvalues = np.full(self._parameters.P, np.nan, options.dtype)
+        if self._parameters.P > 0 and np.isfinite(self.hessian).all():
             self.hessian_eigenvalues, successful = precisely_compute_eigenvalues(self.hessian)
             if not successful:
                 self._errors.append(exceptions.HessianEigenvaluesError(self.hessian))
@@ -322,7 +344,18 @@ class ProblemResults(Results):
         self.beta_bounds = self._parameters.beta_bounds
         self.gamma_bounds = self._parameters.gamma_bounds
 
-        # collect inputs to weighting matrix and standard error computation
+        # the Jacobian of micro moments with respect to beta is needed to compute standard errors
+        self.micro_by_beta_jacobian = np.full((self._moments.MM, self.beta.size), np.nan, options.dtype)
+        if self._moments.MM > 0:
+            for p, parameter in enumerate(self._parameters.unfixed):
+                if isinstance(parameter, BetaParameter):
+                    self.micro_by_beta_jacobian[:, parameter.location[0]] = self.micro_by_theta_jacobian[:, p]
+            if self._parameters.eliminated_beta_index.any():
+                eliminated_jacobian, eliminated_jacobian_errors = self._compute_micro_by_eliminated_beta_jacobian()
+                self.micro_by_beta_jacobian[:, self._parameters.eliminated_beta_index.flat] = eliminated_jacobian
+                self._errors.extend(eliminated_jacobian_errors)
+
+        # collect additional inputs to weighting matrix and standard error computation
         u_list = [self.xi]
         Z_list = [self.problem.products.ZD]
         jacobian_list = [np.c_[
@@ -339,23 +372,47 @@ class ProblemResults(Results):
                 -self.problem.products.X3[:, self._parameters.eliminated_gamma_index.flat]
             ])
 
-        # update the weighting matrix
+        # ignore computational errors when updating the weighting matrix and computing covariances
         with np.errstate(invalid='ignore'):
-            self.updated_W, W_errors = compute_gmm_weights(
+            # compute moment covariances
+            W_S = se_S = compute_gmm_moment_covariances(
                 u_list, Z_list, W_type, self.problem.products.clustering_ids, center_moments
             )
-        self._errors.extend(W_errors)
+            if se_type != W_type or center_moments:
+                se_S = compute_gmm_moment_covariances(u_list, Z_list, se_type, self.problem.products.clustering_ids)
+            if self._moments.MM > 0:
+                assert micro_covariances is not None
+                micro_S = np.asarray(micro_covariances(self.micro), options.dtype)
+                if micro_S.shape != (self._moments.MM, self._moments.MM):
+                    raise ValueError(f"micro_covariances must return a {self._moments.MM} by {self._moments.MM} array.")
+                self.problem._detect_psd(micro_S, "the matrix returned by micro_covariances")
+                W_S = scipy.linalg.block_diag(W_S, micro_S)
+                se_S = scipy.linalg.block_diag(se_S, micro_S)
 
-        # compute parameter covariances (if this is the first step, an unadjusted weighting matrix needs to be used so
-        #   that unadjusted covariances are scaled properly)
-        update_W = se_type == 'unadjusted' and self.step == 1
-        with np.errstate(all='ignore'):
-            self.parameter_covariances, covariance_errors = compute_gmm_parameter_covariances(
-                jacobian_list, u_list, Z_list, self.W, se_type, self.problem.products.clustering_ids, update_W
-            )
-        self._errors.extend(covariance_errors)
+            # update the weighting matrix
+            self.updated_W, W_errors = compute_gmm_weights(W_S)
+            self._errors.extend(W_errors)
 
-        # compute standard errors
+            # if this is the first step, an unadjusted weighting matrix needs to be used when computing unadjusted
+            #   covariances so that they are scaled properly
+            se_W = self.W
+            if se_type == 'unadjusted' and self.step == 1:
+                se_W, se_W_errors = compute_gmm_weights(se_S)
+                self._errors.extend(se_W_errors)
+
+            # compute parameter covariances
+            G_bar = np.r_[
+                compute_gmm_moments_jacobian_mean(jacobian_list, Z_list),
+                np.c_[
+                    self.micro_by_theta_jacobian,
+                    self.micro_by_beta_jacobian[:, self._parameters.eliminated_beta_index.flat],
+                    np.zeros((self._moments.MM, self._parameters.eliminated_gamma_index.sum()), options.dtype)
+                ]
+            ]
+            self.parameter_covariances, se_errors = compute_gmm_parameter_covariances(se_W, se_S, G_bar, se_type)
+            self._errors.extend(se_errors)
+
+        # compute standard errors, ignoring invalid numbers from any computational errors above
         with np.errstate(invalid='ignore'):
             se = np.sqrt(np.c_[self.parameter_covariances.diagonal()] / self.problem.N)
         if np.isnan(se).any():
@@ -382,7 +439,8 @@ class ProblemResults(Results):
         self._se_type = se_type
 
     def __str__(self) -> str:
-        """Format problem results (including parameters estimates) as a string."""
+        """Format problem results as a string."""
+        sections = [self._format_summary()]
 
         # construct a standard error description
         if self._se_type == 'unadjusted':
@@ -393,14 +451,16 @@ class ProblemResults(Results):
             assert self._se_type == 'clustered'
             se_description = f'Robust SEs Adjusted for {np.unique(self.problem.products.clustering_ids).size} Clusters'
 
-        # combine a summary table section and another with formatted estimates into one string
-        return "\n\n".join([
-            self._format_summary(),
-            self._parameters.format_estimates(
-                f"Estimates ({se_description} in Parentheses)", self.sigma, self.pi, self.rho, self.beta, self.gamma,
-                self.sigma_se, self.pi_se, self.rho_se, self.beta_se, self.gamma_se
-            )
-        ])
+        # add sections formatting estimates and micro moments values
+        sections.append(self._parameters.format_estimates(
+            f"Estimates ({se_description} in Parentheses)", self.sigma, self.pi, self.rho, self.beta, self.gamma,
+            self.sigma_se, self.pi_se, self.rho_se, self.beta_se, self.gamma_se
+        ))
+        if self._moments.MM > 0:
+            sections.append(self._moments.format("Micro Moment Values", self.micro))
+
+        # join the sections into a single string
+        return "\n\n".join(sections)
 
     def _format_summary(self) -> str:
         """Format a summary table of problem results."""
@@ -467,6 +527,32 @@ class ProblemResults(Results):
             formatter.line()
         ])
         return "\n".join(lines)
+
+    def _compute_micro_by_eliminated_beta_jacobian(self) -> Tuple[Array, List[Error]]:
+        """Compute the Jacobian of micro moments with respect to eliminated parameters in beta."""
+        errors: List[Error] = []
+
+        # define a factory for computing the Jacobian in each market
+        def market_factory(s: Hashable) -> Tuple[Market]:
+            """Build a market along with arguments used to compute the Jacobian of micro moments with respect to
+            eliminated beta parameters.
+            """
+            market_s = Market(
+                self.problem, s, self._parameters, self.sigma, self.pi, self.rho, self.beta, self.delta, self._moments
+            )
+            return market_s,
+
+        # compute the Jacobian market-by-market
+        jacobian = np.zeros((self._moments.MM, self._parameters.eliminated_beta_index.sum()), options.dtype)
+        generator = generate_items(
+            self.problem.unique_market_ids, market_factory, Market.compute_micro_by_eliminated_beta_jacobian
+        )
+        for t, (jacobian_t, errors_t) in generator:
+            jacobian[self._moments.market_indices[t]] = (
+                jacobian_t / self._moments.market_counts[self._moments.market_indices[t]]
+            )
+            errors.extend(errors_t)
+        return jacobian, errors
 
     def bootstrap(
             self, draws: int = 1000, seed: Optional[int] = None, iteration: Optional[Iteration] = None) -> (
@@ -916,12 +1002,11 @@ class ProblemResults(Results):
         # define a factory for computing the Jacobian of xi with respect to theta in markets
         def market_factory(s: Hashable) -> Tuple[ResultsMarket]:
             """Build a market with the data realization along with arguments used to compute the Jacobian."""
-            data_override_s = {
-                'prices': equilibrium_prices[self.problem._product_market_indices[s]],
-                'shares': equilibrium_shares[self.problem._product_market_indices[s]]
-            }
             market_s = ResultsMarket(
-                self.problem, s, self._parameters, self.sigma, self.pi, self.rho, self.beta, delta, data_override_s
+                self.problem, s, self._parameters, self.sigma, self.pi, self.rho, self.beta, delta, data_override={
+                    'prices': equilibrium_prices[self.problem._product_market_indices[s]],
+                    'shares': equilibrium_shares[self.problem._product_market_indices[s]]
+                }
             )
             return market_s,
 
@@ -951,12 +1036,11 @@ class ProblemResults(Results):
         # define a factory for computing the Jacobian of omega with respect to theta in markets
         def market_factory(s: Hashable) -> Tuple[ResultsMarket, Array, Array, str]:
             """Build a market with the data realization along with arguments used to compute the Jacobians."""
-            data_override_s = {
-                'prices': equilibrium_prices[self.problem._product_market_indices[s]],
-                'shares': equilibrium_shares[self.problem._product_market_indices[s]]
-            }
             market_s = ResultsMarket(
-                self.problem, s, self._parameters, self.sigma, self.pi, self.rho, self.beta, delta, data_override_s
+                self.problem, s, self._parameters, self.sigma, self.pi, self.rho, self.beta, delta, data_override={
+                    'prices': equilibrium_prices[self.problem._product_market_indices[s]],
+                    'shares': equilibrium_shares[self.problem._product_market_indices[s]]
+                }
             )
             tilde_costs_s = tilde_costs[self.problem._product_market_indices[s]]
             xi_jacobian_s = xi_jacobian[self.problem._product_market_indices[s]]
@@ -1029,7 +1113,7 @@ class ProblemResults(Results):
             """Build a market along with arguments used to compute arrays."""
             indices_s = self.problem._product_market_indices[s]
             market_s = ResultsMarket(
-                self.problem, s, self._parameters, self.sigma, self.pi, self.rho, self.beta, self.delta
+                self.problem, s, self._parameters, self.sigma, self.pi, self.rho, self.beta, self.delta, self._moments
             )
             args_s = [None if a is None else a[indices_s] for a in market_args]
             return (market_s, *fixed_args, *args_s)

@@ -1,12 +1,18 @@
 """Economy-level structuring of BLP simulation results."""
 
-from typing import Dict, Hashable, Optional, Sequence, TYPE_CHECKING, Union
+import time
+from typing import Dict, Hashable, List, Optional, Sequence, Tuple, TYPE_CHECKING, Union
 
 import numpy as np
 
+from .. import exceptions, options
 from ..configurations.formulation import Formulation
 from ..configurations.integration import Integration
-from ..utilities.basics import Array, Mapping, RecArray, StringRepresentation, TableFormatter, format_seconds
+from ..markets.market import Market
+from ..moments import Moment, EconomyMoments
+from ..utilities.basics import (
+    Array, Error, generate_items, Mapping, output, RecArray, StringRepresentation, TableFormatter, format_seconds
+)
 
 
 # only import objects that create import cycles when checking types
@@ -133,3 +139,71 @@ class SimulationResults(StringRepresentation):
             agent_data = self.simulation.agent_data
         assert product_formulations is not None and product_data is not None
         return Problem(product_formulations, product_data, agent_formulation, agent_data, integration)
+
+    def compute_micro(self, micro_moments: Sequence[Moment]) -> Array:
+        r"""Compute averaged micro moment values, :math:`\bar{g}_M`.
+
+        Typically, this method is used to compute the values that micro moments aim to match. This can be done by
+        setting ``value=0`` in each of the configured ``micro_moments``.
+
+        Parameters
+        ----------
+        micro_moments : `tuple of ProductsAgentsCovarianceMoment`
+            Configurations for the averaged micro moments that will be computed. The only type of micro moment currently
+            supported is the :class:`ProductsAgentsCovarianceMoment`.
+
+        Returns
+        -------
+        `ndarray`
+            Averaged micro moments, :math:`\bar{g}_M`, in :eq:`averaged_micro_moments`.
+
+        Examples
+        --------
+            - :doc:`Tutorial </tutorial>`
+
+        """
+        errors: List[Error] = []
+
+        # keep track of long it takes to compute micro moments
+        output("Computing micro moment values ...")
+        start_time = time.time()
+
+        # validate and structure micro moments before outputting related information
+        moments = EconomyMoments(self.simulation, micro_moments)
+        if moments.MM == 0:
+            raise ValueError("At least one micro moment should be specified.")
+        output("")
+        output(moments.format("Micro Moments"))
+
+        # define a factory for computing market-level micro moments
+        def market_factory(s: Hashable) -> Tuple[Market]:
+            """Build a market along with arguments used to compute micro moments."""
+            data_override_cs = {
+                'prices': self.product_data.prices[self.simulation._product_market_indices[s]],
+                'shares': self.product_data.shares[self.simulation._product_market_indices[s]]
+            }
+            market_s = Market(
+                self.simulation, s, self.simulation._parameters, self.simulation.sigma, self.simulation.pi,
+                self.simulation.rho, self.simulation.beta, self.delta, moments, data_override_cs
+            )
+            return market_s,
+
+        # compute micro moments (averaged across markets) market-by-market
+        micro = np.zeros((moments.MM, 1), options.dtype)
+        generator = generate_items(self.simulation.unique_market_ids, market_factory, Market.compute_micro)
+        for t, (micro_t, errors_t) in generator:
+            micro[moments.market_indices[t]] += micro_t / moments.market_counts[moments.market_indices[t]]
+            errors.extend(errors_t)
+
+        # output a warning about any errors
+        if errors:
+            output("")
+            output(exceptions.MultipleErrors(errors))
+            output("")
+
+        # output how long it took to compute the micro moments
+        end_time = time.time()
+        output("")
+        output(f"Finished after {format_seconds(end_time - start_time)}.")
+        output("")
+        return micro

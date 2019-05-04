@@ -49,6 +49,12 @@ Berry, Levinsohn, and Pakes (1999)
 Berry, Steven, James Levinsohn, and Ariel Pakes (1999). `Voluntary export restraints on automobiles: Evaluating a trade policy <https://ideas.repec.org/a/aea/aecrev/v89y1999i3p400-430.html>`_. *American Economic Review, 83* (9), 400-430.
 
 
+Berry, Levinsohn, and Pakes (2004)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Berry, Steven, James Levinsohn, and Ariel Pakes (2004). `Differentiated products demand systems from a combination of micro and macro data: The new car market <https://ideas.repec.org/a/ucp/jpolec/v112y2004i1p68-105.html>`_. *Journal of Political Economy, 112* (1), 68-105.
+
+
 Brenkers and Verboven (2006)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -109,6 +115,12 @@ Heiss and Winschel (2008)
 Heiss, Florian, and Viktor Winschel (2008). `Likelihood approximation by numerical integration on sparse grids <https://ideas.repec.org/a/eee/econom/v144y2008i1p62-80.html>`_. *Journal of Econometrics, 144* (1), 62-80.
 
 
+Imbens and Lancaster (1994)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Imbens, Guido W., and Tony Lancaster (1994). `Combining micro and macro data in microeconometric models <https://ideas.repec.org/a/oup/restud/v61y1994i4p655-680..html>`_. *Review of Economic Studies, 61* (4), 655-680.
+
+
 Judd and Skrainka (2011)
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -143,6 +155,12 @@ Nevo (2000)
 ~~~~~~~~~~~
 
 Nevo, Aviv (2000). `A practitioner's guide to estimation of random‐coefficients logit models of demand <https://ideas.repec.org/a/bla/jemstr/v9y2000i4p513-548.html>`_. *Journal of Economics & Management Strategy, 9* (4), 513-548.
+
+
+Petrin (2002)
+~~~~~~~~~~~~~
+
+Petrin, Amil (2002). `Quantifying the benefits of new products: The case of the minivan <https://ideas.repec.org/a/ucp/jpolec/v110y2002i4p705-729.html>`_. *Journal of Political Economy, 110* (4), 705-729.
 
 
 Reynaert and Verboven (2014)

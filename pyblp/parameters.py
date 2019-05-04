@@ -148,6 +148,7 @@ class Parameters(object):
     eliminated_gamma_index: Array
     fixed: List[Parameter]
     unfixed: List[Parameter]
+    eliminated: List[Parameter]
     P: int
 
     def __init__(
@@ -157,10 +158,11 @@ class Parameters(object):
             beta_bounds: Optional[Tuple[Any, Any]] = None, gamma_bounds: Optional[Tuple[Any, Any]] = None,
             bounded: bool = False, allow_linear_nans: bool = False) -> None:
         """Coerce parameters into usable formats before storing information about fixed (equal bounds) and unfixed
-        (unequal bounds) elements of sigma, pi, rho, beta, and gamma. For unfixed parameters, verify that values have
-        been chosen such that choice probability computation is unlikely to overflow. If bounds are unspecified,
-        determine reasonable bounds as well. If allow_linear_nans is True, allow null linear parameters in order to
-        denote those parameters that will be concentrated out.
+        (unequal bounds) elements of sigma, pi, rho, beta, and gamma. Also store information about eliminated
+        (concentrated out) parameters in beta and gamma. For unfixed parameters, verify that values have been chosen
+        such that choice probability computation is unlikely to overflow. If bounds are unspecified, determine
+        reasonable bounds as well. If allow_linear_nans is True, allow null linear parameters in order to denote those
+        parameters that will be concentrated out.
         """
 
         # store labels
@@ -223,11 +225,12 @@ class Parameters(object):
         # store information about fixed and unfixed parameters
         self.fixed: List[Parameter] = []
         self.unfixed: List[Parameter] = []
-        self.store_parameters(SigmaParameter, zip(*np.triu_indices_from(self.sigma)), self.sigma_bounds)
-        self.store_parameters(PiParameter, np.ndindex(self.pi.shape), self.pi_bounds)
-        self.store_parameters(rho_type, np.ndindex(self.rho.shape), self.rho_bounds)
-        self.store_parameters(BetaParameter, zip(*np.where(~self.eliminated_beta_index)), self.beta_bounds)
-        self.store_parameters(GammaParameter, zip(*np.where(~self.eliminated_gamma_index)), self.gamma_bounds)
+        self.eliminated: List[Parameter] = []
+        self.store(SigmaParameter, zip(*np.triu_indices_from(self.sigma)), self.sigma_bounds)
+        self.store(PiParameter, np.ndindex(self.pi.shape), self.pi_bounds)
+        self.store(rho_type, np.ndindex(self.rho.shape), self.rho_bounds)
+        self.store(BetaParameter, np.ndindex(self.beta.shape), self.beta_bounds, self.eliminated_beta_index)
+        self.store(GammaParameter, np.ndindex(self.gamma.shape), self.gamma_bounds, self.eliminated_gamma_index)
 
         # count the number of unfixed parameters
         self.P = len(self.unfixed)
@@ -329,12 +332,15 @@ class Parameters(object):
         bounds[0][zeros] = bounds[1][zeros] = 0
         return bounds
 
-    def store_parameters(
-            self, parameter_type: Type[Parameter], locations: Iterable[Tuple[int, int]], bounds: Bounds) -> None:
-        """Store fixed and unfixed parameters in lists."""
+    def store(
+            self, parameter_type: Type[Parameter], locations: Iterable[Tuple[int, int]], bounds: Bounds,
+            eliminated_index: Optional[Array] = None) -> None:
+        """Store fixed, unfixed, and eliminated parameters in lists."""
         for location in locations:
             parameter = parameter_type(location, bounds)
-            if parameter.value is None:
+            if eliminated_index is not None and eliminated_index[location]:
+                self.eliminated.append(parameter)
+            elif parameter.value is None:
                 self.unfixed.append(parameter)
             else:
                 self.fixed.append(parameter)

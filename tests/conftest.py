@@ -2,7 +2,7 @@
 
 import hashlib
 import os
-from typing import Any, Callable, Dict, Hashable, Iterator, Tuple
+from typing import Any, Callable, Dict, Hashable, Iterator, List, Tuple
 
 import numpy as np
 import patsy
@@ -10,14 +10,14 @@ import pytest
 import scipy.linalg
 
 from pyblp import (
-    Formulation, Integration, Optimization, Problem, ProblemResults, Simulation, SimulationResults,
-    build_differentiation_instruments, build_id_data, build_matrix, build_ownership, options
+    Formulation, Integration, Optimization, Problem, ProblemResults, ProductsAgentsCovarianceMoment, Simulation,
+    SimulationResults, build_differentiation_instruments, build_id_data, build_matrix, build_ownership, options
 )
 from pyblp.utilities.basics import update_matrices, Array, Data, Options
 
 
 # define common types
-SimulationFixture = Tuple[Simulation, SimulationResults]
+SimulationFixture = Tuple[Simulation, SimulationResults, List[ProductsAgentsCovarianceMoment]]
 SimulatedProblemFixture = Tuple[Simulation, SimulationResults, Problem, Options, ProblemResults]
 
 
@@ -93,7 +93,8 @@ def small_logit_simulation() -> SimulationFixture:
         correlation=0.7,
         seed=0
     )
-    return simulation, simulation.solve()
+    simulation_results = simulation.solve()
+    return simulation, simulation_results, []
 
 
 @pytest.fixture(scope='session')
@@ -122,7 +123,8 @@ def large_logit_simulation() -> SimulationFixture:
         costs_type='log',
         seed=2
     )
-    return simulation, simulation.solve()
+    simulation_results = simulation.solve()
+    return simulation, simulation_results, []
 
 
 @pytest.fixture(scope='session')
@@ -152,7 +154,8 @@ def small_nested_logit_simulation() -> SimulationFixture:
         correlation=0.7,
         seed=0
     )
-    return simulation, simulation.solve()
+    simulation_results = simulation.solve()
+    return simulation, simulation_results, []
 
 
 @pytest.fixture(scope='session')
@@ -184,7 +187,8 @@ def large_nested_logit_simulation() -> SimulationFixture:
         costs_type='log',
         seed=2
     )
-    return simulation, simulation.solve()
+    simulation_results = simulation.solve()
+    return simulation, simulation_results, []
 
 
 @pytest.fixture(scope='session')
@@ -213,7 +217,8 @@ def small_blp_simulation() -> SimulationFixture:
         omega=uniform[:, 0] + uniform[:, 2],
         seed=0
     )
-    return simulation, simulation.solve()
+    simulation_results = simulation.solve()
+    return simulation, simulation_results, []
 
 
 @pytest.fixture(scope='session')
@@ -251,7 +256,9 @@ def medium_blp_simulation() -> SimulationFixture:
         correlation=0.8,
         seed=1
     )
-    return simulation, simulation.solve()
+    simulation_results = simulation.solve()
+    simulated_micro_moments = [ProductsAgentsCovarianceMoment(X2_index=1, demographics_index=0, value=0)]
+    return simulation, simulation_results, simulated_micro_moments
 
 
 @pytest.fixture(scope='session')
@@ -302,7 +309,14 @@ def large_blp_simulation() -> SimulationFixture:
     simulation_results.product_data = update_matrices(simulation_results.product_data, {
         'demand_instruments': (differentiation_instruments, simulation_results.product_data.demand_instruments.dtype)
     })
-    return simulation, simulation_results
+    simulated_micro_moments = [
+        ProductsAgentsCovarianceMoment(X2_index=0, demographics_index=0, value=0),
+        ProductsAgentsCovarianceMoment(X2_index=1, demographics_index=1, value=0),
+        ProductsAgentsCovarianceMoment(
+            X2_index=0, demographics_index=1, value=0, market_ids=simulation.unique_market_ids[:5]
+        )
+    ]
+    return simulation, simulation_results, simulated_micro_moments
 
 
 @pytest.fixture(scope='session')
@@ -333,7 +347,8 @@ def small_nested_blp_simulation() -> SimulationFixture:
         correlation=0.7,
         seed=0
     )
-    return simulation, simulation.solve()
+    simulation_results = simulation.solve()
+    return simulation, simulation_results, []
 
 
 @pytest.fixture(scope='session')
@@ -378,7 +393,12 @@ def large_nested_blp_simulation() -> SimulationFixture:
         costs_type='log',
         seed=2
     )
-    return simulation, simulation.solve()
+    simulation_results = simulation.solve()
+    simulated_micro_moments = [
+        ProductsAgentsCovarianceMoment(X2_index=0, demographics_index=0, value=0),
+        ProductsAgentsCovarianceMoment(X2_index=1, demographics_index=1, value=0)
+    ]
+    return simulation, simulation_results, simulated_micro_moments
 
 
 @pytest.fixture(scope='session', params=[
@@ -406,7 +426,14 @@ def simulated_problem(request: Any) -> SimulatedProblemFixture:
     bounds that are more conservative than the default ones.
     """
     name, supply = request.param
-    simulation, simulation_results = request.getfixturevalue(f'{name}_simulation')
+    simulation, simulation_results, simulated_micro_moments = request.getfixturevalue(f'{name}_simulation')
+    micro_moments = []
+    if simulated_micro_moments:
+        micro_values = simulation_results.compute_micro(simulated_micro_moments)
+        for moment, value in zip(simulated_micro_moments, micro_values):
+            micro_moments.append(ProductsAgentsCovarianceMoment(
+                moment.X2_index, moment.demographics_index, value, moment.market_ids
+            ))
     problem = simulation_results.to_problem(simulation.product_formulations[:2 + int(supply)])
     solve_options = {
         'sigma': simulation.sigma,
@@ -417,7 +444,9 @@ def simulated_problem(request: Any) -> SimulatedProblemFixture:
         'costs_type': simulation.costs_type,
         'method': '1s',
         'check_optimality': 'gradient',
-        'optimization': Optimization('slsqp', {'ftol': 1e-10})
+        'optimization': Optimization('slsqp', {'ftol': 1e-10}),
+        'micro_moments': micro_moments,
+        'micro_covariances': lambda m: np.eye(m.size)
     }
     problem_results = problem.solve(**solve_options)
     return simulation, simulation_results, problem, solve_options, problem_results

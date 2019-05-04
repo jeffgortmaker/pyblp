@@ -100,6 +100,24 @@ class DeltaFloatingPointError(Error):
     """
 
 
+class CostsFloatingPointError(Error):
+    """Encountered floating point issues when computing marginal costs.
+
+    This problem is often due to prior problems or overflow and can sometimes be mitigated by choosing smaller initial
+    parameter values, setting more conservative bounds, rescaling data, removing outliers, changing the floating point
+    precision, or using different optimization or cost configurations.
+
+    """
+
+
+class MicroMomentsFloatingPointError(Error):
+    """Encountered floating point issues when computing micro moments.
+
+    This problem is often due to prior problems or overflow.
+
+    """
+
+
 class XiByThetaJacobianFloatingPointError(Error):
     r"""Encountered floating point issues when computing the Jacobian of :math:`\xi` (equivalently, of :math:`\delta`)
     with respect to :math:`\theta`.
@@ -111,16 +129,6 @@ class XiByThetaJacobianFloatingPointError(Error):
     """
 
 
-class CostsFloatingPointError(Error):
-    """Encountered floating point issues when computing marginal costs.
-
-    This problem is often due to prior problems or overflow and can sometimes be mitigated by choosing smaller initial
-    parameter values, setting more conservative bounds, rescaling data, removing outliers, changing the floating point
-    precision, or using different optimization or cost configurations.
-
-    """
-
-
 class OmegaByThetaJacobianFloatingPointError(Error):
     r"""Encountered floating point issues when computing the Jacobian of :math:`\omega` (equivalently, of transformed
     marginal costs) with respect to :math:`\theta`.
@@ -128,6 +136,22 @@ class OmegaByThetaJacobianFloatingPointError(Error):
     This problem is often due to prior problems or overflow, and can sometimes be mitigated by choosing smaller initial
     parameter values, setting more conservative bounds, rescaling data, removing outliers, changing the floating point
     precision, or using different optimization or cost configurations.
+
+    """
+
+
+class MicroMomentsByThetaJacobianFloatingPointError(Error):
+    r"""Encountered floating point issues when computing the Jacobian of micro moments with respect to :math:`\theta`.
+
+    This problem is often due to prior problems or overflow.
+
+    """
+
+
+class MicroMomentsByBetaJacobianFloatingPointError(Error):
+    r"""Encountered floating point issues when computing the Jacobian of micro moments with respect to :math:`\beta`.
+
+    This problem is often due to prior problems or overflow.
 
     """
 
@@ -233,6 +257,10 @@ class CostsReversionError(_MultipleReversionError):
     """Reverted problematic marginal costs."""
 
 
+class MicroMomentsReversionError(_MultipleReversionError):
+    """Reverted problematic micro moments."""
+
+
 class XiByThetaJacobianReversionError(_MultipleReversionError):
     r"""Reverted problematic elements in the Jacobian of :math:`\xi` (equivalently, of :math:`\delta`) with respect to
     :math:`\theta`.
@@ -245,6 +273,10 @@ class OmegaByThetaJacobianReversionError(_MultipleReversionError):
     with respect to :math:`\theta`.
 
     """
+
+
+class MicroMomentsByThetaJacobianReversionError(_MultipleReversionError):
+    r"""Reverted problematic elements in the Jacobian of micro moments with respect to :math:`\theta`."""
 
 
 class AbsorptionInversionError(_InversionError):

@@ -5,6 +5,7 @@ from typing import Any, Callable, Optional, Sequence, TYPE_CHECKING
 
 from ..configurations.iteration import Iteration
 from ..markets.results_market import ResultsMarket
+from ..moments import EconomyMoments
 from ..parameters import Parameters
 from ..utilities.basics import Array, StringRepresentation, output
 
@@ -19,11 +20,13 @@ class Results(abc.ABC, StringRepresentation):
 
     problem: 'ProblemEconomy'
     _parameters: Parameters
+    _moments: EconomyMoments
 
-    def __init__(self, problem: 'ProblemEconomy', parameters: Parameters) -> None:
+    def __init__(self, problem: 'ProblemEconomy', parameters: Parameters, moments: EconomyMoments) -> None:
         """Store the underlying problem and parameter information."""
         self.problem = problem
         self._parameters = parameters
+        self._moments = moments
 
     @abc.abstractmethod
     def _coerce_matrices(self, matrices: Any) -> Array:

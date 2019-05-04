@@ -149,10 +149,10 @@ def test_parallel(simulated_problem: SimulatedProblemFixture) -> None:
     # test that all arrays in the results are essentially identical
     for key, result in results.__dict__.items():
         if isinstance(result, np.ndarray) and result.dtype != np.object:
-            np.testing.assert_allclose(result, getattr(parallel_results, key), atol=1e-14, rtol=0, err_msg=key)
+            np.testing.assert_allclose(result, getattr(parallel_results, key), atol=1e-10, rtol=0, err_msg=key)
 
     # test that marginal costs are essentially equal
-    np.testing.assert_allclose(costs, parallel_costs, atol=1e-14, rtol=0)
+    np.testing.assert_allclose(costs, parallel_costs, atol=1e-10, rtol=0)
 
 
 @pytest.mark.usefixtures('simulated_problem')
@@ -287,13 +287,16 @@ def test_fixed_effects(
         atol *= 10
         rtol *= 10
 
-    # test that all problem results expected to be identical are essentially identical
+    # test that all problem results expected to be identical are essentially identical, except for standard errors under
+    #   micro moments, which are expected to be slightly different
     problem_results_keys = [
         'theta', 'sigma', 'pi', 'rho', 'beta', 'gamma', 'sigma_se', 'pi_se', 'rho_se', 'beta_se', 'gamma_se',
         'delta', 'tilde_costs', 'xi', 'omega', 'xi_by_theta_jacobian', 'omega_by_theta_jacobian', 'objective',
         'gradient', 'gradient_norm', 'sigma_gradient', 'pi_gradient', 'rho_gradient', 'beta_gradient', 'gamma_gradient'
     ]
     for key in problem_results_keys:
+        if key.endswith('_se') and solve_options['micro_moments']:
+            continue
         result1 = getattr(problem_results1, key)
         result2 = getattr(problem_results2, key)
         result3 = getattr(problem_results3, key)
@@ -855,8 +858,10 @@ def test_logit(
     )
     results2 = model.fit(iter_limit=1 if method == '1s' else 2, cov_type=se_type, **se_options)
 
-    # test that results are essentially identical
+    # test that results are essentially identical (unadjusted second stage standard errors will be different because
+    #   linearmodels still constructs a S matrix)
     for key1, key2 in [('beta', 'params'), ('xi', 'resids'), ('beta_se', 'std_errors')]:
-        values1 = getattr(results1, key1)
-        values2 = np.c_[getattr(results2, key2)]
-        np.testing.assert_allclose(values1, values2, atol=1e-10, rtol=1e-8, err_msg=key1)
+        if not (se_type == 'unadjusted' and key1 == 'beta_se'):
+            values1 = getattr(results1, key1)
+            values2 = np.c_[getattr(results2, key2)]
+            np.testing.assert_allclose(values1, values2, atol=1e-10, rtol=1e-8, err_msg=key1)

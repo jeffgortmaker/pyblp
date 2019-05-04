@@ -219,14 +219,14 @@ def format_seconds(seconds: float) -> str:
     return f'{hours:02}:{minutes:02}:{seconds:02}'
 
 
-def format_number(number: Optional[float]) -> str:
+def format_number(number: Optional[float], sign: bool = True) -> str:
     """Prepare a number to be displayed as a string."""
     if number is None or np.isnan(number):
         return "NA"
     if not isinstance(options.digits, int):
         raise TypeError("options.digits must be an int.")
     template = f"{{:+.{options.digits - 1}E}}"
-    return template.format(float(number))
+    return template.format(float(number))[int(not sign):]
 
 
 def format_se(se: Optional[float]) -> str:

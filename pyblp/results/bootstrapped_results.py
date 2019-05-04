@@ -90,7 +90,7 @@ class BootstrappedResults(Results):
             end_time: float, draws: int, converged_mappings: List[Dict[Hashable, bool]],
             iteration_mappings: List[Dict[Hashable, int]], evaluation_mappings: List[Dict[Hashable, int]]) -> None:
         """Structure bootstrapped problem results."""
-        super().__init__(problem_results.problem, problem_results._parameters)
+        super().__init__(problem_results.problem, problem_results._parameters, problem_results._moments)
         self.problem_results = problem_results
         self.bootstrapped_sigma = bootstrapped_sigma
         self.bootstrapped_pi = bootstrapped_pi
@@ -187,7 +187,8 @@ class BootstrappedResults(Results):
             }
             market_js = ResultsMarket(
                 self.problem, s, self._parameters, self.bootstrapped_sigma[c], self.bootstrapped_pi[c],
-                self.bootstrapped_rho[c], self.bootstrapped_beta[c], self.bootstrapped_delta[c], data_override_cs
+                self.bootstrapped_rho[c], self.bootstrapped_beta[c], self.bootstrapped_delta[c], self._moments,
+                data_override_cs
             )
             args_cs: List[Optional[Array]] = []
             for market_arg in market_args:

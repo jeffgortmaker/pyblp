@@ -53,23 +53,9 @@ class IV(object):
         return parameters_list, residuals_list
 
 
-def compute_2sls_weights(Z_list: List[Array]) -> Tuple[Array, List[Error]]:
-    """Use instruments to compute a 2SLS weighting matrix."""
-    errors: List[Error] = []
-    Z = scipy.linalg.block_diag(*Z_list)
-    S = Z.T @ Z
-    W, replacement = approximately_invert(S)
-    if replacement:
-        errors.append(exceptions.GMMMomentCovariancesInversionError(S, replacement))
-    return W, errors
-
-
-def compute_gmm_weights(
-        u_list: List[Array], Z_list: List[Array], W_type: str, clustering_ids: Array, center_moments: bool) -> (
-        Tuple[Array, List[Error]]):
+def compute_gmm_weights(S: Array) -> Tuple[Array, List[Error]]:
     """Compute a GMM weighting matrix."""
     errors: List[Error] = []
-    S = compute_gmm_moment_covariances(u_list, Z_list, W_type, clustering_ids, center_moments)
     W, replacement = approximately_invert(S)
     if replacement:
         errors.append(exceptions.GMMMomentCovariancesInversionError(S, replacement))
@@ -81,7 +67,7 @@ def compute_gmm_weights(
 def compute_gmm_moment_covariances(
         u_list: List[Array], Z_list: List[Array], covariance_type: str, clustering_ids: Array,
         center_moments: bool = False) -> Array:
-    """Compute covariances between moment conditions."""
+    """Compute covariances between moments."""
 
     # count dimensions
     N = u_list[0].shape[0]
@@ -102,28 +88,20 @@ def compute_gmm_moment_covariances(
     return np.c_[S + S.T] / 2
 
 
-def compute_gmm_parameter_covariances(
-        jacobian_list: List[Array], u_list: List[Array], Z_list: List[Array], W: Array, se_type: str,
-        clustering_ids: Array, update_W: bool) -> Tuple[Array, List[Error]]:
+def compute_gmm_parameter_covariances(W: Array, S: Array, G_bar: Array, se_type: str) -> Tuple[Array, List[Error]]:
     """Estimate GMM parameter covariances."""
     errors: List[Error] = []
 
-    # optionally update the weighting matrix
-    if update_W:
-        W, W_errors = compute_gmm_weights(u_list, Z_list, se_type, clustering_ids, center_moments=False)
-        errors.extend(W_errors)
-
     # attempt to compute the covariance matrix
-    G_bar = compute_gmm_moments_jacobian_mean(jacobian_list, Z_list)
     covariances_inverse = G_bar.T @ W @ G_bar
     covariances, replacement = approximately_invert(covariances_inverse)
     if replacement:
         errors.append(exceptions.GMMParameterCovariancesInversionError(covariances_inverse, replacement))
 
     # compute the robust covariance matrix
-    with np.errstate(invalid='ignore'):
-        S = compute_gmm_moment_covariances(u_list, Z_list, se_type, clustering_ids)
-        covariances = covariances @ G_bar.T @ W @ S @ W @ G_bar @ covariances
+    if se_type != 'unadjusted':
+        with np.errstate(invalid='ignore'):
+            covariances = covariances @ G_bar.T @ W @ S @ W @ G_bar @ covariances
 
     # enforce shape and symmetry
     return np.c_[covariances + covariances.T] / 2, errors
@@ -135,17 +113,17 @@ def compute_gmm_error_covariance(u1: Array, u2: Array) -> Array:
 
 
 def compute_gmm_moments(u_list: List[Array], Z_list: List[Array]) -> Array:
-    """Compute GMM moment conditions."""
+    """Compute GMM moments."""
     return np.hstack([u * Z for u, Z in zip(u_list, Z_list)])
 
 
 def compute_gmm_moments_mean(u_list: List[Array], Z_list: List[Array]) -> Array:
-    """Compute GMM moment conditions, averaged across observations."""
+    """Compute GMM moments, averaged across observations."""
     return np.c_[compute_gmm_moments(u_list, Z_list).mean(axis=0)]
 
 
 def compute_gmm_moments_jacobian_mean(jacobian_list: List[Array], Z_list: List[Array]) -> Array:
-    """Compute the Jacobian of GMM moment conditions with respect to parameters, averaged across observations."""
+    """Compute the Jacobian of GMM moments with respect to parameters, averaged across observations."""
 
     # tensors or loops are not needed when there is only one equation
     if len(jacobian_list) == 1:

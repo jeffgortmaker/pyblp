@@ -66,9 +66,10 @@ Features
 - Bertrand-Nash supply-side moments
 - Multiple equation GMM
 - Demographic interactions
+- Micro moments
 - Fixed effect absorption
 - Nonlinear functions of product characteristics
-- Concentrating out of linear parameters
+- Concentrating out linear parameters
 - Parameter bounds and constraints
 - Random coefficients nested logit (RCNL)
 - Varying nesting parameters across groups
@@ -79,7 +80,7 @@ Features
 - Marginal costs and markups
 - Profits and consumer surplus
 - Merger simulation
-- Parametric boostrapping of post-estimation outputs
+- Parametric boostrapping post-estimation outputs
 - Synthetic data construction
 - SciPy or Artleys Knitro optimization
 - Fixed point acceleration
@@ -97,8 +98,6 @@ Features
 
 Features Slated for Future Versions
 -----------------------------------
-
-- Micro moments
 - Fast, "Robust," and Approximately Correct (FRAC) estimation
 - Analytic Hessians
 - Mathematical Program with Equilibrium Constraints (MPEC)

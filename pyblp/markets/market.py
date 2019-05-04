@@ -7,7 +7,8 @@ import numpy as np
 from .. import exceptions, options
 from ..configurations.iteration import ContractionResults, Iteration
 from ..economies.economy import Economy
-from ..parameters import LinearCoefficient, NonlinearCoefficient, Parameter, Parameters, RhoParameter
+from ..moments import EconomyMoments, MarketMoments, ProductsAgentsCovarianceMoment
+from ..parameters import BetaParameter, LinearCoefficient, NonlinearCoefficient, Parameter, Parameters, RhoParameter
 from ..primitives import Container
 from ..utilities.algebra import approximately_invert, approximately_solve
 from ..utilities.basics import Array, Error, Groups, update_matrices
@@ -32,10 +33,13 @@ class Market(Container):
     rho: Array
     delta: Array
     mu: Array
+    parameters: Parameters
+    moments: Optional[MarketMoments]
 
     def __init__(
             self, economy: Economy, t: Any, parameters: Parameters, sigma: Array, pi: Array, rho: Array,
-            beta: Optional[Array] = None, delta: Optional[Array] = None, data_override: Optional[Dict] = None) -> None:
+            beta: Optional[Array] = None, delta: Optional[Array] = None, moments: Optional[EconomyMoments] = None,
+            data_override: Optional[Dict] = None) -> None:
         """Store or compute information about formulations, data, parameters, and utility."""
 
         # structure relevant data
@@ -95,6 +99,9 @@ class Market(Container):
         # store delta and compute mu
         self.delta = None if delta is None else delta[economy._product_market_indices[t]]
         self.mu = self.compute_mu()
+
+        # store moments relevant to this market
+        self.moments = None if moments is None else MarketMoments(moments, t)
 
     def get_membership_matrix(self) -> Array:
         """Build a membership matrix from nesting IDs."""
@@ -186,13 +193,14 @@ class Market(Container):
     def compute_probabilities(
             self, delta: Array = None, mu: Optional[Array] = None, linear: bool = True, safe: bool = True,
             utility_reduction: Optional[Array] = None, numerator: Optional[Array] = None,
-            eliminate_product: Optional[int] = None) -> Tuple[Array, Optional[Array]]:
+            eliminate_outside: bool = False, eliminate_product: Optional[int] = None) -> Tuple[Array, Optional[Array]]:
         """Compute choice probabilities. By default, use unchanged delta and mu values. If linear is False, delta and mu
         must be specified and already be exponentiated. If safe is True, scale the logit equation by the exponential of
         negative the maximum utility for each agent, and if utility_reduction is specified, it should be values that
         have already been subtracted from the specified utility for each agent. If the numerator is specified, it will
-        be used as the numerator in the non-nested logit expression. If eliminate_product is specified, eliminate the
-        product associated with the specified index from the choice set.
+        be used as the numerator in the non-nested logit expression. If eliminate_outside is True, eliminate the outside
+        option from the choice set. If eliminate_product is specified, eliminate the product associated with the
+        specified index from the choice set.
         """
         if delta is None:
             assert self.delta is not None
@@ -225,6 +233,10 @@ class Market(Container):
                 scale = np.exp(-utility_reduction * (1 - self.group_rho))
                 if self.rho_size > 1:
                     scale_weights = np.exp(-utility_reduction[None] * (self.group_rho.T - self.group_rho)[..., None])
+
+        # optionally eliminate the outside option from the choice set
+        if eliminate_outside:
+            scale = 0
 
         # optionally eliminate a product from the choice set
         if eliminate_product is not None:
@@ -676,3 +688,90 @@ class Market(Container):
                 assert costs_type == 'log'
                 omega_jacobian = -eta_jacobian / np.exp(tilde_costs)
             return omega_jacobian, errors
+
+    def compute_micro(self, delta: Optional[Array] = None) -> Tuple[Array, List[Error]]:
+        """Compute micro moments."""
+        errors: List[Error] = []
+        assert self.moments is not None
+
+        # configure NumPy to identify floating point errors
+        with np.errstate(divide='call', over='call', under='ignore', invalid='call'):
+            np.seterrcall(lambda *_: errors.append(exceptions.MicroMomentsFloatingPointError()))
+
+            # compute probabilities with the outside option eliminated
+            conditional_probabilities, _ = self.compute_probabilities(delta, eliminate_outside=True)
+
+            # compute the micro moments
+            micro = np.zeros((self.moments.MM, 1), options.dtype)
+            for m, moment in enumerate(self.moments.micro_moments):
+                assert isinstance(moment, ProductsAgentsCovarianceMoment)
+                z = conditional_probabilities.T @ self.products.X2[:, [moment.X2_index]]
+                d = self.agents.demographics[:, [moment.demographics_index]]
+                mean_z = z.T @ self.agents.weights
+                mean_d = d.T @ self.agents.weights
+                micro[m] = (z - mean_z).T @ (self.agents.weights * (d - mean_d)) - moment.value
+            return micro, errors
+
+    def compute_micro_by_theta_jacobian(self, delta: Array) -> Tuple[Array, List[Error]]:
+        """Compute the Jacobian of micro moments with respect to theta."""
+        errors: List[Error] = []
+        assert self.moments is not None
+
+        # configure NumPy to identify floating point errors
+        with np.errstate(divide='call', over='call', under='ignore', invalid='call'):
+            np.seterrcall(lambda *_: errors.append(exceptions.MicroMomentsByThetaJacobianFloatingPointError()))
+
+            # compute probabilities with the outside option eliminated
+            conditional_probabilities, conditionals = self.compute_probabilities(delta, eliminate_outside=True)
+
+            # compute the Jacobian
+            jacobian_columns: List[Array] = []
+            for parameter in self.parameters.unfixed:
+                jacobian_columns.append(self.compute_micro_by_parameter_gradient(
+                    parameter, conditional_probabilities, conditionals, delta
+                ))
+            return np.hstack(jacobian_columns), errors
+
+    def compute_micro_by_eliminated_beta_jacobian(self) -> Tuple[Array, List[Error]]:
+        """Compute the Jacobian of micro moments with respect to eliminated parameters in beta."""
+        errors: List[Error] = []
+        assert self.moments is not None
+
+        # configure NumPy to identify floating point errors
+        with np.errstate(divide='call', over='call', under='ignore', invalid='call'):
+            np.seterrcall(lambda *_: errors.append(exceptions.MicroMomentsByBetaJacobianFloatingPointError()))
+
+            # compute probabilities with the outside option removed from the choice set
+            conditional_probabilities, conditionals = self.compute_probabilities(eliminate_outside=True)
+
+            # compute the Jacobian
+            jacobian_columns: List[Array] = []
+            for parameter in self.parameters.eliminated:
+                if isinstance(parameter, BetaParameter):
+                    jacobian_columns.append(self.compute_micro_by_parameter_gradient(
+                        parameter, conditional_probabilities, conditionals
+                    ))
+            return np.hstack(jacobian_columns), errors
+
+    def compute_micro_by_parameter_gradient(
+            self, parameter: Parameter, conditional_probabilities: Array, conditionals: Optional[Array],
+            delta: Optional[Array] = None) -> Array:
+        """Compute the gradient of micro moments with respect to a parameter."""
+        assert self.moments is not None
+
+        # compute the tangent of probabilities (with the outside option removed from the choice set) with respect to
+        #   the parameter
+        conditional_probabilities_tangent, _ = self.compute_probabilities_by_parameter_tangent(
+            parameter, conditional_probabilities, conditionals, delta
+        )
+
+        # compute the gradient
+        gradient = np.zeros((self.moments.MM, 1), options.dtype)
+        for m, moment in enumerate(self.moments.micro_moments):
+            assert isinstance(moment, ProductsAgentsCovarianceMoment)
+            z_tangent = conditional_probabilities_tangent.T @ self.products.X2[:, [moment.X2_index]]
+            d = self.agents.demographics[:, [moment.demographics_index]]
+            mean_z_tangent = z_tangent.T @ self.agents.weights
+            mean_d = d.T @ self.agents.weights
+            gradient[m] = (z_tangent - mean_z_tangent).T @ (self.agents.weights * (d - mean_d))
+        return gradient

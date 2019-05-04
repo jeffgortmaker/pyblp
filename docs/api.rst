@@ -38,49 +38,10 @@ There are also a number of convenience functions that can be used to construct c
    build_integration
 
 
-Simulation Class
-----------------
-
-In addition to reading from data files, data can be simulated by initializing the following class.
-
-.. autosummary::
-   :toctree: _api
-   :template: class_with_signature.rst
-
-   Simulation
-
-Once initialized, the following method computes equilibrium prices and shares.
-
-.. autosummary::
-   :toctree: _api
-
-   Simulation.solve
-
-
-Simulation Results Class
-------------------------
-
-Solved simulations return the following results class.
-
-.. autosummary::
-   :nosignatures:
-   :toctree: _api
-   :template: class_without_signature.rst
-
-   SimulationResults
-
-The simulation results can be converted into a :class:`Problem` with the following method.
-
-.. autosummary::
-   :toctree: _api
-
-   SimulationResults.to_problem
-
-
 Problem Class
 -------------
 
-Given real or simulated data and appropriate configurations, the BLP problem can be structured by initializing the following class.
+Given data and appropriate configurations, a BLP-type problem can be structured by initializing the following class.
 
 .. autosummary::
    :toctree: _api
@@ -187,6 +148,64 @@ This method returns the following class, which behaves exactly like a :class:`Pr
    OptimalInstrumentProblem
 
 
+Micro Moment Classes
+--------------------
+
+Micro moment configurations can be passed to :meth:`Problem.solve`. Only one type of micro moment is currently supported.
+
+.. autosummary::
+   :toctree: _api
+   :template: class_with_signature.rst
+
+   ProductsAgentsCovarianceMoment
+
+
+Simulation Class
+----------------
+
+In addition to reading from data files, data can be simulated by initializing the following class.
+
+.. autosummary::
+   :toctree: _api
+   :template: class_with_signature.rst
+
+   Simulation
+
+Once initialized, the following method computes equilibrium prices and shares.
+
+.. autosummary::
+   :toctree: _api
+
+   Simulation.solve
+
+
+Simulation Results Class
+------------------------
+
+Solved simulations return the following results class.
+
+.. autosummary::
+   :nosignatures:
+   :toctree: _api
+   :template: class_without_signature.rst
+
+   SimulationResults
+
+The simulation results can be converted into a :class:`Problem` with the following method.
+
+.. autosummary::
+   :toctree: _api
+
+   SimulationResults.to_problem
+
+Simulation results can also be used to compute micro moment values.
+
+.. autosummary::
+   :toctree: _api
+
+   SimulationResults.compute_micro
+
+
 Structured Data Classes
 -----------------------
 
@@ -239,9 +258,12 @@ When errors occur, they will either be displayed as warnings or raised as except
    InvalidParameterCovariancesError
    InvalidMomentCovariancesError
    DeltaFloatingPointError
-   XiByThetaJacobianFloatingPointError
    CostsFloatingPointError
+   MicroMomentsFloatingPointError
+   XiByThetaJacobianFloatingPointError
    OmegaByThetaJacobianFloatingPointError
+   MicroMomentsByThetaJacobianFloatingPointError
+   MicroMomentsByBetaJacobianFloatingPointError
    SyntheticPricesFloatingPointError
    SyntheticSharesFloatingPointError
    EquilibriumPricesFloatingPointError
@@ -255,8 +277,10 @@ When errors occur, they will either be displayed as warnings or raised as except
    GradientReversionError
    DeltaReversionError
    CostsReversionError
+   MicroMomentsReversionError
    XiByThetaJacobianReversionError
    OmegaByThetaJacobianReversionError
+   MicroMomentsByThetaJacobianReversionError
    AbsorptionInversionError
    HessianEigenvaluesError
    FittedValuesInversionError

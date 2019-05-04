@@ -85,19 +85,17 @@ The GMM problem is
 .. math:: \min_\theta q(\theta) = N^2\bar{g}(\theta)'W\bar{g}(\theta),
    :label: objective
 
-in which :math:`W` is a :math:`(M_D + M_S) \times (M_D + M_S)` weighting matrix and :math:`\bar{g}` is a :math:`(M_D + M_S) \times 1` vector of sample moment conditions:
+in which :math:`W` is a :math:`M \times M` weighting matrix and :math:`\bar{g}` is a :math:`M \times 1` vector of averaged demand- and supply-side moments:
 
-.. math:: \bar{g} = \frac{1}{N} \begin{bmatrix} \sum_{j,t} Z_{D,jt}'\xi_{jt} \\ \sum_{j,t} Z_{S,jt}'\omega_{jt} \end{bmatrix},
-   :label: conditions
+.. math:: \bar{g} = \begin{bmatrix} \bar{g}_D \\ \bar{g}_S \end{bmatrix} = \frac{1}{N} \begin{bmatrix} \sum_{j,t} Z_{D,jt}'\xi_{jt} \\ \sum_{j,t} Z_{S,jt}'\omega_{jt} \end{bmatrix}
+   :label: averaged_moments
 
-in which :math:`Z_D` and :math:`Z_S` are :math:`N \times M_D` and :math:`N \times M_S` matrices of demand- and supply-side instruments containing excluded instruments along with :math:`X_1^x` and :math:`X_3`, respectively.
+where :math:`Z_D` and :math:`Z_S` are :math:`N \times M_D` and :math:`N \times M_S` matrices of demand- and supply-side instruments containing excluded instruments along with :math:`X_1^x` and :math:`X_3`, respectively. When there are only demand- and supply-side moments, :math:`M = M_D + M_S`.
 
-The vector :math:`\bar{g}` is the sample analogue of the GMM moment conditions :math:`E[g_{jt}] = 0` where
+The vector :math:`\bar{g}` contains sample analogues of the demand- and supply-side moment conditions :math:`E[g_{D,jt}] = E[g_{S,jt}] = 0` where
 
-.. math:: g_{jt} = \begin{bmatrix} Z_{D,jt}\xi_{jt} & Z_{S,jt}\omega_{jt} \end{bmatrix}.
+.. math:: \begin{bmatrix} g_{D,jt} & g_{S,jt} \end{bmatrix} = \begin{bmatrix} \xi_{jt}Z_{D,jt} & \omega_{jt}Z_{S,jt} \end{bmatrix}.
    :label: moments
-
-defines the :math:`N \times (M_D + M_S)` matrix of GMM moments :math:`g`.
 
 In each GMM stage, a nonlinear optimizer finds the :math:`\hat{\theta}` that minimizes the GMM objective value :math:`q(\theta)`.
 
@@ -131,7 +129,7 @@ Finally, the unobserved product characteristics (structural errors),
 
 .. math:: \begin{bmatrix} \xi(\hat{\theta}) \\ \omega(\hat{\theta}) \end{bmatrix} = \begin{bmatrix} \delta(\hat{\theta}) - X_1\hat{\beta} \\ \tilde{c}(\hat{\theta}) - X_3\hat{\gamma} \end{bmatrix},
 
-are interacted with the instruments to form the sample moment conditions :math:`\bar{g}(\hat{\theta})` in :eq:`conditions`, which give the GMM objective :math:`q(\hat{\theta})` in :eq:`objective`.
+are interacted with the instruments to form :math:`\bar{g}(\hat{\theta})` in :eq:`averaged_moments`, which give the GMM objective :math:`q(\hat{\theta})` in :eq:`objective`.
 
 
 The Gradient
@@ -144,7 +142,8 @@ The gradient of the GMM objective in :eq:`objective` is
 
 where
 
-.. math:: \bar{G} = \frac{1}{N} \begin{bmatrix} \sum_{j,t} Z_{D,jt}'\frac{\partial\xi_{jt}}{\partial\theta} \\ \sum_{j,t} Z_{S,jt}'\frac{\partial\omega_{jt}}{\partial\theta} \end{bmatrix}.
+.. math:: \bar{G} = \begin{bmatrix} \bar{G}_D \\ \bar{G}_S \end{bmatrix} = \frac{1}{N} \begin{bmatrix} \sum_{j,t} Z_{D,jt}'\frac{\partial\xi_{jt}}{\partial\theta} \\ \sum_{j,t} Z_{S,jt}'\frac{\partial\omega_{jt}}{\partial\theta} \end{bmatrix}.
+   :label: averaged_moments_jacobian
 
 Writing :math:`\delta` as an implicit function of :math:`s` in :eq:`shares` gives the demand-side Jacobian:
 
@@ -152,9 +151,9 @@ Writing :math:`\delta` as an implicit function of :math:`s` in :eq:`shares` give
 
 The supply-side Jacobian is derived from the definition of :math:`\tilde{c}` in :eq:`costs`:
 
-.. math:: \frac{\partial\omega}{\partial\theta} = \frac{\partial\tilde{c}}{\partial\theta_p} = -\frac{\partial\tilde{c}}{\partial c}\frac{\partial\eta}{\partial\theta}
+.. math:: \frac{\partial\omega}{\partial\theta} = \frac{\partial\tilde{c}}{\partial\theta_p} = -\frac{\partial\tilde{c}}{\partial c}\frac{\partial\eta}{\partial\theta}.
 
-where the second term is derived from the definition of :math:`\eta` in :eq:`eta`:
+The second term in this expression is derived from the definition of :math:`\eta` in :eq:`eta`:
 
 .. math:: \frac{\partial\eta}{\partial\theta} = -\Delta^{-1}\left(\frac{\partial\Delta}{\partial\theta}\eta + \frac{\partial\Delta}{\partial\xi}\eta\frac{\partial\xi}{\partial\theta}\right).
 
@@ -179,12 +178,12 @@ For heteroscedasticity robust weighting matrices,
 
 For clustered weighting matrices, which account for arbitrary correlation within :math:`c = 1, 2, \dotsc, C` clusters,
 
-.. math:: S = \frac{1}{N}\sum_{c=1}^C q_cq_c',
+.. math:: S = \frac{1}{N}\sum_{c=1}^C g_cg_c',
    :label: clustered_S
 
 where, letting the set :math:`\mathscr{J}_c \subset \{1, 2, \ldots, N\}` denote products in cluster :math:`c`,
 
-.. math:: q_c = \sum_{j\in\mathscr{J}_c} g_j.
+.. math:: g_c = \sum_{t=1}^T \sum_{j\in\mathscr{J}_{ct}} g_{jt}.
 
 For unadjusted weighting matrices,
 
@@ -227,6 +226,25 @@ Instead, fixed effects are typically absorbed into :math:`X`, :math:`Z`, and :ma
 This procedure is equivalent to replacing each column of the matrices with residuals from a regression of the column on the fixed effect. The Frish-Waugh-Lovell (FWL) theorem of :ref:`references:Frisch and Waugh (1933)` and :ref:`references:Lovell (1963)` guarantees that using these residualized matrices gives the same results as including fixed effects as dummy variables. When :math:`E_D > 1` or :math:`E_S > 1`, the matrices are residualized with more involved algorithms.
 
 Once fixed effects have been absorbed, estimation is as described above with the structural errors :math:`\Delta\xi` and :math:`\Delta\omega`.
+
+
+Micro Moments
+-------------
+
+In the spirit of :ref:`references:Imbens and Lancaster (1994)`, :ref:`references:Petrin (2002)`, and :ref:`references:Berry, Levinsohn, and Pakes (2004)`, more detailed micro data on individual agent decisions can be used to supplement the standard demand- and supply-side moments :math:`\bar{g}_D` and :math:`\bar{g}_S` in :eq:`averaged_moments` with an additional :math:`m = 1, 2, \ldots, M_M` averaged micro moments, :math:`\bar{g}_M`, for a total of :math:`M = M_D + M_S + M_M` averaged moments:
+
+.. math:: \bar{g} = \begin{bmatrix} \bar{g}_D \\ \bar{g}_S \\ \bar{g}_M \end{bmatrix}.
+
+Each micro moment :math:`m` is averaged over a set :math:`\mathscr{T}_m \subset \{1, 2, \ldots, T\}` of markets in which its micro data are relevant:
+
+.. math:: \bar{g}_{M,m} = \frac{1}{|\mathscr{T}_m|} \sum_{t\in\mathscr{T}_m} g_{M,mt}.
+   :label: averaged_micro_moments
+
+The vector :math:`\bar{g}_M` contains sample analogues of micro moment conditions :math:`E[g_{M,mt}] = 0` where :math:`g_{M,mt}` is typically a function of choice probabilities, data in market :math:`t`, and a statistic computed from survey data that the moment aims to match.
+
+Mico moments are computed for each :math:`\hat{\theta}` and contribute to the GMM objective :math:`q(\hat{\theta})` in :eq:`objective`. Their derivatives with respect to :math:`\theta` are also stacked with :math:`\bar{G}` in :eq:`averaged_moments_jacobian`.
+
+Lastly, blocks are added to :math:`W` and :math:`S` in :eq:`2sls_W` and :eq:`W`. The covariance between standard moments and micro moments is typically assumed to be zero, so these matrices will be block-diagonal. Their micro moment blocks will depend, for example, on how statistics the micro moments aim to match are estimated from the survey data.
 
 
 Random Coefficients Nested Logit

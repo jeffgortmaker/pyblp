@@ -14,16 +14,33 @@ def precisely_identify_collinearity(x: Array) -> Tuple[Array, bool]:
     """Compute the QR decomposition of a matrix and identify which diagonal elements of the upper diagonal matrix are
     within absolute and relative tolerances.
     """
-    try:
-        with warnings.catch_warnings():
-            warnings.filterwarnings('error')
-            r = scipy.linalg.qr(x, mode='r')[0] if x.size > 0 else x
-            collinear = np.abs(r.diagonal()) < options.collinear_atol + options.collinear_rtol * x.std(axis=0)
-            successful = True
-    except (ValueError, scipy.linalg.LinAlgError, scipy.linalg.LinAlgWarning):
-        collinear = np.zeros(x.shape[1], np.bool)
-        successful = False
+    collinear = np.zeros(x.shape[1], np.bool)
+    successful = True
+    if x.size > 0 and min(options.collinear_atol, options.collinear_rtol) > 0:
+        try:
+            with warnings.catch_warnings():
+                warnings.filterwarnings('error')
+                r = scipy.linalg.qr(x, mode='r')[0]
+                collinear = np.abs(r.diagonal()) < options.collinear_atol + options.collinear_rtol * x.std(axis=0)
+        except (ValueError, scipy.linalg.LinAlgError, scipy.linalg.LinAlgWarning):
+            successful = False
     return collinear, successful
+
+
+def precisely_identify_psd(x: Array) -> Tuple[bool, bool]:
+    """Compute the SVD of a matrix and use it to identify whether the matrix is PSD with absolute and relative
+    tolerances.
+    """
+    psd = successful = True
+    if x.size > 0 and np.isfinite([options.psd_atol, options.psd_rtol]).any():
+        try:
+            with warnings.catch_warnings():
+                warnings.filterwarnings('error')
+                _, s, v = scipy.linalg.svd(x)
+                psd = np.allclose((v.T * s) @ v, x, atol=options.psd_atol, rtol=options.psd_rtol)
+        except (ValueError, scipy.linalg.LinAlgError, scipy.linalg.LinAlgWarning):
+            psd = successful = False
+    return psd, successful
 
 
 def precisely_compute_eigenvalues(x: Array) -> Tuple[Array, bool]:

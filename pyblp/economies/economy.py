@@ -10,7 +10,7 @@ import numpy as np
 from .. import options
 from ..configurations.formulation import Formulation
 from ..primitives import Container
-from ..utilities.algebra import precisely_identify_collinearity
+from ..utilities.algebra import precisely_identify_collinearity, precisely_identify_psd
 from ..utilities.basics import Array, RecArray, StringRepresentation, TableFormatter
 
 
@@ -197,6 +197,16 @@ class Economy(Container, StringRepresentation):
                     f"Detected collinearity issues with [{collinear_labels}] and at least one other column in {name}. "
                     f"{common_message}"
                 )
+
+    @staticmethod
+    def _detect_psd(matrix: Array, name: str) -> None:
+        """Detect whether a matrix is PSD."""
+        psd, successful = precisely_identify_psd(matrix)
+        common_message = "To disable PSD checks, set options.psd_atol = options.psd_rtol = numpy.inf."
+        if not successful:
+            raise ValueError(f"Failed to compute the SVD of {name} while checking that it is PSD. {common_message}")
+        if not psd:
+            raise ValueError(f"{name} must be a PSD matrix. {common_message}")
 
     def _validate_name(self, name: str) -> None:
         """Validate that a name corresponds to a variable in X1, X2, or X3."""

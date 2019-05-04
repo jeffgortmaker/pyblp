@@ -478,13 +478,9 @@ class Simulation(Economy):
         # simulate or load xi and omega
         if xi is None and omega is None:
             covariance = correlation * np.sqrt(xi_variance * omega_variance)
-            covariances = [[xi_variance, covariance], [covariance, omega_variance]]
-            try:
-                errors = state.multivariate_normal([0, 0], covariances, self.N, check_valid='raise')
-            except ValueError:
-                raise ValueError(
-                    "xi_variance, omega_variance, and correlation must give a positive-semidefinite matrix."
-                )
+            covariances = np.array([[xi_variance, covariance], [covariance, omega_variance]], options.dtype)
+            self._detect_psd(covariances, "the covariance matrix from xi_variance, omega_variance, and correlation")
+            errors = state.multivariate_normal([0, 0], covariances, self.N, check_valid='ignore')
             self.xi = errors[:, [0]].astype(options.dtype)
             self.omega = errors[:, [1]].astype(options.dtype)
         elif xi is None:
