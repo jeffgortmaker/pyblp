@@ -4,11 +4,27 @@ Notation
 The notation in pyblp is a customized amalgamation of the notation employed by :ref:`references:Berry, Levinsohn, and Pakes (1995)`, :ref:`references:Nevo (2000)`, :ref:`references:Morrow and Skerlos (2011)`, :ref:`references:Grigolon and Verboven (2014)`, and others.
 
 
-Dimensions and Sets
--------------------
+Indices
+-------
+
+=========  =====================
+Index      Description
+=========  =====================
+:math:`j`  Products
+:math:`t`  Markets
+:math:`i`  Agents or individuals
+:math:`f`  Firms
+:math:`h`  Nests
+:math:`c`  Clusters
+:math:`m`  Micro moments
+=========  =====================
+
+
+Dimensions
+----------
 
 ========================  ==================================================================================================
-Symbol                    Description
+Dimension                 Description
 ========================  ==================================================================================================
 :math:`T`                 Markets
 :math:`N`                 Products across all markets
@@ -32,17 +48,24 @@ Symbol                    Description
 :math:`H`                 Nesting groups
 :math:`C`                 Clusters
 :math:`P`                 Parameters
-:math:`\mathscr{J}_{ft}`  Set of products produced by firm :math:`f` in market :math:`t`
-:math:`\mathscr{J}_{ht}`  Set of products in nesting group :math:`h` and market :math:`t`
-:math:`\mathscr{J}_{ct}`  Set of products in cluster :math:`c` and market :math:`t`
-:math:`\mathscr{T}_m`     Set of markets over which micro moment :math:`m` is averaged
 ========================  ==================================================================================================
+
+
+Sets
+----
+
+========================  ========================================================
+Set                       Description
+========================  ========================================================
+:math:`\mathscr{J}_{ft}`  Products produced by firm :math:`f` in market :math:`t`
+:math:`\mathscr{J}_{ht}`  Products in nesting group :math:`h` and market :math:`t`
+:math:`\mathscr{J}_{ct}`  Products in cluster :math:`c` and market :math:`t`
+:math:`\mathscr{T}_m`     Markets over which micro moment :math:`m` is averaged
+========================  ========================================================
 
 
 Matrices, Vectors, and Scalars
 ------------------------------
-
-Dimensions that can differ across markets are reported for a single market :math:`t`. Some notation differs depending on how it is indexed.
 
 =====================================================  ============================  ====================================================================================
 Symbol                                                 Dimensions                    Description

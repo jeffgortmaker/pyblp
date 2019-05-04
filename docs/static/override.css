@@ -15,6 +15,12 @@
     }
 }
 
+/* left-align tables */
+.wy-table-responsive table {
+    text-align: left !important;
+    margin: 0 !important;
+}
+
 /* allow table to have multi-line rows on desktops */
 @media screen and (min-width: 767px) {
     .wy-table-responsive table td {
