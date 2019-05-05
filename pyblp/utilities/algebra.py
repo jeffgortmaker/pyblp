@@ -97,19 +97,27 @@ def approximately_solve(a: Array, b: Array) -> Tuple[Array, Optional[str]]:
 
 def approximately_invert(x: Array) -> Tuple[Array, Optional[str]]:
     """Attempt to invert a matrix with decreasingly precise replacements for the inverse."""
-    try:
-        with warnings.catch_warnings():
-            warnings.filterwarnings('error')
-            inverted = scipy.linalg.inv(x) if x.size > 0 else x
-            replacement = None
-    except ValueError:
-        inverted = np.full_like(x, np.nan)
-        replacement = "null values"
-    except (scipy.linalg.LinAlgError, scipy.linalg.LinAlgWarning):
-        try:
-            inverted = scipy.linalg.pinv(x)
-            replacement = "its Moore-Penrose pseudo inverse"
-        except (scipy.linalg.LinAlgError, scipy.linalg.LinAlgWarning):
-            inverted = np.diag(1 / np.diag(x))
-            replacement = "inverted diagonal terms because the Moore-Penrose pseudo inverse could not be computed"
+    inverted = np.full_like(x, np.nan)
+    replacement = None
+    if x.size > 0:
+        if options.pseudo_inverses:
+            methods = [(scipy.linalg.pinv, None)]
+        else:
+            methods = [(scipy.linalg.inv, None), (scipy.linalg.pinv, "its Moore-Penrose pseudo inverse")]
+        methods.append((
+            lambda y: np.diag(1 / y.diagonal()),
+            "inverted diagonal terms because the Moore-Penrose pseudo-inverse could not be computed"
+        ))
+        for invert, replacement in methods:
+            try:
+                with warnings.catch_warnings():
+                    warnings.filterwarnings('error')
+                    inverted = invert(x)
+                replacement = None
+                break
+            except ValueError:
+                replacement = "null values"
+                break
+            except (scipy.linalg.LinAlgError, scipy.linalg.LinAlgWarning):
+                pass
     return inverted, replacement

@@ -35,6 +35,15 @@ dtype : `dtype`
     Windows, it is often easier to install Linux in a virtual machine than it is to build NumPy from source with a
     non-standard compiler.
 
+pseudo_inverses : `bool`
+    Whether to compute Moore-Penrose pseudo-inverses of matrices with :func:`scipy.linalg.pinv` instead of their classic
+    inverses with :func:`scipy.linalg.inv`. This is by default ``True``, so pseudo-inverses will be used. Up to small
+    numerical differences, the pseudo-inverse is identical to the classic inverse for invertible matrices. Using the
+    pseudo-inverse by default can help alleviate problems from, for example, near-singular weighting matrices.
+
+    To always attempt to compute classic inverses first, set ``pyblp.options.pseudo_inverses = False``. If a classic
+    inverse cannot be computed, an error will be displayed, and a pseudo-inverse may be computed instead.
+
 collinear_atol : `float`
     Absolute tolerance for detecting collinear columns in each matrix of product characteristics and instruments:
     :math:`X_1`, :math:`X_2`, :math:`X_3`, :math:`Z_D`, and :math:`Z_S`.
@@ -71,5 +80,6 @@ digits = 10
 verbose = True
 verbose_output = print
 dtype = _np.float64
+pseudo_inverses = True
 collinear_atol = collinear_rtol = 1e-14
 psd_atol = psd_rtol = 1e-8
