@@ -88,12 +88,12 @@ def compute_gmm_moment_covariances(
     return np.c_[S + S.T] / 2
 
 
-def compute_gmm_parameter_covariances(W: Array, S: Array, G_bar: Array, se_type: str) -> Tuple[Array, List[Error]]:
+def compute_gmm_parameter_covariances(W: Array, S: Array, mean_G: Array, se_type: str) -> Tuple[Array, List[Error]]:
     """Estimate GMM parameter covariances."""
     errors: List[Error] = []
 
     # attempt to compute the covariance matrix
-    covariances_inverse = G_bar.T @ W @ G_bar
+    covariances_inverse = mean_G.T @ W @ mean_G
     covariances, replacement = approximately_invert(covariances_inverse)
     if replacement:
         errors.append(exceptions.GMMParameterCovariancesInversionError(covariances_inverse, replacement))
@@ -101,7 +101,7 @@ def compute_gmm_parameter_covariances(W: Array, S: Array, G_bar: Array, se_type:
     # compute the robust covariance matrix
     if se_type != 'unadjusted':
         with np.errstate(invalid='ignore'):
-            covariances = covariances @ G_bar.T @ W @ S @ W @ G_bar @ covariances
+            covariances = covariances @ mean_G.T @ W @ S @ W @ mean_G @ covariances
 
     # enforce shape and symmetry
     return np.c_[covariances + covariances.T] / 2, errors

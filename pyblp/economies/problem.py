@@ -724,8 +724,8 @@ class ProblemEconomy(Economy):
 
         # compute the objective value and replace it with its last value if computation failed
         with np.errstate(all='ignore'):
-            g_bar = np.r_[self.N * compute_gmm_moments_mean(u_list, Z_list), micro]
-            objective = g_bar.T @ W @ g_bar
+            mean_g = np.r_[self.N * compute_gmm_moments_mean(u_list, Z_list), micro]
+            objective = mean_g.T @ W @ mean_g
         if not np.isfinite(np.squeeze(objective)):
             objective = progress.objective
             errors.append(exceptions.ObjectiveReversionError())
@@ -734,8 +734,8 @@ class ProblemEconomy(Economy):
         gradient = np.full_like(progress.gradient, np.nan)
         if compute_gradient:
             with np.errstate(all='ignore'):
-                G_bar = np.r_[self.N * compute_gmm_moments_jacobian_mean(jacobian_list, Z_list), micro_jacobian]
-                gradient = 2 * (G_bar.T @ W @ g_bar)
+                mean_G = np.r_[self.N * compute_gmm_moments_jacobian_mean(jacobian_list, Z_list), micro_jacobian]
+                gradient = 2 * (mean_G.T @ W @ mean_g)
             bad_gradient_index = ~np.isfinite(gradient)
             if np.any(bad_gradient_index):
                 gradient[bad_gradient_index] = progress.gradient[bad_gradient_index]

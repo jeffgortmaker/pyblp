@@ -401,7 +401,7 @@ class ProblemResults(Results):
                 self._errors.extend(se_W_errors)
 
             # compute parameter covariances
-            G_bar = np.r_[
+            mean_G = np.r_[
                 compute_gmm_moments_jacobian_mean(jacobian_list, Z_list),
                 np.c_[
                     self.micro_by_theta_jacobian,
@@ -409,7 +409,7 @@ class ProblemResults(Results):
                     np.zeros((self._moments.MM, self._parameters.eliminated_gamma_index.sum()), options.dtype)
                 ]
             ]
-            self.parameter_covariances, se_errors = compute_gmm_parameter_covariances(se_W, se_S, G_bar, se_type)
+            self.parameter_covariances, se_errors = compute_gmm_parameter_covariances(se_W, se_S, mean_G, se_type)
             self._errors.extend(se_errors)
 
         # compute standard errors, ignoring invalid numbers from any computational errors above
