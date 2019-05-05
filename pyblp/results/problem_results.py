@@ -9,9 +9,7 @@ import scipy.linalg
 from .results import Results
 from .. import exceptions, options
 from ..configurations.iteration import Iteration
-from ..markets.market import Market
 from ..markets.results_market import ResultsMarket
-from ..parameters import BetaParameter
 from ..utilities.algebra import approximately_solve, precisely_compute_eigenvalues
 from ..utilities.basics import (
     Array, Bounds, Error, TableFormatter, format_number, format_seconds, generate_items, output, output_progress
@@ -154,11 +152,6 @@ class ProblemResults(Results):
     micro_by_theta_jacobian : `ndarray`
         Estimated :math:`\frac{\partial\bar{g}_M}{\partial\theta}`, which is used to compute the gradient and standard
         errors.
-    micro_by_beta_jacobian : `ndarray`
-        Estimated :math:`\frac{\partial\bar{g}_M}{\partial\beta}`, which is needed to compute standard errors because
-        linear parameters cannot be concentrated out of micro moments' contribution to the GMM objective. This Jacobian
-        does not account for absorbed demand-side fixed effects, so standard errors computed under absorbed fixed
-        effects may be different than standard errors computed under fixed effects that are included as dummy variables.
     gradient : `ndarray`
         Gradient of the GMM objective, :math:`\nabla q(\hat{\theta})`, defined in :eq:`gradient`. This is computed after
         the optimization routine finishes even if the routine was configured to not use analytic gradients.
@@ -236,7 +229,6 @@ class ProblemResults(Results):
     xi_by_theta_jacobian: Array
     omega_by_theta_jacobian: Array
     micro_by_theta_jacobian: Array
-    micro_by_beta_jacobian: Array
     gradient: Array
     gradient_norm: Array
     hessian: Array
@@ -344,17 +336,6 @@ class ProblemResults(Results):
         self.beta_bounds = self._parameters.beta_bounds
         self.gamma_bounds = self._parameters.gamma_bounds
 
-        # the Jacobian of micro moments with respect to beta is needed to compute standard errors
-        self.micro_by_beta_jacobian = np.full((self._moments.MM, self.beta.size), np.nan, options.dtype)
-        if self._moments.MM > 0:
-            for p, parameter in enumerate(self._parameters.unfixed):
-                if isinstance(parameter, BetaParameter):
-                    self.micro_by_beta_jacobian[:, parameter.location[0]] = self.micro_by_theta_jacobian[:, p]
-            if self._parameters.eliminated_beta_index.any():
-                eliminated_jacobian, eliminated_jacobian_errors = self._compute_micro_by_eliminated_beta_jacobian()
-                self.micro_by_beta_jacobian[:, self._parameters.eliminated_beta_index.flat] = eliminated_jacobian
-                self._errors.extend(eliminated_jacobian_errors)
-
         # collect additional inputs to weighting matrix and standard error computation
         u_list = [self.xi]
         Z_list = [self.problem.products.ZD]
@@ -405,7 +386,7 @@ class ProblemResults(Results):
                 compute_gmm_moments_jacobian_mean(jacobian_list, Z_list),
                 np.c_[
                     self.micro_by_theta_jacobian,
-                    self.micro_by_beta_jacobian[:, self._parameters.eliminated_beta_index.flat],
+                    np.zeros((self._moments.MM, self._parameters.eliminated_beta_index.sum()), options.dtype),
                     np.zeros((self._moments.MM, self._parameters.eliminated_gamma_index.sum()), options.dtype)
                 ]
             ]
@@ -527,32 +508,6 @@ class ProblemResults(Results):
             formatter.line()
         ])
         return "\n".join(lines)
-
-    def _compute_micro_by_eliminated_beta_jacobian(self) -> Tuple[Array, List[Error]]:
-        """Compute the Jacobian of micro moments with respect to eliminated parameters in beta."""
-        errors: List[Error] = []
-
-        # define a factory for computing the Jacobian in each market
-        def market_factory(s: Hashable) -> Tuple[Market]:
-            """Build a market along with arguments used to compute the Jacobian of micro moments with respect to
-            eliminated beta parameters.
-            """
-            market_s = Market(
-                self.problem, s, self._parameters, self.sigma, self.pi, self.rho, self.beta, self.delta, self._moments
-            )
-            return market_s,
-
-        # compute the Jacobian market-by-market
-        jacobian = np.zeros((self._moments.MM, self._parameters.eliminated_beta_index.sum()), options.dtype)
-        generator = generate_items(
-            self.problem.unique_market_ids, market_factory, Market.compute_micro_by_eliminated_beta_jacobian
-        )
-        for t, (jacobian_t, errors_t) in generator:
-            jacobian[self._moments.market_indices[t]] = (
-                jacobian_t / self._moments.market_counts[self._moments.market_indices[t]]
-            )
-            errors.extend(errors_t)
-        return jacobian, errors
 
     def bootstrap(
             self, draws: int = 1000, seed: Optional[int] = None, iteration: Optional[Iteration] = None) -> (

@@ -382,13 +382,9 @@ class ProblemEconomy(Economy):
             type of micro moment currently supported is the :class:`ProductsAgentsCovarianceMoment`. By default, no
             micro moments are used, so :math:`M_M = 0`.
 
-            .. warning::
-
-               The Jacobian of micro moments with respect to any absorbed demand-side fixed effects is not computed, so
-               with micro moments, standard errors computed under absorbed fixed effects may be different than standard
-               errors computed under fixed effects that are included as dummy variables. This is because linear
-               parameters cannot be concentrated out of micro moments' contribution to the GMM objective. If this is a
-               concern, demand-side fixed effects should be included as dummy variables when micro moments are used.
+            If micro moments are specified, ``micro_covariances`` are required. The micro moment block in ``W`` should
+            also usually be replaced by a matrix that better reflects micro moment covariances and the size of the micro
+            dataset relative to :math:`N`.
 
         micro_covariances : `callable, optional`
             A function that computes covariances between the :math:`M_M` micro moments, which is required if

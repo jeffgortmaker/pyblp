@@ -46,7 +46,7 @@ class ProblemMarket(Market):
             micro, micro_errors = self.compute_micro(valid_delta)
             errors.extend(micro_errors)
             if compute_jacobian:
-                micro_jacobian, micro_jacobian_errors = self.compute_micro_by_theta_jacobian(valid_delta)
+                micro_jacobian, micro_jacobian_errors = self.compute_micro_by_theta_jacobian(valid_delta, xi_jacobian)
                 errors.extend(micro_jacobian_errors)
         return delta, micro, xi_jacobian, micro_jacobian, errors, converged, iterations, evaluations
 

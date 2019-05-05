@@ -8,7 +8,7 @@ from .. import exceptions, options
 from ..configurations.iteration import ContractionResults, Iteration
 from ..economies.economy import Economy
 from ..moments import EconomyMoments, MarketMoments, ProductsAgentsCovarianceMoment
-from ..parameters import BetaParameter, LinearCoefficient, NonlinearCoefficient, Parameter, Parameters, RhoParameter
+from ..parameters import LinearCoefficient, NonlinearCoefficient, Parameter, Parameters, RhoParameter
 from ..primitives import Container
 from ..utilities.algebra import approximately_invert, approximately_solve
 from ..utilities.basics import Array, Error, Groups, update_matrices
@@ -27,11 +27,11 @@ class Market(Container):
     H: int
     sigma: Array
     pi: Array
-    beta: Array
+    beta: Optional[Array]
     rho_size: int
     group_rho: Array
     rho: Array
-    delta: Array
+    delta: Optional[Array]
     mu: Array
     parameters: Parameters
     moments: Optional[MarketMoments]
@@ -699,20 +699,20 @@ class Market(Container):
             np.seterrcall(lambda *_: errors.append(exceptions.MicroMomentsFloatingPointError()))
 
             # compute probabilities with the outside option eliminated
-            conditional_probabilities, _ = self.compute_probabilities(delta, eliminate_outside=True)
+            probabilities, _ = self.compute_probabilities(delta, eliminate_outside=True)
 
             # compute the micro moments
             micro = np.zeros((self.moments.MM, 1), options.dtype)
             for m, moment in enumerate(self.moments.micro_moments):
                 assert isinstance(moment, ProductsAgentsCovarianceMoment)
-                z = conditional_probabilities.T @ self.products.X2[:, [moment.X2_index]]
+                z = probabilities.T @ self.products.X2[:, [moment.X2_index]]
                 d = self.agents.demographics[:, [moment.demographics_index]]
-                mean_z = z.T @ self.agents.weights
-                mean_d = d.T @ self.agents.weights
-                micro[m] = (z - mean_z).T @ (self.agents.weights * (d - mean_d)) - moment.value
+                demeaned_z = z - z.T @ self.agents.weights
+                demeaned_d = d - d.T @ self.agents.weights
+                micro[m] = demeaned_z.T @ (self.agents.weights * demeaned_d) - moment.value
             return micro, errors
 
-    def compute_micro_by_theta_jacobian(self, delta: Array) -> Tuple[Array, List[Error]]:
+    def compute_micro_by_theta_jacobian(self, delta: Array, xi_jacobian: Array) -> Tuple[Array, List[Error]]:
         """Compute the Jacobian of micro moments with respect to theta."""
         errors: List[Error] = []
         assert self.moments is not None
@@ -721,57 +721,35 @@ class Market(Container):
         with np.errstate(divide='call', over='call', under='ignore', invalid='call'):
             np.seterrcall(lambda *_: errors.append(exceptions.MicroMomentsByThetaJacobianFloatingPointError()))
 
-            # compute probabilities with the outside option eliminated
-            conditional_probabilities, conditionals = self.compute_probabilities(delta, eliminate_outside=True)
+            # compute probabilities with the outside option eliminated and their tensor derivative with respect to xi
+            probabilities, conditionals = self.compute_probabilities(delta, eliminate_outside=True)
+            probabilities_tensor, conditionals_tensor = self.compute_probabilities_by_xi_tensor(
+                probabilities, conditionals
+            )
 
             # compute the Jacobian
-            jacobian_columns: List[Array] = []
-            for parameter in self.parameters.unfixed:
-                jacobian_columns.append(self.compute_micro_by_parameter_gradient(
-                    parameter, conditional_probabilities, conditionals, delta
-                ))
-            return np.hstack(jacobian_columns), errors
+            micro_jacobian = np.zeros((self.moments.MM, self.parameters.P))
+            for p, parameter in enumerate(self.parameters.unfixed):
+                if not isinstance(parameter, LinearCoefficient):
+                    # compute the tangent of probabilities (with the outside option removed from the choice set) with
+                    #   respect to the parameter
+                    probabilities_tangent, _ = self.compute_probabilities_by_parameter_tangent(
+                        parameter, probabilities, conditionals, delta
+                    )
 
-    def compute_micro_by_eliminated_beta_jacobian(self) -> Tuple[Array, List[Error]]:
-        """Compute the Jacobian of micro moments with respect to eliminated parameters in beta."""
-        errors: List[Error] = []
-        assert self.moments is not None
-
-        # configure NumPy to identify floating point errors
-        with np.errstate(divide='call', over='call', under='ignore', invalid='call'):
-            np.seterrcall(lambda *_: errors.append(exceptions.MicroMomentsByBetaJacobianFloatingPointError()))
-
-            # compute probabilities with the outside option removed from the choice set
-            conditional_probabilities, conditionals = self.compute_probabilities(eliminate_outside=True)
-
-            # compute the Jacobian
-            jacobian_columns: List[Array] = []
-            for parameter in self.parameters.eliminated:
-                if isinstance(parameter, BetaParameter):
-                    jacobian_columns.append(self.compute_micro_by_parameter_gradient(
-                        parameter, conditional_probabilities, conditionals
-                    ))
-            return np.hstack(jacobian_columns), errors
-
-    def compute_micro_by_parameter_gradient(
-            self, parameter: Parameter, conditional_probabilities: Array, conditionals: Optional[Array],
-            delta: Optional[Array] = None) -> Array:
-        """Compute the gradient of micro moments with respect to a parameter."""
-        assert self.moments is not None
-
-        # compute the tangent of probabilities (with the outside option removed from the choice set) with respect to
-        #   the parameter
-        conditional_probabilities_tangent, _ = self.compute_probabilities_by_parameter_tangent(
-            parameter, conditional_probabilities, conditionals, delta
-        )
-
-        # compute the gradient
-        gradient = np.zeros((self.moments.MM, 1), options.dtype)
-        for m, moment in enumerate(self.moments.micro_moments):
-            assert isinstance(moment, ProductsAgentsCovarianceMoment)
-            z_tangent = conditional_probabilities_tangent.T @ self.products.X2[:, [moment.X2_index]]
-            d = self.agents.demographics[:, [moment.demographics_index]]
-            mean_z_tangent = z_tangent.T @ self.agents.weights
-            mean_d = d.T @ self.agents.weights
-            gradient[m] = (z_tangent - mean_z_tangent).T @ (self.agents.weights * (d - mean_d))
-        return gradient
+                    # compute the gradient of micro moments with respect to the parameter
+                    for m, moment in enumerate(self.moments.micro_moments):
+                        assert isinstance(moment, ProductsAgentsCovarianceMoment)
+                        z_tangent = probabilities_tangent.T @ self.products.X2[:, [moment.X2_index]]
+                        z_jacobian = np.squeeze(
+                            probabilities_tensor.swapaxes(1, 2) @ self.products.X2[:, [moment.X2_index]]
+                        )
+                        d = self.agents.demographics[:, [moment.demographics_index]]
+                        demeaned_z_tangent = z_tangent - z_tangent.T @ self.agents.weights
+                        demeaned_z_jacobian = z_jacobian - z_jacobian @ self.agents.weights
+                        weighted_demeaned_d = self.agents.weights * (d - d.T @ self.agents.weights)
+                        micro_jacobian[m, p] = (
+                            demeaned_z_tangent.T @ weighted_demeaned_d +
+                            (demeaned_z_jacobian @ weighted_demeaned_d).T @ xi_jacobian[:, [p]]
+                        )
+            return micro_jacobian, errors
