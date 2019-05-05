@@ -762,42 +762,36 @@ def test_extra_demographics(simulated_problem: SimulatedProblemFixture) -> None:
     pytest.param(True, id="linear parameters eliminated"),
     pytest.param(False, id="linear parameters not eliminated")
 ])
-@pytest.mark.parametrize('solve_options_update', [
-    pytest.param({}, id="default"),
-    pytest.param({'fp_type': 'nonlinear'}, id="nonlinear fixed point")
+@pytest.mark.parametrize('demand', [
+    pytest.param(True, id="demand"),
+    pytest.param(False, id="no demand")
+])
+@pytest.mark.parametrize('supply', [
+    pytest.param(True, id="supply"),
+    pytest.param(False, id="no supply")
+])
+@pytest.mark.parametrize('micro', [
+    pytest.param(True, id="micro"),
+    pytest.param(False, id="no micro")
 ])
 def test_objective_gradient(
-        simulated_problem: SimulatedProblemFixture, eliminate: bool, solve_options_update: Options) -> None:
+        simulated_problem: SimulatedProblemFixture, eliminate: bool, demand: bool, supply: bool, micro: bool) -> None:
     """Implement central finite differences in a custom optimization routine to test that analytic gradient values
     are close to estimated values.
     """
-    simulation, _, problem, solve_options, _ = simulated_problem
+    simulation, _, problem, solve_options, problem_results = simulated_problem
 
-    # define a custom optimization routine that tests central finite differences around starting parameter values
-    def test_finite_differences(theta: Array, _: Any, objective_function: Callable, __: Any) -> Tuple[Array, bool]:
-        exact = objective_function(theta)[1]
-        estimated = np.zeros_like(exact)
-        change = np.sqrt(np.finfo(np.float64).eps)
-        for index in range(theta.size):
-            theta1 = theta.copy()
-            theta2 = theta.copy()
-            theta1[index] += change / 2
-            theta2[index] -= change / 2
-            estimated[index] = (objective_function(theta1)[0] - objective_function(theta2)[0]) / change
-        np.testing.assert_allclose(exact, estimated, atol=0, rtol=0.001)
-        return theta, True
+    # skip some redundant tests
+    if supply and problem.K3 == 0:
+        return pytest.skip("The problem does not have supply-side moments to test.")
+    if micro and not solve_options['micro_moments']:
+        return pytest.skip("The problem does not have micro moments to test.")
+    if not demand and not supply and not micro:
+        return pytest.skip("There are no moments to test.")
 
-    # test the gradient at parameter values slightly different from the true ones so that the objective is sizable
+    # configure the options used to solve the problem
     updated_solve_options = solve_options.copy()
-    updated_solve_options.update(solve_options_update)
     updated_solve_options.update({k: 0.9 * solve_options[k] for k in ['sigma', 'pi', 'rho', 'beta']})
-    updated_solve_options.update({
-        'method': '1s',
-        'optimization': Optimization(test_finite_differences),
-        'iteration': Iteration('squarem', {
-            'atol': 1e-16 if solve_options_update.get('fp_type') == 'nonlinear' else 1e-14
-        })
-    })
 
     # optionally include linear parameters in theta
     if not eliminate:
@@ -807,7 +801,35 @@ def test_objective_gradient(
             updated_solve_options['gamma'] = np.full_like(simulation.gamma, np.nan)
             updated_solve_options['gamma'][-1] = 0.9 * simulation.gamma[-1]
 
+    # optionally zero out weighting matrix blocks to only test individual contributions of the gradient
+    updated_solve_options['W'] = problem_results.W.copy()
+    if not demand:
+        updated_solve_options['W'][:problem.MD, :problem.MD] = 0
+    if not supply and problem.K3 > 0:
+        updated_solve_options['W'][problem.MD:problem.MD + problem.MS, problem.MD:problem.MD + problem.MS] = 0
+    if not micro and updated_solve_options['micro_moments']:
+        MM = len(updated_solve_options['micro_moments'])
+        updated_solve_options['W'][-MM:, -MM:] = 0
+
+    # compute the analytic gradient
+    updated_solve_options['optimization'] = Optimization('return')
+    exact = problem.solve(**updated_solve_options).gradient
+
+    # define a custom optimization routine that tests central finite differences around starting parameter values
+    def test_finite_differences(theta: Array, _: Any, objective_function: Callable, __: Any) -> Tuple[Array, bool]:
+        estimated = np.zeros_like(exact)
+        change = np.sqrt(np.finfo(np.float64).eps)
+        for index in range(theta.size):
+            theta1 = theta.copy()
+            theta2 = theta.copy()
+            theta1[index] += change / 2
+            theta2[index] -= change / 2
+            estimated[index] = (objective_function(theta1)[0] - objective_function(theta2)[0]) / change
+        np.testing.assert_allclose(exact, estimated, atol=1e-10, rtol=1e-3)
+        return theta, True
+
     # test the gradient
+    updated_solve_options['optimization'] = Optimization(test_finite_differences, compute_gradient=False)
     problem.solve(**updated_solve_options)
 
 
