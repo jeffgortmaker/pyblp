@@ -6,7 +6,7 @@ from typing import Any, Callable, Optional, Tuple, Union
 import numpy as np
 import scipy.optimize
 
-from ..utilities.basics import Array, Options, StringRepresentation, format_options
+from ..utilities.basics import Array, Options, SolverStats, StringRepresentation, format_options
 
 
 # define contraction function types
@@ -245,8 +245,7 @@ class Iteration(StringRepresentation):
         description = f"{self._description} {'with' if self._compute_jacobian else 'without'} analytic Jacobians"
         return f"Configured to iterate using {description} with options {format_options(self._method_options)}."
 
-    def _iterate(
-            self, initial: Array, contraction: ContractionFunction) -> Tuple[Array, bool, int, int]:
+    def _iterate(self, initial: Array, contraction: ContractionFunction) -> Tuple[Array, SolverStats]:
         """Solve a fixed point iteration problem."""
 
         # initialize counters
@@ -283,7 +282,8 @@ class Iteration(StringRepresentation):
             raw_initial, contraction_wrapper, iteration_callback, **self._method_options
         )
         final = np.asarray(raw_final).astype(initial.dtype, copy=False).reshape(initial.shape)
-        return final, converged, iterations, evaluations
+        stats = SolverStats(converged, iterations, evaluations)
+        return final, stats
 
 
 def infinity_norm(x: Array) -> float:

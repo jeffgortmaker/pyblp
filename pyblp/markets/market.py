@@ -11,7 +11,7 @@ from ..moments import EconomyMoments, MarketMoments, ProductsAgentsCovarianceMom
 from ..parameters import LinearCoefficient, NonlinearCoefficient, Parameter, Parameters, RhoParameter
 from ..primitives import Container
 from ..utilities.algebra import approximately_invert, approximately_solve
-from ..utilities.basics import Array, Error, Groups, update_matrices
+from ..utilities.basics import Array, Error, Groups, SolverStats, update_matrices
 
 
 class Market(Container):
@@ -332,7 +332,7 @@ class Market(Container):
 
     def compute_equilibrium_prices(
             self, costs: Array, iteration: Iteration, ownership_matrix: Optional[Array] = None,
-            prices: Optional[Array] = None) -> Tuple[Array, bool, int, int]:
+            prices: Optional[Array] = None) -> Tuple[Array, SolverStats]:
         """Compute equilibrium prices by iterating over the zeta-markup equation. By default, use unchanged firm IDs
         and use unchanged prices as initial values.
         """
@@ -357,8 +357,8 @@ class Market(Container):
             return x, capital_lamda_diagonal, None
 
         # solve the fixed point problem
-        prices, converged, iterations, evaluations = iteration._iterate(prices, contraction)
-        return prices, converged, iterations, evaluations
+        prices, stats = iteration._iterate(prices, contraction)
+        return prices, stats
 
     def compute_utility_derivatives_by_parameter_tangent(
             self, parameter: Parameter, X1_derivatives: Array, X2_derivatives: Array) -> Array:

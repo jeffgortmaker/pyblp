@@ -2,7 +2,7 @@
 
 import itertools
 import time
-from typing import Any, Callable, Dict, Hashable, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, Hashable, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -10,7 +10,9 @@ from .problem_results import ProblemResults
 from .results import Results
 from .. import exceptions, options
 from ..markets.results_market import ResultsMarket
-from ..utilities.basics import Array, Error, TableFormatter, format_seconds, generate_items, output, output_progress
+from ..utilities.basics import (
+    Array, Error, SolverStats, TableFormatter, format_seconds, generate_items, output, output_progress
+)
 
 
 class BootstrappedResults(Results):
@@ -87,8 +89,7 @@ class BootstrappedResults(Results):
             self, problem_results: ProblemResults, bootstrapped_sigma: Array, bootstrapped_pi: Array,
             bootstrapped_rho: Array, bootstrapped_beta: Array, bootstrapped_gamma: Array, bootstrapped_prices: Array,
             bootstrapped_shares: Array, bootstrapped_delta: Array, bootstrapped_costs: Array, start_time: float,
-            end_time: float, draws: int, converged_mappings: List[Dict[Hashable, bool]],
-            iteration_mappings: List[Dict[Hashable, int]], evaluation_mappings: List[Dict[Hashable, int]]) -> None:
+            end_time: float, draws: int, iteration_stats: Sequence[Mapping[Hashable, SolverStats]]) -> None:
         """Structure bootstrapped problem results."""
         super().__init__(problem_results.problem, problem_results._parameters, problem_results._moments)
         self.problem_results = problem_results
@@ -103,17 +104,15 @@ class BootstrappedResults(Results):
         self.bootstrapped_costs = bootstrapped_costs
         self.computation_time = end_time - start_time
         self.draws = draws
+        unique_market_ids = problem_results.problem.unique_market_ids
         self.fp_converged = np.array(
-            [[m[t] if m else True for m in converged_mappings] for t in problem_results.problem.unique_market_ids],
-            dtype=np.int
+            [[m[t].converged if m else True for m in iteration_stats] for t in unique_market_ids], dtype=np.bool
         )
         self.fp_iterations = np.array(
-            [[m[t] if m else 0 for m in iteration_mappings] for t in problem_results.problem.unique_market_ids],
-            dtype=np.int
+            [[m[t].iterations if m else 0 for m in iteration_stats] for t in unique_market_ids], dtype=np.int
         )
         self.contraction_evaluations = np.array(
-            [[m[t] if m else 0 for m in evaluation_mappings] for t in problem_results.problem.unique_market_ids],
-            dtype=np.int
+            [[m[t].evaluations if m else 0 for m in iteration_stats] for t in unique_market_ids], dtype=np.int
         )
 
     def __str__(self) -> str:

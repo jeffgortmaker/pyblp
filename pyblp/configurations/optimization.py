@@ -12,7 +12,7 @@ import numpy as np
 import scipy.optimize
 
 from .. import options
-from ..utilities.basics import Array, Options, StringRepresentation, format_options
+from ..utilities.basics import Array, Options, SolverStats, StringRepresentation, format_options
 
 
 # objective function types
@@ -247,8 +247,7 @@ class Optimization(StringRepresentation):
 
     def _optimize(
             self, initial: Array, bounds: Optional[Iterable[Tuple[float, float]]],
-            verbose_objective_function: Callable[[Array, int, int], ObjectiveResults]) -> (
-            Tuple[Array, bool, int, int]):
+            verbose_objective_function: Callable[[Array, int, int], ObjectiveResults]) -> Tuple[Array, SolverStats]:
         """Optimize parameters to minimize a scalar objective."""
 
         # initialize counters
@@ -284,7 +283,8 @@ class Optimization(StringRepresentation):
             raw_initial, raw_bounds, objective_wrapper, iteration_callback, **self._method_options
         )
         final = np.asanyarray(raw_final).astype(initial.dtype, copy=False).reshape(initial.shape)
-        return final, converged, iterations, evaluations
+        stats = SolverStats(converged, iterations, evaluations)
+        return final, stats
 
 
 def return_optimizer(initial_values: Array, *_: Any, **__: Any) -> Tuple[Array, bool]:
@@ -356,8 +356,8 @@ def knitro_optimizer(
                 return knitro.KTR_RC_BEGINEND
             if request_code == knitro.KTR_RC_EVALGA:
                 assert compute_gradient and gradient is not None
-                for index, value in enumerate(gradient.flatten()):
-                    gradient_store[index] = normalize(value)
+                for index, gradient_value in enumerate(gradient.flatten()):
+                    gradient_store[index] = normalize(gradient_value)
                 return knitro.KTR_RC_BEGINEND
             return knitro.KTR_RC_CALLBACK_ERR
 

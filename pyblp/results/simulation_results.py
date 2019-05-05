@@ -11,7 +11,8 @@ from ..configurations.integration import Integration
 from ..markets.market import Market
 from ..moments import Moment, EconomyMoments
 from ..utilities.basics import (
-    Array, Error, generate_items, Mapping, output, RecArray, StringRepresentation, TableFormatter, format_seconds
+    Array, Error, SolverStats, generate_items, Mapping, output, RecArray, StringRepresentation, TableFormatter,
+    format_seconds
 )
 
 
@@ -63,8 +64,7 @@ class SimulationResults(StringRepresentation):
 
     def __init__(
             self, simulation: 'Simulation', prices: Array, shares: Array, start_time: float, end_time: float,
-            converged_mapping: Dict[Hashable, bool], iteration_mapping: Dict[Hashable, int],
-            evaluation_mapping: Dict[Hashable, int]) -> None:
+            iteration_stats: Dict[Hashable, SolverStats]) -> None:
         """Structure simulation results."""
         self.simulation = simulation
         self.product_data = simulation.product_data.copy()
@@ -72,10 +72,14 @@ class SimulationResults(StringRepresentation):
         self.product_data.shares = shares
         self.delta = simulation._compute_true_X1({'prices': prices}) @ simulation.beta + simulation.xi
         self.computation_time = end_time - start_time
-        self.fp_converged = np.array([converged_mapping[t] for t in simulation.unique_market_ids], dtype=np.int)
-        self.fp_iterations = np.array([iteration_mapping[t] for t in simulation.unique_market_ids], dtype=np.int)
+        self.fp_converged = np.array(
+            [iteration_stats[t].converged for t in simulation.unique_market_ids], dtype=np.bool
+        )
+        self.fp_iterations = np.array(
+            [iteration_stats[t].iterations for t in simulation.unique_market_ids], dtype=np.int
+        )
         self.contraction_evaluations = np.array(
-            [evaluation_mapping[t] for t in simulation.unique_market_ids], dtype=np.int
+            [iteration_stats[t].evaluations for t in simulation.unique_market_ids], dtype=np.int
         )
 
     def __str__(self) -> str:

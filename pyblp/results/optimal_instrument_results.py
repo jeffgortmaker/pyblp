@@ -7,7 +7,7 @@ import numpy as np
 from .problem_results import ProblemResults
 from ..configurations.formulation import Formulation
 from ..parameters import LinearCoefficient
-from ..utilities.basics import Array, Mapping, StringRepresentation, TableFormatter, format_seconds
+from ..utilities.basics import Array, Mapping, SolverStats, StringRepresentation, TableFormatter, format_seconds
 
 
 # only import objects that create import cycles when checking types
@@ -91,8 +91,7 @@ class OptimalInstrumentResults(StringRepresentation):
             self, problem_results: ProblemResults, demand_instruments: Array, supply_instruments: Array,
             inverse_covariance_matrix: Array, expected_xi_jacobian: Array, expected_omega_jacobian: Array,
             expected_prices: Array, start_time: float, end_time: float, draws: int,
-            converged_mappings: Sequence[Mapping[Hashable, bool]], iteration_mappings: Sequence[Mapping[Hashable, int]],
-            evaluation_mappings: Sequence[Mapping[Hashable, int]]) -> None:
+            iteration_stats: Sequence[Mapping[Hashable, SolverStats]]) -> None:
         """Structure optimal excluded instrument computation results. Also identify supply and demand shifters that will
         be added to the optimal instruments when converting them into a problem.
         """
@@ -105,17 +104,15 @@ class OptimalInstrumentResults(StringRepresentation):
         self.expected_prices = expected_prices
         self.computation_time = end_time - start_time
         self.draws = draws
+        unique_market_ids = problem_results.problem.unique_market_ids
         self.fp_converged = np.array(
-            [[m[t] if m else True for m in converged_mappings] for t in problem_results.problem.unique_market_ids],
-            dtype=np.int
+            [[m[t].converged if m else True for m in iteration_stats] for t in unique_market_ids], dtype=np.bool
         )
         self.fp_iterations = np.array(
-            [[m[t] if m else 0 for m in iteration_mappings] for t in problem_results.problem.unique_market_ids],
-            dtype=np.int
+            [[m[t].iterations if m else 0 for m in iteration_stats] for t in unique_market_ids], dtype=np.int
         )
         self.contraction_evaluations = np.array(
-            [[m[t] if m else 0 for m in evaluation_mappings] for t in problem_results.problem.unique_market_ids],
-            dtype=np.int
+            [[m[t].evaluations if m else 0 for m in iteration_stats] for t in unique_market_ids], dtype=np.int
         )
 
         # construct default supply and demand shifter formulations

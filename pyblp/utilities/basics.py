@@ -247,6 +247,20 @@ def format_options(mapping: Options) -> str:
     return f'{{{joined}}}'
 
 
+class SolverStats(object):
+    """Structured statistics returned by a generic numerical solver."""
+
+    converged: bool
+    iterations: int
+    evaluations: int
+
+    def __init__(self, converged: bool = True, iterations: int = 0, evaluations: int = 0) -> None:
+        """Structure the statistics."""
+        self.converged = converged
+        self.iterations = iterations
+        self.evaluations = evaluations
+
+
 class TableFormatter(object):
     """Formatter of tables with fixed-width columns."""
 

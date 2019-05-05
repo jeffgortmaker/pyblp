@@ -7,7 +7,7 @@ import numpy as np
 from .market import Market
 from .. import exceptions, options
 from ..configurations.iteration import Iteration
-from ..utilities.basics import Array, Error
+from ..utilities.basics import Array, Error, SolverStats
 
 
 class ResultsMarket(Market):
@@ -15,7 +15,7 @@ class ResultsMarket(Market):
 
     def solve_equilibrium(
             self, costs: Array, prices: Optional[Array], iteration: Optional[Iteration]) -> (
-            Tuple[Array, Array, Array, List[Error], bool, int, int]):
+            Tuple[Array, Array, Array, SolverStats, List[Error]]):
         """If not already estimated, compute equilibrium prices along with associated delta and shares."""
         errors: List[Error] = []
 
@@ -26,11 +26,10 @@ class ResultsMarket(Market):
             # solve the fixed point problem if prices haven't already been estimated
             if iteration is None:
                 assert prices is not None
-                converged = True
-                iterations = evaluations = 0
+                stats = SolverStats()
             else:
-                prices, converged, iterations, evaluations = self.compute_equilibrium_prices(costs, iteration)
-                if not converged:
+                prices, stats = self.compute_equilibrium_prices(costs, iteration)
+                if not stats.converged:
                     errors.append(exceptions.EquilibriumPricesConvergenceError())
 
             # switch to identifying floating point errors with equilibrium share computation
@@ -40,7 +39,7 @@ class ResultsMarket(Market):
             delta = self.update_delta_with_variable('prices', prices)
             mu = self.update_mu_with_variable('prices', prices)
             shares = self.compute_probabilities(delta, mu)[0] @ self.agents.weights
-            return prices, shares, delta, errors, converged, iterations, evaluations
+            return prices, shares, delta, stats, errors
 
     def compute_aggregate_elasticity(self, factor: float, name: str) -> Tuple[Array, List[Error]]:
         """Estimate the aggregate elasticity of demand with respect to a variable."""

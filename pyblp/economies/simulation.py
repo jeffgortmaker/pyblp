@@ -18,7 +18,7 @@ from ..parameters import Parameters
 from ..primitives import Agents, Products
 from ..results.simulation_results import SimulationResults
 from ..utilities.basics import (
-    Array, Data, Error, RecArray, extract_matrix, format_seconds, generate_items, output, output_progress,
+    Array, Data, Error, SolverStats, RecArray, extract_matrix, format_seconds, generate_items, output, output_progress,
     structure_matrices
 )
 
@@ -614,21 +614,17 @@ class Simulation(Economy):
             return market_s, firm_ids_s, ownership_s, costs_s, prices_s, iteration
 
         # compute prices and shares market-by-market
-        converged_mapping: Dict[Hashable, bool] = {}
-        iteration_mapping: Dict[Hashable, int] = {}
-        evaluation_mapping: Dict[Hashable, int] = {}
         synthetic_prices = np.full_like(self.products.prices, np.nan)
         synthetic_shares = np.full_like(self.products.shares, np.nan)
+        iteration_stats: Dict[Hashable, SolverStats] = {}
         generator = output_progress(
             generate_items(self.unique_market_ids, market_factory, SimulationMarket.solve), self.T, start_time
         )
-        for t, (prices_t, shares_t, errors_t, converged_t, iterations_t, evaluations_t) in generator:
+        for t, (prices_t, shares_t, iteration_stats_t, errors_t) in generator:
             synthetic_prices[self._product_market_indices[t]] = prices_t
             synthetic_shares[self._product_market_indices[t]] = shares_t
+            iteration_stats[t] = iteration_stats_t
             errors.extend(errors_t)
-            converged_mapping[t] = converged_t
-            iteration_mapping[t] = iterations_t
-            evaluation_mapping[t] = evaluations_t
 
         # handle any errors
         if errors:
@@ -640,10 +636,7 @@ class Simulation(Economy):
             output("")
 
         # structure the results
-        results = SimulationResults(
-            self, synthetic_prices, synthetic_shares, start_time, time.time(), converged_mapping, iteration_mapping,
-            evaluation_mapping
-        )
+        results = SimulationResults(self, synthetic_prices, synthetic_shares, start_time, time.time(), iteration_stats)
         output(f"Computed synthetic prices and shares after {format_seconds(results.computation_time)}.")
         output("")
         output(results)

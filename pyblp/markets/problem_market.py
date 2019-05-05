@@ -8,7 +8,7 @@ import numpy as np
 from .market import Market
 from .. import exceptions, options
 from ..configurations.iteration import ContractionResults, Iteration
-from ..utilities.basics import Array, Bounds, Error
+from ..utilities.basics import Array, Bounds, Error, SolverStats
 
 
 class ProblemMarket(Market):
@@ -16,7 +16,7 @@ class ProblemMarket(Market):
 
     def solve_demand(
             self, initial_delta: Array, iteration: Iteration, fp_type: str, compute_jacobian: bool) -> (
-            Tuple[Array, Array, Array, Array, List[Error], bool, int, int]):
+            Tuple[Array, Array, Array, Array, SolverStats, List[Error]]):
         """Compute the mean utility for this market that equates market shares to observed values by solving a fixed
         point problem. Then, if compute_jacobian is True, compute the Jacobian of xi (equivalently, of delta) with
         respect to theta. Finally, compute any micro moments and their Jacobian with respect to theta. Replace null
@@ -25,7 +25,7 @@ class ProblemMarket(Market):
         errors: List[Error] = []
 
         # solve the contraction
-        delta, delta_errors, converged, iterations, evaluations = self.compute_delta(initial_delta, iteration, fp_type)
+        delta, stats, delta_errors = self.compute_delta(initial_delta, iteration, fp_type)
 
         # replace invalid values in delta with their last computed values
         valid_delta = delta.copy()
@@ -48,11 +48,10 @@ class ProblemMarket(Market):
             if compute_jacobian:
                 micro_jacobian, micro_jacobian_errors = self.compute_micro_by_theta_jacobian(valid_delta, xi_jacobian)
                 errors.extend(micro_jacobian_errors)
-        return delta, micro, xi_jacobian, micro_jacobian, errors, converged, iterations, evaluations
+        return delta, micro, xi_jacobian, micro_jacobian, stats, errors
 
     def compute_delta(
-            self, initial_delta: Array, iteration: Iteration, fp_type: str) -> (
-            Tuple[Array, List[Error], bool, int, int]):
+            self, initial_delta: Array, iteration: Iteration, fp_type: str) -> Tuple[Array, SolverStats, List[Error]]:
         """Compute the mean utility for this market that equates market shares to observed values by solving a fixed
         point problem.
         """
@@ -64,8 +63,7 @@ class ProblemMarket(Market):
 
             # compute delta either with a closed-form solution or by solving a fixed point problem
             if self.K2 == 0:
-                converged = True
-                iterations = evaluations = 0
+                stats = SolverStats()
                 log_shares = np.log(self.products.shares)
                 log_outside_share = np.log(1 - self.products.shares.sum())
                 delta = log_shares - log_outside_share
@@ -109,7 +107,7 @@ class ProblemMarket(Market):
                         return x, None, jacobian
 
                 # solve the linear fixed point problem
-                delta, converged, iterations, evaluations = iteration._iterate(initial_delta, contraction)
+                delta, stats = iteration._iterate(initial_delta, contraction)
             else:
                 assert 'nonlinear' in fp_type
 
@@ -158,13 +156,13 @@ class ProblemMarket(Market):
                         return x, None, jacobian
 
                 # solve the nonlinear fixed point problem
-                exp_delta, converged, iterations, evaluations = iteration._iterate(np.exp(initial_delta), contraction)
+                exp_delta, stats = iteration._iterate(np.exp(initial_delta), contraction)
                 delta = np.log(exp_delta)
 
             # check for convergence
-            if not converged:
+            if not stats.converged:
                 errors.append(exceptions.DeltaConvergenceError())
-            return delta, errors, converged, iterations, evaluations
+            return delta, stats, errors
 
     def solve_supply(
             self, initial_tilde_costs: Array, xi_jacobian: Array, costs_type: str, costs_bounds: Bounds,

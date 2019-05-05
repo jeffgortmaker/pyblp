@@ -22,8 +22,8 @@ from ..primitives import Agents, Products
 from ..results.problem_results import ProblemResults
 from ..utilities.algebra import precisely_invert
 from ..utilities.basics import (
-    Array, Bounds, Error, Groups, RecArray, TableFormatter, format_number, format_seconds, generate_items, output,
-    update_matrices
+    Array, Bounds, Error, Groups, RecArray, SolverStats, TableFormatter, format_number, format_seconds, generate_items,
+    output, update_matrices
 )
 from ..utilities.statistics import IV, compute_gmm_moments_mean, compute_gmm_moments_jacobian_mean
 
@@ -558,9 +558,7 @@ class ProblemEconomy(Economy):
             )
 
             # initialize optimization progress
-            converged_mappings: List[Dict[Hashable, bool]] = []
-            iteration_mappings: List[Dict[Hashable, int]] = []
-            evaluation_mappings: List[Dict[Hashable, int]] = []
+            iteration_stats: List[Dict[Hashable, SolverStats]] = []
             smallest_objective = np.inf
             progress = InitialProgress(
                 self, parameters, moments, W, theta, objective, gradient, hessian, delta, delta, tilde_costs, micro,
@@ -568,18 +566,16 @@ class ProblemEconomy(Economy):
             )
 
             # define the objective function
-            def wrapper(new_theta: Array, current_iterations: int, current_evaluations: int) -> ObjectiveResults:
+            def wrapper(new_theta: Array, iterations: int, evaluations: int) -> ObjectiveResults:
                 """Compute and output progress associated with a single objective evaluation."""
-                nonlocal converged_mappings, iteration_mappings, evaluation_mappings, smallest_objective, progress
+                nonlocal iteration_stats, smallest_objective, progress
                 assert optimization is not None and costs_bounds is not None
-                progress = progress = compute_step_progress(
+                progress = compute_step_progress(
                     new_theta, progress, optimization._compute_gradient, compute_hessian=False
                 )
-                converged_mappings.append(progress.converged_mapping)
-                iteration_mappings.append(progress.iteration_mapping)
-                evaluation_mappings.append(progress.evaluation_mapping)
+                iteration_stats.append(progress.iteration_stats)
                 formatted_progress = progress.format(
-                    optimization, costs_bounds, step, current_iterations, current_evaluations, smallest_objective
+                    optimization, costs_bounds, step, iterations, evaluations, smallest_objective
                 )
                 if formatted_progress:
                     output(formatted_progress)
@@ -587,18 +583,17 @@ class ProblemEconomy(Economy):
                 return progress.objective, progress.gradient if optimization._compute_gradient else None
 
             # optimize theta
-            converged = True
-            iterations = evaluations = 0
+            optimization_stats = SolverStats()
             optimization_start_time = optimization_end_time = time.time()
             if parameters.P > 0:
                 output("")
                 output(f"Starting optimization ...")
                 output("")
-                theta, converged, iterations, evaluations = optimization._optimize(theta, theta_bounds, wrapper)
-                status = "completed" if converged else "failed"
+                theta, optimization_stats = optimization._optimize(theta, theta_bounds, wrapper)
+                status = "completed" if optimization_stats.converged else "failed"
                 optimization_end_time = time.time()
                 optimization_time = optimization_end_time - optimization_start_time
-                if not converged:
+                if not optimization_stats.converged:
                     self._handle_errors(error_behavior, [exceptions.ThetaConvergenceError()])
                 output("")
                 output(f"Optimization {status} after {format_seconds(optimization_time)}.")
@@ -619,10 +614,11 @@ class ProblemEconomy(Economy):
             else:
                 output("Estimating standard errors ...")
             final_progress = compute_step_progress(theta, progress, compute_gradient, compute_hessian)
+            optimization_stats.evaluations += 1
             results = ProblemResults(
                 final_progress, last_results, step_start_time, optimization_start_time, optimization_end_time,
-                iterations, evaluations + 1, converged_mappings, iteration_mappings, evaluation_mappings, converged,
-                costs_type, costs_bounds, micro_covariances, center_moments, W_type, se_type
+                optimization_stats, iteration_stats, costs_type, costs_bounds, micro_covariances, center_moments,
+                W_type, se_type
             )
             self._handle_errors(error_behavior, results._errors)
             output(f"Computed results after {format_seconds(results.total_time - results.optimization_time)}.")
@@ -660,10 +656,9 @@ class ProblemEconomy(Economy):
         sigma, pi, rho, beta, gamma = parameters.expand(theta)
 
         # compute demand-side contributions
-        demand = self._compute_demand_contributions(
+        delta, micro, xi_jacobian, micro_jacobian, iteration_stats, demand_errors = self._compute_demand_contributions(
             parameters, moments, iteration, fp_type, sigma, pi, rho, progress, compute_gradient
         )
-        delta, micro, xi_jacobian, micro_jacobian, converged, iterations, evaluations, demand_errors = demand
         errors.extend(demand_errors)
 
         # compute supply-side contributions
@@ -777,30 +772,25 @@ class ProblemEconomy(Economy):
         # structure progress
         return Progress(
             self, parameters, moments, W, theta, objective, gradient, hessian, next_delta, delta, tilde_costs, micro,
-            xi_jacobian, omega_jacobian, micro_jacobian, xi, omega, beta, gamma, converged, iterations, evaluations,
-            clipped_costs, errors
+            xi_jacobian, omega_jacobian, micro_jacobian, xi, omega, beta, gamma, iteration_stats, clipped_costs, errors
         )
 
     def _compute_demand_contributions(
             self, parameters: Parameters, moments: EconomyMoments, iteration: Iteration, fp_type: str, sigma: Array,
             pi: Array, rho: Array, progress: 'InitialProgress', compute_jacobian: bool) -> (
-            Tuple[
-                Array, Array, Array, Array, Dict[Hashable, bool], Dict[Hashable, int], Dict[Hashable, int], List[Error]
-            ]):
+            Tuple[Array, Array, Array, Array, Dict[Hashable, SolverStats], List[Error]]):
         """Compute delta and the Jacobian of xi (equivalently, of delta) with respect to theta market-by-market. If
         there are any micro moments, compute them (taking the average across relevant markets) along with their
         Jacobian. Revert any problematic elements to their last values.
         """
         errors: List[Error] = []
 
-        # initialize delta, micro moments, their Jacobians, and fixed point information so that they can be filled
-        converged: Dict[Hashable, bool] = {}
-        iterations: Dict[Hashable, int] = {}
-        evaluations: Dict[Hashable, int] = {}
+        # initialize delta, micro moments, their Jacobians, and fixed point statistics so that they can be filled
         delta = np.zeros((self.N, 1), options.dtype)
         micro = np.zeros((moments.MM, 1), options.dtype)
         xi_jacobian = np.zeros((self.N, parameters.P), options.dtype)
         micro_jacobian = np.zeros((moments.MM, parameters.P), options.dtype)
+        iteration_stats: Dict[Hashable, SolverStats] = {}
 
         # when possible and when a gradient isn't needed, compute delta with a closed-form solution
         if self.K2 == 0 and moments.MM == 0 and (parameters.P == 0 or not compute_jacobian):
@@ -814,9 +804,8 @@ class ProblemEconomy(Economy):
                 return market_s, initial_delta_s, iteration, fp_type, compute_jacobian
 
             # compute delta, micro moments (averaged across markets), and their Jacobians market-by-market
-            for t, generated in generate_items(self.unique_market_ids, market_factory, ProblemMarket.solve_demand):
-                delta_t, micro_t, xi_jacobian_t, micro_jacobian_t, errors_t = generated[:5]
-                converged[t], iterations[t], evaluations[t] = generated[5:]
+            generator = generate_items(self.unique_market_ids, market_factory, ProblemMarket.solve_demand)
+            for t, (delta_t, micro_t, xi_jacobian_t, micro_jacobian_t, iteration_stats_t, errors_t) in generator:
                 delta[self._product_market_indices[t]] = delta_t
                 xi_jacobian[self._product_market_indices[t], :parameters.P] = xi_jacobian_t
                 if moments.MM > 0:
@@ -824,6 +813,7 @@ class ProblemEconomy(Economy):
                     micro_jacobian[moments.market_indices[t], :parameters.P] += (
                         micro_jacobian_t / moments.market_counts[moments.market_indices[t]]
                     )
+                iteration_stats[t] = iteration_stats_t
                 errors.extend(errors_t)
 
         # replace invalid elements in delta and the micro moment values with their last values
@@ -846,7 +836,7 @@ class ProblemEconomy(Economy):
             if np.any(bad_micro_jacobian_index):
                 micro_jacobian[bad_micro_jacobian_index] = progress.micro_jacobian[bad_micro_jacobian_index]
                 errors.append(exceptions.MicroMomentsByThetaJacobianReversionError(bad_micro_jacobian_index))
-        return delta, micro, xi_jacobian, micro_jacobian, converged, iterations, evaluations, errors
+        return delta, micro, xi_jacobian, micro_jacobian, iteration_stats, errors
 
     def _compute_supply_contributions(
             self, parameters: Parameters, costs_type: str, costs_bounds: Bounds, sigma: Array, pi: Array, rho: Array,
@@ -1275,9 +1265,7 @@ class Progress(InitialProgress):
     omega: Array
     beta: Array
     gamma: Array
-    converged_mapping: Dict[Hashable, bool]
-    iteration_mapping: Dict[Hashable, int]
-    evaluation_mapping: Dict[Hashable, int]
+    iteration_stats: Dict[Hashable, SolverStats]
     clipped_costs: Array
     errors: List[Error]
     gradient_norm: Array
@@ -1286,8 +1274,8 @@ class Progress(InitialProgress):
             self, problem: ProblemEconomy, parameters: Parameters, moments: EconomyMoments, W: Array, theta: Array,
             objective: Array, gradient: Array, hessian: Array, next_delta: Array, delta: Array, tilde_costs: Array,
             micro: Array, xi_jacobian: Array, omega_jacobian: Array, micro_jacobian: Array, xi: Array, omega: Array,
-            beta: Array, gamma: Array, converged_mapping: Dict[Hashable, bool], iteration_mapping: Dict[Hashable, int],
-            evaluation_mapping: Dict[Hashable, int], clipped_costs: Array, errors: List[Error]) -> None:
+            beta: Array, gamma: Array, iteration_stats: Dict[Hashable, SolverStats], clipped_costs: Array,
+            errors: List[Error]) -> None:
         """Store progress information."""
         super().__init__(
             problem, parameters, moments, W, theta, objective, gradient, hessian, next_delta, delta, tilde_costs, micro,
@@ -1297,17 +1285,15 @@ class Progress(InitialProgress):
         self.omega = omega
         self.beta = beta
         self.gamma = gamma
-        self.converged_mapping = converged_mapping or {}
-        self.iteration_mapping = iteration_mapping or {}
-        self.evaluation_mapping = evaluation_mapping or {}
+        self.iteration_stats = iteration_stats or {}
         self.clipped_costs = clipped_costs
         self.errors = errors or []
         with np.errstate(invalid='ignore'):
             self.gradient_norm = np.array(np.nan, options.dtype) if gradient.size == 0 else np.abs(gradient).max()
 
     def format(
-            self, optimization: Optimization, costs_bounds: Bounds, step: int, current_iterations: int,
-            current_evaluations: int, smallest_objective: Array) -> str:
+            self, optimization: Optimization, costs_bounds: Bounds, step: int, iterations: int, evaluations: int,
+            smallest_objective: Array) -> str:
         """Format a universal display of optimization progress as a string. The first iteration will include the
         progress table header. If there are any errors, information about them will be formatted as well, regardless of
         whether or not a universal display is to be used. The smallest_objective is the smallest objective value
@@ -1324,10 +1310,10 @@ class Progress(InitialProgress):
         objective_improved = np.isfinite(smallest_objective) and self.objective < smallest_objective
         values = [
             step,
-            current_iterations,
-            current_evaluations,
-            sum(self.iteration_mapping.values()),
-            sum(self.evaluation_mapping.values()),
+            iterations,
+            evaluations,
+            sum(s.iterations for s in self.iteration_stats.values()),
+            sum(s.evaluations for s in self.iteration_stats.values()),
             format_number(float(self.objective)),
             format_number(float(smallest_objective - self.objective)) if objective_improved else "",
         ]
@@ -1352,7 +1338,7 @@ class Progress(InitialProgress):
         formatter = TableFormatter(widths)
 
         # if this is the first iteration, include the header
-        if optimization._universal_display and current_evaluations == 1:
+        if optimization._universal_display and evaluations == 1:
             lines.extend([formatter([k[0] for k in header]), formatter([k[1] for k in header], underline=True)])
 
         # include information about any errors
