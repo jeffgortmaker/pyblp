@@ -354,7 +354,7 @@ def build_differentiation_instruments(
         raise ValueError("The firm_ids field of product_data must be one-dimensional.")
 
     # identify markets
-    market_indices = {t: np.where(market_ids.flat == t) for t in np.unique(market_ids)}
+    market_indices = {t: np.flatnonzero(market_ids.flat == t) for t in np.unique(market_ids)}
 
     # build the matrix and count its dimensions
     X = build_matrix(formulation, product_data)
@@ -365,7 +365,7 @@ def build_differentiation_instruments(
     for k in range(K):
         distances_mapping[k] = {}
         for t, indices in market_indices.items():
-            x = X[indices, [k]]
+            x = X[indices][:, [k]]
             distances = x - x.T
             np.fill_diagonal(distances, np.nan)
             distances_mapping[k][t] = distances
@@ -397,10 +397,10 @@ def build_differentiation_instruments(
     # create the instruments
     other_blocks: List[List[Array]] = []
     rival_blocks: List[List[Array]] = []
-    for t, indices in market_indices.items():
+    for t, indices_t in market_indices.items():
         other_blocks.append([])
         rival_blocks.append([])
-        ownership = firm_ids[indices] == firm_ids[indices].T
+        ownership = firm_ids[indices_t] == firm_ids[indices_t].T
         for term in generate_instrument_terms(t):
             other_blocks[-1].append((ownership * term).sum(axis=1, keepdims=True))
             rival_blocks[-1].append((~ownership * term).sum(axis=1, keepdims=True))

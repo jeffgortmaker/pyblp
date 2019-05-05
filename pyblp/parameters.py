@@ -328,8 +328,8 @@ class Parameters(object):
                     raise ValueError(f"{name} must be within its bounds.")
 
         # fix parameters set to zero
-        zeros = np.where(matrix == 0)
-        bounds[0][zeros] = bounds[1][zeros] = 0
+        zeros_index = matrix == 0
+        bounds[0][zeros_index] = bounds[1][zeros_index] = 0
         return bounds
 
     def store(

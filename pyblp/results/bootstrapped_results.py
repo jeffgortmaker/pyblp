@@ -197,7 +197,7 @@ class BootstrappedResults(Results):
                     args_cs.append(market_arg[self.problem._product_market_indices[s]])
                 else:
                     assert len(market_arg.shape) == 3
-                    args_cs.append(market_arg[c, self.problem._product_market_indices[s][0]])
+                    args_cs.append(market_arg[c, self.problem._product_market_indices[s]])
             return (market_js, *fixed_args, *args_cs)
 
         # construct a mapping from draws and market IDs to market-specific arrays and compute the full matrix size

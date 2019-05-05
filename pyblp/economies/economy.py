@@ -74,12 +74,15 @@ class Economy(Container, StringRepresentation):
         self.H = self.unique_nesting_ids.size
 
         # identify market indices
-        self._product_market_indices = {t: np.where(self.products.market_ids.flat == t) for t in self.unique_market_ids}
-        self._agent_market_indices = {t: np.where(self.agents.market_ids.flat == t) for t in self.unique_market_ids}
+        self._product_market_indices: Dict[Hashable, Array] = {}
+        self._agent_market_indices: Dict[Hashable, Array] = {}
+        for t in self.unique_market_ids:
+            self._product_market_indices[t] = np.flatnonzero(self.products.market_ids == t)
+            self._agent_market_indices[t] = np.flatnonzero(self.agents.market_ids == t)
 
         # identify the largest number of products and agents in a market
-        self._max_J = max(v[0].size for v in self._product_market_indices.values())
-        self._max_I = max(v[0].size for v in self._agent_market_indices.values())
+        self._max_J = max(i.size for i in self._product_market_indices.values())
+        self._max_I = max(i.size for i in self._agent_market_indices.values())
 
         # construct fixed effect absorption functions
         self._absorb_demand_ids = self._absorb_supply_ids = None
@@ -156,7 +159,7 @@ class Economy(Container, StringRepresentation):
         shares = self.products.shares
         if (shares <= 0).any() or (shares >= 1).any():
             raise ValueError("Product shares must be between zero and one, exclusive.")
-        bad_markets = [t for t, indices in self._product_market_indices.items() if shares[indices].sum() >= 1]
+        bad_markets = [t for t, i in self._product_market_indices.items() if shares[i].sum() >= 1]
         if bad_markets:
             raise ValueError(f"Shares in the following markets do not sum to less than one: {bad_markets}.")
 
