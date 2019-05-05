@@ -723,33 +723,35 @@ class Market(Container):
 
             # compute probabilities with the outside option eliminated and their tensor derivative with respect to xi
             probabilities, conditionals = self.compute_probabilities(delta, eliminate_outside=True)
-            probabilities_tensor, conditionals_tensor = self.compute_probabilities_by_xi_tensor(
-                probabilities, conditionals
-            )
+            probabilities_tensor, _ = self.compute_probabilities_by_xi_tensor(probabilities, conditionals)
+
+            # pre-transpose the tensor derivatives
+            probabilities_tensor = probabilities_tensor.swapaxes(1, 2)
 
             # compute the Jacobian
             micro_jacobian = np.zeros((self.moments.MM, self.parameters.P))
             for p, parameter in enumerate(self.parameters.unfixed):
-                if not isinstance(parameter, LinearCoefficient):
-                    # compute the tangent of probabilities (with the outside option removed from the choice set) with
-                    #   respect to the parameter
-                    probabilities_tangent, _ = self.compute_probabilities_by_parameter_tangent(
-                        parameter, probabilities, conditionals, delta
-                    )
+                # derivatives with respect to linear parameters are zero
+                if isinstance(parameter, LinearCoefficient):
+                    continue
 
-                    # compute the gradient of micro moments with respect to the parameter
-                    for m, moment in enumerate(self.moments.micro_moments):
-                        assert isinstance(moment, ProductsAgentsCovarianceMoment)
-                        z_tangent = probabilities_tangent.T @ self.products.X2[:, [moment.X2_index]]
-                        z_jacobian = np.squeeze(
-                            probabilities_tensor.swapaxes(1, 2) @ self.products.X2[:, [moment.X2_index]]
-                        )
-                        d = self.agents.demographics[:, [moment.demographics_index]]
-                        demeaned_z_tangent = z_tangent - z_tangent.T @ self.agents.weights
-                        demeaned_z_jacobian = z_jacobian - z_jacobian @ self.agents.weights
-                        weighted_demeaned_d = self.agents.weights * (d - d.T @ self.agents.weights)
-                        micro_jacobian[m, p] = (
-                            demeaned_z_tangent.T @ weighted_demeaned_d +
-                            (demeaned_z_jacobian @ weighted_demeaned_d).T @ xi_jacobian[:, [p]]
-                        )
+                # compute the tangent of probabilities (with the outside option removed from the choice set) with
+                #   respect to the parameter
+                probabilities_tangent, _ = self.compute_probabilities_by_parameter_tangent(
+                    parameter, probabilities, conditionals, delta
+                )
+
+                # fill the gradient of micro moments with respect to the parameter moment-by-moment
+                for m, moment in enumerate(self.moments.micro_moments):
+                    assert isinstance(moment, ProductsAgentsCovarianceMoment)
+                    z_tangent = probabilities_tangent.T @ self.products.X2[:, [moment.X2_index]]
+                    z_jacobian = np.squeeze(probabilities_tensor @ self.products.X2[:, [moment.X2_index]])
+                    d = self.agents.demographics[:, [moment.demographics_index]]
+                    demeaned_z_tangent = z_tangent - z_tangent.T @ self.agents.weights
+                    demeaned_z_jacobian = z_jacobian - z_jacobian @ self.agents.weights
+                    weighted_demeaned_d = self.agents.weights * (d - d.T @ self.agents.weights)
+                    micro_jacobian[m, p] = (
+                        demeaned_z_tangent.T @ weighted_demeaned_d +
+                        (demeaned_z_jacobian @ weighted_demeaned_d).T @ xi_jacobian[:, [p]]
+                    )
             return micro_jacobian, errors
