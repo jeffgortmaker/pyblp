@@ -77,7 +77,8 @@ class ProductsAgentsCovarianceMoment(Moment):
 
     .. math:: g_{M,mt} \approx \sum_{i=1}^{I_t} w_i(z_{it} - \bar{z}_t)(y_{it} - \bar{y}_t) - \sigma_{xy}
 
-    where, conditional on purchasing a non-outside good, the expected value of :math:`x_{jt}` for agent :math:`i` is
+    where :math:`\bar{z}_t = \sum_i w_iz_{it}`, :math:`\bar{y}_t = \sum_i w_iy_{it}`, and conditional on purchasing a
+    non-outside good, the expected value of :math:`x_{jt}` for agent :math:`i` is
 
     .. math:: z_{it} = \sum_{j=1}^{J_t} \frac{x_{jt}s_{jti}}{1 - s_{0ti}}.
 
