@@ -47,7 +47,7 @@ def test_scipy(method: str, method_options: Options, compute_jacobian: bool, use
 
     # simple methods do not accept an analytic Jacobian
     if compute_jacobian and method not in {'hybr', 'lm'}:
-        return
+        return pytest.skip("This method does not accept an analytic Jacobian.")
 
     # initialize the configuration and test that it can be formatted
     iteration = Iteration(method, method_options, compute_jacobian)

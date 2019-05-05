@@ -180,7 +180,7 @@ def test_fixed_effects(
     if problem.K3 == 0:
         ES = 0
     if ED == ES == 0:
-        return
+        return pytest.skip("There are no fixed effects to test.")
 
     # make product data mutable
     product_data = {k: simulation_results.product_data[k] for k in simulation_results.product_data.dtype.names}
@@ -716,7 +716,7 @@ def test_extra_nodes(simulated_problem: SimulatedProblemFixture) -> None:
 
     # skip simulations without agents
     if simulation.K2 == 0:
-        return
+        return pytest.skip("There are no nodes.")
 
     # reconstruct the problem with unnecessary columns of nodes
     assert simulation.agent_data is not None
@@ -740,7 +740,7 @@ def test_extra_demographics(simulated_problem: SimulatedProblemFixture) -> None:
 
     # skip simulations without demographics
     if simulation.D == 0:
-        return
+        return pytest.skip("There are no demographics.")
 
     # reconstruct the problem with unnecessary rows of demographics
     assert simulation.agent_data is not None
@@ -833,7 +833,7 @@ def test_logit(
 
     # skip more complicated simulations
     if problem.K2 > 0 or problem.K3 > 0 or problem.H > 0:
-        return
+        return pytest.skip("This simulation cannot be tested against linearmodels.")
 
     # solve the problem
     results1 = problem.solve(method=method, center_moments=center_moments, W_type=W_type, se_type=se_type)

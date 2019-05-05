@@ -57,13 +57,11 @@ def test_entropy(
         gradient = F.T @ p - K if compute_gradient else None
         return objective, gradient
 
-    # simple methods do not accept an analytic gradient
+    # simple some methods
     if compute_gradient and method in {'nelder-mead', 'powell'}:
-        return
-
-    # Newton CG requires an analytic gradient
+        return pytest.skip("This method does not support an analytic gradient.")
     if not compute_gradient and method == 'newton-cg':
-        return
+        return pytest.skip("This method requires an analytic gradient.")
 
     # skip optimization methods that haven't been configured properly
     try:
