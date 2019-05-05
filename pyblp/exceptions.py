@@ -3,8 +3,7 @@
 import collections
 from typing import List, Sequence
 
-import numpy as np
-
+from .utilities.algebra import compute_condition_number
 from .utilities.basics import Array, Error, format_number
 
 
@@ -31,7 +30,7 @@ class _InversionError(Error):
 
     def __init__(self, matrix: Array) -> None:
         """Compute condition number of the matrix."""
-        self._condition = np.nan if not np.isfinite(matrix).all() else np.linalg.cond(matrix.astype(np.float64))
+        self._condition = compute_condition_number(matrix)
 
     def __str__(self) -> str:
         """Supplement the error with the condition number."""

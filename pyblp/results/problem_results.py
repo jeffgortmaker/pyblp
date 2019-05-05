@@ -10,7 +10,7 @@ from .results import Results
 from .. import exceptions, options
 from ..configurations.iteration import Iteration
 from ..markets.results_market import ResultsMarket
-from ..utilities.algebra import approximately_solve, precisely_compute_eigenvalues
+from ..utilities.algebra import approximately_solve, compute_condition_number, precisely_compute_eigenvalues
 from ..utilities.basics import (
     Array, Bounds, Error, TableFormatter, format_number, format_seconds, generate_items, output, output_progress
 )
@@ -486,6 +486,10 @@ class ProblemResults(Results):
                     format_number(float(np.min(self.hessian_eigenvalues))),
                     format_number(float(np.max(self.hessian_eigenvalues)))
                 ])
+
+        # include the weighting matrix's condition number
+        header.append(("", "Weighting Matrix", "Condition Number"))
+        values.append(format_number(compute_condition_number(self.W)))
 
         # include any information about clipped marginal costs
         if np.isfinite(self._costs_bounds).any():

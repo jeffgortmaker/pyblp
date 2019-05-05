@@ -1,13 +1,20 @@
 """Algebraic routines."""
 
 import warnings
-from typing import Optional, Tuple
+from typing import Callable, List, Optional, Tuple
 
 import numpy as np
 import scipy.linalg
 
 from .basics import Array
 from .. import options
+
+
+def compute_condition_number(x: Array) -> float:
+    """Compute the condition number of a square matrix."""
+    if not np.isfinite(x).all():
+        return np.nan
+    return np.linalg.cond(x.astype(np.float64))
 
 
 def precisely_identify_collinearity(x: Array) -> Tuple[Array, bool]:
@@ -100,10 +107,11 @@ def approximately_invert(x: Array) -> Tuple[Array, Optional[str]]:
     inverted = np.full_like(x, np.nan)
     replacement = None
     if x.size > 0:
+        methods: List[Tuple[Callable, Optional[str]]] = []
         if options.pseudo_inverses:
-            methods = [(scipy.linalg.pinv, None)]
+            methods.append((scipy.linalg.pinv, None))
         else:
-            methods = [(scipy.linalg.inv, None), (scipy.linalg.pinv, "its Moore-Penrose pseudo inverse")]
+            methods.extend([(scipy.linalg.inv, None), (scipy.linalg.pinv, "its Moore-Penrose pseudo inverse")])
         methods.append((
             lambda y: np.diag(1 / y.diagonal()),
             "inverted diagonal terms because the Moore-Penrose pseudo-inverse could not be computed"
