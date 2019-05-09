@@ -192,7 +192,7 @@ For unadjusted weighting matrices,
 
 where
 
-.. math:: \text{Var}(\xi, \omega) = \begin{bmatrix} \sigma_\xi^2 & \sigma_{\xi\omega} \\ \sigma_{\xi\omega} \\ \sigma_\omega^2 \end{bmatrix}.
+.. math:: \text{Var}(\xi, \omega) = \begin{bmatrix} \sigma_\xi^2 & \sigma_{\xi\omega} \\ \sigma_{\xi\omega} & \sigma_\omega^2 \end{bmatrix}.
 
 
 Standard Errors
