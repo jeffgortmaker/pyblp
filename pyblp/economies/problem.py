@@ -286,7 +286,7 @@ class ProblemEconomy(Economy):
 
                 - ``'safe_linear'`` (default) - The standard linear contraction mapping in :eq:`contraction` (or
                   :eq:`nested_contraction` when there is nesting) with safeguards against numerical overflow.
-                  Specifically, :math:`\max_j V_{jti}` (or :math:`\max_j V_{jti} / (1 - \rho_{h(j)}) when there is
+                  Specifically, :math:`\max_j V_{jti}` (or :math:`\max_j V_{jti} / (1 - \rho_{h(j)})` when there is
                   nesting) is subtracted from :math:`V_{jti}` and the logit expression for choice probabilities in
                   :eq:`probabilities` (or :eq:`nested_probabilities`) is re-scaled accordingly. Such re-scaling is known
                   as the log-sum-exp trick.
