@@ -263,7 +263,6 @@ When errors occur, they will either be displayed as warnings or raised as except
    exceptions.XiByThetaJacobianFloatingPointError
    exceptions.OmegaByThetaJacobianFloatingPointError
    exceptions.MicroMomentsByThetaJacobianFloatingPointError
-   exceptions.MicroMomentsByBetaJacobianFloatingPointError
    exceptions.SyntheticPricesFloatingPointError
    exceptions.SyntheticSharesFloatingPointError
    exceptions.SyntheticMicroMomentsFloatingPointError

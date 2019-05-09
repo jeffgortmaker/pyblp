@@ -149,14 +149,6 @@ class MicroMomentsByThetaJacobianFloatingPointError(Error):
     """
 
 
-class MicroMomentsByBetaJacobianFloatingPointError(Error):
-    r"""Encountered floating point issues when computing the Jacobian of micro moments with respect to :math:`\beta`.
-
-    This problem is often due to prior problems or overflow.
-
-    """
-
-
 class SyntheticPricesFloatingPointError(Error):
     """Encountered floating point issues when computing synthetic prices.
 
@@ -178,9 +170,7 @@ class SyntheticSharesFloatingPointError(Error):
 
 
 class SyntheticMicroMomentsFloatingPointError(Error):
-    """Encountered floating point issues when computing synthetic micro moments.
-
-    """
+    """Encountered floating point issues when computing synthetic micro moments."""
 
 
 class EquilibriumRealizationFloatingPointError(Error):
