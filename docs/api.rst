@@ -266,8 +266,9 @@ When errors occur, they will either be displayed as warnings or raised as except
    exceptions.MicroMomentsByBetaJacobianFloatingPointError
    exceptions.SyntheticPricesFloatingPointError
    exceptions.SyntheticSharesFloatingPointError
-   exceptions.EquilibriumPricesFloatingPointError
-   exceptions.EquilibriumSharesFloatingPointError
+   exceptions.SyntheticMicroMomentsFloatingPointError
+   exceptions.EquilibriumRealizationFloatingPointError
+   exceptions.PostEstimationFloatingPointError
    exceptions.AbsorptionConvergenceError
    exceptions.ThetaConvergenceError
    exceptions.DeltaConvergenceError

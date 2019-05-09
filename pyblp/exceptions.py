@@ -112,7 +112,9 @@ class CostsFloatingPointError(Error):
 class MicroMomentsFloatingPointError(Error):
     """Encountered floating point issues when computing micro moments.
 
-    This problem is often due to prior problems or overflow.
+    This problem is often due to prior problems, overflow, or nonpositive shares, and can sometimes be mitigated by
+    choosing smaller initial parameter values, setting more conservative bounds, rescaling data, removing outliers,
+    changing the floating point precision, or using different optimization, iteration, or integration configurations.
 
     """
 
@@ -175,22 +177,32 @@ class SyntheticSharesFloatingPointError(Error):
     """
 
 
-class EquilibriumPricesFloatingPointError(Error):
-    """Encountered floating point issues when computing equilibrium prices.
-
-    This problem is often due to prior problems or overflow and can sometimes be mitigated by rescaling data, removing
-    outliers, or changing the floating point precision.
+class SyntheticMicroMomentsFloatingPointError(Error):
+    """Encountered floating point issues when computing synthetic micro moments.
 
     """
 
 
-class EquilibriumSharesFloatingPointError(Error):
-    """Encountered floating point issues when computing equilibrium shares.
+class EquilibriumRealizationFloatingPointError(Error):
+    """Encountered floating point issues when solving for a realization of equilibrium prices and shares."""
 
-    This problem is often due to prior problems or overflow and can sometimes be mitigated by rescaling data, removing
-    outliers, or changing the floating point precision.
+
+class XiByThetaJacobianRealizationFloatingPointError(Error):
+    r"""Encountered floating point issues when computing a realization of the Jacobian of :math:`\xi` (equivalently, of
+    :math:`\delta`) with respect to :math:`\theta`.
 
     """
+
+
+class OmegaByThetaJacobianRealizationFloatingPointError(Error):
+    r"""Encountered floating point issues when computing a realization of the Jacobian of :math:`\omega` (equivalently,
+    of transformed marginal costs) with respect to :math:`\theta`.
+
+    """
+
+
+class PostEstimationFloatingPointError(Error):
+    """Encountered floating point issues when computing a post-estimation output."""
 
 
 class AbsorptionConvergenceError(Error):

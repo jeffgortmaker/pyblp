@@ -6,7 +6,8 @@ import multiprocessing.pool
 import re
 import time
 from typing import (
-    Any, Callable, Container, Dict, Hashable, Iterable, Iterator, List, Mapping, Optional, Sequence, Tuple, Union
+    Any, Callable, Container, Dict, Hashable, Iterable, Iterator, List, Mapping, Optional, Sequence, Type, Tuple,
+    Union
 )
 
 import numpy as np
@@ -379,3 +380,19 @@ class Error(Exception):
 
         # remove all remaining domains and compress whitespace
         return re.sub(r'[\s\n]+', ' ', re.sub(r':[a-z\-]+:|`', '', doc))
+
+
+def numerical_error_handler(error: Type[Error]) -> Callable:
+    """Construct a decorator that appends errors to a function's returned list when numerical errors are encountered."""
+    def decorator(decorated: Callable) -> Callable:
+        """Decorate the function."""
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            """Configure NumPy to detect numerical errors."""
+            errors: List[Error] = []
+            with np.errstate(divide='call', over='call', under='ignore', invalid='call'):
+                np.seterrcall(lambda *_: errors.append(error()))
+                returned = decorated(*args, **kwargs)
+            returned[-1].extend(errors)
+            return returned
+        return wrapper
+    return decorator

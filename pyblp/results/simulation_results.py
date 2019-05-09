@@ -8,7 +8,7 @@ import numpy as np
 from .. import exceptions, options
 from ..configurations.formulation import Formulation
 from ..configurations.integration import Integration
-from ..markets.market import Market
+from ..markets.simulation_results_market import SimulationResultsMarket
 from ..moments import Moment, EconomyMoments
 from ..utilities.basics import (
     Array, Error, SolverStats, generate_items, Mapping, output, RecArray, StringRepresentation, TableFormatter,
@@ -180,13 +180,13 @@ class SimulationResults(StringRepresentation):
         output(moments.format("Micro Moments"))
 
         # define a factory for computing market-level micro moments
-        def market_factory(s: Hashable) -> Tuple[Market]:
+        def market_factory(s: Hashable) -> Tuple[SimulationResultsMarket]:
             """Build a market along with arguments used to compute micro moments."""
             data_override_cs = {
                 'prices': self.product_data.prices[self.simulation._product_market_indices[s]],
                 'shares': self.product_data.shares[self.simulation._product_market_indices[s]]
             }
-            market_s = Market(
+            market_s = SimulationResultsMarket(
                 self.simulation, s, self.simulation._parameters, self.simulation.sigma, self.simulation.pi,
                 self.simulation.rho, self.simulation.beta, self.delta, moments, data_override_cs
             )
@@ -194,7 +194,9 @@ class SimulationResults(StringRepresentation):
 
         # compute micro moments (averaged across markets) market-by-market
         micro = np.zeros((moments.MM, 1), options.dtype)
-        generator = generate_items(self.simulation.unique_market_ids, market_factory, Market.compute_micro)
+        generator = generate_items(
+            self.simulation.unique_market_ids, market_factory, SimulationResultsMarket.safely_compute_micro
+        )
         for t, (micro_t, errors_t) in generator:
             micro[moments.market_indices[t]] += micro_t / moments.market_counts[moments.market_indices[t]]
             errors.extend(errors_t)

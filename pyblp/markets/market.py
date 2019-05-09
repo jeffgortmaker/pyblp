@@ -360,6 +360,15 @@ class Market(Container):
         prices, stats = iteration._iterate(prices, contraction)
         return prices, stats
 
+    def compute_shares(self, prices: Optional[Array] = None) -> Array:
+        """Compute shares evaluated at specific prices. By default, use unchanged prices."""
+        if prices is None:
+            prices = self.products.prices
+        delta = self.update_delta_with_variable('prices', prices)
+        mu = self.update_mu_with_variable('prices', prices)
+        shares = self.compute_probabilities(delta, mu)[0] @ self.agents.weights
+        return shares
+
     def compute_utility_derivatives_by_parameter_tangent(
             self, parameter: Parameter, X1_derivatives: Array, X2_derivatives: Array) -> Array:
         """Compute the tangent with respect to a parameter of derivatives of utility with respect to a variable."""
@@ -656,102 +665,41 @@ class Market(Container):
         if delta is None:
             assert self.delta is not None
             delta = self.delta
-
-        # configure NumPy to identify floating point errors
-        with np.errstate(divide='call', over='call', under='ignore', invalid='call'):
-            np.seterrcall(lambda *_: errors.append(exceptions.XiByThetaJacobianFloatingPointError()))
-
-            # compute the Jacobian
-            probabilities, conditionals = self.compute_probabilities(delta)
-            shares_by_xi_jacobian = self.compute_shares_by_xi_jacobian(probabilities, conditionals)
-            shares_by_theta_jacobian = self.compute_shares_by_theta_jacobian(delta, probabilities, conditionals)
-            xi_by_theta_jacobian, replacement = approximately_solve(shares_by_xi_jacobian, -shares_by_theta_jacobian)
-            if replacement:
-                errors.append(exceptions.SharesByXiJacobianInversionError(shares_by_xi_jacobian, replacement))
-            return xi_by_theta_jacobian, errors
+        probabilities, conditionals = self.compute_probabilities(delta)
+        shares_by_xi_jacobian = self.compute_shares_by_xi_jacobian(probabilities, conditionals)
+        shares_by_theta_jacobian = self.compute_shares_by_theta_jacobian(delta, probabilities, conditionals)
+        xi_by_theta_jacobian, replacement = approximately_solve(shares_by_xi_jacobian, -shares_by_theta_jacobian)
+        if replacement:
+            errors.append(exceptions.SharesByXiJacobianInversionError(shares_by_xi_jacobian, replacement))
+        return xi_by_theta_jacobian, errors
 
     def compute_omega_by_theta_jacobian(
             self, tilde_costs: Array, xi_jacobian: Array, costs_type: str) -> Tuple[Array, List[Error]]:
         """Compute the Jacobian of omega (equivalently, of transformed marginal costs) with respect to theta."""
         errors: List[Error] = []
+        eta_jacobian, eta_jacobian_errors = self.compute_eta_by_theta_jacobian(xi_jacobian)
+        errors.extend(eta_jacobian_errors)
+        if costs_type == 'linear':
+            omega_jacobian = -eta_jacobian
+        else:
+            assert costs_type == 'log'
+            omega_jacobian = -eta_jacobian / np.exp(tilde_costs)
+        return omega_jacobian, errors
 
-        # configure NumPy to identify floating point errors
-        with np.errstate(divide='call', over='call', under='ignore', invalid='call'):
-            np.seterrcall(lambda *_: errors.append(exceptions.OmegaByThetaJacobianFloatingPointError()))
-
-            # compute the Jacobian
-            eta_jacobian, eta_jacobian_errors = self.compute_eta_by_theta_jacobian(xi_jacobian)
-            errors.extend(eta_jacobian_errors)
-            if costs_type == 'linear':
-                omega_jacobian = -eta_jacobian
-            else:
-                assert costs_type == 'log'
-                omega_jacobian = -eta_jacobian / np.exp(tilde_costs)
-            return omega_jacobian, errors
-
-    def compute_micro(self, delta: Optional[Array] = None) -> Tuple[Array, List[Error]]:
-        """Compute micro moments."""
-        errors: List[Error] = []
+    def compute_micro(self, delta: Optional[Array] = None) -> Array:
+        """Compute micro moments. By default, use the delta with which this market was initialized."""
         assert self.moments is not None
 
-        # configure NumPy to identify floating point errors
-        with np.errstate(divide='call', over='call', under='ignore', invalid='call'):
-            np.seterrcall(lambda *_: errors.append(exceptions.MicroMomentsFloatingPointError()))
+        # compute probabilities with the outside option eliminated
+        probabilities, _ = self.compute_probabilities(delta, eliminate_outside=True)
 
-            # compute probabilities with the outside option eliminated
-            probabilities, _ = self.compute_probabilities(delta, eliminate_outside=True)
-
-            # compute the micro moments
-            micro = np.zeros((self.moments.MM, 1), options.dtype)
-            for m, moment in enumerate(self.moments.micro_moments):
-                assert isinstance(moment, ProductsAgentsCovarianceMoment)
-                z = probabilities.T @ self.products.X2[:, [moment.X2_index]]
-                d = self.agents.demographics[:, [moment.demographics_index]]
-                demeaned_z = z - z.T @ self.agents.weights
-                demeaned_d = d - d.T @ self.agents.weights
-                micro[m] = demeaned_z.T @ (self.agents.weights * demeaned_d) - moment.value
-            return micro, errors
-
-    def compute_micro_by_theta_jacobian(self, delta: Array, xi_jacobian: Array) -> Tuple[Array, List[Error]]:
-        """Compute the Jacobian of micro moments with respect to theta."""
-        errors: List[Error] = []
-        assert self.moments is not None
-
-        # configure NumPy to identify floating point errors
-        with np.errstate(divide='call', over='call', under='ignore', invalid='call'):
-            np.seterrcall(lambda *_: errors.append(exceptions.MicroMomentsByThetaJacobianFloatingPointError()))
-
-            # compute probabilities with the outside option eliminated and their tensor derivative with respect to xi
-            probabilities, conditionals = self.compute_probabilities(delta, eliminate_outside=True)
-            probabilities_tensor, _ = self.compute_probabilities_by_xi_tensor(probabilities, conditionals)
-
-            # pre-transpose the tensor derivatives
-            probabilities_tensor = probabilities_tensor.swapaxes(1, 2)
-
-            # compute the Jacobian
-            micro_jacobian = np.zeros((self.moments.MM, self.parameters.P))
-            for p, parameter in enumerate(self.parameters.unfixed):
-                # derivatives with respect to linear parameters are zero
-                if isinstance(parameter, LinearCoefficient):
-                    continue
-
-                # compute the tangent of probabilities (with the outside option removed from the choice set) with
-                #   respect to the parameter
-                probabilities_tangent, _ = self.compute_probabilities_by_parameter_tangent(
-                    parameter, probabilities, conditionals, delta
-                )
-
-                # fill the gradient of micro moments with respect to the parameter moment-by-moment
-                for m, moment in enumerate(self.moments.micro_moments):
-                    assert isinstance(moment, ProductsAgentsCovarianceMoment)
-                    z_tangent = probabilities_tangent.T @ self.products.X2[:, [moment.X2_index]]
-                    z_jacobian = np.squeeze(probabilities_tensor @ self.products.X2[:, [moment.X2_index]])
-                    d = self.agents.demographics[:, [moment.demographics_index]]
-                    demeaned_z_tangent = z_tangent - z_tangent.T @ self.agents.weights
-                    demeaned_z_jacobian = z_jacobian - z_jacobian @ self.agents.weights
-                    weighted_demeaned_d = self.agents.weights * (d - d.T @ self.agents.weights)
-                    micro_jacobian[m, p] = (
-                        demeaned_z_tangent.T @ weighted_demeaned_d +
-                        (demeaned_z_jacobian @ weighted_demeaned_d).T @ xi_jacobian[:, [p]]
-                    )
-            return micro_jacobian, errors
+        # compute the micro moments
+        micro = np.zeros((self.moments.MM, 1), options.dtype)
+        for m, moment in enumerate(self.moments.micro_moments):
+            assert isinstance(moment, ProductsAgentsCovarianceMoment)
+            z = probabilities.T @ self.products.X2[:, [moment.X2_index]]
+            d = self.agents.demographics[:, [moment.demographics_index]]
+            demeaned_z = z - z.T @ self.agents.weights
+            demeaned_d = d - d.T @ self.agents.weights
+            micro[m] = demeaned_z.T @ (self.agents.weights * demeaned_d) - moment.value
+        return micro

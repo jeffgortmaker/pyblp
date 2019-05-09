@@ -84,7 +84,7 @@ class Results(abc.ABC, StringRepresentation):
         if not isinstance(factor, float):
             raise ValueError("factor must be a float.")
         self.problem._validate_name(name)
-        return self._combine_arrays(ResultsMarket.compute_aggregate_elasticity, fixed_args=[factor, name])
+        return self._combine_arrays(ResultsMarket.safely_compute_aggregate_elasticity, fixed_args=[factor, name])
 
     def compute_elasticities(self, name: str = 'prices') -> Array:
         r"""Estimate matrices of elasticities of demand, :math:`\varepsilon`, with respect to a variable, :math:`x`.
@@ -112,7 +112,7 @@ class Results(abc.ABC, StringRepresentation):
         """
         output(f"Computing elasticities with respect to {name} ...")
         self.problem._validate_name(name)
-        return self._combine_arrays(ResultsMarket.compute_elasticities, fixed_args=[name])
+        return self._combine_arrays(ResultsMarket.safely_compute_elasticities, fixed_args=[name])
 
     def compute_diversion_ratios(self, name: str = 'prices') -> Array:
         r"""Estimate matrices of diversion ratios, :math:`\mathscr{D}`, with respect to a variable, :math:`x`.
@@ -143,7 +143,7 @@ class Results(abc.ABC, StringRepresentation):
         """
         output(f"Computing diversion ratios with respect to {name} ...")
         self.problem._validate_name(name)
-        return self._combine_arrays(ResultsMarket.compute_diversion_ratios, fixed_args=[name])
+        return self._combine_arrays(ResultsMarket.safely_compute_diversion_ratios, fixed_args=[name])
 
     def compute_long_run_diversion_ratios(self) -> Array:
         r"""Estimate matrices of long-run diversion ratios, :math:`\bar{\mathscr{D}}`.
@@ -172,7 +172,7 @@ class Results(abc.ABC, StringRepresentation):
 
         """
         output("Computing long run mean diversion ratios ...")
-        return self._combine_arrays(ResultsMarket.compute_long_run_diversion_ratios)
+        return self._combine_arrays(ResultsMarket.safely_compute_long_run_diversion_ratios)
 
     def extract_diagonals(self, matrices: Any) -> Array:
         r"""Extract diagonals from stacked :math:`J_t \times J_t` matrices for each market :math:`t`.
@@ -199,7 +199,7 @@ class Results(abc.ABC, StringRepresentation):
         """
         output("Extracting diagonals ...")
         matrices = self._coerce_matrices(matrices)
-        return self._combine_arrays(ResultsMarket.extract_diagonal, market_args=[matrices])
+        return self._combine_arrays(ResultsMarket.safely_extract_diagonal, market_args=[matrices])
 
     def extract_diagonal_means(self, matrices: Any) -> Array:
         r"""Extract means of diagonals from stacked :math:`J_t \times J_t` matrices for each market :math:`t`.
@@ -227,7 +227,7 @@ class Results(abc.ABC, StringRepresentation):
         """
         output("Extracting diagonal means ...")
         matrices = self._coerce_matrices(matrices)
-        return self._combine_arrays(ResultsMarket.extract_diagonal_mean, market_args=[matrices])
+        return self._combine_arrays(ResultsMarket.safely_extract_diagonal_mean, market_args=[matrices])
 
     def compute_costs(self) -> Array:
         r"""Estimate marginal costs, :math:`c`.
@@ -247,7 +247,7 @@ class Results(abc.ABC, StringRepresentation):
 
         """
         output("Computing marginal costs ...")
-        return self._combine_arrays(ResultsMarket.compute_costs)
+        return self._combine_arrays(ResultsMarket.safely_compute_costs)
 
     def compute_approximate_prices(
             self, firm_ids: Optional[Any] = None, ownership: Optional[Any] = None, costs: Optional[Any] = None) -> (
@@ -292,7 +292,9 @@ class Results(abc.ABC, StringRepresentation):
         firm_ids = self.problem._coerce_optional_firm_ids(firm_ids)
         ownership = self.problem._coerce_optional_ownership(ownership)
         costs = self._coerce_optional_costs(costs)
-        return self._combine_arrays(ResultsMarket.compute_approximate_prices, market_args=[firm_ids, ownership, costs])
+        return self._combine_arrays(
+            ResultsMarket.safely_compute_approximate_equilibrium_prices, market_args=[firm_ids, ownership, costs]
+        )
 
     def compute_prices(
             self, firm_ids: Optional[Any] = None, ownership: Optional[Any] = None, costs: Optional[Any] = None,
@@ -352,7 +354,8 @@ class Results(abc.ABC, StringRepresentation):
         elif iteration._compute_jacobian:
             raise ValueError("Analytic Jacobians are not supported for solving this system.")
         return self._combine_arrays(
-            ResultsMarket.compute_prices, fixed_args=[iteration], market_args=[firm_ids, ownership, costs, prices]
+            ResultsMarket.safely_compute_prices, fixed_args=[iteration],
+            market_args=[firm_ids, ownership, costs, prices]
         )
 
     def compute_shares(self, prices: Optional[Any] = None) -> Array:
@@ -376,7 +379,7 @@ class Results(abc.ABC, StringRepresentation):
         """
         output("Computing shares ...")
         prices = self._coerce_optional_prices(prices)
-        return self._combine_arrays(ResultsMarket.compute_shares, market_args=[prices])
+        return self._combine_arrays(ResultsMarket.safely_compute_shares, market_args=[prices])
 
     def compute_hhi(self, firm_ids: Optional[Any] = None, shares: Optional[Any] = None) -> Array:
         r"""Estimate Herfindahl-Hirschman Indices, :math:`\text{HHI}`.
@@ -407,7 +410,7 @@ class Results(abc.ABC, StringRepresentation):
         output("Computing HHI ...")
         firm_ids = self.problem._coerce_optional_firm_ids(firm_ids)
         shares = self._coerce_optional_shares(shares)
-        return self._combine_arrays(ResultsMarket.compute_hhi, market_args=[firm_ids, shares])
+        return self._combine_arrays(ResultsMarket.safely_compute_hhi, market_args=[firm_ids, shares])
 
     def compute_markups(self, prices: Optional[Any] = None, costs: Optional[Any] = None) -> Array:
         r"""Estimate markups, :math:`\mathscr{M}`.
@@ -438,7 +441,7 @@ class Results(abc.ABC, StringRepresentation):
         output("Computing markups ...")
         prices = self._coerce_optional_prices(prices)
         costs = self._coerce_optional_costs(costs)
-        return self._combine_arrays(ResultsMarket.compute_markups, market_args=[prices, costs])
+        return self._combine_arrays(ResultsMarket.safely_compute_markups, market_args=[prices, costs])
 
     def compute_profits(
             self, prices: Optional[Any] = None, shares: Optional[Any] = None, costs: Optional[Any] = None) -> Array:
@@ -474,7 +477,7 @@ class Results(abc.ABC, StringRepresentation):
         prices = self._coerce_optional_prices(prices)
         shares = self._coerce_optional_shares(shares)
         costs = self._coerce_optional_costs(costs)
-        return self._combine_arrays(ResultsMarket.compute_profits, market_args=[prices, shares, costs])
+        return self._combine_arrays(ResultsMarket.safely_compute_profits, market_args=[prices, shares, costs])
 
     def compute_consumer_surpluses(self, prices: Optional[Any] = None) -> Array:
         r"""Estimate population-normalized consumer surpluses, :math:`\text{CS}`.
@@ -525,4 +528,4 @@ class Results(abc.ABC, StringRepresentation):
         """
         output("Computing consumer surpluses with the equation that assumes away nonlinear income effects ...")
         prices = self._coerce_optional_prices(prices)
-        return self._combine_arrays(ResultsMarket.compute_consumer_surplus, market_args=[prices])
+        return self._combine_arrays(ResultsMarket.safely_compute_consumer_surplus, market_args=[prices])

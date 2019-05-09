@@ -671,7 +671,9 @@ class ProblemResults(Results):
         equilibrium_prices = np.zeros_like(self.problem.products.prices)
         equilibrium_shares = np.zeros_like(self.problem.products.shares)
         iteration_stats: Dict[Hashable, SolverStats] = {}
-        generator = generate_items(self.problem.unique_market_ids, market_factory, ResultsMarket.solve_equilibrium)
+        generator = generate_items(
+            self.problem.unique_market_ids, market_factory, ResultsMarket.safely_solve_equilibrium_realization
+        )
         for t, (prices_t, shares_t, delta_t, iteration_stats_t, errors_t) in generator:
             equilibrium_prices[self.problem._product_market_indices[t]] = prices_t
             equilibrium_shares[self.problem._product_market_indices[t]] = shares_t
@@ -899,7 +901,9 @@ class ProblemResults(Results):
         equilibrium_prices = np.zeros_like(self.problem.products.prices)
         equilibrium_shares = np.zeros_like(self.problem.products.shares)
         iteration_stats: Dict[Hashable, SolverStats] = {}
-        generator = generate_items(self.problem.unique_market_ids, market_factory, ResultsMarket.solve_equilibrium)
+        generator = generate_items(
+            self.problem.unique_market_ids, market_factory, ResultsMarket.safely_solve_equilibrium_realization
+        )
         for t, (prices_t, shares_t, delta_t, iteration_stats_t, errors_t) in generator:
             equilibrium_prices[self.problem._product_market_indices[t]] = prices_t
             equilibrium_shares[self.problem._product_market_indices[t]] = shares_t
@@ -947,7 +951,8 @@ class ProblemResults(Results):
 
         # compute the Jacobian market-by-market
         generator = generate_items(
-            self.problem.unique_market_ids, market_factory, ResultsMarket.compute_xi_by_theta_jacobian
+            self.problem.unique_market_ids, market_factory,
+            ResultsMarket.safely_compute_xi_by_theta_jacobian_realization
         )
         for t, (xi_jacobian_t, errors_t) in generator:
             xi_jacobian[self.problem._product_market_indices[t]] = xi_jacobian_t
@@ -984,7 +989,8 @@ class ProblemResults(Results):
         # compute the Jacobian market-by-market
         omega_jacobian = np.full((self.problem.N, self._parameters.P), np.nan, options.dtype)
         generator = generate_items(
-            self.problem.unique_market_ids, market_factory, ResultsMarket.compute_omega_by_theta_jacobian
+            self.problem.unique_market_ids, market_factory,
+            ResultsMarket.safely_compute_omega_by_theta_jacobian_realization
         )
         for t, (omega_jacobian_t, errors_t) in generator:
             omega_jacobian[self.problem._product_market_indices[t]] = omega_jacobian_t

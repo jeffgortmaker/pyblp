@@ -2,12 +2,10 @@
 
 from typing import List, Optional, Tuple
 
-import numpy as np
-
 from .market import Market
 from .. import exceptions
 from ..configurations.iteration import Iteration
-from ..utilities.basics import Array, Error, SolverStats
+from ..utilities.basics import Array, Error, SolverStats, numerical_error_handler
 
 
 class SimulationMarket(Market):
@@ -19,21 +17,25 @@ class SimulationMarket(Market):
         """Solve for synthetic prices and shares. By default, use unchanged firm IDs."""
         errors: List[Error] = []
         ownership_matrix = self.get_ownership_matrix(firm_ids, ownership)
+        prices, stats, price_errors = self.safely_compute_equilibrium_prices(costs, iteration, ownership_matrix, prices)
+        shares, share_errors = self.safely_compute_shares(prices)
+        errors.extend(price_errors + share_errors)
+        return prices, shares, stats, errors
 
-        # configure NumPy to identify floating point errors
-        with np.errstate(divide='call', over='call', under='ignore', invalid='call'):
-            np.seterrcall(lambda *_: errors.append(exceptions.SyntheticPricesFloatingPointError()))
+    @numerical_error_handler(exceptions.SyntheticPricesFloatingPointError)
+    def safely_compute_equilibrium_prices(
+            self, costs: Array, iteration: Iteration, ownership_matrix: Array, prices: Array) -> (
+            Tuple[Array, SolverStats, List[Error]]):
+        """Compute equilibrium prices by iterating over the zeta-markup equation, handling any numerical errors."""
+        errors: List[Error] = []
+        prices, stats = self.compute_equilibrium_prices(costs, iteration, ownership_matrix, prices)
+        if not stats.converged:
+            errors.append(exceptions.SyntheticPricesConvergenceError())
+        return prices, stats, errors
 
-            # solve the fixed point problem
-            prices, stats = self.compute_equilibrium_prices(costs, iteration, ownership_matrix, prices)
-            if not stats.converged:
-                errors.append(exceptions.SyntheticPricesConvergenceError())
-
-            # switch to identifying floating point errors with synthetic share computation
-            np.seterrcall(lambda *_: errors.append(exceptions.SyntheticSharesFloatingPointError()))
-
-            # compute the associated shares
-            delta = self.update_delta_with_variable('prices', prices)
-            mu = self.update_mu_with_variable('prices', prices)
-            shares = self.compute_probabilities(delta, mu)[0] @ self.agents.weights
-            return prices, shares, stats, errors
+    @numerical_error_handler(exceptions.SyntheticSharesFloatingPointError)
+    def safely_compute_shares(self, prices: Array) -> Tuple[Array, List[Error]]:
+        """Compute equilibrium shares associated with prices, handling any numerical errors."""
+        errors: List[Error] = []
+        shares = self.compute_shares(prices)
+        return shares, errors
