@@ -7,13 +7,13 @@ import numpy as np
 from .market import Market
 from .. import exceptions, options
 from ..configurations.iteration import Iteration
-from ..utilities.basics import Array, Error, SolverStats, numerical_error_handler
+from ..utilities.basics import Array, Error, SolverStats, NumericalErrorHandler
 
 
 class ResultsMarket(Market):
     """A market in structured BLP results."""
 
-    @numerical_error_handler(exceptions.EquilibriumRealizationFloatingPointError)
+    @NumericalErrorHandler(exceptions.EquilibriumRealizationNumericalError)
     def safely_solve_equilibrium_realization(
             self, costs: Array, prices: Optional[Array], iteration: Optional[Iteration]) -> (
             Tuple[Array, Array, Array, SolverStats, List[Error]]):
@@ -38,14 +38,14 @@ class ResultsMarket(Market):
         shares = self.compute_probabilities(delta, mu)[0] @ self.agents.weights
         return prices, shares, delta, stats, errors
 
-    @numerical_error_handler(exceptions.XiByThetaJacobianRealizationFloatingPointError)
+    @NumericalErrorHandler(exceptions.XiByThetaJacobianRealizationNumericalError)
     def safely_compute_xi_by_theta_jacobian_realization(self) -> Tuple[Array, List[Error]]:
         """Compute the Jacobian of xi (equivalently, of delta) with respect to theta for a realization of the market,
         handling any numerical errors.
         """
         return self.compute_xi_by_theta_jacobian()
 
-    @numerical_error_handler(exceptions.OmegaByThetaJacobianRealizationFloatingPointError)
+    @NumericalErrorHandler(exceptions.OmegaByThetaJacobianRealizationNumericalError)
     def safely_compute_omega_by_theta_jacobian_realization(
             self, tilde_costs: Array, xi_jacobian: Array, costs_type: str) -> Tuple[Array, List[Error]]:
         """Compute the Jacobian of omega (equivalently, of transformed marginal costs) with respect to theta for a
@@ -53,7 +53,7 @@ class ResultsMarket(Market):
         """
         return self.compute_omega_by_theta_jacobian(tilde_costs, xi_jacobian, costs_type)
 
-    @numerical_error_handler(exceptions.PostEstimationFloatingPointError)
+    @NumericalErrorHandler(exceptions.PostEstimationNumericalError)
     def safely_compute_aggregate_elasticity(self, factor: float, name: str) -> Tuple[Array, List[Error]]:
         """Estimate the aggregate elasticity of demand with respect to a variable, handling any numerical errors."""
         errors: List[Error] = []
@@ -64,7 +64,7 @@ class ResultsMarket(Market):
         aggregate_elasticities = (shares - self.products.shares).sum() / factor
         return aggregate_elasticities, errors
 
-    @numerical_error_handler(exceptions.PostEstimationFloatingPointError)
+    @NumericalErrorHandler(exceptions.PostEstimationNumericalError)
     def safely_compute_elasticities(self, name: str) -> Tuple[Array, List[Error]]:
         """Estimate a matrix of elasticities of demand with respect to a variable, handling any numerical errors."""
         errors: List[Error] = []
@@ -73,7 +73,7 @@ class ResultsMarket(Market):
         elasticities = jacobian * self.products[name].T / self.products.shares
         return elasticities, errors
 
-    @numerical_error_handler(exceptions.PostEstimationFloatingPointError)
+    @NumericalErrorHandler(exceptions.PostEstimationNumericalError)
     def safely_compute_diversion_ratios(self, name: str) -> Tuple[Array, List[Error]]:
         """Estimate a matrix of diversion ratios with respect to a variable, handling any numerical errors."""
         errors: List[Error] = []
@@ -88,7 +88,7 @@ class ResultsMarket(Market):
         ratios = -jacobian / np.tile(jacobian_diagonal, self.J)
         return ratios, errors
 
-    @numerical_error_handler(exceptions.PostEstimationFloatingPointError)
+    @NumericalErrorHandler(exceptions.PostEstimationNumericalError)
     def safely_compute_long_run_diversion_ratios(self) -> Tuple[Array, List[Error]]:
         """Estimate a matrix of long-run diversion ratios, handling any numerical errors."""
         errors: List[Error] = []
@@ -104,21 +104,21 @@ class ResultsMarket(Market):
         ratios = changes / np.tile(self.products.shares, self.J)
         return ratios, errors
 
-    @numerical_error_handler(exceptions.PostEstimationFloatingPointError)
+    @NumericalErrorHandler(exceptions.PostEstimationNumericalError)
     def safely_extract_diagonal(self, matrix: Array) -> Tuple[Array, List[Error]]:
         """Extract the diagonal from a matrix, handling any numerical errors."""
         errors: List[Error] = []
         diagonal = matrix[:, :self.J].diagonal()
         return diagonal, errors
 
-    @numerical_error_handler(exceptions.PostEstimationFloatingPointError)
+    @NumericalErrorHandler(exceptions.PostEstimationNumericalError)
     def safely_extract_diagonal_mean(self, matrix: Array) -> Tuple[Array, List[Error]]:
         """Extract the mean of the diagonal from a matrix, handling any numerical errors."""
         errors: List[Error] = []
         diagonal_mean = matrix[:, :self.J].diagonal().mean()
         return diagonal_mean, errors
 
-    @numerical_error_handler(exceptions.PostEstimationFloatingPointError)
+    @NumericalErrorHandler(exceptions.PostEstimationNumericalError)
     def safely_compute_costs(self) -> Tuple[Array, List[Error]]:
         """Estimate marginal costs, handling any numerical errors."""
         errors: List[Error] = []
@@ -127,7 +127,7 @@ class ResultsMarket(Market):
         costs = self.products.prices - eta
         return costs, errors
 
-    @numerical_error_handler(exceptions.PostEstimationFloatingPointError)
+    @NumericalErrorHandler(exceptions.PostEstimationNumericalError)
     def safely_compute_approximate_equilibrium_prices(
             self, firm_ids: Optional[Array], ownership: Optional[Array], costs: Optional[Array]) -> (
             Tuple[Array, List[Error]]):
@@ -145,7 +145,7 @@ class ResultsMarket(Market):
         prices = costs + eta
         return prices, errors
 
-    @numerical_error_handler(exceptions.PostEstimationFloatingPointError)
+    @NumericalErrorHandler(exceptions.PostEstimationNumericalError)
     def safely_compute_prices(
             self, iteration: Iteration, firm_ids: Optional[Array], ownership: Optional[Array], costs: Optional[Array],
             prices: Optional[Array]) -> Tuple[Array, List[Error]]:
@@ -162,7 +162,7 @@ class ResultsMarket(Market):
             errors.append(exceptions.EquilibriumPricesConvergenceError())
         return prices, errors
 
-    @numerical_error_handler(exceptions.PostEstimationFloatingPointError)
+    @NumericalErrorHandler(exceptions.PostEstimationNumericalError)
     def safely_compute_shares(self, prices: Optional[Array]) -> Tuple[Array, List[Error]]:
         """Estimate shares evaluated at specified prices. By default, use unchanged prices, handling any numerical
         errors.
@@ -175,7 +175,7 @@ class ResultsMarket(Market):
         shares = self.compute_probabilities(delta, mu)[0] @ self.agents.weights
         return shares, errors
 
-    @numerical_error_handler(exceptions.PostEstimationFloatingPointError)
+    @NumericalErrorHandler(exceptions.PostEstimationNumericalError)
     def safely_compute_hhi(self, firm_ids: Optional[Array], shares: Optional[Array]) -> Tuple[Array, List[Error]]:
         """Estimate HHI. By default, use unchanged firm IDs and shares, handling any numerical errors."""
         errors: List[Error] = []
@@ -186,7 +186,7 @@ class ResultsMarket(Market):
         hhi = 1e4 * sum((shares[firm_ids == f].sum() / shares.sum())**2 for f in np.unique(firm_ids))
         return hhi, errors
 
-    @numerical_error_handler(exceptions.PostEstimationFloatingPointError)
+    @NumericalErrorHandler(exceptions.PostEstimationNumericalError)
     def safely_compute_markups(self, prices: Optional[Array], costs: Optional[Array]) -> Tuple[Array, List[Error]]:
         """Estimate markups. By default, use unchanged prices and compute marginal costs, handling any numerical
         errors.
@@ -200,7 +200,7 @@ class ResultsMarket(Market):
         markups = (prices - costs) / prices
         return markups, errors
 
-    @numerical_error_handler(exceptions.PostEstimationFloatingPointError)
+    @NumericalErrorHandler(exceptions.PostEstimationNumericalError)
     def safely_compute_profits(
             self, prices: Optional[Array], shares: Optional[Array], costs: Optional[Array]) -> (
             Tuple[Array, List[Error]]):
@@ -218,7 +218,7 @@ class ResultsMarket(Market):
         profits = (prices - costs) * shares
         return profits, errors
 
-    @numerical_error_handler(exceptions.PostEstimationFloatingPointError)
+    @NumericalErrorHandler(exceptions.PostEstimationNumericalError)
     def safely_compute_consumer_surplus(self, prices: Optional[Array]) -> Tuple[Array, List[Error]]:
         """Estimate population-normalized consumer surplus. By default, use unchanged prices, handling any numerical
         errors.

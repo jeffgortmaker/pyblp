@@ -10,7 +10,7 @@ from .. import exceptions, options
 from ..configurations.iteration import ContractionResults, Iteration
 from ..moments import ProductsAgentsCovarianceMoment
 from ..parameters import LinearCoefficient
-from ..utilities.basics import Array, Bounds, Error, SolverStats, numerical_error_handler
+from ..utilities.basics import Array, Bounds, Error, SolverStats, NumericalErrorHandler
 
 
 class ProblemMarket(Market):
@@ -28,6 +28,7 @@ class ProblemMarket(Market):
 
         # solve the contraction
         delta, stats, delta_errors = self.safely_compute_delta(initial_delta, iteration, fp_type)
+        errors.extend(delta_errors)
 
         # replace invalid values in delta with their last computed values
         valid_delta = delta.copy()
@@ -80,7 +81,7 @@ class ProblemMarket(Market):
             omega_jacobian[clipped_costs.flat] = 0
         return tilde_costs, omega_jacobian, clipped_costs, errors
 
-    @numerical_error_handler(exceptions.DeltaFloatingPointError)
+    @NumericalErrorHandler(exceptions.DeltaNumericalError)
     def safely_compute_delta(
             self, initial_delta: Array, iteration: Iteration, fp_type: str) -> Tuple[Array, SolverStats, List[Error]]:
         """Compute the mean utility for this market that equates market shares to observed values by solving a fixed
@@ -191,19 +192,19 @@ class ProblemMarket(Market):
             errors.append(exceptions.DeltaConvergenceError())
         return delta, stats, errors
 
-    @numerical_error_handler(exceptions.XiByThetaJacobianFloatingPointError)
+    @NumericalErrorHandler(exceptions.XiByThetaJacobianNumericalError)
     def safely_compute_xi_by_theta_jacobian(self, delta: Array) -> Tuple[Array, List[Error]]:
         """Compute the Jacobian of xi (equivalently, of delta) with respect to theta, handling any numerical errors."""
         return self.compute_xi_by_theta_jacobian(delta)
 
-    @numerical_error_handler(exceptions.MicroMomentsFloatingPointError)
+    @NumericalErrorHandler(exceptions.MicroMomentsNumericalError)
     def safely_compute_micro(self, delta: Array) -> Tuple[Array, List[Error]]:
         """Compute micro moments, handling any numerical errors."""
         errors: List[Error] = []
         micro = self.compute_micro(delta)
         return micro, errors
 
-    @numerical_error_handler(exceptions.MicroMomentsByThetaJacobianFloatingPointError)
+    @NumericalErrorHandler(exceptions.MicroMomentsByThetaJacobianNumericalError)
     def compute_micro_by_theta_jacobian(self, delta: Array, xi_jacobian: Array) -> Tuple[Array, List[Error]]:
         """Compute the Jacobian of micro moments with respect to theta, handling any numerical errors."""
         errors: List[Error] = []
@@ -244,7 +245,7 @@ class ProblemMarket(Market):
                 )
         return micro_jacobian, errors
 
-    @numerical_error_handler(exceptions.CostsFloatingPointError)
+    @NumericalErrorHandler(exceptions.CostsNumericalError)
     def compute_tilde_costs(self, costs_type: str, costs_bounds: Bounds) -> Tuple[Array, Array, List[Error]]:
         """Compute transformed marginal costs, handling any numerical errors."""
         errors: List[Error] = []
@@ -270,7 +271,7 @@ class ProblemMarket(Market):
                 tilde_costs = np.log(costs)
         return tilde_costs, clipped_costs, errors
 
-    @numerical_error_handler(exceptions.OmegaByThetaJacobianFloatingPointError)
+    @NumericalErrorHandler(exceptions.OmegaByThetaJacobianNumericalError)
     def safely_compute_omega_by_theta_jacobian(
             self, tilde_costs: Array, xi_jacobian: Array, costs_type: str) -> Tuple[Array, List[Error]]:
         """Compute the Jacobian of omega (equivalently, of transformed marginal costs) with respect to theta, storing

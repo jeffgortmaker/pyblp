@@ -3,53 +3,7 @@
 import collections
 from typing import List, Sequence
 
-from .utilities.algebra import compute_condition_number
-from .utilities.basics import Array, Error, format_number
-
-
-class _MultipleReversionError(Error):
-    """Reversion of problematic elements."""
-
-    _bad: int
-    _total: int
-
-    def __init__(self, bad_indices: Array) -> None:
-        """Store element counts."""
-        self._bad = bad_indices.sum()
-        self._total = bad_indices.size
-
-    def __str__(self) -> str:
-        """Supplement the error with the counts."""
-        return f"{super().__str__()} Number of reverted elements: {self._bad} out of {self._total}."
-
-
-class _InversionError(Error):
-    """Problems with inverting a matrix."""
-
-    _condition: float
-
-    def __init__(self, matrix: Array) -> None:
-        """Compute condition number of the matrix."""
-        self._condition = compute_condition_number(matrix)
-
-    def __str__(self) -> str:
-        """Supplement the error with the condition number."""
-        return f"{super().__str__()} Condition number: {format_number(self._condition)}."
-
-
-class _InversionReplacementError(_InversionError):
-    """Problems with inverting a matrix led to the use of a replacement such as an approximation."""
-
-    _replacement: str
-
-    def __init__(self, matrix: Array, replacement: str) -> None:
-        """Store the replacement description."""
-        super().__init__(matrix)
-        self._replacement = replacement
-
-    def __str__(self) -> str:
-        """Supplement the error with the description."""
-        return f"{super().__str__()} The inverse was replaced with {self._replacement}."
+from .utilities.basics import Error, NumericalError, MultipleReversionError, InversionError, InversionReplacementError
 
 
 class MultipleErrors(Error):
@@ -89,8 +43,8 @@ class InvalidMomentCovariancesError(Error):
     """Failed to compute a weighting matrix because of invalid estimated covariances of GMM moments."""
 
 
-class DeltaFloatingPointError(Error):
-    r"""Encountered floating point issues when computing :math:`\delta`.
+class DeltaNumericalError(NumericalError):
+    r"""Encountered a numerical error when computing :math:`\delta`.
 
     This problem is often due to prior problems, overflow, or nonpositive shares, and can sometimes be mitigated by
     choosing smaller initial parameter values, setting more conservative bounds, rescaling data, removing outliers,
@@ -99,8 +53,8 @@ class DeltaFloatingPointError(Error):
     """
 
 
-class CostsFloatingPointError(Error):
-    """Encountered floating point issues when computing marginal costs.
+class CostsNumericalError(NumericalError):
+    """Encountered a numerical error when computing marginal costs.
 
     This problem is often due to prior problems or overflow and can sometimes be mitigated by choosing smaller initial
     parameter values, setting more conservative bounds, rescaling data, removing outliers, changing the floating point
@@ -109,8 +63,8 @@ class CostsFloatingPointError(Error):
     """
 
 
-class MicroMomentsFloatingPointError(Error):
-    """Encountered floating point issues when computing micro moments.
+class MicroMomentsNumericalError(NumericalError):
+    """Encountered a numerical error when computing micro moments.
 
     This problem is often due to prior problems, overflow, or nonpositive shares, and can sometimes be mitigated by
     choosing smaller initial parameter values, setting more conservative bounds, rescaling data, removing outliers,
@@ -119,8 +73,8 @@ class MicroMomentsFloatingPointError(Error):
     """
 
 
-class XiByThetaJacobianFloatingPointError(Error):
-    r"""Encountered floating point issues when computing the Jacobian of :math:`\xi` (equivalently, of :math:`\delta`)
+class XiByThetaJacobianNumericalError(NumericalError):
+    r"""Encountered a numerical error when computing the Jacobian of :math:`\xi` (equivalently, of :math:`\delta`)
     with respect to :math:`\theta`.
 
     This problem is often due to prior problems, overflow, or nonpositive shares, and can sometimes be mitigated by
@@ -130,8 +84,8 @@ class XiByThetaJacobianFloatingPointError(Error):
     """
 
 
-class OmegaByThetaJacobianFloatingPointError(Error):
-    r"""Encountered floating point issues when computing the Jacobian of :math:`\omega` (equivalently, of transformed
+class OmegaByThetaJacobianNumericalError(NumericalError):
+    r"""Encountered a numerical error when computing the Jacobian of :math:`\omega` (equivalently, of transformed
     marginal costs) with respect to :math:`\theta`.
 
     This problem is often due to prior problems or overflow, and can sometimes be mitigated by choosing smaller initial
@@ -141,16 +95,16 @@ class OmegaByThetaJacobianFloatingPointError(Error):
     """
 
 
-class MicroMomentsByThetaJacobianFloatingPointError(Error):
-    r"""Encountered floating point issues when computing the Jacobian of micro moments with respect to :math:`\theta`.
+class MicroMomentsByThetaJacobianNumericalError(NumericalError):
+    r"""Encountered a numerical error when computing the Jacobian of micro moments with respect to :math:`\theta`.
 
     This problem is often due to prior problems or overflow.
 
     """
 
 
-class SyntheticPricesFloatingPointError(Error):
-    """Encountered floating point issues when computing synthetic prices.
+class SyntheticPricesNumericalError(NumericalError):
+    """Encountered a numerical error when computing synthetic prices.
 
     This problem is often due to prior problems or overflow and can sometimes be mitigated by making sure that the
     specified parameters are reasonable. For example, the parameters on prices should generally imply a downward sloping
@@ -159,8 +113,8 @@ class SyntheticPricesFloatingPointError(Error):
     """
 
 
-class SyntheticSharesFloatingPointError(Error):
-    """Encountered floating point issues when computing synthetic shares.
+class SyntheticSharesNumericalError(NumericalError):
+    """Encountered a numerical error when computing synthetic shares.
 
     This problem is often due to prior problems or overflow and can sometimes be mitigated by making sure that the
     specified parameters are reasonable. For example, the parameters on prices should generally imply a downward sloping
@@ -169,30 +123,30 @@ class SyntheticSharesFloatingPointError(Error):
     """
 
 
-class SyntheticMicroMomentsFloatingPointError(Error):
-    """Encountered floating point issues when computing synthetic micro moments."""
+class SyntheticMicroMomentsNumericalError(NumericalError):
+    """Encountered a numerical error when computing synthetic micro moments."""
 
 
-class EquilibriumRealizationFloatingPointError(Error):
-    """Encountered floating point issues when solving for a realization of equilibrium prices and shares."""
+class EquilibriumRealizationNumericalError(NumericalError):
+    """Encountered a numerical error when solving for a realization of equilibrium prices and shares."""
 
 
-class XiByThetaJacobianRealizationFloatingPointError(Error):
-    r"""Encountered floating point issues when computing a realization of the Jacobian of :math:`\xi` (equivalently, of
+class XiByThetaJacobianRealizationNumericalError(NumericalError):
+    r"""Encountered a numerical error when computing a realization of the Jacobian of :math:`\xi` (equivalently, of
     :math:`\delta`) with respect to :math:`\theta`.
 
     """
 
 
-class OmegaByThetaJacobianRealizationFloatingPointError(Error):
-    r"""Encountered floating point issues when computing a realization of the Jacobian of :math:`\omega` (equivalently,
-    of transformed marginal costs) with respect to :math:`\theta`.
+class OmegaByThetaJacobianRealizationNumericalError(NumericalError):
+    r"""Encountered a numerical error when computing a realization of the Jacobian of :math:`\omega` (equivalently, of
+    transformed marginal costs) with respect to :math:`\theta`.
 
     """
 
 
-class PostEstimationFloatingPointError(Error):
-    """Encountered floating point issues when computing a post-estimation output."""
+class PostEstimationNumericalError(NumericalError):
+    """Encountered a numerical error when computing a post-estimation output."""
 
 
 class AbsorptionConvergenceError(Error):
@@ -246,41 +200,41 @@ class ObjectiveReversionError(Error):
     """Reverted a problematic GMM objective value."""
 
 
-class GradientReversionError(_MultipleReversionError):
+class GradientReversionError(MultipleReversionError):
     """Reverted problematic elements in the GMM objective gradient."""
 
 
-class DeltaReversionError(_MultipleReversionError):
+class DeltaReversionError(MultipleReversionError):
     r"""Reverted problematic elements in :math:`\delta`."""
 
 
-class CostsReversionError(_MultipleReversionError):
+class CostsReversionError(MultipleReversionError):
     """Reverted problematic marginal costs."""
 
 
-class MicroMomentsReversionError(_MultipleReversionError):
+class MicroMomentsReversionError(MultipleReversionError):
     """Reverted problematic micro moments."""
 
 
-class XiByThetaJacobianReversionError(_MultipleReversionError):
+class XiByThetaJacobianReversionError(MultipleReversionError):
     r"""Reverted problematic elements in the Jacobian of :math:`\xi` (equivalently, of :math:`\delta`) with respect to
     :math:`\theta`.
 
     """
 
 
-class OmegaByThetaJacobianReversionError(_MultipleReversionError):
+class OmegaByThetaJacobianReversionError(MultipleReversionError):
     r"""Reverted problematic elements in the Jacobian of :math:`\omega` (equivalently, of transformed marginal costs)
     with respect to :math:`\theta`.
 
     """
 
 
-class MicroMomentsByThetaJacobianReversionError(_MultipleReversionError):
+class MicroMomentsByThetaJacobianReversionError(MultipleReversionError):
     r"""Reverted problematic elements in the Jacobian of micro moments with respect to :math:`\theta`."""
 
 
-class AbsorptionInversionError(_InversionError):
+class AbsorptionInversionError(InversionError):
     """Failed to invert the :math:`A` matrix from :ref:`references:Somaini and Wolak (2016)` when absorbing two-way
     fixed effects.
 
@@ -289,11 +243,11 @@ class AbsorptionInversionError(_InversionError):
     """
 
 
-class HessianEigenvaluesError(_InversionError):
+class HessianEigenvaluesError(InversionError):
     """Failed to compute eigenvalues for the GMM objective's Hessian matrix."""
 
 
-class FittedValuesInversionError(_InversionReplacementError):
+class FittedValuesInversionError(InversionReplacementError):
     """Failed to invert an estimated covariance when computing fitted values.
 
     There are probably collinearity issues.
@@ -301,18 +255,18 @@ class FittedValuesInversionError(_InversionReplacementError):
     """
 
 
-class SharesByXiJacobianInversionError(_InversionReplacementError):
+class SharesByXiJacobianInversionError(InversionReplacementError):
     r"""Failed to invert a Jacobian of shares with respect to :math:`\xi` when computing the Jacobian of :math:`\xi`
     (equivalently, of :math:`\delta`) with respect to :math:`\theta`.
 
     """
 
 
-class IntraFirmJacobianInversionError(_InversionReplacementError):
+class IntraFirmJacobianInversionError(InversionReplacementError):
     r"""Failed to invert an intra-firm Jacobian of shares with respect to prices when computing :math:`\eta`."""
 
 
-class LinearParameterCovariancesInversionError(_InversionReplacementError):
+class LinearParameterCovariancesInversionError(InversionReplacementError):
     """Failed to invert an estimated covariance matrix of linear parameters.
 
     One or more data matrices may be highly collinear.
@@ -320,7 +274,7 @@ class LinearParameterCovariancesInversionError(_InversionReplacementError):
     """
 
 
-class GMMParameterCovariancesInversionError(_InversionReplacementError):
+class GMMParameterCovariancesInversionError(InversionReplacementError):
     """Failed to invert an estimated covariance matrix of GMM parameters.
 
     One or more data matrices may be highly collinear.
@@ -328,7 +282,7 @@ class GMMParameterCovariancesInversionError(_InversionReplacementError):
     """
 
 
-class GMMMomentCovariancesInversionError(_InversionReplacementError):
+class GMMMomentCovariancesInversionError(InversionReplacementError):
     """Failed to invert an estimated covariance matrix of GMM moments.
 
     One or more data matrices may be highly collinear.

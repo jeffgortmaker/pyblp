@@ -1,12 +1,14 @@
 """Basic functionality."""
 
 import contextlib
+import functools
 import inspect
 import multiprocessing.pool
 import re
 import time
+import traceback
 from typing import (
-    Any, Callable, Container, Dict, Hashable, Iterable, Iterator, List, Mapping, Optional, Sequence, Type, Tuple,
+    Any, Callable, Container, Dict, Hashable, Iterable, Iterator, List, Mapping, Optional, Set, Sequence, Type, Tuple,
     Union
 )
 
@@ -346,6 +348,15 @@ class Groups(object):
 class Error(Exception):
     """Errors that are indistinguishable from others with the same message, which is parsed from the docstring."""
 
+    stack: Optional[str]
+
+    def __init__(self) -> None:
+        """Optionally store the full current traceback for debugging purposes."""
+        if options.verbose_tracebacks:
+            self.stack = ''.join(traceback.format_stack())
+        else:
+            self.stack = None
+
     def __eq__(self, other: Any) -> bool:
         """Defer to hashes."""
         return hash(self) == hash(other)
@@ -379,20 +390,114 @@ class Error(Exception):
             doc = doc[:start] + re.sub(r'<[^>]+>', '', match.group(1)) + doc[end:]
 
         # remove all remaining domains and compress whitespace
-        return re.sub(r'[\s\n]+', ' ', re.sub(r':[a-z\-]+:|`', '', doc))
+        doc = re.sub(r'[\s\n]+', ' ', re.sub(r':[a-z\-]+:|`', '', doc))
+
+        # optionally add the full traceback
+        if self.stack is not None:
+            doc = f"{doc} Traceback:\n\n{self.stack}\n"
+        return doc
 
 
-def numerical_error_handler(error: Type[Error]) -> Callable:
-    """Construct a decorator that appends errors to a function's returned list when numerical errors are encountered."""
-    def decorator(decorated: Callable) -> Callable:
+class NumericalError(Error):
+    """Floating point issues."""
+
+    _messages: Set[str]
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._messages: Set[str] = set()
+
+    def __str__(self) -> str:
+        """Supplement the error with the messages."""
+        combined = ", ".join(sorted(self._messages))
+        return f"{super().__str__()} Errors encountered: {combined}."
+
+
+class MultipleReversionError(Error):
+    """Reversion of problematic elements."""
+
+    _bad: int
+    _total: int
+
+    def __init__(self, bad_indices: Array) -> None:
+        """Store element counts."""
+        super().__init__()
+        self._bad = bad_indices.sum()
+        self._total = bad_indices.size
+
+    def __str__(self) -> str:
+        """Supplement the error with the counts."""
+        return f"{super().__str__()} Number of reverted elements: {self._bad} out of {self._total}."
+
+
+class InversionError(Error):
+    """Problems with inverting a matrix."""
+
+    _condition: float
+
+    def __init__(self, matrix: Array) -> None:
+        """Compute condition number of the matrix."""
+        super().__init__()
+        from .algebra import compute_condition_number
+        self._condition = compute_condition_number(matrix)
+
+    def __str__(self) -> str:
+        """Supplement the error with the condition number."""
+        return f"{super().__str__()} Condition number: {format_number(self._condition)}."
+
+
+class InversionReplacementError(InversionError):
+    """Problems with inverting a matrix led to the use of a replacement such as an approximation."""
+
+    _replacement: str
+
+    def __init__(self, matrix: Array, replacement: str) -> None:
+        """Store the replacement description."""
+        super().__init__(matrix)
+        self._replacement = replacement
+
+    def __str__(self) -> str:
+        """Supplement the error with the description."""
+        return f"{super().__str__()} The inverse was replaced with {self._replacement}."
+
+
+class NumericalErrorHandler(object):
+    """Decorator that appends errors to a function's returned list when numerical errors are encountered."""
+
+    error: Type[NumericalError]
+
+    def __init__(self, error: Type[NumericalError]) -> None:
+        """Store the error class."""
+        self.error = error
+
+    def __call__(self, decorated: Callable) -> Callable:
         """Decorate the function."""
+        @functools.wraps(decorated)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             """Configure NumPy to detect numerical errors."""
-            errors: List[Error] = []
+            detector = NumericalErrorDetector(self.error)
             with np.errstate(divide='call', over='call', under='ignore', invalid='call'):
-                np.seterrcall(lambda *_: errors.append(error()))
+                np.seterrcall(detector)
                 returned = decorated(*args, **kwargs)
-            returned[-1].extend(errors)
+            if detector.detected is not None:
+                returned[-1].append(detector.detected)
             return returned
         return wrapper
-    return decorator
+
+
+class NumericalErrorDetector(object):
+    """Error detector to be passed to NumPy's error call function."""
+
+    error: Type[NumericalError]
+    detected: Optional[NumericalError]
+
+    def __init__(self, error: Type[NumericalError]) -> None:
+        """By default no error is detected."""
+        self.error = error
+        self.detected = None
+
+    def __call__(self, message: str, _: int) -> None:
+        """Initialize the error and store the error message."""
+        if self.detected is None:
+            self.detected = self.error()
+        self.detected._messages.add(message)

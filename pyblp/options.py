@@ -8,6 +8,10 @@ digits : `int`
 verbose : `bool`
     Whether to output status updates. By default, verbosity is turned on. Verbosity can be turned off with
     ``pyblp.options.verbose = False``.
+verbose_tracebacks : `bool`
+    Whether to include full tracebacks in error messages. By default, full tracebacks are turned off. These can be
+    useful when attempting to find the source of an error message. Tracebacks can be turned on with
+    ``pyblp.options.verbose_tracebacks = True``.
 verbose_output : `callable`
     Function used to output status updates. The default function is simply ``print``. The function can be changed, for
     example, to include an indicator that statuses are from this package, with
@@ -78,6 +82,7 @@ import numpy as _np
 
 digits = 10
 verbose = True
+verbose_tracebacks = False
 verbose_output = print
 dtype = _np.float64
 pseudo_inverses = True

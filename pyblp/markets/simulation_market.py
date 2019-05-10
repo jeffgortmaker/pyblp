@@ -5,7 +5,7 @@ from typing import List, Optional, Tuple
 from .market import Market
 from .. import exceptions
 from ..configurations.iteration import Iteration
-from ..utilities.basics import Array, Error, SolverStats, numerical_error_handler
+from ..utilities.basics import Array, Error, SolverStats, NumericalErrorHandler
 
 
 class SimulationMarket(Market):
@@ -22,7 +22,7 @@ class SimulationMarket(Market):
         errors.extend(price_errors + share_errors)
         return prices, shares, stats, errors
 
-    @numerical_error_handler(exceptions.SyntheticPricesFloatingPointError)
+    @NumericalErrorHandler(exceptions.SyntheticPricesNumericalError)
     def safely_compute_equilibrium_prices(
             self, costs: Array, iteration: Iteration, ownership_matrix: Array, prices: Array) -> (
             Tuple[Array, SolverStats, List[Error]]):
@@ -33,7 +33,7 @@ class SimulationMarket(Market):
             errors.append(exceptions.SyntheticPricesConvergenceError())
         return prices, stats, errors
 
-    @numerical_error_handler(exceptions.SyntheticSharesFloatingPointError)
+    @NumericalErrorHandler(exceptions.SyntheticSharesNumericalError)
     def safely_compute_shares(self, prices: Array) -> Tuple[Array, List[Error]]:
         """Compute equilibrium shares associated with prices, handling any numerical errors."""
         errors: List[Error] = []

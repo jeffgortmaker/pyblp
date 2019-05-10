@@ -257,17 +257,17 @@ When errors occur, they will either be displayed as warnings or raised as except
    exceptions.NonpositiveCostsError
    exceptions.InvalidParameterCovariancesError
    exceptions.InvalidMomentCovariancesError
-   exceptions.DeltaFloatingPointError
-   exceptions.CostsFloatingPointError
-   exceptions.MicroMomentsFloatingPointError
-   exceptions.XiByThetaJacobianFloatingPointError
-   exceptions.OmegaByThetaJacobianFloatingPointError
-   exceptions.MicroMomentsByThetaJacobianFloatingPointError
-   exceptions.SyntheticPricesFloatingPointError
-   exceptions.SyntheticSharesFloatingPointError
-   exceptions.SyntheticMicroMomentsFloatingPointError
-   exceptions.EquilibriumRealizationFloatingPointError
-   exceptions.PostEstimationFloatingPointError
+   exceptions.DeltaNumericalError
+   exceptions.CostsNumericalError
+   exceptions.MicroMomentsNumericalError
+   exceptions.XiByThetaJacobianNumericalError
+   exceptions.OmegaByThetaJacobianNumericalError
+   exceptions.MicroMomentsByThetaJacobianNumericalError
+   exceptions.SyntheticPricesNumericalError
+   exceptions.SyntheticSharesNumericalError
+   exceptions.SyntheticMicroMomentsNumericalError
+   exceptions.EquilibriumRealizationNumericalError
+   exceptions.PostEstimationNumericalError
    exceptions.AbsorptionConvergenceError
    exceptions.ThetaConvergenceError
    exceptions.DeltaConvergenceError
