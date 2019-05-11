@@ -263,6 +263,7 @@ When errors occur, they will either be displayed as warnings or raised as except
    exceptions.XiByThetaJacobianNumericalError
    exceptions.OmegaByThetaJacobianNumericalError
    exceptions.MicroMomentsByThetaJacobianNumericalError
+   exceptions.MicroMomentCovariancesNumericalError
    exceptions.SyntheticPricesNumericalError
    exceptions.SyntheticSharesNumericalError
    exceptions.SyntheticMicroMomentsNumericalError

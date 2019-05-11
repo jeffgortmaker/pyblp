@@ -73,17 +73,19 @@ class ProductsAgentsCovarianceMoment(Moment):
 
     For example, survey data can often be used to compute the covariance :math:`\sigma_{xy}` between a product
     characteristic, :math:`x_{jt}`, and an agent demographic such as income, :math:`y_{it}`, conditional on purchasing a
-    non-outside good. With this covariance, a micro moment :math:`m` can approximated in market :math:`t` by
+    non-outside good. With this covariance, a micro moment :math:`m` in market :math:`t` for agent :math:`i` can be
+    defined by
 
-    .. math:: g_{M,mt} \approx \sum_{i=1}^{I_t} w_i(z_{it} - \bar{z}_t)(y_{it} - \bar{y}_t) - \sigma_{xy}
+    .. math:: g_{M,mti} = (z_{it} - \bar{z}_t)(y_{it} - \bar{y}_t) - \sigma_{xy}
 
-    where :math:`\bar{z}_t = \sum_i w_iz_{it}`, :math:`\bar{y}_t = \sum_i w_iy_{it}`, and conditional on purchasing a
+    where :math:`\bar{z}_t = \sum_i w_i z_{it}`, :math:`\bar{y}_t = \sum_i w_i y_{it}`, and conditional on purchasing a
     non-outside good, the expected value of :math:`x_{jt}` for agent :math:`i` is
 
     .. math:: z_{it} = \sum_{j=1}^{J_t} \frac{x_{jt}s_{jti}}{1 - s_{0ti}}.
 
-    These market-level micro moments are averaged across a set :math:`\mathscr{T}_m` of markets in which the micro data
-    used to compute :math:`\sigma_{xy}` is relevant. This gives a :math:`\bar{g}_{M,m}` in :eq:`averaged_micro_moments`.
+    Integrals of these micro moments are approximated within and averaged across a set :math:`\mathscr{T}_m` of markets
+    in which the micro data used to compute :math:`\sigma_{xy}` is relevant, which gives :math:`\bar{g}_{M,m}` in
+    :eq:`averaged_micro_moments`.
 
     Parameters
     ----------
@@ -96,10 +98,10 @@ class ProductsAgentsCovarianceMoment(Moment):
     value : `float`
         Value of the covariance :math:`\sigma_{xy}` estimated from micro data.
     market_ids : `array-like, optional`
-        Distinct market IDs over which the micro moments :math:`g_{M,mt}` will be averaged to get :math:`\bar{g}_{M,m}`.
-        These are also the only markets in which the moments will be computed. By default, the moments are computed for
-        and averaged across all markets. That is, by default, it is assumed that the specified ``value`` is on average
-        the same for all markets.
+        Distinct market IDs over which the micro moments will be averaged to get :math:`\bar{g}_{M,m}`. These are also
+        the only markets in which the moments will be computed. By default, the moments are computed for and averaged
+        across all markets. That is, by default, it is assumed that the specified ``value`` is relevant for and on
+        average the same for all markets.
 
     Examples
     --------
@@ -175,8 +177,9 @@ class Moments(object):
 class EconomyMoments(Moments):
     """Information about a sequence of micro moments in an economy."""
 
-    market_counts: Array
     market_indices: Dict[Hashable, Array]
+    market_counts: Array
+    pairwise_market_counts: Array
 
     def __init__(self, economy: 'Economy', micro_moments: Sequence[Moment]) -> None:
         """Validate and store information about a sequence of micro moment instances in the context of an economy."""
@@ -195,13 +198,21 @@ class EconomyMoments(Moments):
         # store basic moment information
         super().__init__(micro_moments)
 
-        # identify market counts and indices
-        market_counts = [economy.T if m.market_ids is None else m.market_ids.size for m in micro_moments]
-        self.market_counts = np.c_[np.array(market_counts)]
+        # identify market indices
         self.market_indices: Dict[Hashable, Array] = {}
         for t in economy.unique_market_ids:
             market_index_t = [m.market_ids is None or t in m.market_ids for m in self.micro_moments]
             self.market_indices[t] = np.flatnonzero(market_index_t)
+
+        # count the number of markets associated with moments
+        self.market_counts = np.zeros((self.MM, 1), np.int)
+        self.pairwise_market_counts = np.zeros((self.MM, self.MM), np.int)
+        for m, moment_m in enumerate(self.micro_moments):
+            market_ids_m = set(economy.unique_market_ids if moment_m.market_ids is None else moment_m.market_ids)
+            self.market_counts[m] = len(market_ids_m)
+            for n, moment_n in enumerate(self.micro_moments):
+                market_ids_n = set(economy.unique_market_ids if moment_n.market_ids is None else moment_n.market_ids)
+                self.pairwise_market_counts[m, n] = len(market_ids_m & market_ids_n)
 
 
 class MarketMoments(Moments):

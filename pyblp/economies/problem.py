@@ -4,7 +4,7 @@ import abc
 import collections
 import functools
 import time
-from typing import Any, Callable, Dict, Hashable, List, Mapping, Optional, Sequence, Tuple, Union
+from typing import Any, Dict, Hashable, List, Mapping, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import scipy.linalg
@@ -48,7 +48,7 @@ class ProblemEconomy(Economy):
             delta_behavior: str = 'first', iteration: Optional[Iteration] = None, fp_type: str = 'safe_linear',
             costs_type: str = 'linear', costs_bounds: Optional[Tuple[Any, Any]] = None, W: Optional[Any] = None,
             center_moments: bool = True, W_type: str = 'robust', se_type: str = 'robust',
-            micro_moments: Sequence[Moment] = (), micro_covariances: Optional[Callable] = None, ) -> ProblemResults:
+            micro_moments: Sequence[Moment] = (), extra_micro_covariances: Optional[Any] = None) -> ProblemResults:
         r"""Solve the problem.
 
         The problem is solved in one or more GMM steps. During each step, any parameters in :math:`\hat{\theta}` are
@@ -359,7 +359,7 @@ class ProblemEconomy(Economy):
 
             This only affects the standard demand- and supply-side block of the updated weighting matrix. If there are
             micro moments, this matrix will be block-diagonal with a micro moment block equal to the inverse of the
-            covariance matrix returned by ``micro_covariances``.
+            covariance matrix defined in :eq:`averaged_micro_moment_covariances` plus any ``extra_micro_covariances``.
 
         se_type : `str, optional`
             How to compute standard errors. Usually, ``W_type`` should be the same. The following types are supported:
@@ -374,29 +374,25 @@ class ProblemEconomy(Economy):
                   computed under the assumption that the weighting matrix is optimal.
 
             This only affects the standard demand- and supply-side block of the matrix of averaged moment covariances.
-            If there are micro moments, this matrix will be block-diagonal with a micro moment block equal to the
-            covariance matrix returned by ``micro_covariances``.
+            If there are micro moments, the :math:`S` matrix defined in the expressions referenced above will be
+            block-diagonal with a micro moment block equal to the covariance matrix defined in
+            :eq:`averaged_micro_moment_covariances` plus any ``extra_micro_covariances``.
 
         micro_moments : `tuple of ProductsAgentsCovarianceMoment, optional`
             Configurations for the :math:`M_M` micro moments that will be added to the standard set of moments. The only
             type of micro moment currently supported is the :class:`ProductsAgentsCovarianceMoment`. By default, no
             micro moments are used, so :math:`M_M = 0`.
 
-            If micro moments are specified, ``micro_covariances`` are required. The micro moment block in ``W`` should
-            also usually be replaced by a matrix that better reflects micro moment covariances and the size of the micro
-            dataset relative to :math:`N`.
+            If micro moments are specified, the micro moment block in ``W`` should usually be replaced by a matrix that
+            better reflects micro moment covariances and the size of the micro dataset relative to :math:`N`. If micro
+            moments were computed with substantial sampling error, ``extra_micro_covariances`` can be specified to
+            account for this additional source of error.
 
-        micro_covariances : `callable, optional`
-            A function that computes covariances between the :math:`M_M` micro moments, which is required if
-            ``micro_moments`` are specified, and should have the following form::
-
-                micro_covariances(micro) -> covariances
-
-            where ``micro`` is the averaged micro moments :math:`\bar{g}_M` in :eq:`averaged_micro_moments` (stored as
-            :attr:`ProblemResults.micro`) and ``covariances`` is a :math:`M_M \times `M_M` covariance matrix. The
-            returned covariance matrix will be used when updating the weighting matrix (if ``method`` is ``'2s'``) and
-            computing standard errors. The correct form of the covariance matrix typically depends on how micro moment
-            values are estimated from their micro data.
+        extra_micro_covariances : `array-like, optional`
+            Covariance matrix that is added on to the :math:`M_M \times M_M` matrix of micro moments covariances defined
+            in :eq:`averaged_micro_moment_covariances`, which is used to update the weighting matrix and compute
+            standard errors. By default, this matrix is assumed to be zero. It should be specified if, for example,
+            micro moments were computed with substantial sampling error.
 
         Returns
         -------
@@ -464,10 +460,13 @@ class ProblemEconomy(Economy):
         # validate and structure micro moments before outputting related information
         moments = EconomyMoments(self, micro_moments)
         if moments.MM > 0:
-            if not callable(micro_covariances):
-                raise TypeError("micro_covariances must be specified when micro moments are specified.")
             output("")
             output(moments.format("Micro Moments"))
+            if extra_micro_covariances is not None:
+                extra_micro_covariances = np.atleast_2d(np.asarray(extra_micro_covariances, options.dtype))
+                if extra_micro_covariances.shape != (moments.MM, moments.MM):
+                    raise ValueError(f"extra_micro_moments must be a square {moments.MM} by {moments.MM} matrix.")
+                self._detect_psd(extra_micro_covariances, "extra_micro_moments")
 
         # validate parameters before compressing unfixed parameters into theta and outputting related information
         parameters = Parameters(
@@ -496,7 +495,7 @@ class ProblemEconomy(Economy):
             if moments.MM > 0:
                 W = scipy.linalg.block_diag(W, np.eye(moments.MM, dtype=options.dtype))
         else:
-            W = np.asarray(W, options.dtype)
+            W = np.atleast_2d(np.asarray(W, options.dtype))
             M = self.MD + self.MS + moments.MM
             if W.shape != (M, M):
                 raise ValueError(f"W must be a square {M} by {M} matrix.")
@@ -571,7 +570,8 @@ class ProblemEconomy(Economy):
                 nonlocal iteration_stats, smallest_objective, progress
                 assert optimization is not None and costs_bounds is not None
                 progress = compute_step_progress(
-                    new_theta, progress, optimization._compute_gradient, compute_hessian=False
+                    new_theta, progress, optimization._compute_gradient, compute_hessian=False,
+                    compute_micro_covariances=False
                 )
                 iteration_stats.append(progress.iteration_stats)
                 formatted_progress = progress.format(
@@ -599,9 +599,10 @@ class ProblemEconomy(Economy):
                 output(f"Optimization {status} after {format_seconds(optimization_time)}.")
 
             # identify what will be done when computing results
+            last_step = method != '2s' or step == 2
             compute_gradient = parameters.P > 0
             compute_hessian = compute_gradient and check_optimality == 'both'
-            last_step = method != '2s' or step == 2
+            compute_micro_covariances = moments.MM > 0
 
             # use progress information computed at the optimal theta to compute results for the step
             output("")
@@ -613,11 +614,13 @@ class ProblemEconomy(Economy):
                 output("Estimating standard errors and updating weights ...")
             else:
                 output("Estimating standard errors ...")
-            final_progress = compute_step_progress(theta, progress, compute_gradient, compute_hessian)
+            final_progress = compute_step_progress(
+                theta, progress, compute_gradient, compute_hessian, compute_micro_covariances
+            )
             optimization_stats.evaluations += 1
             results = ProblemResults(
                 final_progress, last_results, step_start_time, optimization_start_time, optimization_end_time,
-                optimization_stats, iteration_stats, costs_type, costs_bounds, micro_covariances, center_moments,
+                optimization_stats, iteration_stats, costs_type, costs_bounds, extra_micro_covariances, center_moments,
                 W_type, se_type
             )
             self._handle_errors(error_behavior, results._errors)
@@ -645,7 +648,7 @@ class ProblemEconomy(Economy):
             self, parameters: Parameters, moments: EconomyMoments, iv: IV, W: Array, error_behavior: str,
             error_punishment: float, delta_behavior: str, iteration: Iteration, fp_type: str, costs_type: str,
             costs_bounds: Bounds, theta: Array, progress: 'InitialProgress', compute_gradient: bool,
-            compute_hessian: bool) -> 'Progress':
+            compute_hessian: bool, compute_micro_covariances: bool) -> 'Progress':
         """Compute demand- and supply-side contributions before recovering the linear parameters and structural error
         terms. Then, form the GMM objective value and its gradient. Finally, handle any errors that were encountered
         before structuring relevant progress information.
@@ -656,8 +659,11 @@ class ProblemEconomy(Economy):
         sigma, pi, rho, beta, gamma = parameters.expand(theta)
 
         # compute demand-side contributions
-        delta, micro, xi_jacobian, micro_jacobian, iteration_stats, demand_errors = self._compute_demand_contributions(
-            parameters, moments, iteration, fp_type, sigma, pi, rho, progress, compute_gradient
+        delta, micro, xi_jacobian, micro_jacobian, micro_covariances, iteration_stats, demand_errors = (
+            self._compute_demand_contributions(
+                parameters, moments, iteration, fp_type, sigma, pi, rho, progress, compute_gradient,
+                compute_micro_covariances
+            )
         )
         errors.extend(demand_errors)
 
@@ -756,7 +762,8 @@ class ProblemEconomy(Economy):
         if compute_hessian:
             compute_progress = lambda x: self._compute_progress(
                 parameters, moments, iv, W, error_behavior, error_punishment, delta_behavior, iteration, fp_type,
-                costs_type, costs_bounds, x, progress, compute_gradient=True, compute_hessian=False
+                costs_type, costs_bounds, x, progress, compute_gradient=True, compute_hessian=False,
+                compute_micro_covariances=False
             )
             change = np.sqrt(np.finfo(np.float64).eps)
             for p in range(parameters.P):
@@ -772,24 +779,28 @@ class ProblemEconomy(Economy):
         # structure progress
         return Progress(
             self, parameters, moments, W, theta, objective, gradient, hessian, next_delta, delta, tilde_costs, micro,
-            xi_jacobian, omega_jacobian, micro_jacobian, xi, omega, beta, gamma, iteration_stats, clipped_costs, errors
+            xi_jacobian, omega_jacobian, micro_jacobian, micro_covariances, xi, omega, beta, gamma, iteration_stats,
+            clipped_costs, errors
         )
 
     def _compute_demand_contributions(
             self, parameters: Parameters, moments: EconomyMoments, iteration: Iteration, fp_type: str, sigma: Array,
-            pi: Array, rho: Array, progress: 'InitialProgress', compute_jacobian: bool) -> (
-            Tuple[Array, Array, Array, Array, Dict[Hashable, SolverStats], List[Error]]):
+            pi: Array, rho: Array, progress: 'InitialProgress', compute_jacobian: bool,
+            compute_micro_covariances: bool) -> (
+            Tuple[Array, Array, Array, Array, Array, Dict[Hashable, SolverStats], List[Error]]):
         """Compute delta and the Jacobian of xi (equivalently, of delta) with respect to theta market-by-market. If
         there are any micro moments, compute them (taking the average across relevant markets) along with their
-        Jacobian. Revert any problematic elements to their last values.
+        Jacobian and covariances. Revert any problematic elements to their last values.
         """
         errors: List[Error] = []
 
-        # initialize delta, micro moments, their Jacobians, and fixed point statistics so that they can be filled
+        # initialize delta, micro moments, their Jacobians, micro moment covariances, and fixed point statistics so that
+        #   they can be filled
         delta = np.zeros((self.N, 1), options.dtype)
         micro = np.zeros((moments.MM, 1), options.dtype)
         xi_jacobian = np.zeros((self.N, parameters.P), options.dtype)
         micro_jacobian = np.zeros((moments.MM, parameters.P), options.dtype)
+        micro_covariances = np.zeros((moments.MM, moments.MM), options.dtype)
         iteration_stats: Dict[Hashable, SolverStats] = {}
 
         # when possible and when a gradient isn't needed, compute delta with a closed-form solution
@@ -797,23 +808,28 @@ class ProblemEconomy(Economy):
             delta = self._compute_logit_delta(rho)
         else:
             # define a factory for solving the demand side of problem markets
-            def market_factory(s: Hashable) -> Tuple[ProblemMarket, Array, Iteration, str, bool]:
+            def market_factory(s: Hashable) -> Tuple[ProblemMarket, Array, Iteration, str, bool, bool]:
                 """Build a market along with arguments used to compute delta, micro moment values, and Jacobians."""
                 market_s = ProblemMarket(self, s, parameters, sigma, pi, rho, moments=moments)
                 initial_delta_s = progress.next_delta[self._product_market_indices[s]]
-                return market_s, initial_delta_s, iteration, fp_type, compute_jacobian
+                return market_s, initial_delta_s, iteration, fp_type, compute_jacobian, compute_micro_covariances
 
-            # compute delta, micro moments (averaged across markets), and their Jacobians market-by-market
+            # compute delta, micro moments (averaged across markets), their Jacobians, and micro moment covariances
+            #   market-by-market
             generator = generate_items(self.unique_market_ids, market_factory, ProblemMarket.solve_demand)
-            for t, (delta_t, micro_t, xi_jacobian_t, micro_jacobian_t, iteration_stats_t, errors_t) in generator:
+            for t, (delta_t, micro_t, xi_jacobian_t, micro_jacobian_t, covariances_t, stats_t, errors_t) in generator:
                 delta[self._product_market_indices[t]] = delta_t
                 xi_jacobian[self._product_market_indices[t], :parameters.P] = xi_jacobian_t
                 if moments.MM > 0:
-                    micro[moments.market_indices[t]] += micro_t / moments.market_counts[moments.market_indices[t]]
-                    micro_jacobian[moments.market_indices[t], :parameters.P] += (
-                        micro_jacobian_t / moments.market_counts[moments.market_indices[t]]
-                    )
-                iteration_stats[t] = iteration_stats_t
+                    indices = moments.market_indices[t]
+                    micro[indices] += micro_t / moments.market_counts[indices]
+                    micro_jacobian[indices, :parameters.P] += micro_jacobian_t / moments.market_counts[indices]
+                    if compute_micro_covariances:
+                        pairwise_indices = tuple(np.meshgrid(indices, indices))
+                        micro_covariances[pairwise_indices] += (
+                            covariances_t / moments.pairwise_market_counts[pairwise_indices]
+                        )
+                iteration_stats[t] = stats_t
                 errors.extend(errors_t)
 
         # replace invalid elements in delta and the micro moment values with their last values
@@ -836,7 +852,7 @@ class ProblemEconomy(Economy):
             if np.any(bad_micro_jacobian_index):
                 micro_jacobian[bad_micro_jacobian_index] = progress.micro_jacobian[bad_micro_jacobian_index]
                 errors.append(exceptions.MicroMomentsByThetaJacobianReversionError(bad_micro_jacobian_index))
-        return delta, micro, xi_jacobian, micro_jacobian, iteration_stats, errors
+        return delta, micro, xi_jacobian, micro_jacobian, micro_covariances, iteration_stats, errors
 
     def _compute_supply_contributions(
             self, parameters: Parameters, costs_type: str, costs_bounds: Bounds, sigma: Array, pi: Array, rho: Array,
@@ -1261,6 +1277,7 @@ class InitialProgress(object):
 class Progress(InitialProgress):
     """Structured information about estimation progress."""
 
+    micro_covariances: Array
     xi: Array
     omega: Array
     beta: Array
@@ -1273,14 +1290,15 @@ class Progress(InitialProgress):
     def __init__(
             self, problem: ProblemEconomy, parameters: Parameters, moments: EconomyMoments, W: Array, theta: Array,
             objective: Array, gradient: Array, hessian: Array, next_delta: Array, delta: Array, tilde_costs: Array,
-            micro: Array, xi_jacobian: Array, omega_jacobian: Array, micro_jacobian: Array, xi: Array, omega: Array,
-            beta: Array, gamma: Array, iteration_stats: Dict[Hashable, SolverStats], clipped_costs: Array,
-            errors: List[Error]) -> None:
+            micro: Array, xi_jacobian: Array, omega_jacobian: Array, micro_jacobian: Array, micro_covariances: Array,
+            xi: Array, omega: Array, beta: Array, gamma: Array, iteration_stats: Dict[Hashable, SolverStats],
+            clipped_costs: Array, errors: List[Error]) -> None:
         """Store progress information."""
         super().__init__(
             problem, parameters, moments, W, theta, objective, gradient, hessian, next_delta, delta, tilde_costs, micro,
             xi_jacobian, omega_jacobian, micro_jacobian
         )
+        self.micro_covariances = micro_covariances
         self.xi = xi
         self.omega = omega
         self.beta = beta

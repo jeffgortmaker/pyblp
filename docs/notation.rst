@@ -118,7 +118,7 @@ Symbol                                                 Dimensions               
 :math:`q`                                              :math:`1 \times 1`            Objective value
 :math:`g_D`                                            :math:`N \times M_D`          Demand-side moments
 :math:`g_S`                                            :math:`N \times M_S`          Supply-side moments
-:math:`g_M`                                            :math:`T \times M_M`          Micro moments
+:math:`g_M`                                            :math:`I \times M_M`          Micro moments
 :math:`g` (:math:`g_{jt}`)                             :math:`N \times (M_D + M_S)`  Demand- and supply-side moments
 :math:`g` (:math:`g_c`)                                :math:`C \times (M_D + M_S)`  Clustered demand- and supply-side moments
 :math:`\bar{g}_D`                                      :math:`M_D \times 1`          Averaged demand-side moments

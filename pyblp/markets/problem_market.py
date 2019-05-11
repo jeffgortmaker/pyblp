@@ -17,12 +17,13 @@ class ProblemMarket(Market):
     """A market underlying the BLP problem."""
 
     def solve_demand(
-            self, initial_delta: Array, iteration: Iteration, fp_type: str, compute_jacobian: bool) -> (
-            Tuple[Array, Array, Array, Array, SolverStats, List[Error]]):
+            self, initial_delta: Array, iteration: Iteration, fp_type: str, compute_jacobian: bool,
+            compute_micro_covariances: bool) -> Tuple[Array, Array, Array, Array, Array, SolverStats, List[Error]]:
         """Compute the mean utility for this market that equates market shares to observed values by solving a fixed
         point problem. Then, if compute_jacobian is True, compute the Jacobian of xi (equivalently, of delta) with
-        respect to theta. Finally, compute any micro moments and their Jacobian with respect to theta. Replace null
-        elements in delta with their last values before computing micro moments and Jacobians.
+        respect to theta. Finally, compute any micro moments, their Jacobian with respect to theta, and, if
+        compute_micro_covariances is True, their covariances. Replace null elements in delta with their last values
+        before computing micro moments and Jacobians.
         """
         errors: List[Error] = []
 
@@ -41,17 +42,23 @@ class ProblemMarket(Market):
             xi_jacobian, xi_jacobian_errors = self.safely_compute_xi_by_theta_jacobian(valid_delta)
             errors.extend(xi_jacobian_errors)
 
-        # compute micro moments and their Jacobian
+        # compute micro moments, their Jacobian, and their covariances
         assert self.moments is not None
         micro = np.zeros((self.moments.MM, 0), options.dtype)
         micro_jacobian = np.full((self.moments.MM, self.parameters.P), np.nan, options.dtype)
+        micro_covariances = np.full((self.moments.MM, self.moments.MM), np.nan, options.dtype)
         if self.moments.MM > 0:
-            micro, micro_errors = self.safely_compute_micro(valid_delta)
+            micro, micro_probabilities, micro_conditionals, micro_errors = self.safely_compute_micro(valid_delta)
             errors.extend(micro_errors)
             if compute_jacobian:
-                micro_jacobian, micro_jacobian_errors = self.compute_micro_by_theta_jacobian(valid_delta, xi_jacobian)
+                micro_jacobian, micro_jacobian_errors = self.safely_compute_micro_by_theta_jacobian(
+                    valid_delta, micro_probabilities, micro_conditionals, xi_jacobian
+                )
                 errors.extend(micro_jacobian_errors)
-        return delta, micro, xi_jacobian, micro_jacobian, stats, errors
+            if compute_micro_covariances:
+                micro_covariances, micro_covariances_errors = self.safely_compute_micro_covariances(micro_probabilities)
+                errors.extend(micro_covariances_errors)
+        return delta, micro, xi_jacobian, micro_jacobian, micro_covariances, stats, errors
 
     def solve_supply(
             self, initial_tilde_costs: Array, xi_jacobian: Array, costs_type: str, costs_bounds: Bounds,
@@ -63,7 +70,7 @@ class ProblemMarket(Market):
         errors: List[Error] = []
 
         # compute transformed marginal costs
-        tilde_costs, clipped_costs, tilde_costs_errors = self.compute_tilde_costs(costs_type, costs_bounds)
+        tilde_costs, clipped_costs, tilde_costs_errors = self.safely_compute_tilde_costs(costs_type, costs_bounds)
         errors.extend(tilde_costs_errors)
 
         # replace invalid transformed marginal costs with their last computed values
@@ -74,7 +81,7 @@ class ProblemMarket(Market):
         # compute the Jacobian, which is zero for clipped marginal costs
         omega_jacobian = np.full((self.J, self.parameters.P), np.nan, options.dtype)
         if compute_jacobian:
-            omega_jacobian, omega_jacobian_errors = self.compute_omega_by_theta_jacobian(
+            omega_jacobian, omega_jacobian_errors = self.safely_compute_omega_by_theta_jacobian(
                 valid_tilde_costs, xi_jacobian, costs_type
             )
             errors.extend(omega_jacobian_errors)
@@ -198,24 +205,24 @@ class ProblemMarket(Market):
         return self.compute_xi_by_theta_jacobian(delta)
 
     @NumericalErrorHandler(exceptions.MicroMomentsNumericalError)
-    def safely_compute_micro(self, delta: Array) -> Tuple[Array, List[Error]]:
+    def safely_compute_micro(self, delta: Array) -> Tuple[Array, Array, Array, List[Error]]:
         """Compute micro moments, handling any numerical errors."""
         errors: List[Error] = []
-        micro = self.compute_micro(delta)
-        return micro, errors
+        micro, micro_probabilities, micro_conditionals = self.compute_micro(delta)
+        return micro, micro_probabilities, micro_conditionals, errors
 
     @NumericalErrorHandler(exceptions.MicroMomentsByThetaJacobianNumericalError)
-    def compute_micro_by_theta_jacobian(self, delta: Array, xi_jacobian: Array) -> Tuple[Array, List[Error]]:
+    def safely_compute_micro_by_theta_jacobian(
+            self, delta: Array, micro_probabilities: Array, micro_conditionals: Array, xi_jacobian: Array) -> (
+            Tuple[Array, List[Error]]):
         """Compute the Jacobian of micro moments with respect to theta, handling any numerical errors."""
         errors: List[Error] = []
         assert self.moments is not None
 
-        # compute probabilities with the outside option eliminated and their tensor derivative with respect to xi
-        probabilities, conditionals = self.compute_probabilities(delta, eliminate_outside=True)
-        probabilities_tensor, _ = self.compute_probabilities_by_xi_tensor(probabilities, conditionals)
-
-        # pre-transpose the tensor derivatives
-        probabilities_tensor = probabilities_tensor.swapaxes(1, 2)
+        # compute the transposed tensor derivative of probabilities (with the outside option eliminated from the choice
+        #   set) with respect to xi
+        micro_probabilities_tensor, _ = self.compute_probabilities_by_xi_tensor(micro_probabilities, micro_conditionals)
+        micro_probabilities_tensor = micro_probabilities_tensor.swapaxes(1, 2)
 
         # compute the Jacobian
         micro_jacobian = np.zeros((self.moments.MM, self.parameters.P))
@@ -226,15 +233,15 @@ class ProblemMarket(Market):
 
             # compute the tangent of probabilities (with the outside option removed from the choice set) with
             #   respect to the parameter
-            probabilities_tangent, _ = self.compute_probabilities_by_parameter_tangent(
-                parameter, probabilities, conditionals, delta
+            micro_probabilities_tangent, _ = self.compute_probabilities_by_parameter_tangent(
+                parameter, micro_probabilities, micro_conditionals, delta
             )
 
             # fill the gradient of micro moments with respect to the parameter moment-by-moment
             for m, moment in enumerate(self.moments.micro_moments):
                 assert isinstance(moment, ProductsAgentsCovarianceMoment)
-                z_tangent = probabilities_tangent.T @ self.products.X2[:, [moment.X2_index]]
-                z_jacobian = np.squeeze(probabilities_tensor @ self.products.X2[:, [moment.X2_index]])
+                z_tangent = micro_probabilities_tangent.T @ self.products.X2[:, [moment.X2_index]]
+                z_jacobian = np.squeeze(micro_probabilities_tensor @ self.products.X2[:, [moment.X2_index]])
                 d = self.agents.demographics[:, [moment.demographics_index]]
                 demeaned_z_tangent = z_tangent - z_tangent.T @ self.agents.weights
                 demeaned_z_jacobian = z_jacobian - z_jacobian @ self.agents.weights
@@ -245,8 +252,29 @@ class ProblemMarket(Market):
                 )
         return micro_jacobian, errors
 
+    @NumericalErrorHandler(exceptions.MicroMomentCovariancesNumericalError)
+    def safely_compute_micro_covariances(self, micro_probabilities: Array) -> Tuple[Array, List[Error]]:
+        """Compute micro moment covariances, handling any numerical errors."""
+        errors: List[Error] = []
+        assert self.moments is not None
+
+        # fill a matrix of de-meaned micro moments for each agent moment-by-moment
+        demeaned_agent_micro = np.zeros((self.I, self.moments.MM), options.dtype)
+        for m, moment in enumerate(self.moments.micro_moments):
+            assert isinstance(moment, ProductsAgentsCovarianceMoment)
+            z = micro_probabilities.T @ self.products.X2[:, [moment.X2_index]]
+            d = self.agents.demographics[:, [moment.demographics_index]]
+            demeaned_z = z - z.T @ self.agents.weights
+            demeaned_d = d - d.T @ self.agents.weights
+            agent_micro_m = demeaned_z * demeaned_d - moment.value
+            demeaned_agent_micro[:, [m]] = agent_micro_m - agent_micro_m.T @ self.agents.weights
+
+        # compute the moment covariances, enforcing shape and symmetry
+        micro_covariances = demeaned_agent_micro.T @ (self.agents.weights * demeaned_agent_micro)
+        return np.c_[micro_covariances + micro_covariances.T] / 2, errors
+
     @NumericalErrorHandler(exceptions.CostsNumericalError)
-    def compute_tilde_costs(self, costs_type: str, costs_bounds: Bounds) -> Tuple[Array, Array, List[Error]]:
+    def safely_compute_tilde_costs(self, costs_type: str, costs_bounds: Bounds) -> Tuple[Array, Array, List[Error]]:
         """Compute transformed marginal costs, handling any numerical errors."""
         errors: List[Error] = []
 
@@ -274,7 +302,7 @@ class ProblemMarket(Market):
     @NumericalErrorHandler(exceptions.OmegaByThetaJacobianNumericalError)
     def safely_compute_omega_by_theta_jacobian(
             self, tilde_costs: Array, xi_jacobian: Array, costs_type: str) -> Tuple[Array, List[Error]]:
-        """Compute the Jacobian of omega (equivalently, of transformed marginal costs) with respect to theta, storing
+        """Compute the Jacobian of omega (equivalently, of transformed marginal costs) with respect to theta, handling
         any numerical errors.
         """
         return self.compute_omega_by_theta_jacobian(tilde_costs, xi_jacobian, costs_type)

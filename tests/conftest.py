@@ -311,9 +311,11 @@ def large_blp_simulation() -> SimulationFixture:
     })
     simulated_micro_moments = [
         ProductsAgentsCovarianceMoment(X2_index=0, demographics_index=0, value=0),
-        ProductsAgentsCovarianceMoment(X2_index=1, demographics_index=1, value=0),
         ProductsAgentsCovarianceMoment(
-            X2_index=0, demographics_index=1, value=0, market_ids=simulation.unique_market_ids[:5]
+            X2_index=1, demographics_index=1, value=0, market_ids=simulation.unique_market_ids[:5]
+        ),
+        ProductsAgentsCovarianceMoment(
+            X2_index=0, demographics_index=1, value=0, market_ids=simulation.unique_market_ids[-3:]
         )
     ]
     return simulation, simulation_results, simulated_micro_moments
@@ -445,8 +447,7 @@ def simulated_problem(request: Any) -> SimulatedProblemFixture:
         'method': '1s',
         'check_optimality': 'gradient',
         'optimization': Optimization('slsqp', {'ftol': 1e-10}),
-        'micro_moments': micro_moments,
-        'micro_covariances': lambda m: np.eye(m.size)
+        'micro_moments': micro_moments
     }
     problem_results = problem.solve(**solve_options)
     return simulation, simulation_results, problem, solve_options, problem_results

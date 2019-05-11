@@ -198,7 +198,8 @@ class SimulationResults(StringRepresentation):
             self.simulation.unique_market_ids, market_factory, SimulationResultsMarket.safely_compute_micro
         )
         for t, (micro_t, errors_t) in generator:
-            micro[moments.market_indices[t]] += micro_t / moments.market_counts[moments.market_indices[t]]
+            indices = moments.market_indices[t]
+            micro[indices] += micro_t / moments.market_counts[indices]
             errors.extend(errors_t)
 
         # output a warning about any errors

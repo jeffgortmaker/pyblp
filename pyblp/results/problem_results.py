@@ -249,7 +249,7 @@ class ProblemResults(Results):
             self, progress: 'Progress', last_results: Optional['ProblemResults'], step_start_time: float,
             optimization_start_time: float, optimization_end_time: float, optimization_stats: SolverStats,
             iteration_stats: Sequence[Dict[Hashable, SolverStats]], costs_type: str, costs_bounds: Bounds,
-            micro_covariances: Optional[Callable], center_moments: bool, W_type: str, se_type: str) -> None:
+            extra_micro_covariances: Optional[Array], center_moments: bool, W_type: str, se_type: str) -> None:
         """Compute cumulative progress statistics, update weighting matrices, and estimate standard errors."""
 
         # initialize values from the progress structure
@@ -356,30 +356,28 @@ class ProblemResults(Results):
         # ignore computational errors when updating the weighting matrix and computing covariances
         with np.errstate(invalid='ignore'):
             # compute moment covariances
-            W_S = se_S = compute_gmm_moment_covariances(
+            S_for_W = S_for_se = compute_gmm_moment_covariances(
                 u_list, Z_list, W_type, self.problem.products.clustering_ids, center_moments
             )
             if se_type != W_type or center_moments:
-                se_S = compute_gmm_moment_covariances(u_list, Z_list, se_type, self.problem.products.clustering_ids)
+                S_for_se = compute_gmm_moment_covariances(u_list, Z_list, se_type, self.problem.products.clustering_ids)
             if self._moments.MM > 0:
-                assert micro_covariances is not None
-                micro_S = np.asarray(micro_covariances(self.micro), options.dtype)
-                if micro_S.shape != (self._moments.MM, self._moments.MM):
-                    raise ValueError(f"micro_covariances must return a {self._moments.MM} by {self._moments.MM} array.")
-                self.problem._detect_psd(micro_S, "the matrix returned by micro_covariances")
-                W_S = scipy.linalg.block_diag(W_S, micro_S)
-                se_S = scipy.linalg.block_diag(se_S, micro_S)
+                micro_S = progress.micro_covariances.copy()
+                if extra_micro_covariances is not None:
+                    micro_S += extra_micro_covariances
+                S_for_W = scipy.linalg.block_diag(S_for_W, micro_S)
+                S_for_se = scipy.linalg.block_diag(S_for_se, micro_S)
 
             # update the weighting matrix
-            self.updated_W, W_errors = compute_gmm_weights(W_S)
+            self.updated_W, W_errors = compute_gmm_weights(S_for_W)
             self._errors.extend(W_errors)
 
             # if this is the first step, an unadjusted weighting matrix needs to be used when computing unadjusted
             #   covariances so that they are scaled properly
-            se_W = self.W
+            W_for_se = self.W
             if se_type == 'unadjusted' and self.step == 1:
-                se_W, se_W_errors = compute_gmm_weights(se_S)
-                self._errors.extend(se_W_errors)
+                W_for_se, W_for_se_errors = compute_gmm_weights(S_for_se)
+                self._errors.extend(W_for_se_errors)
 
             # compute parameter covariances
             mean_G = np.r_[
@@ -390,7 +388,9 @@ class ProblemResults(Results):
                     np.zeros((self._moments.MM, self._parameters.eliminated_gamma_index.sum()), options.dtype)
                 ]
             ]
-            self.parameter_covariances, se_errors = compute_gmm_parameter_covariances(se_W, se_S, mean_G, se_type)
+            self.parameter_covariances, se_errors = compute_gmm_parameter_covariances(
+                W_for_se, S_for_se, mean_G, se_type
+            )
             self._errors.extend(se_errors)
 
         # compute standard errors, ignoring invalid numbers from any computational errors above

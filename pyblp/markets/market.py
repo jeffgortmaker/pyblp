@@ -686,20 +686,23 @@ class Market(Container):
             omega_jacobian = -eta_jacobian / np.exp(tilde_costs)
         return omega_jacobian, errors
 
-    def compute_micro(self, delta: Optional[Array] = None) -> Array:
-        """Compute micro moments. By default, use the delta with which this market was initialized."""
+    def compute_micro(self, delta: Optional[Array] = None) -> Tuple[Array, Array, Array]:
+        """Compute micro moments. By default, use the delta with which this market was initialized. Also return the
+        probabilities with the outside option eliminated so they can be re-used when computing other things related to
+        micro moments.
+        """
         assert self.moments is not None
 
         # compute probabilities with the outside option eliminated
-        probabilities, _ = self.compute_probabilities(delta, eliminate_outside=True)
+        micro_probabilities, micro_conditionals = self.compute_probabilities(delta, eliminate_outside=True)
 
         # compute the micro moments
         micro = np.zeros((self.moments.MM, 1), options.dtype)
         for m, moment in enumerate(self.moments.micro_moments):
             assert isinstance(moment, ProductsAgentsCovarianceMoment)
-            z = probabilities.T @ self.products.X2[:, [moment.X2_index]]
+            z = micro_probabilities.T @ self.products.X2[:, [moment.X2_index]]
             d = self.agents.demographics[:, [moment.demographics_index]]
             demeaned_z = z - z.T @ self.agents.weights
             demeaned_d = d - d.T @ self.agents.weights
             micro[m] = demeaned_z.T @ (self.agents.weights * demeaned_d) - moment.value
-        return micro
+        return micro, micro_probabilities, micro_conditionals

@@ -14,5 +14,5 @@ class SimulationResultsMarket(Market):
     def safely_compute_micro(self) -> Tuple[Array, List[Error]]:
         """Compute micro moments, handling any numerical errors."""
         errors: List[Error] = []
-        micro = self.compute_micro()
+        micro = self.compute_micro()[0]
         return micro, errors

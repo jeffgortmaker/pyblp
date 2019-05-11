@@ -96,11 +96,11 @@ class OmegaByThetaJacobianNumericalError(NumericalError):
 
 
 class MicroMomentsByThetaJacobianNumericalError(NumericalError):
-    r"""Encountered a numerical error when computing the Jacobian of micro moments with respect to :math:`\theta`.
+    r"""Encountered a numerical error when computing the Jacobian of micro moments with respect to :math:`\theta`."""
 
-    This problem is often due to prior problems or overflow.
 
-    """
+class MicroMomentCovariancesNumericalError(NumericalError):
+    """Encountered a numerical error when computing micro moment covariances."""
 
 
 class SyntheticPricesNumericalError(NumericalError):
