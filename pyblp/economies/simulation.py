@@ -1,7 +1,6 @@
 """Economy-level simulation of synthetic BLP data."""
 
 import collections
-import patsy.desc
 import time
 from typing import Any, Dict, Hashable, List, Mapping, Optional, Sequence, Tuple
 
@@ -40,10 +39,12 @@ class Simulation(Economy):
     are constructed according to a specified :class:`Integration` configuration.
 
     Next, traditional excluded BLP instruments are constructed. Demand-side instruments are BLP instruments constructed
-    by :func:`build_blp_instruments` from :math:`X_1^x`, along with any supply shifters (variables in :math:`X_3` but
-    not :math:`X_1`. Supply side instruments are BLP instruments constructed from :math:`X_3`, along with any demand
-    shifters (variables in :math:`X_1` but not :math:`X_3`). BLP instruments for constant characteristics are
-    constructed only if there is variation in :math:`J_t`, the number of products per market.
+    by :func:`build_blp_instruments` from variables in :math:`X_1^x`, along with any supply shifters (variables in
+    :math:`X_3` but not :math:`X_1`). Supply side instruments are BLP instruments constructed from variables in
+    :math:`X_3`, along with any demand shifters (variables in :math:`X_1` but not :math:`X_3`). BLP instruments will
+    also be constructed for constant characteristics if there is variation in  :math:`J_t`, the number of products per
+    market. Any constant columns will be dropped. For example, if each firm owns exactly one product in each market, the
+    "rival" columns of BLP instruments will be zero and hence dropped.
 
     .. note::
 
@@ -368,10 +369,8 @@ class Simulation(Economy):
             **numerical_mapping
         }
         J_variation = len({(market_ids == t).sum() for t in np.unique(market_ids)}) > 1
-        demand_intercept = any(t == patsy.desc.INTERCEPT for t in product_formulations[0]._terms)
-        supply_intercept = any(t == patsy.desc.INTERCEPT for t in product_formulations[2]._terms)
-        demand_blp_formula = ' + '.join(['1' if J_variation and demand_intercept else '0'] + sorted(X1_names))
-        supply_blp_formula = ' + '.join(['1' if J_variation and supply_intercept else '0'] + sorted(X3_names))
+        demand_blp_formula = ' + '.join(['1' if J_variation else '0'] + sorted(X1_names))
+        supply_blp_formula = ' + '.join(['1' if J_variation else '0'] + sorted(X3_names))
         demand_instruments = build_blp_instruments(Formulation(demand_blp_formula), instrument_data)
         supply_instruments = build_blp_instruments(Formulation(supply_blp_formula), instrument_data)
 
@@ -384,6 +383,10 @@ class Simulation(Economy):
         if demand_shifter_names:
             demand_formula = ' + '.join(['0'] + sorted(demand_shifter_names))
             supply_instruments = np.c_[supply_instruments, build_matrix(Formulation(demand_formula), numerical_mapping)]
+
+        # drop any constant columns
+        demand_instruments = demand_instruments[:, (demand_instruments[0] != demand_instruments[1:]).any(axis=0)]
+        supply_instruments = supply_instruments[:, (supply_instruments[0] != supply_instruments[1:]).any(axis=0)]
 
         # structure product data fields as a mapping
         product_data_mapping = {
