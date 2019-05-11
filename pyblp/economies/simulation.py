@@ -349,7 +349,7 @@ class Simulation(Economy):
                         variable = state.uniform(size=market_ids.size).astype(options.dtype)
                     elif variable.shape[1] > 1:
                         raise ValueError(f"The {name} variable has a field in product_data with more than one column.")
-                    if np.issubdtype(variable.dtype, getattr(np, 'number')):
+                    if np.issubdtype(variable.dtype, np.number):
                         numerical_mapping[name] = variable
                     else:
                         categorical_mapping[name] = variable
@@ -357,10 +357,6 @@ class Simulation(Economy):
         # identify numerical variables
         X1_names = set(numerical_mapping) & product_formulations[0]._names
         X3_names = set(numerical_mapping) & product_formulations[2]._names
-        if not X1_names:
-            raise ValueError("The formulation for X1 must have at least one non-price numerical variable.")
-        if not X3_names:
-            raise ValueError("The formulation for X3 must have at least one numerical variable.")
 
         # construct excluded BLP instruments
         instrument_data = {
@@ -371,10 +367,13 @@ class Simulation(Economy):
         J_variation = len({(market_ids == t).sum() for t in np.unique(market_ids)}) > 1
         demand_blp_formula = ' + '.join(['1' if J_variation else '0'] + sorted(X1_names))
         supply_blp_formula = ' + '.join(['1' if J_variation else '0'] + sorted(X3_names))
-        demand_instruments = build_blp_instruments(Formulation(demand_blp_formula), instrument_data)
-        supply_instruments = build_blp_instruments(Formulation(supply_blp_formula), instrument_data)
+        demand_instruments = supply_instruments = np.zeros((market_ids.size, 0), options.dtype)
+        if demand_blp_formula != '0':
+            demand_instruments = build_blp_instruments(Formulation(demand_blp_formula), instrument_data)
+        if supply_blp_formula != '0':
+            supply_instruments = build_blp_instruments(Formulation(supply_blp_formula), instrument_data)
 
-        # add any supply or demand shifters
+        # add any shifters
         supply_shifter_names = X3_names - X1_names
         demand_shifter_names = X1_names - X3_names
         if supply_shifter_names:
