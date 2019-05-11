@@ -75,6 +75,7 @@ Features
 - Varying nesting parameters across groups
 - Logit and nested logit benchmarks
 - Classic BLP instruments
+- Differentiation instruments
 - Optimal instruments
 - Elasticities and diversion ratios
 - Marginal costs and markups
