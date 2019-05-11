@@ -38,13 +38,13 @@ class Simulation(Economy):
     After variables are loaded or simulated, any unspecified integration nodes and weights, :math:`\nu` and :math:`w`,
     are constructed according to a specified :class:`Integration` configuration.
 
-    Next, traditional excluded BLP instruments are constructed. Demand-side instruments are BLP instruments constructed
-    by :func:`build_blp_instruments` from variables in :math:`X_1^x`, along with any supply shifters (variables in
-    :math:`X_3` but not :math:`X_1`). Supply side instruments are BLP instruments constructed from variables in
-    :math:`X_3`, along with any demand shifters (variables in :math:`X_1` but not :math:`X_3`). BLP instruments will
-    also be constructed for constant characteristics if there is variation in  :math:`J_t`, the number of products per
-    market. Any constant columns will be dropped. For example, if each firm owns exactly one product in each market, the
-    "rival" columns of BLP instruments will be zero and hence dropped.
+    Next, traditional excluded BLP instruments are constructed if they aren't already specified. Demand-side instruments
+    are BLP instruments constructed by :func:`build_blp_instruments` from variables in :math:`X_1^x`, along with any
+    supply shifters (variables in :math:`X_3` but not :math:`X_1`). Supply side instruments are BLP instruments
+    constructed from variables in :math:`X_3`, along with any demand shifters (variables in :math:`X_1` but not
+    :math:`X_3`). BLP instruments will also be constructed for constant characteristics if there is variation in
+    :math:`J_t`, the number of products per market. Any constant columns will be dropped. For example, if each firm owns
+    exactly one product in each market, the "rival" columns of BLP instruments will be zero and hence dropped.
 
     .. note::
 
@@ -84,6 +84,16 @@ class Simulation(Economy):
 
             - **firm_ids** : (`object`) - IDs that associate products with firms.
 
+        If excluded instruments are specified, traditional BLP instruments will not be constructed:
+
+            - **demand_instruments** : (`numeric`) - Excluded demand-side instruments, which, together with the
+              formulated exogenous linear product characteristics, :math:`X_1^x`, constitute the full set of demand-side
+              instruments, :math:`Z_D`.
+
+            - **supply_instruments** : (`numeric, optional`) - Excluded supply-side instruments, which, together with
+              the formulated cost characteristics, :math:`X_3`, constitute the full set of supply-side instruments,
+              :math:`Z_S`.
+
         Custom ownership matrices can be specified as well:
 
             - **ownership** : (`numeric, optional') - Custom stacked :math:`J_t \times J_t` ownership matrices,
@@ -94,10 +104,11 @@ class Simulation(Economy):
 
         .. note::
 
-           If ``ownership`` has multiple columns, it can be specified as a matrix or broken up into multiple
-           one-dimensional fields with column index suffixes that start at zero. For example, if there are three columns
-           of ownership information, a ``ownership`` field with three columns can be replaced by three one-dimensional
-           fields: ``ownership0``, ``ownership1``, and ``ownership2``.
+           Fields that can have multiple columns (``demand_instruments``, ``supply_instruments``, and ``ownership``) can
+           either be matrices or can be broken up into multiple one-dimensional fields with column index suffixes that
+           start at zero. For example, if there are three columns of excluded demand-side instruments, a
+           ``demand_instruments`` field with three columns can be replaced by three one-dimensional fields:
+           ``demand_instruments0``, ``demand_instruments1``, and ``demand_instruments2``.
 
         To simulate a nested logit or random coefficients nested logit (RCNL) model, nesting groups must be specified:
 
@@ -106,7 +117,8 @@ class Simulation(Economy):
 
         Along with ``market_ids``, ``firm_ids``, and ``nesting_ids``, the names of any additional fields can typically
         be used as variables in ``product_formulations``. However, there are a few variable names such as ``'X1'``,
-        which are reserved for use by :class:`Products`.
+        which are reserved for use by :class:`Products`. The names ``prices`` and ``shares`` will be ignored because
+        these will be computed by :meth:`Simulation.solve`.
 
     agent_formulation : `Formulation, optional`
         :class:`Formulation` configuration for the matrix of observed agent characteristics called demographics,
@@ -329,8 +341,10 @@ class Simulation(Economy):
         if firm_ids.shape[1] > 1:
             raise ValueError("The firm_ids field of product_data must be one-dimensional.")
 
-        # load ownership matrices
+        # load ownership matrices and excluded instruments
         ownership = extract_matrix(product_data, 'ownership')
+        demand_instruments = extract_matrix(product_data, 'demand_instruments')
+        supply_instruments = extract_matrix(product_data, 'supply_instruments')
 
         # seed the random number generator
         state = np.random.RandomState(seed)
@@ -354,38 +368,35 @@ class Simulation(Economy):
                     else:
                         categorical_mapping[name] = variable
 
-        # identify numerical variables
+        # prepare components needed for BLP instrument construction
         X1_names = set(numerical_mapping) & product_formulations[0]._names
         X3_names = set(numerical_mapping) & product_formulations[2]._names
-
-        # construct excluded BLP instruments
-        instrument_data = {
-            'market_ids': market_ids,
-            'firm_ids': firm_ids,
-            **numerical_mapping
-        }
         J_variation = len({(market_ids == t).sum() for t in np.unique(market_ids)}) > 1
-        demand_blp_formula = ' + '.join(['1' if J_variation else '0'] + sorted(X1_names))
-        supply_blp_formula = ' + '.join(['1' if J_variation else '0'] + sorted(X3_names))
-        demand_instruments = supply_instruments = np.zeros((market_ids.size, 0), options.dtype)
-        if demand_blp_formula != '0':
-            demand_instruments = build_blp_instruments(Formulation(demand_blp_formula), instrument_data)
-        if supply_blp_formula != '0':
-            supply_instruments = build_blp_instruments(Formulation(supply_blp_formula), instrument_data)
+        blp_data = {'market_ids': market_ids, 'firm_ids': firm_ids, **numerical_mapping}
 
-        # add any shifters
-        supply_shifter_names = X3_names - X1_names
-        demand_shifter_names = X1_names - X3_names
-        if supply_shifter_names:
-            supply_formula = ' + '.join(['0'] + sorted(supply_shifter_names))
-            demand_instruments = np.c_[demand_instruments, build_matrix(Formulation(supply_formula), numerical_mapping)]
-        if demand_shifter_names:
-            demand_formula = ' + '.join(['0'] + sorted(demand_shifter_names))
-            supply_instruments = np.c_[supply_instruments, build_matrix(Formulation(demand_formula), numerical_mapping)]
+        # construct excluded demand-side BLP instruments if they haven't already been specified
+        if demand_instruments is None:
+            demand_instruments = np.zeros((market_ids.size, 0), options.dtype)
+            demand_blp_formula = ' + '.join(['1' if J_variation else '0'] + sorted(X1_names))
+            supply_shifter_formula = ' + '.join(['0'] + sorted(X3_names - X1_names))
+            if demand_blp_formula != '0':
+                demand_instruments = build_blp_instruments(Formulation(demand_blp_formula), blp_data)
+                demand_instruments = demand_instruments[:, (demand_instruments != demand_instruments[0]).any(axis=0)]
+            if supply_shifter_formula != '0':
+                supply_shifters = build_matrix(Formulation(supply_shifter_formula), numerical_mapping)
+                demand_instruments = np.c_[demand_instruments, supply_shifters]
 
-        # drop any constant columns
-        demand_instruments = demand_instruments[:, (demand_instruments[0] != demand_instruments[1:]).any(axis=0)]
-        supply_instruments = supply_instruments[:, (supply_instruments[0] != supply_instruments[1:]).any(axis=0)]
+        # construct excluded supply-side BLP instruments if they haven't already been specified
+        if supply_instruments is None:
+            supply_instruments = np.zeros((market_ids.size, 0), options.dtype)
+            supply_blp_formula = ' + '.join(['1' if J_variation else '0'] + sorted(X3_names))
+            demand_shifter_formula = ' + '.join(['0'] + sorted(X1_names - X3_names))
+            if supply_blp_formula != '0':
+                supply_instruments = build_blp_instruments(Formulation(supply_blp_formula), blp_data)
+                supply_instruments = supply_instruments[:, (supply_instruments != supply_instruments[0]).any(axis=0)]
+            if demand_shifter_formula != '0':
+                demand_shifters = build_matrix(Formulation(demand_shifter_formula), numerical_mapping)
+                supply_instruments = np.c_[supply_instruments, demand_shifters]
 
         # structure product data fields as a mapping
         product_data_mapping = {
