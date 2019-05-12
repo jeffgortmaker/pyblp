@@ -143,7 +143,8 @@ class ProblemResults(Results):
     micro : `ndarray`
         Averaged micro moments, :math:`\bar{g}_M`, in :eq:`averaged_micro_moments`.
     objective : `float`
-        GMM objective value, :math:`q(\hat{\theta})`, defined in :eq:`objective`.
+        GMM objective value, :math:`q(\hat{\theta})`, defined in :eq:`objective`. Note that this expression is scaled
+        by a :math:`N^2` term to match numbers traditionally reported in the BLP literature.
     xi_by_theta_jacobian : `ndarray`
         Estimated :math:`\frac{\partial\xi}{\partial\theta} = \frac{\partial\delta}{\partial\theta}`, which is used to
         compute the gradient and standard errors.

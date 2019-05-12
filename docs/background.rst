@@ -85,7 +85,7 @@ The GMM problem is
 .. math:: \min_\theta q(\theta) = N^2\bar{g}(\theta)'W\bar{g}(\theta),
    :label: objective
 
-in which :math:`W` is a :math:`M \times M` weighting matrix and :math:`\bar{g}` is a :math:`M \times 1` vector of averaged demand- and supply-side moments:
+in which :math:`q(\theta)` is the GMM objective (scaled by :math:`N^2` to match numbers traditionally reported in the BLP literature), :math:`W` is a :math:`M \times M` weighting matrix and :math:`\bar{g}` is a :math:`M \times 1` vector of averaged demand- and supply-side moments:
 
 .. math:: \bar{g} = \begin{bmatrix} \bar{g}_D \\ \bar{g}_S \end{bmatrix} = \frac{1}{N} \begin{bmatrix} \sum_{j,t} Z_{D,jt}'\xi_{jt} \\ \sum_{j,t} Z_{S,jt}'\omega_{jt} \end{bmatrix}
    :label: averaged_moments
