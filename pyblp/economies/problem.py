@@ -463,7 +463,7 @@ class ProblemEconomy(Economy):
             output("")
             output(moments.format("Micro Moments"))
             if extra_micro_covariances is not None:
-                extra_micro_covariances = np.atleast_2d(np.asarray(extra_micro_covariances, options.dtype))
+                extra_micro_covariances = np.c_[np.asarray(extra_micro_covariances, options.dtype)]
                 if extra_micro_covariances.shape != (moments.MM, moments.MM):
                     raise ValueError(f"extra_micro_moments must be a square {moments.MM} by {moments.MM} matrix.")
                 self._detect_psd(extra_micro_covariances, "extra_micro_moments")
@@ -495,7 +495,7 @@ class ProblemEconomy(Economy):
             if moments.MM > 0:
                 W = scipy.linalg.block_diag(W, np.eye(moments.MM, dtype=options.dtype))
         else:
-            W = np.atleast_2d(np.asarray(W, options.dtype))
+            W = np.c_[np.asarray(W, options.dtype)]
             M = self.MD + self.MS + moments.MM
             if W.shape != (M, M):
                 raise ValueError(f"W must be a square {M} by {M} matrix.")
