@@ -77,11 +77,12 @@ Features
 - Classic BLP instruments
 - Differentiation instruments
 - Optimal instruments
+- Parametric boostrapping post-estimation outputs
 - Elasticities and diversion ratios
 - Marginal costs and markups
 - Profits and consumer surplus
 - Merger simulation
-- Parametric boostrapping post-estimation outputs
+- Custom counterfactual simulation
 - Synthetic data construction
 - SciPy or Artleys Knitro optimization
 - Fixed point acceleration
