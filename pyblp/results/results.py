@@ -301,6 +301,14 @@ class Results(abc.ABC, StringRepresentation):
             prices: Optional[Any] = None, iteration: Optional[Iteration] = None) -> Array:
         r"""Estimate equilibrium prices after firm or cost changes, :math:`p^*`.
 
+        .. note::
+
+           To compute equilibrium prices (and shares) associated with a more complicated counterfactual, a
+           :class:`Simulation` for the counterfactual can be initialized with the estimated parameters, structural
+           errors, and marginal costs from these results, and then solved with :meth:`Simulation.solve`. The returned
+           :class:`SimulationResults` gives more information about the contraction than this method, such as the number
+           of contraction evaluations.
+
         Prices are computed in each market by iterating over the :math:`\zeta`-markup contraction in
         :eq:`zeta_contraction`:
 
@@ -360,6 +368,12 @@ class Results(abc.ABC, StringRepresentation):
 
     def compute_shares(self, prices: Optional[Any] = None) -> Array:
         r"""Estimate shares evaluated at specified prices.
+
+        .. note::
+
+           To compute equilibrium shares (and prices) associated with a more complicated counterfactual, a
+           :class:`Simulation` for the counterfactual can be initialized with the estimated parameters, structural
+           errors, and marginal costs from these results, and then solved with :meth:`Simulation.solve`.
 
         Parameters
         ----------

@@ -2,7 +2,7 @@
 
 import collections
 import time
-from typing import Any, Dict, Hashable, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, Hashable, List, Mapping, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
@@ -23,42 +23,54 @@ from ..utilities.basics import (
 
 
 class Simulation(Economy):
-    r"""Simulation of synthetic data from BLP-type models.
+    r"""Simulation of data in BLP-type models.
 
-    All data are either loaded or simulated during initialization, except for synthetic prices and shares, which are
-    computed by :meth:`Simulation.solve`.
+    Any data left unspecified are simulated during initialization, except for synthetic prices and shares, which are
+    computed by :meth:`Simulation.solve`. Typically, this class is used for one of two purposes:
 
-    Unspecified exogenous variables that are used to formulate product characteristics in :math:`X_1`, :math:`X_2`, and
-    :math:`X_3`, as well as agent demographics, :math:`d`, are all drawn independently from the standard uniform
-    distribution.
+        1. Solving for equilibrium prices and shares under more complicated counterfactuals than is possible with
+           :meth:`ProblemResults.compute_prices` and :meth:`ProblemResults.compute_shares`. For example, this class
+           can be initialized with estimated parameters, structural errors, and marginal costs from a
+           :meth:`ProblemResults`, but with changed data (fewer products, new products, different characteristics, etc.)
+           and :meth:`Simulation.solve` can be used to compute the corresponding prices and shares.
 
-    Unobserved demand- and supply-side product characteristics, :math:`\xi` and :math:`\omega`, are drawn from a
-    mean-zero bivariate normal distribution.
+        2. Simulation of BLP-type models from scratch. For example, a model with fixed true parameters can be simulated
+           many times, converted into problems with :meth:`SimulationResults.to_problem`, and solved with
+           :meth:`Problem.solve` to evaluate in a Monte Carlo study how well the true parameters can be recovered.
+
+    If data for exogenous variables (used to formulate product characteristics in :math:`X_1`, :math:`X_2`, and
+    :math:`X_3`, as well as agent demographics, :math:`d`) are not provided, the values for each unspecified exogenous
+    variable are drawn independently from the standard uniform distribution.
+
+    If data for unobserved demand-and supply-side product characteristics, :math:`\xi` and :math:`\omega`, are not
+    provided, they are by default drawn from a mean-zero bivariate normal distribution. When a supply side is not
+    included in the simulation, marginal costs, :math:`c`, must be provided along with :math:`\xi`.
 
     After variables are loaded or simulated, any unspecified integration nodes and weights, :math:`\nu` and :math:`w`,
     are constructed according to a specified :class:`Integration` configuration.
 
-    Next, traditional excluded BLP instruments are constructed if they aren't already specified. Demand-side instruments
-    are BLP instruments constructed by :func:`build_blp_instruments` from variables in :math:`X_1^x`, along with any
-    supply shifters (variables in :math:`X_3` but not :math:`X_1`). Supply side instruments are BLP instruments
-    constructed from variables in :math:`X_3`, along with any demand shifters (variables in :math:`X_1` but not
-    :math:`X_3`). BLP instruments will also be constructed for constant characteristics if there is variation in
-    :math:`J_t`, the number of products per market. Any constant columns will be dropped. For example, if each firm owns
-    exactly one product in each market, the "rival" columns of BLP instruments will be zero and hence dropped.
+    If excluded instruments are not specified, traditional BLP instruments are constructed. Demand-side instruments are
+    BLP instruments constructed by :func:`build_blp_instruments` from variables in :math:`X_1^x`, along with any supply
+    shifters (variables in :math:`X_3` but not :math:`X_1`). Supply side instruments are BLP instruments constructed
+    from variables in :math:`X_3`, along with any demand shifters (variables in :math:`X_1` but not :math:`X_3`). BLP
+    instruments will also be constructed from columns of ones if there is variation in :math:`J_t`, the number of
+    products per market. Any constant columns will be dropped. For example, if each firm owns exactly one product in
+    each market, the "rival" columns of BLP instruments will be zero and hence dropped.
 
     .. note::
 
-       These excluded instruments are constructed only for convenience. Especially for more complicated formulations,
-       they should be replaced with better instruments. For example, instruments constructed with
-       :func:`build_differentiation_instruments` may be preferable.
+       These excluded instruments are constructed only for convenience if the simulation will be turned into a
+       :class:`Problem` and solved. Especially for more complicated problems, they should be replaced with better
+       instruments.
 
     Parameters
     ----------
-    product_formulations : `tuple`
-        Tuple of three :class:`Formulation` configurations for the matrix of linear product characteristics,
-        :math:`X_1`, for the matrix of nonlinear product characteristics, :math:`X_2`, and for the matrix of cost
-        characteristics, :math:`X_3`, respectively. If the formulation for :math:`X_2` is ``None``, the logit (or nested
-        logit) model will be simulated.
+    product_formulations : `Formulation or tuple of Formulation`
+        :class:`Formulation` configuration or tuple of up to three :class:`Formulation` configurations for the matrix
+        of linear product characteristics, :math:`X_1`, for the matrix of nonlinear product characteristics,
+        :math:`X_2`, and for the matrix of cost characteristics, :math:`X_3`, respectively. If the formulation for
+        :math:`X_3` is not specified or is ``None``, ``costs`` must be specified. If the formulation for :math:`X_2` is
+        not specified or is ``None``, the logit (or nested logit) model will be simulated.
 
         The ``shares`` variable should not be included in any of the formulations and ``prices`` should be included in
         the formulation for :math:`X_1` or :math:`X_2` (or both). All exogenous characteristics in :math:`X_2` should
@@ -66,16 +78,13 @@ class Simulation(Economy):
         drawn from independent standard uniform distributions. Unlike in :class:`Problem`, fixed effect absorption is
         not supported during simulation.
 
-    beta : `array-like`
-        Vector of demand-side linear parameters, :math:`\beta`. Elements correspond to columns in :math:`X_1`, which
-        is formulated by ``product_formulations``.
-    sigma : `array-like`
-        Cholesky root of the covariance matrix for unobserved taste heterogeneity, :math:`\Sigma`, which is an upper
-        triangular matrix. Rows and columns correspond to columns in :math:`X_2`, which is formulated by
-        ``product_formulations``. If the formulation for :math:`X_2` is ``None``, this should be ``None`` as well.
-    gamma : `array-like`
-        Vector of supply-side linear parameters, :math:`\gamma`. Elements correspond to columns in :math:`X_3`, which
-        is formulated by ``product_formulations``.
+        .. warning::
+
+           Characteristics that involve prices, :math:`p`, should always be formulated with the ``prices`` variable. If
+           another name is used, :class:`Simulation` will not understand that the characteristic is endogenous. For
+           example, to include a :math:`p^2` characteristic, include ``I(prices**2)`` in a formula instead of manually
+           including a ``prices_squared`` variable in ``product_data`` and a formula.
+
     product_data : `structured array-like`
         Each row corresponds to a product. Markets can have differing numbers of products. The convenience function
         :func:`build_id_data` can be used to construct the following required ID data:
@@ -120,14 +129,30 @@ class Simulation(Economy):
         which are reserved for use by :class:`Products`. The names ``prices`` and ``shares`` will be ignored because
         these will be computed by :meth:`Simulation.solve`.
 
+    beta : `array-like`
+        Vector of demand-side linear parameters, :math:`\beta`. Elements correspond to columns in :math:`X_1`, which
+        is formulated by ``product_formulations``.
+    sigma : `array-like, optional`
+        Cholesky root of the covariance matrix for unobserved taste heterogeneity, :math:`\Sigma`, which is an upper
+        triangular matrix. Rows and columns correspond to columns in :math:`X_2`, which is formulated by
+        ``product_formulations``. If :math:`X_2` is not formulated, this should not be specified, since the logit model
+        will be simulated.
+    pi : `array-like, optional`
+        Parameters that measure how agent tastes vary with demographics, :math:`\Pi`. Rows correspond to the same
+        product characteristics as in ``sigma``. Columns correspond to columns in :math:`d`, which is formulated by
+        ``agent_formulation``. If :math:`d` is not formulated, this should not be specified.
+    gamma : `array-like, optional`
+        Vector of supply-side linear parameters, :math:`\gamma`. Elements correspond to columns in :math:`X_3`, which
+        is formulated by ``product_formulations``. If :math:`X_3` is not formulated, this should not be specified.
+    rho : `array-like, optional`
+        Parameters that measure within nesting group correlation, :math:`\rho`. If this is a scalar, it corresponds to
+        all groups defined by the ``nesting_ids`` field of ``product_data``. If this is a vector, it must have :math:`H`
+        elements, one for each nesting group. Elements correspond to group IDs in the sorted order of
+        :attr:`Simulation.unique_nesting_ids`. If nesting IDs are not specified, this should not be specified either.
     agent_formulation : `Formulation, optional`
         :class:`Formulation` configuration for the matrix of observed agent characteristics called demographics,
         :math:`d`, which will only be included in the model if this formulation is specified. Any variables that cannot
         be loaded from ``agent_data`` will be drawn from independent standard uniform distributions.
-    pi : `array-like, optional`
-        Parameters that measure how agent tastes vary with demographics, :math:`\Pi`. Rows correspond to the same
-        product characteristics as in ``sigma``. Columns correspond to columns in :math:`d`, which is formulated by
-        ``agent_formulation``.
     agent_data : `structured array-like, optional`
         Each row corresponds to an agent. Markets can have differing numbers of agents. Since simulated agents are only
         used if there are nonlinear product characteristics, agent data should only be specified if :math:`X_2` is
@@ -169,29 +194,28 @@ class Simulation(Economy):
         characteristics) will be built. However, if ``sigma`` is left unspecified or is specified with columns fixed at
         zero, fewer columns will be used.
 
-    rho : `array-like, optional`
-        Parameters that measure within nesting group correlation, :math:`\rho`. If this is a scalar, it corresponds to
-        all groups defined by the ``nesting_ids`` field of ``product_data``. If this is a vector, it must have :math:`H`
-        elements, one for each nesting group. Elements correspond to group IDs in the sorted order of
-        :attr:`Simulation.unique_nesting_ids`. If nesting IDs were not specified, this should not be specified either.
     xi : `array-like, optional`
-        Unobserved demand-side product characteristics, :math:`\xi`. By default, each pair of unobserved characteristics
-        in this and :math:`\omega` is drawn from a mean-zero bivariate normal distribution. This must be specified if
-        ``omega`` is specified.
+        Unobserved demand-side product characteristics, :math:`\xi`. By default, if :math:`X_3` is formulated, each pair
+        of unobserved characteristics in this and :math:`\omega` is drawn from a mean-zero bivariate normal
+        distribution. This must be specified if :math:`X_3` is not formulated or if ``omega`` is specified.
     omega : `array-like, optional`
-        Unobserved supply-side product characteristics, :math:`\omega`. By default, each pair of unobserved
-        characteristics in this and :math:`\xi` is drawn from a mean-zero bivariate normal distribution. This must be
-        specified if ``xi`` is specified.
+        Unobserved supply-side product characteristics, :math:`\omega`. By default, if :math:`X_3` is formulated, each
+        pair of unobserved characteristics in this and :math:`\xi` is drawn from a mean-zero bivariate normal
+        distribution. This must be specified if :math:`X_3` is formulated and ``xi`` is specified. It is ignored if
+        :math:`X_3` is not formulated.
     xi_variance : `float, optional`
-        Variance of :math:`\xi`. The default value is ``1.0``. This is ignored if ``xi`` and ``omega`` are specified.
+        Variance of :math:`\xi`. The default value is ``1.0``. This is ignored if ``xi`` or ``omega`` is specified.
     omega_variance : `float, optional`
-        Variance of :math:`\omega`. The default value is ``1.0``. This is ignored if ``xi`` and ``omega`` are specified.
+        Variance of :math:`\omega`. The default value is ``1.0``. This is ignored if ``xi`` or ``omega`` is specified.
     correlation : `float, optional`
-        Correlation between :math:`\xi` and :math:`\omega`. The default value is ``0.9``. This is ignored if ``xi`` and
-        ``omega`` are specified.
+        Correlation between :math:`\xi` and :math:`\omega`. The default value is ``0.9``. This is ignored if ``xi`` or
+        ``omega`` is specified.
+    costs : `array-like, optional`
+        Marginal costs, :math:`c`. By default, if :math:`X_3` is formulated, :math:`c = X_3\gamma + \omega`. This must
+        be specified if :math:`X_3` is not formulated. It is ignored if :math:`X_3` is formulated.
     costs_type : `str, optional`
-        Specification of the marginal cost function :math:`\tilde{c} = f(c)` in :eq:`costs`. The following
-        specifications are supported:
+        Specification of the marginal cost function :math:`\tilde{c} = f(c)` in :eq:`costs`. This is ignored if
+        ``costs`` is specified. The following specifications are supported:
 
             - ``'linear'`` (default) - Linear specification: :math:`\tilde{c} = c`.
 
@@ -242,9 +266,10 @@ class Simulation(Economy):
     omega : `ndarray`
         Unobserved supply-side product characteristics, :math:`\omega`.
     costs : `ndarray`
-        Marginal costs, :math:`c`, which was constructed during initialization.
+        Marginal costs, :math:`c`.
     costs_type : `str`
-        The specification according to which :attr:`Simulation.costs` was constructed during initialization.
+        The specification according to which :attr:`Simulation.costs` was constructed during initialization if it was
+        not specified.
     T : `int`
         Number of markets, :math:`T`.
     N : `int`
@@ -282,43 +307,43 @@ class Simulation(Economy):
 
     """
 
+    product_data: RecArray
+    agent_data: Optional[RecArray]
+    integration: Optional[Integration]
     beta: Array
     sigma: Array
     gamma: Array
     pi: Array
     rho: Array
-    product_data: RecArray
-    agent_data: Optional[RecArray]
-    integration: Optional[Integration]
     xi: Array
-    omega: Array
+    omega: Optional[Array]
     costs: Array
     costs_type: str
     _parameters: Parameters
 
     def __init__(
-            self, product_formulations: Sequence[Optional[Formulation]], beta: Any, sigma: Any, gamma: Any,
-            product_data: Mapping, agent_formulation: Optional[Formulation] = None, pi: Optional[Any] = None,
-            agent_data: Optional[Mapping] = None, integration: Optional[Integration] = None, rho: Optional[Any] = None,
-            xi: Optional[Any] = None, omega: Optional[Any] = None, xi_variance: float = 1, omega_variance: float = 1,
-            correlation: float = 0.9, costs_type: str = 'linear', seed: Optional[int] = None) -> None:
+            self, product_formulations: Union[Formulation, Sequence[Optional[Formulation]]], product_data: Mapping,
+            beta: Any, sigma: Optional[Any] = None, pi: Optional[Any] = None, gamma: Optional[Any] = None,
+            rho: Optional[Any] = None, agent_formulation: Optional[Formulation] = None,
+            agent_data: Optional[Mapping] = None, integration: Optional[Integration] = None, xi: Optional[Any] = None,
+            omega: Optional[Any] = None, xi_variance: float = 1, omega_variance: float = 1, correlation: float = 0.9,
+            costs: Optional[Any] = None, costs_type: str = 'linear', seed: Optional[int] = None) -> None:
         """Load or simulate all data except for synthetic prices and shares."""
 
         # keep track of long it takes to initialize the simulation
         output("Initializing the simulation ...")
         start_time = time.time()
 
-        # validate the product formulations
-        if not isinstance(product_formulations, collections.Sequence) or len(product_formulations) != 3:
-            raise TypeError("product_formulations must be a tuple of three formulations.")
-        if not all(f is None or isinstance(f, Formulation) for f in product_formulations):
-            raise TypeError("Each formulation in product_formulations must be None or a Formulation instance.")
-        if product_formulations[0] is None:
-            raise ValueError("The formulation for X1 must be specified.")
-        if product_formulations[2] is None:
-            raise ValueError("The formulation for X3 must be specified.")
+        # validate and normalize product formulations
+        if isinstance(product_formulations, Formulation):
+            product_formulations = [product_formulations]
+        elif isinstance(product_formulations, collections.Sequence) and len(product_formulations) <= 3:
+            product_formulations = list(product_formulations)
+        else:
+            raise TypeError("product_formulations must be a Formulation instance or a tuple of up to three instances.")
         if any(f._absorbed_terms for f in product_formulations if f is not None):
             raise ValueError("product_formulations do not support fixed effect absorption in simulations.")
+        product_formulations.extend([None] * (3 - len(product_formulations)))
 
         # validate the agent formulation
         if agent_formulation is not None:
@@ -369,8 +394,9 @@ class Simulation(Economy):
                         categorical_mapping[name] = variable
 
         # prepare components needed for BLP instrument construction
+        assert product_formulations[0] is not None
         X1_names = set(numerical_mapping) & product_formulations[0]._names
-        X3_names = set(numerical_mapping) & product_formulations[2]._names
+        X3_names = set() if product_formulations[2] is None else set(numerical_mapping) & product_formulations[2]._names
         J_variation = len({(market_ids == t).sum() for t in np.unique(market_ids)}) > 1
         blp_data = {'market_ids': market_ids, 'firm_ids': firm_ids, **numerical_mapping}
 
@@ -424,24 +450,18 @@ class Simulation(Economy):
         # structure product data
         products = Products(product_formulations, self.product_data)
 
-        # if there are only linear characteristics, agents should not be specified
-        K2 = products.X2.shape[1]
-        if K2 == 0:
-            if agent_formulation is not None or agent_data is not None or integration is not None:
-                raise ValueError(
-                    "Since X2 is not formulated, none of agent_formulation, agent_data, and integration should be "
-                    "specified."
-                )
-            self.integration = self.agent_data = None
-        else:
+        # load or build agent data
+        self.integration = self.agent_data = None
+        if products.X2.shape[1] > 0:
             # determine the number of agents by loading market IDs or by building them along with nodes and weights
             if integration is not None:
                 if not isinstance(integration, Integration):
                     raise ValueError("integration must be None or an Integration instance.")
-                agent_market_ids, nodes, weights = integration._build_many(K2, np.unique(market_ids))
+                agent_market_ids, nodes, weights = integration._build_many(products.X2.shape[1], np.unique(market_ids))
             elif agent_data is not None:
                 agent_market_ids = extract_matrix(agent_data, 'market_ids')
-                nodes = weights = None
+                nodes = extract_matrix(agent_data, 'nodes')
+                weights = extract_matrix(agent_data, 'weights')
             else:
                 raise ValueError("At least one of agent_data and integration must be specified.")
 
@@ -488,33 +508,48 @@ class Simulation(Economy):
         self.beta = self._parameters.beta
         self.gamma = self._parameters.gamma
 
-        # simulate or load xi and omega
-        if xi is None and omega is None:
+        # load xi, omega, and costs if any are specified
+        self.xi = self.omega = self.costs = None
+        if xi is not None:
+            self.xi = np.c_[np.asarray(xi, options.dtype)]
+            if self.xi.shape != (self.N, 1):
+                raise ValueError(f"xi must be a vector with {self.N} elements.")
+        if omega is not None:
+            self.omega = np.c_[np.asarray(omega, options.dtype)]
+            if self.omega.shape != (self.N, 1):
+                raise ValueError(f"omega must be a vector with {self.N} elements.")
+        if costs is not None:
+            self.costs = np.c_[np.asarray(costs, options.dtype)]
+            if self.costs.shape != (self.N, 1):
+                raise ValueError(f"costs must be a vector with {self.N} elements.")
+
+        # simulate unspecified xi and omega if there is a supply side
+        if self.xi is None and self.omega is None and self.K3 > 0:
             covariance = correlation * np.sqrt(xi_variance * omega_variance)
             covariances = np.array([[xi_variance, covariance], [covariance, omega_variance]], options.dtype)
             self._detect_psd(covariances, "the covariance matrix from xi_variance, omega_variance, and correlation")
-            errors = state.multivariate_normal([0, 0], covariances, self.N, check_valid='ignore')
-            self.xi = errors[:, [0]].astype(options.dtype)
-            self.omega = errors[:, [1]].astype(options.dtype)
-        elif xi is None:
-            raise ValueError("omega is specified so xi must be specified as well.")
-        elif omega is None:
-            raise ValueError("xi is specified so omega must be specified as well.")
-        else:
-            self.xi = np.c_[np.asarray(xi, options.dtype)]
-            self.omega = np.c_[np.asarray(omega, options.dtype)]
-            if self.xi.shape != (self.N, 1):
-                raise ValueError(f"xi must be a vector with {self.N} elements.")
-            if self.omega.shape != (self.N, 1):
-                raise ValueError(f"omega must be a vector with {self.N} elements.")
+            xi_and_omega = state.multivariate_normal([0, 0], covariances, self.N, check_valid='ignore')
+            self.xi = xi_and_omega[:, [0]].astype(options.dtype)
+            self.omega = xi_and_omega[:, [1]].astype(options.dtype)
 
-        # compute marginal costs
+        # make sure that xi was specified or simulated
+        if self.xi is None:
+            raise ValueError("xi must be specified if X3 is not formulated or omega is specified.")
+
+        # validate the type of marginal costs
         if costs_type not in {'linear', 'log'}:
             raise ValueError("costs_type must be 'linear' or 'log'.")
         self.costs_type = costs_type
-        self.costs = self.products.X3 @ self.gamma + self.omega
-        if costs_type == 'log':
-            self.costs = np.exp(self.costs)
+
+        # compute unspecified marginal costs
+        if self.costs is None:
+            if self.K3 == 0:
+                raise ValueError("costs must be specified when X3 is not formulated.")
+            if self.omega is None:
+                raise ValueError("omega must be specified when X3 is formulated and xi is specified.")
+            self.costs = self.products.X3 @ self.gamma + self.omega
+            if costs_type == 'log':
+                self.costs = np.exp(self.costs)
 
         # output information about the initialized simulation
         output(f"Initialized the simulation after {format_seconds(time.time() - start_time)}.")

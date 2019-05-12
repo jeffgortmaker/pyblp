@@ -57,6 +57,18 @@ Once initialized, the following method solves the problem.
    Problem.solve
 
 
+Micro Moment Classes
+--------------------
+
+Micro moment configurations can be passed to :meth:`Problem.solve`. Only one type of micro moment is currently supported.
+
+.. autosummary::
+   :toctree: _api
+   :template: class_with_signature.rst
+
+   ProductsAgentsCovarianceMoment
+
+
 Problem Results Class
 ---------------------
 
@@ -148,22 +160,10 @@ This method returns the following class, which behaves exactly like a :class:`Pr
    OptimalInstrumentProblem
 
 
-Micro Moment Classes
---------------------
-
-Micro moment configurations can be passed to :meth:`Problem.solve`. Only one type of micro moment is currently supported.
-
-.. autosummary::
-   :toctree: _api
-   :template: class_with_signature.rst
-
-   ProductsAgentsCovarianceMoment
-
-
 Simulation Class
 ----------------
 
-In addition to reading from data files, data can be simulated by initializing the following class.
+The following class allows for evaluation of more complicated counterfactuals than is possible with :class:`ProblemResults` methods, or for simulation of synthetic data from scratch.
 
 .. autosummary::
    :toctree: _api

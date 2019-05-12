@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 import scipy.optimize
 
-from pyblp import Formulation, Iteration, Optimization, Problem, build_ownership, parallel
+from pyblp import Formulation, Iteration, Optimization, Problem, Simulation, build_ownership, parallel
 from pyblp.utilities.basics import Array, Options
 from .conftest import SimulatedProblemFixture
 
@@ -328,18 +328,19 @@ def test_fixed_effects(
     pytest.param(False, id="firm IDs change"),
     pytest.param(True, id="ownership change")
 ])
-@pytest.mark.parametrize('compute_prices_options', [
+@pytest.mark.parametrize('solve_options', [
     pytest.param({}, id="defaults"),
     pytest.param({'iteration': Iteration('simple')}, id="configured iteration")
 ])
-def test_merger(simulated_problem: SimulatedProblemFixture, ownership: bool, compute_prices_options: Options) -> None:
+def test_merger(simulated_problem: SimulatedProblemFixture, ownership: bool, solve_options: Options) -> None:
     """Test that prices and shares simulated under changed firm IDs are reasonably close to prices and shares computed
     from the results of a solved problem. In particular, test that unchanged prices and shares are farther from their
     simulated counterparts than those computed by approximating a merger, which in turn are farther from their simulated
     counterparts than those computed by fully solving a merger. Also test that simple acquisitions increase HHI. These
-    inequalities are only guaranteed because of the way in which the simulations are configured.
+    inequalities are only guaranteed because of the way in which the simulations are configured. Finally, test that we
+    get the same results when we initialize a solve a simulation instead of using the convenient results methods.
     """
-    simulation, simulation_results, _, _, results = simulated_problem
+    simulation, simulation_results, problem, _, results = simulated_problem
 
     # create changed ownership or firm IDs associated with a merger
     merger_ids = merger_ownership = None
@@ -352,11 +353,20 @@ def test_merger(simulated_problem: SimulatedProblemFixture, ownership: bool, com
     # get changed prices and shares
     changed_product_data = simulation.solve(merger_ids, merger_ownership).product_data
 
-    # solve for approximate and actual changed prices and shares
-    approximated_prices = results.compute_approximate_prices(merger_ids, merger_ownership)
-    estimated_prices = results.compute_prices(merger_ids, merger_ownership, **compute_prices_options)
-    approximated_shares = results.compute_shares(approximated_prices)
+    # compute marginal costs and create a simulation with the results
+    costs = results.compute_costs()
+    results_simulation = Simulation(
+        product_formulations=simulation.product_formulations[:2], product_data=simulation_results.product_data,
+        beta=results.beta, sigma=results.sigma, pi=results.pi, rho=results.rho,
+        agent_formulation=simulation.agent_formulation, agent_data=simulation.agent_data, xi=results.xi, costs=costs
+    )
+
+    # solve for actual and approximate changed prices and shares
+    estimated = results_simulation.solve(merger_ids, merger_ownership, problem.products.prices, **solve_options)
+    estimated_prices = results.compute_prices(merger_ids, merger_ownership, costs, **solve_options)
+    approximated_prices = results.compute_approximate_prices(merger_ids, merger_ownership, costs)
     estimated_shares = results.compute_shares(estimated_prices)
+    approximated_shares = results.compute_shares(approximated_prices)
 
     # test that estimated prices are closer to changed prices than approximate prices
     approximated_prices_error = np.linalg.norm(changed_product_data.prices - approximated_prices)
@@ -374,13 +384,17 @@ def test_merger(simulated_problem: SimulatedProblemFixture, ownership: bool, com
         changed_hhi = results.compute_hhi(merger_ids, estimated_shares)
         np.testing.assert_array_less(np.median(hhi), np.median(changed_hhi), verbose=True)
 
+    # test that we get the same results from solving the simulation
+    np.testing.assert_allclose(estimated_prices, estimated.product_data.prices, atol=1e-14, rtol=0, verbose=True)
+    np.testing.assert_allclose(estimated_shares, estimated.product_data.shares, atol=1e-14, rtol=0, verbose=True)
+
 
 @pytest.mark.usefixtures('simulated_problem')
 def test_shares(simulated_problem: SimulatedProblemFixture) -> None:
     """Test that shares computed from estimated parameters are essentially equal to actual shares."""
     _, simulation_results, _, _, results = simulated_problem
     shares = results.compute_shares()
-    np.testing.assert_allclose(simulation_results.product_data.shares, shares, atol=1e-14, rtol=0)
+    np.testing.assert_allclose(simulation_results.product_data.shares, shares, atol=1e-14, rtol=0, verbose=True)
 
 
 @pytest.mark.usefixtures('simulated_problem')

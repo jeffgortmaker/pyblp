@@ -80,14 +80,13 @@ def small_logit_simulation() -> SimulationFixture:
             None,
             Formulation('0 + a')
         ),
-        beta=[1, -5, 1],
-        sigma=None,
-        gamma=2,
         product_data={
             'market_ids': id_data.market_ids,
             'firm_ids': id_data.firm_ids,
             'clustering_ids': np.random.RandomState(0).choice(range(10), id_data.size)
         },
+        beta=[1, -5, 1],
+        gamma=2,
         xi_variance=0.001,
         omega_variance=0.001,
         correlation=0.7,
@@ -109,14 +108,13 @@ def large_logit_simulation() -> SimulationFixture:
             None,
             Formulation('0 + log(x) + a + b + c')
         ),
-        beta=[1, -6, 1, 2, 3],
-        sigma=None,
-        gamma=[0.1, 0.2, 0.3, 0.5],
         product_data={
             'market_ids': id_data.market_ids,
             'firm_ids': id_data.firm_ids,
             'clustering_ids': np.random.RandomState(2).choice(range(30), id_data.size)
         },
+        beta=[1, -6, 1, 2, 3],
+        gamma=[0.1, 0.2, 0.3, 0.5],
         xi_variance=0.00001,
         omega_variance=0.00001,
         correlation=0.1,
@@ -139,15 +137,14 @@ def small_nested_logit_simulation() -> SimulationFixture:
             None,
             Formulation('0 + a + b')
         ),
-        beta=[-5, 1, 1],
-        sigma=None,
-        gamma=[2, 1],
         product_data={
             'market_ids': id_data.market_ids,
             'firm_ids': id_data.firm_ids,
             'nesting_ids': np.random.RandomState(0).choice(['f', 'g'], id_data.size),
             'clustering_ids': np.random.RandomState(0).choice(range(10), id_data.size)
         },
+        beta=[-5, 1, 1],
+        gamma=[2, 1],
         rho=[0.1, 0.2],
         xi_variance=0.001,
         omega_variance=0.001,
@@ -171,15 +168,14 @@ def large_nested_logit_simulation() -> SimulationFixture:
             None,
             Formulation('0 + log(x) + a + b + c')
         ),
-        beta=[1, -6, 1, 2, 3],
-        sigma=None,
-        gamma=[0.1, 0.2, 0.3, 0.5],
         product_data={
             'market_ids': id_data.market_ids,
             'firm_ids': id_data.firm_ids,
             'nesting_ids': np.random.RandomState(2).choice(['f', 'g', 'h'], id_data.size),
             'clustering_ids': np.random.RandomState(2).choice(range(30), id_data.size)
         },
+        beta=[1, -6, 1, 2, 3],
+        gamma=[0.1, 0.2, 0.3, 0.5],
         rho=0.1,
         xi_variance=0.00001,
         omega_variance=0.00001,
@@ -204,14 +200,14 @@ def small_blp_simulation() -> SimulationFixture:
             Formulation('0 + x'),
             Formulation('0 + a + b')
         ),
-        beta=[-5, 1],
-        sigma=2,
-        gamma=[2, 1],
         product_data={
             'market_ids': id_data.market_ids,
             'firm_ids': id_data.firm_ids,
             'clustering_ids': np.random.RandomState(0).choice(range(10), id_data.size)
         },
+        beta=[-5, 1],
+        sigma=2,
+        gamma=[2, 1],
         integration=Integration('product', 3),
         xi=uniform[:, 0] + uniform[:, 1],
         omega=uniform[:, 0] + uniform[:, 2],
@@ -233,23 +229,24 @@ def medium_blp_simulation() -> SimulationFixture:
             Formulation('1 + I(prices ** 2)'),
             Formulation('1 + a + b')
         ),
-        beta=[1, 2, 1],
-        sigma=[
-            [0.5, 0],
-            [0.0, 0],
-        ],
-        gamma=[1, 1, 2],
+
         product_data={
             'market_ids': id_data.market_ids,
             'firm_ids': id_data.firm_ids,
             'clustering_ids': np.random.RandomState(1).choice(range(20), id_data.size),
             'ownership': build_ownership(id_data, lambda f, g: 1 if f == g else (0.1 if f > 3 and g > 3 else 0))
         },
-        agent_formulation=Formulation('0 + f'),
+        beta=[1, 2, 1],
+        sigma=[
+            [0.5, 0],
+            [0.0, 0],
+        ],
         pi=[
             [+0],
             [-3]
         ],
+        gamma=[1, 1, 2],
+        agent_formulation=Formulation('0 + f'),
         integration=Integration('product', 4),
         xi_variance=0.0001,
         omega_variance=0.0001,
@@ -278,22 +275,23 @@ def large_blp_simulation() -> SimulationFixture:
             Formulation('0 + prices + x'),
             Formulation('0 + log(x) + log(a) + log(b)')
         ),
-        beta=[1, -10, 1, 2, 3, 1],
-        sigma=[
-            [1, -0.1],
-            [0, +2.0]
-        ],
-        gamma=[0.1, 0.2, 0.3],
+
         product_data={
             'market_ids': id_data.market_ids,
             'firm_ids': id_data.firm_ids,
             'clustering_ids': np.random.RandomState(2).choice(range(30), id_data.size)
         },
-        agent_formulation=Formulation('0 + f + g'),
+        beta=[1, -10, 1, 2, 3, 1],
+        sigma=[
+            [1, -0.1],
+            [0, +2.0]
+        ],
         pi=[
             [1, 0],
             [0, 2]
         ],
+        gamma=[0.1, 0.2, 0.3],
+        agent_formulation=Formulation('0 + f + g'),
         integration=Integration('product', 4),
         xi_variance=0.00001,
         omega_variance=0.00001,
@@ -333,17 +331,18 @@ def small_nested_blp_simulation() -> SimulationFixture:
             Formulation('0 + x'),
             Formulation('0 + a + b + c')
         ),
-        beta=[-5, 1, 2],
-        sigma=2,
-        gamma=[2, 1, 1],
+
         product_data={
             'market_ids': id_data.market_ids,
             'firm_ids': id_data.firm_ids,
             'nesting_ids': np.random.RandomState(0).choice(['f', 'g'], id_data.size),
             'clustering_ids': np.random.RandomState(0).choice(range(10), id_data.size)
         },
-        integration=Integration('product', 3),
+        beta=[-5, 1, 2],
+        sigma=2,
+        gamma=[2, 1, 1],
         rho=[0.1, 0.2],
+        integration=Integration('product', 3),
         xi_variance=0.001,
         omega_variance=0.001,
         correlation=0.7,
@@ -370,25 +369,26 @@ def large_nested_blp_simulation() -> SimulationFixture:
             Formulation('0 + prices + x'),
             Formulation('0 + log(x) + log(a) + log(b)')
         ),
-        beta=[1, -10, 1, 2, 3, 1],
-        sigma=[
-            [1, 0],
-            [0, 2]
-        ],
-        gamma=[0.1, 0.2, 0.3],
+
         product_data={
             'market_ids': id_data.market_ids,
             'firm_ids': id_data.firm_ids,
             'nesting_ids': np.random.RandomState(2).choice(['f', 'g', 'h'], id_data.size),
             'clustering_ids': np.random.RandomState(2).choice(range(30), id_data.size)
         },
-        agent_formulation=Formulation('0 + f + g'),
+        beta=[1, -10, 1, 2, 3, 1],
+        sigma=[
+            [1, 0],
+            [0, 2]
+        ],
         pi=[
             [1, 0],
             [0, 2]
         ],
-        integration=Integration('product', 4),
+        gamma=[0.1, 0.2, 0.3],
         rho=0.1,
+        agent_formulation=Formulation('0 + f + g'),
+        integration=Integration('product', 4),
         xi_variance=0.00001,
         omega_variance=0.00001,
         correlation=0.9,
