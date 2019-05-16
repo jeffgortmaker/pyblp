@@ -201,7 +201,7 @@ class EconomyMoments(Moments):
         # identify market indices
         self.market_indices: Dict[Hashable, Array] = {}
         for t in economy.unique_market_ids:
-            market_index_t = [m.market_ids is None or t in m.market_ids for m in self.micro_moments]
+            market_index_t = np.array([m.market_ids is None or t in m.market_ids for m in self.micro_moments])
             self.market_indices[t] = np.flatnonzero(market_index_t)
 
         # count the number of markets associated with moments
