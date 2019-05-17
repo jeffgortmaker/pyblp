@@ -18,12 +18,12 @@ from ..utilities.basics import (
 class BootstrappedResults(Results):
     r"""Bootstrapped results of a solved problem.
 
-    This class has all of the same methods as :class:`ProblemResults` except for :meth:`ProblemResults.bootstrap` and
-    :meth:`ProblemResults.compute_optimal_instruments`. The only other difference is that methods return arrays with an
-    extra first dimension along which bootstrapped results are stacked (these stacked results can be used to construct,
-    for example, confidence intervals for post-estimation outputs). Similarly, arrays of data (except for firm IDs and
-    ownership matrices) passed as arguments to methods should have an extra first dimension of size
-    :attr:`BootstrappedResults.draws`.
+    This class has same methods as :class:`ProblemResults` that compute post-estimation outputs in one or more markets,
+    but not other methods like :meth:`ProblemResults.compute_optimal_instruments` that do not make sense in a
+    bootstrapped dataset. The only other difference is that methods return arrays with an extra first dimension along
+    which bootstrapped results are stacked (these stacked results can be used to construct, for example, confidence
+    intervals for post-estimation outputs). Similarly, arrays of data (except for firm IDs and ownership matrices)
+    passed as arguments to methods should have an extra first dimension of size :attr:`BootstrappedResults.draws`.
 
     Attributes
     ----------

@@ -81,7 +81,17 @@ Solved problems return the following results class.
 
    ProblemResults
 
-In addition to class attributes, other post-estimation outputs can be estimated with the following methods, which each return an array.
+The following methods test the validity of overidentifying and model restrictions.
+
+.. autosummary::
+   :toctree: _api
+
+   ProblemResults.run_hansen_test
+   ProblemResults.run_distance_test
+   ProblemResults.run_lm_test
+   ProblemResults.run_wald_test
+
+In addition to class attributes, other post-estimation outputs can be estimated market-by-market with the following methods, which each return an array.
 
 .. autosummary::
    :toctree: _api

@@ -10,14 +10,16 @@ from .results import Results
 from .. import exceptions, options
 from ..configurations.iteration import Iteration
 from ..markets.results_market import ResultsMarket
-from ..utilities.algebra import approximately_solve, compute_condition_number, precisely_compute_eigenvalues
+from ..utilities.algebra import (
+    approximately_invert, approximately_solve, compute_condition_number, precisely_compute_eigenvalues
+)
 from ..utilities.basics import (
     Array, Bounds, Error, SolverStats, TableFormatter, format_number, format_seconds, generate_items, output,
     output_progress
 )
 from ..utilities.statistics import (
-    compute_gmm_moment_covariances, compute_gmm_parameter_covariances, compute_gmm_moments_jacobian_mean,
-    compute_gmm_weights
+    compute_gmm_moment_covariances, compute_gmm_moments_mean, compute_gmm_parameter_covariances,
+    compute_gmm_moments_jacobian_mean, compute_gmm_weights
 )
 
 
@@ -35,8 +37,9 @@ class ProblemResults(Results):
 
     .. note::
 
-       All methods in this class support :func:`parallel` processing. If multiprocessing is used, market-by-market
-       computation of each post-estimation output will be distributed among the processes.
+       Methods in this class that compute one or more post-estimation output per market support :func:`parallel`
+       processing. If multiprocessing is used, market-by-market computation of each post-estimation output will be
+       distributed among the processes.
 
     Attributes
     ----------
@@ -337,60 +340,31 @@ class ProblemResults(Results):
         self.beta_bounds = self._parameters.beta_bounds
         self.gamma_bounds = self._parameters.gamma_bounds
 
-        # collect additional inputs to weighting matrix and standard error computation
-        u_list = [self.xi]
-        Z_list = [self.problem.products.ZD]
-        jacobian_list = [np.c_[
-            self.xi_by_theta_jacobian,
-            -self.problem.products.X1[:, self._parameters.eliminated_beta_index.flat],
-            np.zeros_like(self.problem.products.X3[:, self._parameters.eliminated_gamma_index.flat])
-        ]]
-        if self.problem.K3 > 0:
-            u_list.append(self.omega)
-            Z_list.append(self.problem.products.ZS)
-            jacobian_list.append(np.c_[
-                self.omega_by_theta_jacobian,
-                np.zeros_like(self.problem.products.X1[:, self._parameters.eliminated_beta_index.flat]),
-                -self.problem.products.X3[:, self._parameters.eliminated_gamma_index.flat]
-            ])
-
         # ignore computational errors when updating the weighting matrix and computing covariances
         with np.errstate(invalid='ignore'):
             # compute moment covariances
-            S_for_W = S_for_se = compute_gmm_moment_covariances(
-                u_list, Z_list, W_type, self.problem.products.clustering_ids, center_moments
-            )
+            micro_covariances = progress.micro_covariances.copy()
+            if extra_micro_covariances is not None:
+                micro_covariances += extra_micro_covariances
+            S_for_weights = S_for_covariances = self._compute_S(micro_covariances, W_type, center_moments)
             if se_type != W_type or center_moments:
-                S_for_se = compute_gmm_moment_covariances(u_list, Z_list, se_type, self.problem.products.clustering_ids)
-            if self._moments.MM > 0:
-                micro_S = progress.micro_covariances.copy()
-                if extra_micro_covariances is not None:
-                    micro_S += extra_micro_covariances
-                S_for_W = scipy.linalg.block_diag(S_for_W, micro_S)
-                S_for_se = scipy.linalg.block_diag(S_for_se, micro_S)
+                S_for_covariances = self._compute_S(micro_covariances, se_type)
 
             # update the weighting matrix
-            self.updated_W, W_errors = compute_gmm_weights(S_for_W)
+            self.updated_W, W_errors = compute_gmm_weights(S_for_weights)
             self._errors.extend(W_errors)
 
             # if this is the first step, an unadjusted weighting matrix needs to be used when computing unadjusted
             #   covariances so that they are scaled properly
-            W_for_se = self.W
+            W_for_covariances = self.W
             if se_type == 'unadjusted' and self.step == 1:
-                W_for_se, W_for_se_errors = compute_gmm_weights(S_for_se)
-                self._errors.extend(W_for_se_errors)
+                W_for_covariances, W_for_covariances_errors = compute_gmm_weights(S_for_covariances)
+                self._errors.extend(W_for_covariances_errors)
 
             # compute parameter covariances
-            mean_G = np.r_[
-                compute_gmm_moments_jacobian_mean(jacobian_list, Z_list),
-                np.c_[
-                    self.micro_by_theta_jacobian,
-                    np.zeros((self._moments.MM, self._parameters.eliminated_beta_index.sum()), options.dtype),
-                    np.zeros((self._moments.MM, self._parameters.eliminated_gamma_index.sum()), options.dtype)
-                ]
-            ]
+            mean_G = self._compute_mean_G()
             self.parameter_covariances, se_errors = compute_gmm_parameter_covariances(
-                W_for_se, S_for_se, mean_G, se_type
+                W_for_covariances, S_for_covariances, mean_G, se_type
             )
             self._errors.extend(se_errors)
 
@@ -443,6 +417,53 @@ class ProblemResults(Results):
 
         # join the sections into a single string
         return "\n\n".join(sections)
+
+    def _compute_mean_g(self) -> Array:
+        """Compute moments."""
+        u_list = [self.xi]
+        Z_list = [self.problem.products.ZD]
+        if self.problem.K3 > 0:
+            u_list.append(self.omega)
+            Z_list.append(self.problem.products.ZS)
+        mean_g = np.r_[compute_gmm_moments_mean(u_list, Z_list), self.micro]
+        return mean_g
+
+    def _compute_mean_G(self) -> Array:
+        """Compute the Jacobian of moments with respect to parameters."""
+        Z_list = [self.problem.products.ZD]
+        jacobian_list = [np.c_[
+            self.xi_by_theta_jacobian,
+            -self.problem.products.X1[:, self._parameters.eliminated_beta_index.flat],
+            np.zeros_like(self.problem.products.X3[:, self._parameters.eliminated_gamma_index.flat])
+        ]]
+        if self.problem.K3 > 0:
+            Z_list.append(self.problem.products.ZS)
+            jacobian_list.append(np.c_[
+                self.omega_by_theta_jacobian,
+                np.zeros_like(self.problem.products.X1[:, self._parameters.eliminated_beta_index.flat]),
+                -self.problem.products.X3[:, self._parameters.eliminated_gamma_index.flat]
+            ])
+        mean_G = np.r_[
+            compute_gmm_moments_jacobian_mean(jacobian_list, Z_list),
+            np.c_[
+                self.micro_by_theta_jacobian,
+                np.zeros((self._moments.MM, self._parameters.eliminated_beta_index.sum()), options.dtype),
+                np.zeros((self._moments.MM, self._parameters.eliminated_gamma_index.sum()), options.dtype)
+            ]
+        ]
+        return mean_G
+
+    def _compute_S(self, micro_covariances: Array, S_type: str, center_moments: bool = False) -> Array:
+        """Compute moment covariances."""
+        u_list = [self.xi]
+        Z_list = [self.problem.products.ZD]
+        if self.problem.K3 > 0:
+            u_list.append(self.omega)
+            Z_list.append(self.problem.products.ZS)
+        S = compute_gmm_moment_covariances(u_list, Z_list, S_type, self.problem.products.clustering_ids, center_moments)
+        if self._moments.MM > 0:
+            S = scipy.linalg.block_diag(S, micro_covariances)
+        return S
 
     def _format_summary(self) -> str:
         """Format a summary table of problem results."""
@@ -514,15 +535,189 @@ class ProblemResults(Results):
         ])
         return "\n".join(lines)
 
+    def run_hansen_test(self) -> float:
+        r"""Test the validity of overidentifying restrictions with the Hansen :math:`J` test.
+
+        Following :ref:`references:Hansen (1982)`, the :math:`J` statistic is
+
+        .. math:: J = N\bar{g}(\hat{\theta})'W\bar{g}(\hat{\theta})
+           :label: J
+
+        where :math:`\bar{g}(\hat{\theta})` is defined in :eq:`averaged_moments` and :math:`W` is the optimal weighting
+        matrix in :eq:`W`.
+
+        .. note::
+
+           The statistic can equivalently be written as :math:`J = q(\hat{\theta}) / N` where the GMM objective value
+           is defined in :eq:`objective`.
+
+        When the overidentifying restrictions in this model are valid, the :math:`J` statistic is asymptotically
+        :math:`\chi^2` with degrees of freedom equal to the number of overidentifying restrictions. This requires that
+        there are more moments than parameters.
+
+        .. warning::
+
+           This test requires :attr:`ProblemResults.W` to be an optimal weighting matrix, so it should typically be run
+           only after two-step GMM or after one-step GMM with a pre-specified optimal weighting matrix.
+
+        Returns
+        -------
+        `float`
+            The :math:`J` statistic.
+
+        Examples
+        --------
+            - :doc:`Tutorial </tutorial>`
+
+        """
+        return float(self.objective) / self.problem.N
+
+    def run_distance_test(self, unrestricted: 'ProblemResults') -> float:
+        r"""Test the validity of model restrictions with the distance test.
+
+        Following :ref:`references:Newey and West (1987)`, the distance or likelihood ratio-like statistic is
+
+        .. math:: \textit{LR} = J(\hat{\theta^r}) - J(\hat{\theta^u})
+
+        where :math:`J(\hat{\theta^r})` is the :math:`J` statistic defined in :eq:`J` for this restricted model and
+        :math:`J(\hat{\theta^u})` is the :math:`J` statistic for the unrestricted model.
+
+        .. note::
+
+           The statistic can equivalently be written as
+           :math:`\textit{LR} = [q(\hat{\theta^r}) - q(\hat{\theta^u})] / N` where the GMM objective value is defined in
+           :eq:`objective`.
+
+        If the restrictions in this model are valid, the distance statistic is asymptotically :math:`\chi^2` with
+        degrees of freedom equal to the number of restrictions.
+
+        .. warning::
+
+           This test requires each model's :attr:`ProblemResults.W` to be the optimal weighting matrix, so it should
+           typically be run only after two-step GMM or after one-step GMM with pre-specified optimal weighting matrices.
+
+        Parameters
+        ----------
+        unrestricted : `ProblemResults`
+            :class:`ProblemResults` for the unrestricted model.
+
+        Returns
+        -------
+        `float`
+            The distance statistic.
+
+        Examples
+        --------
+            - :doc:`Tutorial </tutorial>`
+
+        """
+
+        # validate the other set of results
+        if not isinstance(unrestricted, ProblemResults):
+            raise TypeError("unrestricted must be another ProblemResults.")
+        if unrestricted.problem.N != self.problem.N:
+            raise ValueError("unrestricted must have as many observations as these results.")
+
+        # compute the statistic
+        return float(self.objective - unrestricted.objective) / self.problem.N
+
+    def run_lm_test(self) -> float:
+        r"""Test the validity of model restrictions with the Lagrange multiplier test.
+
+        Following :ref:`references:Newey and West (1987)`, the Lagrange multiplier or score statistic is
+
+        .. math::
+
+           \textit{LM} = N\bar{g}(\hat{\theta})'W\bar{G}(\hat{\theta})V\bar{G}(\hat{\theta})'W\bar{g}(\hat{\theta})
+
+        where :math:`\bar{g}(\hat{\theta})` is defined in :eq:`averaged_moments`, :math:`\bar{G}(\hat{\theta})` is
+        defined in :eq:`averaged_moments_jacobian`, :math:`W` is the optimal weighting matrix in :eq:`W`, and :math:`V`
+        is the covariance matrix of parameters in :eq:`covariances`.
+
+        If the restrictions in this model are valid, the Lagrange multiplier statistic is asymptotically :math:`\chi^2`
+        with degrees of freedom equal to the number of restrictions.
+
+        .. warning::
+
+           This test requires :attr:`ProblemResults.W` to be an optimal weighting matrix, so it should typically be run
+           only after two-step GMM or after one-step GMM with a pre-specified optimal weighting matrix.
+
+        Returns
+        -------
+        `float`
+            The Lagrange multiplier statistic.
+
+        Examples
+        --------
+            - :doc:`Tutorial </tutorial>`
+
+        """
+        mean_g = self._compute_mean_g()
+        mean_G = self._compute_mean_G()
+        gradient = mean_G.T @ self.W @ mean_g
+        return self.problem.N * float(gradient.T @ self.parameter_covariances @ gradient)
+
+    def run_wald_test(self, restrictions: Any, restrictions_jacobian: Any) -> float:
+        r"""Test the validity of model restrictions with the Wald test.
+
+        Following :ref:`references:Newey and West (1987)`, the Wald statistic is
+
+        .. math:: \text{Wald} = Nr(\hat{\theta})'[R(\hat{\theta})VR(\hat{\theta})']^{-1}r(\hat{\theta})
+
+        where the restrictions are :math:`r(\theta) = 0` under the test's null hypothesis, their Jacobian is
+        :math:`R(\theta) = \frac{\partial r(\theta)}{\partial\theta}`, and :math:`V` is the covariance matrix of
+        parameters in :eq:`covariances`.
+
+        If the restrictions are valid, the Wald statistic is asymptotically :math:`\chi^2` with degrees of freedom equal
+        to the number of restrictions.
+
+        Parameters
+        ----------
+        restrictions : `array-like`
+            Column vector of the model restrictions evaluated at the estimated parameters, :math:`r(\hat{\theta})`.
+        restrictions_jacobian : `array-like`
+            Estimated Jacobian of the restrictions with respect to all parameters, :math:`R(\hat{\theta})`. This matrix
+            should have as many rows as ``restrictions`` and as many columns as
+            :attr:`ProblemResults.parameter_covariances`.
+
+        Returns
+        -------
+        `float`
+            The Wald statistic.
+
+        Examples
+        --------
+            - :doc:`Tutorial </tutorial>`
+
+        """
+
+        # validate the restrictions and their Jacobian
+        restrictions = np.c_[np.asarray(restrictions, options.dtype)]
+        restrictions_jacobian = np.c_[np.asarray(restrictions_jacobian, options.dtype)]
+        if restrictions.shape != (restrictions.shape[0], 1):
+            raise ValueError("restrictions must be a column vector.")
+        if restrictions_jacobian.shape != (restrictions.shape[0], self.parameter_covariances.shape[0]):
+            raise ValueError(
+                f"restrictions_jacobian must be a {restrictions.shape[0]} by {self.parameter_covariances.shape[0]} "
+                f"matrix."
+            )
+
+        # compute the statistic
+        matrix = restrictions_jacobian @ self.parameter_covariances @ restrictions_jacobian.T
+        inverted, replacement = approximately_invert(matrix)
+        if replacement:
+            output(exceptions.WaldInversionError(matrix, replacement))
+        return self.problem.N * float(restrictions.T @ inverted @ restrictions)
+
     def bootstrap(
             self, draws: int = 1000, seed: Optional[int] = None, iteration: Optional[Iteration] = None) -> (
             'BootstrappedResults'):
         r"""Use a parametric bootstrap to create an empirical distribution of results.
 
         The constructed :class:`BootstrappedResults` can be used just like :class:`ProblemResults` to compute various
-        post-estimation outputs. The only difference is that :class:`BootstrappedResults` methods return arrays with an
-        extra first dimension, along which bootstrapped results are stacked. These stacked results can be used to
-        construct, for example, confidence intervals for post-estimation outputs.
+        post-estimation outputs for different markets. The only difference is that :class:`BootstrappedResults` methods
+        return arrays with an extra first dimension, along which bootstrapped results are stacked. These stacked results
+        can be used to construct, for example, confidence intervals for post-estimation outputs.
 
         For each bootstrap draw, parameters are drawn from the estimated multivariate normal distribution of all
         parameters defined by :attr:`ProblemResults.parameters` and :attr:`ProblemResults.parameter_covariances`. Any

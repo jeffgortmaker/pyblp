@@ -77,6 +77,7 @@ Features
 - Classic BLP instruments
 - Differentiation instruments
 - Optimal instruments
+- Tests of overidentifying and model restrictions
 - Parametric boostrapping post-estimation outputs
 - Elasticities and diversion ratios
 - Marginal costs and markups

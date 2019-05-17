@@ -288,3 +288,7 @@ class GMMMomentCovariancesInversionError(InversionReplacementError):
     One or more data matrices may be highly collinear.
 
     """
+
+
+class WaldInversionError(InversionReplacementError):
+    """Failed to invert the matrix in the Wald statistic expression."""

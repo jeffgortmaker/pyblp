@@ -66,7 +66,7 @@ def compute_gmm_weights(S: Array) -> Tuple[Array, List[Error]]:
 
 def compute_gmm_moment_covariances(
         u_list: List[Array], Z_list: List[Array], covariance_type: str, clustering_ids: Array,
-        center_moments: bool = False) -> Array:
+        center_moments: bool) -> Array:
     """Compute covariances between moments."""
 
     # count dimensions

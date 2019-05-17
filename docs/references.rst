@@ -109,6 +109,12 @@ Guimarães and Portugal (2010)
 Guimarães, Paulo, and Pedro Portugal (2010). `A simple feasible procedure to fit models with high-dimensional fixed effects <https://ideas.repec.org/a/tsj/stataj/v10y2010i4p628-649.html>`_. *Stata Journal, 10* (4), 628-649.
 
 
+Hansen (1982)
+~~~~~~~~~~~~~
+
+Hansen, Lars Peter (1982). `Large sample properties of generalized method of moments estimators <https://ideas.repec.org/a/ecm/emetrp/v50y1982i4p1029-54.html>`_. *Econometrica, 50* (4), 1029-1054.
+
+
 Heiss and Winschel (2008)
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -155,6 +161,12 @@ Nevo (2000)
 ~~~~~~~~~~~
 
 Nevo, Aviv (2000). `A practitioner's guide to estimation of random‐coefficients logit models of demand <https://ideas.repec.org/a/bla/jemstr/v9y2000i4p513-548.html>`_. *Journal of Economics & Management Strategy, 9* (4), 513-548.
+
+
+Newey and West (1987)
+~~~~~~~~~~~~~~~~~~~~~
+
+Newey, Whitney K., and Kenneth D. West (1987). `Hypothesis testing with efficient method of moments estimation <https://ideas.repec.org/a/ier/iecrev/v28y1987i3p777-87.html>`_. *International Economic Review, 28* (3), 777-787.
 
 
 Petrin (2002)

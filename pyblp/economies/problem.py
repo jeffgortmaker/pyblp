@@ -362,15 +362,16 @@ class ProblemEconomy(Economy):
             covariance matrix defined in :eq:`averaged_micro_moment_covariances` plus any ``extra_micro_covariances``.
 
         se_type : `str, optional`
-            How to compute standard errors. Usually, ``W_type`` should be the same. The following types are supported:
+            How to compute parameter covarainces and standard errors. Usually, ``W_type`` should be the same. The
+            following types are supported:
 
-                - ``'robust'`` (default) - Heteroscedasticity robust standard errors defined in :eq:`covariances` and
+                - ``'robust'`` (default) - Heteroscedasticity robust covariances defined in :eq:`covariances` and
                   :eq:`robust_S`.
 
-                - ``'clustered'`` - Clustered standard errors defined in :eq:`covariances` and :eq:`clustered_S`.
-                  Clusters must be defined by the ``clustering_ids`` field of ``product_data`` in :class:`Problem`.
+                - ``'clustered'`` - Clustered covariances defined in :eq:`covariances` and :eq:`clustered_S`. Clusters
+                  must be defined by the ``clustering_ids`` field of ``product_data`` in :class:`Problem`.
 
-                - ``'unadjusted'`` - Homoskedastic standard errors defined in :eq:`unadjusted_covariances`, which are
+                - ``'unadjusted'`` - Homoskedastic covariances defined in :eq:`unadjusted_covariances`, which are
                   computed under the assumption that the weighting matrix is optimal.
 
             This only affects the standard demand- and supply-side block of the matrix of averaged moment covariances.
@@ -721,8 +722,8 @@ class ProblemEconomy(Economy):
 
         # compute the objective value and replace it with its last value if computation failed
         with np.errstate(all='ignore'):
-            mean_g = np.r_[self.N * compute_gmm_moments_mean(u_list, Z_list), micro]
-            objective = mean_g.T @ W @ mean_g
+            mean_g = np.r_[compute_gmm_moments_mean(u_list, Z_list), micro]
+            objective = self.N**2 * mean_g.T @ W @ mean_g
         if not np.isfinite(np.squeeze(objective)):
             objective = progress.objective
             errors.append(exceptions.ObjectiveReversionError())
@@ -731,8 +732,8 @@ class ProblemEconomy(Economy):
         gradient = np.full_like(progress.gradient, np.nan)
         if compute_gradient:
             with np.errstate(all='ignore'):
-                mean_G = np.r_[self.N * compute_gmm_moments_jacobian_mean(jacobian_list, Z_list), micro_jacobian]
-                gradient = 2 * (mean_G.T @ W @ mean_g)
+                mean_G = np.r_[compute_gmm_moments_jacobian_mean(jacobian_list, Z_list), micro_jacobian]
+                gradient = 2 * self.N**2 * (mean_G.T @ W @ mean_g)
             bad_gradient_index = ~np.isfinite(gradient)
             if np.any(bad_gradient_index):
                 gradient[bad_gradient_index] = progress.gradient[bad_gradient_index]
