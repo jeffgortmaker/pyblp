@@ -311,7 +311,7 @@ class Parameters(object):
         bounds = (np.full_like(matrix, -np.inf, options.dtype), np.full_like(matrix, +np.inf, options.dtype))
 
         # validate any specified bounds
-        if matrix.size > 0 and bound_values is not None and bounded:
+        if matrix.size > 0 and bound_values is not None:
             if len(bound_values) != 2:
                 raise ValueError(f"{name}_bounds must be a tuple of the form (lb, ub).")
             bounds = (
@@ -326,6 +326,12 @@ class Parameters(object):
             with np.errstate(invalid='ignore'):
                 if ((matrix < bounds[0]) | (matrix > bounds[1])).any():
                     raise ValueError(f"{name} must be within its bounds.")
+
+        # keep only bounds that fix parameters if bounding isn't supported
+        if not bounded:
+            unfixed = bounds[0] != bounds[1]
+            bounds[0][unfixed] = -np.inf
+            bounds[1][unfixed] = +np.inf
 
         # fix parameters set to zero
         zeros_index = matrix == 0

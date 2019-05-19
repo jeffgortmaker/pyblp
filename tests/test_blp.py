@@ -607,7 +607,12 @@ def test_gradient_optionality(simulated_problem: SimulatedProblemFixture, scipy_
     pytest.param('trust-constr', id="trust-region"),
     pytest.param('tnc', id="TNC"),
     pytest.param('slsqp', id="SLSQP"),
-    pytest.param('knitro', id="Knitro")
+    pytest.param('knitro', id="Knitro"),
+    pytest.param('cg', id="CG"),
+    pytest.param('bfgs', id="BFGS"),
+    pytest.param('newton-cg', id="Newton-CG"),
+    pytest.param('nelder-mead', id="Nelder-Mead"),
+    pytest.param('powell', id="Powell")
 ])
 def test_bounds(simulated_problem: SimulatedProblemFixture, method: str) -> None:
     """Test that non-binding bounds on parameters in simulated problems do not affect estimates and that binding bounds
@@ -619,7 +624,10 @@ def test_bounds(simulated_problem: SimulatedProblemFixture, method: str) -> None
     # skip optimization methods that haven't been configured properly
     updated_solve_options = solve_options.copy()
     try:
-        updated_solve_options['optimization'] = Optimization(method)
+        updated_solve_options['optimization'] = Optimization(
+            method,
+            compute_gradient=method not in {'nelder-mead', 'powell'}
+        )
     except OSError as exception:
         return pytest.skip(f"Failed to use the {method} method in this environment: {exception}.")
 
@@ -653,8 +661,13 @@ def test_bounds(simulated_problem: SimulatedProblemFixture, method: str) -> None
         gamma_index = (simulation.gamma.nonzero()[0][-1], simulation.gamma.nonzero()[1][-1])
         gamma_value = unbounded_results.gamma[gamma_index]
 
+    # only test non-fixed (but bounded) parameters for routines that support this
+    bound_scales: List[Tuple[Any, Any]] = [(0, 0)]
+    if method not in {'cg', 'bfgs', 'newton-cg', 'nelder-mead', 'powell'}:
+        bound_scales.extend([(-0.1, +np.inf), (+1, -0.1)])
+
     # use different types of binding bounds
-    for lb_scale, ub_scale in [(-0.1, +np.inf), (+1, -0.1), (0, 0)]:
+    for lb_scale, ub_scale in bound_scales:
         binding_sigma_bounds = (np.full_like(simulation.sigma, -np.inf), np.full_like(simulation.sigma, +np.inf))
         binding_pi_bounds = (np.full_like(simulation.pi, -np.inf), np.full_like(simulation.pi, +np.inf))
         binding_rho_bounds = (np.full_like(simulation.rho, -np.inf), np.full_like(simulation.rho, +np.inf))

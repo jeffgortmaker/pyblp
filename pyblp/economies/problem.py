@@ -479,7 +479,7 @@ class ProblemEconomy(Economy):
         if parameters.fixed or parameters.unfixed:
             output("")
             output(parameters.format("Initial Values"))
-            if optimization._supports_bounds:
+            if parameters.fixed or optimization._supports_bounds:
                 output("")
                 output(parameters.format_lower_bounds("Lower Bounds"))
                 output("")
