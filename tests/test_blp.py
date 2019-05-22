@@ -171,8 +171,8 @@ def test_fixed_effects(
         simulated_problem: SimulatedProblemFixture, ED: int, ES: int,
         absorb_method: Optional[Union[str, Iteration]]) -> None:
     """Test that absorbing different numbers of demand- and supply-side fixed effects gives rise to essentially
-    identical first-stage results as does including indicator variables. Also test that optimal instruments results
-    and marginal costs remain unchanged.
+    identical first-stage results as does including indicator variables. Also test that optimal instruments results,
+    marginal costs, and test statistics remain unchanged.
     """
     simulation, simulation_results, problem, solve_options, problem_results = simulated_problem
 
@@ -279,6 +279,24 @@ def test_fixed_effects(
     costs1 = problem_results1.compute_costs()
     costs2 = problem_results2.compute_costs()
     costs3 = problem_results3.compute_costs()
+    J1 = problem_results1.run_hansen_test()
+    J2 = problem_results2.run_hansen_test()
+    J3 = problem_results3.run_hansen_test()
+    LR1 = problem_results1.run_distance_test(problem_results)
+    LR2 = problem_results2.run_distance_test(problem_results)
+    LR3 = problem_results3.run_distance_test(problem_results)
+    LM1 = problem_results1.run_lm_test()
+    LM2 = problem_results2.run_lm_test()
+    LM3 = problem_results3.run_lm_test()
+    wald1 = problem_results1.run_wald_test(
+        problem_results1.parameters[:2], np.eye(problem_results1.parameters.size)[:2]
+    )
+    wald2 = problem_results2.run_wald_test(
+        problem_results2.parameters[:2], np.eye(problem_results2.parameters.size)[:2]
+    )
+    wald3 = problem_results3.run_wald_test(
+        problem_results3.parameters[:2], np.eye(problem_results3.parameters.size)[:2]
+    )
 
     # choose tolerances (be more flexible with iterative de-meaning)
     atol = 1e-8
@@ -318,9 +336,17 @@ def test_fixed_effects(
         np.testing.assert_allclose(result1, result2, atol=atol, rtol=rtol, err_msg=key)
         np.testing.assert_allclose(result1, result3, atol=atol, rtol=rtol, err_msg=key)
 
-    # test that marginal costs are essentially identical
+    # test that marginal costs and test statistics are essentially identical
     np.testing.assert_allclose(costs1, costs2, atol=atol, rtol=rtol)
     np.testing.assert_allclose(costs1, costs3, atol=atol, rtol=rtol)
+    np.testing.assert_allclose(J1, J2, atol=atol, rtol=rtol)
+    np.testing.assert_allclose(J1, J3, atol=atol, rtol=rtol)
+    np.testing.assert_allclose(LR1, LR2, atol=atol, rtol=rtol)
+    np.testing.assert_allclose(LR1, LR3, atol=atol, rtol=rtol)
+    np.testing.assert_allclose(LM1, LM2, atol=atol, rtol=rtol)
+    np.testing.assert_allclose(LM1, LM3, atol=atol, rtol=rtol)
+    np.testing.assert_allclose(wald1, wald2, atol=atol, rtol=rtol)
+    np.testing.assert_allclose(wald1, wald3, atol=atol, rtol=rtol)
 
 
 @pytest.mark.usefixtures('simulated_problem')
