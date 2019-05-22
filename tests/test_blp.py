@@ -861,7 +861,10 @@ def test_objective_gradient(
 
 
 @pytest.mark.usefixtures('simulated_problem')
-@pytest.mark.parametrize('method', [pytest.param('1s', id="one-step"), pytest.param('2s', id="two-step")])
+@pytest.mark.parametrize('method', [
+    pytest.param('1s', id="one-step"),
+    pytest.param('2s', id="two-step")
+])
 @pytest.mark.parametrize('center_moments', [pytest.param(True, id="centered"), pytest.param(False, id="uncentered")])
 @pytest.mark.parametrize('W_type', [
     pytest.param('robust', id="robust W"),
@@ -914,3 +917,13 @@ def test_logit(
             values1 = getattr(results1, key1)
             values2 = np.c_[getattr(results2, key2)]
             np.testing.assert_allclose(values1, values2, atol=1e-10, rtol=1e-8, err_msg=key1)
+
+    # test that test statistics in the second stage (when they make sense) are essentially identical
+    if method == '2s' and se_type != 'unadjusted':
+        nonconstant = (problem.products.X1[0] != problem.products.X1).any(axis=0)
+        F1 = results1.run_wald_test(results1.parameters[nonconstant], np.eye(results1.parameters.size)[nonconstant])
+        J1 = results1.run_hansen_test()
+        F2 = results2.f_statistic.stat
+        J2 = results2.j_stat.stat
+        np.testing.assert_allclose(F1, F2, atol=1e-10, rtol=1e-8)
+        np.testing.assert_allclose(J1, J2, atol=1e-10, rtol=1e-8)
