@@ -8,7 +8,9 @@ from .. import exceptions, options
 from ..configurations.iteration import ContractionResults, Iteration
 from ..economies.economy import Economy
 from ..moments import EconomyMoments, MarketMoments, ProductsAgentsCovarianceMoment
-from ..parameters import LinearCoefficient, NonlinearCoefficient, Parameter, Parameters, RhoParameter
+from ..parameters import (
+    LinearCoefficient, NonlinearCoefficient, Parameter, Parameters, PiParameter, RhoParameter, SigmaParameter
+)
 from ..primitives import Container
 from ..utilities.algebra import approximately_invert, approximately_solve
 from ..utilities.basics import Array, Error, Groups, SolverStats, update_matrices
@@ -120,18 +122,64 @@ class Market(Container):
         tiled_ids = np.tile(self.products.firm_ids, self.J)
         return np.where(tiled_ids == tiled_ids.T, 1, 0)
 
-    def compute_random_coefficients(self) -> Array:
-        """Compute the random coefficients by weighting agent characteristics with nonlinear parameters."""
-        coefficients = self.sigma @ self.agents.nodes.T
+    def compute_random_coefficients(self, sigma: Optional[Array] = None, pi: Optional[Array] = None) -> Array:
+        """Compute the random coefficients by weighting agent characteristics with nonlinear parameters. By default, use
+        unchanged parameters.
+        """
+        if sigma is None:
+            sigma = self.sigma
+        if pi is None:
+            pi = self.pi
+        coefficients = sigma @ self.agents.nodes.T
         if self.D > 0:
-            coefficients += self.pi @ self.agents.demographics.T
+            coefficients += pi @ self.agents.demographics.T
         return coefficients
 
-    def compute_mu(self, X2: Optional[Array] = None) -> Array:
-        """Compute mu. By default, use the unchanged X2."""
+    def compute_mu(
+            self, X2: Optional[Array] = None, sigma: Optional[Array] = None, pi: Optional[Array] = None) -> Array:
+        """Compute mu. By default, use unchanged X2 and parameters."""
         if X2 is None:
             X2 = self.products.X2
-        return X2 @ self.compute_random_coefficients()
+        return X2 @ self.compute_random_coefficients(sigma, pi)
+
+    def compute_default_bounds(self, parameters: List[Parameter]) -> List[Tuple[Array, Array]]:
+        """Compute default bounds for nonlinear parameters."""
+
+        # define a function to normalize bounds
+        def normalize(x: float) -> float:
+            """Reduce an initial parameter bound by 1% and round it to two significant figures."""
+            if not np.isfinite(x) or x == 0:
+                return x
+            reduced = 0.99 * x
+            return np.round(reduced, 1 + int(reduced < 1) - int(np.log10(reduced)))
+
+        # compute common components of default bounds
+        mu_norm = np.abs(self.mu).max()
+        mu_max = np.log(np.finfo(np.float64).max)
+        bounds: List[Tuple[Array, Array]] = []
+
+        # compute the bounds parameter-by-parameter
+        for parameter in parameters:
+            if isinstance(parameter, SigmaParameter):
+                sigma = self.sigma.copy()
+                sigma[parameter.location] = 0
+                additional_mu_norm = np.abs(self.compute_mu(sigma=sigma)).max()
+                v_norm = np.abs(parameter.get_agent_characteristic(self)).max()
+                x_norm = np.abs(parameter.get_product_characteristic(self)).max()
+                bound = normalize(max(0, mu_max - additional_mu_norm) / v_norm / x_norm)
+                bounds.append((-bound if parameter.location[0] != parameter.location[1] else 0, bound))
+            elif isinstance(parameter, PiParameter):
+                pi = self.pi.copy()
+                pi[parameter.location] = 0
+                additional_mu_norm = np.abs(self.compute_mu(pi=pi)).max()
+                v_norm = np.abs(parameter.get_agent_characteristic(self)).max()
+                x_norm = np.abs(parameter.get_product_characteristic(self)).max()
+                bound = normalize(max(0, mu_max - additional_mu_norm) / v_norm / x_norm)
+                bounds.append((-bound, bound))
+            else:
+                assert isinstance(parameter, RhoParameter)
+                bounds.append((0, normalize(1 - min(1, mu_norm / mu_max))))
+        return bounds
 
     def update_delta_with_variable(self, name: str, variable: Array) -> Array:
         """Update delta to reflect a changed variable by adding any parameter-weighted characteristic changes to X1."""

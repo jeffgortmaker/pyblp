@@ -1,19 +1,20 @@
 """Parameters underlying the BLP model."""
 
 import abc
-from typing import Any, Type, Iterable, List, Optional, Sequence, Set, TYPE_CHECKING, Tuple, Union
+from typing import Any, Type, Hashable, Iterable, List, Optional, Sequence, Set, TYPE_CHECKING, Tuple, Union
 
 import numpy as np
 
 from . import options
 from .configurations.formulation import ColumnFormulation
 from .primitives import Container
-from .utilities.basics import Array, Bounds, Groups, TableFormatter, format_number, format_se
+from .utilities.basics import Array, Bounds, Groups, TableFormatter, format_number, format_se, generate_items
 
 
 # only import objects that create import cycles when checking types
 if TYPE_CHECKING:
     from .economies.economy import Economy  # noqa
+    from .markets.market import Market  # noqa
 
 
 class Parameter(abc.ABC):
@@ -36,7 +37,7 @@ class Coefficient(Parameter):
         """Get the product formulation associated with the parameter."""
 
     @abc.abstractmethod
-    def get_product_characteristic(self, container: Container) -> Array:
+    def get_product_characteristic(self, market: 'Market') -> Array:
         """Get the product characteristic associated with the parameter."""
 
 
@@ -47,29 +48,29 @@ class NonlinearCoefficient(Coefficient):
         """Get the product formulation associated with the parameter."""
         return container._X2_formulations[self.location[0]]
 
-    def get_product_characteristic(self, container: Container) -> Array:
+    def get_product_characteristic(self, market: 'Market') -> Array:
         """Get the product characteristic associated with the parameter."""
-        return container.products.X2[:, [self.location[0]]]
+        return market.products.X2[:, [self.location[0]]]
 
     @abc.abstractmethod
-    def get_agent_characteristic(self, container: Container) -> Array:
+    def get_agent_characteristic(self, market: 'Market') -> Array:
         """Get the agent characteristic associated with the parameter."""
 
 
 class SigmaParameter(NonlinearCoefficient):
     """Information about a single parameter in sigma."""
 
-    def get_agent_characteristic(self, container: Container) -> Array:
+    def get_agent_characteristic(self, market: 'Market') -> Array:
         """Get the agent characteristic associated with the parameter."""
-        return container.agents.nodes[:, [self.location[1]]]
+        return market.agents.nodes[:, [self.location[1]]]
 
 
 class PiParameter(NonlinearCoefficient):
     """Information about a single parameter in pi."""
 
-    def get_agent_characteristic(self, container: Container) -> Array:
+    def get_agent_characteristic(self, market: 'Market') -> Array:
         """Get the agent characteristic associated with the parameter."""
-        return container.agents.demographics[:, [self.location[1]]]
+        return market.agents.demographics[:, [self.location[1]]]
 
 
 class RhoParameter(Parameter):
@@ -101,10 +102,10 @@ class OneGroupRhoParameter(RhoParameter):
 class LinearCoefficient(Coefficient):
     """Information about a single linear parameter in beta or gamma."""
 
-    def get_product_characteristic(self, container: Container) -> Array:
+    def get_product_characteristic(self, market: 'Market') -> Array:
         """Get the product characteristic associated with the parameter."""
-        x = self.get_product_formulation(container).evaluate(container.products)
-        return np.broadcast_to(x, (container.products.shape[0], 1)).astype(options.dtype)
+        x = self.get_product_formulation(market).evaluate(market.products)
+        return np.broadcast_to(x, (market.products.shape[0], 1)).astype(options.dtype)
 
 
 class BetaParameter(LinearCoefficient):
@@ -239,46 +240,43 @@ class Parameters(object):
         if not bounded:
             return
 
-        # identify which parameters need default bounds
-        unbounded_parameters = []
-        bounds_mapping = {
-            SigmaParameter: sigma_bounds,
-            PiParameter: pi_bounds,
-            RhoParameter: rho_bounds
-        }
+        # identify which parameters need default bounds and initialize default bounds as starting values
+        unbounded_parameters: List[Parameter] = []
         for parameter in self.unfixed:
-            for parameter_type, bounds in bounds_mapping.items():
-                if isinstance(parameter, parameter_type):
-                    if bounds is None:
-                        unbounded_parameters.append(parameter)
-                    break
-
-        # compute default bounds for unbounded parameters such that conditional on reasonable values for all other
-        #   parameters, choice probability computation is unlikely to require overflow safety precautions
-        mu_norm = self.compute_mu_norm(economy)
-        mu_max = np.log(np.finfo(np.float64).max)
-        for parameter in unbounded_parameters:
             location = parameter.location
-            if isinstance(parameter, NonlinearCoefficient):
-                v_norm = np.abs(parameter.get_agent_characteristic(economy)).max()
-                x_norm = np.abs(parameter.get_product_characteristic(economy)).max()
-                additional_mu_norm = self.compute_mu_norm(economy, eliminate_parameter=parameter)
-                with np.errstate(divide='ignore'):
-                    bound = self.normalize_default_bound(max(0, mu_max - additional_mu_norm) / v_norm / x_norm)
+            if isinstance(parameter, SigmaParameter) and sigma_bounds is None:
+                unbounded_parameters.append(parameter)
+                self.sigma_bounds[0][location] = self.sigma_bounds[1][location] = self.sigma[location]
+            elif isinstance(parameter, PiParameter) and pi_bounds is None:
+                unbounded_parameters.append(parameter)
+                self.pi_bounds[0][location] = self.pi_bounds[1][location] = self.pi[location]
+            elif isinstance(parameter, RhoParameter) and rho_bounds is None:
+                unbounded_parameters.append(parameter)
+                self.rho_bounds[0][location] = self.rho_bounds[1][location] = self.rho[location]
+
+        # market-level computation is needed to compute default bounds
+        from .markets.market import Market
+
+        # define a factory for computing default bounds
+        def market_factory(s: Hashable) -> Tuple[Market, List[Parameter]]:
+            """Build a market along with arguments used to compute default parameter bounds."""
+            market_s = Market(economy, s, self, self.sigma, self.pi, self.rho)
+            return market_s, unbounded_parameters
+
+        # compute default bounds market-by-market
+        for _, bounds_t in generate_items(economy.unique_market_ids, market_factory, Market.compute_default_bounds):
+            for parameter, (lb_t, ub_t) in zip(unbounded_parameters, bounds_t):
+                location = parameter.location
                 if isinstance(parameter, SigmaParameter):
-                    lb = min(self.sigma[location], -bound if location[0] != location[1] else 0)
-                    ub = max(self.sigma[location], +bound)
-                    self.sigma_bounds[0][location], self.sigma_bounds[1][location] = lb, ub
+                    self.sigma_bounds[0][location] = min(self.sigma_bounds[0][location], lb_t)
+                    self.sigma_bounds[1][location] = max(self.sigma_bounds[1][location], ub_t)
+                elif isinstance(parameter, PiParameter):
+                    self.pi_bounds[0][location] = min(self.pi_bounds[0][location], lb_t)
+                    self.pi_bounds[1][location] = max(self.pi_bounds[1][location], ub_t)
                 else:
-                    assert isinstance(parameter, PiParameter)
-                    lb = min(self.pi[location], -bound)
-                    ub = max(self.pi[location], +bound)
-                    self.pi_bounds[0][location], self.pi_bounds[1][location] = lb, ub
-            else:
-                assert isinstance(parameter, RhoParameter)
-                lb = min(self.rho[location], 0)
-                ub = max(self.rho[location], self.normalize_default_bound(1 - min(1, mu_norm / mu_max)))
-                self.rho_bounds[0][location], self.rho_bounds[1][location] = lb, ub
+                    assert isinstance(parameter, RhoParameter)
+                    self.rho_bounds[0][location] = min(self.rho_bounds[0][location], lb_t)
+                    self.rho_bounds[1][location] = max(self.rho_bounds[1][location], ub_t)
 
     @staticmethod
     def initialize_matrix(
@@ -350,42 +348,6 @@ class Parameters(object):
                 self.unfixed.append(parameter)
             else:
                 self.fixed.append(parameter)
-
-    def compute_mu_norm(
-            self, economy: 'Economy', eliminate_parameter: Optional[NonlinearCoefficient] = None) -> float:
-        """Compute the infinity norm of mu under initial parameters, optionally eliminating the contribution of a
-        parameter.
-        """
-
-        # zero out any parameter that is to be eliminated
-        sigma = self.sigma.copy()
-        pi = self.pi.copy()
-        if isinstance(eliminate_parameter, SigmaParameter):
-            sigma[eliminate_parameter.location] = 0
-        elif isinstance(eliminate_parameter, PiParameter):
-            pi[eliminate_parameter.location] = 0
-
-        # compute the norm by computing mu in each market
-        norm = 0
-        if economy.K2 > 0:
-            for t in economy.unique_market_ids:
-                agents_t = economy.agents[economy._agent_market_indices[t]]
-                nodes_t = np.zeros((agents_t.shape[0], economy.K2), agents_t.nodes.dtype)
-                nodes_t[:, self.nonzero_sigma_index] = agents_t.nodes[:, :self.nonzero_sigma_index.sum()]
-                coefficients_t = sigma @ nodes_t.T
-                if economy.D > 0:
-                    coefficients_t += pi @ agents_t.demographics.T
-                mu_t = economy.products.X2[economy._product_market_indices[t]] @ coefficients_t
-                norm = max(norm, np.abs(mu_t).max())
-        return norm
-
-    @staticmethod
-    def normalize_default_bound(bound: float) -> float:
-        """Reduce an initial parameter bound by 1% and round it to two significant figures."""
-        if not np.isfinite(bound) or bound == 0:
-            return bound
-        reduced = 0.99 * bound
-        return np.round(reduced, 1 + int(reduced < 1) - int(np.log10(reduced)))
 
     def format(self, title: str) -> str:
         """Format fixed and unfixed parameter values as a string."""
