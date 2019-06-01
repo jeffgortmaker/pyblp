@@ -244,7 +244,7 @@ class AbsorptionInversionError(InversionError):
 
 
 class HessianEigenvaluesError(InversionError):
-    """Failed to compute eigenvalues for the GMM objective's Hessian matrix."""
+    """Failed to compute eigenvalues for the GMM objective's (reduced) Hessian matrix."""
 
 
 class FittedValuesInversionError(InversionReplacementError):

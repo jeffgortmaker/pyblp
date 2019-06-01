@@ -160,23 +160,21 @@ class ProblemResults(Results):
     gradient : `ndarray`
         Gradient of the GMM objective, :math:`\nabla q(\hat{\theta})`, defined in :eq:`gradient`. This is computed after
         the optimization routine finishes even if the routine was configured to not use analytic gradients.
-    sigma_gradient : `ndarray`
-        Estimated gradient of the GMM objective with respect to :math:`\Sigma` elements in :math:`\theta`.
-    pi_gradient : `ndarray`
-        Estimated gradient of the GMM objective with respect to :math:`\Pi` elements in :math:`\theta`.
-    rho_gradient : `ndarray`
-        Estimated gradient of the GMM objective with respect to :math:`\rho` elements in :math:`\theta`.
-    beta_gradient : `ndarray`
-        Estimated gradient of the GMM objective with respect to :math:`\beta` elements in :math:`\theta`.
-    gamma_gradient : `ndarray`
-        Estimated gradient of the GMM objective with respect to :math:`\gamma` elements in :math:`\theta`.
-    gradient_norm : `ndarray`
-        Infinity norm of :attr:`ProblemResults.gradient`.
+    projected_gradient : `ndarray`
+        Projected gradient of the GMM objective. When there are no parameter bounds, this will always be equal to
+        :attr:`ProblemResults.gradient`. Otherwise, if an element in :math:`\hat{\theta}` is equal to its lower (upper)
+        bound, the corresponding projected gradient value will be truncated at a maximum (minimum) of zero.
+    projected_gradient_norm : `ndarray`
+        Infinity norm of :attr:`ProblemResults.projected_gradient`.
     hessian : `ndarray`
         Estimated Hessian of the GMM objective. By default, this is computed with finite central differences after the
         optimization routine finishes.
-    hessian_eigenvalues : `ndarray`
-        Eigenvalues of :attr:`ProblemResults.hessian`.
+    reduced_hessian : `ndarray`
+        Reduced Hessian of the GMM objective. When there are no parameter bounds, this will always be equal to
+        :attr:`ProblemResults.hessian`. Otherwise, if an element in :math:`\hat{\theta}` is equal to either its lower
+        or upper bound, the corresponding row and column in the reduced Hessian will be all zeros.
+    reduced_hessian_eigenvalues : `ndarray`
+        Eigenvalues of :attr:`ProblemResults.reduced_hessian`.
     W : `ndarray`
         Weighting matrix, :math:`W`, used to compute these results.
     updated_W : `ndarray`
@@ -235,14 +233,11 @@ class ProblemResults(Results):
     omega_by_theta_jacobian: Array
     micro_by_theta_jacobian: Array
     gradient: Array
-    gradient_norm: Array
+    projected_gradient: Array
+    projected_gradient_norm: Array
     hessian: Array
-    hessian_eigenvalues: Array
-    sigma_gradient: Array
-    pi_gradient: Array
-    rho_gradient: Array
-    beta_gradient: Array
-    gamma_gradient: Array
+    reduced_hessian: Array
+    reduced_hessian_eigenvalues: Array
     W: Array
     updated_W: Array
     _costs_type: str
@@ -274,15 +269,17 @@ class ProblemResults(Results):
         self.gamma = progress.gamma
         self.objective = progress.objective
         self.gradient = progress.gradient
-        self.gradient_norm = progress.gradient_norm
+        self.projected_gradient = progress.projected_gradient
+        self.projected_gradient_norm = progress.projected_gradient_norm
         self.hessian = progress.hessian
+        self.reduced_hessian = progress.reduced_hessian
 
-        # if the Hessian was computed, compute its eigenvalues and the ratio of the smallest to largest ones
-        self.hessian_eigenvalues = np.full(self._parameters.P, np.nan, options.dtype)
-        if self._parameters.P > 0 and np.isfinite(self.hessian).all():
-            self.hessian_eigenvalues, successful = precisely_compute_eigenvalues(self.hessian)
+        # if the reduced Hessian was computed, compute its eigenvalues and the ratio of the smallest to largest ones
+        self.reduced_hessian_eigenvalues = np.full(self._parameters.P, np.nan, options.dtype)
+        if self._parameters.P > 0 and np.isfinite(self.reduced_hessian).all():
+            self.reduced_hessian_eigenvalues, successful = precisely_compute_eigenvalues(self.reduced_hessian)
             if not successful:
-                self._errors.append(exceptions.HessianEigenvaluesError(self.hessian))
+                self._errors.append(exceptions.HessianEigenvaluesError(self.reduced_hessian))
 
         # store information about cost bounds
         self._costs_bounds = costs_bounds
@@ -384,11 +381,6 @@ class ProblemResults(Results):
         )
         self.beta_se[self._parameters.eliminated_beta_index] = eliminated_beta_se.flatten()
         self.gamma_se[self._parameters.eliminated_gamma_index] = eliminated_gamma_se.flatten()
-
-        # expand gradients
-        self.sigma_gradient, self.pi_gradient, self.rho_gradient, self.beta_gradient, self.gamma_gradient = (
-            self._parameters.expand(self.gradient, nullify=True)
-        )
 
         # store types that are used in other methods
         self._costs_type = costs_type
@@ -492,21 +484,21 @@ class ProblemResults(Results):
         # include any information about the final objective value
         header.append(("", "Objective", "Value"))
         values.append(format_number(float(self.objective)))
-        if np.isfinite(self.gradient_norm):
-            header.append(("", "Gradient", "Infinity Norm"))
-            values.append(format_number(float(self.gradient_norm)))
-        if np.isfinite(self.hessian_eigenvalues).any():
-            if self.hessian_eigenvalues.size == 1:
-                header.append(("", "Hessian", "Eigenvalue"))
-                values.append(format_number(float(self.hessian_eigenvalues)))
+        if np.isfinite(self.projected_gradient_norm):
+            header.append(("", "Projected Gradient" if self._parameters.any_bounds else "Gradient", "Infinity Norm"))
+            values.append(format_number(float(self.projected_gradient_norm)))
+        if np.isfinite(self.reduced_hessian_eigenvalues).any():
+            if self.reduced_hessian_eigenvalues.size == 1:
+                header.append(("", "Reduced Hessian" if self._parameters.any_bounds else "Hessian", "Eigenvalue"))
+                values.append(format_number(float(self.reduced_hessian_eigenvalues)))
             else:
                 header.extend([
-                    ("Smallest", "Hessian", "Eigenvalue"),
-                    ("Largest", "Hessian", "Eigenvalue")
+                    ("Smallest", "Reduced Hessian" if self._parameters.any_bounds else "Hessian", "Eigenvalue"),
+                    ("Largest", "Reduced Hessian" if self._parameters.any_bounds else "Hessian", "Eigenvalue")
                 ])
                 values.extend([
-                    format_number(float(np.min(self.hessian_eigenvalues))),
-                    format_number(float(np.max(self.hessian_eigenvalues)))
+                    format_number(float(np.min(self.reduced_hessian_eigenvalues))),
+                    format_number(float(np.max(self.reduced_hessian_eigenvalues)))
                 ])
 
         # include the weighting matrix's condition number

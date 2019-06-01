@@ -310,7 +310,7 @@ def test_fixed_effects(
     problem_results_keys = [
         'theta', 'sigma', 'pi', 'rho', 'beta', 'gamma', 'sigma_se', 'pi_se', 'rho_se', 'beta_se', 'gamma_se',
         'delta', 'tilde_costs', 'xi', 'omega', 'xi_by_theta_jacobian', 'omega_by_theta_jacobian', 'objective',
-        'gradient', 'gradient_norm', 'sigma_gradient', 'pi_gradient', 'rho_gradient', 'beta_gradient', 'gamma_gradient'
+        'gradient', 'projected_gradient'
     ]
     for key in problem_results_keys:
         if key.endswith('_se') and solve_options['micro_moments']:
@@ -318,7 +318,7 @@ def test_fixed_effects(
         result1 = getattr(problem_results1, key)
         result2 = getattr(problem_results2, key)
         result3 = getattr(problem_results3, key)
-        if key in {'beta', 'gamma', 'beta_se', 'gamma_se', 'beta_gradient', 'gamma_gradient'}:
+        if key in {'beta', 'gamma', 'beta_se', 'gamma_se'}:
             result2 = result2[:result1.size]
             result3 = result3[:result1.size]
         np.testing.assert_allclose(result1, result2, atol=atol, rtol=rtol, err_msg=key)

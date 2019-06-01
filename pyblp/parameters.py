@@ -151,6 +151,7 @@ class Parameters(object):
     unfixed: List[Parameter]
     eliminated: List[Parameter]
     P: int
+    any_bounds: bool
 
     def __init__(
             self, economy: 'Economy', sigma: Optional[Any] = None, pi: Optional[Any] = None, rho: Optional[Any] = None,
@@ -237,46 +238,47 @@ class Parameters(object):
         self.P = len(self.unfixed)
 
         # skip overflow checks and bound computation if parameters aren't bounded
-        if not bounded:
-            return
-
-        # identify which parameters need default bounds and initialize default bounds as starting values
-        unbounded_parameters: List[Parameter] = []
-        for parameter in self.unfixed:
-            location = parameter.location
-            if isinstance(parameter, SigmaParameter) and sigma_bounds is None:
-                unbounded_parameters.append(parameter)
-                self.sigma_bounds[0][location] = self.sigma_bounds[1][location] = self.sigma[location]
-            elif isinstance(parameter, PiParameter) and pi_bounds is None:
-                unbounded_parameters.append(parameter)
-                self.pi_bounds[0][location] = self.pi_bounds[1][location] = self.pi[location]
-            elif isinstance(parameter, RhoParameter) and rho_bounds is None:
-                unbounded_parameters.append(parameter)
-                self.rho_bounds[0][location] = self.rho_bounds[1][location] = self.rho[location]
-
-        # market-level computation is needed to compute default bounds
-        from .markets.market import Market
-
-        # define a factory for computing default bounds
-        def market_factory(s: Hashable) -> Tuple[Market, List[Parameter]]:
-            """Build a market along with arguments used to compute default parameter bounds."""
-            market_s = Market(economy, s, self, self.sigma, self.pi, self.rho)
-            return market_s, unbounded_parameters
-
-        # compute default bounds market-by-market
-        for _, bounds_t in generate_items(economy.unique_market_ids, market_factory, Market.compute_default_bounds):
-            for parameter, (lb_t, ub_t) in zip(unbounded_parameters, bounds_t):
+        if bounded:
+            # identify which parameters need default bounds and initialize default bounds as starting values
+            unbounded_parameters: List[Parameter] = []
+            for parameter in self.unfixed:
                 location = parameter.location
-                if isinstance(parameter, SigmaParameter):
-                    self.sigma_bounds[0][location] = min(self.sigma_bounds[0][location], lb_t)
-                    self.sigma_bounds[1][location] = max(self.sigma_bounds[1][location], ub_t)
-                elif isinstance(parameter, PiParameter):
-                    self.pi_bounds[0][location] = min(self.pi_bounds[0][location], lb_t)
-                    self.pi_bounds[1][location] = max(self.pi_bounds[1][location], ub_t)
-                else:
-                    assert isinstance(parameter, RhoParameter)
-                    self.rho_bounds[0][location] = min(self.rho_bounds[0][location], lb_t)
-                    self.rho_bounds[1][location] = max(self.rho_bounds[1][location], ub_t)
+                if isinstance(parameter, SigmaParameter) and sigma_bounds is None:
+                    unbounded_parameters.append(parameter)
+                    self.sigma_bounds[0][location] = self.sigma_bounds[1][location] = self.sigma[location]
+                elif isinstance(parameter, PiParameter) and pi_bounds is None:
+                    unbounded_parameters.append(parameter)
+                    self.pi_bounds[0][location] = self.pi_bounds[1][location] = self.pi[location]
+                elif isinstance(parameter, RhoParameter) and rho_bounds is None:
+                    unbounded_parameters.append(parameter)
+                    self.rho_bounds[0][location] = self.rho_bounds[1][location] = self.rho[location]
+
+            # market-level computation is needed to compute default bounds
+            from .markets.market import Market
+
+            # define a factory for computing default bounds
+            def market_factory(s: Hashable) -> Tuple[Market, List[Parameter]]:
+                """Build a market along with arguments used to compute default parameter bounds."""
+                market_s = Market(economy, s, self, self.sigma, self.pi, self.rho)
+                return market_s, unbounded_parameters
+
+            # compute default bounds market-by-market
+            for _, bounds_t in generate_items(economy.unique_market_ids, market_factory, Market.compute_default_bounds):
+                for parameter, (lb_t, ub_t) in zip(unbounded_parameters, bounds_t):
+                    location = parameter.location
+                    if isinstance(parameter, SigmaParameter):
+                        self.sigma_bounds[0][location] = min(self.sigma_bounds[0][location], lb_t)
+                        self.sigma_bounds[1][location] = max(self.sigma_bounds[1][location], ub_t)
+                    elif isinstance(parameter, PiParameter):
+                        self.pi_bounds[0][location] = min(self.pi_bounds[0][location], lb_t)
+                        self.pi_bounds[1][location] = max(self.pi_bounds[1][location], ub_t)
+                    else:
+                        assert isinstance(parameter, RhoParameter)
+                        self.rho_bounds[0][location] = min(self.rho_bounds[0][location], lb_t)
+                        self.rho_bounds[1][location] = max(self.rho_bounds[1][location], ub_t)
+
+        # identify whether there are any bounds
+        self.any_bounds = np.isfinite(self.compress_bounds()).any()
 
     @staticmethod
     def initialize_matrix(

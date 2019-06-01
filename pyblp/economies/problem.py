@@ -1257,7 +1257,7 @@ class InitialProgress(object):
             self, problem: ProblemEconomy, parameters: Parameters, moments: EconomyMoments, W: Array, theta: Array,
             objective: Array, gradient: Array, hessian: Array, next_delta: Array, delta: Array, tilde_costs: Array,
             micro: Array, xi_jacobian: Array, omega_jacobian: Array, micro_jacobian: Array) -> None:
-        """Store initial progress information."""
+        """Store initial progress information, computing the projected gradient and the reduced Hessian."""
         self.problem = problem
         self.parameters = parameters
         self.moments = moments
@@ -1286,7 +1286,9 @@ class Progress(InitialProgress):
     iteration_stats: Dict[Hashable, SolverStats]
     clipped_costs: Array
     errors: List[Error]
-    gradient_norm: Array
+    projected_gradient: Array
+    reduced_hessian: Array
+    projected_gradient_norm: Array
 
     def __init__(
             self, problem: ProblemEconomy, parameters: Parameters, moments: EconomyMoments, W: Array, theta: Array,
@@ -1294,7 +1296,7 @@ class Progress(InitialProgress):
             micro: Array, xi_jacobian: Array, omega_jacobian: Array, micro_jacobian: Array, micro_covariances: Array,
             xi: Array, omega: Array, beta: Array, gamma: Array, iteration_stats: Dict[Hashable, SolverStats],
             clipped_costs: Array, errors: List[Error]) -> None:
-        """Store progress information."""
+        """Store progress information, compute the projected gradient and its norm, and compute the reduced Hessian."""
         super().__init__(
             problem, parameters, moments, W, theta, objective, gradient, hessian, next_delta, delta, tilde_costs, micro,
             xi_jacobian, omega_jacobian, micro_jacobian
@@ -1307,8 +1309,23 @@ class Progress(InitialProgress):
         self.iteration_stats = iteration_stats or {}
         self.clipped_costs = clipped_costs
         self.errors = errors or []
-        with np.errstate(invalid='ignore'):
-            self.gradient_norm = np.array(np.nan, options.dtype) if gradient.size == 0 else np.abs(gradient).max()
+
+        # compute the projected gradient and the reduced Hessian
+        self.projected_gradient = self.gradient.copy()
+        self.reduced_hessian = self.hessian.copy()
+        for p, (lb, ub) in enumerate(self.parameters.compress_bounds()):
+            if not lb < theta[p] < ub:
+                self.reduced_hessian[p] = self.reduced_hessian[:, p] = 0
+                if theta[p] <= lb:
+                    self.projected_gradient[p] = min(0, self.gradient[p])
+                elif theta[p] >= ub:
+                    self.projected_gradient[p] = max(0, self.gradient[p])
+
+        # compute the norm of the projected gradient
+        self.projected_gradient_norm = np.array(np.nan, options.dtype)
+        if gradient.size > 0:
+            with np.errstate(invalid='ignore'):
+                self.projected_gradient_norm = np.abs(self.projected_gradient).max()
 
     def format(
             self, optimization: Optimization, costs_bounds: Bounds, step: int, iterations: int, evaluations: int,
@@ -1338,8 +1355,8 @@ class Progress(InitialProgress):
         ]
         widths = [max(len(k1), len(k2), options.digits + 6 if i > 4 else 0) for i, (k1, k2) in enumerate(header)]
         if optimization._compute_gradient:
-            header.append(("Gradient", "Infinity Norm"))
-            values.append(format_number(float(self.gradient_norm)))
+            header.append(("Projected Gradient" if self.parameters.any_bounds else "Gradient", "Infinity Norm"))
+            values.append(format_number(float(self.projected_gradient_norm)))
             widths.append(max(len(header[-1][0]), len(header[-1][1]), options.digits + 6))
         if np.isfinite(costs_bounds).any():
             header.append(("Clipped", "Marginal Costs"))
