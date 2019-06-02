@@ -59,6 +59,26 @@ If you lack permissions, you can install pyblp in your user directory with the `
 Alternatively, you can download a wheel or source archive from `PyPI <https://pypi.org/project/pyblp/>`_. You can find the latest development code on `GitHub <https://github.com/jeffgortmaker/pyblp/>`_ and the latest development documentation `here <https://pyblp.readthedocs.io/en/latest/>`_.
 
 
+Other Languages
+---------------
+
+Once installed, pyblp can be incorporated into projects written in many other languages with the help of various tools that enable interoperability with Python.
+
+For example, the `reticulate <https://github.com/rstudio/reticulate>`_ package makes interacting with pyblp in R straightforward::
+
+    library(reticulate)
+    pyblp <- import("pyblp")
+
+Similarly, `PyCall <https://github.com/JuliaPy/PyCall.jl>`_ can be used to incorporate pyblp into a Julia workflow::
+
+    using PyCall
+    pyblp = pyimport("pyblp")
+
+The `py command <https://www.mathworks.com/help/matlab/call-python-libraries.html>`_ serves a similar purpose in MATLAB::
+
+   py.pyblp
+
+
 Features
 --------
 
