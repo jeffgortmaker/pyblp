@@ -484,6 +484,7 @@ class ProblemEconomy(Economy):
                 output(parameters.format_lower_bounds("Lower Bounds"))
                 output("")
                 output(parameters.format_upper_bounds("Upper Bounds"))
+                output("")
 
         # compute or load the weighting matrix
         if W is None:
@@ -587,7 +588,6 @@ class ProblemEconomy(Economy):
             optimization_stats = SolverStats()
             optimization_start_time = optimization_end_time = time.time()
             if parameters.P > 0:
-                output("")
                 output(f"Starting optimization ...")
                 output("")
                 theta, optimization_stats = optimization._optimize(theta, theta_bounds, wrapper)
@@ -606,13 +606,12 @@ class ProblemEconomy(Economy):
             compute_micro_covariances = moments.MM > 0
 
             # use progress information computed at the optimal theta to compute results for the step
-            output("")
             if compute_hessian and not last_step:
-                output("Computing the Hessian, estimating standard errors, and updating weights ...")
+                output("Computing the Hessian and and updating the weighting matrix ...")
             elif compute_hessian:
                 output("Computing the Hessian and estimating standard errors ...")
             elif not last_step:
-                output("Estimating standard errors and updating weights ...")
+                output("Updating the weighting matrix ...")
             else:
                 output("Estimating standard errors ...")
             final_progress = compute_step_progress(
@@ -620,9 +619,9 @@ class ProblemEconomy(Economy):
             )
             optimization_stats.evaluations += 1
             results = ProblemResults(
-                final_progress, last_results, step_start_time, optimization_start_time, optimization_end_time,
-                optimization_stats, iteration_stats, costs_type, costs_bounds, extra_micro_covariances, center_moments,
-                W_type, se_type
+                final_progress, last_results, last_step, step_start_time, optimization_start_time,
+                optimization_end_time, optimization_stats, iteration_stats, costs_type, costs_bounds,
+                extra_micro_covariances, center_moments, W_type, se_type
             )
             self._handle_errors(error_behavior, results._errors)
             output(f"Computed results after {format_seconds(results.total_time - results.optimization_time)}.")
@@ -632,6 +631,7 @@ class ProblemEconomy(Economy):
             output("")
             if not last_step:
                 output(results._format_summary())
+                output("")
             else:
                 output(results)
                 return results

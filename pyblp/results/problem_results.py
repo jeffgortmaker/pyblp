@@ -92,7 +92,8 @@ class ProblemResults(Results):
         Stacked parameters in the following order: :math:`\hat{\theta}`, concentrated out elements of
         :math:`\hat{\beta}`, and concentrated out elements of :math:`\hat{\gamma}`.
     parameter_covariances : `ndarray`
-        Estimated covariance matrix of the stacked parameters, from which standard errors are extracted.
+        Estimated covariance matrix of the stacked parameters, from which standard errors are extracted. Parameter
+        covariances are not estimated during the first step of two-step GMM.
     theta : `ndarray`
         Estimated unfixed parameters, :math:`\hat{\theta}`, in the following order: :math:`\hat{\Sigma}`,
         :math:`\hat{\Pi}`, :math:`\hat{\rho}`, non-concentrated out elements from :math:`\hat{\beta}`, and
@@ -108,15 +109,15 @@ class ProblemResults(Results):
     gamma : `ndarray`
         Estimated supply-side linear parameters, :math:`\hat{\gamma}`.
     sigma_se : `ndarray`
-        Estimated standard errors for :math:`\hat{\Sigma}`.
+        Estimated standard errors for :math:`\hat{\Sigma}`, which are not estimated in the first step of two-step GMM.
     pi_se : `ndarray`
-        Estimated standard errors for :math:`\hat{\Pi}`.
+        Estimated standard errors for :math:`\hat{\Pi}`, which are not estimated in the first step of two-step GMM.
     rho_se : `ndarray`
-        Estimated standard errors for :math:`\hat{\rho}`.
+        Estimated standard errors for :math:`\hat{\rho}`, which are not estimated in the first step of two-step GMM.
     beta_se : `ndarray`
-        Estimated standard errors for :math:`\hat{\beta}`.
+        Estimated standard errors for :math:`\hat{\beta}`, which are not estimated in the first step of two-step GMM.
     gamma_se : `ndarray`
-        Estimated standard errors for :math:`\hat{\gamma}`.
+        Estimated standard errors for :math:`\hat{\gamma}`, which are not estimated in the first step of two-step GMM.
     sigma_bounds : `tuple`
         Bounds for :math:`\Sigma` that were used during optimization, which are of the form ``(lb, ub)``.
     pi_bounds : `tuple`
@@ -245,13 +246,12 @@ class ProblemResults(Results):
     _errors: List[Error]
 
     def __init__(
-            self, progress: 'Progress', last_results: Optional['ProblemResults'], step_start_time: float,
-            optimization_start_time: float, optimization_end_time: float, optimization_stats: SolverStats,
-            iteration_stats: Sequence[Dict[Hashable, SolverStats]], costs_type: str, costs_bounds: Bounds,
-            extra_micro_covariances: Optional[Array], center_moments: bool, W_type: str, se_type: str) -> None:
+            self, progress: 'Progress', last_results: Optional['ProblemResults'], last_step: bool,
+            step_start_time: float, optimization_start_time: float, optimization_end_time: float,
+            optimization_stats: SolverStats, iteration_stats: Sequence[Dict[Hashable, SolverStats]], costs_type: str,
+            costs_bounds: Bounds, extra_micro_covariances: Optional[Array], center_moments: bool, W_type: str,
+            se_type: str) -> None:
         """Compute cumulative progress statistics, update weighting matrices, and estimate standard errors."""
-
-        # initialize values from the progress structure
         super().__init__(progress.problem, progress.parameters, progress.moments)
         self._errors = progress.errors
         self.problem = progress.problem
@@ -273,6 +273,10 @@ class ProblemResults(Results):
         self.projected_gradient_norm = progress.projected_gradient_norm
         self.hessian = progress.hessian
         self.reduced_hessian = progress.reduced_hessian
+        self.clipped_costs = progress.clipped_costs
+        self._costs_type = costs_type
+        self._costs_bounds = costs_bounds
+        self._se_type = se_type
 
         # if the reduced Hessian was computed, compute its eigenvalues and the ratio of the smallest to largest ones
         self.reduced_hessian_eigenvalues = np.full(self._parameters.P, np.nan, options.dtype)
@@ -280,10 +284,6 @@ class ProblemResults(Results):
             self.reduced_hessian_eigenvalues, successful = precisely_compute_eigenvalues(self.reduced_hessian)
             if not successful:
                 self._errors.append(exceptions.HessianEigenvaluesError(self.reduced_hessian))
-
-        # store information about cost bounds
-        self._costs_bounds = costs_bounds
-        self.clipped_costs = progress.clipped_costs
 
         # initialize counts, times, and convergence
         self.step = 1
@@ -339,37 +339,41 @@ class ProblemResults(Results):
 
         # ignore computational errors when updating the weighting matrix and computing covariances
         with np.errstate(invalid='ignore'):
-            # compute moment covariances
+            # update the weighting matrix
             micro_covariances = progress.micro_covariances.copy()
             if extra_micro_covariances is not None:
                 micro_covariances += extra_micro_covariances
-            S_for_weights = S_for_covariances = self._compute_S(micro_covariances, W_type, center_moments)
-            if se_type != W_type or center_moments:
-                S_for_covariances = self._compute_S(micro_covariances, se_type)
-
-            # update the weighting matrix
+            S_for_weights = self._compute_S(micro_covariances, W_type, center_moments)
             self.updated_W, W_errors = compute_gmm_weights(S_for_weights)
             self._errors.extend(W_errors)
 
-            # if this is the first step, an unadjusted weighting matrix needs to be used when computing unadjusted
-            #   covariances so that they are scaled properly
-            W_for_covariances = self.W
-            if se_type == 'unadjusted' and self.step == 1:
-                W_for_covariances, W_for_covariances_errors = compute_gmm_weights(S_for_covariances)
-                self._errors.extend(W_for_covariances_errors)
+            # only compute parameter covariances and standard errors if this is the last step
+            self.parameter_covariances = np.full((self.parameters.size, self.parameters.size), np.nan, options.dtype)
+            se = np.full((self.parameters.size, 1), np.nan, options.dtype)
+            if last_step:
+                S_for_covariances = S_for_weights
+                if se_type != W_type or center_moments:
+                    S_for_covariances = self._compute_S(micro_covariances, se_type)
 
-            # compute parameter covariances
-            mean_G = self._compute_mean_G()
-            self.parameter_covariances, se_errors = compute_gmm_parameter_covariances(
-                W_for_covariances, S_for_covariances, mean_G, se_type
-            )
-            self._errors.extend(se_errors)
+                # if this is the first step, an unadjusted weighting matrix needs to be used when computing unadjusted
+                #   covariances so that they are scaled properly
+                W_for_covariances = self.W
+                if se_type == 'unadjusted' and self.step == 1:
+                    W_for_covariances, W_for_covariances_errors = compute_gmm_weights(S_for_covariances)
+                    self._errors.extend(W_for_covariances_errors)
 
-        # compute standard errors, ignoring invalid numbers from any computational errors above
-        with np.errstate(invalid='ignore'):
-            se = np.sqrt(np.c_[self.parameter_covariances.diagonal()] / self.problem.N)
-        if np.isnan(se).any():
-            self._errors.append(exceptions.InvalidParameterCovariancesError())
+                # compute parameter covariances
+                mean_G = self._compute_mean_G()
+                self.parameter_covariances, se_errors = compute_gmm_parameter_covariances(
+                    W_for_covariances, S_for_covariances, mean_G, se_type
+                )
+                self._errors.extend(se_errors)
+
+                # compute standard errors
+                with np.errstate(invalid='ignore'):
+                    se = np.sqrt(np.c_[self.parameter_covariances.diagonal()] / self.problem.N)
+                if np.isnan(se).any():
+                    self._errors.append(exceptions.InvalidParameterCovariancesError())
 
         # expand standard errors
         theta_se, eliminated_beta_se, eliminated_gamma_se = np.split(se, [
@@ -381,10 +385,6 @@ class ProblemResults(Results):
         )
         self.beta_se[self._parameters.eliminated_beta_index] = eliminated_beta_se.flatten()
         self.gamma_se[self._parameters.eliminated_gamma_index] = eliminated_gamma_se.flatten()
-
-        # store types that are used in other methods
-        self._costs_type = costs_type
-        self._se_type = se_type
 
     def __str__(self) -> str:
         """Format problem results as a string."""
