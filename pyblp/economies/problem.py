@@ -22,7 +22,7 @@ from ..primitives import Agents, Products
 from ..results.problem_results import ProblemResults
 from ..utilities.algebra import precisely_invert
 from ..utilities.basics import (
-    Array, Bounds, Error, Groups, RecArray, SolverStats, TableFormatter, format_number, format_seconds, generate_items,
+    Array, Bounds, Error, Groups, RecArray, SolverStats, format_number, format_seconds, format_table, generate_items,
     output, update_matrices
 )
 from ..utilities.statistics import IV, compute_gmm_moments_mean, compute_gmm_moments_jacobian_mean
@@ -1337,46 +1337,6 @@ class Progress(InitialProgress):
         """
         lines: List[str] = []
 
-        # build the header of the universal display, structure values, and determine widths
-        header = [
-            ("GMM", "Step"), ("Optimization", "Iterations"), ("Objective", "Evaluations"),
-            ("Fixed Point", "Iterations"), ("Contraction", "Evaluations"), ("Objective", "Value"),
-            ("Objective", "Improvement")
-        ]
-        objective_improved = np.isfinite(smallest_objective) and self.objective < smallest_objective
-        values = [
-            step,
-            iterations,
-            evaluations,
-            sum(s.iterations for s in self.iteration_stats.values()),
-            sum(s.evaluations for s in self.iteration_stats.values()),
-            format_number(float(self.objective)),
-            format_number(float(smallest_objective - self.objective)) if objective_improved else "",
-        ]
-        widths = [max(len(k1), len(k2), options.digits + 6 if i > 4 else 0) for i, (k1, k2) in enumerate(header)]
-        if optimization._compute_gradient:
-            header.append(("Projected Gradient" if self.parameters.any_bounds else "Gradient", "Infinity Norm"))
-            values.append(format_number(float(self.projected_gradient_norm)))
-            widths.append(max(len(header[-1][0]), len(header[-1][1]), options.digits + 6))
-        if np.isfinite(costs_bounds).any():
-            header.append(("Clipped", "Marginal Costs"))
-            values.append(self.clipped_costs.sum())
-            widths.append(max(len(header[-1][0]), len(header[-1][1]), options.digits + 6))
-        header.append(("", "Theta"))
-        values.append(", ".join(format_number(x) for x in self.theta))
-        widths.append(max(len(header[-1][0]), len(header[-1][1]), self.theta.size * (options.digits + 8) - 2))
-        if self.moments.MM > 0:
-            header.append(("", "Micro"))
-            values.append(", ".join(format_number(x) for x in self.micro))
-            widths.append(max(len(header[-1][0]), len(header[-1][1]), self.micro.size * (options.digits + 8) - 2))
-
-        # build the formatter of the universal display
-        formatter = TableFormatter(widths)
-
-        # if this is the first iteration, include the header
-        if optimization._universal_display and evaluations == 1:
-            lines.extend([formatter([k[0] for k in header]), formatter([k[1] for k in header], underline=True)])
-
         # include information about any errors
         if self.errors:
             preamble = (
@@ -1387,7 +1347,51 @@ class Progress(InitialProgress):
             )
             lines.extend(["", preamble, str(exceptions.MultipleErrors(self.errors)), ""])
 
-        # format the values and combine the lines into one string
-        if optimization._universal_display:
-            lines.append(formatter(values))
+        # only output errors if the solver's display is being used
+        if not optimization._universal_display:
+            return "\n".join(lines)
+
+        # construct the leftmost part of the table that always shows up
+        header = [
+            ("GMM", "Step"), ("Optimization", "Iterations"), ("Objective", "Evaluations"),
+            ("Fixed Point", "Iterations"), ("Contraction", "Evaluations")
+        ]
+        values = [
+            str(step),
+            str(iterations),
+            str(evaluations),
+            str(sum(s.iterations for s in self.iteration_stats.values())),
+            str(sum(s.evaluations for s in self.iteration_stats.values()))
+        ]
+
+        # add a count of any clipped marginal costs
+        if np.isfinite(costs_bounds).any():
+            header.append(("Clipped", "Costs"))
+            values.append(str(self.clipped_costs.sum()))
+
+        # add information about the objective
+        header.extend([("Objective", "Value"), ("Objective", "Improvement")])
+        values.append(format_number(self.objective))
+        improvement = smallest_objective - self.objective
+        if np.isfinite(improvement) and improvement > 0:
+            values.append(format_number(smallest_objective - self.objective))
+        else:
+            values.append(" " * len(format_number(improvement)))
+
+        # add information about the gradient
+        if optimization._compute_gradient:
+            header.append(("Projected", "Gradient Norm") if self.parameters.any_bounds else ("Gradient", "Norm"))
+            values.append(format_number(self.projected_gradient_norm))
+
+        # add information about theta
+        header.append(("", "Theta"))
+        values.append(", ".join(format_number(x) for x in self.theta))
+
+        # add information about micro moments
+        if self.moments.MM > 0:
+            header.append(("Micro", "Moments"))
+            values.append(", ".join(format_number(x) for x in self.micro))
+
+        # format the table
+        lines.append(format_table(header, values, include_border=False, include_header=evaluations == 1))
         return "\n".join(lines)

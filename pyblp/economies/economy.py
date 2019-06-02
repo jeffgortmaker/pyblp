@@ -1,9 +1,8 @@
 """Economy underlying the BLP model."""
 
 import abc
-import collections
 import functools
-from typing import Any, Dict, Hashable, Mapping, Optional, Sequence
+from typing import Any, Dict, Hashable, List, Mapping, Optional, Sequence
 
 import numpy as np
 
@@ -11,7 +10,7 @@ from .. import options
 from ..configurations.formulation import Formulation
 from ..primitives import Container
 from ..utilities.algebra import precisely_identify_collinearity, precisely_identify_psd
-from ..utilities.basics import Array, RecArray, StringRepresentation, TableFormatter
+from ..utilities.basics import Array, RecArray, StringRepresentation, format_table
 
 
 class Economy(Container, StringRepresentation):
@@ -95,64 +94,40 @@ class Economy(Container, StringRepresentation):
 
     def __str__(self) -> str:
         """Format economy information as a string."""
+        return "\n\n".join([self._format_dimensions(), self._format_formulations()])
 
-        # associate dimensions and formulations with names
-        dimension_mapping = collections.OrderedDict([
-            ("T", self.T),
-            ("N", self.N),
-            ("F", self.F),
-            ("I", self.I),
-            ("K1", self.K1),
-            ("K2", self.K2),
-            ("K3", self.K3),
-            ("D", self.D),
-            ("MD", self.MD),
-            ("MS", self.MS),
-            ("ED", self.ED),
-            ("ES", self.ES),
-            ("H", self.H)
-        ])
-        formulation_mapping = collections.OrderedDict([
-            ("X1: Linear Characteristics", self._X1_formulations),
-            ("X2: Nonlinear Characteristics", self._X2_formulations),
-            ("X3: Cost Characteristics", self._X3_formulations),
-            ("d: Demographics", self._demographics_formulations)
-        ])
+    def _format_dimensions(self) -> str:
+        """Format information about the nonzero dimensions of the economy as a string."""
+        header: List[str] = []
+        values: List[str] = []
+        for key in ['T', 'N', 'F', 'I', 'K1', 'K2', 'K3', 'D', 'MD', 'MS', 'ED', 'ES', 'H']:
+            value = getattr(self, key)
+            if value > 0:
+                header.append(f" {key} ")
+                values.append(str(value))
+        return format_table(header, values, title="Dimensions")
 
-        # build a dimensions section
-        dimension_widths = [max(len(k) + 2, len(str(d))) for k, d in dimension_mapping.items() if d > 0]
-        dimension_formatter = TableFormatter(dimension_widths)
-        dimension_section = [
-            "Dimensions:",
-            dimension_formatter.line(),
-            dimension_formatter([k for k, d in dimension_mapping.items() if d > 0], underline=True),
-            dimension_formatter([d for k, d in dimension_mapping.items() if d > 0]),
-            dimension_formatter.line()
+    def _format_formulations(self) -> str:
+        """Formation information about the formulations of the economy as a string."""
+
+        # construct the data
+        named_formulations = [
+            (self._X1_formulations, "X1: Linear Characteristics"),
+            (self._X2_formulations, "X2: Nonlinear Characteristics"),
+            (self._X3_formulations, "X3: Cost Characteristics"),
+            (self._demographics_formulations, "d: Demographics")
         ]
+        data: List[List[str]] = []
+        for formulations, name in named_formulations:
+            if any(formulations):
+                data.append([name] + [str(f) for f in formulations])
 
-        # build a formulations section
-        formulation_header = ["Column Indices:"]
-        formulation_widths = [max(len(formulation_header[0]), max(map(len, formulation_mapping.keys())))]
-        for index in range(max(map(len, formulation_mapping.values()))):
-            formulation_header.append(str(index))
-            column_width = 5
-            for formulation in formulation_mapping.values():
-                if len(formulation) > index:
-                    column_width = max(column_width, len(str(formulation[index])))
-            formulation_widths.append(column_width)
-        formulation_formatter = TableFormatter(formulation_widths)
-        formulation_section = [
-            "Formulations:",
-            formulation_formatter.line(),
-            formulation_formatter(formulation_header, underline=True)
-        ]
-        for name, formulations in formulation_mapping.items():
-            if formulations:
-                formulation_section.append(formulation_formatter([name] + list(map(str, formulations))))
-        formulation_section.append(formulation_formatter.line())
+        # construct the header
+        max_formulations = max(len(r[1:]) for r in data)
+        header = ["Column Indices:"] + [f" {i} " for i in range(max_formulations)]
 
-        # combine the sections into one string
-        return "\n\n".join("\n".join(s) for s in [dimension_section, formulation_section])
+        # format the table
+        return format_table(header, *data, title="Formulations")
 
     def _validate_shares(self) -> None:
         """Validate the integrity of product shares."""

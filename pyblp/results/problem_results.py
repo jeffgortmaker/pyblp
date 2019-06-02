@@ -14,7 +14,7 @@ from ..utilities.algebra import (
     approximately_invert, approximately_solve, compute_condition_number, precisely_compute_eigenvalues
 )
 from ..utilities.basics import (
-    Array, Bounds, Error, SolverStats, TableFormatter, format_number, format_seconds, generate_items, output,
+    Array, Bounds, Error, SolverStats, format_number, format_seconds, format_table, generate_items, output,
     output_progress
 )
 from ..utilities.statistics import (
@@ -388,7 +388,7 @@ class ProblemResults(Results):
 
     def __str__(self) -> str:
         """Format problem results as a string."""
-        sections = [self._format_summary()]
+        sections = [self._format_summary(), self._format_cumulative_statistics()]
 
         # construct a standard error description
         if self._se_type == 'unadjusted':
@@ -460,72 +460,68 @@ class ProblemResults(Results):
     def _format_summary(self) -> str:
         """Format a summary table of problem results."""
 
-        # at a minimum include time and the GMM step
-        floats_index = 3
-        header = [("", "Computation", "Time"), ("", "GMM", "Step")]
-        values = [format_seconds(self.cumulative_total_time), self.step]
+        # construct the leftmost part of the table that always shows up
+        header = [("GMM", "Step"), ("Objective", "Value")]
+        values = [self.step, format_number(self.objective)]
 
-        # include any optimization information
-        if self._parameters.P > 0:
-            floats_index += 1
-            header.append(("", "Optimization", "Iterations"))
-            values.append(self.cumulative_optimization_iterations)
-
-        # include objective evaluation information
-        header.append(("", "Objective", "Evaluations"))
-        values.append(self.cumulative_objective_evaluations)
-
-        # include any fixed point information
-        if np.any(self.cumulative_contraction_evaluations > 0):
-            floats_index += 2
-            header.extend([("", "Fixed Point", "Iterations"), ("", "Contraction", "Evaluations")])
-            values.extend([self.cumulative_fp_iterations.sum(), self.cumulative_contraction_evaluations.sum()])
-
-        # include any information about the final objective value
-        header.append(("", "Objective", "Value"))
-        values.append(format_number(float(self.objective)))
+        # add information about first and second order conditions
         if np.isfinite(self.projected_gradient_norm):
-            header.append(("", "Projected Gradient" if self._parameters.any_bounds else "Gradient", "Infinity Norm"))
-            values.append(format_number(float(self.projected_gradient_norm)))
+            if self._parameters.any_bounds:
+                header.append(("Projected", "Gradient Norm"))
+            else:
+                header.append(("Gradient", "Norm"))
+            values.append(format_number(self.projected_gradient_norm))
         if np.isfinite(self.reduced_hessian_eigenvalues).any():
+            hessian_type = "Reduced" if self._parameters.any_bounds else ""
             if self.reduced_hessian_eigenvalues.size == 1:
-                header.append(("", "Reduced Hessian" if self._parameters.any_bounds else "Hessian", "Eigenvalue"))
-                values.append(format_number(float(self.reduced_hessian_eigenvalues)))
+                header.append((hessian_type, "Hessian"))
+                values.append(format_number(self.reduced_hessian))
             else:
                 header.extend([
-                    ("Smallest", "Reduced Hessian" if self._parameters.any_bounds else "Hessian", "Eigenvalue"),
-                    ("Largest", "Reduced Hessian" if self._parameters.any_bounds else "Hessian", "Eigenvalue")
+                    (f"{hessian_type} Hessian", "Min Eigenvalue"),
+                    (f"{hessian_type} Hessian", "Max Eigenvalue")
                 ])
                 values.extend([
-                    format_number(float(np.min(self.reduced_hessian_eigenvalues))),
-                    format_number(float(np.max(self.reduced_hessian_eigenvalues)))
+                    format_number(self.reduced_hessian_eigenvalues.min()),
+                    format_number(self.reduced_hessian_eigenvalues.max())
                 ])
 
-        # include the weighting matrix's condition number
-        header.append(("", "Weighting Matrix", "Condition Number"))
-        values.append(format_number(compute_condition_number(self.W)))
-
-        # include any information about clipped marginal costs
+        # add a count of any clipped marginal costs
         if np.isfinite(self._costs_bounds).any():
-            header.append(("Clipped", "Marginal", "Costs"))
+            header.append(("Clipped", "Costs"))
             values.append(self.clipped_costs.sum())
 
+        # add information about the weighting matrix
+        header.append(("Weighting Matrix", "Condition Number"))
+        values.append(format_number(compute_condition_number(self.W)))
+
         # format the table
-        widths = [max(options.digits + 6 if i >= floats_index else 0, *map(len, k)) for i, k in enumerate(header)]
-        formatter = TableFormatter(widths)
-        lines = [
-            "Problem Results Summary:",
-            formatter.line()
-        ]
-        if any(k[0] for k in header):
-            lines.append(formatter([k[0] for k in header]))
-        lines.extend([
-            formatter([k[1] for k in header]),
-            formatter([k[2] for k in header], underline=True),
-            formatter(values),
-            formatter.line()
-        ])
-        return "\n".join(lines)
+        return format_table(header, values, title="Problem Results Summary")
+
+    def _format_cumulative_statistics(self) -> str:
+        """Format a table of cumulative statistics."""
+
+        # construct the leftmost part of the top table that always shows up
+        header = [("Computation", "Time")]
+        values = [format_seconds(self.cumulative_total_time)]
+
+        # add optimization iterations
+        if self._parameters.P > 0:
+            header.append(("Optimization", "Iterations"))
+            values.append(str(self.cumulative_optimization_iterations))
+
+        # add evaluations and iterations
+        header.append(("Objective", "Evaluations"))
+        values.append(str(self.cumulative_objective_evaluations))
+        if np.any(self.cumulative_contraction_evaluations > 0):
+            header.extend([("Fixed Point", "Iterations"), ("Contraction", "Evaluations")])
+            values.extend([
+                str(self.cumulative_fp_iterations.sum()),
+                str(self.cumulative_contraction_evaluations.sum())]
+            )
+
+        # format the table
+        return format_table(header, values, title="Cumulative Statistics")
 
     def run_hansen_test(self) -> float:
         r"""Test the validity of overidentifying restrictions with the Hansen :math:`J` test.

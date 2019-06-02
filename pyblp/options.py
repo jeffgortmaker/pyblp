@@ -3,8 +3,8 @@ r"""Global options.
 Attributes
 ----------
 digits : `int`
-    Number of digits displayed by status updates. The default number of digits is ``10``. The number of digits can be
-    changed to, for example, ``20``, with ``pyblp.options.digits = 20``.
+    Number of digits displayed by status updates. The default number of digits is ``7``. The number of digits can be
+    changed to, for example, ``2``, with ``pyblp.options.digits = 2``.
 verbose : `bool`
     Whether to output status updates. By default, verbosity is turned on. Verbosity can be turned off with
     ``pyblp.options.verbose = False``.
@@ -80,7 +80,7 @@ psd_rtol : `float`
 import numpy as _np
 
 
-digits = 10
+digits = 7
 verbose = True
 verbose_tracebacks = False
 verbose_output = print

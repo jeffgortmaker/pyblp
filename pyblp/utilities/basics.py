@@ -222,17 +222,18 @@ def format_seconds(seconds: float) -> str:
     return f'{hours:02}:{minutes:02}:{seconds:02}'
 
 
-def format_number(number: Optional[float], sign: bool = True) -> str:
+def format_number(number: Any) -> str:
     """Prepare a number to be displayed as a string."""
-    if number is None or np.isnan(number):
-        return "NA"
     if not isinstance(options.digits, int):
         raise TypeError("options.digits must be an int.")
-    template = f"{{:+.{options.digits - 1}E}}"
-    return template.format(float(number))[int(not sign):]
+    template = f"{{:^+{options.digits + 6}.{options.digits - 1}E}}"
+    formatted = template.format(float(number))
+    if "NAN" in formatted:
+        formatted = formatted.replace("+", " ")
+    return formatted
 
 
-def format_se(se: Optional[float]) -> str:
+def format_se(se: Any) -> str:
     """Prepare a standard error to be displayed as a string."""
     return f"({format_number(se)})"
 
@@ -250,6 +251,50 @@ def format_options(mapping: Options) -> str:
     return f'{{{joined}}}'
 
 
+def format_table(
+        header: Sequence[Union[str, Sequence[str]]], *data: Sequence, title: Optional[str] = None,
+        include_border: bool = True, include_header: bool = True, line_indices: Container[int] = ()) -> str:
+    """Format table information as a string, which has fixed widths, vertical lines after any specified indices, and
+    optionally a title, border, and header.
+    """
+
+    # construct the header rows
+    row_index = -1
+    header_rows: List[List[str]] = []
+    header = [[c] if isinstance(c, str) else c for c in header]
+    while True:
+        header_row = ["" if len(c) < -row_index else c[row_index] for c in header]
+        if not any(header_row):
+            break
+        header_rows.insert(0, header_row)
+        row_index -= 1
+
+    # construct the data rows
+    data_rows = [[str(c) for c in r] + [""] * (len(header) - len(r)) for r in data]
+
+    # compute column widths
+    widths = []
+    for column_index in range(len(header)):
+        widths.append(max(len(r[column_index]) for r in header_rows + data_rows))
+
+    # build the template
+    template = "  " .join("{{:^{}}}{}".format(w, "  |" if i in line_indices else "") for i, w in enumerate(widths))
+
+    # build the table
+    lines = []
+    if title is not None:
+        lines.append(f"{title}:")
+    if include_border:
+        lines.append("=" * len(template.format(*[""] * len(widths))))
+    if include_header:
+        lines.extend([template.format(*r) for r in header_rows])
+        lines.append(template.format(*("-" * w for w in widths)))
+    lines.extend([template.format(*r) for r in data_rows])
+    if include_border:
+        lines.append("=" * len(template.format(*[""] * len(widths))))
+    return "\n".join(lines)
+
+
 class SolverStats(object):
     """Structured statistics returned by a generic numerical solver."""
 
@@ -262,34 +307,6 @@ class SolverStats(object):
         self.converged = converged
         self.iterations = iterations
         self.evaluations = evaluations
-
-
-class TableFormatter(object):
-    """Formatter of tables with fixed-width columns."""
-
-    template: str
-    widths: List[int]
-
-    def __init__(self, widths: Sequence[int], line_indices: Container[int] = ()) -> None:
-        """Build the table's template string, which has fixed widths and vertical lines after specified indices."""
-        parts = ["{{:^{}}}{}".format(w, "  |" if i in line_indices else "") for i, w in enumerate(widths)]
-        self.template = "  ".join(parts)
-        self.widths = list(widths)
-
-    def __call__(self, values: Sequence, underline: bool = False) -> str:
-        """Construct a row. If underline is True, construct a second row of underlines."""
-        formatted = self.template.format(*map(str, list(values) + [""] * (len(self.widths) - len(values))))
-        if underline:
-            return "\n".join([formatted, self(["-" * w for w in self.widths[:len(values)]])])
-        return formatted
-
-    def blank(self) -> str:
-        """Construct a blank row."""
-        return self([""] * len(self.widths))
-
-    def line(self) -> str:
-        """Construct a horizontal line."""
-        return "=" * len(self.blank())
 
 
 class StringRepresentation(object):

@@ -11,7 +11,7 @@ from .results import Results
 from .. import exceptions, options
 from ..markets.results_market import ResultsMarket
 from ..utilities.basics import (
-    Array, Error, SolverStats, TableFormatter, format_seconds, generate_items, output, output_progress
+    Array, Error, SolverStats, format_seconds, format_table, generate_items, output, output_progress
 )
 
 
@@ -120,18 +120,9 @@ class BootstrappedResults(Results):
         header = [("Computation", "Time"), ("Bootstrap", "Draws")]
         values = [format_seconds(self.computation_time), self.draws]
         if self.fp_iterations.sum() > 0 or self.contraction_evaluations.sum() > 0:
-            header.extend([("Total Fixed Point", "Iterations"), ("Total Contraction", "Evaluations")])
+            header.extend([("Fixed Point", "Iterations"), ("Contraction", "Evaluations")])
             values.extend([self.fp_iterations.sum(), self.contraction_evaluations.sum()])
-        widths = [max(len(k1), len(k2)) for k1, k2 in header]
-        formatter = TableFormatter(widths)
-        return "\n".join([
-            "Bootstrapped Problem Results Summary:",
-            formatter.line(),
-            formatter([k[0] for k in header]),
-            formatter([k[1] for k in header], underline=True),
-            formatter(values),
-            formatter.line()
-        ])
+        return format_table(header, values, title="Bootstrapped Results Summary")
 
     def _coerce_matrices(self, matrices: Any) -> Array:
         """Coerce array-like stacked matrix tensors into a stacked matrix tensor and validate it."""

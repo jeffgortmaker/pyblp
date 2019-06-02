@@ -8,7 +8,7 @@ import numpy as np
 from . import options
 from .configurations.formulation import ColumnFormulation
 from .primitives import Container
-from .utilities.basics import Array, Bounds, Groups, TableFormatter, format_number, format_se, generate_items
+from .utilities.basics import Array, Bounds, Groups, format_number, format_se, format_table, generate_items
 
 
 # only import objects that create import cycles when checking types
@@ -412,49 +412,28 @@ class Parameters(object):
             self, title: str, parameter_type: Type[Union[RhoParameter, LinearCoefficient]], header: List[str],
             vector: Array, vector_se: Optional[Array] = None) -> str:
         """Format a vector (and optional standard errors) as a string."""
-        lines = [f"{title}:"]
-
-        # build the formatter
-        widths = [max(len(k), options.digits + 8) for k in header]
-        formatter = TableFormatter(widths)
-
-        # build the table
-        lines.extend([formatter.line(), formatter(header, underline=True)])
-
-        # determine which indices correspond to fixed parameters
-        fixed_indices = {p.location[0] for p in self.fixed if isinstance(p, parameter_type)}
-
-        # build the content of the table
-        lines.append(formatter([format_number(x) for x in vector]))
+        data = [[format_number(x) for x in vector]]
         if vector_se is not None:
-            lines.append(formatter([format_se(x) if i not in fixed_indices else "" for i, x in enumerate(vector_se)]))
-
-        # build the bottom of the table before combining the lines into one string
-        lines.append(formatter.line())
-        return "\n".join(lines)
+            fixed_indices = {p.location[0] for p in self.fixed if isinstance(p, parameter_type)}
+            data.append(["" if i in fixed_indices else format_se(x) for i, x in enumerate(vector_se)])
+        return format_table(header, *data, title=title)
 
     def format_nonlinear_coefficients(
             self, title: str, sigma_like: Array, pi_like: Array, sigma_se_like: Optional[Array] = None,
             pi_se_like: Optional[Array] = None) -> str:
         """Format matrices (and optional standard errors) of the same size as sigma and pi as a string."""
-        lines = [f"Nonlinear Coefficient {title}:"]
 
-        # build the formatter
+        # construct the header
         line_indices: Set[int] = set()
         header = ["Sigma:"] + self.sigma_labels
-        widths = [max(map(len, header))] + [max(len(k), options.digits + 8) for k in header[1:]]
         if self.pi_labels:
-            line_indices.add(len(widths) - 1)
+            line_indices.add(len(header) - 1)
             header.extend(["Pi:"] + self.pi_labels)
-            widths.extend([widths[0]] + [max(len(k), options.digits + 8) for k in header[len(widths) + 1:]])
-        formatter = TableFormatter(widths, line_indices)
 
-        # build the top of the table
-        lines.extend([formatter.line(), formatter(header, underline=True)])
-
-        # construct the rows containing parameter information
+        # construct the data
+        data: List[List[str]] = []
         for row_index, row_label in enumerate(self.sigma_labels):
-            # the row is a label, blanks for sigma's lower triangle, sigma values, the label again, and pi values
+            # add a row of values
             values_row = [row_label] + [""] * row_index
             for column_index in range(row_index, sigma_like.shape[1]):
                 values_row.append(format_number(sigma_like[row_index, column_index]))
@@ -462,34 +441,36 @@ class Parameters(object):
                 values_row.append(row_label)
                 for column_index in range(pi_like.shape[1]):
                     values_row.append(format_number(pi_like[row_index, column_index]))
-            lines.append(formatter(values_row))
+            data.append(values_row)
 
-            # construct a row of standard errors for unfixed parameters
-            if sigma_se_like is not None and pi_se_like is not None:
-                # determine which columns in this row correspond to unfixed parameters
-                relevant_unfixed = {p for p in self.unfixed if p.location[0] == row_index}
-                unfixed_sigma_indices = {p.location[1] for p in relevant_unfixed if isinstance(p, SigmaParameter)}
-                unfixed_pi_indices = {p.location[1] for p in relevant_unfixed if isinstance(p, PiParameter)}
+            # only add a row of standard errors if standard errors are specified
+            if sigma_se_like is None:
+                continue
+            assert pi_se_like is not None
 
-                # construct a row similar to the values row without row labels and optionally with standard errors
-                se_row = [""] * (1 + row_index)
-                for column_index in range(row_index, sigma_se_like.shape[1]):
-                    se = sigma_se_like[row_index, column_index]
-                    se_row.append(format_se(se) if column_index in unfixed_sigma_indices else "")
-                if pi_se_like.shape[1] > 0:
-                    se_row.append("")
-                    for column_index in range(pi_se_like.shape[1]):
-                        se = pi_se_like[row_index, column_index]
-                        se_row.append(format_se(se) if column_index in unfixed_pi_indices else "")
+            # determine which columns in this row correspond to unfixed parameters
+            relevant_unfixed = {p for p in self.unfixed if p.location[0] == row_index}
+            unfixed_sigma_indices = {p.location[1] for p in relevant_unfixed if isinstance(p, SigmaParameter)}
+            unfixed_pi_indices = {p.location[1] for p in relevant_unfixed if isinstance(p, PiParameter)}
 
-                # format the row of values and add an additional blank line if there is another row of values
-                lines.append(formatter(se_row))
-                if row_index < sigma_like.shape[1] - 1:
-                    lines.append(formatter.blank())
+            # add a row of standard errors
+            se_row = [""] * (1 + row_index)
+            for column_index in range(row_index, sigma_se_like.shape[1]):
+                se = sigma_se_like[row_index, column_index]
+                se_row.append(format_se(se) if column_index in unfixed_sigma_indices else "")
+            if pi_se_like.shape[1] > 0:
+                se_row.append("")
+                for column_index in range(pi_se_like.shape[1]):
+                    se = pi_se_like[row_index, column_index]
+                    se_row.append(format_se(se) if column_index in unfixed_pi_indices else "")
+            data.append(se_row)
 
-        # build the bottom of the table before combining the lines into one string
-        lines.append(formatter.line())
-        return "\n".join(lines)
+            # add a blank row to separate the standard errors from the next row of values
+            if row_index < sigma_like.shape[1] - 1:
+                data.append([""] * len(se_row))
+
+        # format the table
+        return format_table(header, *data, title=f"Nonlinear Coefficient {title}", line_indices=line_indices)
 
     def compress(self) -> Array:
         """Compress the initial parameters into theta."""

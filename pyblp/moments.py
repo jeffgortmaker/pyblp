@@ -2,12 +2,12 @@
 
 import abc
 import collections
-from typing import Dict, Hashable, Optional, Sequence, TYPE_CHECKING
+from typing import Dict, Hashable, List, Optional, Sequence, TYPE_CHECKING
 
 import numpy as np
 
 from . import options
-from .utilities.basics import Array, StringRepresentation, TableFormatter, format_number
+from .utilities.basics import Array, StringRepresentation, format_number, format_table
 
 
 # only import objects that create import cycles when checking types
@@ -50,9 +50,9 @@ class Moment(StringRepresentation):
         """Construct a string expression for the micro moment."""
         formatted = self._format_value()
         if self.value < 0:
-            formatted = f"{formatted} + {format_number(float(self.value), sign=False)}"
+            formatted = f"{formatted} + {format_number(float(self.value))[1:]}"
         elif self.value > 0:
-            formatted = f"{formatted} - {format_number(float(self.value), sign=False)}"
+            formatted = f"{formatted} - {format_number(float(self.value))[1:]}"
         return formatted
 
     @abc.abstractmethod
@@ -149,29 +149,21 @@ class Moments(object):
 
     def format(self, title: str, values: Optional[Array] = None) -> str:
         """Format micro moments (and optionally their values) as a string."""
-        lines = [f"{title}:"]
 
-        # build the formatter
-        mapping = collections.OrderedDict([
-            ("Index", [str(i) for i in range(self.MM)]),
-            ("Markets", [m._format_markets() for m in self.micro_moments]),
-            ("Moment", [m._format_moment() for m in self.micro_moments])
-        ])
+        # construct the leftmost part of the table that always shows up
+        header = ["Index", "Markets", "Moment"]
+        data: List[List[str]] = []
+        for m, moment in enumerate(self.micro_moments):
+            data.append([str(m), moment._format_markets(), moment._format_moment()])
+
+        # add moment values
         if values is not None:
-            mapping["Value"] = [format_number(v) for v in values]
-        widths = [max(len(k), max(map(len, v))) for k, v in mapping.items()]
-        formatter = TableFormatter(widths)
+            header.append("Value")
+            for m, value in enumerate(values):
+                data[m].append(format_number(value))
 
-        # build the top of the table
-        lines.extend([formatter.line(), formatter(list(mapping.keys()), underline=True)])
-
-        # build the content of the table
-        for index in range(self.MM):
-            lines.append(formatter([v[index] for v in mapping.values()]))
-
-        # build the bottom of the table before combining the lines into one string
-        lines.append(formatter.line())
-        return "\n".join(lines)
+        # format the table
+        return format_table(header, *data, title=title)
 
 
 class EconomyMoments(Moments):

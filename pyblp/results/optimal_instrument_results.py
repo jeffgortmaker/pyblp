@@ -7,7 +7,7 @@ import numpy as np
 from .problem_results import ProblemResults
 from ..configurations.formulation import Formulation
 from ..parameters import LinearCoefficient
-from ..utilities.basics import Array, Mapping, SolverStats, StringRepresentation, TableFormatter, format_seconds
+from ..utilities.basics import Array, Mapping, SolverStats, StringRepresentation, format_seconds, format_table
 
 
 # only import objects that create import cycles when checking types
@@ -136,18 +136,9 @@ class OptimalInstrumentResults(StringRepresentation):
         header = [("Computation", "Time"), ("Error Term", "Draws")]
         values = [format_seconds(self.computation_time), self.draws]
         if self.fp_iterations.sum() > 0 or self.contraction_evaluations.sum() > 0:
-            header.extend([("Total Fixed Point", "Iterations"), ("Total Contraction", "Evaluations")])
+            header.extend([("Fixed Point", "Iterations"), ("Contraction", "Evaluations")])
             values.extend([self.fp_iterations.sum(), self.contraction_evaluations.sum()])
-        widths = [max(len(k1), len(k2)) for k1, k2 in header]
-        formatter = TableFormatter(widths)
-        return "\n".join([
-            "Optimal Instrument Results Summary:",
-            formatter.line(),
-            formatter([k[0] for k in header]),
-            formatter([k[1] for k in header], underline=True),
-            formatter(values),
-            formatter.line()
-        ])
+        return format_table(header, values, title="Optimal Instrument Results Summary")
 
     def to_problem(
             self, supply_shifter_formulation: Optional[Formulation] = None,

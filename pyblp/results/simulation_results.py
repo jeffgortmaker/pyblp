@@ -11,8 +11,8 @@ from ..configurations.integration import Integration
 from ..markets.simulation_results_market import SimulationResultsMarket
 from ..moments import Moment, EconomyMoments
 from ..utilities.basics import (
-    Array, Error, SolverStats, generate_items, Mapping, output, RecArray, StringRepresentation, TableFormatter,
-    format_seconds
+    Array, Error, SolverStats, generate_items, Mapping, output, RecArray, StringRepresentation, format_seconds,
+    format_table
 )
 
 
@@ -85,20 +85,12 @@ class SimulationResults(StringRepresentation):
     def __str__(self) -> str:
         """Format simulation results as a string."""
         header = [("Computation", "Time"), ("Fixed Point", "Iterations"), ("Contraction", "Evaluations")]
-        widths = [max(len(k1), len(k2)) for k1, k2 in header]
-        formatter = TableFormatter(widths)
-        return "\n".join([
-            "Simulation Results Summary:",
-            formatter.line(),
-            formatter([k[0] for k in header]),
-            formatter([k[1] for k in header], underline=True),
-            formatter([
-                format_seconds(self.computation_time),
-                self.fp_iterations.sum(),
-                self.contraction_evaluations.sum()
-            ]),
-            formatter.line()
-        ])
+        values = [
+            format_seconds(self.computation_time),
+            self.fp_iterations.sum(),
+            self.contraction_evaluations.sum()
+        ]
+        return format_table(header, values, title="Simulation Results Summary")
 
     def to_problem(
             self, product_formulations: Optional[Union[Formulation, Sequence[Optional[Formulation]]]] = None,
