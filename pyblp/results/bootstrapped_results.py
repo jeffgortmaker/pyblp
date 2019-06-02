@@ -224,3 +224,31 @@ class BootstrappedResults(Results):
         output(f"Finished after {format_seconds(end_time - start_time)}.")
         output("")
         return combined
+
+    def to_dict(
+            self, attributes: Sequence[str] = (
+                'bootstrapped_sigma', 'bootstrapped_pi', 'bootstrapped_rho', 'bootstrapped_beta', 'bootstrapped_gamma',
+                'bootstrapped_prices', 'bootstrapped_shares', 'bootstrapped_delta', 'bootstrapped_costs',
+                'computation_time', 'draws', 'fp_converged', 'fp_iterations', 'contraction_evaluations'
+            )) -> dict:
+        """Convert these results into a dictionary that maps attribute names to values.
+
+        Once converted to a dictionary, these results can be saved to a file with :func:`pickle.dump`.
+
+        Parameters
+        ----------
+        attributes : `tuple of str, optional`
+            Name of attributes that will be added to the dictionary. By default, all :class:`BootstrappedResults`
+            attributes are added except for :attr:`BootstrappedResults.problem_results`.
+
+        Returns
+        -------
+        `dict`
+            Mapping from attribute names to values.
+
+        Examples
+        --------
+            - :doc:`Tutorial </tutorial>`
+
+        """
+        return {k: getattr(self, k) for k in attributes}

@@ -523,6 +523,41 @@ class ProblemResults(Results):
         # format the table
         return format_table(header, values, title="Cumulative Statistics")
 
+    def to_dict(
+            self, attributes: Sequence[str] = (
+                'step', 'optimization_time', 'cumulative_optimization_time', 'total_time', 'cumulative_total_time',
+                'converged', 'cumulative_converged', 'optimization_iterations', 'cumulative_optimization_iterations',
+                'objective_evaluations', 'cumulative_objective_evaluations', 'fp_converged', 'cumulative_fp_converged',
+                'fp_iterations', 'cumulative_fp_iterations', 'contraction_evaluations',
+                'cumulative_contraction_evaluations', 'parameters', 'parameter_covariances', 'theta', 'sigma', 'pi',
+                'rho', 'beta', 'gamma', 'sigma_se', 'pi_se', 'rho_se', 'beta_se', 'gamma_se', 'sigma_bounds',
+                'pi_bounds', 'rho_bounds', 'beta_bounds', 'gamma_bounds', 'delta', 'tilde_costs', 'clipped_costs', 'xi',
+                'omega', 'micro', 'objective', 'xi_by_theta_jacobian', 'omega_by_theta_jacobian',
+                'micro_by_theta_jacobian', 'gradient', 'projected_gradient', 'projected_gradient_norm', 'hessian',
+                'reduced_hessian', 'reduced_hessian_eigenvalues', 'W', 'updated_W'
+            )) -> dict:
+        """Convert these results into a dictionary that maps attribute names to values.
+
+        Once converted to a dictionary, these results can be saved to a file with :func:`pickle.dump`.
+
+        Parameters
+        ----------
+        attributes : `tuple of str, optional`
+            Name of attributes that will be added to the dictionary. By default, all :class:`ProblemResults` attributes
+            are added except for :attr:`ProblemResults.problem` and :attr:`ProblemResults.last_results`.
+
+        Returns
+        -------
+        `dict`
+            Mapping from attribute names to values.
+
+        Examples
+        --------
+            - :doc:`Tutorial </tutorial>`
+
+        """
+        return {k: getattr(self, k) for k in attributes}
+
     def run_hansen_test(self) -> float:
         r"""Test the validity of overidentifying restrictions with the Hansen :math:`J` test.
 

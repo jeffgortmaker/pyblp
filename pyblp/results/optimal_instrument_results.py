@@ -25,9 +25,9 @@ class OptimalInstrumentResults(StringRepresentation):
     ----------
     problem_results : `ProblemResults`
         :class:`ProblemResults` that was used to compute these optimal instrument results.
-    demand_instruments: `ndarray`
+    demand_instruments : `ndarray`
         Estimated optimal demand-side instruments for :math:`\theta`, :math:`Z_D^\textit{Opt}`.
-    supply_instruments: `ndarray`
+    supply_instruments : `ndarray`
         Estimated optimal supply-side instruments for :math:`\theta`, :math:`Z_S^\textit{Opt}`.
     supply_shifter_formulation : `Formulation or None`
         :class:`Formulation` configuration for supply shifters that will by default be included in the full set of
@@ -39,13 +39,13 @@ class OptimalInstrumentResults(StringRepresentation):
         optimal supply-side instruments. This is only constructed if a supply side was estimated, and it can be changed
         in :meth:`OptimalInstrumentResults.to_problem`. By default, this is the formulation for :math:`X_1^x` from
         :class:`Problem` excluding any variables in the formulation for :math:`X_3`.
-    inverse_covariance_matrix: `ndarray`
+    inverse_covariance_matrix : `ndarray`
         Inverse of the sample covariance matrix of the estimated :math:`\xi` and :math:`\omega`, which is used to
         normalize the expected Jacobians. If a supply side was not estimated, this is simply the sample estimate of
         :math:`1 / \sigma_{\xi}^2`.
-    expected_xi_by_theta_jacobian: `ndarray`
+    expected_xi_by_theta_jacobian : `ndarray`
         Estimated :math:`E[\frac{\partial\xi}{\partial\theta} \mid Z]`.
-    expected_omega_by_theta_jacobian: `ndarray`
+    expected_omega_by_theta_jacobian : `ndarray`
         Estimated :math:`E[\frac{\partial\omega}{\partial\theta} \mid Z]`.
     expected_prices : `ndarray`
         Vector of expected prices conditional on all exogenous variables, :math:`E[p \mid Z]`, which may have been
@@ -139,6 +139,36 @@ class OptimalInstrumentResults(StringRepresentation):
             header.extend([("Fixed Point", "Iterations"), ("Contraction", "Evaluations")])
             values.extend([self.fp_iterations.sum(), self.contraction_evaluations.sum()])
         return format_table(header, values, title="Optimal Instrument Results Summary")
+
+    def to_dict(
+            self, attributes: Sequence[str] = (
+                'demand_instruments', 'supply_instruments', 'inverse_covariance_matrix',
+                'expected_xi_by_theta_jacobian', 'expected_omega_by_theta_jacobian', 'expected_prices',
+                'computation_time', 'draws', 'fp_converged', 'fp_iterations', 'contraction_evaluations'
+            )) -> dict:
+        """Convert these results into a dictionary that maps attribute names to values.
+
+        Once converted to a dictionary, these results can be saved to a file with :func:`pickle.dump`.
+
+        Parameters
+        ----------
+        attributes : `tuple of str, optional`
+            Name of attributes that will be added to the dictionary. By default, all :class:`OptimalInstrumentResults`
+            attributes are added except for :attr:`OptimalInstrumentResults.problem_results`,
+            :attr:`OptimalInstrumentResults.supply_shifter_formulation`, and
+            :attr:`OptimalInstrumentResults.demand_shifter_formulation`.
+
+        Returns
+        -------
+        `dict`
+            Mapping from attribute names to values.
+
+        Examples
+        --------
+            - :doc:`Tutorial </tutorial>`
+
+        """
+        return {k: getattr(self, k) for k in attributes}
 
     def to_problem(
             self, supply_shifter_formulation: Optional[Formulation] = None,

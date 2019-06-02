@@ -81,6 +81,13 @@ Solved problems return the following results class.
 
    ProblemResults
 
+The results can be converted into a dictionary.
+
+.. autosummary::
+   :toctree: _api
+
+   ProblemResults.to_dict
+
 The following methods test the validity of overidentifying and model restrictions.
 
 .. autosummary::
@@ -138,7 +145,12 @@ Parametric bootstrap computation returns the following class.
 
    BootstrappedResults
 
-This class has all of the same methods as :class:`ProblemResults`, except for :meth:`ProblemResults.bootstrap` and :meth:`ProblemResults.compute_optimal_instruments`.
+This class has all of the same methods as :class:`ProblemResults`, except for :meth:`ProblemResults.bootstrap` and :meth:`ProblemResults.compute_optimal_instruments`. It can also be converted into a dictionary.
+
+.. autosummary::
+   :toctree: _api
+
+   BootstrappedResults.to_dict
 
 
 Optimal Instrument Results Class
@@ -153,7 +165,14 @@ Optimal instrument computation returns the following results class.
 
    OptimalInstrumentResults
 
-The optimal instrument results can be converted into a :class:`Problem` with the following method.
+The results can be converted into a dictionary.
+
+.. autosummary::
+   :toctree: _api
+
+   OptimalInstrumentResults.to_dict
+
+They can also be converted into a :class:`Problem` with the following method.
 
 .. autosummary::
    :toctree: _api
@@ -201,7 +220,14 @@ Solved simulations return the following results class.
 
    SimulationResults
 
-The simulation results can be converted into a :class:`Problem` with the following method.
+The results can be converted into a dictionary.
+
+.. autosummary::
+   :toctree: _api
+
+   SimulationResults.to_dict
+
+They can also be converted into a :class:`Problem` with the following method.
 
 .. autosummary::
    :toctree: _api

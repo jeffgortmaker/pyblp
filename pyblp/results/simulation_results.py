@@ -30,7 +30,7 @@ class SimulationResults(StringRepresentation):
 
     Attributes
     ----------
-    simulation: `Simulation`
+    simulation : `Simulation`
         :class:`Simulation` that created these results.
     product_data : `recarray`
         Simulated :attr:`Simulation.product_data` that are updated with synthetic prices and shares.
@@ -91,6 +91,32 @@ class SimulationResults(StringRepresentation):
             self.contraction_evaluations.sum()
         ]
         return format_table(header, values, title="Simulation Results Summary")
+
+    def to_dict(
+            self, attributes: Sequence[str] = (
+                'product_data', 'delta', 'computation_time', 'fp_converged', 'fp_iterations', 'contraction_evaluations'
+            )) -> dict:
+        """Convert these results into a dictionary that maps attribute names to values.
+
+        Once converted to a dictionary, these results can be saved to a file with :func:`pickle.dump`.
+
+        Parameters
+        ----------
+        attributes : `tuple of str, optional`
+            Name of attributes that will be added to the dictionary. By default, all :class:`SimulationResults`
+            attributes are added except for :attr:`SimulationResults.simulation`.
+
+        Returns
+        -------
+        `dict`
+            Mapping from attribute names to values.
+
+        Examples
+        --------
+            - :doc:`Tutorial </tutorial>`
+
+        """
+        return {k: getattr(self, k) for k in attributes}
 
     def to_problem(
             self, product_formulations: Optional[Union[Formulation, Sequence[Optional[Formulation]]]] = None,

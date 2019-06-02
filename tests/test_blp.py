@@ -1,5 +1,7 @@
 """Primary tests."""
 
+import pickle
+import tempfile
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import warnings
 
@@ -106,6 +108,19 @@ def test_bootstrap(simulated_problem: SimulatedProblemFixture) -> None:
         lb, ub = np.percentile(bootstrapped_medians, [5, 95])
         np.testing.assert_array_less(np.squeeze(lb), np.squeeze(median) + 1e-14, err_msg=name)
         np.testing.assert_array_less(np.squeeze(median), np.squeeze(ub) + 1e-14, err_msg=name)
+
+
+@pytest.mark.usefixtures('simulated_problem')
+def test_result_serialization(simulated_problem: SimulatedProblemFixture) -> None:
+    """Test that result objects can be serialized after being converted to dictionaries."""
+    _, simulation_results, _, _, problem_results = simulated_problem
+    instrument_results = problem_results.compute_optimal_instruments()
+    bootstrapped_results = problem_results.bootstrap(draws=1, seed=0)
+    with tempfile.TemporaryFile() as handle:
+        pickle.dump(simulation_results.to_dict(), handle)
+        pickle.dump(problem_results.to_dict(), handle)
+        pickle.dump(instrument_results.to_dict(), handle)
+        pickle.dump(bootstrapped_results.to_dict(), handle)
 
 
 @pytest.mark.usefixtures('simulated_problem')
