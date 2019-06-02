@@ -152,9 +152,9 @@ def build_ownership(product_data: Mapping, kappa_specification: Optional[Callabl
 
 
 def build_blp_instruments(formulation: Formulation, product_data: Mapping) -> Array:
-    r"""Construct traditional excluded BLP instruments.
+    r"""Construct "sums of characteristics" excluded BLP instruments.
 
-    Traditional excluded BLP instruments are
+    Traditional "sums of characteristics" BLP instruments are
 
     .. math:: Z^\textit{BLP}(X) = [Z^\textit{BLP,Other}(X), Z^\textit{BLP,Rival}(X)],
 
@@ -199,7 +199,7 @@ def build_blp_instruments(formulation: Formulation, product_data: Mapping) -> Ar
     Returns
     -------
     `ndarray`
-        Traditional excluded BLP instruments, :math:`Z^\textit{BLP}(X)`.
+        Traditional "sums of characteristics" BLP instruments, :math:`Z^\textit{BLP}(X)`.
 
     Examples
     --------

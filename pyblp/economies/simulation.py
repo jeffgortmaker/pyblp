@@ -49,13 +49,13 @@ class Simulation(Economy):
     After variables are loaded or simulated, any unspecified integration nodes and weights, :math:`\nu` and :math:`w`,
     are constructed according to a specified :class:`Integration` configuration.
 
-    If excluded instruments are not specified, traditional BLP instruments are constructed. Demand-side instruments are
-    BLP instruments constructed by :func:`build_blp_instruments` from variables in :math:`X_1^x`, along with any supply
-    shifters (variables in :math:`X_3` but not :math:`X_1`). Supply side instruments are BLP instruments constructed
-    from variables in :math:`X_3`, along with any demand shifters (variables in :math:`X_1` but not :math:`X_3`). BLP
-    instruments will also be constructed from columns of ones if there is variation in :math:`J_t`, the number of
-    products per market. Any constant columns will be dropped. For example, if each firm owns exactly one product in
-    each market, the "rival" columns of BLP instruments will be zero and hence dropped.
+    If excluded instruments are not specified, traditional "sums of characteristics" BLP instruments are constructed.
+    Demand-side instruments are constructed by :func:`build_blp_instruments` from variables in :math:`X_1^x`, along with
+    any supply shifters (variables in :math:`X_3` but not :math:`X_1`). Supply side instruments are constructed from
+    variables in :math:`X_3`, along with any demand shifters (variables in :math:`X_1` but not :math:`X_3`). Instruments
+    will also be constructed from columns of ones if there is variation in :math:`J_t`, the number of products per
+    market. Any constant columns will be dropped. For example, if each firm owns exactly one product in each market, the
+    "rival" columns of instruments will be zero and hence dropped.
 
     .. note::
 
@@ -93,7 +93,8 @@ class Simulation(Economy):
 
             - **firm_ids** : (`object`) - IDs that associate products with firms.
 
-        If excluded instruments are specified, traditional BLP instruments will not be constructed:
+        If excluded instruments are specified, traditional "sums of characteristics" BLP instruments will not be
+        constructed:
 
             - **demand_instruments** : (`numeric`) - Excluded demand-side instruments, which, together with the
               formulated exogenous linear product characteristics, :math:`X_1^x`, constitute the full set of demand-side
@@ -400,7 +401,7 @@ class Simulation(Economy):
         J_variation = len({(market_ids == t).sum() for t in np.unique(market_ids)}) > 1
         blp_data = {'market_ids': market_ids, 'firm_ids': firm_ids, **numerical_mapping}
 
-        # construct excluded demand-side BLP instruments if they haven't already been specified
+        # construct excluded demand-side instruments if they haven't already been specified
         if demand_instruments is None:
             demand_instruments = np.zeros((market_ids.size, 0), options.dtype)
             demand_blp_formula = ' + '.join(['1' if J_variation else '0'] + sorted(X1_names))
@@ -412,7 +413,7 @@ class Simulation(Economy):
                 supply_shifters = build_matrix(Formulation(supply_shifter_formula), numerical_mapping)
                 demand_instruments = np.c_[demand_instruments, supply_shifters]
 
-        # construct excluded supply-side BLP instruments if they haven't already been specified
+        # construct excluded supply-side instruments if they haven't already been specified
         if supply_instruments is None:
             supply_instruments = np.zeros((market_ids.size, 0), options.dtype)
             supply_blp_formula = ' + '.join(['1' if J_variation else '0'] + sorted(X3_names))
