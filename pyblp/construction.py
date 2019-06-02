@@ -1,6 +1,6 @@
 """Data construction."""
 
-from typing import Any, Callable, Dict, Hashable, Iterator, List, Mapping, Optional
+from typing import Any, Callable, Dict, Iterator, List, Mapping, Optional
 
 import numpy as np
 
@@ -360,50 +360,58 @@ def build_differentiation_instruments(
     X = build_matrix(formulation, product_data)
     N, K = X.shape
 
-    # build distance matrices for each characteristic and market, nullifying distances between the same products
-    distances_mapping: Dict[int, Array] = {}
-    for k in range(K):
-        distances_mapping[k] = {}
-        for t, indices in market_indices.items():
-            x = X[indices][:, [k]]
-            distances = x - x.T
-            np.fill_diagonal(distances, np.nan)
-            distances_mapping[k][t] = distances
-
-    # compute standard deviations of pairwise differences across all markets
+    # for the local version, do a first pass to compute standard deviations of pairwise differences across all markets
     sd_mapping: Dict[int, Array] = {}
     if version == 'local':
         for k in range(K):
-            sd_mapping[k] = np.nanstd(np.hstack([d.flatten() for d in distances_mapping[k].values()]))
+            distances_count = distances_sum = squared_distances_sum = 0
+            for t, indices_t in market_indices.items():
+                x = X[indices_t][:, [k]]
+                distances = x - x.T
+                np.fill_diagonal(distances, np.nan)
+                distances_count += distances.size - x.size
+                distances_sum += np.nansum(distances)
+                squared_distances_sum += np.nansum(distances**2)
+            sd_mapping[k] = np.sqrt(squared_distances_sum / distances_count - (distances_sum / distances_count)**2)
 
-    # define a function that generates market-level terms used to create instruments
-    def generate_instrument_terms(t: Hashable) -> Iterator[Array]:
-        """Generate terms for a market that will be summed to create instruments."""
-        for k1 in range(K):
-            if version == 'quadratic':
-                for k2 in range(k1, K if interact else k1 + 1):
-                    yield np.nan_to_num(distances_mapping[k1][t]) * np.nan_to_num(distances_mapping[k2][t])
-            elif version == 'local':
-                with np.errstate(invalid='ignore'):
-                    close = np.nan_to_num(np.abs(distances_mapping[k1][t]) < sd_mapping[k1])
-                if not interact:
-                    yield close
-                else:
-                    for k2 in range(K):
-                        yield close * np.nan_to_num(distances_mapping[k2][t])
-            else:
-                raise ValueError("version must be 'local' or 'quadratic'.")
-
-    # create the instruments
+    # build instruments market-by-market to conserve memory
     other_blocks: List[List[Array]] = []
     rival_blocks: List[List[Array]] = []
     for t, indices_t in market_indices.items():
+        # build distance matrices for all characteristics
+        distances_mapping: Dict[int, Array] = {}
+        for k in range(K):
+            x = X[indices_t][:, [k]]
+            distances_mapping[k] = x - x.T
+            np.fill_diagonal(distances_mapping[k], np.nan)
+
+        # define a function that generates the terms used to create the instruments
+        def generate_instrument_terms() -> Iterator[Array]:
+            """Generate terms that will be summed to create instruments."""
+            for k1 in range(K):
+                if version == 'quadratic':
+                    for k2 in range(k1, K if interact else k1 + 1):
+                        yield np.nan_to_num(distances_mapping[k1]) * np.nan_to_num(distances_mapping[k2])
+                elif version == 'local':
+                    with np.errstate(invalid='ignore'):
+                        close = np.nan_to_num(np.abs(distances_mapping[k1]) < sd_mapping[k1])
+                    if not interact:
+                        yield close
+                    else:
+                        for k2 in range(K):
+                            yield close * np.nan_to_num(distances_mapping[k2])
+                else:
+                    raise ValueError("version must be 'local' or 'quadratic'.")
+
+        # append instrument blocks
         other_blocks.append([])
         rival_blocks.append([])
         ownership = firm_ids[indices_t] == firm_ids[indices_t].T
-        for term in generate_instrument_terms(t):
+        for term in generate_instrument_terms():
             other_blocks[-1].append((ownership * term).sum(axis=1, keepdims=True))
             rival_blocks[-1].append((~ownership * term).sum(axis=1, keepdims=True))
+
+    # stack the blocks
     return np.c_[np.block(other_blocks), np.block(rival_blocks)]
 
 
