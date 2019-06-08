@@ -124,43 +124,49 @@ class BootstrappedResults(Results):
             values.extend([self.fp_iterations.sum(), self.contraction_evaluations.sum()])
         return format_table(header, values, title="Bootstrapped Results Summary")
 
-    def _coerce_matrices(self, matrices: Any) -> Array:
+    def _coerce_matrices(self, matrices: Any, market_ids: Array) -> Array:
         """Coerce array-like stacked matrix tensors into a stacked matrix tensor and validate it."""
         matrices = np.atleast_3d(np.asarray(matrices, options.dtype))
-        if matrices.shape != (self.draws, self.problem.N, self.problem._max_J):
-            raise ValueError(f"matrices must be {self.draws} by {self.problem.N} by {self.problem._max_J}.")
+        rows = sum(i.size for t, i in self.problem._product_market_indices.items() if t in market_ids)
+        columns = max(i.size for t, i in self.problem._product_market_indices.items() if t in market_ids)
+        if matrices.shape != (self.draws, rows, columns):
+            raise ValueError(f"matrices must be {self.draws} by {rows} by {columns}.")
         return matrices
 
-    def _coerce_optional_costs(self, costs: Optional[Any]) -> Array:
+    def _coerce_optional_costs(self, costs: Optional[Any], market_ids: Array) -> Array:
         """Coerce optional array-like costs into a column vector tensor and validate it."""
         if costs is not None:
             costs = np.atleast_3d(np.asarray(costs, options.dtype))
-            if costs.shape != (self.draws, self.problem.N, 1):
-                raise ValueError(f"costs must be None or {self.draws} by {self.problem.N}.")
+            rows = sum(i.size for t, i in self.problem._product_market_indices.items() if t in market_ids)
+            if costs.shape != (self.draws, rows, 1):
+                raise ValueError(f"costs must be None or {self.draws} by {rows}.")
         return costs
 
-    def _coerce_optional_prices(self, prices: Optional[Any]) -> Array:
+    def _coerce_optional_prices(self, prices: Optional[Any], market_ids: Array) -> Array:
         """Coerce optional array-like prices into a column vector tensor and validate it."""
         if prices is not None:
             prices = np.atleast_3d(np.asarray(prices, options.dtype))
-            if prices.shape != (self.draws, self.problem.N, 1):
-                raise ValueError(f"prices must be None or {self.draws} by {self.problem.N}.")
+            rows = sum(i.size for t, i in self.problem._product_market_indices.items() if t in market_ids)
+            if prices.shape != (self.draws, rows, 1):
+                raise ValueError(f"prices must be None or {self.draws} by {rows}.")
         return prices
 
-    def _coerce_optional_shares(self, shares: Optional[Any]) -> Array:
+    def _coerce_optional_shares(self, shares: Optional[Any], market_ids: Array) -> Array:
         """Coerce optional array-like shares into a column vector tensor and validate it."""
         if shares is not None:
             shares = np.atleast_3d(np.asarray(shares, options.dtype))
-            if shares.shape != (self.draws, self.problem.N, 1):
-                raise ValueError(f"shares must be None or {self.draws} by {self.problem.N}.")
+            rows = sum(i.size for t, i in self.problem._product_market_indices.items() if t in market_ids)
+            if shares.shape != (self.draws, rows, 1):
+                raise ValueError(f"shares must be None or {self.draws} by {rows}.")
         return shares
 
     def _combine_arrays(
-            self, compute_market_results: Callable, fixed_args: Sequence = (), market_args: Sequence = ()) -> Array:
-        """Compute an array for each market and stack them into a single tensor. An array for a single market is
+            self, compute_market_results: Callable, market_ids: Array, fixed_args: Sequence = (),
+            market_args: Sequence = ()) -> Array:
+        """Compute arrays for one or all markets and stack them into a single tensor. An array for a single market is
         computed by passing fixed_args (identical for all markets) and market_args (matrices with as many rows as there
         are products that are restricted to the market) to compute_market_results, a ResultsMarket method that returns
-        the output for the market and a set of any errors encountered during computation.
+        the output for the market and any errors encountered during computation.
         """
         errors: List[Error] = []
 
@@ -185,18 +191,24 @@ class BootstrappedResults(Results):
                 if market_arg is None:
                     args_cs.append(market_arg)
                 elif len(market_arg.shape) == 2:
-                    args_cs.append(market_arg[self.problem._product_market_indices[s]])
+                    if market_ids.size == 1:
+                        args_cs.append(market_arg)
+                    else:
+                        args_cs.append(market_arg[self.problem._product_market_indices[s]])
                 else:
                     assert len(market_arg.shape) == 3
-                    args_cs.append(market_arg[c, self.problem._product_market_indices[s]])
+                    if market_ids.size == 1:
+                        args_cs.append(market_arg[c])
+                    else:
+                        args_cs.append(market_arg[c, self.problem._product_market_indices[s]])
             return (market_js, *fixed_args, *args_cs)
 
         # construct a mapping from draws and market IDs to market-specific arrays and compute the full matrix size
         matrix_mapping: Dict[Tuple[int, Hashable], Array] = {}
-        pairs = itertools.product(range(self.draws), self.problem.unique_market_ids)
-        generator = output_progress(
-            generate_items(pairs, market_factory, compute_market_results), self.draws * self.problem.T, start_time
-        )
+        pairs = itertools.product(range(self.draws), market_ids)
+        generator = generate_items(pairs, market_factory, compute_market_results)
+        if self.draws > 1 or market_ids.size > 1:
+            generator = output_progress(generator, self.draws * market_ids.size, start_time)
         for (d, t), (array_dt, errors_dt) in generator:
             matrix_mapping[(d, t)] = np.c_[array_dt]
             errors.extend(errors_dt)
@@ -208,16 +220,19 @@ class BootstrappedResults(Results):
             output("")
 
         # determine the number of rows and columns
-        row_count = sum(matrix_mapping[(0, t)].shape[0] for t in self.problem.unique_market_ids)
-        column_count = max(matrix_mapping[(0, t)].shape[1] for t in self.problem.unique_market_ids)
+        row_count = sum(matrix_mapping[(0, t)].shape[0] for t in market_ids)
+        column_count = max(matrix_mapping[(0, t)].shape[1] for t in market_ids)
 
         # preserve the original product order or the sorted market order when stacking the arrays
         combined = np.full((self.draws, row_count, column_count), np.nan, options.dtype)
         for (d, t), matrix_dt in matrix_mapping.items():
-            if row_count == self.problem.N:
+            if row_count == market_ids.size:
+                combined[d, market_ids == t, :matrix_dt.shape[1]] = matrix_dt
+            elif row_count == self.problem.N:
                 combined[d, self.problem._product_market_indices[t], :matrix_dt.shape[1]] = matrix_dt
             else:
-                combined[d, self.problem.unique_market_ids == t, :matrix_dt.shape[1]] = matrix_dt
+                assert market_ids.size == 1
+                combined[d] = matrix_dt
 
         # output how long it took to compute the arrays
         end_time = time.time()

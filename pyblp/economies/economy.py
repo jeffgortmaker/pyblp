@@ -193,20 +193,32 @@ class Economy(Container, StringRepresentation):
         if name not in names:
             raise NameError(f"The name '{name}' is not one of the underlying variables, {list(sorted(names))}.")
 
-    def _coerce_optional_firm_ids(self, firm_ids: Optional[Any]) -> Array:
-        """Coerce optional array-like firm IDs into a column vector and validate it."""
+    def _coerce_optional_firm_ids(self, firm_ids: Optional[Any], market_ids: Optional[Array] = None) -> Array:
+        """Coerce optional array-like firm IDs into a column vector and validate it. By default, assume that firm IDs
+        are for all markets.
+        """
         if firm_ids is not None:
             firm_ids = np.c_[np.asarray(firm_ids, options.dtype)]
-            if firm_ids.shape != (self.N, 1):
-                raise ValueError(f"firm_ids must be None or a {self.N}-vector.")
+            rows = self.N
+            if market_ids is not None:
+                rows = sum(i.size for t, i in self._product_market_indices.items() if t in market_ids)
+            if firm_ids.shape != (rows, 1):
+                raise ValueError(f"firm_ids must be None or a {rows}-vector.")
         return firm_ids
 
-    def _coerce_optional_ownership(self, ownership: Optional[Any]) -> Array:
-        """Coerce optional array-like firm IDs into a column vector and validate it."""
+    def _coerce_optional_ownership(self, ownership: Optional[Any], market_ids: Optional[Array] = None) -> Array:
+        """Coerce optional array-like ownership matrices into a stacked matrix and validate it. By default, assume that
+        ownership matrices are for all markets.
+        """
         if ownership is not None:
             ownership = np.c_[np.asarray(ownership, options.dtype)]
-            if ownership.shape != (self.N, self._max_J):
-                raise ValueError(f"ownership must be None or a {self.N} by {self._max_J} matrix.")
+            rows = self.N
+            columns = self._max_J
+            if market_ids is not None:
+                rows = sum(i.size for t, i in self._product_market_indices.items() if t in market_ids)
+                columns = max(i.size for t, i in self._product_market_indices.items() if t in market_ids)
+            if ownership.shape != (rows, columns):
+                raise ValueError(f"ownership must be None or a {rows} by {columns} matrix.")
         return ownership
 
     def _compute_true_X1(self, data_override: Optional[Mapping] = None, index: Optional[Array] = None) -> Array:

@@ -1225,43 +1225,49 @@ class ProblemResults(Results):
             errors.append(exceptions.OmegaByThetaJacobianReversionError(bad_jacobian_index))
         return omega_jacobian, errors
 
-    def _coerce_matrices(self, matrices: Any) -> Array:
+    def _coerce_matrices(self, matrices: Any, market_ids: Array) -> Array:
         """Coerce array-like stacked matrices into a stacked matrix and validate it."""
         matrices = np.c_[np.asarray(matrices, options.dtype)]
-        if matrices.shape != (self.problem.N, self.problem._max_J):
-            raise ValueError(f"matrices must be {self.problem.N} by {self.problem._max_J}.")
+        rows = sum(i.size for t, i in self.problem._product_market_indices.items() if t in market_ids)
+        columns = max(i.size for t, i in self.problem._product_market_indices.items() if t in market_ids)
+        if matrices.shape != (rows, columns):
+            raise ValueError(f"matrices must be {rows} by {columns}.")
         return matrices
 
-    def _coerce_optional_costs(self, costs: Optional[Any]) -> Array:
+    def _coerce_optional_costs(self, costs: Optional[Any], market_ids: Array) -> Array:
         """Coerce optional array-like costs into a column vector and validate it."""
         if costs is not None:
             costs = np.c_[np.asarray(costs, options.dtype)]
-            if costs.shape != (self.problem.N, 1):
-                raise ValueError(f"costs must be None or a {self.problem.N}-vector.")
+            rows = sum(i.size for t, i in self.problem._product_market_indices.items() if t in market_ids)
+            if costs.shape != (rows, 1):
+                raise ValueError(f"costs must be None or a {rows}-vector.")
         return costs
 
-    def _coerce_optional_prices(self, prices: Optional[Any]) -> Array:
+    def _coerce_optional_prices(self, prices: Optional[Any], market_ids: Array) -> Array:
         """Coerce optional array-like prices into a column vector and validate it."""
         if prices is not None:
             prices = np.c_[np.asarray(prices, options.dtype)]
-            if prices.shape != (self.problem.N, 1):
-                raise ValueError(f"prices must be None or a {self.problem.N}-vector.")
+            rows = sum(i.size for t, i in self.problem._product_market_indices.items() if t in market_ids)
+            if prices.shape != (rows, 1):
+                raise ValueError(f"prices must be None or a {rows}-vector.")
         return prices
 
-    def _coerce_optional_shares(self, shares: Optional[Any]) -> Array:
+    def _coerce_optional_shares(self, shares: Optional[Any], market_ids: Array) -> Array:
         """Coerce optional array-like shares into a column vector and validate it."""
         if shares is not None:
             shares = np.c_[np.asarray(shares, options.dtype)]
-            if shares.shape != (self.problem.N, 1):
-                raise ValueError(f"shares must be None or a {self.problem.N}-vector.")
+            rows = sum(i.size for t, i in self.problem._product_market_indices.items() if t in market_ids)
+            if shares.shape != (rows, 1):
+                raise ValueError(f"shares must be None or a {rows}-vector.")
         return shares
 
     def _combine_arrays(
-            self, compute_market_results: Callable, fixed_args: Sequence = (), market_args: Sequence = ()) -> Array:
-        """Compute an array for each market and stack them into a single matrix. An array for a single market is
+            self, compute_market_results: Callable, market_ids: Array, fixed_args: Sequence = (),
+            market_args: Sequence = ()) -> Array:
+        """Compute arrays for one or all markets and stack them into a single matrix. An array for a single market is
         computed by passing fixed_args (identical for all markets) and market_args (matrices with as many rows as there
         are products that are restricted to the market) to compute_market_results, a ResultsMarket method that returns
-        the output for the market and a set of any errors encountered during computation.
+        the output for the market any errors encountered during computation.
         """
         errors: List[Error] = []
 
@@ -1275,15 +1281,17 @@ class ProblemResults(Results):
             market_s = ResultsMarket(
                 self.problem, s, self._parameters, self.sigma, self.pi, self.rho, self.beta, self.delta, self._moments
             )
-            args_s = [None if a is None else a[indices_s] for a in market_args]
+            if market_ids.size == 1:
+                args_s = market_args
+            else:
+                args_s = [None if a is None else a[indices_s] for a in market_args]
             return (market_s, *fixed_args, *args_s)
 
         # construct a mapping from market IDs to market-specific arrays
         matrix_mapping: Dict[Hashable, Array] = {}
-        generator = output_progress(
-            generate_items(self.problem.unique_market_ids, market_factory, compute_market_results), self.problem.T,
-            start_time
-        )
+        generator = generate_items(market_ids, market_factory, compute_market_results)
+        if market_ids.size > 1:
+            generator = output_progress(generator, market_ids.size, start_time)
         for t, (array_t, errors_t) in generator:
             matrix_mapping[t] = np.c_[array_t]
             errors.extend(errors_t)
@@ -1295,16 +1303,19 @@ class ProblemResults(Results):
             output("")
 
         # determine the number of rows and columns
-        row_count = sum(matrix_mapping[t].shape[0] for t in self.problem.unique_market_ids)
-        column_count = max(matrix_mapping[t].shape[1] for t in self.problem.unique_market_ids)
+        row_count = sum(matrix_mapping[t].shape[0] for t in market_ids)
+        column_count = max(matrix_mapping[t].shape[1] for t in market_ids)
 
         # preserve the original product order or the sorted market order when stacking the arrays
         combined = np.full((row_count, column_count), np.nan, options.dtype)
         for t, matrix_t in matrix_mapping.items():
-            if row_count == self.problem.N:
+            if row_count == market_ids.size:
+                combined[market_ids == t, :matrix_t.shape[1]] = matrix_t
+            elif row_count == self.problem.N:
                 combined[self.problem._product_market_indices[t], :matrix_t.shape[1]] = matrix_t
             else:
-                combined[self.problem.unique_market_ids == t, :matrix_t.shape[1]] = matrix_t
+                assert market_ids.size == 1
+                combined = matrix_t
 
         # output how long it took to compute the arrays
         end_time = time.time()

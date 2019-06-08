@@ -3,6 +3,8 @@
 import abc
 from typing import Any, Callable, Optional, Sequence, TYPE_CHECKING
 
+import numpy as np
+
 from ..configurations.iteration import Iteration
 from ..markets.results_market import ResultsMarket
 from ..moments import EconomyMoments
@@ -28,31 +30,41 @@ class Results(abc.ABC, StringRepresentation):
         self._parameters = parameters
         self._moments = moments
 
+    def _select_market_ids(self, market_id: Optional[Any] = None) -> Array:
+        """Select either a single market ID or all unique IDs."""
+        if market_id is None:
+            return self.problem.unique_market_ids
+        if market_id in self.problem.unique_market_ids:
+            return np.array(market_id, np.object)
+        raise ValueError(f"market_id must be None or one of {list(sorted(self.problem.unique_market_ids))}.")
+
     @abc.abstractmethod
-    def _coerce_matrices(self, matrices: Any) -> Array:
+    def _coerce_matrices(self, matrices: Any, market_ids: Array) -> Array:
         """Coerce array-like stacked arrays into a stacked array and validate it."""
 
     @abc.abstractmethod
-    def _coerce_optional_costs(self, costs: Optional[Any]) -> Array:
+    def _coerce_optional_costs(self, costs: Optional[Any], market_ids: Array) -> Array:
         """Coerce optional array-like costs into an array and validate it."""
 
     @abc.abstractmethod
-    def _coerce_optional_prices(self, prices: Optional[Any]) -> Array:
+    def _coerce_optional_prices(self, prices: Optional[Any], market_ids: Array) -> Array:
         """Coerce optional array-like prices into an array and validate it."""
 
     @abc.abstractmethod
-    def _coerce_optional_shares(self, shares: Optional[Any]) -> Array:
+    def _coerce_optional_shares(self, shares: Optional[Any], market_ids: Array) -> Array:
         """Coerce optional array-like shares into an array and validate it."""
 
     @abc.abstractmethod
     def _combine_arrays(
-            self, compute_market_results: Callable, fixed_args: Sequence = (), market_args: Sequence = ()) -> Array:
-        """Combine arrays for each market, which are computed by passing fixed_args (identical for all markets) and
-        market_args (arrays that need to be restricted to markets) to compute_market_results, a ResultsMarket method
-        that returns the output for the market and a set of any errors encountered during computation.
+            self, compute_market_results: Callable, market_ids: Array, fixed_args: Sequence = (),
+            market_args: Sequence = ()) -> Array:
+        """Combine arrays from one or all markets, which are computed by passing fixed_args (identical for all markets)
+        and market_args (arrays that need to be restricted to markets) to compute_market_results, a ResultsMarket method
+        that returns the output for the market and any errors encountered during computation.
         """
 
-    def compute_aggregate_elasticities(self, factor: float = 0.1, name: str = 'prices') -> Array:
+    def compute_aggregate_elasticities(
+            self, factor: float = 0.1, name: str = 'prices', market_id: Optional[Any] = None) -> Array:
         r"""Estimate aggregate elasticities of demand, :math:`\mathscr{E}`, with respect to a variable, :math:`x`.
 
         In market :math:`t`, the aggregate elasticity of demand is
@@ -68,12 +80,15 @@ class Results(abc.ABC, StringRepresentation):
             The scalar factor, :math:`\Delta`.
         name : `str, optional`
             Name of the variable, :math:`x`. By default, :math:`x = p`, prices.
+        market_id : `object, optional`
+            ID of the market in which to compute aggregate elasticities. By default, aggregate elasticities are computed
+            in all markets and stacked.
 
         Returns
         -------
         `ndarray`
-            Estimates of aggregate elasticities of demand, :math:`\mathscr{E}`, for all markets. Rows are in the same
-            order as :attr:`Problem.unique_market_ids`.
+            Estimates of aggregate elasticities of demand, :math:`\mathscr{E}`. If ``market_id`` was not specified, rows
+            are in the same order as :attr:`Problem.unique_market_ids`.
 
         Examples
         --------
@@ -84,9 +99,12 @@ class Results(abc.ABC, StringRepresentation):
         if not isinstance(factor, float):
             raise ValueError("factor must be a float.")
         self.problem._validate_name(name)
-        return self._combine_arrays(ResultsMarket.safely_compute_aggregate_elasticity, fixed_args=[factor, name])
+        market_ids = self._select_market_ids(market_id)
+        return self._combine_arrays(
+            ResultsMarket.safely_compute_aggregate_elasticity, market_ids, fixed_args=[factor, name]
+        )
 
-    def compute_elasticities(self, name: str = 'prices') -> Array:
+    def compute_elasticities(self, name: str = 'prices', market_id: Optional[Any] = None) -> Array:
         r"""Estimate matrices of elasticities of demand, :math:`\varepsilon`, with respect to a variable, :math:`x`.
 
         For each market, the value in row :math:`j` and column :math:`k` of :math:`\varepsilon` is
@@ -97,13 +115,17 @@ class Results(abc.ABC, StringRepresentation):
         ----------
         name : `str, optional`
             Name of the variable, :math:`x`. By default, :math:`x = p`, prices.
+        market_id : `object, optional`
+            ID of the market in which to compute elasticities. By default, elasticities are computed in all markets and
+            stacked.
 
         Returns
         -------
         `ndarray`
-            Stacked :math:`J_t \times J_t` estimated matrices of elasticities of demand, :math:`\varepsilon`, for each
-            market :math:`t`. Columns for a market are in the same order as products for the market. If a market has
-            fewer products than others, extra columns will contain ``numpy.nan``.
+            Estimated :math:`J_t \times J_t` matrices of elasticities of demand, :math:`\varepsilon`. If ``market_id``
+            was not specified, matrices are estimated in each market :math:`t` and stacked. Columns for a market are in
+            the same order as products for the market. If a market has fewer products than others, extra columns will
+            contain ``numpy.nan``.
 
         Examples
         --------
@@ -112,9 +134,10 @@ class Results(abc.ABC, StringRepresentation):
         """
         output(f"Computing elasticities with respect to {name} ...")
         self.problem._validate_name(name)
-        return self._combine_arrays(ResultsMarket.safely_compute_elasticities, fixed_args=[name])
+        market_ids = self._select_market_ids(market_id)
+        return self._combine_arrays(ResultsMarket.safely_compute_elasticities, market_ids, fixed_args=[name])
 
-    def compute_diversion_ratios(self, name: str = 'prices') -> Array:
+    def compute_diversion_ratios(self, name: str = 'prices', market_id: Optional[Any] = None) -> Array:
         r"""Estimate matrices of diversion ratios, :math:`\mathscr{D}`, with respect to a variable, :math:`x`.
 
         Diversion ratios to the outside good are reported on diagonals. For each market, the value in row :math:`j` and
@@ -128,13 +151,17 @@ class Results(abc.ABC, StringRepresentation):
         ----------
         name : `str, optional`
             Name of the variable, :math:`x`. By default, :math:`x = p`, prices.
+        market_id : `object, optional`
+            ID of the market in which to compute diversion ratios. By default, diversion ratios are computed in all
+            markets and stacked.
 
         Returns
         -------
         `ndarray`
-            Stacked :math:`J_t \times J_t` estimated matrices of diversion ratios, :math:`\mathscr{D}`, for all markets.
-            Columns for a market are in the same order as products for the market. If a market has fewer products than
-            others, extra columns will contain ``numpy.nan``.
+            Estimated :math:`J_t \times J_t` matrices of diversion ratios, :math:`\mathscr{D}`. If ``market_id`` was not
+            specified, matrices are estimated in each market :math:`t` and stacked. Columns for a market are in the same
+            order as products for the market. If a market has fewer products than others, extra columns will contain
+            ``numpy.nan``.
 
         Examples
         --------
@@ -143,9 +170,10 @@ class Results(abc.ABC, StringRepresentation):
         """
         output(f"Computing diversion ratios with respect to {name} ...")
         self.problem._validate_name(name)
-        return self._combine_arrays(ResultsMarket.safely_compute_diversion_ratios, fixed_args=[name])
+        market_ids = self._select_market_ids(market_id)
+        return self._combine_arrays(ResultsMarket.safely_compute_diversion_ratios, market_ids, fixed_args=[name])
 
-    def compute_long_run_diversion_ratios(self) -> Array:
+    def compute_long_run_diversion_ratios(self, market_id: Optional[Any] = None) -> Array:
         r"""Estimate matrices of long-run diversion ratios, :math:`\bar{\mathscr{D}}`.
 
         Long-run diversion ratios to the outside good are reported on diagonals. For each market, the value in row
@@ -158,13 +186,17 @@ class Results(abc.ABC, StringRepresentation):
 
         Parameters
         ----------
+        market_id : `object, optional`
+            ID of the market in which to compute long-run diversion ratios. By default, long-run diversion ratios are
+            computed in all markets and stacked.
 
         Returns
         -------
         `ndarray`
-            Stacked :math:`J_t \times J_t` estimated matrices of long-run diversion ratios, :math:`\bar{\mathscr{D}}`,
-            for all markets. Columns for a market are in the same order as products for the market. If a market has
-            fewer products than others, extra columns will contain ``numpy.nan``.
+            Estimated :math:`J_t \times J_t` matrices of long-run diversion ratios, :math:`\bar{\mathscr{D}}`. If
+            ``market_id`` was not specified, matrices are estimated in each market :math:`t` and stacked. Columns for a
+            market are in the same order as products for the market. If a market has fewer products than others, extra
+            columns will contain ``numpy.nan``.
 
         Examples
         --------
@@ -172,7 +204,8 @@ class Results(abc.ABC, StringRepresentation):
 
         """
         output("Computing long run mean diversion ratios ...")
-        return self._combine_arrays(ResultsMarket.safely_compute_long_run_diversion_ratios)
+        market_ids = self._select_market_ids(market_id)
+        return self._combine_arrays(ResultsMarket.safely_compute_long_run_diversion_ratios, market_ids)
 
     def extract_diagonals(self, matrices: Any) -> Array:
         r"""Extract diagonals from stacked :math:`J_t \times J_t` matrices for each market :math:`t`.
@@ -188,9 +221,9 @@ class Results(abc.ABC, StringRepresentation):
         Returns
         -------
         `ndarray`
-            Stacked diagonals for all markets. If the matrices are estimates of :math:`\varepsilon`, a diagonal is a
-            market's own elasticities of demand; if they are estimates of :math:`\mathscr{D}` or
-            :math:`\bar{\mathscr{D}}`, a diagonal is a market's diversion ratios to the outside good.
+            Stacked matrix diagonals. If the matrices are estimates of :math:`\varepsilon`, a diagonal is a market's own
+            elasticities of demand; if they are estimates of :math:`\mathscr{D}` or :math:`\bar{\mathscr{D}}`, a
+            diagonal is a market's diversion ratios to the outside good.
 
         Examples
         --------
@@ -198,8 +231,9 @@ class Results(abc.ABC, StringRepresentation):
 
         """
         output("Extracting diagonals ...")
-        matrices = self._coerce_matrices(matrices)
-        return self._combine_arrays(ResultsMarket.safely_extract_diagonal, market_args=[matrices])
+        market_ids = self._select_market_ids()
+        matrices = self._coerce_matrices(matrices, market_ids)
+        return self._combine_arrays(ResultsMarket.safely_extract_diagonal, market_ids, market_args=[matrices])
 
     def extract_diagonal_means(self, matrices: Any) -> Array:
         r"""Extract means of diagonals from stacked :math:`J_t \times J_t` matrices for each market :math:`t`.
@@ -215,8 +249,8 @@ class Results(abc.ABC, StringRepresentation):
         Returns
         -------
         `ndarray`
-            Stacked means of diagonals for all markets. If the matrices are estimates of :math:`\varepsilon`, the mean
-            of a diagonal is a market's mean own elasticity of demand; if they are estimates of :math:`\mathscr{D}` or
+            Stacked diagonal means. If the matrices are estimates of :math:`\varepsilon`, the mean of a diagonal is a
+            market's mean own elasticity of demand; if they are estimates of :math:`\mathscr{D}` or
             :math:`\bar{\mathscr{D}}`, the mean of a diagonal is a market's mean diversion ratio to the outside good.
             Rows are in the same order as :attr:`Problem.unique_market_ids`.
 
@@ -226,15 +260,22 @@ class Results(abc.ABC, StringRepresentation):
 
         """
         output("Extracting diagonal means ...")
-        matrices = self._coerce_matrices(matrices)
-        return self._combine_arrays(ResultsMarket.safely_extract_diagonal_mean, market_args=[matrices])
+        market_ids = self._select_market_ids()
+        matrices = self._coerce_matrices(matrices, market_ids)
+        return self._combine_arrays(ResultsMarket.safely_extract_diagonal_mean, market_ids, market_args=[matrices])
 
-    def compute_costs(self) -> Array:
+    def compute_costs(self, market_id: Optional[Any] = None) -> Array:
         r"""Estimate marginal costs, :math:`c`.
 
         Marginal costs are computed with the :math:`\eta`-markup equation in :eq:`eta`:
 
         .. math:: c = p - \eta.
+
+        Parameters
+        ----------
+        market_id : `object, optional`
+            ID of the market in which to compute marginal costs. By default, marginal costs are computed in all markets
+            and stacked.
 
         Returns
         -------
@@ -247,11 +288,12 @@ class Results(abc.ABC, StringRepresentation):
 
         """
         output("Computing marginal costs ...")
-        return self._combine_arrays(ResultsMarket.safely_compute_costs)
+        market_ids = self._select_market_ids(market_id)
+        return self._combine_arrays(ResultsMarket.safely_compute_costs, market_ids)
 
     def compute_approximate_prices(
-            self, firm_ids: Optional[Any] = None, ownership: Optional[Any] = None, costs: Optional[Any] = None) -> (
-            Array):
+            self, firm_ids: Optional[Any] = None, ownership: Optional[Any] = None, costs: Optional[Any] = None,
+            market_id: Optional[Any] = None) -> Array:
         r"""Approximate equilibrium prices after firm or cost changes, :math:`p^*`, under the assumption that shares and
         their price derivatives are unaffected by such changes.
 
@@ -277,6 +319,9 @@ class Results(abc.ABC, StringRepresentation):
         costs : `array-like, optional`
             Potentially changed marginal costs, :math:`c^*`. By default, unchanged marginal costs are computed with
             :meth:`ProblemResults.compute_costs`.
+        market_id : `object, optional`
+            ID of the market in which to compute approximate equilibrium prices. By default, approximate equilibrium
+            prices are computed in all markets and stacked.
 
         Returns
         -------
@@ -289,16 +334,19 @@ class Results(abc.ABC, StringRepresentation):
 
         """
         output("Solving for approximate equilibrium prices ...")
-        firm_ids = self.problem._coerce_optional_firm_ids(firm_ids)
-        ownership = self.problem._coerce_optional_ownership(ownership)
-        costs = self._coerce_optional_costs(costs)
+        market_ids = self._select_market_ids(market_id)
+        firm_ids = self.problem._coerce_optional_firm_ids(firm_ids, market_ids)
+        ownership = self.problem._coerce_optional_ownership(ownership, market_ids)
+        costs = self._coerce_optional_costs(costs, market_ids)
         return self._combine_arrays(
-            ResultsMarket.safely_compute_approximate_equilibrium_prices, market_args=[firm_ids, ownership, costs]
+            ResultsMarket.safely_compute_approximate_equilibrium_prices, market_ids,
+            market_args=[firm_ids, ownership, costs]
         )
 
     def compute_prices(
             self, firm_ids: Optional[Any] = None, ownership: Optional[Any] = None, costs: Optional[Any] = None,
-            prices: Optional[Any] = None, iteration: Optional[Iteration] = None) -> Array:
+            prices: Optional[Any] = None, iteration: Optional[Iteration] = None, market_id: Optional[Any] = None) -> (
+            Array):
         r"""Estimate equilibrium prices after firm or cost changes, :math:`p^*`.
 
         .. note::
@@ -339,6 +387,9 @@ class Results(abc.ABC, StringRepresentation):
             :class:`Iteration` configuration for how to solve the fixed point problem in each market. By default,
             ``Iteration('simple', {'atol': 1e-12})`` is used. Analytic Jacobians are not supported for solving this
             system.
+        market_id : `object, optional`
+            ID of the market in which to compute equilibrium prices. By default, equilibrium prices are computed in all
+            markets and stacked.
 
         Returns
         -------
@@ -351,10 +402,11 @@ class Results(abc.ABC, StringRepresentation):
 
         """
         output("Solving for equilibrium prices ...")
-        firm_ids = self.problem._coerce_optional_firm_ids(firm_ids)
-        ownership = self.problem._coerce_optional_ownership(ownership)
-        costs = self._coerce_optional_costs(costs)
-        prices = self._coerce_optional_prices(prices)
+        market_ids = self._select_market_ids(market_id)
+        firm_ids = self.problem._coerce_optional_firm_ids(firm_ids, market_ids)
+        ownership = self.problem._coerce_optional_ownership(ownership, market_ids)
+        costs = self._coerce_optional_costs(costs, market_ids)
+        prices = self._coerce_optional_prices(prices, market_ids)
         if iteration is None:
             iteration = Iteration('simple', {'atol': 1e-12})
         elif not isinstance(iteration, Iteration):
@@ -362,11 +414,11 @@ class Results(abc.ABC, StringRepresentation):
         elif iteration._compute_jacobian:
             raise ValueError("Analytic Jacobians are not supported for solving this system.")
         return self._combine_arrays(
-            ResultsMarket.safely_compute_prices, fixed_args=[iteration],
+            ResultsMarket.safely_compute_prices, market_ids, fixed_args=[iteration],
             market_args=[firm_ids, ownership, costs, prices]
         )
 
-    def compute_shares(self, prices: Optional[Any] = None) -> Array:
+    def compute_shares(self, prices: Optional[Any] = None, market_id: Optional[Any] = None) -> Array:
         r"""Estimate shares evaluated at specified prices.
 
         .. note::
@@ -380,6 +432,8 @@ class Results(abc.ABC, StringRepresentation):
         prices : `array-like`
             Prices at which to evaluate shares, such as equilibrium prices, :math:`p^*`, computed by
             :meth:`ProblemResults.compute_prices`. By default, unchanged prices are used.
+        market_id : `object, optional`
+            ID of the market in which to compute shares. By default, shares are computed in all markets and stacked.
 
         Returns
         -------
@@ -392,10 +446,13 @@ class Results(abc.ABC, StringRepresentation):
 
         """
         output("Computing shares ...")
-        prices = self._coerce_optional_prices(prices)
-        return self._combine_arrays(ResultsMarket.safely_compute_shares, market_args=[prices])
+        market_ids = self._select_market_ids(market_id)
+        prices = self._coerce_optional_prices(prices, market_ids)
+        return self._combine_arrays(ResultsMarket.safely_compute_shares, market_ids, market_args=[prices])
 
-    def compute_hhi(self, firm_ids: Optional[Any] = None, shares: Optional[Any] = None) -> Array:
+    def compute_hhi(
+            self, firm_ids: Optional[Any] = None, shares: Optional[Any] = None, market_id: Optional[Any] = None) -> (
+            Array):
         r"""Estimate Herfindahl-Hirschman Indices, :math:`\text{HHI}`.
 
         The index in market :math:`t` is
@@ -409,12 +466,14 @@ class Results(abc.ABC, StringRepresentation):
         shares : `array-like, optional`
             Shares, :math:`s`, such as those computed by :meth:`ProblemResults.compute_shares`. By default, unchanged
             shares are used.
+        market_id : `object, optional`
+            ID of the market in which to compute the index. By default, indices are computed in all markets and stacked.
 
         Returns
         -------
         `ndarray`
-            Estimated Herfindahl-Hirschman Indices, :math:`\text{HHI}`, for all markets. Rows are in the same order as
-            :attr:`Problem.unique_market_ids`.
+            Estimated Herfindahl-Hirschman Indices, :math:`\text{HHI}`. If ``market_ids`` was not specified, rows are in
+            the same order as :attr:`Problem.unique_market_ids`.
 
         Examples
         --------
@@ -422,11 +481,13 @@ class Results(abc.ABC, StringRepresentation):
 
         """
         output("Computing HHI ...")
-        firm_ids = self.problem._coerce_optional_firm_ids(firm_ids)
-        shares = self._coerce_optional_shares(shares)
-        return self._combine_arrays(ResultsMarket.safely_compute_hhi, market_args=[firm_ids, shares])
+        market_ids = self._select_market_ids(market_id)
+        firm_ids = self.problem._coerce_optional_firm_ids(firm_ids, market_ids)
+        shares = self._coerce_optional_shares(shares, market_ids)
+        return self._combine_arrays(ResultsMarket.safely_compute_hhi, market_ids, market_args=[firm_ids, shares])
 
-    def compute_markups(self, prices: Optional[Any] = None, costs: Optional[Any] = None) -> Array:
+    def compute_markups(
+            self, prices: Optional[Any] = None, costs: Optional[Any] = None, market_id: Optional[Any] = None) -> Array:
         r"""Estimate markups, :math:`\mathscr{M}`.
 
         The markup of product :math:`j` in market :math:`t` is
@@ -441,6 +502,8 @@ class Results(abc.ABC, StringRepresentation):
         costs : `array-like`
             Marginal costs, :math:`c`. By default, marginal costs are computed with
             :meth:`ProblemResults.compute_costs`.
+        market_id : `object, optional`
+            ID of the market in which to compute markups. By default, markups are computed in all markets and stacked.
 
         Returns
         -------
@@ -453,12 +516,14 @@ class Results(abc.ABC, StringRepresentation):
 
         """
         output("Computing markups ...")
-        prices = self._coerce_optional_prices(prices)
-        costs = self._coerce_optional_costs(costs)
-        return self._combine_arrays(ResultsMarket.safely_compute_markups, market_args=[prices, costs])
+        market_ids = self._select_market_ids(market_id)
+        prices = self._coerce_optional_prices(prices, market_ids)
+        costs = self._coerce_optional_costs(costs, market_ids)
+        return self._combine_arrays(ResultsMarket.safely_compute_markups, market_ids, market_args=[prices, costs])
 
     def compute_profits(
-            self, prices: Optional[Any] = None, shares: Optional[Any] = None, costs: Optional[Any] = None) -> Array:
+            self, prices: Optional[Any] = None, shares: Optional[Any] = None, costs: Optional[Any] = None,
+            market_id: Optional[Any] = None) -> Array:
         r"""Estimate population-normalized gross expected profits, :math:`\pi`.
 
         The profit from product :math:`j` in market :math:`t` is
@@ -476,6 +541,8 @@ class Results(abc.ABC, StringRepresentation):
         costs : `array-like`
             Marginal costs, :math:`c`. By default, marginal costs are computed with
             :meth:`ProblemResults.compute_costs`.
+        market_id : `object, optional`
+            ID of the market in which to compute profits. By default, profits are computed in all markets and stacked.
 
         Returns
         -------
@@ -488,12 +555,15 @@ class Results(abc.ABC, StringRepresentation):
 
         """
         output("Computing profits ...")
-        prices = self._coerce_optional_prices(prices)
-        shares = self._coerce_optional_shares(shares)
-        costs = self._coerce_optional_costs(costs)
-        return self._combine_arrays(ResultsMarket.safely_compute_profits, market_args=[prices, shares, costs])
+        market_ids = self._select_market_ids(market_id)
+        prices = self._coerce_optional_prices(prices, market_ids)
+        shares = self._coerce_optional_shares(shares, market_ids)
+        costs = self._coerce_optional_costs(costs, market_ids)
+        return self._combine_arrays(
+            ResultsMarket.safely_compute_profits, market_ids, market_args=[prices, shares, costs]
+        )
 
-    def compute_consumer_surpluses(self, prices: Optional[Any] = None) -> Array:
+    def compute_consumer_surpluses(self, prices: Optional[Any] = None, market_id: Optional[Any] = None) -> Array:
         r"""Estimate population-normalized consumer surpluses, :math:`\text{CS}`.
 
         Assuming away nonlinear income effects, the surplus in market :math:`t` is
@@ -528,12 +598,15 @@ class Results(abc.ABC, StringRepresentation):
         prices : `array-like, optional`
             Prices at which utilities and price derivatives will be evaluated, such as equilibrium prices, :math:`p^*`,
             computed by :meth:`ProblemResults.compute_prices`. By default, unchanged prices are used.
+        market_id : `object, optional`
+            ID of the market in which to compute consumer surplus. By default, consumer surpluses are computed in all
+            markets and stacked.
 
         Returns
         -------
         `ndarray`
-            Estimated population-normalized consumer surpluses, :math:`\text{CS}`, for all markets. Rows are in the same
-            order as :attr:`Problem.unique_market_ids`.
+            Estimated population-normalized consumer surpluses, :math:`\text{CS}`. If ``market_ids`` was not specified,
+            rows are in the same order as :attr:`Problem.unique_market_ids`.
 
         Examples
         --------
@@ -541,5 +614,6 @@ class Results(abc.ABC, StringRepresentation):
 
         """
         output("Computing consumer surpluses with the equation that assumes away nonlinear income effects ...")
-        prices = self._coerce_optional_prices(prices)
-        return self._combine_arrays(ResultsMarket.safely_compute_consumer_surplus, market_args=[prices])
+        market_ids = self._select_market_ids(market_id)
+        prices = self._coerce_optional_prices(prices, market_ids)
+        return self._combine_arrays(ResultsMarket.safely_compute_consumer_surplus, market_ids, market_args=[prices])

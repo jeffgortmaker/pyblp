@@ -86,19 +86,23 @@ def test_optimal_instruments(simulated_problem: SimulatedProblemFixture, compute
 @pytest.mark.usefixtures('simulated_problem')
 def test_bootstrap(simulated_problem: SimulatedProblemFixture) -> None:
     """Test that post-estimation output medians are within 95% parametric bootstrap confidence intervals."""
-    _, simulation_results, _, _, results = simulated_problem
+    _, _, problem, _, results = simulated_problem
 
     # create bootstrapped results (use only a few draws for speed)
     bootstrapped_results = results.bootstrap(draws=100, seed=0)
 
     # test that post-estimation outputs are within 95% confidence intervals
-    merger_ids = np.where(simulation_results.product_data.firm_ids == 1, 0, simulation_results.product_data.firm_ids)
+    t = problem.products.market_ids[0]
+    merger_ids = np.where(problem.products.firm_ids == 1, 0, problem.products.firm_ids)
+    merger_ids_t = merger_ids[problem.products.market_ids == t]
     method_mapping = {
-        'aggregate_elasticities': lambda r: r.compute_aggregate_elasticities(),
-        'own_elasticity_means': lambda r: r.extract_diagonal_means(r.compute_elasticities()),
-        'own_long_run_diversion_ratios': lambda r: r.extract_diagonals(r.compute_long_run_diversion_ratios()),
-        'approximate_prices': lambda r: r.compute_approximate_prices(merger_ids),
-        'consumer_surpluses': lambda r: r.compute_consumer_surpluses()
+        "aggregate elasticities": lambda r: r.compute_aggregate_elasticities(),
+        "consumer surpluses": lambda r: r.compute_consumer_surpluses(),
+        "approximate prices": lambda r: r.compute_approximate_prices(merger_ids),
+        "own elasticities": lambda r: r.extract_diagonals(r.compute_elasticities()),
+        "aggregate elasticity in t": lambda r: r.compute_aggregate_elasticities(market_id=t),
+        "consumer surplus in t": lambda r: r.compute_consumer_surpluses(market_id=t),
+        "approximate prices in t": lambda r: r.compute_approximate_prices(merger_ids_t, market_id=t)
     }
     for name, method in method_mapping.items():
         values = method(results)
@@ -441,36 +445,33 @@ def test_shares(simulated_problem: SimulatedProblemFixture) -> None:
 @pytest.mark.usefixtures('simulated_problem')
 def test_shares_by_prices_jacobian(simulated_problem: SimulatedProblemFixture) -> None:
     """Use central finite differences to test that analytic values in the Jacobian of shares with respect to prices are
-    essentially equal..
+    essentially equal.
     """
     simulation, simulation_results, _, _, results = simulated_problem
     product_data = simulation_results.product_data
 
+    # only do the test for a single market
+    t = product_data.market_ids[0]
+    shares = product_data.shares[product_data.market_ids.flat == t]
+    prices = product_data.prices[product_data.market_ids.flat == t]
+
     # extract the Jacobian from the analytic expression for elasticities
-    exact = np.nan_to_num(results.compute_elasticities())
-    for t in simulation.unique_market_ids:
-        prices_t = product_data.prices[product_data.market_ids.flat == t]
-        shares_t = product_data.shares[product_data.market_ids.flat == t]
-        exact[product_data.market_ids.flat == t, :prices_t.size] /= prices_t.T / shares_t
+    exact = results.compute_elasticities(market_id=t) * shares / prices.T
 
     # estimate the Jacobian with central finite differences
     estimated = np.zeros_like(exact)
     change = np.sqrt(np.finfo(np.float64).eps)
     for index in range(estimated.shape[1]):
-        prices1 = product_data.prices.copy()
-        prices2 = product_data.prices.copy()
-        for t in simulation.unique_market_ids:
-            if index < np.sum(product_data.market_ids.flat == t):
-                prices1_t = prices1[product_data.market_ids.flat == t]
-                prices2_t = prices2[product_data.market_ids.flat == t]
-                prices1_t[index] += change / 2
-                prices2_t[index] -= change / 2
-                prices1[product_data.market_ids.flat == t] = prices1_t
-                prices2[product_data.market_ids.flat == t] = prices2_t
-        estimated[:, [index]] = (results.compute_shares(prices1) - results.compute_shares(prices2)) / change
+        prices1 = prices.copy()
+        prices2 = prices.copy()
+        prices1[index] += change / 2
+        prices2[index] -= change / 2
+        shares1 = results.compute_shares(prices1, market_id=t)
+        shares2 = results.compute_shares(prices2, market_id=t)
+        estimated[:, [index]] = (shares1 - shares2) / change
 
-    # compare the two sets of elasticity matrices
-    np.testing.assert_allclose(exact, estimated, atol=1e-7, rtol=0)
+    # compare the two Jacobians
+    np.testing.assert_allclose(exact, estimated, atol=1e-8, rtol=0)
 
 
 @pytest.mark.usefixtures('simulated_problem')
@@ -503,35 +504,41 @@ def test_diversion_ratios(simulated_problem: SimulatedProblemFixture) -> None:
     """Test simulated diversion ratio rows sum to one."""
     simulation, _, _, _, results = simulated_problem
 
+    # only do the test for a single market
+    t = simulation.products.market_ids[0]
+
     # test price-based ratios
-    ratios = np.nan_to_num(results.compute_diversion_ratios())
-    long_run_ratios = np.nan_to_num(results.compute_long_run_diversion_ratios())
+    ratios = results.compute_diversion_ratios(market_id=t)
+    long_run_ratios = results.compute_long_run_diversion_ratios(market_id=t)
     np.testing.assert_allclose(ratios.sum(axis=1), 1, atol=1e-14, rtol=0)
     np.testing.assert_allclose(long_run_ratios.sum(axis=1), 1, atol=1e-14, rtol=0)
 
     # test ratios based on other variables
     for name in {n for f in simulation._X1_formulations + simulation._X2_formulations for n in f.names} - {'prices'}:
-        ratios = np.nan_to_num(results.compute_diversion_ratios(name))
+        ratios = results.compute_diversion_ratios(name, market_id=t)
         np.testing.assert_allclose(ratios.sum(axis=1), 1, atol=1e-14, rtol=0, err_msg=name)
 
 
 @pytest.mark.usefixtures('simulated_problem')
 def test_result_positivity(simulated_problem: SimulatedProblemFixture) -> None:
     """Test that simulated markups, profits, consumer surpluses are positive, both before and after a merger."""
-    _, _, _, _, results = simulated_problem
+    simulation, _, _, _, results = simulated_problem
+
+    # only do the test for a single market
+    t = simulation.products.market_ids[0]
 
     # compute post-merger prices and shares
-    changed_prices = results.compute_approximate_prices()
-    changed_shares = results.compute_shares(changed_prices)
+    changed_prices = results.compute_approximate_prices(market_id=t)
+    changed_shares = results.compute_shares(changed_prices, market_id=t)
 
     # compute surpluses and test positivity
     test_positive = lambda x: np.testing.assert_array_less(-1e-14, x, verbose=True)
-    test_positive(results.compute_markups())
-    test_positive(results.compute_profits())
-    test_positive(results.compute_consumer_surpluses())
-    test_positive(results.compute_markups(changed_prices))
-    test_positive(results.compute_profits(changed_prices, changed_shares))
-    test_positive(results.compute_consumer_surpluses(changed_prices))
+    test_positive(results.compute_markups(market_id=t))
+    test_positive(results.compute_profits(market_id=t))
+    test_positive(results.compute_consumer_surpluses(market_id=t))
+    test_positive(results.compute_markups(changed_prices, market_id=t))
+    test_positive(results.compute_profits(changed_prices, changed_shares, market_id=t))
+    test_positive(results.compute_consumer_surpluses(changed_prices, market_id=t))
 
 
 @pytest.mark.usefixtures('simulated_problem')
