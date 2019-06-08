@@ -443,6 +443,23 @@ def test_shares(simulated_problem: SimulatedProblemFixture) -> None:
 
 
 @pytest.mark.usefixtures('simulated_problem')
+def test_probabilities(simulated_problem: SimulatedProblemFixture) -> None:
+    """Test that integrating over choice probabilities computed from estimated parameters essentially gives actual
+    shares.
+    """
+    _, simulation_results, problem, _, results = simulated_problem
+
+    # only do the test for a single market
+    t = problem.products.market_ids[0]
+    shares = problem.products.shares[problem.products.market_ids.flat == t]
+    weights = problem.agents.weights[problem.agents.market_ids.flat == t]
+
+    # compute and compare shares
+    estimated_shares = results.compute_probabilities(market_id=t) @ weights
+    np.testing.assert_allclose(shares, estimated_shares, atol=1e-14, rtol=0, verbose=True)
+
+
+@pytest.mark.usefixtures('simulated_problem')
 def test_shares_by_prices_jacobian(simulated_problem: SimulatedProblemFixture) -> None:
     """Use central finite differences to test that analytic values in the Jacobian of shares with respect to prices are
     essentially equal.

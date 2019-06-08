@@ -207,6 +207,35 @@ class Results(abc.ABC, StringRepresentation):
         market_ids = self._select_market_ids(market_id)
         return self._combine_arrays(ResultsMarket.safely_compute_long_run_diversion_ratios, market_ids)
 
+    def compute_probabilities(self, market_id: Optional[Any] = None) -> Array:
+        r"""Estimate matrices of choice probabilities.
+
+        For each market, the value in row :math:`j` and column `i` is given by :eq:`probabilities` when there are random
+        coefficients, and by :eq:`nested_probabilities` when there is additionally a nested structure. For the logit
+        and nested logit models, choice probabilities are marketshares.
+
+        Parameters
+        ----------
+        market_id : `object, optional`
+            ID of the market in which to compute choice probabilities. By default, choice probabilities are computed in
+            all markets and stacked.
+
+        Returns
+        -------
+        `ndarray`
+            Estimated :math:`J_t \times I_t` matrices of choice probabilities. If ``market_id`` was not specified,
+            matrices are estimated in each market :math:`t` and stacked. Columns for a market are in the same order as
+            agents for the market. If a market has fewer agents than others, extra columns will contain ``numpy.nan``.
+
+        Examples
+        --------
+            - :doc:`Tutorial </tutorial>`
+
+        """
+        output("Computing choice probabilities ...")
+        market_ids = self._select_market_ids(market_id)
+        return self._combine_arrays(ResultsMarket.safely_compute_probabilities, market_ids)
+
     def extract_diagonals(self, matrices: Any) -> Array:
         r"""Extract diagonals from stacked :math:`J_t \times J_t` matrices for each market :math:`t`.
 
@@ -215,8 +244,9 @@ class Results(abc.ABC, StringRepresentation):
         matrices : `array-like`
             Stacked matrices, such as estimates of :math:`\varepsilon`, computed by
             :meth:`ProblemResults.compute_elasticities`; :math:`\mathscr{D}`, computed by
-            :meth:`ProblemResults.compute_diversion_ratios`; or :math:`\bar{\mathscr{D}}`, computed by
-            :meth:`ProblemResults.compute_long_run_diversion_ratios`.
+            :meth:`ProblemResults.compute_diversion_ratios`; :math:`\bar{\mathscr{D}}`, computed by
+            :meth:`ProblemResults.compute_long_run_diversion_ratios`; or :math:`s_{jti}` computed by
+            :meth:`ProblemResults.compute_probabilities`.
 
         Returns
         -------
@@ -243,8 +273,9 @@ class Results(abc.ABC, StringRepresentation):
         matrices : `array-like`
             Stacked matrices, such as estimates of :math:`\varepsilon`, computed by
             :meth:`ProblemResults.compute_elasticities`; :math:`\mathscr{D}`, computed by
-            :meth:`ProblemResults.compute_diversion_ratios`; or :math:`\bar{\mathscr{D}}`, computed by
-            :meth:`ProblemResults.compute_long_run_diversion_ratios`.
+            :meth:`ProblemResults.compute_diversion_ratios`; :math:`\bar{\mathscr{D}}`, computed by
+            :meth:`ProblemResults.compute_long_run_diversion_ratios`; or :math:`s_{jti}` computed by
+            :meth:`ProblemResults.compute_probabilities`.
 
         Returns
         -------

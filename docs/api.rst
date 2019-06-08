@@ -107,6 +107,7 @@ In addition to class attributes, other post-estimation outputs can be estimated 
    ProblemResults.compute_elasticities
    ProblemResults.compute_diversion_ratios
    ProblemResults.compute_long_run_diversion_ratios
+   ProblemResults.compute_probabilities
    ProblemResults.extract_diagonals
    ProblemResults.extract_diagonal_means
    ProblemResults.compute_costs

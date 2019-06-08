@@ -105,6 +105,13 @@ class ResultsMarket(Market):
         return ratios, errors
 
     @NumericalErrorHandler(exceptions.PostEstimationNumericalError)
+    def safely_compute_probabilities(self) -> Tuple[Array, List[Error]]:
+        """Estimate a matrix of choice probabilities, handling any numerical errors."""
+        errors: List[Error] = []
+        probabilities = self.compute_probabilities()[0]
+        return probabilities, errors
+
+    @NumericalErrorHandler(exceptions.PostEstimationNumericalError)
     def safely_extract_diagonal(self, matrix: Array) -> Tuple[Array, List[Error]]:
         """Extract the diagonal from a matrix, handling any numerical errors."""
         errors: List[Error] = []
