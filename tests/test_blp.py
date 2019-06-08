@@ -108,7 +108,7 @@ def test_bootstrap(simulated_problem: SimulatedProblemFixture) -> None:
         values = method(results)
         bootstrapped_values = method(bootstrapped_results)
         median = np.median(values)
-        bootstrapped_medians = np.median(bootstrapped_values, axis=range(1, bootstrapped_values.ndim))
+        bootstrapped_medians = np.nanmedian(bootstrapped_values, axis=range(1, bootstrapped_values.ndim))
         lb, ub = np.percentile(bootstrapped_medians, [5, 95])
         np.testing.assert_array_less(np.squeeze(lb), np.squeeze(median) + 1e-14, err_msg=name)
         np.testing.assert_array_less(np.squeeze(median), np.squeeze(ub) + 1e-14, err_msg=name)
@@ -893,7 +893,7 @@ def test_objective_gradient(
             updated_solve_options['gamma'] = np.full_like(simulation.gamma, np.nan)
             updated_solve_options['gamma'][-1] = 0.9 * simulation.gamma[-1]
 
-    # optionally zero out weighting matrix blocks to only test individual contributions of the gradient
+    # zero out weighting matrix blocks to only test individual contributions of the gradient
     updated_solve_options['W'] = problem_results.W.copy()
     if not demand:
         updated_solve_options['W'][:problem.MD, :problem.MD] = 0
@@ -902,6 +902,9 @@ def test_objective_gradient(
     if not micro and updated_solve_options['micro_moments']:
         MM = len(updated_solve_options['micro_moments'])
         updated_solve_options['W'][-MM:, -MM:] = 0
+
+    # use a restrictive iteration tolerance
+    updated_solve_options['iteration'] = Iteration('squarem', {'atol': 1e-14})
 
     # compute the analytic gradient
     updated_solve_options['optimization'] = Optimization('return')
@@ -917,7 +920,7 @@ def test_objective_gradient(
             theta1[index] += change / 2
             theta2[index] -= change / 2
             estimated[index] = (objective_function(theta1)[0] - objective_function(theta2)[0]) / change
-        np.testing.assert_allclose(exact, estimated, atol=1e-10, rtol=1e-3)
+        np.testing.assert_allclose(estimated, exact, atol=1e-10, rtol=1e-3)
         return theta, True
 
     # test the gradient
