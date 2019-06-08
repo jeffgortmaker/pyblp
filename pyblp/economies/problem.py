@@ -1316,10 +1316,11 @@ class Progress(InitialProgress):
         for p, (lb, ub) in enumerate(self.parameters.compress_bounds()):
             if not lb < theta[p] < ub:
                 self.reduced_hessian[p] = self.reduced_hessian[:, p] = 0
-                if theta[p] <= lb:
-                    self.projected_gradient[p] = min(0, self.gradient[p])
-                elif theta[p] >= ub:
-                    self.projected_gradient[p] = max(0, self.gradient[p])
+                with np.errstate(invalid='ignore'):
+                    if theta[p] <= lb:
+                        self.projected_gradient[p] = min(0, self.gradient[p])
+                    elif theta[p] >= ub:
+                        self.projected_gradient[p] = max(0, self.gradient[p])
 
         # compute the norm of the projected gradient
         self.projected_gradient_norm = np.array(np.nan, options.dtype)
