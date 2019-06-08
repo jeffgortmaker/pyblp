@@ -25,9 +25,8 @@ SimulatedProblemFixture = Tuple[Simulation, SimulationResults, Problem, Options,
 def configure() -> Iterator[None]:
     """Configure NumPy so that it raises all warnings as exceptions. Next, if a DTYPE environment variable is set in
     this testing environment that is different from the default data type, use it for all numeric calculations. Finally,
-    cache results for SciPy linear algebra inversion routines. This is very memory inefficient but guarantees that
-    matrix inversion will always give rise to the same deterministic result, which is important for precise testing of
-    equality.
+    cache results for SciPy linear algebra routines. This is very memory inefficient but guarantees that linear algebra
+    will always give rise to the same deterministic result, which is important for precise testing of equality.
     """
 
     # configure NumPy so that it raises all warnings as exceptions
@@ -42,28 +41,30 @@ def configure() -> Iterator[None]:
             pytest.skip(f"The {dtype_string} data type is the same as the default one in this environment.")
 
     # define a patch for SciPy functions
-    def patch(uncached: Callable) -> Tuple[Callable, Callable]:
+    def patch(uncached: Callable) -> Callable:
         """Patch a function by caching its array arguments."""
         mapping: Dict[Hashable, Array] = {}
 
         # define the cached function
-        def cached(*args: Array) -> Array:
+        def cached(*args: Array, **kwargs: Any) -> Array:
             """Replicate the function, caching its results."""
             nonlocal mapping
             key = tuple(hashlib.sha1(a.data.tobytes()).digest() for a in args)
             if key not in mapping:
-                mapping[key] = uncached(*args)
+                mapping[key] = uncached(*args, **kwargs)
             return mapping[key]
-        return uncached, cached
+        return cached
 
-    # monkey patch the functions
-    old_inv, scipy.linalg.inv = patch(scipy.linalg.inv)
-    old_solve, scipy.linalg.solve = patch(scipy.linalg.solve)
+    # patch the functions
+    old = {}
+    for name in ['inv', 'solve', 'svd', 'eigvalsh', 'pinv', 'qr']:
+        old[name] = getattr(scipy.linalg, name)
+        setattr(scipy.linalg, name, patch(old[name]))
 
     # run tests before reverting all changes
     yield
-    scipy.linalg.inv = old_inv
-    scipy.linalg.solve = old_solve
+    for name, old in old.items():
+        setattr(scipy.linalg, name, old)
     options.dtype = old_dtype
     np.seterr(**old_error)
 
@@ -404,22 +405,22 @@ def large_nested_blp_simulation() -> SimulationFixture:
 
 
 @pytest.fixture(scope='session', params=[
-    pytest.param(['small_logit', False], id="small Logit simulation without supply"),
-    pytest.param(['small_logit', True], id="small Logit simulation with supply"),
-    pytest.param(['large_logit', False], id="large Logit simulation without supply"),
-    pytest.param(['large_logit', True], id="large Logit simulation with supply"),
-    pytest.param(['small_nested_logit', False], id="small nested Logit simulation without supply"),
-    pytest.param(['small_nested_logit', True], id="small nested Logit simulation with supply"),
-    pytest.param(['large_nested_logit', False], id="large nested Logit simulation without supply"),
-    pytest.param(['large_nested_logit', True], id="large nested Logit simulation with supply"),
-    pytest.param(['small_blp', False], id="small BLP simulation without supply"),
-    pytest.param(['small_blp', True], id="small BLP simulation with supply"),
-    pytest.param(['medium_blp', False], id="medium BLP simulation without supply"),
-    pytest.param(['medium_blp', True], id="medium BLP simulation with supply"),
-    pytest.param(['large_blp', False], id="large BLP simulation without supply"),
-    pytest.param(['large_blp', True], id="large BLP simulation with supply"),
-    pytest.param(['small_nested_blp', False], id="small nested BLP simulation without supply"),
-    pytest.param(['small_nested_blp', True], id="small nested BLP simulation with supply"),
+    # pytest.param(['small_logit', False], id="small Logit simulation without supply"),
+    # pytest.param(['small_logit', True], id="small Logit simulation with supply"),
+    # pytest.param(['large_logit', False], id="large Logit simulation without supply"),
+    # pytest.param(['large_logit', True], id="large Logit simulation with supply"),
+    # pytest.param(['small_nested_logit', False], id="small nested Logit simulation without supply"),
+    # pytest.param(['small_nested_logit', True], id="small nested Logit simulation with supply"),
+    # pytest.param(['large_nested_logit', False], id="large nested Logit simulation without supply"),
+    # pytest.param(['large_nested_logit', True], id="large nested Logit simulation with supply"),
+    # pytest.param(['small_blp', False], id="small BLP simulation without supply"),
+    # pytest.param(['small_blp', True], id="small BLP simulation with supply"),
+    # pytest.param(['medium_blp', False], id="medium BLP simulation without supply"),
+    # pytest.param(['medium_blp', True], id="medium BLP simulation with supply"),
+    # pytest.param(['large_blp', False], id="large BLP simulation without supply"),
+    # pytest.param(['large_blp', True], id="large BLP simulation with supply"),
+    # pytest.param(['small_nested_blp', False], id="small nested BLP simulation without supply"),
+    # pytest.param(['small_nested_blp', True], id="small nested BLP simulation with supply"),
     pytest.param(['large_nested_blp', False], id="large nested BLP simulation without supply"),
     pytest.param(['large_nested_blp', True], id="large nested BLP simulation with supply")
 ])
