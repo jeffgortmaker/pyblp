@@ -36,7 +36,7 @@ The model incorporates both observable (demographic) and unobservable taste hete
 
 Random idiosyncratic preferences, :math:`\epsilon_{jti}`, are assumed to be Type I Extreme Value, so that conditional on the heterogeneous coefficients, marketshares follow the well known logit form. Aggregate marketshares are obtained by integrating over the distribution of individual heterogeneity. They are approximated with Monte Carlo integration or quadrature rules defined by the :math:`I_t \times K_2` matrix of integration nodes, :math:`\nu`, and a :math:`I_t \times 1` vector of integration weights, :math:`w`:
 
-.. math:: s_{jt} \approx \sum_{i=1}^{I_t} w_i s_{jti},
+.. math:: s_{jt} \approx \sum_{i=1}^{I_t} w_{it} s_{jti},
    :label: shares
 
 where the probability that agent :math:`i` chooses product :math:`j` in market :math:`t` is
@@ -241,17 +241,17 @@ In the spirit of :ref:`references:Imbens and Lancaster (1994)`, :ref:`references
 
 Each micro moment :math:`m` is approximated in a set :math:`\mathscr{T}_m \subset \{1, 2, \ldots, T\}` of markets in which its micro data are relevant and then averaged across these markets:
 
-.. math:: \bar{g}_{M,m} \approx \frac{1}{|\mathscr{T}_m|} \sum_{t\in\mathscr{T}_m} \sum_{i=1}^{I_t} w_i g_{M,mti}.
+.. math:: \bar{g}_{M,m} \approx \frac{1}{|\mathscr{T}_m|} \sum_{t\in\mathscr{T}_m} \sum_{i=1}^{I_t} w_{it} g_{M,mti}.
    :label: averaged_micro_moments
 
 The vector :math:`\bar{g}_M` contains sample analogues of micro moment conditions :math:`E[g_{M,mti}] = 0` where :math:`g_{M,mti}` is typically a function of choice probabilities, data in market :math:`t`, and a statistic computed from survey data that the moment aims to match.
 
 Mico moments are computed for each :math:`\hat{\theta}` and contribute to the GMM objective :math:`q(\hat{\theta})` in :eq:`objective`. Their derivatives with respect to :math:`\theta` are added as rows to :math:`\bar{G}` in :eq:`averaged_moments_jacobian`, and blocks are added to both :math:`W` and :math:`S` in :eq:`2sls_W` and :eq:`W`. The covariance between standard moments and micro moments is assumed to be zero, so these matrices will be block-diagonal. The covariance between micro moments :math:`m` and :math:`n` in :math:`S` is set to zero if :math:`\mathscr{T}_{mn} = \mathscr{T}_m \cap \mathscr{T}_n = \emptyset` and otherwise is approximated by
 
-.. math:: \text{Cov}(\bar{g}_{M,m}, \bar{g}_{M,n}) \approx \frac{1}{|\mathscr{T}_{mn}|} \sum_{t\in\mathscr{T}_{mn}} \sum_{i=1}^{I_t} w_i(g_{M,mti} - \bar{g}_{M,mt})(g_{M,nti} - \bar{g}_{M,nt})
+.. math:: \text{Cov}(\bar{g}_{M,m}, \bar{g}_{M,n}) \approx \frac{1}{|\mathscr{T}_{mn}|} \sum_{t\in\mathscr{T}_{mn}} \sum_{i=1}^{I_t} w_{it}(g_{M,mti} - \bar{g}_{M,mt})(g_{M,nti} - \bar{g}_{M,nt})
    :label: averaged_micro_moment_covariances
 
-where :math:`\bar{g}_{M,mt} = \sum_i w_i g_{M,mti}`.
+where :math:`\bar{g}_{M,mt} = \sum_i w_{it} g_{M,mti}`.
 
 
 Random Coefficients Nested Logit
@@ -317,11 +317,11 @@ Instead, :ref:`references:Morrow and Skerlos (2011)` reformulate the solution to
 
 where :math:`\Lambda` is a diagonal :math:`J_t \times J_t` matrix approximated by
 
-.. math:: \Lambda_{jj} \approx \sum_{i=1}^{I_t} w_i s_{jti}\frac{\partial U_{jti}}{\partial p_{jt}}
+.. math:: \Lambda_{jj} \approx \sum_{i=1}^{I_t} w_{it} s_{jti}\frac{\partial U_{jti}}{\partial p_{jt}}
 
 and :math:`\Gamma` is a dense :math:`J_t \times J_t` matrix approximated by
 
-.. math:: \Gamma_{jk} \approx \sum_{i=1}^{I_t} w_i s_{jti}s_{kti}\frac{\partial U_{jti}}{\partial p_{jt}}.
+.. math:: \Gamma_{jk} \approx \sum_{i=1}^{I_t} w_{it} s_{jti}s_{kti}\frac{\partial U_{jti}}{\partial p_{jt}}.
 
 Equilibrium prices are computed by iterating over the :math:`\zeta`-markup equation in :eq:`zeta`,
 

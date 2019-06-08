@@ -498,7 +498,7 @@ class Results(abc.ABC, StringRepresentation):
 
         Assuming away nonlinear income effects, the surplus in market :math:`t` is
 
-        .. math:: \text{CS} = \sum_{i=1}^{I_t} w_i\text{CS}_i,
+        .. math:: \text{CS} = \sum_{i=1}^{I_t} w_{it}\text{CS}_i,
 
         in which the consumer surplus for individual :math:`i` is
 

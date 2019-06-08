@@ -78,8 +78,8 @@ class ProductsAgentsCovarianceMoment(Moment):
 
     .. math:: g_{M,mti} = (z_{it} - \bar{z}_t)(y_{it} - \bar{y}_t) - \sigma_{xy}
 
-    where :math:`\bar{z}_t = \sum_i w_i z_{it}`, :math:`\bar{y}_t = \sum_i w_i y_{it}`, and conditional on purchasing a
-    non-outside good, the expected value of :math:`x_{jt}` for agent :math:`i` is
+    where :math:`\bar{z}_t = \sum_i w_{it} z_{it}`, :math:`\bar{y}_t = \sum_i w_{it} y_{it}`, and conditional on
+    purchasing a non-outside good, the expected value of :math:`x_{jt}` for agent :math:`i` is
 
     .. math:: z_{it} = \sum_{j=1}^{J_t} \frac{x_{jt}s_{jti}}{1 - s_{0ti}}.
 
