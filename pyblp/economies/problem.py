@@ -823,13 +823,14 @@ class ProblemEconomy(Economy):
                 xi_jacobian[self._product_market_indices[t], :parameters.P] = xi_jacobian_t
                 if moments.MM > 0:
                     indices = moments.market_indices[t]
-                    micro[indices] += micro_t / moments.market_counts[indices]
-                    micro_jacobian[indices, :parameters.P] += micro_jacobian_t / moments.market_counts[indices]
-                    if compute_micro_covariances:
-                        pairwise_indices = tuple(np.meshgrid(indices, indices))
-                        micro_covariances[pairwise_indices] += (
-                            covariances_t / moments.pairwise_market_counts[pairwise_indices]
-                        )
+                    with np.errstate(all='ignore'):
+                        micro[indices] += micro_t / moments.market_counts[indices]
+                        micro_jacobian[indices, :parameters.P] += micro_jacobian_t / moments.market_counts[indices]
+                        if compute_micro_covariances:
+                            pairwise_indices = tuple(np.meshgrid(indices, indices))
+                            micro_covariances[pairwise_indices] += (
+                                covariances_t / moments.pairwise_market_counts[pairwise_indices]
+                            )
                 iteration_stats[t] = stats_t
                 errors.extend(errors_t)
 
