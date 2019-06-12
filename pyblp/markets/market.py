@@ -579,11 +579,11 @@ class Market(Container):
         """Compute the tensor derivative of the diagonal capital lambda matrix with respect to xi, indexed by the first
         axis.
         """
-        diagonal = np.squeeze(value_derivatives_tensor @ self.agents.weights)
+        diagonal = value_derivatives_tensor @ self.agents.weights
         if self.H > 0:
-            diagonal /= 1 - self.rho
+            diagonal /= 1 - self.rho[None]
         tensor = np.zeros((self.J, self.J, self.J), options.dtype)
-        tensor[:, np.arange(self.J), np.arange(self.J)] = diagonal
+        tensor[:, np.arange(self.J), np.arange(self.J)] = np.squeeze(diagonal)
         return tensor
 
     def compute_capital_gamma_by_parameter_tangent(
