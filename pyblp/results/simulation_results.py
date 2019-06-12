@@ -211,14 +211,20 @@ class SimulationResults(StringRepresentation):
             return market_s,
 
         # compute micro moments (averaged across markets) market-by-market
-        micro = np.zeros((moments.MM, 1), options.dtype)
+        micro_mapping: Dict[Hashable, Array] = {}
         generator = generate_items(
             self.simulation.unique_market_ids, market_factory, SimulationResultsMarket.safely_compute_micro
         )
         for t, (micro_t, errors_t) in generator:
-            indices = moments.market_indices[t]
-            micro[indices] += micro_t / moments.market_counts[indices]
+            micro_mapping[t] = micro_t
             errors.extend(errors_t)
+
+        # average micro moments across all markets (this is done after market-by-market computation to preserve
+        #   numerical stability with different market orderings)
+        micro = np.zeros((moments.MM, 1), options.dtype)
+        for t in self.simulation.unique_market_ids:
+            indices = moments.market_indices[t]
+            micro[indices] += micro_mapping[t] / moments.market_counts[indices]
 
         # output a warning about any errors
         if errors:

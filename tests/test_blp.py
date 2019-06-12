@@ -168,10 +168,10 @@ def test_parallel(simulated_problem: SimulatedProblemFixture) -> None:
     # test that all arrays in the results are essentially identical
     for key, result in results.__dict__.items():
         if isinstance(result, np.ndarray) and result.dtype != np.object:
-            np.testing.assert_allclose(result, getattr(parallel_results, key), atol=1e-10, rtol=0, err_msg=key)
+            np.testing.assert_allclose(result, getattr(parallel_results, key), atol=1e-14, rtol=0, err_msg=key)
 
     # test that marginal costs are essentially equal
-    np.testing.assert_allclose(costs, parallel_costs, atol=1e-10, rtol=0)
+    np.testing.assert_allclose(costs, parallel_costs, atol=1e-14, rtol=0)
 
 
 @pytest.mark.usefixtures('simulated_problem')

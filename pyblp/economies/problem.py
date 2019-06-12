@@ -815,24 +815,35 @@ class ProblemEconomy(Economy):
                 initial_delta_s = progress.next_delta[self._product_market_indices[s]]
                 return market_s, initial_delta_s, iteration, fp_type, compute_jacobian, compute_micro_covariances
 
-            # compute delta, micro moments (averaged across markets), their Jacobians, and micro moment covariances
-            #   market-by-market
+            # compute delta, micro moments, their Jacobians, and micro moment covariances market-by-market
+            micro_mapping: Dict[Hashable, Array] = {}
+            micro_jacobian_mapping: Dict[Hashable, Array] = {}
+            micro_covariances_mapping: Dict[Hashable, Array] = {}
             generator = generate_items(self.unique_market_ids, market_factory, ProblemMarket.solve_demand)
             for t, (delta_t, micro_t, xi_jacobian_t, micro_jacobian_t, covariances_t, stats_t, errors_t) in generator:
                 delta[self._product_market_indices[t]] = delta_t
                 xi_jacobian[self._product_market_indices[t], :parameters.P] = xi_jacobian_t
-                if moments.MM > 0:
-                    indices = moments.market_indices[t]
-                    with np.errstate(all='ignore'):
-                        micro[indices] += micro_t / moments.market_counts[indices]
-                        micro_jacobian[indices, :parameters.P] += micro_jacobian_t / moments.market_counts[indices]
+                micro_mapping[t] = micro_t
+                micro_jacobian_mapping[t] = micro_jacobian_t
+                micro_covariances_mapping[t] = covariances_t
+                iteration_stats[t] = stats_t
+                errors.extend(errors_t)
+
+            # average micro moments, their Jacobian, and their covariances across all markets (this is done after
+            #   market-by-market computation to preserve numerical stability with different market orderings)
+            if moments.MM > 0:
+                with np.errstate(all='ignore'):
+                    for t in self.unique_market_ids:
+                        indices = moments.market_indices[t]
+                        micro[indices] += micro_mapping[t] / moments.market_counts[indices]
+                        micro_jacobian[indices, :parameters.P] += (
+                            micro_jacobian_mapping[t] / moments.market_counts[indices]
+                        )
                         if compute_micro_covariances:
                             pairwise_indices = tuple(np.meshgrid(indices, indices))
                             micro_covariances[pairwise_indices] += (
-                                covariances_t / moments.pairwise_market_counts[pairwise_indices]
+                                micro_covariances_mapping[t] / moments.pairwise_market_counts[pairwise_indices]
                             )
-                iteration_stats[t] = stats_t
-                errors.extend(errors_t)
 
         # replace invalid elements in delta and the micro moment values with their last values
         bad_delta_index = ~np.isfinite(delta)
