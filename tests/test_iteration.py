@@ -58,8 +58,8 @@ def test_scipy(method: str, method_options: Options, compute_jacobian: bool, use
 
     # test that the solution is reasonably close (use the exact values if the iteration routine will just return them)
     start_values = exact_values if method == 'return' else np.ones_like(exact_values)
-    computed_values, converged = iteration._iterate(start_values, contraction)[:2]
-    assert converged
+    computed_values, stats = iteration._iterate(start_values, contraction)
+    assert stats.converged
     np.testing.assert_allclose(exact_values, computed_values, rtol=0, atol=1e-5)
 
 
@@ -99,5 +99,5 @@ def test_hasselblad(scheme: int) -> None:
     # verify that many more iterations would be needed to solve the problem with simple iteration
     del method_options['scheme']
     method_options['max_evaluations'] *= 10
-    converged = Iteration('simple', method_options)._iterate(initial_values, contraction)[1]
-    assert not converged
+    stats = Iteration('simple', method_options)._iterate(initial_values, contraction)[1]
+    assert not stats.converged

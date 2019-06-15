@@ -78,8 +78,8 @@ def test_entropy(
     # estimate the solution (use the exact values if the optimization routine will just return them)
     start_values = exact_values if method == 'return' else np.zeros_like(exact_values)
     bounds = 3 * [(lb, ub)]
-    estimated_values, converged = optimization._optimize(start_values, bounds, lambda x, *_: objective_function(x))[:2]
-    assert converged
+    estimated_values, stats = optimization._optimize(start_values, bounds, lambda x, *_: objective_function(x))
+    assert stats.converged
 
     # test that the estimated objective is reasonably close to the exact objective
     exact = objective_function(exact_values)[0]
