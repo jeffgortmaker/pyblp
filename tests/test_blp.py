@@ -85,8 +85,13 @@ def test_optimal_instruments(simulated_problem: SimulatedProblemFixture, compute
 
 @pytest.mark.usefixtures('simulated_problem')
 def test_bootstrap(simulated_problem: SimulatedProblemFixture) -> None:
-    """Test that post-estimation output medians are within 95% parametric bootstrap confidence intervals."""
-    _, _, problem, _, results = simulated_problem
+    """Test that post-estimation output medians are within 10% parametric bootstrap confidence intervals."""
+    _, _, problem, solve_options, _ = simulated_problem
+
+    # use second-step results to compute boostrapped output
+    solve_options = solve_options.copy()
+    solve_options['method'] = '2s'
+    results = problem.solve(**solve_options)
 
     # create bootstrapped results (use only a few draws for speed)
     bootstrapped_results = results.bootstrap(draws=100, seed=0)
