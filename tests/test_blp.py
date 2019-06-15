@@ -913,7 +913,7 @@ def test_objective_gradient(
     # define a custom optimization routine that tests central finite differences around starting parameter values
     def test_finite_differences(theta: Array, _: Any, objective_function: Callable, __: Any) -> Tuple[Array, bool]:
         estimated = np.zeros_like(exact)
-        change = np.sqrt(np.finfo(np.float64).eps)
+        change = 10 * np.sqrt(np.finfo(np.float64).eps)
         for index in range(theta.size):
             theta1 = theta.copy()
             theta2 = theta.copy()
