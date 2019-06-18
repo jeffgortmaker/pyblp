@@ -2,3 +2,4 @@ numpy>=1.16.0
 patsy>=0.5.1
 scipy>=1.2.0
 sympy>=1.1.0
+pandas>=0.24.2

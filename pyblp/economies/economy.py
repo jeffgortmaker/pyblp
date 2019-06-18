@@ -4,6 +4,7 @@ import abc
 import functools
 from typing import Any, Dict, Hashable, List, Mapping, Optional, Sequence
 
+import pandas as pd
 import numpy as np
 
 from .. import options
@@ -73,11 +74,10 @@ class Economy(Container, StringRepresentation):
         self.H = self.unique_nesting_ids.size
 
         # identify market indices
-        self._product_market_indices: Dict[Hashable, Array] = {}
-        self._agent_market_indices: Dict[Hashable, Array] = {}
-        for t in self.unique_market_ids:
-            self._product_market_indices[t] = np.flatnonzero(self.products.market_ids == t)
-            self._agent_market_indices[t] = np.flatnonzero(self.agents.market_ids == t)
+        s = pd.Series(self.products.market_ids.flatten())
+        self._product_market_indices: Dict[Hashable, Array] = {k: (v,) for k, v in s.groupby(s).groups.items()}
+        s = pd.Series(self.agents.market_ids.flatten())
+        self._agent_market_indices: Dict[Hashable, Array] = {k: (v,) for k, v in s.groupby(s).groups.items()}
 
         # identify the largest number of products and agents in a market
         self._max_J = max(i.size for i in self._product_market_indices.values())
