@@ -7,7 +7,7 @@ import numpy as np
 from . import options
 from .configurations.formulation import Formulation
 from .configurations.integration import Integration
-from .utilities.basics import Array, Groups, RecArray, extract_matrix, interact_ids, structure_matrices
+from .utilities.basics import Array, Groups, RecArray, extract_matrix, interact_ids, structure_matrices, get_indices
 
 
 def build_id_data(T: int, J: int, F: int) -> RecArray:
@@ -354,7 +354,7 @@ def build_differentiation_instruments(
         raise ValueError("The firm_ids field of product_data must be one-dimensional.")
 
     # identify markets
-    market_indices = {t: np.flatnonzero(market_ids.flat == t) for t in np.unique(market_ids)}
+    market_indices = get_indices(market_ids)
 
     # build the matrix and count its dimensions
     X = build_matrix(formulation, product_data)
