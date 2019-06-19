@@ -295,6 +295,16 @@ def format_table(
     return "\n".join(lines)
 
 
+def get_indices(ids) -> Dict[Hashable, Array]:
+    flat = ids.flatten()
+    sort_indices = flat.argsort(kind='mergesort')
+    sorted_ids = flat[sort_indices]
+    changes = np.ones(flat.shape, np.bool)
+    changes[1:] = sorted_ids[1:] != sorted_ids[:-1]
+    reduce_indices = np.nonzero(changes)[0]
+    return dict(zip(sorted_ids[reduce_indices], np.split(sort_indices, reduce_indices)[1:]))
+
+
 class SolverStats(object):
     """Structured statistics returned by a generic numerical solver."""
 

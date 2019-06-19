@@ -4,14 +4,13 @@ import abc
 import functools
 from typing import Any, Dict, Hashable, List, Mapping, Optional, Sequence
 
-import pandas as pd
 import numpy as np
 
 from .. import options
 from ..configurations.formulation import Formulation
 from ..primitives import Container
 from ..utilities.algebra import precisely_identify_collinearity, precisely_identify_psd
-from ..utilities.basics import Array, RecArray, StringRepresentation, format_table
+from ..utilities.basics import Array, RecArray, StringRepresentation, format_table, get_indices
 
 
 class Economy(Container, StringRepresentation):
@@ -54,8 +53,8 @@ class Economy(Container, StringRepresentation):
         self.agent_formulation = agent_formulation
 
         # identify unique markets and nests
-        self.unique_market_ids = np.unique(self.products.market_ids).flatten()
-        self.unique_firm_ids = np.unique(self.products.firm_ids).flatten()
+        self.unique_market_ids = np.unique(self.products.market_ids.flatten())
+        self.unique_firm_ids = np.unique(self.products.firm_ids.flatten())
         self.unique_nesting_ids = np.unique(self.products.nesting_ids).flatten()
 
         # count dimensions
@@ -74,10 +73,8 @@ class Economy(Container, StringRepresentation):
         self.H = self.unique_nesting_ids.size
 
         # identify market indices
-        s = pd.Series(self.products.market_ids.flatten())
-        self._product_market_indices: Dict[Hashable, Array] = {k: v for k, v in s.groupby(s).indices.items()}
-        s = pd.Series(self.agents.market_ids.flatten())
-        self._agent_market_indices: Dict[Hashable, Array] = {k: v for k, v in s.groupby(s).indices.items()}
+        self._product_market_indices: Dict[Hashable, Array] = get_indices(self.products.market_ids)
+        self._agent_market_indices: Dict[Hashable, Array] = get_indices(self.agents.market_ids)
 
         # identify the largest number of products and agents in a market
         self._max_J = max(i.size for i in self._product_market_indices.values())
