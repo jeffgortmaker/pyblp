@@ -73,8 +73,8 @@ class Economy(Container, StringRepresentation):
         self.H = self.unique_nesting_ids.size
 
         # identify market indices
-        self._product_market_indices: Dict[Hashable, Array] = get_indices(self.products.market_ids)
-        self._agent_market_indices: Dict[Hashable, Array] = get_indices(self.agents.market_ids)
+        self._product_market_indices = get_indices(self.products.market_ids)
+        self._agent_market_indices = get_indices(self.agents.market_ids)
 
         # identify the largest number of products and agents in a market
         self._max_J = max(i.size for i in self._product_market_indices.values())

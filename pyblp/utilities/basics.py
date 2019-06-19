@@ -295,7 +295,19 @@ def format_table(
     return "\n".join(lines)
 
 
-def get_indices(ids) -> Dict[Hashable, Array]:
+def get_indices(ids: Array) -> Dict[Hashable, Array]:
+    """get_indices takes a one-dimensional array input and returns a
+    dictionary such that the keys are the unique values of the array
+    and the values are the indices where the key appears in the array.
+
+    Examples
+    --------
+
+    >>> ids = np.array([1, 2, 1, 2, 3, 3, 1, 2])
+    >>> get_indices(ids)
+    {1: array([0, 2, 6]), 2: array([1, 3, 7]), 3: array([4, 5])}
+    """
+
     flat = ids.flatten()
     sort_indices = flat.argsort(kind='mergesort')
     sorted_ids = flat[sort_indices]
