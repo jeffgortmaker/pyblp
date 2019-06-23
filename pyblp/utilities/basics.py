@@ -236,8 +236,9 @@ def format_number(number: Any) -> str:
 def format_se(se: Any) -> str:
     """Prepare a standard error to be displayed as a string."""
     formatted = format_number(se)
-    if "NAN" in formatted:
-        return formatted.replace("NAN", "(NAN)")
+    for string in ["NAN", "-INF", "+INF"]:
+        if string in formatted:
+            return formatted.replace(string, f"({string})")
     return f"({formatted})"
 
 
