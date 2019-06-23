@@ -118,8 +118,12 @@ class OptimalInstrumentResults(StringRepresentation):
         # construct default supply and demand shifter formulations
         self.supply_shifter_formulation = self.demand_shifter_formulation = None
         if self.problem_results.problem.K3 > 0:
-            supply_shifters = {str(f) for f in self.problem_results.problem._X3_formulations}
-            demand_shifters = {str(f) for f in self.problem_results.problem._X1_formulations if 'prices' not in f.names}
+            assert self.problem_results.problem.product_formulations[0] is not None
+            assert self.problem_results.problem.product_formulations[2] is not None
+            X1_expressions = self.problem_results.problem.product_formulations[0]._expressions
+            X3_expressions = self.problem_results.problem.product_formulations[2]._expressions
+            supply_shifters = {str(e) for e in X3_expressions}
+            demand_shifters = {str(e) for e in X1_expressions if all(str(s) != 'prices' for s in e.free_symbols)}
             if supply_shifters - demand_shifters:
                 supply_shifter_formula = ' + '.join(sorted(supply_shifters - demand_shifters))
                 self.supply_shifter_formulation = Formulation(f'{supply_shifter_formula} - 1')
