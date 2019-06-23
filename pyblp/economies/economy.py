@@ -117,7 +117,7 @@ class Economy(Container, StringRepresentation):
         named_formulations = [
             (self._X1_formulations, "X1: Linear Characteristics"),
             (self._X2_formulations, "X2: Nonlinear Characteristics"),
-            (self._X3_formulations, "X3: Cost Characteristics"),
+            (self._X3_formulations, f"X3: {self.costs_type.title()} Cost Characteristics"),
             (self._demographics_formulations, "d: Demographics")
         ]
         data: List[List[str]] = []
