@@ -102,7 +102,7 @@ class SimulationResults(StringRepresentation):
 
         Parameters
         ----------
-        attributes : `tuple of str, optional`
+        attributes : `sequence of str, optional`
             Name of attributes that will be added to the dictionary. By default, all :class:`SimulationResults`
             attributes are added except for :attr:`SimulationResults.simulation`.
 
@@ -129,7 +129,7 @@ class SimulationResults(StringRepresentation):
 
         Parameters
         ----------
-        product_formulations : `Formulation or tuple of Formulation, optional`
+        product_formulations : `Formulation or sequence of Formulation, optional`
             By default, :attr:`Simulation.product_formulations`.
         product_data : `structured array-like, optional`
             By default, :attr:`SimulationResults.product_data`.
@@ -170,7 +170,7 @@ class SimulationResults(StringRepresentation):
 
         Parameters
         ----------
-        micro_moments : `tuple of ProductsAgentsCovarianceMoment`
+        micro_moments : `sequence of ProductsAgentsCovarianceMoment`
             Configurations for the averaged micro moments that will be computed. The only type of micro moment currently
             supported is the :class:`ProductsAgentsCovarianceMoment`.
 

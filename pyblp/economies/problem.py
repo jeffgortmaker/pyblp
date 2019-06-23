@@ -379,7 +379,7 @@ class ProblemEconomy(Economy):
             block-diagonal with a micro moment block equal to the covariance matrix defined in
             :eq:`averaged_micro_moment_covariances` plus any ``extra_micro_covariances``.
 
-        micro_moments : `tuple of ProductsAgentsCovarianceMoment, optional`
+        micro_moments : `sequence of ProductsAgentsCovarianceMoment, optional`
             Configurations for the :math:`M_M` micro moments that will be added to the standard set of moments. The only
             type of micro moment currently supported is the :class:`ProductsAgentsCovarianceMoment`. By default, no
             micro moments are used, so :math:`M_M = 0`.
@@ -949,9 +949,9 @@ class Problem(ProblemEconomy):
 
     Parameters
     ----------
-    product_formulations : `Formulation or tuple of Formulation`
-        :class:`Formulation` configuration or tuple of up to three :class:`Formulation` configurations for the matrix
-        of linear product characteristics, :math:`X_1`, for the matrix of nonlinear product characteristics,
+    product_formulations : `Formulation or sequence of Formulation`
+        :class:`Formulation` configuration or a sequence of up to three :class:`Formulation` configurations for the
+        matrix of linear product characteristics, :math:`X_1`, for the matrix of nonlinear product characteristics,
         :math:`X_2`, and for the matrix of cost characteristics, :math:`X_3`, respectively. If the formulation for
         :math:`X_3` is not specified or is ``None``, a supply side will not be estimated. Similarly, if the formulation
         for :math:`X_2` is not specified or is ``None``, the logit (or nested logit) model will be estimated.
@@ -1088,7 +1088,7 @@ class Problem(ProblemEconomy):
 
     Attributes
     ----------
-    product_formulations : `Formulation or tuple of Formulation`
+    product_formulations : `Formulation or sequence of Formulation`
         :class:`Formulation` configurations for :math:`X_1`, :math:`X_2`, and :math:`X_3`, respectively.
     agent_formulation : `Formulation`
         :class:`Formulation` configuration for :math:`d`.
@@ -1155,7 +1155,7 @@ class Problem(ProblemEconomy):
         elif isinstance(product_formulations, collections.Sequence) and len(product_formulations) <= 3:
             product_formulations = list(product_formulations)
         else:
-            raise TypeError("product_formulations must be a Formulation instance or a tuple of up to three instances.")
+            raise TypeError("product_formulations must be a Formulation instance or a sequence of up to three of them.")
         product_formulations.extend([None] * (3 - len(product_formulations)))
 
         # initialize the underlying economy with structured product and agent data

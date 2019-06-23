@@ -542,7 +542,7 @@ class ProblemResults(Results):
 
         Parameters
         ----------
-        attributes : `tuple of str, optional`
+        attributes : `sequence of str, optional`
             Name of attributes that will be added to the dictionary. By default, all :class:`ProblemResults` attributes
             are added except for :attr:`ProblemResults.problem` and :attr:`ProblemResults.last_results`.
 

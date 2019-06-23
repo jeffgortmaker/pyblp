@@ -178,7 +178,7 @@ class EconomyMoments(Moments):
 
         # validate the moments
         if not isinstance(micro_moments, collections.Sequence):
-            raise TypeError("micro_moments must be a tuple of micro moment instances.")
+            raise TypeError("micro_moments must be a sequence of micro moment instances.")
         for moment in micro_moments:
             if not isinstance(moment, Moment):
                 raise TypeError("micro_moments must consist only of micro moment instances.")

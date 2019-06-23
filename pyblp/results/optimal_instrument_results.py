@@ -148,7 +148,7 @@ class OptimalInstrumentResults(StringRepresentation):
 
         Parameters
         ----------
-        attributes : `tuple of str, optional`
+        attributes : `sequence of str, optional`
             Name of attributes that will be added to the dictionary. By default, all :class:`OptimalInstrumentResults`
             attributes are added except for :attr:`OptimalInstrumentResults.problem_results`,
             :attr:`OptimalInstrumentResults.supply_shifter_formulation`, and

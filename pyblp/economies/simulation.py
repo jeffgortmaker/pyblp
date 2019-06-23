@@ -65,9 +65,9 @@ class Simulation(Economy):
 
     Parameters
     ----------
-    product_formulations : `Formulation or tuple of Formulation`
-        :class:`Formulation` configuration or tuple of up to three :class:`Formulation` configurations for the matrix
-        of linear product characteristics, :math:`X_1`, for the matrix of nonlinear product characteristics,
+    product_formulations : `Formulation or sequence of Formulation`
+        :class:`Formulation` configuration or a sequence of up to three :class:`Formulation` configurations for the
+        matrix of linear product characteristics, :math:`X_1`, for the matrix of nonlinear product characteristics,
         :math:`X_2`, and for the matrix of cost characteristics, :math:`X_3`, respectively. If the formulation for
         :math:`X_3` is not specified or is ``None``, ``costs`` must be specified. If the formulation for :math:`X_2` is
         not specified or is ``None``, the logit (or nested logit) model will be simulated.
@@ -341,7 +341,7 @@ class Simulation(Economy):
         elif isinstance(product_formulations, collections.Sequence) and len(product_formulations) <= 3:
             product_formulations = list(product_formulations)
         else:
-            raise TypeError("product_formulations must be a Formulation instance or a tuple of up to three instances.")
+            raise TypeError("product_formulations must be a Formulation instance or a sequence of up to three of them.")
         if any(f._absorbed_terms for f in product_formulations if f is not None):
             raise ValueError("product_formulations do not support fixed effect absorption in simulations.")
         product_formulations.extend([None] * (3 - len(product_formulations)))

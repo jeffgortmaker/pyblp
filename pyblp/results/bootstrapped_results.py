@@ -252,7 +252,7 @@ class BootstrappedResults(Results):
 
         Parameters
         ----------
-        attributes : `tuple of str, optional`
+        attributes : `sequence of str, optional`
             Name of attributes that will be added to the dictionary. By default, all :class:`BootstrappedResults`
             attributes are added except for :attr:`BootstrappedResults.problem_results`.
 
