@@ -536,7 +536,7 @@ class Market(Container):
         """Compute the Jacobian of market shares with respect to a variable. By default, compute unchanged choice
         probabilities.
         """
-        if probabilities is None or conditionals is None:
+        if probabilities is None:
             probabilities, conditionals = self.compute_probabilities()
         value_derivatives = probabilities * utility_derivatives
         capital_lamda = self.compute_capital_lamda(value_derivatives)
