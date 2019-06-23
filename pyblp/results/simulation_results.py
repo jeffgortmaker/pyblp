@@ -120,7 +120,8 @@ class SimulationResults(StringRepresentation):
     def to_problem(
             self, product_formulations: Optional[Union[Formulation, Sequence[Optional[Formulation]]]] = None,
             product_data: Optional[Mapping] = None, agent_formulation: Optional[Formulation] = None,
-            agent_data: Optional[Mapping] = None, integration: Optional[Integration] = None) -> 'Problem':
+            agent_data: Optional[Mapping] = None, integration: Optional[Integration] = None,
+            costs_type: Optional[str] = None) -> 'Problem':
         """Convert the solved simulation into a problem.
 
         Parameters are the same as those of :class:`Problem`. By default, the structure of the problem will be the same
@@ -138,6 +139,8 @@ class SimulationResults(StringRepresentation):
             By default, :attr:`Simulation.agent_data`.
         integration : `Integration, optional`
             By default, this is unspecified.
+        costs_type : `str, optional`
+            By default, :attr:`Simulation.costs_type`.
 
         Returns
         -------
@@ -158,8 +161,10 @@ class SimulationResults(StringRepresentation):
             agent_formulation = self.simulation.agent_formulation
         if agent_data is None:
             agent_data = self.simulation.agent_data
+        if costs_type is None:
+            costs_type = self.simulation.costs_type
         assert product_formulations is not None and product_data is not None
-        return Problem(product_formulations, product_data, agent_formulation, agent_data, integration)
+        return Problem(product_formulations, product_data, agent_formulation, agent_data, integration, costs_type)
 
     def compute_micro(self, micro_moments: Sequence[Moment]) -> Array:
         r"""Compute averaged micro moment values, :math:`\bar{g}_M`.

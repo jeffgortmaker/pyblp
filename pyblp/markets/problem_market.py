@@ -61,8 +61,8 @@ class ProblemMarket(Market):
         return delta, micro, xi_jacobian, micro_jacobian, micro_covariances, stats, errors
 
     def solve_supply(
-            self, initial_tilde_costs: Array, xi_jacobian: Array, costs_type: str, costs_bounds: Bounds,
-            compute_jacobian: bool) -> Tuple[Array, Array, Array, List[Error]]:
+            self, initial_tilde_costs: Array, xi_jacobian: Array, costs_bounds: Bounds, compute_jacobian: bool) -> (
+            Tuple[Array, Array, Array, List[Error]]):
         """Compute transformed marginal costs for this market. Then, if compute_jacobian is True, compute the Jacobian
         of omega (equivalently, of transformed marginal costs) with respect to theta. Replace null elements in
         transformed marginal costs with their last values before computing their Jacobian.
@@ -70,7 +70,7 @@ class ProblemMarket(Market):
         errors: List[Error] = []
 
         # compute transformed marginal costs
-        tilde_costs, clipped_costs, tilde_costs_errors = self.safely_compute_tilde_costs(costs_type, costs_bounds)
+        tilde_costs, clipped_costs, tilde_costs_errors = self.safely_compute_tilde_costs(costs_bounds)
         errors.extend(tilde_costs_errors)
 
         # replace invalid transformed marginal costs with their last computed values
@@ -82,7 +82,7 @@ class ProblemMarket(Market):
         omega_jacobian = np.full((self.J, self.parameters.P), np.nan, options.dtype)
         if compute_jacobian:
             omega_jacobian, omega_jacobian_errors = self.safely_compute_omega_by_theta_jacobian(
-                valid_tilde_costs, xi_jacobian, costs_type
+                valid_tilde_costs, xi_jacobian
             )
             errors.extend(omega_jacobian_errors)
             omega_jacobian[clipped_costs.flat] = 0
@@ -274,7 +274,7 @@ class ProblemMarket(Market):
         return np.c_[micro_covariances + micro_covariances.T] / 2, errors
 
     @NumericalErrorHandler(exceptions.CostsNumericalError)
-    def safely_compute_tilde_costs(self, costs_type: str, costs_bounds: Bounds) -> Tuple[Array, Array, List[Error]]:
+    def safely_compute_tilde_costs(self, costs_bounds: Bounds) -> Tuple[Array, Array, List[Error]]:
         """Compute transformed marginal costs, handling any numerical errors."""
         errors: List[Error] = []
 
@@ -289,10 +289,10 @@ class ProblemMarket(Market):
             costs = np.clip(costs, *costs_bounds)
 
         # take the log of marginal costs under a log-linear specification
-        if costs_type == 'linear':
+        if self.costs_type == 'linear':
             tilde_costs = costs
         else:
-            assert costs_type == 'log'
+            assert self.costs_type == 'log'
             if np.any(costs <= 0):
                 errors.append(exceptions.NonpositiveCostsError())
             with np.errstate(all='ignore'):
@@ -301,8 +301,8 @@ class ProblemMarket(Market):
 
     @NumericalErrorHandler(exceptions.OmegaByThetaJacobianNumericalError)
     def safely_compute_omega_by_theta_jacobian(
-            self, tilde_costs: Array, xi_jacobian: Array, costs_type: str) -> Tuple[Array, List[Error]]:
+            self, tilde_costs: Array, xi_jacobian: Array) -> Tuple[Array, List[Error]]:
         """Compute the Jacobian of omega (equivalently, of transformed marginal costs) with respect to theta, handling
         any numerical errors.
         """
-        return self.compute_omega_by_theta_jacobian(tilde_costs, xi_jacobian, costs_type)
+        return self.compute_omega_by_theta_jacobian(tilde_costs, xi_jacobian)

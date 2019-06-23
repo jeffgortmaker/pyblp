@@ -319,7 +319,6 @@ class Simulation(Economy):
     xi: Array
     omega: Optional[Array]
     costs: Array
-    costs_type: str
     _parameters: Parameters
 
     def __init__(
@@ -494,7 +493,7 @@ class Simulation(Economy):
         agents = Agents(products, agent_formulation, self.agent_data, integration)
 
         # initialize the underlying economy
-        super().__init__(product_formulations, agent_formulation, products, agents)
+        super().__init__(product_formulations, agent_formulation, products, agents, costs_type)
 
         # validate that all exogenous characteristics in X2 are also in X1
         for column_formulation in self._X2_formulations:
@@ -537,11 +536,6 @@ class Simulation(Economy):
         if self.xi is None:
             raise ValueError("xi must be specified if X3 is not formulated or omega is specified.")
 
-        # validate the type of marginal costs
-        if costs_type not in {'linear', 'log'}:
-            raise ValueError("costs_type must be 'linear' or 'log'.")
-        self.costs_type = costs_type
-
         # compute unspecified marginal costs
         if self.costs is None:
             if self.K3 == 0:
@@ -549,7 +543,7 @@ class Simulation(Economy):
             if self.omega is None:
                 raise ValueError("omega must be specified when X3 is formulated and xi is specified.")
             self.costs = self.products.X3 @ self.gamma + self.omega
-            if costs_type == 'log':
+            if self.costs_type == 'log':
                 self.costs = np.exp(self.costs)
 
         # output information about the initialized simulation

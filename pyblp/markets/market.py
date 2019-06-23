@@ -20,6 +20,7 @@ class Market(Container):
     """A market underlying the BLP model."""
 
     groups: Groups
+    costs_type: str
     J: int
     I: int
     K1: int
@@ -67,6 +68,9 @@ class Market(Container):
 
         # create nesting groups
         self.groups = Groups(self.products.nesting_ids)
+
+        # store other configuration information
+        self.costs_type = economy.costs_type
 
         # count dimensions
         self.J = self.products.shape[0]
@@ -721,16 +725,15 @@ class Market(Container):
             errors.append(exceptions.SharesByXiJacobianInversionError(shares_by_xi_jacobian, replacement))
         return xi_by_theta_jacobian, errors
 
-    def compute_omega_by_theta_jacobian(
-            self, tilde_costs: Array, xi_jacobian: Array, costs_type: str) -> Tuple[Array, List[Error]]:
+    def compute_omega_by_theta_jacobian(self, tilde_costs: Array, xi_jacobian: Array) -> Tuple[Array, List[Error]]:
         """Compute the Jacobian of omega (equivalently, of transformed marginal costs) with respect to theta."""
         errors: List[Error] = []
         eta_jacobian, eta_jacobian_errors = self.compute_eta_by_theta_jacobian(xi_jacobian)
         errors.extend(eta_jacobian_errors)
-        if costs_type == 'linear':
+        if self.costs_type == 'linear':
             omega_jacobian = -eta_jacobian
         else:
-            assert costs_type == 'log'
+            assert self.costs_type == 'log'
             omega_jacobian = -eta_jacobian / np.exp(tilde_costs)
         return omega_jacobian, errors
 

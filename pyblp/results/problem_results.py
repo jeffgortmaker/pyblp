@@ -241,14 +241,13 @@ class ProblemResults(Results):
     reduced_hessian_eigenvalues: Array
     W: Array
     updated_W: Array
-    _costs_type: str
     _se_type: str
     _errors: List[Error]
 
     def __init__(
             self, progress: 'Progress', last_results: Optional['ProblemResults'], last_step: bool,
             step_start_time: float, optimization_start_time: float, optimization_end_time: float,
-            optimization_stats: SolverStats, iteration_stats: Sequence[Dict[Hashable, SolverStats]], costs_type: str,
+            optimization_stats: SolverStats, iteration_stats: Sequence[Dict[Hashable, SolverStats]],
             costs_bounds: Bounds, extra_micro_covariances: Optional[Array], center_moments: bool, W_type: str,
             se_type: str) -> None:
         """Compute cumulative progress statistics, update weighting matrices, and estimate standard errors."""
@@ -274,7 +273,6 @@ class ProblemResults(Results):
         self.hessian = progress.hessian
         self.reduced_hessian = progress.reduced_hessian
         self.clipped_costs = progress.clipped_costs
-        self._costs_type = costs_type
         self._costs_bounds = costs_bounds
         self._se_type = se_type
 
@@ -872,7 +870,7 @@ class ProblemResults(Results):
         # compute delta (which will change under equilibrium prices) and marginal costs (which won't change)
         delta = self.delta + self.problem._compute_true_X1() @ (beta - self.beta)
         costs = self.tilde_costs + self.problem._compute_true_X3() @ (gamma - self.gamma)
-        if self._costs_type == 'log':
+        if self.problem.costs_type == 'log':
             costs = np.exp(costs)
 
         # prices will only change if there is an iteration configuration
@@ -1105,7 +1103,7 @@ class ProblemResults(Results):
         # compute delta (which will change under equilibrium prices) and marginal costs (which won't change)
         delta = self.delta - self.xi + xi
         costs = tilde_costs = self.tilde_costs - self.omega + omega
-        if self._costs_type == 'log':
+        if self.problem.costs_type == 'log':
             costs = np.exp(costs)
 
         # define a factory for computing realizations of prices, shares, and delta in markets
@@ -1192,7 +1190,7 @@ class ProblemResults(Results):
         errors: List[Error] = []
 
         # define a factory for computing the Jacobian of omega with respect to theta in markets
-        def market_factory(s: Hashable) -> Tuple[ResultsMarket, Array, Array, str]:
+        def market_factory(s: Hashable) -> Tuple[ResultsMarket, Array, Array]:
             """Build a market with the data realization along with arguments used to compute the Jacobians."""
             market_s = ResultsMarket(
                 self.problem, s, self._parameters, self.sigma, self.pi, self.rho, self.beta, delta,
@@ -1200,7 +1198,7 @@ class ProblemResults(Results):
             )
             tilde_costs_s = tilde_costs[self.problem._product_market_indices[s]]
             xi_jacobian_s = xi_jacobian[self.problem._product_market_indices[s]]
-            return market_s, tilde_costs_s, xi_jacobian_s, self._costs_type
+            return market_s, tilde_costs_s, xi_jacobian_s
 
         # compute the Jacobian market-by-market
         omega_jacobian = np.full((self.problem.N, self._parameters.P), np.nan, options.dtype)

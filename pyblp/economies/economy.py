@@ -18,6 +18,7 @@ class Economy(Container, StringRepresentation):
 
     product_formulations: Sequence[Optional[Formulation]]
     agent_formulation: Optional[Formulation]
+    costs_type: str
     unique_market_ids: Array
     unique_firm_ids: Array
     unique_nesting_ids: Array
@@ -44,7 +45,7 @@ class Economy(Container, StringRepresentation):
     @abc.abstractmethod
     def __init__(
             self, product_formulations: Sequence[Optional[Formulation]], agent_formulation: Optional[Formulation],
-            products: RecArray, agents: RecArray) -> None:
+            products: RecArray, agents: RecArray, costs_type: str) -> None:
         """Store information about formulations and data. Any fixed effects should be absorbed after initialization."""
 
         # store data and formulations
@@ -56,6 +57,11 @@ class Economy(Container, StringRepresentation):
         self.unique_market_ids = np.unique(self.products.market_ids.flatten())
         self.unique_firm_ids = np.unique(self.products.firm_ids.flatten())
         self.unique_nesting_ids = np.unique(self.products.nesting_ids).flatten()
+
+        # validate other configuration information
+        if costs_type not in {'linear', 'log'}:
+            raise ValueError("costs_type must be 'linear' or 'log'.")
+        self.costs_type = costs_type
 
         # count dimensions
         self.N = self.products.shape[0]

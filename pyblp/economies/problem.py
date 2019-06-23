@@ -34,9 +34,9 @@ class ProblemEconomy(Economy):
     @abc.abstractmethod
     def __init__(
             self, product_formulations: Sequence[Optional[Formulation]], agent_formulation: Optional[Formulation],
-            products: RecArray, agents: RecArray) -> None:
+            products: RecArray, agents: RecArray, costs_type: str) -> None:
         """Initialize the underlying economy with product and agent data."""
-        super().__init__(product_formulations, agent_formulation, products, agents)
+        super().__init__(product_formulations, agent_formulation, products, agents, costs_type)
 
     def solve(
             self, sigma: Optional[Any] = None, pi: Optional[Any] = None, rho: Optional[Any] = None,
@@ -46,9 +46,9 @@ class ProblemEconomy(Economy):
             delta: Optional[Any] = None, method: str = '2s', optimization: Optional[Optimization] = None,
             check_optimality: str = 'both', error_behavior: str = 'revert', error_punishment: float = 1,
             delta_behavior: str = 'first', iteration: Optional[Iteration] = None, fp_type: str = 'safe_linear',
-            costs_type: str = 'linear', costs_bounds: Optional[Tuple[Any, Any]] = None, W: Optional[Any] = None,
-            center_moments: bool = True, W_type: str = 'robust', se_type: str = 'robust',
-            micro_moments: Sequence[Moment] = (), extra_micro_covariances: Optional[Any] = None) -> ProblemResults:
+            costs_bounds: Optional[Tuple[Any, Any]] = None, W: Optional[Any] = None, center_moments: bool = True,
+            W_type: str = 'robust', se_type: str = 'robust', micro_moments: Sequence[Moment] = (),
+            extra_micro_covariances: Optional[Any] = None) -> ProblemResults:
         r"""Solve the problem.
 
         The problem is solved in one or more GMM steps. During each step, any parameters in :math:`\hat{\theta}` are
@@ -311,25 +311,14 @@ class ProblemEconomy(Economy):
             analytically in the logit model with :eq:`logit_delta` and in the nested logit model with
             :eq:`nested_logit_delta`.
 
-        costs_type : `str, optional`
-            Specification of the marginal cost function :math:`\tilde{c} = f(c)` in :eq:`costs`. The following
-            specifications are supported:
-
-                - ``'linear'`` (default) - Linear specification: :math:`\tilde{c} = c`.
-
-                - ``'log'`` - Log-linear specification: :math:`\tilde{c} = \log c`.
-
-            This specification is only relevant if :math:`X_3` was formulated by ``product_formulations`` in
-            :class:`Problem`.
-
         costs_bounds : `tuple, optional`
             Configuration for :math:`c` bounds of the form ``(lb, ub)``, in which both ``lb`` and ``ub`` are floats.
             This is only relevant if :math:`X_3` was formulated by ``product_formulations`` in :class:`Problem`. By
             default, marginal costs are unbounded.
 
-            When ``costs_type`` is ``'log'``, nonpositive :math:`c(\hat{\theta})` values can create problems when
-            computing :math:`\tilde{c}(\hat{\theta}) = \log c(\hat{\theta})`. One solution is to set ``lb`` to a small
-            number. Rows in Jacobians associated with clipped marginal costs will be zero.
+            When ``costs_type`` in :class:`Problem` is ``'log'``, nonpositive :math:`c(\hat{\theta})` values can create
+            problems when computing :math:`\tilde{c}(\hat{\theta}) = \log c(\hat{\theta})`. One solution is to set
+            ``lb`` to a small number. Rows in Jacobians associated with clipped marginal costs will be zero.
 
             Both ``None`` and ``numpy.nan`` are converted to ``-numpy.inf`` in ``lb`` and to ``numpy.inf`` in ``ub``.
 
@@ -433,8 +422,6 @@ class ProblemEconomy(Economy):
             raise ValueError("delta_behavior must be 'last' or 'first'.")
         if fp_type not in {'safe_linear', 'linear', 'safe_nonlinear', 'nonlinear'}:
             raise ValueError("fp_type must be 'safe_linear', 'linear', 'safe_nonlinear', or 'nonlinear'.")
-        if costs_type not in {'linear', 'log'}:
-            raise ValueError("costs_type must be 'linear' or 'log'.")
         if W_type not in {'robust', 'unadjusted', 'clustered'}:
             raise ValueError("W_type must be 'robust', 'unadjusted', or 'clustered'.")
         if se_type not in {'robust', 'unadjusted', 'clustered'}:
@@ -515,10 +502,10 @@ class ProblemEconomy(Economy):
         #   objective evaluation
         tilde_costs = np.full((self.N, 0), np.nan, options.dtype)
         if self.K3 > 0:
-            if costs_type == 'linear':
+            if self.costs_type == 'linear':
                 tilde_costs = self.products.prices
             else:
-                assert costs_type == 'log'
+                assert self.costs_type == 'log'
                 tilde_costs = np.log(self.products.prices)
 
         # initialize micro moments as all zeros, which will only be used if there are computation errors during the
@@ -555,7 +542,7 @@ class ProblemEconomy(Economy):
             # wrap computation of progress information with step-specific information
             compute_step_progress = functools.partial(
                 self._compute_progress, parameters, moments, iv, W, error_behavior, error_punishment, delta_behavior,
-                iteration, fp_type, costs_type, costs_bounds
+                iteration, fp_type, costs_bounds
             )
 
             # initialize optimization progress
@@ -620,8 +607,8 @@ class ProblemEconomy(Economy):
             optimization_stats.evaluations += 1
             results = ProblemResults(
                 final_progress, last_results, last_step, step_start_time, optimization_start_time,
-                optimization_end_time, optimization_stats, iteration_stats, costs_type, costs_bounds,
-                extra_micro_covariances, center_moments, W_type, se_type
+                optimization_end_time, optimization_stats, iteration_stats, costs_bounds, extra_micro_covariances,
+                center_moments, W_type, se_type
             )
             self._handle_errors(error_behavior, results._errors)
             output(f"Computed results after {format_seconds(results.total_time - results.optimization_time)}.")
@@ -647,9 +634,9 @@ class ProblemEconomy(Economy):
 
     def _compute_progress(
             self, parameters: Parameters, moments: EconomyMoments, iv: IV, W: Array, error_behavior: str,
-            error_punishment: float, delta_behavior: str, iteration: Iteration, fp_type: str, costs_type: str,
-            costs_bounds: Bounds, theta: Array, progress: 'InitialProgress', compute_gradient: bool,
-            compute_hessian: bool, compute_micro_covariances: bool) -> 'Progress':
+            error_punishment: float, delta_behavior: str, iteration: Iteration, fp_type: str, costs_bounds: Bounds,
+            theta: Array, progress: 'InitialProgress', compute_gradient: bool, compute_hessian: bool,
+            compute_micro_covariances: bool) -> 'Progress':
         """Compute demand- and supply-side contributions before recovering the linear parameters and structural error
         terms. Then, form the GMM objective value and its gradient. Finally, handle any errors that were encountered
         before structuring relevant progress information.
@@ -675,8 +662,7 @@ class ProblemEconomy(Economy):
             clipped_costs = np.zeros((self.N, 1), np.bool)
         else:
             supply = self._compute_supply_contributions(
-                parameters, costs_type, costs_bounds, sigma, pi, rho, beta, delta, xi_jacobian, progress,
-                compute_gradient
+                parameters, costs_bounds, sigma, pi, rho, beta, delta, xi_jacobian, progress, compute_gradient
             )
             tilde_costs, omega_jacobian, clipped_costs, supply_errors = supply
             errors.extend(supply_errors)
@@ -763,7 +749,7 @@ class ProblemEconomy(Economy):
         if compute_hessian:
             compute_progress = lambda x: self._compute_progress(
                 parameters, moments, iv, W, error_behavior, error_punishment, delta_behavior, iteration, fp_type,
-                costs_type, costs_bounds, x, progress, compute_gradient=True, compute_hessian=False,
+                costs_bounds, x, progress, compute_gradient=True, compute_hessian=False,
                 compute_micro_covariances=False
             )
             change = np.sqrt(np.finfo(np.float64).eps)
@@ -868,8 +854,8 @@ class ProblemEconomy(Economy):
         return delta, micro, xi_jacobian, micro_jacobian, micro_covariances, iteration_stats, errors
 
     def _compute_supply_contributions(
-            self, parameters: Parameters, costs_type: str, costs_bounds: Bounds, sigma: Array, pi: Array, rho: Array,
-            beta: Array, delta: Array, xi_jacobian: Array, progress: 'InitialProgress', compute_jacobian: bool) -> (
+            self, parameters: Parameters, costs_bounds: Bounds, sigma: Array, pi: Array, rho: Array, beta: Array,
+            delta: Array, xi_jacobian: Array, progress: 'InitialProgress', compute_jacobian: bool) -> (
             Tuple[Array, Array, Array, List[Error]]):
         """Compute transformed marginal costs and the Jacobian of omega (equivalently, of transformed marginal costs)
         with respect to theta market-by-market. Revert any problematic elements to their last values.
@@ -883,12 +869,12 @@ class ProblemEconomy(Economy):
 
         # define a factory for solving the supply side of problem markets
         def market_factory(
-                s: Hashable) -> Tuple[ProblemMarket, Array, Array, str, Bounds, bool]:
+                s: Hashable) -> Tuple[ProblemMarket, Array, Array, Bounds, bool]:
             """Build a market along with arguments used to compute transformed marginal costs and their Jacobian."""
             market_s = ProblemMarket(self, s, parameters, sigma, pi, rho, beta, delta)
             last_tilde_costs_s = progress.tilde_costs[self._product_market_indices[s]]
             xi_jacobian_s = xi_jacobian[self._product_market_indices[s]]
-            return market_s, last_tilde_costs_s, xi_jacobian_s, costs_type, costs_bounds, compute_jacobian
+            return market_s, last_tilde_costs_s, xi_jacobian_s, costs_bounds, compute_jacobian
 
         # compute transformed marginal costs and their Jacobian market-by-market
         generator = generate_items(self.unique_market_ids, market_factory, ProblemMarket.solve_supply)
@@ -1086,6 +1072,16 @@ class Problem(ProblemEconomy):
         characteristics) will be built. However, if ``sigma`` in :meth:`Problem.solve` is left unspecified or
         specified with columns fixed at zero, fewer columns will be used.
 
+    costs_type : `str, optional`
+        Functional form of the marginal cost function :math:`\tilde{c} = f(c)` in :eq:`costs`. The following
+        specifications are supported:
+
+            - ``'linear'`` (default) - Linear specification: :math:`\tilde{c} = c`.
+
+            - ``'log'`` - Log-linear specification: :math:`\tilde{c} = \log c`.
+
+        This specification is only relevant if :math:`X_3` is formulated.
+
     Attributes
     ----------
     product_formulations : `Formulation or sequence of Formulation`
@@ -1104,6 +1100,8 @@ class Problem(ProblemEconomy):
         Unique firm IDs in product data.
     unique_nesting_ids : `ndarray`
         Unique nesting group IDs in product data.
+    costs_type : `str`
+        Functional form of the marginal cost function :math:`\tilde{c} = f(c)`.
     T : `int`
         Number of markets, :math:`T`.
     N : `int`
@@ -1142,7 +1140,7 @@ class Problem(ProblemEconomy):
     def __init__(
             self, product_formulations: Union[Formulation, Sequence[Optional[Formulation]]], product_data: Mapping,
             agent_formulation: Optional[Formulation] = None, agent_data: Optional[Mapping] = None,
-            integration: Optional[Integration] = None) -> None:
+            integration: Optional[Integration] = None, costs_type: str = 'linear') -> None:
         """Initialize the underlying economy with product and agent data before absorbing fixed effects."""
 
         # keep track of long it takes to initialize the problem
@@ -1161,7 +1159,7 @@ class Problem(ProblemEconomy):
         # initialize the underlying economy with structured product and agent data
         products = Products(product_formulations, product_data)
         agents = Agents(products, agent_formulation, agent_data, integration)
-        super().__init__(product_formulations, agent_formulation, products, agents)
+        super().__init__(product_formulations, agent_formulation, products, agents, costs_type)
 
         # absorb any demand-side fixed effects
         if self._absorb_demand_ids is not None:
@@ -1221,7 +1219,10 @@ class OptimalInstrumentProblem(ProblemEconomy):
         })
 
         # initialize the underlying economy with structured product and agent data
-        super().__init__(problem.product_formulations, problem.agent_formulation, updated_products, problem.agents)
+        super().__init__(
+            problem.product_formulations, problem.agent_formulation, updated_products, problem.agents,
+            costs_type=problem.costs_type
+        )
 
         # absorb any demand-side fixed effects, which have already been absorbed into X1
         if self._absorb_demand_ids is not None:

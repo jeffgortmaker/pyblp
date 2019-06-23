@@ -47,11 +47,11 @@ class ResultsMarket(Market):
 
     @NumericalErrorHandler(exceptions.OmegaByThetaJacobianRealizationNumericalError)
     def safely_compute_omega_by_theta_jacobian_realization(
-            self, tilde_costs: Array, xi_jacobian: Array, costs_type: str) -> Tuple[Array, List[Error]]:
+            self, tilde_costs: Array, xi_jacobian: Array) -> Tuple[Array, List[Error]]:
         """Compute the Jacobian of omega (equivalently, of transformed marginal costs) with respect to theta for a
         realization of the market, handling any numerical errors.
         """
-        return self.compute_omega_by_theta_jacobian(tilde_costs, xi_jacobian, costs_type)
+        return self.compute_omega_by_theta_jacobian(tilde_costs, xi_jacobian)
 
     @NumericalErrorHandler(exceptions.PostEstimationNumericalError)
     def safely_compute_aggregate_elasticity(self, factor: float, name: str) -> Tuple[Array, List[Error]]:

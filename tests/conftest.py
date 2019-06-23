@@ -444,7 +444,6 @@ def simulated_problem(request: Any) -> SimulatedProblemFixture:
         'rho': simulation.rho,
         'beta': np.where(simulation._parameters.alpha_index, simulation.beta if supply else np.nan, np.nan),
         'rho_bounds': (np.zeros_like(simulation.rho), np.minimum(0.9, 1.5 * simulation.rho)),
-        'costs_type': simulation.costs_type,
         'method': '1s',
         'check_optimality': 'gradient',
         'optimization': Optimization('slsqp', {'ftol': 1e-10}),
