@@ -383,8 +383,8 @@ class Market(Container):
         return zeta, capital_lamda_diagonal
 
     def compute_equilibrium_prices(
-            self, costs: Array, iteration: Iteration, ownership_matrix: Optional[Array] = None,
-            prices: Optional[Array] = None) -> Tuple[Array, SolverStats]:
+            self, costs: Array, iteration: Iteration, prices: Optional[Array] = None,
+            ownership_matrix: Optional[Array] = None) -> Tuple[Array, SolverStats]:
         """Compute equilibrium prices by iterating over the zeta-markup equation. By default, use unchanged firm IDs
         and use unchanged prices as initial values.
         """

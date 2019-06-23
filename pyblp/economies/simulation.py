@@ -16,34 +16,37 @@ from ..parameters import Parameters
 from ..primitives import Agents, Products
 from ..results.simulation_results import SimulationResults
 from ..utilities.basics import (
-    Array, Data, Error, SolverStats, RecArray, extract_matrix, format_seconds, generate_items, output, output_progress,
-    structure_matrices
+    Array, Error, Groups, SolverStats, RecArray, extract_matrix, format_seconds, generate_items, output,
+    output_progress, structure_matrices
 )
 
 
 class Simulation(Economy):
     r"""Simulation of data in BLP-type models.
 
-    Any data left unspecified are simulated during initialization, except for synthetic prices and shares, which are
-    computed by :meth:`Simulation.solve`. Typically, this class is used for one of two purposes:
+    Any data left unspecified are simulated during initialization. Simulated prices and shares can be replaced by
+    :meth:`Simulation.replace_endogenous` with values that are consistent with true parameters. Simulations are
+    typically used for two purposes:
 
         1. Solving for equilibrium prices and shares under more complicated counterfactuals than is possible with
            :meth:`ProblemResults.compute_prices` and :meth:`ProblemResults.compute_shares`. For example, this class
            can be initialized with estimated parameters, structural errors, and marginal costs from a
            :meth:`ProblemResults`, but with changed data (fewer products, new products, different characteristics, etc.)
-           and :meth:`Simulation.solve` can be used to compute the corresponding prices and shares.
+           and :meth:`Simulation.replace_endogenous` can be used to compute the corresponding prices and shares.
 
         2. Simulation of BLP-type models from scratch. For example, a model with fixed true parameters can be simulated
            many times, converted into problems with :meth:`SimulationResults.to_problem`, and solved with
            :meth:`Problem.solve` to evaluate in a Monte Carlo study how well the true parameters can be recovered.
 
-    If data for exogenous variables (used to formulate product characteristics in :math:`X_1`, :math:`X_2`, and
-    :math:`X_3`, as well as agent demographics, :math:`d`) are not provided, the values for each unspecified exogenous
-    variable are drawn independently from the standard uniform distribution.
+    If data for variables (used to formulate product characteristics in :math:`X_1`, :math:`X_2`, and :math:`X_3`, as
+    well as agent demographics, :math:`d`, and endogenous prices and marketshares :math:`p` and :math:`s`) are not
+    provided, the values for each unspecified variable are drawn independently from the standard uniform distribution.
+    In each market :math:`t`, marketshares are divided by the number of products in the market :math:`J_t`. Typically,
+    :meth:`Simulation.replace_endogenous` is used to replace prices and shares with values that are consistent with true
+    parameters.
 
     If data for unobserved demand-and supply-side product characteristics, :math:`\xi` and :math:`\omega`, are not
-    provided, they are by default drawn from a mean-zero bivariate normal distribution. When a supply side is not
-    included in the simulation, marginal costs, :math:`c`, must be provided along with :math:`\xi`.
+    provided, they are by default drawn from a mean-zero bivariate normal distribution.
 
     After variables are loaded or simulated, any unspecified integration nodes and weights, :math:`\nu` and :math:`w`,
     are constructed according to a specified :class:`Integration` configuration.
@@ -54,14 +57,12 @@ class Simulation(Economy):
         :class:`Formulation` configuration or a sequence of up to three :class:`Formulation` configurations for the
         matrix of linear product characteristics, :math:`X_1`, for the matrix of nonlinear product characteristics,
         :math:`X_2`, and for the matrix of cost characteristics, :math:`X_3`, respectively. If the formulation for
-        :math:`X_3` is not specified or is ``None``, ``costs`` must be specified. If the formulation for :math:`X_2` is
-        not specified or is ``None``, the logit (or nested logit) model will be simulated.
+        :math:`X_2` is not specified or is ``None``, the logit (or nested logit) model will be simulated.
 
         The ``shares`` variable should not be included in any of the formulations and ``prices`` should be included in
-        the formulation for :math:`X_1` or :math:`X_2` (or both). All exogenous characteristics in :math:`X_2` should
-        also be included in :math:`X_1`. Any additional variables that cannot be loaded from ``product_data`` will be
-        drawn from independent standard uniform distributions. Unlike in :class:`Problem`, fixed effect absorption is
-        not supported during simulation.
+        the formulation for :math:`X_1` or :math:`X_2` (or both). Variables that cannot be loaded from ``product_data``
+        will be drawn from independent standard uniform distributions. Unlike in :class:`Problem`, fixed effect
+        absorption is not supported during simulation.
 
         .. warning::
 
@@ -100,8 +101,7 @@ class Simulation(Economy):
 
         Along with ``market_ids``, ``firm_ids``, and ``nesting_ids``, the names of any additional fields can typically
         be used as variables in ``product_formulations``. However, there are a few variable names such as ``'X1'``,
-        which are reserved for use by :class:`Products`. The names ``prices`` and ``shares`` will be ignored because
-        these will be computed by :meth:`Simulation.solve`.
+        which are reserved for use by :class:`Products`.
 
     beta : `array-like`
         Vector of demand-side linear parameters, :math:`\beta`. Elements correspond to columns in :math:`X_1`, which
@@ -170,11 +170,11 @@ class Simulation(Economy):
 
     xi : `array-like, optional`
         Unobserved demand-side product characteristics, :math:`\xi`. By default, if :math:`X_3` is formulated, each pair
-        of unobserved characteristics in this and :math:`\omega` is drawn from a mean-zero bivariate normal
+        of unobserved characteristics in this vector and :math:`\omega` is drawn from a mean-zero bivariate normal
         distribution. This must be specified if :math:`X_3` is not formulated or if ``omega`` is specified.
     omega : `array-like, optional`
         Unobserved supply-side product characteristics, :math:`\omega`. By default, if :math:`X_3` is formulated, each
-        pair of unobserved characteristics in this and :math:`\xi` is drawn from a mean-zero bivariate normal
+        pair of unobserved characteristics in this vector and :math:`\xi` is drawn from a mean-zero bivariate normal
         distribution. This must be specified if :math:`X_3` is formulated and ``xi`` is specified. It is ignored if
         :math:`X_3` is not formulated.
     xi_variance : `float, optional`
@@ -184,12 +184,9 @@ class Simulation(Economy):
     correlation : `float, optional`
         Correlation between :math:`\xi` and :math:`\omega`. The default value is ``0.9``. This is ignored if ``xi`` or
         ``omega`` is specified.
-    costs : `array-like, optional`
-        Marginal costs, :math:`c`. By default, if :math:`X_3` is formulated, :math:`c = X_3\gamma + \omega`. This must
-        be specified if :math:`X_3` is not formulated. It is ignored if :math:`X_3` is formulated.
     costs_type : `str, optional`
-        Specification of the marginal cost function :math:`\tilde{c} = f(c)` in :eq:`costs`. This is ignored if
-        ``costs`` is specified. The following specifications are supported:
+        Specification of the marginal cost function :math:`\tilde{c} = f(c)` in :eq:`costs`. The following
+        specifications are supported:
 
             - ``'linear'`` (default) - Linear specification: :math:`\tilde{c} = c`.
 
@@ -206,8 +203,9 @@ class Simulation(Economy):
     agent_formulation : `tuple`
         :class:`Formulation` configuration for :math:`d`.
     product_data : `recarray`
-        Synthetic product data that were loaded or simulated during initialization, except for synthetic prices and
-        shares, which are computed by :meth:`Simulation.solve`.
+        Synthetic product data that were loaded or simulated during initialization. Typically,
+        :meth:`Simulation.replace_endogenous` should be used to replace prices and shares with values that are
+        consistent with true parameters.
     agent_data : `recarray`
         Synthetic agent data that were loaded or simulated during initialization.
     integration : `Integration`
@@ -239,11 +237,8 @@ class Simulation(Economy):
         Unobserved demand-side product characteristics, :math:`\xi`.
     omega : `ndarray`
         Unobserved supply-side product characteristics, :math:`\omega`.
-    costs : `ndarray`
-        Marginal costs, :math:`c`.
     costs_type : `str`
-        The specification according to which :attr:`Simulation.costs` was constructed during initialization if it was
-        not specified.
+        Functional form of the marginal cost function :math:`\tilde{c} = f(c)`.
     T : `int`
         Number of markets, :math:`T`.
     N : `int`
@@ -291,7 +286,6 @@ class Simulation(Economy):
     rho: Array
     xi: Array
     omega: Optional[Array]
-    costs: Array
     _parameters: Parameters
 
     def __init__(
@@ -300,7 +294,7 @@ class Simulation(Economy):
             rho: Optional[Any] = None, agent_formulation: Optional[Formulation] = None,
             agent_data: Optional[Mapping] = None, integration: Optional[Integration] = None, xi: Optional[Any] = None,
             omega: Optional[Any] = None, xi_variance: float = 1, omega_variance: float = 1, correlation: float = 0.9,
-            costs: Optional[Any] = None, costs_type: str = 'linear', seed: Optional[int] = None) -> None:
+            costs_type: str = 'linear', seed: Optional[int] = None) -> None:
         """Load or simulate all data except for synthetic prices and shares."""
 
         # keep track of long it takes to initialize the simulation
@@ -325,11 +319,12 @@ class Simulation(Economy):
             if agent_formulation._absorbed_terms:
                 raise ValueError("agent_formulation does not support fixed effect absorption.")
 
-        # load IDs
+        # load IDs and ownership matrices
         market_ids = extract_matrix(product_data, 'market_ids')
         firm_ids = extract_matrix(product_data, 'firm_ids')
         nesting_ids = extract_matrix(product_data, 'nesting_ids')
         clustering_ids = extract_matrix(product_data, 'clustering_ids')
+        ownership = extract_matrix(product_data, 'ownership')
         if market_ids is None:
             raise KeyError("product_data must have a market_ids field.")
         if firm_ids is None:
@@ -339,57 +334,38 @@ class Simulation(Economy):
         if firm_ids.shape[1] > 1:
             raise ValueError("The firm_ids field of product_data must be one-dimensional.")
 
-        # load ownership matrices
-        ownership = extract_matrix(product_data, 'ownership')
-
         # seed the random number generator
         state = np.random.RandomState(seed)
 
-        # load or simulate exogenous product variables in sorted order so that a seed always furnishes the same draws
-        numerical_mapping: Data = {}
-        categorical_mapping: Data = {}
-        for formulation in product_formulations:
-            if formulation is not None:
-                exogenous_names = formulation._names - set(numerical_mapping) - set(categorical_mapping) - {
-                    'prices', 'market_ids', 'firm_ids', 'nesting_ids', 'clustering_ids'
-                }
-                for name in sorted(exogenous_names):
-                    variable = extract_matrix(product_data, name)
-                    if variable is None:
-                        variable = state.uniform(size=market_ids.size).astype(options.dtype)
-                    elif variable.shape[1] > 1:
-                        raise ValueError(f"The {name} variable has a field in product_data with more than one column.")
-                    if np.issubdtype(variable.dtype, np.number):
-                        numerical_mapping[name] = variable
-                    else:
-                        categorical_mapping[name] = variable
-
-        # structure product data fields as a mapping
-        product_data_mapping = {
+        # load or simulate product variables in sorted order so that a seed always gives the same draws
+        market_groups = Groups(market_ids)
+        product_mapping = {
             'market_ids': (market_ids, np.object),
             'firm_ids': (firm_ids, np.object),
-            'shares': (np.zeros(market_ids.size), options.dtype),
-            'prices': (np.zeros(market_ids.size), options.dtype)
+            'nesting_ids': (nesting_ids, np.object),
+            'clustering_ids': (clustering_ids, np.object),
+            'ownership': (ownership, options.dtype),
+            'shares': (state.uniform(size=market_ids.size) / market_groups.expand(market_groups.counts), options.dtype),
+            'prices': (state.uniform(size=market_ids.size), options.dtype)
         }
-        if nesting_ids is not None:
-            product_data_mapping['nesting_ids'] = (nesting_ids, np.object)
-        if clustering_ids is not None:
-            product_data_mapping['clustering_ids'] = (clustering_ids, np.object)
-        if ownership is not None:
-            product_data_mapping['ownership'] = (ownership, options.dtype)
-
-        # supplement the mapping with exogenous product variables
-        variable_mapping = {k: (v, options.dtype) for k, v in {**numerical_mapping, **categorical_mapping}.items()}
-        invalid_names = set(variable_mapping) & set(product_data_mapping)
-        if invalid_names:
-            raise NameError(f"These names in product_formulations are invalid: {list(invalid_names)}.")
-        self.product_data = structure_matrices({**product_data_mapping, **variable_mapping})
+        for formulation in product_formulations:
+            if formulation is None:
+                continue
+            for name in sorted(formulation._names - set(product_mapping)):
+                variable = extract_matrix(product_data, name)
+                if variable is None:
+                    variable = state.uniform(size=market_ids.size)
+                elif variable.shape[1] > 1:
+                    raise ValueError(f"The {name} variable has a field in product_data with more than one column.")
+                variable_dtype = options.dtype if np.issubdtype(variable.dtype, np.number) else np.object
+                product_mapping[name] = (variable, variable_dtype)
 
         # structure product data
+        self.product_data = structure_matrices(product_mapping)
         products = Products(product_formulations, self.product_data, instruments=False)
 
         # load or build agent data
-        self.integration = self.agent_data = None
+        agent_mapping = None
         if products.X2.shape[1] > 0:
             # determine the number of agents by loading market IDs or by building them along with nodes and weights
             if integration is not None:
@@ -401,42 +377,54 @@ class Simulation(Economy):
                 nodes = extract_matrix(agent_data, 'nodes')
                 weights = extract_matrix(agent_data, 'weights')
             else:
-                raise ValueError("At least one of agent_data and integration must be specified.")
+                raise ValueError("At least one of agent_data or integration must be specified.")
 
-            # load or simulate agent variables (in sorted order so that seeds give rise to the same draws)
-            agent_numerical_mapping: Data = {}
+            # load or simulate agent variables in sorted order so that a seed always gives the same draws
+            agent_mapping = {
+                'market_ids': (agent_market_ids, np.object),
+                'nodes': (nodes, options.dtype),
+                'weights': (weights, options.dtype)
+            }
             if agent_formulation is not None:
-                for name in sorted(agent_formulation._names - set(agent_numerical_mapping)):
+                for name in sorted(agent_formulation._names - set(agent_mapping)):
                     variable = extract_matrix(agent_data, name) if agent_data is not None else None
                     if variable is None:
-                        variable = state.uniform(size=agent_market_ids.size).astype(options.dtype)
-                    agent_numerical_mapping[name] = variable
-
-            # structure agent data fields as a mapping
-            agent_data_mapping = {'market_ids': (agent_market_ids, np.object)}
-            if nodes is not None:
-                agent_data_mapping['nodes'] = (nodes, options.dtype)
-            if weights is not None:
-                agent_data_mapping['weights'] = (weights, options.dtype)
-
-            # supplement the mapping with agent variables
-            agent_variable_mapping = {k: (v, options.dtype) for k, v in agent_numerical_mapping.items()}
-            invalid_names = set(agent_variable_mapping) & set(agent_data_mapping)
-            if invalid_names:
-                raise NameError(f"These names in agent_formulation are invalid: {list(invalid_names)}.")
-            self.integration = integration
-            self.agent_data = structure_matrices({**agent_data_mapping, **agent_variable_mapping})
+                        variable = state.uniform(size=agent_market_ids.size)
+                    elif variable.shape[1] > 1:
+                        raise ValueError(f"The {name} variable has a field in agent_data with more than one column.")
+                    variable_dtype = options.dtype if np.issubdtype(variable.dtype, np.number) else np.object
+                    agent_mapping[name] = (variable, variable_dtype)
 
         # structure agent data
-        agents = Agents(products, agent_formulation, self.agent_data, integration)
+        self.integration = integration
+        self.agent_data = structure_matrices(agent_mapping) if agent_mapping is not None else None
+        agents = Agents(products, agent_formulation, self.agent_data)
 
         # initialize the underlying economy
         super().__init__(product_formulations, agent_formulation, products, agents, costs_type)
 
-        # validate that all exogenous characteristics in X2 are also in X1
-        for column_formulation in self._X2_formulations:
-            if 'prices' not in column_formulation.names and column_formulation not in self._X1_formulations:
-                raise ValueError(f"'{column_formulation}' in the formulation for X2 is not in the formulation for X1.")
+        # load or simulate the structural errors
+        self.xi = xi
+        self.omega = omega
+        if self.xi is not None:
+            self.xi = np.c_[np.asarray(self.xi, options.dtype)]
+            if self.xi.shape != (self.N, 1):
+                raise ValueError(f"xi must be a vector with {self.N} elements.")
+        if self.omega is not None:
+            self.omega = np.c_[np.asarray(self.omega, options.dtype)]
+            if self.omega.shape != (self.N, 1):
+                raise ValueError(f"omega must be a vector with {self.N} elements.")
+        if self.xi is None and self.omega is None and self.K3 > 0:
+            covariance = correlation * np.sqrt(xi_variance * omega_variance)
+            covariances = np.array([[xi_variance, covariance], [covariance, omega_variance]], options.dtype)
+            self._detect_psd(covariances, "the covariance matrix from xi_variance, omega_variance, and correlation")
+            xi_and_omega = state.multivariate_normal([0, 0], covariances, self.N, check_valid='ignore')
+            self.xi = xi_and_omega[:, [0]].astype(options.dtype)
+            self.omega = xi_and_omega[:, [1]].astype(options.dtype)
+        if self.xi is None:
+            raise ValueError("xi must be specified if X3 is not formulated or omega is specified.")
+        if self.omega is None and self.K3 > 0:
+            raise ValueError("omega must be specified if X3 is formulated and xi is specified.")
 
         # validate parameters
         self._parameters = Parameters(self, sigma, pi, rho, beta, gamma)
@@ -445,44 +433,6 @@ class Simulation(Economy):
         self.rho = self._parameters.rho
         self.beta = self._parameters.beta
         self.gamma = self._parameters.gamma
-
-        # load xi, omega, and costs if any are specified
-        self.xi = self.omega = self.costs = None
-        if xi is not None:
-            self.xi = np.c_[np.asarray(xi, options.dtype)]
-            if self.xi.shape != (self.N, 1):
-                raise ValueError(f"xi must be a vector with {self.N} elements.")
-        if omega is not None:
-            self.omega = np.c_[np.asarray(omega, options.dtype)]
-            if self.omega.shape != (self.N, 1):
-                raise ValueError(f"omega must be a vector with {self.N} elements.")
-        if costs is not None:
-            self.costs = np.c_[np.asarray(costs, options.dtype)]
-            if self.costs.shape != (self.N, 1):
-                raise ValueError(f"costs must be a vector with {self.N} elements.")
-
-        # simulate unspecified xi and omega if there is a supply side
-        if self.xi is None and self.omega is None and self.K3 > 0:
-            covariance = correlation * np.sqrt(xi_variance * omega_variance)
-            covariances = np.array([[xi_variance, covariance], [covariance, omega_variance]], options.dtype)
-            self._detect_psd(covariances, "the covariance matrix from xi_variance, omega_variance, and correlation")
-            xi_and_omega = state.multivariate_normal([0, 0], covariances, self.N, check_valid='ignore')
-            self.xi = xi_and_omega[:, [0]].astype(options.dtype)
-            self.omega = xi_and_omega[:, [1]].astype(options.dtype)
-
-        # make sure that xi was specified or simulated
-        if self.xi is None:
-            raise ValueError("xi must be specified if X3 is not formulated or omega is specified.")
-
-        # compute unspecified marginal costs
-        if self.costs is None:
-            if self.K3 == 0:
-                raise ValueError("costs must be specified when X3 is not formulated.")
-            if self.omega is None:
-                raise ValueError("omega must be specified when X3 is formulated and xi is specified.")
-            self.costs = self.products.X3 @ self.gamma + self.omega
-            if self.costs_type == 'log':
-                self.costs = np.exp(self.costs)
 
         # output information about the initialized simulation
         output(f"Initialized the simulation after {format_seconds(time.time() - start_time)}.")
@@ -493,12 +443,12 @@ class Simulation(Economy):
         """Supplement general formatted information with other information about parameters."""
         return "\n\n".join([super().__str__(), self._parameters.format("True Values")])
 
-    def solve(
-            self, firm_ids: Optional[Any] = None, ownership: Optional[Any] = None, prices: Optional[Any] = None,
-            iteration: Optional[Iteration] = None, error_behavior: str = 'raise') -> SimulationResults:
-        r"""Compute synthetic prices and shares.
+    def replace_endogenous(
+            self, costs: Optional[Any] = None, prices: Optional[Any] = None, iteration: Optional[Iteration] = None,
+            error_behavior: str = 'raise') -> SimulationResults:
+        r"""Replace simulated prices and marketshares with values that are consistent with true parameters.
 
-        Prices and shares are computed in each market by iterating over the :math:`\zeta`-markup contraction in
+        Prices and marketshares are computed in each market by iterating over the :math:`\zeta`-markup contraction in
         :eq:`zeta_contraction`:
 
         .. math:: p \leftarrow c + \zeta(p).
@@ -516,15 +466,12 @@ class Simulation(Economy):
 
         Parameters
         ----------
-        firm_ids : `array-like, optional`
-            Potentially changed firms IDs. By default, the ``firm_ids`` field of ``product_data`` in :class:`Simulation`
-            will be used.
-        ownership : `array-like, optional`
-            Custom ownership matrices. By default, standard ownership matrices based on ``firm_ids`` will be used unless
-            the ``ownership`` field of ``product_data`` in :class:`Simulation` was specified.
+        costs : `array-like, optional`
+            Marginal costs, :math:`c`. By default, :math:`c = X_3\gamma + \omega`. Marginal costs must be specified if
+            :math:`X_3` was not formulated in :class:`Simulation`.
         prices : `array-like, optional`
-            Prices at which the fixed point iteration routine will start. By default, marginal costs, :math:`c`, are
-            used as starting values.
+            Prices at which the fixed point iteration routine will start. By default, ``costs``, are used as starting
+            values.
         iteration : `Iteration, optional`
             :class:`Iteration` configuration for how to solve the fixed point problem. By default,
             ``Iteration('simple', {'atol': 1e-12})`` is used. Analytic Jacobians are not supported for solving this
@@ -552,17 +499,25 @@ class Simulation(Economy):
         """
         errors: List[Error] = []
 
-        # keep track of long it takes to solve for prices and shares
-        output("Computing synthetic prices and shares ...")
+        # keep track of long it takes to replace endogenous variables
+        output("Replacing prices and shares ...")
         start_time = time.time()
 
-        # validate the firm IDs and ownership
-        firm_ids = self._coerce_optional_firm_ids(firm_ids)
-        ownership = self._coerce_optional_ownership(ownership)
+        # load or compute marginal costs
+        if costs is not None:
+            costs = np.c_[np.asarray(costs, options.dtype)]
+            if costs.shape != (self.N, 1):
+                raise ValueError(f"costs must be {self.N}-vector.")
+        elif self.K3 == 0:
+            raise ValueError("costs must be specified if X3 was not formulated.")
+        else:
+            costs = self.products.X3 @ self.gamma + self.omega
+            if self.costs_type == 'log':
+                costs = np.exp(costs)
 
         # choose or validate initial prices
         if prices is None:
-            prices = self.costs
+            prices = costs
         else:
             prices = np.c_[np.asarray(prices, options.dtype)]
             if prices.shape != (self.N, 1):
@@ -580,19 +535,17 @@ class Simulation(Economy):
         if error_behavior not in {'raise', 'warn'}:
             raise ValueError("error_behavior must be 'raise' or 'warn'.")
 
-        # compute a baseline delta that will be updated when shares and prices are changed
+        # compute a baseline delta that will be updated when shares and prices are replaced
         delta = self.products.X1 @ self.beta + self.xi
 
         # define a factory for solving simulation markets
-        def market_factory(s: Hashable) -> Tuple[SimulationMarket, Array, Array, Array, Array, Iteration]:
+        def market_factory(s: Hashable) -> Tuple[SimulationMarket, Array, Array, Iteration]:
             """Build a market along with arguments used to compute prices and shares."""
-            assert prices is not None and iteration is not None
+            assert costs is not None and prices is not None and iteration is not None
             market_s = SimulationMarket(self, s, self._parameters, self.sigma, self.pi, self.rho, self.beta, delta)
-            firm_ids_s = firm_ids[self._product_market_indices[s]] if firm_ids is not None else None
-            ownership_s = ownership[self._product_market_indices[s]] if ownership is not None else None
-            costs_s = self.costs[self._product_market_indices[s]]
+            costs_s = costs[self._product_market_indices[s]]
             prices_s = prices[self._product_market_indices[s]]
-            return market_s, firm_ids_s, ownership_s, costs_s, prices_s, iteration
+            return market_s, costs_s, prices_s, iteration
 
         # replace prices and shares market-by-market
         data_override = {
@@ -600,10 +553,8 @@ class Simulation(Economy):
             'shares': np.zeros_like(self.products.shares)
         }
         iteration_stats: Dict[Hashable, SolverStats] = {}
-        generator = output_progress(
-            generate_items(self.unique_market_ids, market_factory, SimulationMarket.solve), self.T, start_time
-        )
-        for t, (prices_t, shares_t, iteration_stats_t, errors_t) in generator:
+        generator = generate_items(self.unique_market_ids, market_factory, SimulationMarket.compute_prices_and_shares)
+        for t, (prices_t, shares_t, iteration_stats_t, errors_t) in output_progress(generator, self.T, start_time):
             data_override['prices'][self._product_market_indices[t]] = prices_t
             data_override['shares'][self._product_market_indices[t]] = shares_t
             iteration_stats[t] = iteration_stats_t
@@ -620,7 +571,7 @@ class Simulation(Economy):
 
         # structure the results
         results = SimulationResults(self, data_override, start_time, time.time(), iteration_stats)
-        output(f"Computed synthetic prices and shares after {format_seconds(results.computation_time)}.")
+        output(f"Replaced prices and shares after {format_seconds(results.computation_time)}.")
         output("")
         output(results)
         return results

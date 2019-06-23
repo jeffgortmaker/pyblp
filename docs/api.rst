@@ -201,12 +201,12 @@ The following class allows for evaluation of more complicated counterfactuals th
 
    Simulation
 
-Once initialized, the following method computes equilibrium prices and shares.
+Once initialized, the following method replaces prices and shares with values that are consistent with true parameters.
 
 .. autosummary::
    :toctree: _api
 
-   Simulation.solve
+   Simulation.replace_endogenous
 
 
 Simulation Results Class

@@ -384,9 +384,9 @@ class Results(abc.ABC, StringRepresentation):
 
            To compute equilibrium prices (and shares) associated with a more complicated counterfactual, a
            :class:`Simulation` for the counterfactual can be initialized with the estimated parameters, structural
-           errors, and marginal costs from these results, and then solved with :meth:`Simulation.solve`. The returned
-           :class:`SimulationResults` gives more information about the contraction than this method, such as the number
-           of contraction evaluations.
+           errors, and marginal costs from these results, and then solved with :meth:`Simulation.replace_endogenous`.
+           The returned :class:`SimulationResults` gives more information about the contraction than this method, such
+           as the number of contraction evaluations.
 
         Prices are computed in each market by iterating over the :math:`\zeta`-markup contraction in
         :eq:`zeta_contraction`:
@@ -456,7 +456,7 @@ class Results(abc.ABC, StringRepresentation):
 
            To compute equilibrium shares (and prices) associated with a more complicated counterfactual, a
            :class:`Simulation` for the counterfactual can be initialized with the estimated parameters, structural
-           errors, and marginal costs from these results, and then solved with :meth:`Simulation.solve`.
+           errors, and marginal costs from these results, and then solved with :meth:`Simulation.replace_endogenous`.
 
         Parameters
         ----------

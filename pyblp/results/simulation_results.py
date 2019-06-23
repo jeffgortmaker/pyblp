@@ -34,18 +34,19 @@ class SimulationResults(StringRepresentation):
     simulation : `Simulation`
         :class:`Simulation` that created these results.
     product_data : `recarray`
-        Simulated :attr:`Simulation.product_data` that are updated with synthetic prices and shares.
+        Simulated :attr:`Simulation.product_data` with prices and marketshares replaced to be consistent with true
+        parameters.
     computation_time : `float`
-        Number of seconds it took to compute synthetic prices and shares.
+        Number of seconds it took to compute prices and marketshares.
     fp_converged : `ndarray`
-        Flags for convergence of the iteration routine used to compute synthetic prices in each market. Flags are in
-        the same order as :attr:`Simulation.unique_market_ids`.
+        Flags for convergence of the iteration routine used to replace prices in each market. Flags are in the same
+        order as :attr:`Simulation.unique_market_ids`.
     fp_iterations : `ndarray`
-        Number of major iterations completed by the iteration routine used to compute synthetic prices in each market.
-        Counts are in the same order as :attr:`Simulation.unique_market_ids`.
+        Number of major iterations completed by the iteration routine used to replace prices in each market. Counts are
+        in the same order as :attr:`Simulation.unique_market_ids`.
     contraction_evaluations : `ndarray`
-        Number of times the contraction used to compute synthetic prices was evaluated in each market. Counts are in the
-        same order as :attr:`Simulation.unique_market_ids`.
+        Number of times the contraction used to replace prices was evaluated in each market. Counts are in the same
+        order as :attr:`Simulation.unique_market_ids`.
 
     Examples
     --------
@@ -125,10 +126,10 @@ class SimulationResults(StringRepresentation):
             costs_type: Optional[str] = None) -> 'Problem':
         """Convert the solved simulation into a problem.
 
-        Parameters are the same as those of :class:`Problem`. By default, the structure of the problem will be the same
+        Arguments are the same as those of :class:`Problem`. By default, the structure of the problem will be the same
         as that of the solved simulation.
 
-        Some simple "sums of characteristics" BLP instruments will also be constructed. Demand-side instruments are
+        By default, some simple "sums of characteristics" BLP instruments are constructed. Demand-side instruments are
         constructed by :func:`build_blp_instruments` from variables in :math:`X_1^x`, along with any supply shifters
         (variables in :math:`X_3` but not :math:`X_1`). Supply side instruments are constructed from variables in
         :math:`X_3`, along with any demand shifters (variables in :math:`X_1` but not :math:`X_3`). Instruments will

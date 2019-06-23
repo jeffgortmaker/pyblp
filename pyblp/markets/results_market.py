@@ -164,7 +164,7 @@ class ResultsMarket(Market):
         if costs is None:
             costs, costs_errors = self.safely_compute_costs()
             errors.extend(costs_errors)
-        prices, converged = self.compute_equilibrium_prices(costs, iteration, ownership_matrix, prices)[:2]
+        prices, converged = self.compute_equilibrium_prices(costs, iteration, prices, ownership_matrix)[:2]
         if not converged:
             errors.append(exceptions.EquilibriumPricesConvergenceError())
         return prices, errors

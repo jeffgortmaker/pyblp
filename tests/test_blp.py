@@ -11,7 +11,7 @@ import pytest
 import scipy.optimize
 
 from pyblp import Formulation, Iteration, Optimization, Problem, Simulation, build_ownership, parallel
-from pyblp.utilities.basics import Array, Options
+from pyblp.utilities.basics import Array, Options, update_matrices
 from .conftest import SimulatedProblemFixture
 
 
@@ -395,45 +395,59 @@ def test_merger(simulated_problem: SimulatedProblemFixture, ownership: bool, sol
     from the results of a solved problem. In particular, test that unchanged prices and shares are farther from their
     simulated counterparts than those computed by approximating a merger, which in turn are farther from their simulated
     counterparts than those computed by fully solving a merger. Also test that simple acquisitions increase HHI. These
-    inequalities are only guaranteed because of the way in which the simulations are configured. Finally, test that we
-    get the same results when we initialize a solve a simulation instead of using the convenient results methods.
+    inequalities are only guaranteed because of the way in which the simulations are configured.
     """
     simulation, simulation_results, problem, _, results = simulated_problem
 
+    # custom ownership complicates the test
+    if simulation.products.ownership.size > 0:
+        return pytest.skip("Merger testing doesn't work with custom ownership.")
+
     # create changed ownership or firm IDs associated with a merger
-    merger_ids = merger_ownership = None
-    product_data = simulation_results.product_data
+    merger_product_data = simulation_results.product_data.copy()
     if ownership:
-        merger_ownership = build_ownership(product_data, lambda f, g: 1 if f == g or (f < 2 and g < 2) else 0)
+        merger_ids = None
+        merger_ownership = build_ownership(merger_product_data, lambda f, g: 1 if f == g or (f < 2 and g < 2) else 0)
+        merger_product_data = update_matrices(merger_product_data, {
+            'ownership': (merger_ownership, merger_ownership.dtype)
+        })
     else:
-        merger_ids = np.where(product_data.firm_ids < 2, 0, product_data.firm_ids)
+        merger_ownership = None
+        merger_product_data.firm_ids[merger_product_data.firm_ids < 2] = 0
+        merger_ids = merger_product_data.firm_ids
 
-    # get changed prices and shares
-    changed_product_data = simulation.solve(merger_ids, merger_ownership).product_data
+    # get actual prices and shares
+    merger_simulation = Simulation(
+        simulation.product_formulations, merger_product_data, simulation.beta, simulation.sigma, simulation.pi,
+        simulation.gamma, simulation.rho, simulation.agent_formulation, simulation.agent_data, xi=simulation.xi,
+        omega=simulation.omega, costs_type=simulation.costs_type
+    )
+    actual = merger_simulation.replace_endogenous(**solve_options)
 
-    # compute marginal costs and create a simulation with the results
+    # compute marginal costs get estimated prices and shares
     costs = results.compute_costs()
     results_simulation = Simulation(
-        product_formulations=simulation.product_formulations[:2], product_data=simulation_results.product_data,
-        beta=results.beta, sigma=results.sigma, pi=results.pi, rho=results.rho,
-        agent_formulation=simulation.agent_formulation, agent_data=simulation.agent_data, xi=results.xi, costs=costs
+        simulation.product_formulations[:2], merger_product_data, results.beta, results.sigma, results.pi,
+        rho=results.rho, agent_formulation=simulation.agent_formulation, agent_data=simulation.agent_data, xi=results.xi
     )
-
-    # solve for actual and approximate changed prices and shares
-    estimated = results_simulation.solve(merger_ids, merger_ownership, problem.products.prices, **solve_options)
+    estimated = results_simulation.replace_endogenous(costs, problem.products.prices, **solve_options)
     estimated_prices = results.compute_prices(merger_ids, merger_ownership, costs, **solve_options)
     approximated_prices = results.compute_approximate_prices(merger_ids, merger_ownership, costs)
     estimated_shares = results.compute_shares(estimated_prices)
     approximated_shares = results.compute_shares(approximated_prices)
 
+    # test that we get the same results from solving the simulation
+    np.testing.assert_allclose(estimated.product_data.prices, estimated_prices, atol=1e-14, rtol=0, verbose=True)
+    np.testing.assert_allclose(estimated.product_data.shares, estimated_shares, atol=1e-14, rtol=0, verbose=True)
+
     # test that estimated prices are closer to changed prices than approximate prices
-    approximated_prices_error = np.linalg.norm(changed_product_data.prices - approximated_prices)
-    estimated_prices_error = np.linalg.norm(changed_product_data.prices - estimated_prices)
+    approximated_prices_error = np.linalg.norm(actual.product_data.prices - approximated_prices)
+    estimated_prices_error = np.linalg.norm(actual.product_data.prices - estimated_prices)
     np.testing.assert_array_less(estimated_prices_error, approximated_prices_error, verbose=True)
 
     # test that estimated shares are closer to changed shares than approximate shares
-    approximated_shares_error = np.linalg.norm(changed_product_data.shares - approximated_shares)
-    estimated_shares_error = np.linalg.norm(changed_product_data.shares - estimated_shares)
+    approximated_shares_error = np.linalg.norm(actual.product_data.shares - approximated_shares)
+    estimated_shares_error = np.linalg.norm(actual.product_data.shares - estimated_shares)
     np.testing.assert_array_less(estimated_shares_error, approximated_shares_error, verbose=True)
 
     # test that median HHI increases
@@ -441,10 +455,6 @@ def test_merger(simulated_problem: SimulatedProblemFixture, ownership: bool, sol
         hhi = results.compute_hhi()
         changed_hhi = results.compute_hhi(merger_ids, estimated_shares)
         np.testing.assert_array_less(np.median(hhi), np.median(changed_hhi), verbose=True)
-
-    # test that we get the same results from solving the simulation
-    np.testing.assert_allclose(estimated_prices, estimated.product_data.prices, atol=1e-14, rtol=0, verbose=True)
-    np.testing.assert_allclose(estimated_shares, estimated.product_data.shares, atol=1e-14, rtol=0, verbose=True)
 
 
 @pytest.mark.usefixtures('simulated_problem')
@@ -962,7 +972,6 @@ def test_logit(
         None):
     """Test that Logit estimates are the same as those from the the linearmodels package."""
     _, simulation_results, problem, _, _ = simulated_problem
-    product_data = simulation_results.product_data
 
     # skip more complicated simulations
     if problem.K2 > 0 or problem.K3 > 0 or problem.H > 0:
@@ -972,14 +981,14 @@ def test_logit(
     results1 = problem.solve(method=method, center_moments=center_moments, W_type=W_type, se_type=se_type)
 
     # compute the delta from the logit problem
-    delta = np.log(product_data.shares)
+    delta = np.log(simulation_results.product_data.shares)
     for t in problem.unique_market_ids:
-        shares_t = product_data.shares[product_data.market_ids == t]
-        delta[product_data.market_ids == t] -= np.log(1 - shares_t.sum())
+        shares_t = simulation_results.product_data.shares[simulation_results.product_data.market_ids == t]
+        delta[simulation_results.product_data.market_ids == t] -= np.log(1 - shares_t.sum())
 
     # configure covariance options
-    W_options = {'clusters': product_data.clustering_ids} if W_type == 'clustered' else {}
-    se_options = {'clusters': product_data.clustering_ids} if se_type == 'clustered' else {}
+    W_options = {'clusters': simulation_results.product_data.clustering_ids} if W_type == 'clustered' else {}
+    se_options = {'clusters': simulation_results.product_data.clustering_ids} if se_type == 'clustered' else {}
 
     # monkey-patch a problematic linearmodels method that shouldn't be called but is anyways
     linearmodels.IVLIML._estimate_kappa = lambda _: 1

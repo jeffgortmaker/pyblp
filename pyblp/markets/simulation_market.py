@@ -1,6 +1,6 @@
 """Market-level simulation of synthetic BLP data."""
 
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
 from .market import Market
 from .. import exceptions
@@ -11,24 +11,21 @@ from ..utilities.basics import Array, Error, SolverStats, NumericalErrorHandler
 class SimulationMarket(Market):
     """A market in a simulation of synthetic BLP data."""
 
-    def solve(
-            self, firm_ids: Optional[Array], ownership: Optional[Array], costs: Array, prices: Array,
-            iteration: Iteration) -> Tuple[Array, Array, SolverStats, List[Error]]:
-        """Solve for synthetic prices and shares. By default, use unchanged firm IDs."""
+    def compute_prices_and_shares(
+            self, costs: Array, prices: Array, iteration: Iteration) -> Tuple[Array, Array, SolverStats, List[Error]]:
+        """Compute endogenous prices and shares"""
         errors: List[Error] = []
-        ownership_matrix = self.get_ownership_matrix(firm_ids, ownership)
-        prices, stats, price_errors = self.safely_compute_equilibrium_prices(costs, iteration, ownership_matrix, prices)
+        prices, stats, price_errors = self.safely_compute_equilibrium_prices(costs, iteration, prices)
         shares, share_errors = self.safely_compute_shares(prices)
         errors.extend(price_errors + share_errors)
         return prices, shares, stats, errors
 
     @NumericalErrorHandler(exceptions.SyntheticPricesNumericalError)
     def safely_compute_equilibrium_prices(
-            self, costs: Array, iteration: Iteration, ownership_matrix: Array, prices: Array) -> (
-            Tuple[Array, SolverStats, List[Error]]):
+            self, costs: Array, iteration: Iteration, prices: Array) -> Tuple[Array, SolverStats, List[Error]]:
         """Compute equilibrium prices by iterating over the zeta-markup equation, handling any numerical errors."""
         errors: List[Error] = []
-        prices, stats = self.compute_equilibrium_prices(costs, iteration, ownership_matrix, prices)
+        prices, stats = self.compute_equilibrium_prices(costs, iteration, prices)
         if not stats.converged:
             errors.append(exceptions.SyntheticPricesConvergenceError())
         return prices, stats, errors

@@ -93,7 +93,7 @@ def small_logit_simulation() -> SimulationFixture:
         correlation=0.7,
         seed=0
     )
-    simulation_results = simulation.solve()
+    simulation_results = simulation.replace_endogenous()
     return simulation, simulation_results, {}, []
 
 
@@ -122,7 +122,7 @@ def large_logit_simulation() -> SimulationFixture:
         costs_type='log',
         seed=2
     )
-    simulation_results = simulation.solve()
+    simulation_results = simulation.replace_endogenous()
     return simulation, simulation_results, {}, []
 
 
@@ -152,7 +152,7 @@ def small_nested_logit_simulation() -> SimulationFixture:
         correlation=0.7,
         seed=0
     )
-    simulation_results = simulation.solve()
+    simulation_results = simulation.replace_endogenous()
     return simulation, simulation_results, {}, []
 
 
@@ -184,7 +184,7 @@ def large_nested_logit_simulation() -> SimulationFixture:
         costs_type='log',
         seed=2
     )
-    simulation_results = simulation.solve()
+    simulation_results = simulation.replace_endogenous()
     return simulation, simulation_results, {}, []
 
 
@@ -214,7 +214,7 @@ def small_blp_simulation() -> SimulationFixture:
         omega=uniform[:, 0] + uniform[:, 2],
         seed=0
     )
-    simulation_results = simulation.solve()
+    simulation_results = simulation.replace_endogenous()
     return simulation, simulation_results, {}, []
 
 
@@ -254,7 +254,7 @@ def medium_blp_simulation() -> SimulationFixture:
         correlation=0.8,
         seed=1
     )
-    simulation_results = simulation.solve()
+    simulation_results = simulation.replace_endogenous()
     simulated_micro_moments = [ProductsAgentsCovarianceMoment(X2_index=1, demographics_index=0, value=0)]
     return simulation, simulation_results, {}, simulated_micro_moments
 
@@ -300,7 +300,7 @@ def large_blp_simulation() -> SimulationFixture:
         costs_type='log',
         seed=2
     )
-    simulation_results = simulation.solve()
+    simulation_results = simulation.replace_endogenous()
     simulated_data_override = {
         'demand_instruments': np.c_[
             build_differentiation_instruments(Formulation('0 + x + y + z + q'), simulation_results.product_data),
@@ -352,7 +352,7 @@ def small_nested_blp_simulation() -> SimulationFixture:
         correlation=0.7,
         seed=0
     )
-    simulation_results = simulation.solve()
+    simulation_results = simulation.replace_endogenous()
     return simulation, simulation_results, {}, []
 
 
@@ -399,7 +399,7 @@ def large_nested_blp_simulation() -> SimulationFixture:
         costs_type='log',
         seed=2
     )
-    simulation_results = simulation.solve()
+    simulation_results = simulation.replace_endogenous()
     simulated_micro_moments = [
         ProductsAgentsCovarianceMoment(X2_index=0, demographics_index=0, value=0),
         ProductsAgentsCovarianceMoment(X2_index=1, demographics_index=1, value=0)
