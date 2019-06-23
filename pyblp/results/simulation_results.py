@@ -1,13 +1,14 @@
 """Economy-level structuring of BLP simulation results."""
 
 import time
-from typing import Dict, Hashable, List, Optional, Sequence, Tuple, TYPE_CHECKING, Union
+from typing import Dict, Hashable, List, Optional, Sequence, Set, Tuple, TYPE_CHECKING, Union
 
 import numpy as np
 
 from .. import exceptions, options
 from ..configurations.formulation import Formulation
 from ..configurations.integration import Integration
+from ..construction import build_blp_instruments, build_matrix
 from ..markets.simulation_results_market import SimulationResultsMarket
 from ..moments import Moment, EconomyMoments
 from ..utilities.basics import (
@@ -25,8 +26,8 @@ if TYPE_CHECKING:
 class SimulationResults(StringRepresentation):
     r"""Results of a solved simulation of synthetic BLP data.
 
-    The :meth:`SimulationResults.to_problem` method can be used to convert the full set of simulated data and configured
-    information into a :class:`Problem`.
+    The :meth:`SimulationResults.to_problem` method can be used to convert the full set of simulated data (along with
+    some basic default instruments) and configured information into a :class:`Problem`.
 
     Attributes
     ----------
@@ -93,7 +94,7 @@ class SimulationResults(StringRepresentation):
 
     def to_dict(
             self, attributes: Sequence[str] = (
-                'product_data', 'delta', 'computation_time', 'fp_converged', 'fp_iterations', 'contraction_evaluations'
+                'product_data', 'computation_time', 'fp_converged', 'fp_iterations', 'contraction_evaluations'
             )) -> dict:
         """Convert these results into a dictionary that maps attribute names to values.
 
@@ -127,12 +128,25 @@ class SimulationResults(StringRepresentation):
         Parameters are the same as those of :class:`Problem`. By default, the structure of the problem will be the same
         as that of the solved simulation.
 
+        Some simple "sums of characteristics" BLP instruments will also be constructed. Demand-side instruments are
+        constructed by :func:`build_blp_instruments` from variables in :math:`X_1^x`, along with any supply shifters
+        (variables in :math:`X_3` but not :math:`X_1`). Supply side instruments are constructed from variables in
+        :math:`X_3`, along with any demand shifters (variables in :math:`X_1` but not :math:`X_3`). Instruments will
+        also be constructed from columns of ones if there is variation in :math:`J_t`, the number of products per
+        market. Any constant columns will be dropped. For example, if each firm owns exactly one product in each market,
+        the "rival" columns of instruments will be zero and hence dropped.
+
+        .. note::
+
+           These excluded instruments are constructed only for convenience. Especially for more complicated problems,
+           they should be replaced with better instruments.
+
         Parameters
         ----------
         product_formulations : `Formulation or sequence of Formulation, optional`
             By default, :attr:`Simulation.product_formulations`.
         product_data : `structured array-like, optional`
-            By default, :attr:`SimulationResults.product_data`.
+            By default, :attr:`SimulationResults.product_data` with excluded instruments.
         agent_formulation : `Formulation, optional`
             By default, :attr:`Simulation.agent_formulation`.
         agent_data : `structured array-like, optional`
@@ -152,19 +166,59 @@ class SimulationResults(StringRepresentation):
             - :doc:`Tutorial </tutorial>`
 
         """
-        from ..economies.problem import Problem  # noqa
         if product_formulations is None:
             product_formulations = self.simulation.product_formulations
         if product_data is None:
-            product_data = self.product_data
+            demand_instruments, supply_instruments = self._compute_default_instruments()
+            product_data = update_matrices(self.product_data, {
+                'demand_instruments': (demand_instruments, options.dtype),
+                'supply_instruments': (supply_instruments, options.dtype)
+            })
+            assert product_data is not None
         if agent_formulation is None:
             agent_formulation = self.simulation.agent_formulation
         if agent_data is None:
             agent_data = self.simulation.agent_data
         if costs_type is None:
             costs_type = self.simulation.costs_type
-        assert product_formulations is not None and product_data is not None
+        from ..economies.problem import Problem  # noqa
         return Problem(product_formulations, product_data, agent_formulation, agent_data, integration, costs_type)
+
+    def _compute_default_instruments(self) -> Tuple[Array, Array]:
+        """Compute default sums of characteristics excluded BLP instruments."""
+
+        # collect exogenous variables names that will be used in instruments
+        assert self.simulation.product_formulations[0] is not None
+        X1_names = self.simulation.product_formulations[0]._names - {'prices'}
+        X3_names: Set[str] = set()
+        if self.simulation.product_formulations[2] is not None:
+            X3_names = self.simulation.product_formulations[2]._names
+
+        # determine whether there's variation in the number of products per markets
+        J_variation = any(i.size < self.simulation._max_J for i in self.simulation._product_market_indices.values())
+
+        # construct the BLP instruments, dropping any constant columns
+        demand_instruments = np.zeros((self.simulation.N, 0), options.dtype)
+        supply_instruments = np.zeros((self.simulation.N, 0), options.dtype)
+        demand_formula = ' + '.join(['1' if J_variation else '0'] + sorted(X1_names))
+        supply_formula = ' + '.join(['1' if J_variation else '0'] + sorted(X3_names))
+        if demand_formula != '0':
+            demand_instruments = build_blp_instruments(Formulation(demand_formula), self.simulation.product_data)
+            demand_instruments = demand_instruments[:, (demand_instruments != demand_instruments[0]).any(axis=0)]
+        if supply_formula != '0' and self.simulation.K3 > 0:
+            supply_instruments = build_blp_instruments(Formulation(supply_formula), self.simulation.product_data)
+            supply_instruments = supply_instruments[:, (supply_instruments != supply_instruments[0]).any(axis=0)]
+
+        # add supply and demand shifters
+        supply_shifter_formula = ' + '.join(['0'] + sorted(X3_names - X1_names))
+        demand_shifter_formula = ' + '.join(['0'] + sorted(X1_names - X3_names))
+        if supply_shifter_formula != '0':
+            supply_shifters = build_matrix(Formulation(supply_shifter_formula), self.simulation.product_data)
+            demand_instruments = np.c_[demand_instruments, supply_shifters]
+        if demand_shifter_formula != '0' and self.simulation.K3 > 0:
+            demand_shifters = build_matrix(Formulation(demand_shifter_formula), self.simulation.product_data)
+            supply_instruments = np.c_[supply_instruments, demand_shifters]
+        return demand_instruments, supply_instruments
 
     def compute_micro(self, micro_moments: Sequence[Moment]) -> Array:
         r"""Compute averaged micro moment values, :math:`\bar{g}_M`.

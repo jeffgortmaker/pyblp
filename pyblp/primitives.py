@@ -63,7 +63,9 @@ class Products(object):
     X3: Array
     prices: Array
 
-    def __new__(cls, product_formulations: Sequence[Optional[Formulation]], product_data: Mapping) -> RecArray:
+    def __new__(
+            cls, product_formulations: Sequence[Optional[Formulation]], product_data: Mapping,
+            instruments: bool = True) -> RecArray:
         """Structure product data."""
 
         # validate the formulations
@@ -104,14 +106,16 @@ class Products(object):
                 raise NameError("prices cannot be included in the formulation for X3.")
 
         # load excluded demand-side instruments and supplement them with exogenous characteristics in X1
-        ZD = extract_matrix(product_data, 'demand_instruments')
-        for index, formulation in enumerate(X1_formulations):
-            if 'prices' not in formulation.names:
-                ZD = X1[:, [index]] if ZD is None else np.c_[ZD, X1[:, [index]]]
+        ZD = None
+        if instruments:
+            ZD = extract_matrix(product_data, 'demand_instruments')
+            for index, formulation in enumerate(X1_formulations):
+                if 'prices' not in formulation.names:
+                    ZD = X1[:, [index]] if ZD is None else np.c_[ZD, X1[:, [index]]]
 
         # load excluded supply-side instruments and supplement them with all characteristics in X3
         ZS = None
-        if X3 is not None:
+        if instruments and X3 is not None:
             ZS = extract_matrix(product_data, 'supply_instruments')
             ZS = X3 if ZS is None else np.c_[ZS, X3]
 

@@ -17,7 +17,7 @@ from pyblp.utilities.basics import update_matrices, Array, Data, Options
 
 
 # define common types
-SimulationFixture = Tuple[Simulation, SimulationResults, List[ProductsAgentsCovarianceMoment]]
+SimulationFixture = Tuple[Simulation, SimulationResults, Dict[str, Array], List[ProductsAgentsCovarianceMoment]]
 SimulatedProblemFixture = Tuple[Simulation, SimulationResults, Problem, Options, ProblemResults]
 
 
@@ -94,7 +94,7 @@ def small_logit_simulation() -> SimulationFixture:
         seed=0
     )
     simulation_results = simulation.solve()
-    return simulation, simulation_results, []
+    return simulation, simulation_results, {}, []
 
 
 @pytest.fixture(scope='session')
@@ -123,7 +123,7 @@ def large_logit_simulation() -> SimulationFixture:
         seed=2
     )
     simulation_results = simulation.solve()
-    return simulation, simulation_results, []
+    return simulation, simulation_results, {}, []
 
 
 @pytest.fixture(scope='session')
@@ -153,7 +153,7 @@ def small_nested_logit_simulation() -> SimulationFixture:
         seed=0
     )
     simulation_results = simulation.solve()
-    return simulation, simulation_results, []
+    return simulation, simulation_results, {}, []
 
 
 @pytest.fixture(scope='session')
@@ -185,7 +185,7 @@ def large_nested_logit_simulation() -> SimulationFixture:
         seed=2
     )
     simulation_results = simulation.solve()
-    return simulation, simulation_results, []
+    return simulation, simulation_results, {}, []
 
 
 @pytest.fixture(scope='session')
@@ -215,7 +215,7 @@ def small_blp_simulation() -> SimulationFixture:
         seed=0
     )
     simulation_results = simulation.solve()
-    return simulation, simulation_results, []
+    return simulation, simulation_results, {}, []
 
 
 @pytest.fixture(scope='session')
@@ -256,7 +256,7 @@ def medium_blp_simulation() -> SimulationFixture:
     )
     simulation_results = simulation.solve()
     simulated_micro_moments = [ProductsAgentsCovarianceMoment(X2_index=1, demographics_index=0, value=0)]
-    return simulation, simulation_results, simulated_micro_moments
+    return simulation, simulation_results, {}, simulated_micro_moments
 
 
 @pytest.fixture(scope='session')
@@ -264,7 +264,7 @@ def large_blp_simulation() -> SimulationFixture:
     """Solve a simulation with 20 markets, varying numbers of products per market, a linear constant, linear/nonlinear
     prices, a linear/nonlinear/cost characteristic, another three linear characteristics, another two cost
     characteristics, demographics interacted with prices and the linear/nonlinear/cost characteristic, dense parameter
-    matrices, a log-linear cost specification, and local differentiation instruments on the demand side.
+    matrices, a log-linear cost specification, and local differentiation instruments.
     """
     id_data = build_id_data(T=20, J=20, F=9)
     keep = np.arange(id_data.size)
@@ -301,13 +301,16 @@ def large_blp_simulation() -> SimulationFixture:
         seed=2
     )
     simulation_results = simulation.solve()
-    differentiation_instruments = np.c_[
-        build_differentiation_instruments(Formulation('0 + x + y + z + q'), simulation_results.product_data),
-        build_matrix(Formulation('0 + a + b'), simulation_results.product_data)
-    ]
-    simulation_results.product_data = update_matrices(simulation_results.product_data, {
-        'demand_instruments': (differentiation_instruments, simulation_results.product_data.demand_instruments.dtype)
-    })
+    simulated_data_override = {
+        'demand_instruments': np.c_[
+            build_differentiation_instruments(Formulation('0 + x + y + z + q'), simulation_results.product_data),
+            build_matrix(Formulation('0 + a + b'), simulation_results.product_data)
+        ],
+        'supply_instruments': np.c_[
+            build_differentiation_instruments(Formulation('0 + x + a + b'), simulation_results.product_data),
+            build_matrix(Formulation('0 + y + z + q'), simulation_results.product_data)
+        ]
+    }
     simulated_micro_moments = [
         ProductsAgentsCovarianceMoment(X2_index=0, demographics_index=0, value=0),
         ProductsAgentsCovarianceMoment(
@@ -317,7 +320,7 @@ def large_blp_simulation() -> SimulationFixture:
             X2_index=0, demographics_index=1, value=0, market_ids=simulation.unique_market_ids[-3:]
         )
     ]
-    return simulation, simulation_results, simulated_micro_moments
+    return simulation, simulation_results, simulated_data_override, simulated_micro_moments
 
 
 @pytest.fixture(scope='session')
@@ -350,7 +353,7 @@ def small_nested_blp_simulation() -> SimulationFixture:
         seed=0
     )
     simulation_results = simulation.solve()
-    return simulation, simulation_results, []
+    return simulation, simulation_results, {}, []
 
 
 @pytest.fixture(scope='session')
@@ -401,7 +404,7 @@ def large_nested_blp_simulation() -> SimulationFixture:
         ProductsAgentsCovarianceMoment(X2_index=0, demographics_index=0, value=0),
         ProductsAgentsCovarianceMoment(X2_index=1, demographics_index=1, value=0)
     ]
-    return simulation, simulation_results, simulated_micro_moments
+    return simulation, simulation_results, {}, simulated_micro_moments
 
 
 @pytest.fixture(scope='session', params=[
@@ -429,7 +432,19 @@ def simulated_problem(request: Any) -> SimulatedProblemFixture:
     bounds that are more conservative than the default ones.
     """
     name, supply = request.param
-    simulation, simulation_results, simulated_micro_moments = request.getfixturevalue(f'{name}_simulation')
+    simulation, simulation_results, simulated_data_override, simulated_micro_moments = (
+        request.getfixturevalue(f'{name}_simulation')
+    )
+
+    # override the simulated data
+    product_data = None
+    if simulated_data_override:
+        product_data = update_matrices(
+            simulation_results.product_data,
+            {k: (v, v.dtype) for k, v in simulated_data_override.items()}
+        )
+
+    # compute micro moments
     micro_moments = []
     if simulated_micro_moments:
         micro_values = simulation_results.compute_micro(simulated_micro_moments)
@@ -437,7 +452,9 @@ def simulated_problem(request: Any) -> SimulatedProblemFixture:
             micro_moments.append(ProductsAgentsCovarianceMoment(
                 moment.X2_index, moment.demographics_index, value, moment.market_ids
             ))
-    problem = simulation_results.to_problem(simulation.product_formulations[:2 + int(supply)])
+
+    # initialize and solve the problem
+    problem = simulation_results.to_problem(simulation.product_formulations[:2 + int(supply)], product_data)
     solve_options = {
         'sigma': simulation.sigma,
         'pi': simulation.pi,

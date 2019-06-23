@@ -210,8 +210,12 @@ def test_fixed_effects(
     if ED == ES == 0:
         return pytest.skip("There are no fixed effects to test.")
 
-    # make product data mutable
+    # make product data mutable and add instruments
     product_data = {k: simulation_results.product_data[k] for k in simulation_results.product_data.dtype.names}
+    product_data.update({
+        'demand_instruments': problem.products.ZD[:, :-problem.K1],
+        'supply_instruments': problem.products.ZS[:, :-problem.K3]
+    })
 
     # remove constants and delete associated elements in the initial beta
     solve_options = solve_options.copy()
