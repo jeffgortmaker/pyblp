@@ -148,7 +148,7 @@ class ProblemMarket(Market):
 
             # set up components common to both types of linear contraction
             if 'safe' in fp_type:
-                utility_reduction = np.max(self.mu, axis=0, keepdims=True)
+                utility_reduction = np.clip(self.mu.max(axis=0, keepdims=True), 0, None)
                 exp_mu = np.exp(self.mu - utility_reduction)
                 compute_probabilities = functools.partial(
                     self.compute_probabilities, mu=exp_mu, utility_reduction=utility_reduction, linear=False

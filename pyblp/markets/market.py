@@ -268,7 +268,7 @@ class Market(Container):
             if self.H > 0:
                 utilities /= 1 - self.rho
             if safe:
-                utility_reduction = np.max(utilities, axis=0, keepdims=True)
+                utility_reduction = np.clip(utilities.max(axis=0, keepdims=True), 0, None)
                 utilities -= utility_reduction
             exp_utilities = np.exp(utilities)
 
@@ -491,11 +491,11 @@ class Market(Container):
             conditionals_tangent = associations * (A - conditionals * self.groups.expand(A_sums))
 
             # compute the tangent of marginal probabilities with respect to the parameter (re-scale for robustness)
-            max_utilities = np.max(utilities, axis=0, keepdims=True)
+            utility_reduction = np.clip(utilities.max(axis=0, keepdims=True), 0, None)
             with np.errstate(divide='ignore', invalid='ignore'):
                 B = marginals * (
                     A_sums * (1 - self.group_rho) -
-                    (np.log(self.groups.sum(np.exp(utilities - max_utilities))) + max_utilities)
+                    (np.log(self.groups.sum(np.exp(utilities - utility_reduction))) + utility_reduction)
                 )
                 marginals_tangent = group_associations * B - marginals * (group_associations.T @ B)
             marginals_tangent[~np.isfinite(marginals_tangent)] = 0

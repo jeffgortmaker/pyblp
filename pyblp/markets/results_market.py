@@ -245,17 +245,17 @@ class ResultsMarket(Market):
         utilities = delta + mu
         if self.H > 0:
             utilities /= 1 - self.rho
-        max_utilities = np.max(utilities, axis=0, keepdims=True)
-        exp_utilities = np.exp(utilities - max_utilities)
+        utility_reduction = np.clip(utilities.max(axis=0, keepdims=True), 0, None)
+        exp_utilities = np.exp(utilities - utility_reduction)
         scale_weights = 1
         if self.H == 0:
-            log_scale = -max_utilities
+            log_scale = -utility_reduction
         else:
             exp_utilities = np.exp(np.log(self.groups.sum(exp_utilities)) * (1 - self.group_rho))
             min_rho = np.min(self.group_rho)
-            log_scale = -max_utilities * (1 - min_rho)
+            log_scale = -utility_reduction * (1 - min_rho)
             if self.rho_size > 1:
-                scale_weights = np.exp(-max_utilities * (self.group_rho - min_rho))
+                scale_weights = np.exp(-utility_reduction * (self.group_rho - min_rho))
 
         # compute the derivatives of utility with respect to prices, which are assumed to be constant across products
         derivatives = -self.compute_utility_derivatives('prices')[0]
