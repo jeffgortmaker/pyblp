@@ -235,7 +235,10 @@ def format_number(number: Any) -> str:
 
 def format_se(se: Any) -> str:
     """Prepare a standard error to be displayed as a string."""
-    return f"({format_number(se)})"
+    formatted = format_number(se)
+    if "NAN" in formatted:
+        return formatted.replace("NAN", "(NAN)")
+    return f"({formatted})"
 
 
 def format_options(mapping: Options) -> str:
