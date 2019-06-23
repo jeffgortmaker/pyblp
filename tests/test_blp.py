@@ -36,6 +36,10 @@ def test_accuracy(simulated_problem: SimulatedProblemFixture, solve_options_upda
     """Test that starting parameters that are half their true values give rise to errors of less than 10%."""
     simulation, _, problem, solve_options, _ = simulated_problem
 
+    # skip different iteration configurations when they won't matter
+    if simulation.K2 == 0 and {'delta_behavior', 'fp_type', 'iteration'} & set(solve_options_update):
+        return pytest.skip("A different iteration configuration has no impact when there is no heterogeneity.")
+
     # update the default options and solve the problem
     updated_solve_options = solve_options.copy()
     updated_solve_options.update(solve_options_update)
