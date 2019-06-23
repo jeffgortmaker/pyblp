@@ -177,14 +177,14 @@ class BootstrappedResults(Results):
         def market_factory(pair: Tuple[int, Hashable]) -> tuple:
             """Build a market with bootstrapped data along with arguments used to compute arrays."""
             c, s = pair
-            data_override_cs = {
-                'prices': self.bootstrapped_prices[c, self.problem._product_market_indices[s]],
-                'shares': self.bootstrapped_shares[c, self.problem._product_market_indices[s]]
+            data_override_c = {
+                'prices': self.bootstrapped_prices[c],
+                'shares': self.bootstrapped_shares[c]
             }
             market_js = ResultsMarket(
                 self.problem, s, self._parameters, self.bootstrapped_sigma[c], self.bootstrapped_pi[c],
                 self.bootstrapped_rho[c], self.bootstrapped_beta[c], self.bootstrapped_delta[c], self._moments,
-                data_override_cs
+                data_override_c
             )
             args_cs: List[Optional[Array]] = []
             for market_arg in market_args:

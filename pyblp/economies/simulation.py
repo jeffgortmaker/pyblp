@@ -662,16 +662,18 @@ class Simulation(Economy):
             prices_s = prices[self._product_market_indices[s]]
             return market_s, firm_ids_s, ownership_s, costs_s, prices_s, iteration
 
-        # compute prices and shares market-by-market
-        synthetic_prices = np.full_like(self.products.prices, np.nan)
-        synthetic_shares = np.full_like(self.products.shares, np.nan)
+        # replace prices and shares market-by-market
+        data_override = {
+            'prices': np.zeros_like(self.products.prices),
+            'shares': np.zeros_like(self.products.shares)
+        }
         iteration_stats: Dict[Hashable, SolverStats] = {}
         generator = output_progress(
             generate_items(self.unique_market_ids, market_factory, SimulationMarket.solve), self.T, start_time
         )
         for t, (prices_t, shares_t, iteration_stats_t, errors_t) in generator:
-            synthetic_prices[self._product_market_indices[t]] = prices_t
-            synthetic_shares[self._product_market_indices[t]] = shares_t
+            data_override['prices'][self._product_market_indices[t]] = prices_t
+            data_override['shares'][self._product_market_indices[t]] = shares_t
             iteration_stats[t] = iteration_stats_t
             errors.extend(errors_t)
 
@@ -685,7 +687,7 @@ class Simulation(Economy):
             output("")
 
         # structure the results
-        results = SimulationResults(self, synthetic_prices, synthetic_shares, start_time, time.time(), iteration_stats)
+        results = SimulationResults(self, data_override, start_time, time.time(), iteration_stats)
         output(f"Computed synthetic prices and shares after {format_seconds(results.computation_time)}.")
         output("")
         output(results)

@@ -11,8 +11,8 @@ from ..configurations.integration import Integration
 from ..markets.simulation_results_market import SimulationResultsMarket
 from ..moments import Moment, EconomyMoments
 from ..utilities.basics import (
-    Array, Error, SolverStats, generate_items, Mapping, output, RecArray, StringRepresentation, format_seconds,
-    format_table
+    Array, Error, SolverStats, generate_items, Mapping, output, update_matrices, RecArray, StringRepresentation,
+    format_seconds, format_table
 )
 
 
@@ -34,8 +34,6 @@ class SimulationResults(StringRepresentation):
         :class:`Simulation` that created these results.
     product_data : `recarray`
         Simulated :attr:`Simulation.product_data` that are updated with synthetic prices and shares.
-    delta : `ndarray`
-        Simulated mean utility, :math:`\delta`.
     computation_time : `float`
         Number of seconds it took to compute synthetic prices and shares.
     fp_converged : `ndarray`
@@ -56,21 +54,21 @@ class SimulationResults(StringRepresentation):
 
     simulation: 'Simulation'
     product_data: RecArray
-    delta: Array
     computation_time: float
     fp_converged: Array
     fp_iterations: Array
     contraction_evaluations: Array
+    _data_override: Dict[str, Array]
 
     def __init__(
-            self, simulation: 'Simulation', prices: Array, shares: Array, start_time: float, end_time: float,
+            self, simulation: 'Simulation', data_override: Dict[str, Array], start_time: float, end_time: float,
             iteration_stats: Dict[Hashable, SolverStats]) -> None:
         """Structure simulation results."""
         self.simulation = simulation
-        self.product_data = simulation.product_data.copy()
-        self.product_data.prices = prices
-        self.product_data.shares = shares
-        self.delta = simulation._compute_true_X1({'prices': prices}) @ simulation.beta + simulation.xi
+        self.product_data = update_matrices(
+            simulation.product_data,
+            {k: (v, v.dtype) for k, v in data_override.items()}
+        )
         self.computation_time = end_time - start_time
         self.fp_converged = np.array(
             [iteration_stats[t].converged for t in simulation.unique_market_ids], dtype=np.bool
@@ -81,6 +79,7 @@ class SimulationResults(StringRepresentation):
         self.contraction_evaluations = np.array(
             [iteration_stats[t].evaluations for t in simulation.unique_market_ids], dtype=np.int
         )
+        self._data_override = data_override
 
     def __str__(self) -> str:
         """Format simulation results as a string."""
@@ -197,16 +196,15 @@ class SimulationResults(StringRepresentation):
         output("")
         output(moments.format("Micro Moments"))
 
+        # compute the mean utility
+        delta = self.simulation._compute_true_X1(self._data_override) @ self.simulation.beta + self.simulation.xi
+
         # define a factory for computing market-level micro moments
         def market_factory(s: Hashable) -> Tuple[SimulationResultsMarket]:
             """Build a market along with arguments used to compute micro moments."""
-            data_override_cs = {
-                'prices': self.product_data.prices[self.simulation._product_market_indices[s]],
-                'shares': self.product_data.shares[self.simulation._product_market_indices[s]]
-            }
             market_s = SimulationResultsMarket(
                 self.simulation, s, self.simulation._parameters, self.simulation.sigma, self.simulation.pi,
-                self.simulation.rho, self.simulation.beta, self.delta, moments, data_override_cs
+                self.simulation.rho, self.simulation.beta, delta, moments, self._data_override
             )
             return market_s,
 

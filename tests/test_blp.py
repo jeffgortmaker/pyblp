@@ -625,7 +625,7 @@ def test_return(simulated_problem: SimulatedProblemFixture) -> None:
         'rho': simulation.rho,
         'beta': simulation.beta,
         'gamma': simulation.gamma if problem.K3 > 0 else None,
-        'delta': simulation_results.delta
+        'delta': problem.products.X1 @ simulation.beta + simulation.xi
     }
     updated_solve_options = solve_options.copy()
     updated_solve_options.update({

@@ -1117,36 +1117,37 @@ class ProblemResults(Results):
             return market_s, costs_s, prices_s, iteration
 
         # compute realizations of prices, shares, and delta market-by-market
-        equilibrium_prices = np.zeros_like(self.problem.products.prices)
-        equilibrium_shares = np.zeros_like(self.problem.products.shares)
+        data_override = {
+            'prices': np.zeros_like(self.problem.products.prices),
+            'shares': np.zeros_like(self.problem.products.shares)
+        }
         iteration_stats: Dict[Hashable, SolverStats] = {}
         generator = generate_items(
             self.problem.unique_market_ids, market_factory, ResultsMarket.safely_solve_equilibrium_realization
         )
         for t, (prices_t, shares_t, delta_t, iteration_stats_t, errors_t) in generator:
-            equilibrium_prices[self.problem._product_market_indices[t]] = prices_t
-            equilibrium_shares[self.problem._product_market_indices[t]] = shares_t
+            data_override['prices'][self.problem._product_market_indices[t]] = prices_t
+            data_override['shares'][self.problem._product_market_indices[t]] = shares_t
             delta[self.problem._product_market_indices[t]] = delta_t
             iteration_stats[t] = iteration_stats_t
             errors.extend(errors_t)
 
         # compute the Jacobian of xi with respect to theta
-        xi_jacobian, demand_errors = self._compute_demand_realization(equilibrium_prices, equilibrium_shares, delta)
+        xi_jacobian, demand_errors = self._compute_demand_realization(data_override, delta)
         errors.extend(demand_errors)
 
         # compute the Jacobian of omega with respect to theta
         omega_jacobian = np.full((self.problem.N, self._parameters.P), np.nan, options.dtype)
         if self.problem.K3 > 0:
             omega_jacobian, supply_errors = self._compute_supply_realization(
-                equilibrium_prices, equilibrium_shares, delta, tilde_costs, xi_jacobian
+                data_override, delta, tilde_costs, xi_jacobian
             )
             errors.extend(supply_errors)
 
         # return all of the information associated with this realization
         return xi_jacobian, omega_jacobian, iteration_stats, errors
 
-    def _compute_demand_realization(
-            self, equilibrium_prices: Array, equilibrium_shares: Array, delta: Array) -> Tuple[Array, List[Error]]:
+    def _compute_demand_realization(self, data_override: Dict[str, Array], delta: Array) -> Tuple[Array, List[Error]]:
         """Compute a realization of the Jacobian of xi with respect to theta market-by-market. If necessary, revert
         problematic elements to their estimated values.
         """
@@ -1161,10 +1162,8 @@ class ProblemResults(Results):
         def market_factory(s: Hashable) -> Tuple[ResultsMarket]:
             """Build a market with the data realization along with arguments used to compute the Jacobian."""
             market_s = ResultsMarket(
-                self.problem, s, self._parameters, self.sigma, self.pi, self.rho, self.beta, delta, data_override={
-                    'prices': equilibrium_prices[self.problem._product_market_indices[s]],
-                    'shares': equilibrium_shares[self.problem._product_market_indices[s]]
-                }
+                self.problem, s, self._parameters, self.sigma, self.pi, self.rho, self.beta, delta,
+                data_override=data_override
             )
             return market_s,
 
@@ -1185,8 +1184,8 @@ class ProblemResults(Results):
         return xi_jacobian, errors
 
     def _compute_supply_realization(
-            self, equilibrium_prices: Array, equilibrium_shares: Array, delta: Array, tilde_costs: Array,
-            xi_jacobian: Array) -> Tuple[Array, List[Error]]:
+            self, data_override: Dict[str, Array], delta: Array, tilde_costs: Array, xi_jacobian: Array) -> (
+            Tuple[Array, List[Error]]):
         """Compute a realization of the Jacobian of omega with respect to theta market-by-market. If necessary, revert
         problematic elements to their estimated values.
         """
@@ -1196,10 +1195,8 @@ class ProblemResults(Results):
         def market_factory(s: Hashable) -> Tuple[ResultsMarket, Array, Array, str]:
             """Build a market with the data realization along with arguments used to compute the Jacobians."""
             market_s = ResultsMarket(
-                self.problem, s, self._parameters, self.sigma, self.pi, self.rho, self.beta, delta, data_override={
-                    'prices': equilibrium_prices[self.problem._product_market_indices[s]],
-                    'shares': equilibrium_shares[self.problem._product_market_indices[s]]
-                }
+                self.problem, s, self._parameters, self.sigma, self.pi, self.rho, self.beta, delta,
+                data_override=data_override
             )
             tilde_costs_s = tilde_costs[self.problem._product_market_indices[s]]
             xi_jacobian_s = xi_jacobian[self.problem._product_market_indices[s]]

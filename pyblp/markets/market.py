@@ -41,7 +41,7 @@ class Market(Container):
     def __init__(
             self, economy: Economy, t: Any, parameters: Parameters, sigma: Array, pi: Array, rho: Array,
             beta: Optional[Array] = None, delta: Optional[Array] = None, moments: Optional[EconomyMoments] = None,
-            data_override: Optional[Dict] = None) -> None:
+            data_override: Optional[Dict[str, Array]] = None) -> None:
         """Store or compute information about formulations, data, parameters, and utility."""
 
         # structure relevant data
@@ -80,7 +80,7 @@ class Market(Container):
         # override any data
         if data_override is not None:
             for name, variable in data_override.items():
-                self.products[name][:] = variable[:]
+                self.products[name][:] = variable[economy._product_market_indices[t]]
             for index, formulation in enumerate(self._X2_formulations):
                 if any(n in formulation.names for n in data_override):
                     self.products.X2[:, [index]] = formulation.evaluate(self.products)
