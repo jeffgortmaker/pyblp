@@ -599,21 +599,23 @@ class Results(abc.ABC, StringRepresentation):
 
         Assuming away nonlinear income effects, the surplus in market :math:`t` is
 
-        .. math:: \text{CS} = \sum_{i=1}^{I_t} w_{it}\text{CS}_i,
+        .. math:: \text{CS} = \sum_{i=1}^{I_t} w_{it}\text{CS}_{it},
 
         in which the consumer surplus for individual :math:`i` is
 
         .. math::
 
-           \text{CS}_i =
-           \log\left(1 + \sum_{j=1}^{J_t} \exp V_{jti}\right) \Big/ \frac{\partial V_{1ti}}{\partial p_{1t}},
+           \text{CS}_{it} =
+           \log\left(1 + \sum_{j=1}^{J_t} \exp V_{jti}\right) \Big/
+           \left(-\frac{\partial V_{1ti}}{\partial p_{1t}}\right),
 
         or with nesting parameters,
 
         .. math::
 
-           \text{CS}_i =
-           \log\left(1 + \sum_{h=1}^H \exp V_{hti}\right) \Big/ \frac{\partial V_{1ti}}{\partial p_{1t}}
+           \text{CS}_{it} =
+           \log\left(1 + \sum_{h=1}^H \exp V_{hti}\right) \Big/
+           \left(-\frac{\partial V_{1ti}}{\partial p_{1t}}\right)
 
         where :math:`V_{jti}` is defined in :eq:`utilities` and :math:`V_{hti}` is defined in :eq:`inclusive_value`.
 
