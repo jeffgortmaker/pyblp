@@ -35,6 +35,15 @@ class NonpositiveCostsError(Error):
     """
 
 
+class NonpositiveSyntheticCostsError(Error):
+    """Encountered nonpositive synthetic marginal costs in a log-linear specification.
+
+    This problem can sometimes be mitigated by more reasonable initial parameter values or using a linear costs
+    specification.
+
+    """
+
+
 class InvalidParameterCovariancesError(Error):
     """Failed to compute standard errors because of invalid estimated covariances of GMM parameters."""
 
@@ -123,6 +132,24 @@ class SyntheticSharesNumericalError(NumericalError):
     """
 
 
+class SyntheticDeltaNumericalError(NumericalError):
+    r"""Encountered a numerical error when computing the synthetic :math:`\delta`.
+
+    This problem is often due to prior problems, overflow, or nonpositive shares, and can sometimes be mitigated by
+    making sure that the specified parameters are reasonable.
+
+    """
+
+
+class SyntheticCostsNumericalError(NumericalError):
+    """Encountered a numerical error when computing synthetic marginal costs.
+
+    This problem is often due to prior problems or overflow and can sometimes be mitigated by making sure that the
+    specified parameters are reasonable.
+
+    """
+
+
 class SyntheticMicroMomentsNumericalError(NumericalError):
     """Encountered a numerical error when computing synthetic micro moments."""
 
@@ -183,6 +210,15 @@ class SyntheticPricesConvergenceError(Error):
     This problem can sometimes be mitigated by increasing the maximum number of fixed point iterations, increasing the
     fixed point tolerance, configuring other iteration settings, or making sure the specified parameters are reasonable.
     For example, the parameters on prices should generally imply a downward sloping demand curve.
+
+    """
+
+
+class SyntheticDeltaConvergenceError(Error):
+    r"""The fixed point computation of the synthetic :math:`\delta` failed to converge.
+
+    This problem can sometimes be mitigated by increasing the maximum number of fixed point iterations, increasing the
+    fixed point tolerance, choosing more reasonable parameter values, or using a different iteraiton configuration.
 
     """
 

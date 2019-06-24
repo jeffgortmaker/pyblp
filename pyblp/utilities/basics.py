@@ -32,16 +32,10 @@ pool = None
 def parallel(processes: int) -> Iterator[None]:
     r"""Context manager used for parallel processing in a ``with`` statement context.
 
-    This manager creates a a context in which a pool of Python processes will be used by any of the following methods,
-    which all support parallel processing:
-
-        - :meth:`Problem.solve`
-        - Any method in :class:`ProblemResults`.
-        - :meth:`Simulation.replace_endogenous`.
-
-    These methods, which perform market-by-market computation, will distribute their work among the processes.
-    After the context created by the ``with`` statement ends, all worker processes in the pool will be terminated.
-    Outside of this context, such methods will not use multiprocessing.
+    This manager creates a context in which a pool of Python processes will be used by any method that requires
+    market-by-market computation. These methods will distribute their work among the processes. After the context
+    created by the ``with`` statement ends, all worker processes in the pool will be terminated. Outside of this
+    context, such methods will not use multiprocessing.
 
     Importantly, multiprocessing will only improve speed if gains from parallelization outweigh overhead from
     serializing and passing data between processes. For example, if computation for a single market is very fast and

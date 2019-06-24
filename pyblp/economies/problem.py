@@ -22,8 +22,8 @@ from ..primitives import Agents, Products
 from ..results.problem_results import ProblemResults
 from ..utilities.algebra import precisely_invert
 from ..utilities.basics import (
-    Array, Bounds, Error, Groups, RecArray, SolverStats, format_number, format_seconds, format_table, generate_items,
-    output, update_matrices
+    Array, Bounds, Error, RecArray, SolverStats, format_number, format_seconds, format_table, generate_items, output,
+    update_matrices
 )
 from ..utilities.statistics import IV, compute_gmm_moments_mean, compute_gmm_moments_jacobian_mean
 
@@ -399,29 +399,23 @@ class ProblemEconomy(Economy):
         output("Solving the problem ...")
         step_start_time = time.time()
 
-        # validate the estimation method
+        # validate settings
         if method not in {'1s', '2s'}:
             raise TypeError("method must be '1s' or '2s'.")
-
-        # configure or validate configurations
         if optimization is None:
             optimization = Optimization('l-bfgs-b')
-        if iteration is None:
-            iteration = Iteration('squarem', {'atol': 1e-14})
-        if not isinstance(optimization, Optimization):
+        elif not isinstance(optimization, Optimization):
             raise TypeError("optimization must be None or an Optimization instance.")
-        if not isinstance(iteration, Iteration):
-            raise TypeError("iteration must be None or an Iteration instance.")
-
-        # validate behaviors and types
         if check_optimality not in {'gradient', 'both'}:
             raise ValueError("check_optimality must be 'gradient' or 'both'.")
         if error_behavior not in {'revert', 'punish', 'raise'}:
             raise ValueError("error_behavior must be 'revert', 'punish', or 'raise'.")
+        if not isinstance(error_punishment, (float, int)) or error_punishment < 0:
+            raise ValueError("error_punishment must be a positive float.")
         if delta_behavior not in {'last', 'first'}:
             raise ValueError("delta_behavior must be 'last' or 'first'.")
-        if fp_type not in {'safe_linear', 'linear', 'safe_nonlinear', 'nonlinear'}:
-            raise ValueError("fp_type must be 'safe_linear', 'linear', 'safe_nonlinear', or 'nonlinear'.")
+        iteration = self._coerce_optional_delta_iteration(iteration)
+        self._validate_fp_type(fp_type)
         if W_type not in {'robust', 'unadjusted', 'clustered'}:
             raise ValueError("W_type must be 'robust', 'unadjusted', or 'clustered'.")
         if se_type not in {'robust', 'unadjusted', 'clustered'}:
@@ -537,7 +531,7 @@ class ProblemEconomy(Economy):
 
             # initialize an IV model for linear parameter estimation
             iv = IV(X_list, Z_list, W[:self.MD + self.MS, :self.MD + self.MS])
-            self._handle_errors(error_behavior, iv.errors)
+            self._handle_errors(iv.errors, error_behavior)
 
             # wrap computation of progress information with step-specific information
             compute_step_progress = functools.partial(
@@ -582,7 +576,7 @@ class ProblemEconomy(Economy):
                 optimization_end_time = time.time()
                 optimization_time = optimization_end_time - optimization_start_time
                 if not optimization_stats.converged:
-                    self._handle_errors(error_behavior, [exceptions.ThetaConvergenceError()])
+                    self._handle_errors([exceptions.ThetaConvergenceError()], error_behavior)
                 output("")
                 output(f"Optimization {status} after {format_seconds(optimization_time)}.")
 
@@ -610,7 +604,7 @@ class ProblemEconomy(Economy):
                 optimization_end_time, optimization_stats, iteration_stats, costs_bounds, extra_micro_covariances,
                 center_moments, W_type, se_type
             )
-            self._handle_errors(error_behavior, results._errors)
+            self._handle_errors(results._errors, error_behavior)
             output(f"Computed results after {format_seconds(results.total_time - results.optimization_time)}.")
 
             # store the last results and return results from the final step
@@ -897,35 +891,6 @@ class ProblemEconomy(Economy):
                 omega_jacobian[bad_omega_jacobian_index] = progress.omega_jacobian[bad_omega_jacobian_index]
                 errors.append(exceptions.OmegaByThetaJacobianReversionError(bad_omega_jacobian_index))
         return tilde_costs, omega_jacobian, clipped_costs, errors
-
-    def _compute_logit_delta(self, rho: Array) -> Array:
-        """Compute the delta that solves the simple logit (or nested logit) model."""
-        log_shares = np.log(self.products.shares)
-        delta = log_shares.copy()
-        for t in self.unique_market_ids:
-            shares_t = self.products.shares[self._product_market_indices[t]]
-            log_outside_share_t = np.log(1 - shares_t.sum())
-            delta[self._product_market_indices[t]] -= log_outside_share_t
-            if self.H > 0:
-                log_shares_t = log_shares[self._product_market_indices[t]]
-                groups_t = Groups(self.products.nesting_ids[self._product_market_indices[t]])
-                log_group_shares_t = np.log(groups_t.expand(groups_t.sum(shares_t)))
-                if rho.size == 1:
-                    rho_t = np.full_like(shares_t, float(rho))
-                else:
-                    rho_t = groups_t.expand(rho[np.searchsorted(self.unique_nesting_ids, groups_t.unique)])
-                delta[self._product_market_indices[t]] -= rho_t * (log_shares_t - log_group_shares_t)
-        return delta
-
-    @staticmethod
-    def _handle_errors(error_behavior: str, errors: List[Error]) -> None:
-        """Either raise or output information about any errors."""
-        if errors:
-            if error_behavior == 'raise':
-                raise exceptions.MultipleErrors(errors)
-            output("")
-            output(exceptions.MultipleErrors(errors))
-            output("")
 
 
 class Problem(ProblemEconomy):

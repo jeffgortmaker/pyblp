@@ -7,7 +7,7 @@ from typing import Any, Dict, Hashable, List, Mapping, Optional, Sequence, Tuple
 import numpy as np
 
 from .economy import Economy
-from .. import exceptions, options
+from .. import options
 from ..configurations.formulation import Formulation
 from ..configurations.integration import Integration
 from ..configurations.iteration import Iteration
@@ -25,7 +25,8 @@ class Simulation(Economy):
     r"""Simulation of data in BLP-type models.
 
     Any data left unspecified are simulated during initialization. Simulated prices and shares can be replaced by
-    :meth:`Simulation.replace_endogenous` with values that are consistent with true parameters. Simulations are
+    :meth:`Simulation.replace_endogenous` with values that are consistent with true parameters. Less commonly, simulated
+    exogenous variables can be replaced instead by :meth:`Simulation.replace_exogenous`. Simulations are
     typically used for two purposes:
 
         1. Solving for equilibrium prices and shares under more complicated counterfactuals than is possible with
@@ -204,8 +205,8 @@ class Simulation(Economy):
         :class:`Formulation` configuration for :math:`d`.
     product_data : `recarray`
         Synthetic product data that were loaded or simulated during initialization. Typically,
-        :meth:`Simulation.replace_endogenous` should be used to replace prices and shares with values that are
-        consistent with true parameters.
+        :meth:`Simulation.replace_endogenous` is used replace prices and shares with values that are consistent with
+        true parameters.
     agent_data : `recarray`
         Synthetic agent data that were loaded or simulated during initialization.
     integration : `Integration`
@@ -448,8 +449,8 @@ class Simulation(Economy):
             error_behavior: str = 'raise') -> SimulationResults:
         r"""Replace simulated prices and marketshares with values that are consistent with true parameters.
 
-        Prices and marketshares are computed in each market by iterating over the :math:`\zeta`-markup contraction in
-        :eq:`zeta_contraction`:
+        This method is the standard way of solving the simulation. Prices and marketshares are computed in each market
+        by iterating over the :math:`\zeta`-markup contraction in :eq:`zeta_contraction`:
 
         .. math:: p \leftarrow c + \zeta(p).
 
@@ -523,17 +524,9 @@ class Simulation(Economy):
             if prices.shape != (self.N, 1):
                 raise ValueError(f"prices must None or a {self.N}-vector.")
 
-        # configure or validate integration
-        if iteration is None:
-            iteration = Iteration('simple', {'atol': 1e-12})
-        elif not isinstance(iteration, Iteration):
-            raise ValueError("iteration must be None or an Iteration.")
-        elif iteration._compute_jacobian:
-            raise ValueError("Analytic Jacobians are not supported for solving this system.")
-
-        # validate error behavior
-        if error_behavior not in {'raise', 'warn'}:
-            raise ValueError("error_behavior must be 'raise' or 'warn'.")
+        # validate other settings
+        iteration = self._coerce_optional_prices_iteration(iteration)
+        self._validate_error_behavior(error_behavior)
 
         # compute a baseline delta that will be updated when shares and prices are replaced
         delta = self.products.X1 @ self.beta + self.xi
@@ -547,31 +540,186 @@ class Simulation(Economy):
             prices_s = prices[self._product_market_indices[s]]
             return market_s, costs_s, prices_s, iteration
 
-        # replace prices and shares market-by-market
+        # compute prices and marketshares market-by-market
         data_override = {
             'prices': np.zeros_like(self.products.prices),
             'shares': np.zeros_like(self.products.shares)
         }
         iteration_stats: Dict[Hashable, SolverStats] = {}
-        generator = generate_items(self.unique_market_ids, market_factory, SimulationMarket.compute_prices_and_shares)
+        generator = generate_items(self.unique_market_ids, market_factory, SimulationMarket.compute_endogenous)
         for t, (prices_t, shares_t, iteration_stats_t, errors_t) in output_progress(generator, self.T, start_time):
             data_override['prices'][self._product_market_indices[t]] = prices_t
             data_override['shares'][self._product_market_indices[t]] = shares_t
             iteration_stats[t] = iteration_stats_t
             errors.extend(errors_t)
 
-        # handle any errors
-        if errors:
-            if error_behavior == 'raise':
-                raise exceptions.MultipleErrors(errors)
-            assert error_behavior == 'warn'
-            output("")
-            output(exceptions.MultipleErrors(errors))
-            output("")
-
         # structure the results
+        self._handle_errors(errors, error_behavior)
         results = SimulationResults(self, data_override, start_time, time.time(), iteration_stats)
         output(f"Replaced prices and shares after {format_seconds(results.computation_time)}.")
         output("")
         output(results)
         return results
+
+    def replace_exogenous(
+            self, X1_name: str, X3_name: Optional[str] = None, delta: Optional[Any] = None,
+            iteration: Optional[Iteration] = None, fp_type: str = 'safe_linear', error_behavior: str = 'raise') -> (
+            SimulationResults):
+        r"""Replace exogenous product characteristics with values that are consistent with true parameters.
+
+        This method implements a less common way of solving the simulation. It may be preferable to
+        :meth:`Simulation.replace_endogenous` when for some reason it is desirable to retain the prices and marketshares
+        from :class:`Simulation`.
+
+        For this method of solving the simulation to be used, there must be an exogenous product characteristic
+        :math:`v` that shows up only in :math:`X_1`, and if there is a supply side, another product characteristic
+        :math:`w` that shows up only in :math:`X_3`. These characteristics will be replaced with values that are
+        consistent with true parameters.
+
+        First, the mean utility :math:`\delta` is computed in each market by iterating over the contraction in
+        :eq:`contraction` and :math:`(\delta - \xi - X_1 \beta)\beta_v^{-1}` is added to the :math:`v` from
+        :class:`Simulation`. Here, :math:`\beta_v` is the linear parameter in :math:`\beta` on :math:`v`.
+
+        With a supply side, the marginal cost function :math:`\tilde{c}` is computed according to :eq:`eta` and
+        :eq:`costs` and :math:`(\tilde{c} - \omega - X_3 \gamma)\gamma_w^{-1}` is added to the :math:`w` from
+        :class:`Simulation`. Here, :math:`\gamma_w` is the linear parameter in :math:`\gamma` on :math:`w`.
+
+        .. note::
+
+           This method supports :func:`parallel` processing. If multiprocessing is used, market-by-market computation of
+           prices and shares will be distributed among the processes.
+
+        Parameters
+        ----------
+        X1_name : `str`
+            The name of the variable :math:`v` in :math:`X_1` that will be replaced. It should show up only once in
+            the formulation for :math:`X_1` from :class:`Simulation`, and it should not be transformed in any way.
+        X3_name : `str, optional`
+            The name of the variable :math:`w` in :math:`X_3` that will be replaced. It should show up only once in the
+            formulation for :math:`X_3` from :class:`Simulation`, and it should not be transformed in any way. This will
+            only be used if there is a supply side.
+        delta : `array-like, optional`
+            Initial values for the mean utility, :math:`\delta`, which the fixed point iteration routine will start
+            at. By default, the solution to the logit model in :eq:`logit_delta` is used. If there is a nesting
+            structure, solution to the nested logit model in :eq:`nested_logit_delta` under the initial ``rho`` is used
+            instead.
+        iteration : `Iteration, optional`
+            :class:`Iteration` configuration for how to solve the fixed point problem used to compute
+            :math:`\delta` in each market. This configuration is only relevant if there are nonlinear parameters, since
+            :math:`\delta` can be estimated analytically in the logit model. By default,
+            ``Iteration('squarem', {'atol': 1e-14})`` is used. For more information, refer to the same argument in
+            :meth:`Problem.solve`.
+        fp_type : `str, optional`
+            Configuration for the type of contraction mapping used to compute :math:`\delta`. For information about
+            the different types, refer to the same argument in :meth:`Problem.solve`.
+        error_behavior : `str, optional`
+            How to handle errors when computing :math:`\delta` and :math:`\tilde{c}`. The following behaviors are
+            supported:
+
+                - ``'raise'`` (default) - Raise an exception.
+
+                - ``'warn'`` - Use the last computed :math:`\delta` and :math:`\tilde{c}`. If the fixed point routine
+                  fails to converge, these are the last :math:`\delta` and the associated :math:`\tilde{c}` by the
+                  routine. If there are other issues, these are the starting :math:`\delta` values and their associated
+                  :math:`\tilde{c}`.
+
+        Returns
+        -------
+        `SimulationResults`
+            :class:`SimulationResults` of the solved simulation.
+
+        Examples
+        --------
+            - :doc:`Tutorial </tutorial>`
+
+        """
+        errors: List[Error] = []
+
+        # keep track of long it takes to solve for exogenous product characteristics
+        output("Replacing exogenous product characteristics ...")
+        start_time = time.time()
+
+        # validate that it's possible to solve for the exogenous variables
+        try:
+            X1_index = next(i for i, f in enumerate(self._X1_formulations) if X1_name == f)
+        except StopIteration:
+            raise ValueError("X1_name must be an untransformed variable in the formulation for X1.")
+        if sum(X1_name in f.names for f in self._X1_formulations) > 1:
+            raise ValueError("X1_name must appear only once in the formulation for X1.")
+        if any(X1_name in f.names for f in self._X2_formulations + self._X3_formulations):
+            raise ValueError("X1_name must appear only in the formulation for X1.")
+        if self.beta[X1_index] == 0:
+            raise ValueError("The parameter in beta on X1_name cannot be zero.")
+        X3_index = None
+        if self.K3 > 0:
+            try:
+                X3_index = next(i for i, f in enumerate(self._X3_formulations) if X3_name == f)
+            except StopIteration:
+                raise ValueError("X3_name must be an untransformed variable in the formulation for X3.")
+            if all(X3_name != f for f in self._X3_formulations):
+                raise ValueError("X3_name must be an untransformed variable in the formulation for X3.")
+            if sum(X3_name in f.names for f in self._X3_formulations) > 1:
+                raise ValueError("X3_name must appear only once in the formulation for X3.")
+            if any(X3_name in f.names for f in self._X1_formulations + self._X2_formulations):
+                raise ValueError("X3_name must appear only in the formulation for X3.")
+            if self.gamma[X3_index] == 0:
+                raise ValueError("The parameter in gamma on X3_name cannot be zero.")
+
+        # choose or validate the initial delta
+        if delta is None:
+            delta = self._compute_logit_delta(self.rho)
+        else:
+            delta = np.c_[np.asarray(delta, options.dtype)]
+            if delta.shape != (self.N, 1):
+                raise ValueError(f"delta must None or a {self.N}-vector.")
+
+        # validate other settings
+        iteration = self._coerce_optional_delta_iteration(iteration)
+        self._validate_fp_type(fp_type)
+        self._validate_error_behavior(error_behavior)
+
+        # define a factory for solving simulation markets
+        def market_factory(s: Hashable) -> Tuple[SimulationMarket, Array, Iteration, str]:
+            """Build a market along with arguments used to compute delta and marginal costs."""
+            assert delta is not None and iteration is not None
+            market_s = SimulationMarket(self, s, self._parameters, self.sigma, self.pi, self.rho, self.beta)
+            delta_s = delta[self._product_market_indices[s]]
+            return market_s, delta_s, iteration, fp_type
+
+        # compute delta and marginal costs market-by-market
+        true_delta = np.zeros_like(self.xi)
+        true_tilde_costs = np.zeros_like(self.omega)
+        iteration_stats: Dict[Hashable, SolverStats] = {}
+        generator = generate_items(self.unique_market_ids, market_factory, SimulationMarket.compute_exogenous)
+        for t, (delta_t, tilde_costs_t, iteration_stats_t, errors_t) in output_progress(generator, self.T, start_time):
+            true_delta[self._product_market_indices[t]] = delta_t
+            true_tilde_costs[self._product_market_indices[t]] = tilde_costs_t
+            iteration_stats[t] = iteration_stats_t
+            errors.extend(errors_t)
+
+        # compute the exogenous variables, ignoring any numerical errors here that carry over from market computation
+        data_override: Dict[str, Array] = {}
+        with np.errstate(all='ignore'):
+            data_override[X1_name] = (
+                self.products.X1[:, [X1_index]] +
+                (true_delta - self.xi - self.products.X1 @ self.beta) / self.beta[X1_index]
+            )
+            if X3_name is not None:
+                data_override[X3_name] = (
+                    self.products.X3[:, [X3_index]] +
+                    (true_tilde_costs - self.omega - self.products.X3 @ self.gamma) / self.gamma[X3_index]
+                )
+
+        # structure the results
+        self._handle_errors(errors, error_behavior)
+        results = SimulationResults(self, data_override, start_time, time.time(), iteration_stats)
+        output(f"Replaced exogenous product characteristics after {format_seconds(results.computation_time)}.")
+        output("")
+        output(results)
+        return results
+
+    @staticmethod
+    def _validate_error_behavior(error_behavior: str) -> None:
+        """Validate that a specified error behavior is supported."""
+        if error_behavior not in {'raise', 'warn'}:
+            raise ValueError("error_behavior must be 'raise' or 'warn'.")

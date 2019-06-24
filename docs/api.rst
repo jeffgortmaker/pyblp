@@ -208,6 +208,13 @@ Once initialized, the following method replaces prices and shares with values th
 
    Simulation.replace_endogenous
 
+A less common way to solve the simulation is to replace exogenous variables instead.
+
+.. autosummary::
+   :toctree: _api
+
+   Simulation.replace_exogenous
+
 
 Simulation Results Class
 ------------------------
@@ -292,6 +299,7 @@ When errors occur, they will either be displayed as warnings or raised as except
 
    exceptions.MultipleErrors
    exceptions.NonpositiveCostsError
+   exceptions.NonpositiveSyntheticCostsError
    exceptions.InvalidParameterCovariancesError
    exceptions.InvalidMomentCovariancesError
    exceptions.DeltaNumericalError
@@ -303,6 +311,8 @@ When errors occur, they will either be displayed as warnings or raised as except
    exceptions.MicroMomentCovariancesNumericalError
    exceptions.SyntheticPricesNumericalError
    exceptions.SyntheticSharesNumericalError
+   exceptions.SyntheticDeltaNumericalError
+   exceptions.SyntheticCostsNumericalError
    exceptions.SyntheticMicroMomentsNumericalError
    exceptions.EquilibriumRealizationNumericalError
    exceptions.PostEstimationNumericalError
@@ -310,6 +320,7 @@ When errors occur, they will either be displayed as warnings or raised as except
    exceptions.ThetaConvergenceError
    exceptions.DeltaConvergenceError
    exceptions.SyntheticPricesConvergenceError
+   exceptions.SyntheticDeltaConvergenceError
    exceptions.EquilibriumPricesConvergenceError
    exceptions.ObjectiveReversionError
    exceptions.GradientReversionError

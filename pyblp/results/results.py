@@ -438,12 +438,7 @@ class Results(abc.ABC, StringRepresentation):
         ownership = self.problem._coerce_optional_ownership(ownership, market_ids)
         costs = self._coerce_optional_costs(costs, market_ids)
         prices = self._coerce_optional_prices(prices, market_ids)
-        if iteration is None:
-            iteration = Iteration('simple', {'atol': 1e-12})
-        elif not isinstance(iteration, Iteration):
-            raise ValueError("iteration must None or an Iteration instance.")
-        elif iteration._compute_jacobian:
-            raise ValueError("Analytic Jacobians are not supported for solving this system.")
+        iteration = self.problem._coerce_optional_prices_iteration(iteration)
         return self._combine_arrays(
             ResultsMarket.safely_compute_prices, market_ids, fixed_args=[iteration],
             market_args=[firm_ids, ownership, costs, prices]

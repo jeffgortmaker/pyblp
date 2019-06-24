@@ -34,19 +34,22 @@ class SimulationResults(StringRepresentation):
     simulation : `Simulation`
         :class:`Simulation` that created these results.
     product_data : `recarray`
-        Simulated :attr:`Simulation.product_data` with prices and marketshares replaced to be consistent with true
-        parameters.
+        Simulated :attr:`Simulation.product_data` with product characteristics replaced so as to be consistent with the
+        true parameters. If :meth:`Simulation.replace_endogenous` was used to create these results, prices and
+        marketshares were replaced. If :meth:`Simulation.replace_exogenous` was used, exogenous characteristics were
+        replaced instead.
     computation_time : `float`
         Number of seconds it took to compute prices and marketshares.
     fp_converged : `ndarray`
-        Flags for convergence of the iteration routine used to replace prices in each market. Flags are in the same
-        order as :attr:`Simulation.unique_market_ids`.
+        Flags for convergence of the iteration routine used to compute prices or :math:`\delta` (depending on the method
+        used to create these results) in each market. Flags are in the same order as
+        :attr:`Simulation.unique_market_ids`.
     fp_iterations : `ndarray`
-        Number of major iterations completed by the iteration routine used to replace prices in each market. Counts are
-        in the same order as :attr:`Simulation.unique_market_ids`.
+        Number of major iterations completed by the iteration routine used to compute prices or :math:`\delta` in each
+        market. Counts are in the same order as :attr:`Simulation.unique_market_ids`.
     contraction_evaluations : `ndarray`
-        Number of times the contraction used to replace prices was evaluated in each market. Counts are in the same
-        order as :attr:`Simulation.unique_market_ids`.
+        Number of times the contraction used to compute prices or :math:`\delta` was evaluated in each market. Counts
+        are in the same order as :attr:`Simulation.unique_market_ids`.
 
     Examples
     --------

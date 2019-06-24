@@ -93,7 +93,7 @@ def small_logit_simulation() -> SimulationFixture:
         correlation=0.7,
         seed=0
     )
-    simulation_results = simulation.replace_endogenous()
+    simulation_results = simulation.replace_exogenous('x', 'a')
     return simulation, simulation_results, {}, []
 
 

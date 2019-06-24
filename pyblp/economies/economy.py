@@ -6,11 +6,12 @@ from typing import Any, Dict, Hashable, List, Mapping, Optional, Sequence
 
 import numpy as np
 
-from .. import options
+from .. import exceptions, options
 from ..configurations.formulation import Formulation
+from ..configurations.iteration import Iteration
 from ..primitives import Container
 from ..utilities.algebra import precisely_identify_collinearity, precisely_identify_psd
-from ..utilities.basics import Array, RecArray, StringRepresentation, format_table, get_indices
+from ..utilities.basics import Array, Error, Groups, RecArray, StringRepresentation, format_table, get_indices, output
 
 
 class Economy(Container, StringRepresentation):
@@ -189,6 +190,16 @@ class Economy(Container, StringRepresentation):
         if not psd:
             raise ValueError(f"{name} must be a PSD matrix. {common_message}")
 
+    @staticmethod
+    def _handle_errors(errors: List[Error], error_behavior: str) -> None:
+        """Either raise or output information about any errors."""
+        if errors:
+            if error_behavior == 'raise':
+                raise exceptions.MultipleErrors(errors)
+            output("")
+            output(exceptions.MultipleErrors(errors))
+            output("")
+
     def _validate_name(self, name: str) -> None:
         """Validate that a name corresponds to a variable in X1, X2, or X3."""
         formulations = self._X1_formulations + self._X2_formulations + self._X3_formulations
@@ -224,6 +235,29 @@ class Economy(Container, StringRepresentation):
                 raise ValueError(f"ownership must be None or a {rows} by {columns} matrix.")
         return ownership
 
+    def _coerce_optional_delta_iteration(self, iteration: Optional[Iteration]) -> Iteration:
+        """Validate or choose a default configuration for iterating over the mean utility."""
+        if iteration is None:
+            iteration = Iteration('squarem', {'atol': 1e-14})
+        elif not isinstance(iteration, Iteration):
+            raise TypeError("iteration must be None or an Iteration instance.")
+        return iteration
+
+    def _coerce_optional_prices_iteration(self, iteration: Optional[Iteration]) -> Iteration:
+        """Validate or choose a default configuration for iteration over prices."""
+        if iteration is None:
+            iteration = Iteration('simple', {'atol': 1e-12})
+        elif not isinstance(iteration, Iteration):
+            raise ValueError("iteration must be None or an Iteration.")
+        elif iteration._compute_jacobian:
+            raise ValueError("Analytic Jacobians are not supported for solving this system.")
+        return iteration
+
+    def _validate_fp_type(self, fp_type: str) -> None:
+        """Validate that the delta fixed point type is supported."""
+        if fp_type not in {'safe_linear', 'linear', 'safe_nonlinear', 'nonlinear'}:
+            raise ValueError("fp_type must be 'safe_linear', 'linear', 'safe_nonlinear', or 'nonlinear'.")
+
     def _compute_true_X1(self, data_override: Optional[Mapping] = None, index: Optional[Array] = None) -> Array:
         """Compute X1 or columns of X1 without any absorbed demand-side fixed effects."""
         if index is None:
@@ -249,3 +283,22 @@ class Economy(Container, StringRepresentation):
             if include:
                 columns.append(formulation.evaluate(self.products, data_override) * np.ones((self.N, 1)))
         return np.column_stack(columns)
+
+    def _compute_logit_delta(self, rho: Array) -> Array:
+        """Compute the delta that solves the simple logit (or nested logit) model."""
+        log_shares = np.log(self.products.shares)
+        delta = log_shares.copy()
+        for t in self.unique_market_ids:
+            shares_t = self.products.shares[self._product_market_indices[t]]
+            log_outside_share_t = np.log(1 - shares_t.sum())
+            delta[self._product_market_indices[t]] -= log_outside_share_t
+            if self.H > 0:
+                log_shares_t = log_shares[self._product_market_indices[t]]
+                groups_t = Groups(self.products.nesting_ids[self._product_market_indices[t]])
+                log_group_shares_t = np.log(groups_t.expand(groups_t.sum(shares_t)))
+                if rho.size == 1:
+                    rho_t = np.full_like(shares_t, float(rho))
+                else:
+                    rho_t = groups_t.expand(rho[np.searchsorted(self.unique_nesting_ids, groups_t.unique)])
+                delta[self._product_market_indices[t]] -= rho_t * (log_shares_t - log_group_shares_t)
+        return delta
