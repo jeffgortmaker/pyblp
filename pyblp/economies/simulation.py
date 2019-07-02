@@ -25,9 +25,9 @@ class Simulation(Economy):
     r"""Simulation of data in BLP-type models.
 
     Any data left unspecified are simulated during initialization. Simulated prices and shares can be replaced by
-    :meth:`Simulation.replace_endogenous` with values that are consistent with true parameters. Less commonly, simulated
-    exogenous variables can be replaced instead by :meth:`Simulation.replace_exogenous`. Simulations are
-    typically used for two purposes:
+    :meth:`Simulation.replace_endogenous` with equilibrium values that are consistent with true parameters. Less
+    commonly, simulated exogenous variables can be replaced instead by :meth:`Simulation.replace_exogenous`. Simulations
+    are typically used for two purposes:
 
         1. Solving for equilibrium prices and shares under more complicated counterfactuals than is possible with
            :meth:`ProblemResults.compute_prices` and :meth:`ProblemResults.compute_shares`. For example, this class
@@ -43,8 +43,8 @@ class Simulation(Economy):
     well as agent demographics, :math:`d`, and endogenous prices and marketshares :math:`p` and :math:`s`) are not
     provided, the values for each unspecified variable are drawn independently from the standard uniform distribution.
     In each market :math:`t`, marketshares are divided by the number of products in the market :math:`J_t`. Typically,
-    :meth:`Simulation.replace_endogenous` is used to replace prices and shares with values that are consistent with true
-    parameters.
+    :meth:`Simulation.replace_endogenous` is used to replace prices and shares with equilibrium values that are
+    consistent with true parameters.
 
     If data for unobserved demand-and supply-side product characteristics, :math:`\xi` and :math:`\omega`, are not
     provided, they are by default drawn from a mean-zero bivariate normal distribution.
@@ -205,8 +205,8 @@ class Simulation(Economy):
         :class:`Formulation` configuration for :math:`d`.
     product_data : `recarray`
         Synthetic product data that were loaded or simulated during initialization. Typically,
-        :meth:`Simulation.replace_endogenous` is used replace prices and shares with values that are consistent with
-        true parameters.
+        :meth:`Simulation.replace_endogenous` is used replace prices and shares with equilibrium values that are
+        consistent with true parameters.
     agent_data : `recarray`
         Synthetic agent data that were loaded or simulated during initialization.
     integration : `Integration`
@@ -447,7 +447,7 @@ class Simulation(Economy):
     def replace_endogenous(
             self, costs: Optional[Any] = None, prices: Optional[Any] = None, iteration: Optional[Iteration] = None,
             error_behavior: str = 'raise') -> SimulationResults:
-        r"""Replace simulated prices and marketshares with values that are consistent with true parameters.
+        r"""Replace simulated prices and marketshares with equilibrium values that are consistent with true parameters.
 
         This method is the standard way of solving the simulation. Prices and marketshares are computed in each market
         by iterating over the :math:`\zeta`-markup contraction in :eq:`zeta_contraction`:
@@ -569,7 +569,7 @@ class Simulation(Economy):
 
         This method implements a less common way of solving the simulation. It may be preferable to
         :meth:`Simulation.replace_endogenous` when for some reason it is desirable to retain the prices and marketshares
-        from :class:`Simulation`.
+        from :class:`Simulation`, which are assumed to be in equilibrium.
 
         For this method of solving the simulation to be used, there must be an exogenous product characteristic
         :math:`v` that shows up only in :math:`X_1`, and if there is a supply side, another product characteristic

@@ -201,14 +201,14 @@ The following class allows for evaluation of more complicated counterfactuals th
 
    Simulation
 
-Once initialized, the following method replaces prices and shares with values that are consistent with true parameters.
+Once initialized, the following method replaces prices and shares with equilibrium values that are consistent with true parameters.
 
 .. autosummary::
    :toctree: _api
 
    Simulation.replace_endogenous
 
-A less common way to solve the simulation is to replace exogenous variables instead.
+A less common way to solve the simulation is to assume simulated prices and shares represent and equilibrium and to replace exogenous variables instead.
 
 .. autosummary::
    :toctree: _api
