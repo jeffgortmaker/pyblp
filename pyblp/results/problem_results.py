@@ -147,8 +147,8 @@ class ProblemResults(Results):
     micro : `ndarray`
         Averaged micro moments, :math:`\bar{g}_M`, in :eq:`averaged_micro_moments`.
     objective : `float`
-        GMM objective value, :math:`q(\hat{\theta})`, defined in :eq:`objective`. Note that this expression is scaled
-        by a :math:`N^2` term to match numbers traditionally reported in the BLP literature.
+        GMM objective value, :math:`q(\hat{\theta})`, defined in :eq:`objective`. Note that in some of the BLP
+        literature (and earlier versions of this package), this expression was previously scaled by :math:`N^2`.
     xi_by_theta_jacobian : `ndarray`
         Estimated :math:`\frac{\partial\xi}{\partial\theta} = \frac{\partial\delta}{\partial\theta}`, which is used to
         compute the gradient and standard errors.
@@ -569,8 +569,8 @@ class ProblemResults(Results):
 
         .. note::
 
-           The statistic can equivalently be written as :math:`J = q(\hat{\theta}) / N` where the GMM objective value
-           is defined in :eq:`objective`.
+           The statistic can equivalently be written as :math:`J = Nq(\hat{\theta})` where the GMM objective value is
+           defined in :eq:`objective`.
 
         When the overidentifying restrictions in this model are valid, the :math:`J` statistic is asymptotically
         :math:`\chi^2` with degrees of freedom equal to the number of overidentifying restrictions. This requires that
@@ -591,7 +591,7 @@ class ProblemResults(Results):
             - :doc:`Tutorial </tutorial>`
 
         """
-        return float(self.objective) / self.problem.N
+        return self.problem.N * float(self.objective)
 
     def run_distance_test(self, unrestricted: 'ProblemResults') -> float:
         r"""Test the validity of model restrictions with the distance test.
@@ -606,7 +606,7 @@ class ProblemResults(Results):
         .. note::
 
            The statistic can equivalently be written as
-           :math:`\textit{LR} = [q(\hat{\theta^r}) - q(\hat{\theta^u})] / N` where the GMM objective value is defined in
+           :math:`\textit{LR} = N[q(\hat{\theta^r}) - q(\hat{\theta^u})]` where the GMM objective value is defined in
            :eq:`objective`.
 
         If the restrictions in this model are valid, the distance statistic is asymptotically :math:`\chi^2` with
@@ -640,7 +640,7 @@ class ProblemResults(Results):
             raise ValueError("unrestricted must have as many observations as these results.")
 
         # compute the statistic
-        return float(self.objective - unrestricted.objective) / self.problem.N
+        return self.problem.N * float(self.objective - unrestricted.objective)
 
     def run_lm_test(self) -> float:
         r"""Test the validity of model restrictions with the Lagrange multiplier test.

@@ -225,11 +225,11 @@ class ProblemEconomy(Economy):
         optimization : `Optimization, optional`
             :class:`Optimization` configuration for how to solve the optimization problem in each GMM step, which is
             only used if there are unfixed nonlinear parameters over which to optimize. By default,
-            ``Optimization('l-bfgs-b')`` is used. If available, ``Optimization('knitro')`` may be preferable. Generally,
-            it is recommended to consider a number of different optimization routines and starting values, verifying
-            that :math:`\hat{\theta}` satisfies both the first and second order conditions. Routines that do not support
-            bounds will ignore ``sigma_bounds`` and ``pi_bounds``. Choosing a routine that  does not use analytic
-            gradients will often down estimation.
+            ``Optimization('l-bfgs-b', {'ftol': 0, 'gtol': 1e-8})`` is used. If available, ``Optimization('knitro')``
+            may be preferable. Generally, it is recommended to consider a number of different optimization routines and
+            starting values, verifying that :math:`\hat{\theta}` satisfies both the first and second order conditions.
+            Routines that do not support bounds will ignore ``sigma_bounds`` and ``pi_bounds``. Choosing a routine that
+            does not use analytic gradients will often down estimation.
         check_optimality : `str, optional`
             How to check for optimality (first and second order conditions) after the optimization routine finishes.
             The following configurations are supported:
@@ -403,7 +403,7 @@ class ProblemEconomy(Economy):
         if method not in {'1s', '2s'}:
             raise TypeError("method must be '1s' or '2s'.")
         if optimization is None:
-            optimization = Optimization('l-bfgs-b')
+            optimization = Optimization('l-bfgs-b', {'ftol': 0, 'gtol': 1e-8})
         elif not isinstance(optimization, Optimization):
             raise TypeError("optimization must be None or an Optimization instance.")
         if check_optimality not in {'gradient', 'both'}:
@@ -703,7 +703,7 @@ class ProblemEconomy(Economy):
         # compute the objective value and replace it with its last value if computation failed
         with np.errstate(all='ignore'):
             mean_g = np.r_[compute_gmm_moments_mean(u_list, Z_list), micro]
-            objective = self.N**2 * mean_g.T @ W @ mean_g
+            objective = mean_g.T @ W @ mean_g
         if not np.isfinite(np.squeeze(objective)):
             objective = progress.objective
             errors.append(exceptions.ObjectiveReversionError())
@@ -713,7 +713,7 @@ class ProblemEconomy(Economy):
         if compute_gradient:
             with np.errstate(all='ignore'):
                 mean_G = np.r_[compute_gmm_moments_jacobian_mean(jacobian_list, Z_list), micro_jacobian]
-                gradient = 2 * self.N**2 * (mean_G.T @ W @ mean_g)
+                gradient = 2 * (mean_G.T @ W @ mean_g)
             bad_gradient_index = ~np.isfinite(gradient)
             if np.any(bad_gradient_index):
                 gradient[bad_gradient_index] = progress.gradient[bad_gradient_index]

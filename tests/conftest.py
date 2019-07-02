@@ -325,10 +325,10 @@ def large_blp_simulation() -> SimulationFixture:
 
 @pytest.fixture(scope='session')
 def small_nested_blp_simulation() -> SimulationFixture:
-    """Solve a simulation with five markets, linear prices, a linear/nonlinear characteristic, another linear
+    """Solve a simulation with eight markets, linear prices, a linear/nonlinear characteristic, another linear
     characteristic, three cost characteristics, and two nesting groups with different nesting parameters.
     """
-    id_data = build_id_data(T=5, J=18, F=3)
+    id_data = build_id_data(T=8, J=18, F=3)
     simulation = Simulation(
         product_formulations=(
             Formulation('0 + prices + x + z'),
@@ -463,7 +463,6 @@ def simulated_problem(request: Any) -> SimulatedProblemFixture:
         'rho_bounds': (np.zeros_like(simulation.rho), np.minimum(0.9, 1.5 * simulation.rho)),
         'method': '1s',
         'check_optimality': 'gradient',
-        'optimization': Optimization('slsqp', {'ftol': 1e-10}),
         'micro_moments': micro_moments
     }
     problem_results = problem.solve(**solve_options)
