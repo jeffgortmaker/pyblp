@@ -194,8 +194,8 @@ class Simulation(Economy):
             - ``'log'`` - Log-linear specification: :math:`\tilde{c} = \log c`.
 
     seed : `int, optional`
-        Passed to :class:`numpy.random.RandomState` to seed the random number generator before data are simulated. By
-        default, a seed is not passed to the random number generator.
+        Passed to :class:`numpy.random.mtrand.RandomState` to seed the random number generator before data are
+        simulated. By default, a seed is not passed to the random number generator.
 
     Attributes
     ----------

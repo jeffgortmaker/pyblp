@@ -760,8 +760,8 @@ class ProblemResults(Results):
             The number of draws that will be taken from the joint distribution of the parameters. The default value is
             ``1000``.
         seed : `int, optional`
-            Passed to :class:`numpy.random.RandomState` to seed the random number generator before any draws are taken.
-            By default, a seed is not passed to the random number generator.
+            Passed to :class:`numpy.random.mtrand.RandomState` to seed the random number generator before any draws are
+            taken. By default, a seed is not passed to the random number generator.
         iteration : `Iteration, optional`
             :class:`Iteration` configuration used to compute bootstrapped prices by iterating over the
             :math:`\zeta`-markup equation in :eq:`zeta_contraction`. By default, if a supply side was estimated, this
@@ -971,8 +971,8 @@ class ProblemResults(Results):
             draws is ``1``, even though it will be ignored. For ``'normal'`` or empirical, larger numbers such as
             ``100`` or ``1000`` are recommended.
         seed : `int, optional`
-            Passed to :class:`numpy.random.RandomState` to seed the random number generator before any draws are taken.
-            By default, a seed is not passed to the random number generator.
+            Passed to :class:`numpy.random.mtrand.RandomState` to seed the random number generator before any draws are
+            taken. By default, a seed is not passed to the random number generator.
         expected_prices : `array-like, optional`
             Vector of expected prices conditional on all exogenous variables, :math:`E[p \mid Z]`. By default, if a
             supply side was estimated, ``iteration`` is used. If only a demand side was estimated, this is by default
