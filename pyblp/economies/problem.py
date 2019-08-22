@@ -475,6 +475,7 @@ class ProblemEconomy(Economy):
             ))
             if not successful:
                 raise ValueError("Failed to compute the 2SLS weighting matrix. There may be instrument collinearity.")
+            W *= self.N
             if moments.MM > 0:
                 W = scipy.linalg.block_diag(W, np.eye(moments.MM, dtype=options.dtype))
         else:

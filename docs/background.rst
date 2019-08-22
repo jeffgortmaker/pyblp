@@ -163,7 +163,7 @@ Weighting Matrices
 
 Conventionally, the 2SLS weighting matrix is used in the first stage:
 
-.. math:: W = \begin{bmatrix} (Z_D'Z_D)^{-1} & 0 \\ 0 & (Z_S'Z_S)^{-1} \end{bmatrix}.
+.. math:: W = N \begin{bmatrix} (Z_D'Z_D)^{-1} & 0 \\ 0 & (Z_S'Z_S)^{-1} \end{bmatrix}.
    :label: 2sls_W
 
 With two-step GMM, :math:`W` is updated before the second stage according to 
