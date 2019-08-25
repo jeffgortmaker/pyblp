@@ -164,26 +164,27 @@ class Market(Container):
         bounds: List[Tuple[Array, Array]] = []
 
         # compute the bounds parameter-by-parameter
-        for parameter in parameters:
-            if isinstance(parameter, SigmaParameter):
-                sigma = self.sigma.copy()
-                sigma[parameter.location] = 0
-                additional_mu_norm = np.abs(self.compute_mu(sigma=sigma)).max()
-                v_norm = np.abs(parameter.get_agent_characteristic(self)).max()
-                x_norm = np.abs(parameter.get_product_characteristic(self)).max()
-                bound = normalize(max(0, mu_max - additional_mu_norm) / v_norm / x_norm)
-                bounds.append((-bound if parameter.location[0] != parameter.location[1] else 0, bound))
-            elif isinstance(parameter, PiParameter):
-                pi = self.pi.copy()
-                pi[parameter.location] = 0
-                additional_mu_norm = np.abs(self.compute_mu(pi=pi)).max()
-                v_norm = np.abs(parameter.get_agent_characteristic(self)).max()
-                x_norm = np.abs(parameter.get_product_characteristic(self)).max()
-                bound = normalize(max(0, mu_max - additional_mu_norm) / v_norm / x_norm)
-                bounds.append((-bound, bound))
-            else:
-                assert isinstance(parameter, RhoParameter)
-                bounds.append((0, normalize(1 - min(1, mu_norm / mu_max))))
+        with np.errstate(divide='ignore', invalid='ignore'):
+            for parameter in parameters:
+                if isinstance(parameter, SigmaParameter):
+                    sigma = self.sigma.copy()
+                    sigma[parameter.location] = 0
+                    additional_mu_norm = np.abs(self.compute_mu(sigma=sigma)).max()
+                    v_norm = np.abs(parameter.get_agent_characteristic(self)).max()
+                    x_norm = np.abs(parameter.get_product_characteristic(self)).max()
+                    bound = normalize(max(0, mu_max - additional_mu_norm) / v_norm / x_norm)
+                    bounds.append((-bound if parameter.location[0] != parameter.location[1] else 0, bound))
+                elif isinstance(parameter, PiParameter):
+                    pi = self.pi.copy()
+                    pi[parameter.location] = 0
+                    additional_mu_norm = np.abs(self.compute_mu(pi=pi)).max()
+                    v_norm = np.abs(parameter.get_agent_characteristic(self)).max()
+                    x_norm = np.abs(parameter.get_product_characteristic(self)).max()
+                    bound = normalize(max(0, mu_max - additional_mu_norm) / v_norm / x_norm)
+                    bounds.append((-bound, bound))
+                else:
+                    assert isinstance(parameter, RhoParameter)
+                    bounds.append((0, normalize(1 - min(1, mu_norm / mu_max))))
         return bounds
 
     def update_delta_with_variable(self, name: str, variable: Array) -> Array:
