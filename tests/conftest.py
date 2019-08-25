@@ -10,8 +10,8 @@ import pytest
 import scipy.linalg
 
 from pyblp import (
-    Formulation, Integration, Optimization, Problem, ProblemResults, ProductsAgentsCovarianceMoment, Simulation,
-    SimulationResults, build_differentiation_instruments, build_id_data, build_matrix, build_ownership, options
+    Formulation, Integration, Problem, ProblemResults, ProductsAgentsCovarianceMoment, Simulation, SimulationResults,
+    build_differentiation_instruments, build_id_data, build_matrix, build_ownership, options
 )
 from pyblp.utilities.basics import update_matrices, Array, Data, Options
 
