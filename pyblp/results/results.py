@@ -147,6 +147,9 @@ class Results(abc.ABC, StringRepresentation):
 
         in which :math:`s_{k(j)}` is :math:`s_0 = 1 - \sum_j s_j` if :math:`j = k`, and is :math:`s_k` otherwise.
 
+        Unlike :meth:`ProblemResults.compute_long_run_diversion_ratios`, this gives the marginal treatment effect (MTE)
+        version of the diversion ratio. For more information, see :ref:`references:Conlon and Mortimer (2018)`.
+
         Parameters
         ----------
         name : `str, optional`
@@ -183,6 +186,11 @@ class Results(abc.ABC, StringRepresentation):
 
         in which :math:`s_{k(-j)}` is the share of product :math:`k` computed with the outside option removed from the
         choice set if :math:`j = k`, and with product :math:`j` removed otherwise.
+
+        These diversion ratios are long-run in the sense that we take prices to infinity, or equivalently removing
+        products from the choice set. Unlike :meth:`ProblemResults.compute_diversion_ratios`, this gives the average
+        treatment effect (ATE) version of the diversion ratio. For more information, see
+        :ref:`references:Conlon and Mortimer (2018)`.
 
         Parameters
         ----------
