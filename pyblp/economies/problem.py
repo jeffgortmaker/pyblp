@@ -470,12 +470,11 @@ class ProblemEconomy(Economy):
         # compute or load the weighting matrix
         if W is None:
             W, successful = precisely_invert(scipy.linalg.block_diag(
-                self.products.ZD.T @ self.products.ZD,
-                self.products.ZS.T @ self.products.ZS,
+                self.products.ZD.T @ self.products.ZD / self.N,
+                self.products.ZS.T @ self.products.ZS / self.N,
             ))
             if not successful:
                 raise ValueError("Failed to compute the 2SLS weighting matrix. There may be instrument collinearity.")
-            W *= self.N
             if moments.MM > 0:
                 W = scipy.linalg.block_diag(W, np.eye(moments.MM, dtype=options.dtype))
         else:
