@@ -4,7 +4,7 @@ from typing import Any, Callable, Dict, Iterator, List, Mapping, Optional
 
 import numpy as np
 
-from . import options
+from . import exceptions, options
 from .configurations.formulation import Formulation
 from .configurations.integration import Integration
 from .utilities.basics import Array, Groups, RecArray, extract_matrix, interact_ids, structure_matrices, get_indices
@@ -481,7 +481,9 @@ def build_matrix(formulation: Formulation, data: Mapping) -> Array:
     Parameters
     ----------
     formulation : `Formulation`
-        :class:`Formulation` configuration for the matrix. Variable names should correspond to fields in ``data``.
+        :class:`Formulation` configuration for the matrix. Variable names should correspond to fields in ``data``. The
+        ``absorb`` argument of :class:`Formulation` can be used to absorb fixed effects after the matrix has been
+        constructed.
     data : `structured array-like`
         Fields can be used as variables in ``formulation``.
 
@@ -507,6 +509,10 @@ def build_matrix(formulation: Formulation, data: Mapping) -> Array:
     """
     if not isinstance(formulation, Formulation):
         raise TypeError("formulation must be a Formulation instance.")
+    matrix = formulation._build_matrix(data)[0]
     if formulation._absorbed_terms:
-        raise ValueError("formulation does not support fixed effect absorption.")
-    return formulation._build_matrix(data)[0]
+        absorb = formulation._build_absorb(formulation._build_ids(data))
+        matrix, errors = absorb(matrix)
+        if errors:
+            raise exceptions.MultipleErrors(errors)
+    return matrix
