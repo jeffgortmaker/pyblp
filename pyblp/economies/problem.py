@@ -863,8 +863,7 @@ class ProblemEconomy(Economy):
         clipped_costs = np.zeros((self.N, 1), np.bool)
 
         # define a factory for solving the supply side of problem markets
-        def market_factory(
-                s: Hashable) -> Tuple[ProblemMarket, Array, Array, Bounds, bool]:
+        def market_factory(s: Hashable) -> Tuple[ProblemMarket, Array, Array, Bounds, bool]:
             """Build a market along with arguments used to compute transformed marginal costs and their Jacobian."""
             market_s = ProblemMarket(self, s, parameters, sigma, pi, rho, beta, delta)
             last_tilde_costs_s = progress.tilde_costs[self._product_market_indices[s]]
