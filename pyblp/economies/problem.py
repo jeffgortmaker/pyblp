@@ -351,7 +351,7 @@ class ProblemEconomy(Economy):
             covariance matrix defined in :eq:`averaged_micro_moment_covariances` plus any ``extra_micro_covariances``.
 
         se_type : `str, optional`
-            How to compute parameter covarainces and standard errors. Usually, ``W_type`` should be the same. The
+            How to compute parameter covariances and standard errors. Usually, ``W_type`` should be the same. The
             following types are supported:
 
                 - ``'robust'`` (default) - Heteroscedasticity robust covariances defined in :eq:`covariances` and
