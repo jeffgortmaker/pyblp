@@ -789,11 +789,12 @@ class ProblemEconomy(Economy):
             delta = self._compute_logit_delta(rho)
         else:
             # define a factory for solving the demand side of problem markets
-            def market_factory(s: Hashable) -> Tuple[ProblemMarket, Array, Iteration, str, bool, bool]:
+            def market_factory(s: Hashable) -> Tuple[ProblemMarket, Array, Array, Iteration, str, bool, bool]:
                 """Build a market along with arguments used to compute delta, micro moment values, and Jacobians."""
                 market_s = ProblemMarket(self, s, parameters, sigma, pi, rho, moments=moments)
-                initial_delta_s = progress.next_delta[self._product_market_indices[s]]
-                return market_s, initial_delta_s, iteration, fp_type, compute_jacobian, compute_micro_covariances
+                delta_s = progress.next_delta[self._product_market_indices[s]]
+                last_delta_s = progress.delta[self._product_market_indices[s]]
+                return market_s, delta_s, last_delta_s, iteration, fp_type, compute_jacobian, compute_micro_covariances
 
             # compute delta, micro moments, their Jacobians, and micro moment covariances market-by-market
             micro_mapping: Dict[Hashable, Array] = {}

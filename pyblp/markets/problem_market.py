@@ -16,7 +16,7 @@ class ProblemMarket(Market):
     """A market underlying the BLP problem."""
 
     def solve_demand(
-            self, initial_delta: Array, iteration: Iteration, fp_type: str, compute_jacobian: bool,
+            self, delta: Array, last_delta: Array, iteration: Iteration, fp_type: str, compute_jacobian: bool,
             compute_micro_covariances: bool) -> Tuple[Array, Array, Array, Array, Array, SolverStats, List[Error]]:
         """Compute the mean utility for this market that equates market shares to observed values by solving a fixed
         point problem. Then, if compute_jacobian is True, compute the Jacobian of xi (equivalently, of delta) with
@@ -27,13 +27,13 @@ class ProblemMarket(Market):
         errors: List[Error] = []
 
         # solve the contraction
-        delta, stats, delta_errors = self.safely_compute_delta(initial_delta, iteration, fp_type)
+        delta, stats, delta_errors = self.safely_compute_delta(delta, iteration, fp_type)
         errors.extend(delta_errors)
 
         # replace invalid values in delta with their last computed values
         valid_delta = delta.copy()
         bad_delta_index = ~np.isfinite(delta)
-        valid_delta[bad_delta_index] = initial_delta[bad_delta_index]
+        valid_delta[bad_delta_index] = last_delta[bad_delta_index]
 
         # compute the Jacobian
         xi_jacobian = np.full((self.J, self.parameters.P), np.nan, options.dtype)
@@ -60,7 +60,7 @@ class ProblemMarket(Market):
         return delta, micro, xi_jacobian, micro_jacobian, micro_covariances, stats, errors
 
     def solve_supply(
-            self, initial_tilde_costs: Array, xi_jacobian: Array, costs_bounds: Bounds, compute_jacobian: bool) -> (
+            self, last_tilde_costs: Array, xi_jacobian: Array, costs_bounds: Bounds, compute_jacobian: bool) -> (
             Tuple[Array, Array, Array, List[Error]]):
         """Compute transformed marginal costs for this market. Then, if compute_jacobian is True, compute the Jacobian
         of omega (equivalently, of transformed marginal costs) with respect to theta. Replace null elements in
@@ -75,7 +75,7 @@ class ProblemMarket(Market):
         # replace invalid transformed marginal costs with their last computed values
         valid_tilde_costs = tilde_costs.copy()
         bad_tilde_costs_index = ~np.isfinite(tilde_costs)
-        valid_tilde_costs[bad_tilde_costs_index] = initial_tilde_costs[bad_tilde_costs_index]
+        valid_tilde_costs[bad_tilde_costs_index] = last_tilde_costs[bad_tilde_costs_index]
 
         # compute the Jacobian, which is zero for clipped marginal costs
         omega_jacobian = np.full((self.J, self.parameters.P), np.nan, options.dtype)
