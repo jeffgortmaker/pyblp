@@ -92,7 +92,7 @@ def test_bootstrap(simulated_problem: SimulatedProblemFixture) -> None:
     """Test that post-estimation output medians are within 10% parametric bootstrap confidence intervals."""
     _, _, problem, solve_options, _ = simulated_problem
 
-    # use second-step results to compute boostrapped output
+    # use second-step results to compute bootstrapped output
     solve_options = solve_options.copy()
     solve_options['method'] = '2s'
     results = problem.solve(**solve_options)

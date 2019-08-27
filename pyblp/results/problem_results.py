@@ -1,5 +1,6 @@
 """Economy-level structuring of BLP problem results."""
 
+import itertools
 import time
 from typing import Any, Callable, Dict, Hashable, List, Optional, Sequence, TYPE_CHECKING, Tuple
 
@@ -829,77 +830,52 @@ class ProblemResults(Results):
             bootstrapped_beta[d] = np.clip(bootstrapped_beta[d], *self.beta_bounds)
             bootstrapped_gamma[d] = np.clip(bootstrapped_gamma[d], *self.gamma_bounds)
 
-        # compute bootstrapped prices, shares, delta and marginal costs
+        # pre-compute X1 and X3 without any absorbed fixed effects
+        true_X1 = self.problem._compute_true_X1()
+        true_X3 = self.problem._compute_true_X3()
+
+        # define a factory for computing bootstrapped prices, shares, and delta in markets
+        def market_factory(
+                pair: Tuple[int, Hashable]) -> (
+                Tuple[ResultsMarket, Array, Optional[Array], Optional[Iteration]]):
+            """Build a market along with arguments used to compute equilibrium prices and shares along with delta."""
+            c, s = pair
+            indices_s = self.problem._product_market_indices[s]
+            market_cs = ResultsMarket(
+                self.problem, s, self._parameters, bootstrapped_sigma[c], bootstrapped_pi[c], bootstrapped_rho[c],
+                bootstrapped_beta[c], self.delta + true_X1 @ (bootstrapped_beta[c] - self.beta)
+            )
+            costs_cs = self.tilde_costs[indices_s] + true_X3[indices_s] @ (bootstrapped_gamma[c] - self.gamma)
+            if self.problem.costs_type == 'log':
+                costs_cs = np.exp(costs_cs)
+            prices_s = self.problem.products.prices[indices_s] if iteration is None else None
+            return market_cs, costs_cs, prices_s, iteration
+
+        # compute bootstrapped prices, shares, and deltas
         bootstrapped_prices = np.zeros((draws, self.problem.N, 1), options.dtype)
         bootstrapped_shares = np.zeros((draws, self.problem.N, 1), options.dtype)
         bootstrapped_delta = np.zeros((draws, self.problem.N, 1), options.dtype)
-        bootstrapped_costs = np.zeros((draws, self.problem.N, int(self.problem.K3 > 0)), options.dtype)
-        iteration_stats: List[Dict[Hashable, SolverStats]] = []
-        for d in output_progress(range(draws), draws, start_time):
-            prices_d, shares_d, delta_d, costs_d, iteration_stats_d, errors_d = self._compute_bootstrap(
-                iteration, bootstrapped_sigma[d], bootstrapped_pi[d], bootstrapped_rho[d], bootstrapped_beta[d],
-                bootstrapped_gamma[d]
-            )
-            bootstrapped_prices[d] = prices_d
-            bootstrapped_shares[d] = shares_d
-            bootstrapped_delta[d] = delta_d
-            bootstrapped_costs[d] = costs_d
-            iteration_stats.append(iteration_stats_d)
-            errors.extend(errors_d)
+        iteration_stats: Dict[Hashable, SolverStats] = {}
+        pairs = itertools.product(range(draws), self.problem.unique_market_ids)
+        generator = generate_items(pairs, market_factory, ResultsMarket.safely_solve_equilibrium_realization)
+        for (d, t), (prices_dt, shares_dt, delta_dt, iteration_stats_dt, errors_dt) in generator:
+            bootstrapped_prices[d, self.problem._product_market_indices[t]] = prices_dt
+            bootstrapped_shares[d, self.problem._product_market_indices[t]] = shares_dt
+            bootstrapped_delta[d, self.problem._product_market_indices[t]] = delta_dt
+            iteration_stats[(d, t)] = iteration_stats_dt
+            errors.extend(errors_dt)
 
         # structure the results
         from .bootstrapped_results import BootstrappedResults  # noqa
         results = BootstrappedResults(
             self, bootstrapped_sigma, bootstrapped_pi, bootstrapped_rho, bootstrapped_beta, bootstrapped_gamma,
-            bootstrapped_prices, bootstrapped_shares, bootstrapped_delta, bootstrapped_costs, start_time, time.time(),
-            draws, iteration_stats
+            bootstrapped_prices, bootstrapped_shares, bootstrapped_delta, start_time, time.time(), draws,
+            iteration_stats
         )
         output(f"Bootstrapped results after {format_seconds(results.computation_time)}.")
         output("")
         output(results)
         return results
-
-    def _compute_bootstrap(
-            self, iteration: Optional[Iteration], sigma: Array, pi: Array, rho: Array, beta: Array, gamma: Array) -> (
-            Tuple[Array, Array, Array, Array, Dict[Hashable, SolverStats], List[Error]]):
-        """Compute the equilibrium prices, shares, marginal costs, and delta associated with bootstrapped parameters
-        market-by-market
-        """
-        errors: List[Error] = []
-
-        # compute delta (which will change under equilibrium prices) and marginal costs (which won't change)
-        delta = self.delta + self.problem._compute_true_X1() @ (beta - self.beta)
-        costs = self.tilde_costs + self.problem._compute_true_X3() @ (gamma - self.gamma)
-        if self.problem.costs_type == 'log':
-            costs = np.exp(costs)
-
-        # prices will only change if there is an iteration configuration
-        prices = self.problem.products.prices if iteration is None else None
-
-        # define a factory for computing bootstrapped prices, shares, and delta in markets
-        def market_factory(s: Hashable) -> Tuple[ResultsMarket, Array, Optional[Array], Optional[Iteration]]:
-            """Build a market along with arguments used to compute equilibrium prices and shares along with delta."""
-            market_s = ResultsMarket(self.problem, s, self._parameters, sigma, pi, rho, beta, delta)
-            costs_s = costs[self.problem._product_market_indices[s]]
-            prices_s = prices[self.problem._product_market_indices[s]] if prices is not None else None
-            return market_s, costs_s, prices_s, iteration
-
-        # compute bootstrapped prices, shares, and delta market-by-market
-        equilibrium_prices = np.zeros_like(self.problem.products.prices)
-        equilibrium_shares = np.zeros_like(self.problem.products.shares)
-        iteration_stats: Dict[Hashable, SolverStats] = {}
-        generator = generate_items(
-            self.problem.unique_market_ids, market_factory, ResultsMarket.safely_solve_equilibrium_realization
-        )
-        for t, (prices_t, shares_t, delta_t, iteration_stats_t, errors_t) in generator:
-            equilibrium_prices[self.problem._product_market_indices[t]] = prices_t
-            equilibrium_shares[self.problem._product_market_indices[t]] = shares_t
-            delta[self.problem._product_market_indices[t]] = delta_t
-            iteration_stats[t] = iteration_stats_t
-            errors.extend(errors_t)
-
-        # return all of the information associated with this bootstrap draw
-        return equilibrium_prices, equilibrium_shares, delta, costs, iteration_stats, errors
 
     def compute_optimal_instruments(
             self, method: str = 'approximate', draws: int = 1, seed: Optional[int] = None,

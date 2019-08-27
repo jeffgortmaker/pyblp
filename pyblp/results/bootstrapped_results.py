@@ -46,8 +46,6 @@ class BootstrappedResults(Results):
         Bootstrapped marketshares, :math:`s`, implied by each draw.
     bootstrapped_delta : `ndarray`
         Bootstrapped mean utility, :math:`\delta`, implied by each draw.
-    bootstrapped_costs : `ndarray`
-        Bootstrapped marginal costs, :math:`c`, implied by each draw.
     computation_time : `float`
         Number of seconds it took to compute the bootstrapped results.
     draws : `int`
@@ -78,7 +76,6 @@ class BootstrappedResults(Results):
     bootstrapped_prices: Array
     bootstrapped_shares: Array
     bootstrapped_delta: Array
-    bootstrapped_costs: Array
     computation_time: float
     draws: int
     fp_converged: Array
@@ -88,8 +85,8 @@ class BootstrappedResults(Results):
     def __init__(
             self, problem_results: ProblemResults, bootstrapped_sigma: Array, bootstrapped_pi: Array,
             bootstrapped_rho: Array, bootstrapped_beta: Array, bootstrapped_gamma: Array, bootstrapped_prices: Array,
-            bootstrapped_shares: Array, bootstrapped_delta: Array, bootstrapped_costs: Array, start_time: float,
-            end_time: float, draws: int, iteration_stats: Sequence[Mapping[Hashable, SolverStats]]) -> None:
+            bootstrapped_shares: Array, bootstrapped_delta: Array, start_time: float, end_time: float, draws: int,
+            iteration_stats: Mapping[Hashable, SolverStats]) -> None:
         """Structure bootstrapped problem results."""
         super().__init__(problem_results.problem, problem_results._parameters, problem_results._moments)
         self.problem_results = problem_results
@@ -101,18 +98,17 @@ class BootstrappedResults(Results):
         self.bootstrapped_prices = bootstrapped_prices
         self.bootstrapped_shares = bootstrapped_shares
         self.bootstrapped_delta = bootstrapped_delta
-        self.bootstrapped_costs = bootstrapped_costs
         self.computation_time = end_time - start_time
         self.draws = draws
         unique_market_ids = problem_results.problem.unique_market_ids
         self.fp_converged = np.array(
-            [[m[t].converged if m else True for m in iteration_stats] for t in unique_market_ids], dtype=np.bool
+            [[iteration_stats[(d, t)].converged for d in range(self.draws)] for t in unique_market_ids], dtype=np.bool
         )
         self.fp_iterations = np.array(
-            [[m[t].iterations if m else 0 for m in iteration_stats] for t in unique_market_ids], dtype=np.int
+            [[iteration_stats[(d, t)].iterations for d in range(self.draws)] for t in unique_market_ids], dtype=np.int
         )
         self.contraction_evaluations = np.array(
-            [[m[t].evaluations if m else 0 for m in iteration_stats] for t in unique_market_ids], dtype=np.int
+            [[iteration_stats[(d, t)].evaluations for d in range(self.draws)] for t in unique_market_ids], dtype=np.int
         )
 
     def __str__(self) -> str:
@@ -181,7 +177,7 @@ class BootstrappedResults(Results):
                 'prices': self.bootstrapped_prices[c],
                 'shares': self.bootstrapped_shares[c]
             }
-            market_js = ResultsMarket(
+            market_cs = ResultsMarket(
                 self.problem, s, self._parameters, self.bootstrapped_sigma[c], self.bootstrapped_pi[c],
                 self.bootstrapped_rho[c], self.bootstrapped_beta[c], self.bootstrapped_delta[c], self._moments,
                 data_override_c
@@ -201,7 +197,7 @@ class BootstrappedResults(Results):
                         args_cs.append(market_arg[c])
                     else:
                         args_cs.append(market_arg[c, self.problem._product_market_indices[s]])
-            return (market_js, *fixed_args, *args_cs)
+            return (market_cs, *fixed_args, *args_cs)
 
         # construct a mapping from draws and market IDs to market-specific arrays and compute the full matrix size
         matrix_mapping: Dict[Tuple[int, Hashable], Array] = {}
@@ -243,8 +239,8 @@ class BootstrappedResults(Results):
     def to_dict(
             self, attributes: Sequence[str] = (
                 'bootstrapped_sigma', 'bootstrapped_pi', 'bootstrapped_rho', 'bootstrapped_beta', 'bootstrapped_gamma',
-                'bootstrapped_prices', 'bootstrapped_shares', 'bootstrapped_delta', 'bootstrapped_costs',
-                'computation_time', 'draws', 'fp_converged', 'fp_iterations', 'contraction_evaluations'
+                'bootstrapped_prices', 'bootstrapped_shares', 'bootstrapped_delta', 'computation_time', 'draws',
+                'fp_converged', 'fp_iterations', 'contraction_evaluations'
             )) -> dict:
         """Convert these results into a dictionary that maps attribute names to values.
 
