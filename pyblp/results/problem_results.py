@@ -494,6 +494,11 @@ class ProblemResults(Results):
         header.append(("Weighting Matrix", "Condition Number"))
         values.append(format_number(compute_condition_number(self.W)))
 
+        # add information about the covariance matrix
+        if np.isfinite(self.parameter_covariances).any() and self.parameter_covariances.size > 1:
+            header.append(("Covariance Matrix", "Condition Number"))
+            values.append(format_number(compute_condition_number(self.parameter_covariances)))
+
         # format the table
         return format_table(header, values, title="Problem Results Summary")
 
