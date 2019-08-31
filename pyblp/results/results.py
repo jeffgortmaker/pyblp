@@ -140,12 +140,13 @@ class Results(abc.ABC, StringRepresentation):
     def compute_diversion_ratios(self, name: str = 'prices', market_id: Optional[Any] = None) -> Array:
         r"""Estimate matrices of diversion ratios, :math:`\mathscr{D}`, with respect to a variable, :math:`x`.
 
-        Diversion ratios to the outside good are reported on diagonals. For each market, the value in row :math:`j` and
-        column :math:`k` is
+        For each market, the value in row :math:`j` and column :math:`k \neq j` is
 
-        .. math:: \mathscr{D}_{jk} = -\frac{\partial s_{k(j)}}{\partial x_j} \Big/ \frac{\partial s_j}{\partial x_j},
+        .. math:: \mathscr{D}_{jk} = -\frac{\partial s_k}{\partial x_j} \Big/ \frac{\partial s_j}{\partial x_j}.
 
-        in which :math:`s_{k(j)}` is :math:`s_0 = 1 - \sum_j s_j` if :math:`j = k`, and is :math:`s_k` otherwise.
+        Diversion ratios for the outside good are reported on diagonals:
+
+        .. math:: \mathscr{D}_{jj} = -\frac{\partial s_0}{\partial x_j} \Big/ \frac{\partial s_j}{\partial x_j}.
 
         Unlike :meth:`ProblemResults.compute_long_run_diversion_ratios`, this gives the marginal treatment effect (MTE)
         version of the diversion ratio. For more information, see :ref:`references:Conlon and Mortimer (2018)`.
@@ -179,18 +180,17 @@ class Results(abc.ABC, StringRepresentation):
     def compute_long_run_diversion_ratios(self, market_id: Optional[Any] = None) -> Array:
         r"""Estimate matrices of long-run diversion ratios, :math:`\bar{\mathscr{D}}`.
 
-        Long-run diversion ratios to the outside good are reported on diagonals. For each market, the value in row
-        :math:`j` and column :math:`k` is
+        For each market, the value in row :math:`j` and column :math:`k \neq j` is
 
         .. math:: \bar{\mathscr{D}}_{jk} = \frac{s_{k(-j)} - s_k}{s_j},
 
-        in which :math:`s_{k(-j)}` is the share of product :math:`k` computed with the outside option removed from the
-        choice set if :math:`j = k`, and with product :math:`j` removed otherwise.
+        in which :math:`s_{k(-j)}` is the share of product :math:`k` computed with :math:`j` removed from the choice
+        set. Long-run diversion ratios for the outside good are reported on diagonals:
 
-        These diversion ratios are long-run in the sense that we take prices to infinity, or equivalently removing
-        products from the choice set. Unlike :meth:`ProblemResults.compute_diversion_ratios`, this gives the average
-        treatment effect (ATE) version of the diversion ratio. For more information, see
-        :ref:`references:Conlon and Mortimer (2018)`.
+        .. math:: \bar{\mathscr{D}}_{jj} = \frac{s_{0(-j)} - s_0}{s_j}.
+
+        Unlike :meth:`ProblemResults.compute_diversion_ratios`, this gives the average treatment effect (ATE) version of
+        the diversion ratio. For more information, see :ref:`references:Conlon and Mortimer (2018)`.
 
         Parameters
         ----------

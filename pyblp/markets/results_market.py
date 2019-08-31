@@ -79,12 +79,8 @@ class ResultsMarket(Market):
         errors: List[Error] = []
         derivatives = self.compute_utility_derivatives(name)
         jacobian = self.compute_shares_by_variable_jacobian(derivatives)
-
-        # replace the diagonal with derivatives with respect to the outside option
         jacobian_diagonal = np.c_[jacobian.diagonal()]
-        jacobian[np.diag_indices_from(jacobian)] = -jacobian.sum(axis=1)
-
-        # compute the ratios
+        np.fill_diagonal(jacobian, -jacobian.sum(axis=1))
         ratios = -jacobian / np.tile(jacobian_diagonal, self.J)
         return ratios, errors
 
@@ -92,16 +88,11 @@ class ResultsMarket(Market):
     def safely_compute_long_run_diversion_ratios(self) -> Tuple[Array, List[Error]]:
         """Estimate a matrix of long-run diversion ratios, handling any numerical errors."""
         errors: List[Error] = []
-
-        # compute share differences when products are excluded and store outside share differences on the diagonal
-        changes = np.zeros((self.J, self.J), options.dtype)
+        ratios = np.zeros((self.J, self.J), options.dtype)
         for j in range(self.J):
             shares_without_j = self.compute_probabilities(eliminate_product=j)[0] @ self.agents.weights
-            changes[j] = (shares_without_j - self.products.shares).flat
-            changes[j, j] = -changes[j].sum()
-
-        # compute the ratios
-        ratios = changes / np.tile(self.products.shares, self.J)
+            ratios[j] = (shares_without_j - self.products.shares).flat / self.products.shares[j]
+            ratios[j, j] = -ratios[j].sum()
         return ratios, errors
 
     @NumericalErrorHandler(exceptions.PostEstimationNumericalError)

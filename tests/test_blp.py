@@ -541,7 +541,7 @@ def test_elasticity_aggregates_and_means(simulated_problem: SimulatedProblemFixt
 
 @pytest.mark.usefixtures('simulated_problem')
 def test_diversion_ratios(simulated_problem: SimulatedProblemFixture) -> None:
-    """Test simulated diversion ratio rows sum to one."""
+    """Test that simulated diversion ratio rows sum to one."""
     simulation, _, _, _, results = simulated_problem
 
     # only do the test for a single market
