@@ -81,7 +81,10 @@ class ProductsAgentsCovarianceMoment(Moment):
     where :math:`\bar{z}_t = \sum_i w_{it} z_{it}`, :math:`\bar{y}_t = \sum_i w_{it} y_{it}`, and conditional on
     purchasing a non-outside good, the expected value of :math:`x_{jt}` for agent :math:`i` is
 
-    .. math:: z_{it} = \sum_{j=1}^{J_t} \frac{x_{jt}s_{jti}}{1 - s_{0ti}}.
+    .. math:: z_{it} = \sum_{j=1}^{J_t} x_{jt}s_{j(-0)ti}
+
+    where :math:`s_{j(-0)ti}` is the probability of choosing :math:`j` when the outside option is removed from the
+    choice set.
 
     Integrals of these micro moments are approximated within and averaged across a set :math:`\mathscr{T}_m` of markets
     in which the micro data used to compute :math:`\sigma_{xy}` is relevant, which gives :math:`\bar{g}_{M,m}` in
