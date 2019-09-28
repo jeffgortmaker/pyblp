@@ -368,10 +368,10 @@ class ProblemEconomy(Economy):
             block-diagonal with a micro moment block equal to the covariance matrix defined in
             :eq:`averaged_micro_moment_covariances` plus any ``extra_micro_covariances``.
 
-        micro_moments : `sequence of ProductsAgentsCovarianceMoment, optional`
+        micro_moments : `sequence of FirstChoiceCovarianceMoment, optional`
             Configurations for the :math:`M_M` micro moments that will be added to the standard set of moments. The only
-            type of micro moment currently supported is the :class:`ProductsAgentsCovarianceMoment`. By default, no
-            micro moments are used, so :math:`M_M = 0`.
+            type of micro moment currently supported is the :class:`FirstChoiceCovarianceMoment`. By default, no micro
+            moments are used, so :math:`M_M = 0`.
 
             If micro moments are specified, the micro moment block in ``W`` should usually be replaced by a matrix that
             better reflects micro moment covariances and the size of the micro dataset relative to :math:`N`. If micro

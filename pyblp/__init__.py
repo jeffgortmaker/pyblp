@@ -11,7 +11,7 @@ from .construction import (
 )
 from .economies.problem import OptimalInstrumentProblem, Problem
 from .economies.simulation import Simulation
-from .moments import ProductsAgentsCovarianceMoment
+from .moments import FirstChoiceCovarianceMoment
 from .primitives import Agents, Products
 from .results.bootstrapped_results import BootstrappedResults
 from .results.optimal_instrument_results import OptimalInstrumentResults
@@ -23,6 +23,6 @@ from .version import __version__
 __all__ = [
     'data', 'exceptions', 'options', 'Formulation', 'Integration', 'Iteration', 'Optimization', 'build_blp_instruments',
     'build_differentiation_instruments', 'build_id_data', 'build_integration', 'build_matrix', 'build_ownership',
-    'OptimalInstrumentProblem', 'Problem', 'Simulation', 'ProductsAgentsCovarianceMoment', 'Agents', 'Products',
+    'OptimalInstrumentProblem', 'Problem', 'Simulation', 'FirstChoiceCovarianceMoment', 'Agents', 'Products',
     'BootstrappedResults', 'OptimalInstrumentResults', 'ProblemResults', 'SimulationResults', 'parallel', '__version__'
 ]

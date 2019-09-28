@@ -10,14 +10,14 @@ import pytest
 import scipy.linalg
 
 from pyblp import (
-    Formulation, Integration, Problem, ProblemResults, ProductsAgentsCovarianceMoment, Simulation, SimulationResults,
+    Formulation, Integration, Problem, ProblemResults, FirstChoiceCovarianceMoment, Simulation, SimulationResults,
     build_differentiation_instruments, build_id_data, build_matrix, build_ownership, options
 )
 from pyblp.utilities.basics import update_matrices, Array, Data, Options
 
 
 # define common types
-SimulationFixture = Tuple[Simulation, SimulationResults, Dict[str, Array], List[ProductsAgentsCovarianceMoment]]
+SimulationFixture = Tuple[Simulation, SimulationResults, Dict[str, Array], List[FirstChoiceCovarianceMoment]]
 SimulatedProblemFixture = Tuple[Simulation, SimulationResults, Problem, Options, ProblemResults]
 
 
@@ -255,7 +255,7 @@ def medium_blp_simulation() -> SimulationFixture:
         seed=1
     )
     simulation_results = simulation.replace_endogenous()
-    simulated_micro_moments = [ProductsAgentsCovarianceMoment(X2_index=1, demographics_index=0, value=0)]
+    simulated_micro_moments = [FirstChoiceCovarianceMoment(X2_index=1, demographics_index=0, value=0)]
     return simulation, simulation_results, {}, simulated_micro_moments
 
 
@@ -312,11 +312,11 @@ def large_blp_simulation() -> SimulationFixture:
         ]
     }
     simulated_micro_moments = [
-        ProductsAgentsCovarianceMoment(X2_index=0, demographics_index=0, value=0),
-        ProductsAgentsCovarianceMoment(
+        FirstChoiceCovarianceMoment(X2_index=0, demographics_index=0, value=0),
+        FirstChoiceCovarianceMoment(
             X2_index=1, demographics_index=1, value=0, market_ids=simulation.unique_market_ids[:5]
         ),
-        ProductsAgentsCovarianceMoment(
+        FirstChoiceCovarianceMoment(
             X2_index=0, demographics_index=1, value=0, market_ids=simulation.unique_market_ids[-3:]
         )
     ]
@@ -401,8 +401,8 @@ def large_nested_blp_simulation() -> SimulationFixture:
     )
     simulation_results = simulation.replace_endogenous()
     simulated_micro_moments = [
-        ProductsAgentsCovarianceMoment(X2_index=0, demographics_index=0, value=0),
-        ProductsAgentsCovarianceMoment(X2_index=1, demographics_index=1, value=0)
+        FirstChoiceCovarianceMoment(X2_index=0, demographics_index=0, value=0),
+        FirstChoiceCovarianceMoment(X2_index=1, demographics_index=1, value=0)
     ]
     return simulation, simulation_results, {}, simulated_micro_moments
 
@@ -449,7 +449,7 @@ def simulated_problem(request: Any) -> SimulatedProblemFixture:
     if simulated_micro_moments:
         micro_values = simulation_results.compute_micro(simulated_micro_moments)
         for moment, value in zip(simulated_micro_moments, micro_values):
-            micro_moments.append(ProductsAgentsCovarianceMoment(
+            micro_moments.append(FirstChoiceCovarianceMoment(
                 moment.X2_index, moment.demographics_index, value, moment.market_ids
             ))
 

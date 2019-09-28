@@ -66,7 +66,7 @@ Micro moment configurations can be passed to :meth:`Problem.solve`. Only one typ
    :toctree: _api
    :template: class_with_signature.rst
 
-   ProductsAgentsCovarianceMoment
+   FirstChoiceCovarianceMoment
 
 
 Problem Results Class

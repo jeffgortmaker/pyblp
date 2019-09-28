@@ -8,7 +8,7 @@ import numpy as np
 from .. import exceptions, options
 from ..configurations.iteration import ContractionResults, Iteration
 from ..economies.economy import Economy
-from ..moments import EconomyMoments, MarketMoments, ProductsAgentsCovarianceMoment
+from ..moments import EconomyMoments, MarketMoments, FirstChoiceCovarianceMoment
 from ..parameters import (
     LinearCoefficient, NonlinearCoefficient, Parameter, Parameters, PiParameter, RhoParameter, SigmaParameter
 )
@@ -854,7 +854,7 @@ class Market(Container):
         # compute the micro moments
         micro = np.zeros((self.moments.MM, 1), options.dtype)
         for m, moment in enumerate(self.moments.micro_moments):
-            assert isinstance(moment, ProductsAgentsCovarianceMoment)
+            assert isinstance(moment, FirstChoiceCovarianceMoment)
             z = micro_probabilities.T @ self.products.X2[:, [moment.X2_index]]
             d = self.agents.demographics[:, [moment.demographics_index]]
             demeaned_z = z - z.T @ self.agents.weights

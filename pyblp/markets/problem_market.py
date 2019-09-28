@@ -7,7 +7,7 @@ import numpy as np
 from .market import Market
 from .. import exceptions, options
 from ..configurations.iteration import Iteration
-from ..moments import ProductsAgentsCovarianceMoment
+from ..moments import FirstChoiceCovarianceMoment
 from ..parameters import LinearCoefficient
 from ..utilities.basics import Array, Bounds, Error, SolverStats, NumericalErrorHandler
 
@@ -138,7 +138,7 @@ class ProblemMarket(Market):
 
             # fill the gradient of micro moments with respect to the parameter moment-by-moment
             for m, moment in enumerate(self.moments.micro_moments):
-                assert isinstance(moment, ProductsAgentsCovarianceMoment)
+                assert isinstance(moment, FirstChoiceCovarianceMoment)
                 z_tangent = micro_probabilities_tangent.T @ self.products.X2[:, [moment.X2_index]]
                 z_jacobian = np.squeeze(micro_probabilities_tensor @ self.products.X2[:, [moment.X2_index]])
                 d = self.agents.demographics[:, [moment.demographics_index]]
@@ -160,7 +160,7 @@ class ProblemMarket(Market):
         # fill a matrix of de-meaned micro moments for each agent moment-by-moment
         demeaned_agent_micro = np.zeros((self.I, self.moments.MM), options.dtype)
         for m, moment in enumerate(self.moments.micro_moments):
-            assert isinstance(moment, ProductsAgentsCovarianceMoment)
+            assert isinstance(moment, FirstChoiceCovarianceMoment)
             z = micro_probabilities.T @ self.products.X2[:, [moment.X2_index]]
             d = self.agents.demographics[:, [moment.demographics_index]]
             demeaned_z = z - z.T @ self.agents.weights

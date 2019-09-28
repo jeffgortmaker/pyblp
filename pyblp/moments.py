@@ -67,7 +67,7 @@ class Moment(StringRepresentation):
                 raise ValueError(f"market_ids contains the following extra IDs: {sorted(extra_ids)}.")
 
 
-class ProductsAgentsCovarianceMoment(Moment):
+class FirstChoiceCovarianceMoment(Moment):
     r"""Configuration for micro moments that match covariances between product and agent characteristics, conditional on
     purchasing non-outside goods.
 

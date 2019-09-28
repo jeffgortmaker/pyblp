@@ -232,9 +232,9 @@ class SimulationResults(StringRepresentation):
 
         Parameters
         ----------
-        micro_moments : `sequence of ProductsAgentsCovarianceMoment`
+        micro_moments : `sequence of FirstChoiceCovarianceMoment`
             Configurations for the averaged micro moments that will be computed. The only type of micro moment currently
-            supported is the :class:`ProductsAgentsCovarianceMoment`.
+            supported is the :class:`FirstChoiceCovarianceMoment`.
 
         Returns
         -------
