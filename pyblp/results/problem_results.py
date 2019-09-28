@@ -337,7 +337,7 @@ class ProblemResults(Results):
         self.gamma_bounds = self._parameters.gamma_bounds
 
         # ignore computational errors when updating the weighting matrix and computing covariances
-        with np.errstate(invalid='ignore'):
+        with np.errstate(all='ignore'):
             # update the weighting matrix
             micro_covariances = progress.micro_covariances.copy()
             if extra_micro_covariances is not None:
@@ -369,8 +369,7 @@ class ProblemResults(Results):
                 self._errors.extend(se_errors)
 
                 # compute standard errors
-                with np.errstate(invalid='ignore'):
-                    se = np.sqrt(np.c_[self.parameter_covariances.diagonal()] / self.problem.N)
+                se = np.sqrt(np.c_[self.parameter_covariances.diagonal()] / self.problem.N)
                 if np.isnan(se).any():
                     self._errors.append(exceptions.InvalidParameterCovariancesError())
 
@@ -1052,14 +1051,16 @@ class ProblemResults(Results):
             output("")
 
         # compute the optimal instruments
-        if self.problem.K3 == 0:
-            inverse_covariance_matrix = np.c_[1 / np.var(self.xi)]
-            demand_instruments = inverse_covariance_matrix * expected_xi_jacobian
-            supply_instruments = np.full((self.problem.N, 0), np.nan, options.dtype)
-        else:
-            inverse_covariance_matrix = np.c_[scipy.linalg.inv(np.cov(self.xi, self.omega, rowvar=False))]
-            instruments = inverse_covariance_matrix @ np.stack([expected_xi_jacobian, expected_omega_jacobian], axis=1)
-            demand_instruments, supply_instruments = np.split(instruments.reshape((self.problem.N, -1)), 2, axis=1)
+        with np.errstate(all='ignore'):
+            if self.problem.K3 == 0:
+                inverse_covariance_matrix = np.c_[1 / np.var(self.xi)]
+                demand_instruments = inverse_covariance_matrix * expected_xi_jacobian
+                supply_instruments = np.full((self.problem.N, 0), np.nan, options.dtype)
+            else:
+                inverse_covariance_matrix = np.c_[scipy.linalg.inv(np.cov(self.xi, self.omega, rowvar=False))]
+                expected_jacobian = np.stack([expected_xi_jacobian, expected_omega_jacobian], axis=1)
+                instruments = inverse_covariance_matrix @ expected_jacobian
+                demand_instruments, supply_instruments = np.split(instruments.reshape((self.problem.N, -1)), 2, axis=1)
 
         # structure the results
         from .optimal_instrument_results import OptimalInstrumentResults  # noqa
