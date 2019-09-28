@@ -71,15 +71,15 @@ class ProblemEconomy(Economy):
         Parameters
         ----------
         sigma : `array-like, optional`
-            Configuration for which elements in the Cholesky root of the covariance matrix for unobserved taste
-            heterogeneity, :math:`\Sigma`, are fixed at zero and starting values for the other elements, which, if not
-            fixed by ``sigma_bounds``, are in the vector of unknown elements, :math:`\theta`.
+            Configuration for which elements in the lower-triangular Cholesky root of the covariance matrix for
+            unobserved taste heterogeneity, :math:`\Sigma`, are fixed at zero and starting values for the other
+            elements, which, if not fixed by ``sigma_bounds``, are in the vector of unknown elements, :math:`\theta`.
 
             Rows and columns correspond to columns in :math:`X_2`, which is formulated according
             ``product_formulations`` in :class:`Problem`. If :math:`X_2` was not formulated, this should not be
             specified, since the logit model will be estimated.
 
-            Values below the diagonal are ignored. Zeros are assumed to be zero throughout estimation and nonzeros are,
+            Values above the diagonal are ignored. Zeros are assumed to be zero throughout estimation and nonzeros are,
             if not fixed by ``sigma_bounds``, starting values for unknown elements in :math:`\theta`. If any columns are
             fixed at zero, only the first few columns of integration nodes (specified in :class:`Problem`) will be used.
 
@@ -146,7 +146,7 @@ class ProblemEconomy(Economy):
             :math:`X_2`, :math:`\mu`, and an initial estimate of :math:`\mu`, default bounds for off-diagonal parameters
             are chosen to reduce the need for overflow safety precautions.
 
-            Values below the diagonal are ignored. Lower and upper bounds corresponding to zeros in ``sigma`` are set to
+            Values above the diagonal are ignored. Lower and upper bounds corresponding to zeros in ``sigma`` are set to
             zero. Setting a lower bound equal to an upper bound fixes the corresponding element, removing it from
             :math:`\theta`. Both ``None`` and ``numpy.nan`` are converted to ``-numpy.inf`` in ``lb`` and to
             ``numpy.inf`` in ``ub``.

@@ -181,8 +181,8 @@ class Parameters(object):
         self.beta = self.initialize_matrix("beta", "X1 was formulated", beta, [(economy.K1, 1)], allow_linear_nans)
         self.gamma = self.initialize_matrix("gamma", "X3 was formulated", gamma, [(economy.K3, 1)], allow_linear_nans)
 
-        # fill the lower triangle of sigma with zeros
-        self.sigma[np.tril_indices(economy.K2, -1)] = 0
+        # fill the upper triangle of sigma with zeros
+        self.sigma[np.triu_indices(economy.K2, 1)] = 0
 
         # identify the index of nonzero columns in sigma
         self.nonzero_sigma_index = np.sum(self.sigma, axis=0) > 0
@@ -228,7 +228,7 @@ class Parameters(object):
         self.fixed: List[Parameter] = []
         self.unfixed: List[Parameter] = []
         self.eliminated: List[Parameter] = []
-        self.store(SigmaParameter, zip(*np.triu_indices_from(self.sigma)), self.sigma_bounds)
+        self.store(SigmaParameter, zip(*np.tril_indices_from(self.sigma)), self.sigma_bounds)
         self.store(PiParameter, np.ndindex(self.pi.shape), self.pi_bounds)
         self.store(rho_type, np.ndindex(self.rho.shape), self.rho_bounds)
         self.store(BetaParameter, np.ndindex(self.beta.shape), self.beta_bounds, self.eliminated_beta_index)
@@ -434,9 +434,10 @@ class Parameters(object):
         data: List[List[str]] = []
         for row_index, row_label in enumerate(self.sigma_labels):
             # add a row of values
-            values_row = [row_label] + [""] * row_index
-            for column_index in range(row_index, sigma_like.shape[1]):
+            values_row = [row_label]
+            for column_index in range(row_index + 1):
                 values_row.append(format_number(sigma_like[row_index, column_index]))
+            values_row.extend([""] * (sigma_like.shape[1] - row_index - 1))
             if pi_like.shape[1] > 0:
                 values_row.append(row_label)
                 for column_index in range(pi_like.shape[1]):
@@ -454,10 +455,11 @@ class Parameters(object):
             unfixed_pi_indices = {p.location[1] for p in relevant_unfixed if isinstance(p, PiParameter)}
 
             # add a row of standard errors
-            se_row = [""] * (1 + row_index)
-            for column_index in range(row_index, sigma_se_like.shape[1]):
+            se_row = [""]
+            for column_index in range(row_index + 1):
                 se = sigma_se_like[row_index, column_index]
                 se_row.append(format_se(se) if column_index in unfixed_sigma_indices else "")
+            se_row.extend([""] * (sigma_like.shape[1] - row_index - 1))
             if pi_se_like.shape[1] > 0:
                 se_row.append("")
                 for column_index in range(pi_se_like.shape[1]):
@@ -517,7 +519,7 @@ class Parameters(object):
                     values[parameter.location] = value
                     break
         if not nullify:
-            sigma_like[np.tril_indices_from(sigma_like, -1)] = 0
+            sigma_like[np.triu_indices_from(sigma_like, 1)] = 0
             for parameter in self.fixed:
                 for parameter_type, values in items:
                     if isinstance(parameter, parameter_type):

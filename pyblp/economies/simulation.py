@@ -108,10 +108,9 @@ class Simulation(Economy):
         Vector of demand-side linear parameters, :math:`\beta`. Elements correspond to columns in :math:`X_1`, which
         is formulated by ``product_formulations``.
     sigma : `array-like, optional`
-        Cholesky root of the covariance matrix for unobserved taste heterogeneity, :math:`\Sigma`, which is an upper
-        triangular matrix. Rows and columns correspond to columns in :math:`X_2`, which is formulated by
-        ``product_formulations``. If :math:`X_2` is not formulated, this should not be specified, since the logit model
-        will be simulated.
+        Lower-triangular Cholesky root of the covariance matrix for unobserved taste heterogeneity, :math:`\Sigma`. Rows
+        and columns correspond to columns in :math:`X_2`, which is formulated by ``product_formulations``. If
+        :math:`X_2` is not formulated, this should not be specified, since the logit model will be simulated.
     pi : `array-like, optional`
         Parameters that measure how agent tastes vary with demographics, :math:`\Pi`. Rows correspond to the same
         product characteristics as in ``sigma``. Columns correspond to columns in :math:`d`, which is formulated by

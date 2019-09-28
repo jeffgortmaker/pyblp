@@ -30,9 +30,9 @@ The :math:`K_1 \times 1` vector of demand-side linear paramterers, :math:`\beta`
 
 The agent-specific portion of utility in a single market is
 
-.. math:: \mu = X_2(\Sigma\nu' + \Pi d').
+.. math:: \mu = X_2(\Sigma \nu' + \Pi d').
 
-The model incorporates both observable (demographic) and unobservable taste heterogeneity though random coefficients. For the unobserved heterogeneity, we let :math:`\nu` denote independent draws from the standard normal distribution. These are scaled by a :math:`K_2 \times K_2` upper triangular matrix :math:`\Sigma`, which denotes the Cholesky root of the covariance matrix for unobserved taste heterogeneity. The :math:`K_2 \times D` matrix :math:`\Pi` measures how agent tastes vary with demographics.
+The model incorporates both observable (demographic) and unobservable taste heterogeneity though random coefficients. For the unobserved heterogeneity, we let :math:`\nu` denote independent draws from the standard normal distribution. These are scaled by a :math:`K_2 \times K_2` lower-triangular matrix :math:`\Sigma`, which denotes the Cholesky root of the covariance matrix for unobserved taste heterogeneity. The :math:`K_2 \times D` matrix :math:`\Pi` measures how agent tastes vary with demographics.
 
 Random idiosyncratic preferences, :math:`\epsilon_{jti}`, are assumed to be Type I Extreme Value, so that conditional on the heterogeneous coefficients, marketshares follow the well known logit form. Aggregate marketshares are obtained by integrating over the distribution of individual heterogeneity. They are approximated with Monte Carlo integration or quadrature rules defined by the :math:`I_t \times K_2` matrix of integration nodes, :math:`\nu`, and a :math:`I_t \times 1` vector of integration weights, :math:`w`:
 
