@@ -180,7 +180,7 @@ class EconomyMoments(Moments):
         """Validate and store information about a sequence of micro moment instances in the context of an economy."""
 
         # validate the moments
-        if not isinstance(micro_moments, collections.Sequence):
+        if not isinstance(micro_moments, collections.abc.Sequence):
             raise TypeError("micro_moments must be a sequence of micro moment instances.")
         for moment in micro_moments:
             if not isinstance(moment, Moment):

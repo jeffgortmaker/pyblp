@@ -1115,7 +1115,7 @@ class Problem(ProblemEconomy):
         # validate and normalize product formulations
         if isinstance(product_formulations, Formulation):
             product_formulations = [product_formulations]
-        elif isinstance(product_formulations, collections.Sequence) and len(product_formulations) <= 3:
+        elif isinstance(product_formulations, collections.abc.Sequence) and len(product_formulations) <= 3:
             product_formulations = list(product_formulations)
         else:
             raise TypeError("product_formulations must be a Formulation instance or a sequence of up to three of them.")
