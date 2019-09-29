@@ -816,15 +816,16 @@ class ProblemEconomy(Economy):
                 with np.errstate(all='ignore'):
                     for t in self.unique_market_ids:
                         indices = moments.market_indices[t]
-                        micro[indices] += micro_mapping[t] / moments.market_counts[indices]
-                        micro_jacobian[indices, :parameters.P] += (
-                            micro_jacobian_mapping[t] / moments.market_counts[indices]
-                        )
-                        if compute_micro_covariances:
-                            pairwise_indices = tuple(np.meshgrid(indices, indices))
-                            micro_covariances[pairwise_indices] += (
-                                micro_covariances_mapping[t] / moments.pairwise_market_counts[pairwise_indices]
+                        if indices.size > 0:
+                            micro[indices] += micro_mapping[t] / moments.market_counts[indices]
+                            micro_jacobian[indices, :parameters.P] += (
+                                micro_jacobian_mapping[t] / moments.market_counts[indices]
                             )
+                            if compute_micro_covariances:
+                                pairwise_indices = tuple(np.meshgrid(indices, indices))
+                                micro_covariances[pairwise_indices] += (
+                                    micro_covariances_mapping[t] / moments.pairwise_market_counts[pairwise_indices]
+                                )
 
         # replace invalid elements in delta and the micro moment values with their last values
         bad_delta_index = ~np.isfinite(delta)

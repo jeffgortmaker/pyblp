@@ -285,7 +285,8 @@ class SimulationResults(StringRepresentation):
         micro = np.zeros((moments.MM, 1), options.dtype)
         for t in self.simulation.unique_market_ids:
             indices = moments.market_indices[t]
-            micro[indices] += micro_mapping[t] / moments.market_counts[indices]
+            if indices.size > 0:
+                micro[indices] += micro_mapping[t] / moments.market_counts[indices]
 
         # output a warning about any errors
         if errors:
