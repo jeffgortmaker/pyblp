@@ -230,7 +230,6 @@ def medium_blp_simulation() -> SimulationFixture:
             Formulation('1 + I(prices ** 2)'),
             Formulation('1 + a + b')
         ),
-
         product_data={
             'market_ids': id_data.market_ids,
             'firm_ids': id_data.firm_ids,
@@ -276,7 +275,6 @@ def large_blp_simulation() -> SimulationFixture:
             Formulation('0 + prices + x'),
             Formulation('0 + log(x) + log(a) + log(b)')
         ),
-
         product_data={
             'market_ids': id_data.market_ids,
             'firm_ids': id_data.firm_ids,
@@ -312,7 +310,6 @@ def large_blp_simulation() -> SimulationFixture:
         ]
     }
     simulated_micro_moments = [
-        FirstChoiceCovarianceMoment(X2_index=0, demographics_index=0, value=0),
         FirstChoiceCovarianceMoment(
             X2_index=1, demographics_index=1, value=0, market_ids=simulation.unique_market_ids[:5]
         ),
@@ -335,7 +332,6 @@ def small_nested_blp_simulation() -> SimulationFixture:
             Formulation('0 + x'),
             Formulation('0 + a + b + c')
         ),
-
         product_data={
             'market_ids': id_data.market_ids,
             'firm_ids': id_data.firm_ids,
@@ -373,7 +369,6 @@ def large_nested_blp_simulation() -> SimulationFixture:
             Formulation('0 + prices + x'),
             Formulation('0 + log(x) + log(a) + log(b)')
         ),
-
         product_data={
             'market_ids': id_data.market_ids,
             'firm_ids': id_data.firm_ids,
