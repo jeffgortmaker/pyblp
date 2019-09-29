@@ -210,6 +210,11 @@ def test_fixed_effects(
     if ED == ES == 0:
         return pytest.skip("There are no fixed effects to test.")
 
+    # configure the optimization routine to only do a few iterations to save time and never get to the point where small
+    #   numerical differences between methods build up into noticeable differences
+    solve_options = solve_options.copy()
+    solve_options['optimization'] = Optimization('l-bfgs-b', {'maxfun': 3})
+
     # make product data mutable and add instruments
     product_data = {k: simulation_results.product_data[k] for k in simulation_results.product_data.dtype.names}
     product_data.update({
@@ -218,7 +223,6 @@ def test_fixed_effects(
     })
 
     # remove constants and delete associated elements in the initial beta
-    solve_options = solve_options.copy()
     product_formulations = list(problem.product_formulations).copy()
     if ED > 0:
         assert product_formulations[0] is not None
@@ -330,12 +334,9 @@ def test_fixed_effects(
         problem_results3.parameters[:2], np.eye(problem_results3.parameters.size)[:2]
     )
 
-    # choose tolerances (be more flexible with iterative de-meaning)
+    # choose tolerances
     atol = 1e-8
     rtol = 1e-5
-    if ED > 2 or ES > 2 or isinstance(absorb_method, Iteration):
-        atol *= 10
-        rtol *= 10
 
     # test that all problem results expected to be identical are essentially identical, except for standard errors under
     #   micro moments, which are expected to be slightly different
@@ -353,8 +354,8 @@ def test_fixed_effects(
         if key in {'beta', 'gamma', 'beta_se', 'gamma_se'}:
             result2 = result2[:result1.size]
             result3 = result3[:result1.size]
-        np.testing.assert_allclose(result1, result2, atol=atol, rtol=rtol, err_msg=key)
-        np.testing.assert_allclose(result1, result3, atol=atol, rtol=rtol, err_msg=key)
+        np.testing.assert_allclose(result1, result2, atol=atol, rtol=rtol, err_msg=key, equal_nan=True)
+        np.testing.assert_allclose(result1, result3, atol=atol, rtol=rtol, err_msg=key, equal_nan=True)
 
     # test that all optimal instrument results expected to be identical are essentially identical
     Z_results_keys = [
