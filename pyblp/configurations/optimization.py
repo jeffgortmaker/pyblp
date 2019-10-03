@@ -30,11 +30,11 @@ class Optimization(StringRepresentation):
         gradients:
 
             - ``'knitro'`` - Uses an installed version of
-              `Artleys Knitro <https://www.artelys.com/en/optimization-tools/knitro>`_. Python 3 is supported by Knitro
-              version 10.3 and newer. A number of environment variables most likely need to be configured properly, such
-              as ``KNITRODIR``, ``ARTELYS_LICENSE``, ``LD_LIBRARY_PATH`` (on Linux), and ``DYLD_LIBRARY_PATH`` (on Mac
-              OS X). For more information, refer to the
-              `Knitro installation guide <https://www.artelys.com/tools/knitro_doc/1_introduction/installation.html>`_.
+              `Artleys Knitro <https://www.artelys.com/solvers/knitro/>`_. Python 3 is supported by Knitro version 10.3
+              and newer. A number of environment variables most likely need to be configured properly, such as
+              ``KNITRODIR``, ``ARTELYS_LICENSE``, ``LD_LIBRARY_PATH`` (on Linux), and ``DYLD_LIBRARY_PATH`` (on
+              Mac OS X). For more information, refer to the
+              `Knitro installation guide <https://www.artelys.com/docs/knitro//1_introduction/installation.html>`_.
 
             - ``'slsqp'`` - Uses the :func:`scipy.optimize.minimize` SLSQP routine.
 
@@ -88,7 +88,7 @@ class Optimization(StringRepresentation):
         options are available for each optimization routine.
 
         If ``method`` is ``'knitro'``, these options should be
-        `Knitro user options <https://www.artelys.com/tools/knitro_doc/3_referenceManual/userOptions.html>`_. The
+        `Knitro user options <https://www.artelys.com/docs/knitro//3_referenceManual/userOptions.html>`_. The
         non-standard ``knitro_dir`` option can also be specified. The following options have non-standard default
         values:
 

@@ -11,7 +11,7 @@ In addition to the installation requirements for the package itself, running tes
 
 The full suite of tests also requires installation of the following software:
 
-- `Artleys Knitro <https://www.artelys.com/en/optimization-tools/knitro>`_ version 10.3 or newer: testing optimization routines.
+- `Artleys Knitro <https://www.artelys.com/solvers/knitro/>`_ version 10.3 or newer: testing optimization routines.
 - `MATLAB <https://www.mathworks.com/products/matlab.html>`_: comparing sparse grids with those created by the function `nwspgr <http://www.sparse-grids.de/>`_ created by Florian Heiss and Viktor Winschel, which must be included in a directory on the MATLAB path.
 
 If software is not installed, its associated tests will be skipped. Additionally, some tests that require support for extended precision will be skipped if on the platform running the tests, ``numpy.longdouble`` has the same precision as ``numpy.float64``. This tends to be the case on Windows.
