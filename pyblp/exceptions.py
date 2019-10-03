@@ -1,7 +1,7 @@
 """BLP-specific exceptions."""
 
 import collections
-from typing import List, Sequence
+from typing import Any, List, Sequence
 
 from .utilities.basics import Error, NumericalError, MultipleReversionError, InversionError, InversionReplacementError
 
@@ -11,7 +11,7 @@ class MultipleErrors(Error):
 
     _errors: List[Error]
 
-    def __new__(cls, errors: Sequence[Error]) -> Exception:
+    def __new__(cls, errors: Sequence[Error]) -> Any:
         """Defer to the class of a singular error."""
         if len(errors) == 1:
             return next(iter(errors))

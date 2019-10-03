@@ -409,6 +409,7 @@ class Error(Exception):
     def __str__(self) -> str:
         """Replace docstring markdown with simple text."""
         doc = inspect.getdoc(self)
+        assert doc is not None
 
         # normalize LaTeX
         while True:
