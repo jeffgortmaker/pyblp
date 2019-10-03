@@ -4,6 +4,20 @@ Version Notes
 These notes will only include major changes.
 
 
+0.8
+---
+
+- Micro moments that match product and agent characteristic covariances
+- Extended use of pseudo-inverses
+- Added more information to error messages
+- More flexible simulation interface
+- Alternative way to simulate data with specified prices and shares
+- Tests of overidentifying and model restrictions
+- Report projected gradients and reduced Hessians
+- Change objective gradient scaling
+- Switch to a lower-triangular covariance matrix to fix a bug with off-diagonal parameters
+
+
 0.7
 ---
 

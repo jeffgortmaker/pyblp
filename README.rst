@@ -86,7 +86,7 @@ Features
 - Bertrand-Nash supply-side moments
 - Multiple equation GMM
 - Demographic interactions
-- Micro moments
+- Micro moments that match product and agent characteristic covariances
 - Fixed effect absorption
 - Nonlinear functions of product characteristics
 - Concentrating out linear parameters
@@ -121,6 +121,7 @@ Features
 
 Features Slated for Future Versions
 -----------------------------------
+
 - Other micro moments
 - Fast, "Robust," and Approximately Correct (FRAC) estimation
 - Analytic Hessians
