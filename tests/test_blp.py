@@ -944,7 +944,7 @@ def test_objective_gradient(
             theta1[index] += change / 2
             theta2[index] -= change / 2
             estimated[index] = (objective_function(theta1)[0] - objective_function(theta2)[0]) / change
-        np.testing.assert_allclose(estimated, exact, atol=1e-10, rtol=1e-3)
+        np.testing.assert_allclose(estimated, exact, atol=1e-8, rtol=1e-3)
         return theta, True
 
     # test the gradient
