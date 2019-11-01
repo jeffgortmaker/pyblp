@@ -18,14 +18,14 @@ BLP_PRODUCTS_LOCATION : `str`
     original paper were computed with :func:`~pyblp.build_blp_instruments`. As in the original paper, the ``mpd``
     variable was added to the set of excluded instruments for supply. Due to a collinearity problem with these original
     instruments, each set of excluded instruments was then interacted up to the second degree, standardized, replaced
-    with the minimum set of principal components that explained at least 95% of the variance, and standardized again.
+    with the minimum set of principal components that explained at least 99% of the variance, and standardized again.
 
 BLP_AGENTS_LOCATION : `str`
     Location of a CSV file containing automobile agent data. Included in the file are 200 Monte Carlo weights and draws
     for each market, which, unlike in the fake cereal data, are not the same draws used in the original paper.
 
-    Also included is an income demographic, which consists of draws from lognormal distributions with common standard
-    deviation ``1.72`` and the following market-varying means:
+    Also included is an income demographic, which consists of draws from lognormal distributions. The log of income has
+    a common standard deviation, ``1.72``, and the following market-varying means:
 
     ====  =======
     Year  Mean
@@ -52,8 +52,8 @@ BLP_AGENTS_LOCATION : `str`
     1990  2.18377
     ====  =======
 
-    These numbers were extracted also extracted from the original GAUSS code for
-    :ref:`references:Berry, Levinsohn, and Pakes (1999)`.
+    These numbers were extracted also extracted by :ref:`references:Andrews, Gentzkow, and Shapiro (2017)` from the
+    original GAUSS code for :ref:`references:Berry, Levinsohn, and Pakes (1999)`.
 
 Examples
 --------
