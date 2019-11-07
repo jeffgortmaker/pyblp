@@ -669,7 +669,7 @@ class ProblemEconomy(Economy):
             iv_delta -= self._compute_true_X1(index=~parameters.eliminated_beta_index.flatten()) @ theta_beta
         if not parameters.eliminated_gamma_index.all():
             theta_gamma = np.c_[gamma[~parameters.eliminated_gamma_index]]
-            iv_delta -= self._compute_true_X3(index=~parameters.eliminated_gamma_index.flatten()) @ theta_gamma
+            iv_tilde_costs -= self._compute_true_X3(index=~parameters.eliminated_gamma_index.flatten()) @ theta_gamma
 
         # absorb any fixed effects
         if self._absorb_demand_ids is not None:
