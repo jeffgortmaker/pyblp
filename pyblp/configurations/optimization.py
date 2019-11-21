@@ -428,13 +428,16 @@ def knitro_context_manager() -> Iterator[Tuple[Any, Any]]:
             raise EnvironmentError("Make sure both Knitro and Python are 32- or 64-bit.") from exception
         raise
 
-    # modify Knitro to work with numpy
-    import knitroNumPy
-    knitro.KTR_array_handler._cIntArray = knitroNumPy._cIntArray
-    knitro.KTR_array_handler._cDoubleArray = knitroNumPy._cDoubleArray
-    knitro.KTR_array_handler._userArray = knitroNumPy._userArray
-    knitro.KTR_array_handler._userToCArray = knitroNumPy._userToCArray
-    knitro.KTR_array_handler._cToUserArray = knitroNumPy._cToUserArray
+    # modify older version of Knitro to work with NumPy
+    try:
+        import knitroNumPy
+        knitro.KTR_array_handler._cIntArray = knitroNumPy._cIntArray
+        knitro.KTR_array_handler._cDoubleArray = knitroNumPy._cDoubleArray
+        knitro.KTR_array_handler._userArray = knitroNumPy._userArray
+        knitro.KTR_array_handler._userToCArray = knitroNumPy._userToCArray
+        knitro.KTR_array_handler._cToUserArray = knitroNumPy._cToUserArray
+    except ImportError:
+        pass
 
     # create the Knitro context and attempt to free it if anything goes wrong
     knitro_context = None
