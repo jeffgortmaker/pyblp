@@ -915,11 +915,12 @@ class Problem(ProblemEconomy):
         :math:`X_1`. The typical exception is characteristics that are collinear with fixed effects that have been
         absorbed into :math:`X_1`.
 
-        Characteristics in :math:`X_1` that do not involve ``prices``, :math:`X_1^x`, will be combined with excluded
-        demand-side instruments (specified below) to create the full set of demand-side instruments, :math:`Z_D`. Any
-        fixed effects absorbed into :math:`X_1` will also be absorbed into :math:`Z_D`. Similarly, characteristics in
-        :math:`X_3` will be combined with the excluded supply-side instruments to create :math:`Z_S`, and any fixed
-        effects absorbed into :math:`X_3` will also be absorbed into :math:`Z_S`.
+        By default, characteristics in :math:`X_1` that do not involve ``prices``, :math:`X_1^x`, will be combined with
+        excluded demand-side instruments (specified below) to create the full set of demand-side instruments,
+        :math:`Z_D`. Any fixed effects absorbed into :math:`X_1` will also be absorbed into :math:`Z_D`. Similarly,
+        characteristics in :math:`X_3` will be combined with the excluded supply-side instruments to create :math:`Z_S`,
+        and any fixed effects absorbed into :math:`X_3` will also be absorbed into :math:`Z_S`. The ``add_exogenous``
+        flag can be used to disable this behavior.
 
         .. warning::
 
@@ -945,15 +946,16 @@ class Problem(ProblemEconomy):
 
             - **firm_ids** : (`object, optional`) - IDs that associate products with firms.
 
-        Excluded instruments should generally be specified with the following fields:
+        Excluded instruments are typically specified with the following fields:
 
             - **demand_instruments** : (`numeric`) - Excluded demand-side instruments, which, together with the
               formulated exogenous linear product characteristics, :math:`X_1^x`, constitute the full set of demand-side
-              instruments, :math:`Z_D`.
+              instruments, :math:`Z_D`. To instead specify the full matrix :math:`Z_D`, set ``add_exogenous`` to
+              ``False``.
 
             - **supply_instruments** : (`numeric, optional`) - Excluded supply-side instruments, which, together with
               the formulated cost characteristics, :math:`X_3`, constitute the full set of supply-side instruments,
-              :math:`Z_S`.
+              :math:`Z_S`. To instead specify the full matrix :math:`Z_S`, set ``add_exogenous`` to ``False``.
 
         The recommendation in :ref:`references:Conlon and Gortmaker (2019)` is to start with differentiation instruments
         of :ref:`references:Gandhi and Houde (2017)`, which can be built with :func:`build_differentiation_instruments`,
@@ -1048,6 +1050,24 @@ class Problem(ProblemEconomy):
 
         This specification is only relevant if :math:`X_3` is formulated.
 
+    add_exogenous : `bool, optional`
+        Whether to add characteristics in :math:`X_1` that do not involve prices (including absorbed fixed effects) to
+        the ``demand_instruments`` field in ``product_data``, and similarly, whether to add characteristics in
+        :math:`X_3` (including fixed effects) to the ``supply_instruments`` field. This is by default ``True`` so that
+        only excluded instruments need to be specified.
+
+        If this is set to ``False``, ``demand_instruments`` and ``supply_instruments`` should specify the full sets of
+        demand- and supply-side instruments, :math:`Z_D` and :math:`Z_S`, and fixed effects should be manually absorbed
+        (for example, with the :func:`build_matrix` function). This behavior can be useful, for example, when price is
+        not the only endogenous product characteristic over which consumers have preferences. This type of model can be
+        correctly estimated by manually adding the truly exogenous characteristics in :math:`X_1` to :math:`Z_D`.
+
+        .. warning::
+
+           If this flag is set to ``False`` because there are multiple endogenous product characteristics, care should
+           be taken when including a supply side or computing optimal instruments. These routines assume that price is
+           the only endogenous variable over which consumers have preferences.
+
     Attributes
     ----------
     product_formulations : `Formulation or sequence of Formulation`
@@ -1085,11 +1105,11 @@ class Problem(ProblemEconomy):
     D : `int`
         Number of demographic variables, :math:`D`.
     MD : `int`
-        Number of demand-side instruments, :math:`M_D`, which is the number of excluded demand-side instruments plus
-        the number of exogenous linear product characteristics, :math:`K_1^x`.
+        Number of demand-side instruments, :math:`M_D`, which is typically the number of excluded demand-side
+        instruments plus the number of exogenous linear product characteristics, :math:`K_1^x`.
     MS : `int`
-        Number of supply-side instruments, :math:`M_S`, which is the number of excluded supply-side instruments plus
-        the number of cost product characteristics, :math:`K_3`.
+        Number of supply-side instruments, :math:`M_S`, which is typically the number of excluded supply-side
+        instruments plus the number of cost product characteristics, :math:`K_3`.
     ED : `int`
         Number of absorbed dimensions of demand-side fixed effects, :math:`E_D`.
     ES : `int`
@@ -1106,7 +1126,7 @@ class Problem(ProblemEconomy):
     def __init__(
             self, product_formulations: Union[Formulation, Sequence[Optional[Formulation]]], product_data: Mapping,
             agent_formulation: Optional[Formulation] = None, agent_data: Optional[Mapping] = None,
-            integration: Optional[Integration] = None, costs_type: str = 'linear') -> None:
+            integration: Optional[Integration] = None, costs_type: str = 'linear', add_exogenous: bool = True) -> None:
         """Initialize the underlying economy with product and agent data before absorbing fixed effects."""
 
         # keep track of long it takes to initialize the problem
@@ -1123,7 +1143,7 @@ class Problem(ProblemEconomy):
         product_formulations.extend([None] * (3 - len(product_formulations)))
 
         # initialize the underlying economy with structured product and agent data
-        products = Products(product_formulations, product_data)
+        products = Products(product_formulations, product_data, add_exogenous=add_exogenous)
         agents = Agents(products, agent_formulation, agent_data, integration)
         super().__init__(product_formulations, agent_formulation, products, agents, costs_type)
 
@@ -1131,17 +1151,19 @@ class Problem(ProblemEconomy):
         if self._absorb_demand_ids is not None:
             output("Absorbing demand-side fixed effects ...")
             self.products.X1, X1_errors = self._absorb_demand_ids(self.products.X1)
-            self.products.ZD, ZD_errors = self._absorb_demand_ids(self.products.ZD)
-            if X1_errors or ZD_errors:
-                raise exceptions.MultipleErrors(X1_errors + ZD_errors)
+            self._handle_errors(X1_errors)
+            if add_exogenous:
+                self.products.ZD, ZD_errors = self._absorb_demand_ids(self.products.ZD)
+                self._handle_errors(ZD_errors)
 
         # absorb any supply-side fixed effects
         if self._absorb_supply_ids is not None:
             output("Absorbing supply-side fixed effects ...")
             self.products.X3, X3_errors = self._absorb_supply_ids(self.products.X3)
-            self.products.ZS, ZS_errors = self._absorb_supply_ids(self.products.ZS)
-            if X3_errors or ZS_errors:
-                raise exceptions.MultipleErrors(X3_errors + ZS_errors)
+            self._handle_errors(X3_errors)
+            if add_exogenous:
+                self.products.ZS, ZS_errors = self._absorb_supply_ids(self.products.ZS)
+                self._handle_errors(ZS_errors)
 
         # detect any problems with the product data
         self._detect_collinearity()

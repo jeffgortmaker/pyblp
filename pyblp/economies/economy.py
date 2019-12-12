@@ -182,7 +182,7 @@ class Economy(Container, StringRepresentation):
             raise ValueError(f"{name} must be a PSD matrix. {common_message}")
 
     @staticmethod
-    def _handle_errors(errors: List[Error], error_behavior: str) -> None:
+    def _handle_errors(errors: List[Error], error_behavior: str = 'raise') -> None:
         """Either raise or output information about any errors."""
         if errors:
             if error_behavior == 'raise':

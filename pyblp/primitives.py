@@ -37,9 +37,11 @@ class Products(object):
     prices : `ndarray`
         Product prices, :math:`p`.
     ZD : `ndarray`
-        Full set of demand-side instruments, :math:`Z_D`: excluded demand-side instruments and :math:`X_1^x`.
+        Full set of demand-side instruments, :math:`Z_D`, which typically consists of excluded demand-side instruments
+        and :math:`X_1^x`.
     ZS : `ndarray`
-        Full set of supply-side instruments, :math:`Z_S`: excluded supply-side instruments and :math:`X_3`.
+        Full set of supply-side instruments, :math:`Z_S`, which typically consists of excluded supply-side instruments
+        and :math:`X_3`.
     X1 : `ndarray`
         Linear product characteristics, :math:`X_1`.
     X2 : `ndarray`
@@ -65,7 +67,7 @@ class Products(object):
 
     def __new__(
             cls, product_formulations: Sequence[Optional[Formulation]], product_data: Mapping,
-            instruments: bool = True) -> RecArray:
+            instruments: bool = True, add_exogenous: bool = True) -> RecArray:
         """Structure product data."""
 
         # validate the formulations
@@ -109,15 +111,17 @@ class Products(object):
         ZD = None
         if instruments:
             ZD = extract_matrix(product_data, 'demand_instruments')
-            for index, formulation in enumerate(X1_formulations):
-                if 'prices' not in formulation.names:
-                    ZD = X1[:, [index]] if ZD is None else np.c_[ZD, X1[:, [index]]]
+            if add_exogenous:
+                for index, formulation in enumerate(X1_formulations):
+                    if 'prices' not in formulation.names:
+                        ZD = X1[:, [index]] if ZD is None else np.c_[ZD, X1[:, [index]]]
 
         # load excluded supply-side instruments and supplement them with all characteristics in X3
         ZS = None
         if instruments and X3 is not None:
             ZS = extract_matrix(product_data, 'supply_instruments')
-            ZS = X3 if ZS is None else np.c_[ZS, X3]
+            if add_exogenous:
+                ZS = X3 if ZS is None else np.c_[ZS, X3]
 
         # load fixed effect IDs
         demand_ids = None

@@ -126,7 +126,7 @@ class SimulationResults(StringRepresentation):
             self, product_formulations: Optional[Union[Formulation, Sequence[Optional[Formulation]]]] = None,
             product_data: Optional[Mapping] = None, agent_formulation: Optional[Formulation] = None,
             agent_data: Optional[Mapping] = None, integration: Optional[Integration] = None,
-            costs_type: Optional[str] = None) -> 'Problem':
+            costs_type: Optional[str] = None, add_exogenous: bool = True) -> 'Problem':
         """Convert the solved simulation into a problem.
 
         Arguments are the same as those of :class:`Problem`. By default, the structure of the problem will be the same
@@ -159,6 +159,8 @@ class SimulationResults(StringRepresentation):
             By default, this is unspecified.
         costs_type : `str, optional`
             By default, :attr:`Simulation.costs_type`.
+        add_exogenous : `bool, optional`
+            By default, ``True``.
 
         Returns
         -------
@@ -186,7 +188,9 @@ class SimulationResults(StringRepresentation):
         if costs_type is None:
             costs_type = self.simulation.costs_type
         from ..economies.problem import Problem  # noqa
-        return Problem(product_formulations, product_data, agent_formulation, agent_data, integration, costs_type)
+        return Problem(
+            product_formulations, product_data, agent_formulation, agent_data, integration, costs_type, add_exogenous
+        )
 
     def _compute_default_instruments(self) -> Tuple[Array, Array]:
         """Compute default sums of characteristics excluded BLP instruments."""
