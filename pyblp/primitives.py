@@ -166,6 +166,16 @@ class Products(object):
             raise KeyError("product_data must have a shares field.")
         if shares.shape[1] > 1:
             raise ValueError("The shares field of product_data must be one-dimensional.")
+        if (shares <= 0).any() or (shares >= 1).any():
+            raise ValueError("The shares field of product_data must consist of values between zero and one, exclusive.")
+
+        # verify that shares sum to less than one in each market
+        market_groups = Groups(market_ids)
+        bad_shares_index = market_groups.sum(shares) >= 1
+        if np.any(bad_shares_index):
+            raise ValueError(
+                f"Shares in these markets do not sum to less than 1: {market_groups.unique[bad_shares_index]}"
+            )
 
         # structure product fields as a mapping
         product_mapping: Dict[Union[str, tuple], Tuple[Optional[Array], Any]] = {}

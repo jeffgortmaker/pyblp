@@ -133,15 +133,6 @@ class Economy(Container, StringRepresentation):
         # format the table
         return format_table(header, *data, title="Formulations")
 
-    def _validate_shares(self) -> None:
-        """Validate the integrity of product shares."""
-        shares = self.products.shares
-        if (shares <= 0).any() or (shares >= 1).any():
-            raise ValueError("Product shares must be between zero and one, exclusive.")
-        bad_markets = [t for t, i in self._product_market_indices.items() if shares[i].sum() >= 1]
-        if bad_markets:
-            raise ValueError(f"Shares in the following markets do not sum to less than one: {bad_markets}.")
-
     def _detect_collinearity(self) -> None:
         """Detect any collinearity issues in product data matrices."""
 

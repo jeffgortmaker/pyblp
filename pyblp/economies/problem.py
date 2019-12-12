@@ -1144,7 +1144,6 @@ class Problem(ProblemEconomy):
                 raise exceptions.MultipleErrors(X3_errors + ZS_errors)
 
         # detect any problems with the product data
-        self._validate_shares()
         self._detect_collinearity()
 
         # output information about the initialized problem
