@@ -8,7 +8,7 @@ import numpy as np
 from . import options
 from .configurations.formulation import ColumnFormulation, Formulation
 from .configurations.integration import Integration
-from .utilities.basics import Array, Data, RecArray, extract_matrix, structure_matrices
+from .utilities.basics import Array, Data, Groups, RecArray, extract_matrix, structure_matrices
 
 
 class Products(object):
@@ -297,6 +297,15 @@ class Agents(object):
                 # delete columns of nodes if there are too many
                 if nodes.shape[1] > K2:
                     nodes = nodes[:, :K2]
+
+        # verify that weights sum to one in each market
+        market_groups = Groups(market_ids)
+        bad_weights_index = np.abs(1 - market_groups.sum(weights)) > options.weights_tol
+        if np.any(bad_weights_index):
+            raise ValueError(
+                f"Integration weights in these markets sum to a value that differs from 1 by more than "
+                f"options.weights_tol: {market_groups.unique[bad_weights_index]}."
+            )
 
         # structure agents
         return structure_matrices({
