@@ -1,13 +1,13 @@
 References
 ==========
 
-This page contains a full list of references cited in the documentation, including the original work of :ref:`references:Berry, Levinsohn, and Pakes (1995)`. If you use pyblp in your research, we ask that you also cite the below :ref:`references:Conlon and Gortmaker (2019)`, which describes the advances implemented in the package.
+This page contains a full list of references cited in the documentation, including the original work of :ref:`references:Berry, Levinsohn, and Pakes (1995)`. If you use PyBLP in your research, we ask that you also cite the below :ref:`references:Conlon and Gortmaker (2019)`, which describes the advances implemented in the package.
 
 
 Conlon and Gortmaker (2019)
 ---------------------------
 
-Conlon, Christopher T., and Jeff Gortmaker (2019). `Best practices for differentiated products demand estimation with pyblp <https://jeffgortmaker.com/files/pyblp.pdf>`_. Working paper.
+Conlon, Christopher T., and Jeff Gortmaker (2019). `Best practices for differentiated products demand estimation with PyBLP <https://jeffgortmaker.com/files/pyblp.pdf>`_. Working paper.
 
 
 Other References

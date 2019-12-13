@@ -5,4 +5,4 @@ Please use the `GitHub issue tracker <https://github.com/jeffgortmaker/pyblp/iss
 
 - Code optimizations.
 - Documentation improvements.
-- Alternate formulations that have been implemented in the literature but not in pyblp.
+- Alternate formulations that have been implemented in the literature but not in PyBLP.

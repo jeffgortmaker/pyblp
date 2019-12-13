@@ -1,7 +1,7 @@
 Notation
 ========
 
-The notation in pyblp is a customized amalgamation of the notation employed by :ref:`references:Berry, Levinsohn, and Pakes (1995)`, :ref:`references:Nevo (2000)`, :ref:`references:Morrow and Skerlos (2011)`, :ref:`references:Grigolon and Verboven (2014)`, and others.
+The notation in PyBLP is a customized amalgamation of the notation employed by :ref:`references:Berry, Levinsohn, and Pakes (1995)`, :ref:`references:Nevo (2000)`, :ref:`references:Morrow and Skerlos (2011)`, :ref:`references:Grigolon and Verboven (2014)`, and others.
 
 
 Indices

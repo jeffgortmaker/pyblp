@@ -28,7 +28,7 @@ exclude_patterns = ['_build', '_downloads', 'notebooks', 'templates', '**.ipynb_
 
 # configure project information
 language = 'en'
-project = 'pyblp'
+project = 'PyBLP'
 author = 'Jeff Gortmaker'
 copyright = f'{datetime.datetime.now().year}, {author}'
 release = version = pyblp.__version__
@@ -40,8 +40,8 @@ master_doc = 'index'
 
 # identify the RTD version that's being built and associated URLs
 rtd_version = os.environ.get('READTHEDOCS_VERSION', 'latest')
-rtd_url = f'https://{project}.readthedocs.io/{language}/{rtd_version}'
-pdf_url = f'https://readthedocs.org/projects/{project}/downloads/pdf/{rtd_version}'
+rtd_url = f'https://{project.lower()}.readthedocs.io/{language}/{rtd_version}'
+pdf_url = f'https://readthedocs.org/projects/{project.lower()}/downloads/pdf/{rtd_version}'
 
 # configure extensions
 extensions = [
@@ -126,8 +126,8 @@ def process_notebooks() -> None:
                             section = re.sub(r'-+', '-', re.sub('[^0-9a-zA-Z]+', '-', text)).strip('-').lower()
                         elif role in {'mod', 'func', 'class', 'meth', 'attr', 'exc'}:
                             text = f'`{content}`'
-                            section = f'{project}.{content}'
-                            document = f'_api/{project}.{content}'
+                            section = f'{project.lower()}.{content}'
+                            document = f'_api/{project.lower()}.{content}'
                             if role == 'mod':
                                 section = f'module-{section}'
                             elif role == 'attr':

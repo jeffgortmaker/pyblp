@@ -5,7 +5,7 @@
       Download a PDF version of the documentation: :pdf:`pyblp.pdf <>`
 
 
-pyblp
+PyBLP
 =====
 
 .. only:: html
