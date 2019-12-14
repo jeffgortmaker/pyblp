@@ -12,14 +12,11 @@ import patsy.contrasts
 import patsy.desc
 import patsy.design_info
 import patsy.origin
-import scipy.sparse
 import sympy as sp
 import sympy.parsing.sympy_parser
 
-from .iteration import Iteration
 from .. import exceptions, options
-from ..utilities.algebra import precisely_invert
-from ..utilities.basics import Array, Data, Error, Groups, StringRepresentation, extract_size, interact_ids
+from ..utilities.basics import Array, Data, Error, StringRepresentation, extract_size, interact_ids
 
 
 class Formulation(StringRepresentation):
@@ -60,28 +57,22 @@ class Formulation(StringRepresentation):
         ``-1``. If ``absorb`` is specified, intercepts are ignored.
     absorb : `str, optional`
         R-style formula used to design a matrix of categorical variables representing fixed effects, which will be
-        absorbed into the matrix designed by ``formula``. Fixed effect absorption is only supported for some matrices.
-        Unlike ``formula``, intercepts are ignored. Only categorical variables are supported.
-    absorb_method : `str or Iteration, optional`
-        The method with which fixed effects will be absorbed. One of the following:
+        absorbed into the matrix designed by ``formula`` by the `PyHDFE <https://pyhdfe.readthedocs.io/en/stable/>`_
+        package. Fixed effect absorption is only supported for some matrices. Unlike ``formula``, intercepts are
+        ignored. Only categorical variables are supported.
+    absorb_method : `str, optional`
+        Method by which fixed effects will be absorbed. For a full list of supported methods, refer to the
+        ``residualize_method`` argument of :func:`pyhdfe.create`.
 
-            - ``'simple'`` (default for one fixed effect) - Use simple de-meaning. This method is very unlikely to fully
-              absorb more than one fixed effect.
+        By default, the simplest methods are used: simple de-meaning for a single fixed effect and simple iterative
+        de-meaning by way of the method of alternating projections (MAP) for multiple dimensions of fixed effects. For
+        multiple dimensions, non-accelerated MAP is unlikely to be the fastest algorithm. If fixed effect absorption
+        seems to be taking a long time, consider using a different method such as ``'lsmr'``, using ``absorb_options``
+        to specify a MAP acceleration method, or configuring other options such as termination tolerances.
 
-            - ``'memory'`` (default for two fixed effects) - Use the :ref:`references:Somaini and Wolak (2016)`
-              algorithm, which only works for two-way fixed effects, and which requires inversion of a dense matrix with
-              dimensions equal to the smaller number of fixed effect groups.
-
-            - ``'speed'`` - Use the same :ref:`references:Somaini and Wolak (2016)` algorithm but pre-compute the
-              :math:`A` matrix, which is a dense matrix with dimensions equal to the larger number of fixed effect
-              groups. Again, this method only works for two-way fixed effects.
-
-            - ``Iteration`` (default for more than two fixed effects) - Use the method of alternating projections
-              described, for example, in :ref:`references:Guimarães and Portugal (2010)`. By default,
-              ``Iteration('simple', {'atol': 1e-12})`` is used to iteratively de-mean the matrix within each fixed
-              effect level until convergence. This method is equivalent to ``'simple'`` for one fixed effect, and it
-              will also work for two fixed effects, although either variant of the
-              :ref:`references:Somaini and Wolak (2016)` algorithm is often more performant.
+    absorb_options : `dict, optional`
+        Configuration options for the chosen ``method``, which will be passed to the ``options`` argument of
+        :func:`pyhdfe.create`.
 
     Examples
     --------
@@ -101,7 +92,8 @@ class Formulation(StringRepresentation):
 
     _formula: str
     _absorb: Optional[str]
-    _absorb_method: Optional[Union[str, Iteration]]
+    _absorb_method: Optional[str]
+    _absorb_options: dict
     _terms: List[patsy.desc.Term]
     _absorbed_terms: List[patsy.desc.Term]
     _expressions: List[sp.Expr]
@@ -110,8 +102,8 @@ class Formulation(StringRepresentation):
     _absorbed_names: Set[str]
 
     def __init__(
-            self, formula: str, absorb: Optional[str] = None,
-            absorb_method: Optional[Union[str, Iteration]] = None) -> None:
+            self, formula: str, absorb: Optional[str] = None, absorb_method: Optional[str] = None,
+            absorb_options: Optional[Mapping] = None) -> None:
         """Parse the formula into patsy terms and SymPy expressions. In the process, validate it as much as possible
         without any data.
         """
@@ -149,10 +141,15 @@ class Formulation(StringRepresentation):
             origin = patsy.origin.Origin(absorb, 0, len(absorb))
             raise patsy.PatsyError("absorb should not have any constant terms.", origin)
 
-        # configure fixed effect absorption
-        if absorb_method not in {None, 'simple', 'memory', 'speed'} and not isinstance(absorb_method, Iteration):
-            raise TypeError("absorb_method must be None, 'simple', 'memory', 'speed', or an Iteration instance.")
+        # validate fixed effect absorption options
+        if absorb_method is not None and not isinstance(absorb_method, str):
+            raise TypeError("absorb_method must be None or a string.")
+        if absorb_options is None:
+            absorb_options = {}
+        elif not isinstance(absorb_options, dict):
+            raise TypeError("absorb_options must be None or a dict.")
         self._absorb_method = absorb_method
+        self._absorb_options = absorb_options
 
     def __str__(self) -> str:
         """Format the terms as a string."""
@@ -250,88 +247,24 @@ class Formulation(StringRepresentation):
 
     def _build_absorb(self, ids: Array) -> Callable[[Array], Tuple[Array, List[Error]]]:
         """Build a function used to absorb fixed effects defined by columns of IDs."""
+        import pyhdfe
 
-        # choose a default absorption method
-        method = self._absorb_method
-        if method is None:
-            if ids.shape[1] == 1:
-                method = 'simple'
-            elif ids.shape[1] == 2:
-                method = 'memory'
-            else:
-                method = Iteration('simple', {'atol': 1e-12})
+        # initialize the algorithm for repeated absorption
+        algorithm = pyhdfe.create(
+            ids, drop_singletons=False, compute_degrees=False, residualize_method=self._absorb_method,
+            options=self._absorb_options
+        )
 
-        # simple and iterated de-meaning both require group information for each fixed effect
-        if method == 'simple' or isinstance(method, Iteration):
-            groups_list = [Groups(i) for i in ids.T]
-
-            # define a single de-meaning pass
-            def demean(matrix: Array) -> Array:
-                """De-mean a matrix within each set of groups."""
-                matrix = matrix.copy()
-                for groups in groups_list:
-                    matrix -= groups.expand(groups.mean(matrix))
-                return matrix
-
-            # if the method is simple de-meaning, supplement the de-meaning pass with an empty list of errors
-            if method == 'simple':
-                return lambda m: (demean(m), [])
-
-            # otherwise, use iterative de-meaning
-            def iterated_absorb(matrix: Array) -> Tuple[Array, List[Error]]:
-                """Iteratively de-mean a matrix until convergence."""
-                assert isinstance(method, Iteration)
-                errors: List[Error] = []
-                matrix, converged = method._iterate(matrix, lambda m: (demean(m), None, None))[:2]
-                if not converged:
-                    errors.append(exceptions.AbsorptionConvergenceError())
-                return matrix, errors
-            return iterated_absorb
-
-        # validate that the method is a variation of the algorithm of Somaini and Wolak (2016)
-        assert method in {'memory', 'speed'}
-        if ids.shape[1] != 2:
-            raise ValueError("The absorption methods 'memory' and 'speed' are only applicable for two fixed effects.")
-
-        # compute fixed effect indices and identify the fixed effects with the larger dimension
-        ids1, ids2 = ids.T
-        unique1, indices1 = np.unique(ids1, return_inverse=True)
-        unique2, indices2 = np.unique(ids2, return_inverse=True)
-        if unique1.size > unique2.size:
-            indices1, indices2 = indices2, indices1
-
-        # construct sparse matrices and drop the last column to remove multicollinearity
-        D = scipy.sparse.coo_matrix((np.ones_like(indices1), (np.arange(indices1.size), indices1))).tocsr()
-        H = scipy.sparse.coo_matrix((np.ones_like(indices2), (np.arange(indices2.size), indices2))).tocsc()[:, :-1]
-
-        # compute the straightforward components of the annihilator matrix
-        DH = (D.T @ H).toarray()
-        DD_inverse = scipy.sparse.diags(1 / (D.T @ D).diagonal())
-
-        # attempt to compute the only non-diagonal inverse
-        C_inverse = H.T @ H - DH.T @ DD_inverse @ DH
-        C, successful = precisely_invert(C_inverse)
-        if not successful:
-            raise exceptions.AbsorptionInversionError(C_inverse)
-
-        # compute the remaining components and the function for computing AD'x, optionally pre-computing A
-        B = -DD_inverse @ DH @ C
-        if method == 'speed':
-            A = DD_inverse.toarray() + DD_inverse @ DH @ C @ DH.T @ DD_inverse
-            compute_ADx = lambda Dx: A @ Dx
-        else:
-            assert method == 'memory'
-            compute_ADx = lambda Dx: DD_inverse @ Dx + DD_inverse @ (DH @ (C @ (DH.T @ (DD_inverse @ Dx))))
-
-        # define the absorption function, which returns an empty list of errors
-        def two_way_absorb(matrix: Array) -> Tuple[Array, List[Error]]:
-            """Absorb two-way fixed effects."""
-            Dx = D.T @ matrix
-            Hx = H.T @ matrix
-            delta_hat = compute_ADx(Dx) + B @ Hx
-            tau_hat = B.T @ Dx + C @ Hx
-            return matrix - D @ delta_hat - H @ tau_hat, []
-        return two_way_absorb
+        # construct the absorption function
+        def absorb(matrix: Array) -> Tuple[Array, List[Error]]:
+            """Handle any absorption errors."""
+            errors: List[Error] = []
+            try:
+                matrix = algorithm.residualize(matrix)
+            except Exception as exception:
+                errors.append(exceptions.AbsorptionError(exception))
+            return matrix, errors
+        return absorb
 
 
 class ColumnFormulation(object):

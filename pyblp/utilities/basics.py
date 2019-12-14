@@ -436,6 +436,21 @@ class Error(Exception):
         return doc
 
 
+class DerivedError(Error):
+    """Error derived from another exception."""
+
+    _exception: Exception
+
+    def __init__(self, exception: Exception) -> None:
+        """Store the exception from which this error is derived."""
+        super().__init__()
+        self._exception = exception
+
+    def __str__(self) -> str:
+        """Supplement the error with the exception's message."""
+        return f"{super().__str__()} Exception encountered: '{self._exception}'."
+
+
 class NumericalError(Error):
     """Floating point issues."""
 

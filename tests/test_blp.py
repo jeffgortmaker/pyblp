@@ -2,7 +2,7 @@
 
 import pickle
 import tempfile
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple
 import warnings
 
 import linearmodels
@@ -184,20 +184,18 @@ def test_parallel(simulated_problem: SimulatedProblemFixture) -> None:
 
 
 @pytest.mark.usefixtures('simulated_problem')
-@pytest.mark.parametrize(['ED', 'ES', 'absorb_method'], [
-    pytest.param(1, 0, None, id="1 demand-side FE, default method"),
-    pytest.param(0, 1, None, id="1 supply-side FE, default method"),
-    pytest.param(1, 1, 'simple', id="1 demand- and 1 supply-side FE, simple de-meaning"),
-    pytest.param(2, 0, None, id="2 demand-side FEs, default method"),
-    pytest.param(2, 0, 'memory', id="2 demand-side FEs, memory"),
-    pytest.param(2, 2, 'speed', id="2 demand- and 2 supply-side FEs, speed"),
-    pytest.param(3, 3, None, id="3 demand- and 3 supply-side FEs, default method"),
-    pytest.param(2, 1, None, id="2 demand- and 1 supply-side FEs, default method"),
-    pytest.param(1, 2, Iteration('simple', {'atol': 1e-12}), id="1 demand- and 2 supply-side FEs, iteration")
+@pytest.mark.parametrize(['ED', 'ES', 'absorb_method', 'absorb_options'], [
+    pytest.param(1, 0, None, None, id="1 demand FE, default method"),
+    pytest.param(0, 1, None, None, id="1 supply FE, default method"),
+    pytest.param(1, 1, None, None, id="1 demand- and 1 supply FE, default method"),
+    pytest.param(2, 0, None, None, id="2 demand FEs, default method"),
+    pytest.param(0, 2, 'sw', None, id="2 supply FEs, SW"),
+    pytest.param(3, 1, 'lsmr', None, id="3 demand- and 1 supply FEs, LSMR"),
+    pytest.param(1, 3, 'map', {'transform': 'cimmino', 'acceleration': 'cg'}, id="1 demand- and 3 supply FEs, MAP-CG"),
 ])
 def test_fixed_effects(
-        simulated_problem: SimulatedProblemFixture, ED: int, ES: int,
-        absorb_method: Optional[Union[str, Iteration]]) -> None:
+        simulated_problem: SimulatedProblemFixture, ED: int, ES: int, absorb_method: Optional[str],
+        absorb_options: Optional[dict]) -> None:
     """Test that absorbing different numbers of demand- and supply-side fixed effects gives rise to essentially
     identical first-stage results as does including indicator variables. Also test that optimal instruments results,
     marginal costs, and test statistics remain unchanged.
@@ -260,10 +258,14 @@ def test_fixed_effects(
     product_formulations1 = product_formulations.copy()
     if ED > 0:
         assert product_formulations[0] is not None
-        product_formulations1[0] = Formulation(product_formulations[0]._formula, demand_id_formula, absorb_method)
+        product_formulations1[0] = Formulation(
+            product_formulations[0]._formula, demand_id_formula, absorb_method, absorb_options
+        )
     if ES > 0:
         assert product_formulations[2] is not None
-        product_formulations1[2] = Formulation(product_formulations[2]._formula, supply_id_formula, absorb_method)
+        product_formulations1[2] = Formulation(
+            product_formulations[2]._formula, supply_id_formula, absorb_method, absorb_options
+        )
     problem1 = Problem(product_formulations1, product_data, problem.agent_formulation, simulation.agent_data)
     problem_results1 = problem1.solve(**solve_options1)
 

@@ -3,7 +3,9 @@
 import collections
 from typing import Any, List, Sequence
 
-from .utilities.basics import Error, NumericalError, MultipleReversionError, InversionError, InversionReplacementError
+from .utilities.basics import (
+    Error, DerivedError, NumericalError, MultipleReversionError, InversionError, InversionReplacementError
+)
 
 
 class MultipleErrors(Error):
@@ -176,11 +178,11 @@ class PostEstimationNumericalError(NumericalError):
     """Encountered a numerical error when computing a post-estimation output."""
 
 
-class AbsorptionConvergenceError(Error):
-    """An iterative de-meaning procedure failed to converge when absorbing fixed effects.
+class AbsorptionError(DerivedError):
+    """A fixed effect absorption procedure failed to properly absorb fixed effects.
 
-    This problem can sometimes be mitigated by increasing the maximum number of fixed point iterations, increasing the
-    fixed point tolerance, configuring other iteration settings, or choosing less complicated sets of fixed effects.
+    Consider configuring absorption options or choosing a different absorption method. For information about absorption
+    options and defaults, refer to the PyHDFE package's documentation.
 
     """
 
@@ -218,7 +220,7 @@ class SyntheticDeltaConvergenceError(Error):
     r"""The fixed point computation of the synthetic :math:`\delta` failed to converge.
 
     This problem can sometimes be mitigated by increasing the maximum number of fixed point iterations, increasing the
-    fixed point tolerance, choosing more reasonable parameter values, or using a different iteraiton configuration.
+    fixed point tolerance, choosing more reasonable parameter values, or using a different iteration configuration.
 
     """
 
@@ -268,15 +270,6 @@ class OmegaByThetaJacobianReversionError(MultipleReversionError):
 
 class MicroMomentsByThetaJacobianReversionError(MultipleReversionError):
     r"""Reverted problematic elements in the Jacobian of micro moments with respect to :math:`\theta`."""
-
-
-class AbsorptionInversionError(InversionError):
-    """Failed to invert the :math:`A` matrix from :ref:`references:Somaini and Wolak (2016)` when absorbing two-way
-    fixed effects.
-
-    The formulated fixed effects may be highly collinear.
-
-    """
 
 
 class HessianEigenvaluesError(InversionError):

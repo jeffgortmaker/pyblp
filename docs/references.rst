@@ -103,12 +103,6 @@ Grigolon and Verboven (2014)
 Grigolon, Laura, and Frank Verboven (2014). `Nested logit or random coefficients logit? A comparison of alternative discrete choice models of product differentiation <https://ideas.repec.org/a/tpr/restat/v96y2014i5p916-935.html>`_. *Review of Economics and Statistics, 96* (5), 916-935.
 
 
-Guimarães and Portugal (2010)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Guimarães, Paulo, and Pedro Portugal (2010). `A simple feasible procedure to fit models with high-dimensional fixed effects <https://ideas.repec.org/a/tsj/stataj/v10y2010i4p628-649.html>`_. *Stata Journal, 10* (4), 628-649.
-
-
 Hansen (1982)
 ~~~~~~~~~~~~~
 
@@ -187,22 +181,10 @@ Reynaerts, Varadhan, and Nash (2012)
 Reynaerts, Jo, Ravi Varadhan, and John C. Nash (2012). `Enhancing the convergence properties of the BLP (1995) contraction mapping <https://ideas.repec.org/p/ete/vivwps/35.html>`_. VIVES discussion paper 35.
 
 
-Rios-Avila (2015)
-~~~~~~~~~~~~~~~~~
-
-Rios-Avila, Fernando (2015). `Feasible fitting of linear models with N fixed effects <https://ideas.repec.org/a/tsj/stataj/v15y2015i3p881-898.html>`_. *Stata Journal, 15* (3), 881-898.
-
-
 Skrainka (2012)
 ~~~~~~~~~~~~~~~
 
 Skrainka, Benjamin S. (2012). `A large scale study of the small sample performance of random coefficient models of demand <https://papers.ssrn.com/sol3/papers.cfm?abstract_id=1942627>`_.
-
-
-Somaini and Wolak (2016)
-~~~~~~~~~~~~~~~~~~~~~~~~
-
-Somaini, Paulo, and Frank A. Wolak (2016). `An algorithm to estimate the two-way fixed effects model <https://ideas.repec.org/a/bpj/jecome/v5y2016i1p143-152n4.html>`_. *Journal of Econometric Methods, 5* (1), 143-152.
 
 
 Varadhan and Roland (2008)

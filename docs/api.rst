@@ -316,7 +316,7 @@ When errors occur, they will either be displayed as warnings or raised as except
    exceptions.SyntheticMicroMomentsNumericalError
    exceptions.EquilibriumRealizationNumericalError
    exceptions.PostEstimationNumericalError
-   exceptions.AbsorptionConvergenceError
+   exceptions.AbsorptionError
    exceptions.ThetaConvergenceError
    exceptions.DeltaConvergenceError
    exceptions.SyntheticPricesConvergenceError
@@ -330,7 +330,6 @@ When errors occur, they will either be displayed as warnings or raised as except
    exceptions.XiByThetaJacobianReversionError
    exceptions.OmegaByThetaJacobianReversionError
    exceptions.MicroMomentsByThetaJacobianReversionError
-   exceptions.AbsorptionInversionError
    exceptions.HessianEigenvaluesError
    exceptions.FittedValuesInversionError
    exceptions.SharesByXiJacobianInversionError

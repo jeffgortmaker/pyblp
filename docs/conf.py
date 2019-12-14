@@ -61,7 +61,8 @@ intersphinx_mapping = {
     'numpy': ('https://docs.scipy.org/doc/numpy/', None),
     'patsy': ('https://patsy.readthedocs.io/en/stable/', None),
     'scipy': ('https://docs.scipy.org/doc/scipy/reference/', None),
-    'pandas': ('http://pandas.pydata.org/pandas-docs/stable/', None)
+    'pandas': ('http://pandas.pydata.org/pandas-docs/stable/', None),
+    'pyhdfe': ('https://pyhdfe.readthedocs.io/en/stable/', None),
 }
 extlinks = {
     'rtd': (f'{rtd_url}/%s', None),
