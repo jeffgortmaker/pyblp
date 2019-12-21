@@ -8,7 +8,7 @@ import numpy as np
 import scipy.special
 import scipy.stats
 
-from ..utilities.basics import Array, StringRepresentation
+from ..utilities.basics import Array, Options, StringRepresentation, format_options
 
 
 class Integration(StringRepresentation):
@@ -20,7 +20,20 @@ class Integration(StringRepresentation):
         How to build nodes and weights. One of the following:
 
             - ``'monte_carlo'`` - Draw from a pseudo-random standard multivariate normal distribution. Integration
-              weights are ``1 / size``.
+              weights are ``1 / size``. The ``seed`` field of ``options`` can be used to seed the random number
+              generator.
+
+            - ``'halton'`` - Generate nodes according to the Halton. Different primes (2, 3, 5, etc.) are used for
+              different dimensions. Integration weights are ``1 / size``. By default, the first ``100`` values in each
+              dimension are discarded to eliminate correlation between dimensions. The ``discard`` field of ``options``
+              can be used to increase this number.
+
+            - ``'lhs'`` - Generate nodes according to Latin Hypercube Sampling (LHS). Integration weights are
+              ``1 / size``. The ``seed`` field of ``options`` can be used to seed the random number generator.
+
+            - ``'mlhs'`` - Generate nodes according to Modified Latin Hypercube Sampling (MLHS) described by
+              :ref:`references:Hess, Train, and Polak (2004)`. Integration weights are ``1 / size``. The ``seed`` field
+              of ``options`` can be used to seed the random number generator.
 
             - ``'product'`` - Generate nodes and weights according to the level-``size`` Gauss-Hermite product rule.
 
@@ -42,10 +55,21 @@ class Integration(StringRepresentation):
         :ref:`references:Heiss and Winschel (2008)`.
 
     size : `int`
-        The number of draws if ``specification`` is ``'monte_carlo'``, and the level of the quadrature rule otherwise.
-    seed : `int, optional`
-        Passed to :class:`numpy.random.mtrand.RandomState` when ``specification`` is ``'monte_carlo'`` to seed the
-        random number generator before building nodes. By default, a seed is not passed to the random number generator.
+        The number of draws if ``specification`` is ``'monte_carlo'``, ``'lhs'``, or ``'mlhs'``, and the level of the
+        quadrature rule otherwise.
+    specification_options : `dict, optional`
+        Options for the integration specification. The ``'monte_carlo'``, ``'lhs'``, and ``'mlhs'`` specifications
+        support the following option:
+
+            - **seed** : (`int`) - Passed to :class:`numpy.random.mtrand.RandomState` to seed the random number
+              generator before building integration nodes. By default, a seed is not passed to the random number
+              generator.
+
+        The ``'halton'`` specification supports the following option:
+
+            - **discard** : (`int`) - How many values at the beginning of each dimension's Halton sequence to discard.
+              Discarding values at the start of each dimension's sequence is the simplest way to eliminate correlation
+              between dimensions. By default, the first ``100`` values in each dimension are discarded.
 
     Examples
     --------
@@ -65,14 +89,17 @@ class Integration(StringRepresentation):
 
     _size: int
     _seed: Optional[int]
-    _specification: str
     _description: str
     _builder: functools.partial
+    _specification_options: Options
 
-    def __init__(self, specification: str, size: int, seed: Optional[int] = None) -> None:
+    def __init__(self, specification: str, size: int, specification_options: Optional[Options] = None) -> None:
         """Validate the specification and identify the builder."""
         specifications = {
             'monte_carlo': (functools.partial(monte_carlo), "with Monte Carlo simulation"),
+            'halton': (functools.partial(halton), "with Halton sequences"),
+            'lhs': (functools.partial(lhs), "with Latin Hypercube Sampling (LHS)"),
+            'mlhs': (functools.partial(lhs, modified=True), "with Modified Latin Hypercube Sampling (MLHS)"),
             'product': (functools.partial(product_rule), f"according to the level-{size} Gauss-Hermite product rule"),
             'grid': (
                 functools.partial(sparse_grid),
@@ -93,44 +120,107 @@ class Integration(StringRepresentation):
             raise ValueError(f"specification must be one of {list(specifications.keys())}.")
         if not isinstance(size, int) or size < 1:
             raise ValueError("size must be a positive integer.")
+        if specification_options is not None and not isinstance(specification_options, dict):
+            raise ValueError("specification_options must be None or a dict.")
 
         # initialize class attributes
         self._size = size
-        self._seed = seed
         self._specification = specification
         self._builder, self._description = specifications[specification]
 
+        # set default options
+        self._specification_options: Options = {}
+        if specification == 'halton':
+            self._specification_options['discard'] = 100
+
+        # update and validate options
+        self._specification_options.update(specification_options or {})
+        if specification in {'monte_carlo', 'lhs', 'mlhs'}:
+            if not isinstance(self._specification_options.get('seed', 0), int):
+                raise ValueError("The specification option seed must be an integer.")
+        elif specification == 'halton':
+            discard = self._specification_options['discard']
+            if not isinstance(discard, int) or discard < 0:
+                raise ValueError("The specification option discard must be a nonnegative integer.")
+
     def __str__(self) -> str:
         """Format the configuration as a string."""
-        return f"Configured to construct nodes and weights {self._description}."
+        return (
+            f"Configured to construct nodes and weights {self._description} with options "
+            f"{format_options(self._specification_options)}."
+        )
 
     def _build_many(self, dimensions: int, ids: Iterable) -> Tuple[Array, Array, Array]:
         """Build concatenated IDs, nodes, and weights for each ID."""
         builder = self._builder
-        if self._specification == 'monte_carlo':
-            builder = functools.partial(builder, state=np.random.RandomState(self._seed))
+        if self._specification in {'monte_carlo', 'lhs', 'mlhs'}:
+            builder = functools.partial(builder, state=np.random.RandomState(self._specification_options.get('seed')))
+        count = 0
         ids_list: List[Array] = []
         nodes_list: List[Array] = []
         weights_list: List[Array] = []
         for i in ids:
-            nodes, weights = builder(dimensions, self._size)
+            if self._specification == 'halton':
+                nodes, weights = builder(dimensions, self._size, start=self._specification_options['discard'] + count)
+            else:
+                nodes, weights = builder(dimensions, self._size)
             ids_list.append(np.repeat(i, weights.size))
             nodes_list.append(nodes)
             weights_list.append(weights)
+            count += weights.size
         return np.concatenate(ids_list), np.concatenate(nodes_list), np.concatenate(weights_list)
 
     def _build(self, dimensions: int) -> Tuple[Array, Array]:
         """Build nodes and weights."""
         builder = self._builder
-        if self._specification == 'monte_carlo':
-            builder = functools.partial(builder, state=np.random.RandomState(self._seed))
+        if self._specification in {'monte_carlo', 'lhs', 'mlhs'}:
+            builder = functools.partial(builder, state=np.random.RandomState(self._specification_options.get('seed')))
+        if self._specification == 'halton':
+            return builder(dimensions, self._size, start=self._specification_options['discard'])
         return builder(dimensions, self._size)
 
 
-def monte_carlo(dimensions: int, ns: int, state: np.random.RandomState) -> Tuple[Array, Array]:
+def monte_carlo(dimensions: int, size: int, state: np.random.RandomState) -> Tuple[Array, Array]:
     """Draw from a pseudo-random standard multivariate normal distribution."""
-    nodes = state.normal(size=(ns, dimensions))
-    weights = np.repeat(1 / ns, ns)
+    nodes = state.normal(size=(size, dimensions))
+    weights = np.repeat(1 / size, size)
+    return nodes, weights
+
+
+def halton(dimensions: int, size: int, start: int) -> Tuple[Array, Array]:
+    """Generate nodes and weights for integration according to the Halton sequence."""
+
+    # generate Halton sequences
+    sequences = np.zeros((size, dimensions))
+    for dimension in range(dimensions):
+        base = get_prime(dimension)
+        for index in range(size):
+            value = 0.0
+            denominator = 1.0
+            quotient = start + index
+            while quotient > 0:
+                quotient, remainder = divmod(quotient, base)
+                denominator *= base
+                value += remainder / denominator
+            sequences[index, dimension] = value
+
+    # transform the sequences and construct weights
+    nodes = scipy.stats.norm().ppf(sequences)
+    weights = np.repeat(1 / size, size)
+    return nodes, weights
+
+
+def lhs(dimensions: int, size: int, state: np.random.RandomState, modified: bool = False) -> Tuple[Array, Array]:
+    """Use Latin Hypercube Sampling to generate nodes and weights for integration."""
+
+    # generate the samples
+    samples = np.zeros((size, dimensions))
+    for dimension in range(dimensions):
+        samples[:, dimension] = state.permutation(np.arange(size) + state.uniform(size=1 if modified else size)) / size
+
+    # transform the samples and construct weights
+    nodes = scipy.stats.norm().ppf(samples)
+    weights = np.repeat(1 / size, size)
     return nodes, weights
 
 
@@ -218,11 +308,29 @@ def quadrature_rule(level: int, nested: bool) -> Tuple[Array, Array]:
     if not nested:
         raw_nodes, raw_weights = np.polynomial.hermite.hermgauss(level)
         return raw_nodes * np.sqrt(2), raw_weights / np.sqrt(np.pi)
-    node_data, weight_data = nested_data(level)
+    node_data, weight_data = get_nested_data(level)
     return np.r_[-node_data[::-1], 0, node_data], np.r_[weight_data[::-1], weight_data[1:]]
 
 
-def nested_data(level: int) -> Tuple[Array, Array]:
+def get_prime(dimension: int) -> int:
+    """Return the prime number corresponding to a dimension when constructing a Halton sequence."""
+    primes = [
+        2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97, 101, 103, 107,
+        109, 113, 127, 131, 137, 139, 149, 151, 157, 163, 167, 173, 179, 181, 191, 193, 197, 199, 211, 223, 227, 229,
+        233, 239, 241, 251, 257, 263, 269, 271, 277, 281, 283, 293, 307, 311, 313, 317, 331, 337, 347, 349, 353, 359,
+        367, 373, 379, 383, 389, 397, 401, 409, 419, 421, 431, 433, 439, 443, 449, 457, 461, 463, 467, 479, 487, 491,
+        499, 503, 509, 521, 523, 541, 547, 557, 563, 569, 571, 577, 587, 593, 599, 601, 607, 613, 617, 619, 631, 641,
+        643, 647, 653, 659, 661, 673, 677, 683, 691, 701, 709, 719, 727, 733, 739, 743, 751, 757, 761, 769, 773, 787,
+        797, 809, 811, 821, 823, 827, 829, 839, 853, 857, 859, 863, 877, 881, 883, 887, 907, 911, 919, 929, 937, 941,
+        947, 953, 967, 971, 977, 983, 991, 997
+    ]
+    try:
+        return primes[dimension]
+    except IndexError:
+        raise ValueError(f"Halton sequences are only available for {len(primes)} dimensions here.")
+
+
+def get_nested_data(level: int) -> Tuple[Array, Array]:
     """Return node and weight data used to construct the nested Gauss-Hermite rule."""
     node_data_list = [
         [],
@@ -462,9 +570,9 @@ def nested_data(level: int) -> Tuple[Array, Array]:
             +5.4500412650638412e-15, +1.0541326582337527e-18
         ]
     ]
-    max_level = len(node_data_list) + 1
-    if level > max_level:
-        raise ValueError(f"The nested rule is only available up to a level of {max_level}.")
-    node_data = np.array(node_data_list[level - 1])
-    weight_data = np.array(weight_data_list[level - 1])
+    try:
+        node_data = np.array(node_data_list[level - 1])
+        weight_data = np.array(weight_data_list[level - 1])
+    except IndexError:
+        raise ValueError(f"The nested rule is only available up to a level of {len(node_data_list)}.")
     return node_data, weight_data

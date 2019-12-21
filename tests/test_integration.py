@@ -14,6 +14,12 @@ from pyblp import Integration
 @pytest.mark.parametrize(['dimensions', 'specification', 'size', 'naive_specification'], [
     pytest.param(1, 'monte_carlo', 100000, None, id="1D Monte Carlo"),
     pytest.param(2, 'monte_carlo', 150000, None, id="2D Monte Carlo"),
+    pytest.param(1, 'halton', 50000, None, id="1D Halton"),
+    pytest.param(2, 'halton', 100000, None, id="2D Halton"),
+    pytest.param(1, 'lhs', 100000, None, id="1D LHS"),
+    pytest.param(3, 'lhs', 200000, None, id="3D LHS"),
+    pytest.param(1, 'mlhs', 50000, None, id="1D MLHS"),
+    pytest.param(3, 'mlhs', 100000, None, id="3D MLHS"),
     pytest.param(1, 'product', 5, 'monte_carlo', id="1D product rule and Monte Carlo"),
     pytest.param(5, 'product', 2, 'monte_carlo', id="5D product rule and Monte Carlo"),
     pytest.param(1, 'nested_product', 6, 'monte_carlo', id="1D nested product rule and Monte Carlo"),
@@ -29,11 +35,12 @@ def test_hermite_integral(dimensions: int, specification: str, size: int, naive_
     it performs worse, even with an order of magnitude more nodes.
     """
     integral = lambda n, w: w.T @ (n**2).prod(axis=1)
-    nodes, weights = Integration(specification, size, seed=0)._build(dimensions)
+    specification_options = {'seed': 0}
+    nodes, weights = Integration(specification, size, specification_options)._build(dimensions)
     simulated = integral(nodes, weights)
     np.testing.assert_allclose(simulated, 1, rtol=0, atol=0.01)
     if naive_specification:
-        naive = integral(*Integration(naive_specification, 10 * weights.size, seed=0)._build(dimensions))
+        naive = integral(*Integration(naive_specification, 10 * weights.size, specification_options)._build(dimensions))
         np.testing.assert_array_less(np.linalg.norm(simulated - 1), np.linalg.norm(naive - 1))
 
 
@@ -41,6 +48,8 @@ def test_hermite_integral(dimensions: int, specification: str, size: int, naive_
 @pytest.mark.parametrize(['specification', 'size'], [
     pytest.param('monte_carlo', 100, id="small Monte Carlo"),
     pytest.param('monte_carlo', 300, id="large Monte Carlo"),
+    pytest.param('halton', 10, id="small Monte Carlo"),
+    pytest.param('halton', 20, id="large Monte Carlo"),
     pytest.param('product', 1, id="small product rule"),
     pytest.param('product', 7, id="large product rule"),
     pytest.param('nested_product', 1, id="small nested product rule"),

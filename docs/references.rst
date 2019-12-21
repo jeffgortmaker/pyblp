@@ -115,6 +115,12 @@ Heiss and Winschel (2008)
 Heiss, Florian, and Viktor Winschel (2008). `Likelihood approximation by numerical integration on sparse grids <https://ideas.repec.org/a/eee/econom/v144y2008i1p62-80.html>`_. *Journal of Econometrics, 144* (1), 62-80.
 
 
+Hess, Train, and Polak (2004)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Hess, Stephane, Kenneth E. Train, and John W. Polak (2004). `On the use of a Modified Latin Hypercube Sampling (MLHS) method in the estimation of a mixed logit model for vehicle choice <https://ideas.repec.org/a/eee/transb/v40y2006i2p147-163.html>`_. *Transportation Research Part B* (40), 147-167.
+
+
 Imbens and Lancaster (1994)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

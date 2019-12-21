@@ -107,7 +107,7 @@ Features
 - Synthetic data construction
 - SciPy or Artleys Knitro optimization
 - Fixed point acceleration
-- Monte Carlo, product rule, or sparse grid integration
+- Monte Carlo, quasi-random sequences, quadrature, and sparse grids
 - Custom optimization and iteration routines
 - Robust and clustered errors
 - Linear or log-linear marginal costs
