@@ -481,7 +481,7 @@ def parse_expression(string: str, mark_categorical: bool = False) -> sp.Expr:
     mapping.update({n: getattr(sp, n) for n in sympy_function_names | sympy_class_names})
 
     # define a function that validates a list of tokens into which the string is broken and adds new symbols
-    def transform_tokens(tokens: List[Tuple[int, str]], *_: Any) -> List[Tuple[int, str]]:
+    def transform_tokens(tokens: List[Tuple[int, str]], _: Any, __: Any) -> List[Tuple[int, str]]:
         """Validate a list of tokens and add any unrecognized names as new SymPy symbols."""
         transformed: List[Tuple[int, str]] = []
         symbol_candidate = None
