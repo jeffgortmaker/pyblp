@@ -516,3 +516,56 @@ def build_matrix(formulation: Formulation, data: Mapping) -> Array:
         if errors:
             raise exceptions.MultipleErrors(errors)
     return matrix
+
+
+def data_to_dict(data: RecArray) -> Dict[str, Array]:
+    r"""Convert a NumPy record array into a dictionary.
+
+    Most data in PyBLP are structured as NumPy record arrays (e.g., :attr:`Problem.products` and
+    :attr:`SimulationResults.product_data`) which can be cumbersome to work with when working with data types that can't
+    represent matrices, such as the :class:`pandas.DataFrame`.
+
+    This function converts record arrays created by PyBLP into dictionaries that map field names to one-dimensional
+    arrays. Matrices in the original record array (e.g., ``demand_instruments``) are split into as many fields as there
+    are columns (e.g., ``demand_instruments0``, ``demand_instruments1``, and so on).
+
+    Parameters
+    ----------
+    data : `recarray`
+        Record array created by PyBLP.
+
+    Returns
+    -------
+    `dict`
+        The data re-structured as a dictionary.
+
+    Examples
+    --------
+    .. raw:: latex
+
+       \begin{examplenotebook}
+
+    .. toctree::
+
+       /_notebooks/api/data_to_dict.ipynb
+
+    .. raw:: latex
+
+       \end{examplenotebook}
+
+    """
+    if not isinstance(data, np.recarray):
+        raise TypeError("data must be a NumPy record array.")
+    mapping: Dict[str, Array] = {}
+    for key in data.dtype.names:
+        if len(data[key].shape) > 2:
+            raise ValueError("Arrays with more than two dimensions are not supported.")
+        if len(data[key].shape) == 1 or data[key].shape[1] == 1 or data[key].size == 0:
+            mapping[key] = data[key].flatten()
+            continue
+        for index in range(data[key].shape[1]):
+            new_key = f'{key}{index}'
+            if new_key in data.dtype.names:
+                raise KeyError(f"'{key}' cannot be split into columns because '{new_key}' is already a field.")
+            mapping[new_key] = data[key][:, index].flatten()
+    return mapping

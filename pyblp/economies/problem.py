@@ -1076,10 +1076,12 @@ class Problem(ProblemEconomy):
         :class:`Formulation` configuration for :math:`d`.
     products : `Products`
         Product data structured as :class:`Products`, which consists of data taken from ``product_data`` along with
-        matrices built according to :attr:`Problem.product_formulations`.
+        matrices built according to :attr:`Problem.product_formulations`. The :func:`data_to_dict` function can be
+        used to convert this into a more usable data type.
     agents : `Agents`
         Agent data structured as :class:`Agents`, which consists of data taken from ``agent_data`` or built by
-        ``integration`` along with any demographics built according to :attr:`Problem.agent_formulation`.
+        ``integration`` along with any demographics built according to :attr:`Problem.agent_formulation`. The
+        :func:`data_to_dict` function can be used to convert this into a more usable data type.
     unique_market_ids : `ndarray`
         Unique market IDs in product and agent data.
     unique_firm_ids : `ndarray`

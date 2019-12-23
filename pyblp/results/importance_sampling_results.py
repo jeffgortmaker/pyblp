@@ -24,7 +24,8 @@ class ImportanceSamplingResults(StringRepresentation):
     problem_results : `ProblemResults`
         :class:`ProblemResults` that was used to compute these importance sampling results.
     sampled_agents : `Agents`
-        Importance sampling agent data structured as :class:`Agents`.
+        Importance sampling agent data structured as :class:`Agents`. The :func:`data_to_dict` function can be used to
+        convert this into a more usable data type.
     precise_delta : `ndarray`
         Estimated :math:`\hat{\delta}(\hat{\theta})` used to do importance sampling. By default, this is
         :attr:`ProblemResults.delta`.

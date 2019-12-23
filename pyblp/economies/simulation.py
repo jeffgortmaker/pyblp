@@ -205,18 +205,22 @@ class Simulation(Economy):
     product_data : `recarray`
         Synthetic product data that were loaded or simulated during initialization. Typically,
         :meth:`Simulation.replace_endogenous` is used replace prices and shares with equilibrium values that are
-        consistent with true parameters.
+        consistent with true parameters. The :func:`data_to_dict` function can be used to convert this into a more
+        usable data type.
     agent_data : `recarray`
-        Synthetic agent data that were loaded or simulated during initialization.
+        Synthetic agent data that were loaded or simulated during initialization. The :func:`data_to_dict` function can
+        be used to convert this into a more usable data type.
     integration : `Integration`
         :class:`Integration` configuration for how any nodes and weights were built during initialization.
     products : `Products`
         Product data structured as :class:`Products`, which consists of data taken from :attr:`Simulation.product_data`
-        along with matrices build according to :attr:`Simulation.product_formulations`.
+        along with matrices build according to :attr:`Simulation.product_formulations`. The :func:`data_to_dict`
+        function can be used to convert this into a more usable data type.
     agents : `Agents`
         Agent data structured as :class:`Agents`, which consists of data taken from :attr:`Simulation.agent_data` or
         built by :attr:`Simulation.integration` along with any demographics formulated by
-        :attr:`Simulation.agent_formulation`.
+        :attr:`Simulation.agent_formulation`. The :func:`data_to_dict` function can be used to convert this into a more
+        usable data type.
     unique_market_ids : `ndarray`
         Unique market IDs in product and agent data.
     unique_firm_ids : `ndarray`

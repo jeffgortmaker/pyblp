@@ -36,6 +36,7 @@ There are also a number of convenience functions that can be used to construct c
    build_id_data
    build_ownership
    build_integration
+   data_to_dict
 
 
 Problem Class

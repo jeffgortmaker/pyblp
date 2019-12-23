@@ -10,7 +10,9 @@ import numpy as np
 import pytest
 import scipy.optimize
 
-from pyblp import Formulation, Integration, Iteration, Optimization, Problem, Simulation, build_ownership, parallel
+from pyblp import (
+    Formulation, Integration, Iteration, Optimization, Problem, Simulation, build_ownership, data_to_dict, parallel
+)
 from pyblp.utilities.basics import Array, Options, update_matrices
 from .conftest import SimulatedProblemFixture
 
@@ -177,6 +179,7 @@ def test_result_serialization(simulated_problem: SimulatedProblemFixture) -> Non
         pickle.dump(problem_results.to_dict(), handle)
         pickle.dump(instrument_results.to_dict(), handle)
         pickle.dump(bootstrapped_results.to_dict(), handle)
+        pickle.dump(data_to_dict(simulation_results.product_data), handle)
 
 
 @pytest.mark.usefixtures('simulated_problem')

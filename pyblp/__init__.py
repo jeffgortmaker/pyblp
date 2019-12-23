@@ -7,7 +7,7 @@ from .configurations.iteration import Iteration
 from .configurations.optimization import Optimization
 from .construction import (
     build_blp_instruments, build_differentiation_instruments, build_id_data, build_integration, build_matrix,
-    build_ownership
+    build_ownership, data_to_dict
 )
 from .economies.problem import ImportanceSamplingProblem, OptimalInstrumentProblem, Problem
 from .economies.simulation import Simulation
@@ -24,7 +24,7 @@ from .version import __version__
 __all__ = [
     'data', 'exceptions', 'options', 'Formulation', 'Integration', 'Iteration', 'Optimization', 'build_blp_instruments',
     'build_differentiation_instruments', 'build_id_data', 'build_integration', 'build_matrix', 'build_ownership',
-    'ImportanceSamplingProblem', 'OptimalInstrumentProblem', 'Problem', 'Simulation', 'FirstChoiceCovarianceMoment',
-    'Agents', 'Products', 'BootstrappedResults', 'ImportanceSamplingResults', 'OptimalInstrumentResults',
-    'ProblemResults', 'SimulationResults', 'parallel', '__version__'
+    'data_to_dict', 'ImportanceSamplingProblem', 'OptimalInstrumentProblem', 'Problem', 'Simulation',
+    'FirstChoiceCovarianceMoment', 'Agents', 'Products', 'BootstrappedResults', 'ImportanceSamplingResults',
+    'OptimalInstrumentResults', 'ProblemResults', 'SimulationResults', 'parallel', '__version__'
 ]

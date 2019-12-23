@@ -37,7 +37,7 @@ class SimulationResults(StringRepresentation):
         Simulated :attr:`Simulation.product_data` with product characteristics replaced so as to be consistent with the
         true parameters. If :meth:`Simulation.replace_endogenous` was used to create these results, prices and
         marketshares were replaced. If :meth:`Simulation.replace_exogenous` was used, exogenous characteristics were
-        replaced instead.
+        replaced instead. The :func:`data_to_dict` function can be used to convert this into a more usable data type.
     computation_time : `float`
         Number of seconds it took to compute prices and marketshares.
     fp_converged : `ndarray`
