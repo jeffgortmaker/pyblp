@@ -108,6 +108,7 @@ Features
 - SciPy or Artleys Knitro optimization
 - Fixed point acceleration
 - Monte Carlo, quasi-random sequences, quadrature, and sparse grids
+- Importance sampling
 - Custom optimization and iteration routines
 - Robust and clustered errors
 - Linear or log-linear marginal costs

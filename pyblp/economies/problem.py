@@ -601,8 +601,8 @@ class ProblemEconomy(Economy):
             optimization_stats.evaluations += 1
             results = ProblemResults(
                 final_progress, last_results, last_step, step_start_time, optimization_start_time,
-                optimization_end_time, optimization_stats, iteration_stats, costs_bounds, extra_micro_covariances,
-                center_moments, W_type, se_type
+                optimization_end_time, optimization_stats, iteration_stats, iteration, fp_type, costs_bounds,
+                extra_micro_covariances, center_moments, W_type, se_type
             )
             self._handle_errors(results._errors, error_behavior)
             output(f"Computed results after {format_seconds(results.total_time - results.optimization_time)}.")
@@ -1227,6 +1227,32 @@ class OptimalInstrumentProblem(ProblemEconomy):
 
         # detect any collinearity issues with the updated instruments
         self._detect_collinearity()
+
+        # output information about the re-created problem
+        output(f"Re-created the problem after {format_seconds(time.time() - start_time)}.")
+        output("")
+        output(self)
+
+
+class ImportanceSamplingProblem(ProblemEconomy):
+    """A BLP problem updated after importance sampling.
+
+    This class can be used exactly like :class:`Problem`.
+
+    """
+
+    def __init__(self, problem: ProblemEconomy, sampled_agents: RecArray) -> None:
+        """Initialize the underlying economy with updated agent data."""
+
+        # keep track of long it takes to re-create the problem
+        output("Re-creating the problem ...")
+        start_time = time.time()
+
+        # initialize the underlying economy with structured product and agent data
+        super().__init__(
+            problem.product_formulations, problem.agent_formulation, problem.products, sampled_agents,
+            costs_type=problem.costs_type
+        )
 
         # output information about the re-created problem
         output(f"Re-created the problem after {format_seconds(time.time() - start_time)}.")

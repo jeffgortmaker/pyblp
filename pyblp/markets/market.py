@@ -14,7 +14,7 @@ from ..parameters import (
 )
 from ..primitives import Container
 from ..utilities.algebra import approximately_invert, approximately_solve
-from ..utilities.basics import Array, Error, Groups, SolverStats, update_matrices
+from ..utilities.basics import Array, RecArray, Error, Groups, SolverStats, update_matrices
 
 
 class Market(Container):
@@ -43,13 +43,13 @@ class Market(Container):
     def __init__(
             self, economy: Economy, t: Any, parameters: Parameters, sigma: Array, pi: Array, rho: Array,
             beta: Optional[Array] = None, delta: Optional[Array] = None, moments: Optional[EconomyMoments] = None,
-            data_override: Optional[Dict[str, Array]] = None) -> None:
+            data_override: Optional[Dict[str, Array]] = None, agents_override: Optional[RecArray] = None) -> None:
         """Store or compute information about formulations, data, parameters, and utility."""
 
         # structure relevant data
         super().__init__(
             economy.products[economy._product_market_indices[t]],
-            economy.agents[economy._agent_market_indices[t]]
+            economy.agents[economy._agent_market_indices[t]] if agents_override is None else agents_override
         )
 
         # drop unneeded product data fields to save memory

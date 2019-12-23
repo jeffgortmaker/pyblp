@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 import scipy.optimize
 
-from pyblp import Formulation, Iteration, Optimization, Problem, Simulation, build_ownership, parallel
+from pyblp import Formulation, Integration, Iteration, Optimization, Problem, Simulation, build_ownership, parallel
 from pyblp.utilities.basics import Array, Options, update_matrices
 from .conftest import SimulatedProblemFixture
 
@@ -85,6 +85,49 @@ def test_optimal_instruments(simulated_problem: SimulatedProblemFixture, compute
         keys.append('gamma')
     for key in keys:
         np.testing.assert_allclose(getattr(simulation, key), getattr(new_results, key), atol=0, rtol=0.1, err_msg=key)
+
+
+@pytest.mark.usefixtures('simulated_problem')
+@pytest.mark.parametrize('precise_delta', [
+    pytest.param(False, id="non-precise delta"),
+    pytest.param(True, id="precise delta")
+])
+def test_importance_sampling(simulated_problem: SimulatedProblemFixture, precise_delta: bool) -> None:
+    """Test that starting parameters that are half their true values also give rise to errors of less than 20% under
+    importance sampling.
+    """
+    simulation, _, problem, solve_options, problem_results = simulated_problem
+
+    # importance sampling is only relevant when there are agent data
+    if problem.K2 == 0:
+        return pytest.skip("There are no agent data.")
+
+    # it suffices to test importance sampling for problems without demographics
+    if problem.D > 0:
+        return pytest.skip("Testing importance sampling is hard with demographics.")
+
+    # do importance sampling and verify that the mean utility didn't change if precise integration isn't used
+    sampling_results = problem_results.importance_sampling(
+        draws=500,
+        seed=0,
+        sampling_integration=Integration('mlhs', 50000, {'seed': 0}),
+        precise_integration=simulation.integration if precise_delta else None
+    )
+    if not precise_delta:
+        np.testing.assert_equal(sampling_results.precise_delta, problem_results.delta)
+
+    # solve the new problem
+    new_problem = sampling_results.to_problem()
+    updated_solve_options = solve_options.copy()
+    updated_solve_options.update({k: 0.5 * solve_options[k] for k in ['sigma', 'pi', 'rho', 'beta']})
+    new_results = new_problem.solve(**updated_solve_options)
+
+    # test the accuracy of the estimated parameters
+    keys = ['beta', 'sigma', 'pi', 'rho']
+    if problem.K3 > 0:
+        keys.append('gamma')
+    for key in keys:
+        np.testing.assert_allclose(getattr(simulation, key), getattr(new_results, key), atol=0, rtol=0.2, err_msg=key)
 
 
 @pytest.mark.usefixtures('simulated_problem')

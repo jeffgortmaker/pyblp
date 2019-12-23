@@ -133,6 +133,13 @@ Optimal instruments, which also return a results class instead of an array, can 
 
    ProblemResults.compute_optimal_instruments
 
+Importance sampling can be used to create new integration nodes and weights. Its method also returns a results class.
+
+.. autosummary::
+   :toctree: _api
+
+   ProblemResults.importance_sampling
+
 
 Boostrapped Problem Results Class
 ---------------------------------
@@ -146,7 +153,7 @@ Parametric bootstrap computation returns the following class.
 
    BootstrappedResults
 
-This class has all of the same methods as :class:`ProblemResults`, except for :meth:`ProblemResults.bootstrap` and :meth:`ProblemResults.compute_optimal_instruments`. It can also be converted into a dictionary.
+This class has all of the same methods as :class:`ProblemResults`, except for :meth:`ProblemResults.bootstrap`, :meth:`ProblemResults.compute_optimal_instruments`, and :meth:`ProblemResults.importance_sampling`. It can also be converted into a dictionary.
 
 .. autosummary::
    :toctree: _api
@@ -188,6 +195,42 @@ This method returns the following class, which behaves exactly like a :class:`Pr
    :template: class_without_methods_or_signature.rst
 
    OptimalInstrumentProblem
+
+
+Importance Sampling Results Class
+---------------------------------
+
+Importance sampling returns the following results class:
+
+.. autosummary::
+   :nosignatures:
+   :toctree: _api
+   :template: class_without_signature.rst
+
+   ImportanceSamplingResults
+
+The results can be converted into a dictionary.
+
+.. autosummary::
+   :toctree: _api
+
+   ImportanceSamplingResults.to_dict
+
+They can also be converted into a :class:`Problem` with the following method.
+
+.. autosummary::
+   :toctree: _api
+
+   ImportanceSamplingResults.to_problem
+
+This method returns the following class, which behaves exactly like a :class:`Problem`.
+
+.. autosummary::
+   :nosignatures:
+   :toctree: _api
+   :template: class_without_methods_or_signature.rst
+
+   ImportanceSamplingProblem
 
 
 Simulation Class

@@ -9,14 +9,16 @@ import scipy.linalg
 
 from .results import Results
 from .. import exceptions, options
+from ..configurations.integration import Integration
 from ..configurations.iteration import Iteration
 from ..markets.results_market import ResultsMarket
+from ..primitives import Agents
 from ..utilities.algebra import (
     approximately_invert, approximately_solve, compute_condition_number, precisely_compute_eigenvalues
 )
 from ..utilities.basics import (
-    Array, Bounds, Error, SolverStats, format_number, format_seconds, format_table, generate_items, output,
-    output_progress
+    Array, Bounds, Error, Mapping, RecArray, SolverStats, format_number, format_seconds, format_table, generate_items,
+    get_indices, output, output_progress, update_matrices
 )
 from ..utilities.statistics import (
     compute_gmm_moment_covariances, compute_gmm_moments_mean, compute_gmm_parameter_covariances,
@@ -27,6 +29,7 @@ from ..utilities.statistics import (
 # only import objects that create import cycles when checking types
 if TYPE_CHECKING:
     from .bootstrapped_results import BootstrappedResults  # noqa
+    from .importance_sampling_results import ImportanceSamplingResults  # noqa
     from .optimal_instrument_results import OptimalInstrumentResults  # noqa
     from ..economies.problem import Progress  # noqa
 
@@ -242,6 +245,9 @@ class ProblemResults(Results):
     reduced_hessian_eigenvalues: Array
     W: Array
     updated_W: Array
+    _iteration: Iteration
+    _fp_type: str
+    _costs_bounds: Bounds
     _se_type: str
     _errors: List[Error]
 
@@ -249,8 +255,8 @@ class ProblemResults(Results):
             self, progress: 'Progress', last_results: Optional['ProblemResults'], last_step: bool,
             step_start_time: float, optimization_start_time: float, optimization_end_time: float,
             optimization_stats: SolverStats, iteration_stats: Sequence[Dict[Hashable, SolverStats]],
-            costs_bounds: Bounds, extra_micro_covariances: Optional[Array], center_moments: bool, W_type: str,
-            se_type: str) -> None:
+            iteration: Iteration, fp_type: str, costs_bounds: Bounds, extra_micro_covariances: Optional[Array],
+            center_moments: bool, W_type: str, se_type: str) -> None:
         """Compute cumulative progress statistics, update weighting matrices, and estimate standard errors."""
         super().__init__(progress.problem, progress.parameters, progress.moments)
         self._errors = progress.errors
@@ -274,6 +280,8 @@ class ProblemResults(Results):
         self.hessian = progress.hessian
         self.reduced_hessian = progress.reduced_hessian
         self.clipped_costs = progress.clipped_costs
+        self._iteration = iteration
+        self._fp_type = fp_type
         self._costs_bounds = costs_bounds
         self._se_type = se_type
 
@@ -840,8 +848,7 @@ class ProblemResults(Results):
 
         # define a factory for computing bootstrapped prices, shares, and delta in markets
         def market_factory(
-                pair: Tuple[int, Hashable]) -> (
-                Tuple[ResultsMarket, Array, Optional[Array], Optional[Iteration]]):
+                pair: Tuple[int, Hashable]) -> Tuple[ResultsMarket, Array, Optional[Array], Optional[Iteration]]:
             """Build a market along with arguments used to compute equilibrium prices and shares along with delta."""
             c, s = pair
             indices_s = self.problem._product_market_indices[s]
@@ -868,6 +875,12 @@ class ProblemResults(Results):
             bootstrapped_delta[d, self.problem._product_market_indices[t]] = delta_dt
             iteration_stats[(d, t)] = iteration_stats_dt
             errors.extend(errors_dt)
+
+        # output a warning about any errors
+        if errors:
+            output("")
+            output(exceptions.MultipleErrors(errors))
+            output("")
 
         # structure the results
         from .bootstrapped_results import BootstrappedResults  # noqa
@@ -1201,6 +1214,214 @@ class ProblemResults(Results):
             omega_jacobian[bad_jacobian_index] = self.omega_by_theta_jacobian[bad_jacobian_index]
             errors.append(exceptions.OmegaByThetaJacobianReversionError(bad_jacobian_index))
         return omega_jacobian, errors
+
+    def importance_sampling(
+            self, draws: int, seed: Optional[int] = None, sampling_agent_data: Optional[Mapping] = None,
+            sampling_integration: Optional[Integration] = None, precise_agent_data: Optional[Mapping] = None,
+            precise_integration: Optional[Integration] = None, iteration: Optional[Iteration] = None,
+            fp_type: Optional[str] = None) -> 'ImportanceSamplingResults':
+        r"""Use importance sampling to construct nodes and weights for integration.
+
+        Importance sampling is done with the accept/reject procedure of
+        :ref:`references:Berry, Levinsohn, and Pakes (1995)`. First, ``sampling_agent_data`` and/or
+        ``sampling_integration`` are used to provide a large number of candidate sampling nodes :math:`\nu_{it}`
+        and any demographics :math:`d_{it}`.
+
+        Out of these candidate agent data, each candidate agent :math:`i` in market :math:`t` is rejected with
+        probability equal to the probability the candidate agent chooses the outside good, :math:`s_{0ti}`, which is
+        evaluated at the estimated :math:`\hat{\theta}` and :math:`\hat{\delta}(\hat{\theta})`.
+
+        Optionally, ``precise_agent_data`` and/or ``precise_integration`` can be used to more precisely estimate
+        :math:`\hat{\delta}(\hat{\theta})`. The idea is that more precise agent data (i.e., more integration nodes)
+        would be infeasible to use during estimation, but is feasible here because :math:`\hat{\delta}(\hat{\theta})`
+        only needs to be computed once given a :math:`\hat{\theta}`.
+
+        Out of the remaining accepted agents, ``draws`` are randomly selected within each market and given integration
+        weights :math:`w_{it} \propto \frac{1}{1 - s_{0ti}}` with market-specific proportionality constants defined so
+        that in each market, :math:`\sum_i w_{it} = 1`.
+
+        If this procedure accepts fewer than ``draws`` agents in a market, an exception will be raised. A good rule of
+        thumb is to provide more candidate draws in each market than ``draws`` divided by :math:`1 - s_{0t}` where
+        :math:`s_{0t}` is the share of the outside good in that market.
+
+        Parameters
+        ----------
+        draws : `int, optional`
+            Number of draws to take from ``sampling_agent_data`` in each market.
+        seed : `int, optional`
+            Passed to :class:`numpy.random.mtrand.RandomState` to seed the random number generator before importance
+            sampling is done. By default, a seed is not passed to the random number generator.
+        sampling_agent_data : `structured array-like, optional`
+            Agent data from which draws will be sampled, which should have the same structure as ``agent_data`` in
+            :class:`Problem`. The ``weights`` field does not need to be specified, and if it is specified it will be
+            ignored. By default, the same agent data used to solve the problem will be used.
+        sampling_integration : `Integration, optional`
+            :class:`Integration` configuration for how to build nodes from which draws will be sampled, which will
+            replace any ``nodes`` field in ``sampling_agent_data``. This configuration is required if
+            ``sampling_agent_data`` is specified without a ``nodes`` field.
+        precise_agent_data : `structured array-like, optional`
+            Agent data that will be used to more precisely compute :math:`\delta`, which should have the same structure
+            as ``agent_data`` in :class:`Problem`. When neither this nor ``precise_integration`` is specified (the
+            default), :attr:`ProblemResults.delta` will be used.
+        precise_integration : `Integration, optional`
+            :class:`Integration` configuration that will be used to more precisely compute :math:`\delta`, which will
+            replace any ``nodes`` field in ``precise_agent_data``. This configuration is required if
+            ``precise_agent_data`` is specified without a nodes field.When neither this nor ``precise_agent_data`` is
+            specified (the default), :attr:`ProblemResults.delta` will be used.
+        iteration : `Iteration, optional`
+            :class:`Iteration` configuration for how to solve the fixed point problem used to more precisely compute
+            :math:`\delta` in each market. This is ignored if neither ``precise_agent_data`` nor ``precise_integration``
+            are specified. By default, ``iteration`` in :meth:`Problem.solve` is used. For more information, refer to
+            :meth:`Problem.solve`.
+        fp_type : `str, optional`
+            Configuration for the type of contraction mapping used to more precisely compute :math:`\delta` in each
+            market. This is ignored if neither ``precise_agent_data`` nor ``precise_integration`` are specified. By
+            default, ``fp_type`` in :meth:`Problem.solve` is used. For more information, refer to :meth:`Problem.solve`.
+
+        Returns
+        -------
+        `ImportanceSamplingResults`
+           Computed :class:`ImportanceSamplingResults`.
+
+        Examples
+        --------
+            - :doc:`Tutorial </tutorial>`
+
+        """
+        errors: List[Error] = []
+
+        # keep track of long it takes to do importance sampling
+        output("Importance sampling ...")
+        start_time = time.time()
+
+        # use the same iteration scheme as during estimation if it isn't explicitly specified
+        if iteration is None:
+            iteration = self._iteration
+        if fp_type is None:
+            fp_type = self._fp_type
+
+        # validate the configuration
+        if self.problem.K2 == 0:
+            raise ValueError("Importance sampling is only relevant when there are agent data.")
+        if not isinstance(draws, int) or draws < 1:
+            raise ValueError("draws must be a positive int.")
+        iteration = self.problem._coerce_optional_delta_iteration(iteration)
+        self.problem._validate_fp_type(fp_type)
+
+        # optionally estimate delta more precisely
+        if precise_agent_data is None and precise_integration is None:
+            precise_delta = self.delta
+            iteration_stats: Dict[Hashable, SolverStats] = {}
+        else:
+            precise_agents = Agents(
+                self.problem.products, self.problem.agent_formulation, precise_agent_data, precise_integration,
+                agent_data_name="precise_agent_data", integration_name="precise_integration"
+            )
+            precise_delta, iteration_stats, delta_errors = self._compute_precise_delta(
+                precise_agents, iteration, fp_type
+            )
+            errors.extend(delta_errors)
+
+        # construct agents that will be sampled from
+        sampling_agents = self.problem.agents
+        if sampling_agent_data is not None or sampling_integration is not None:
+            sampling_agents = Agents(
+                self.problem.products, self.problem.agent_formulation, sampling_agent_data, sampling_integration,
+                agent_data_name="sampling_agent_data", integration_name="sampling_integration", check_weights=False
+            )
+
+        # compute importance sampling weights
+        weights, weights_errors = self._compute_importance_weights(sampling_agents, precise_delta, draws, seed)
+        errors.extend(weights_errors)
+
+        # output a warning about any errors
+        if errors:
+            output("")
+            output(exceptions.MultipleErrors(errors))
+            output("")
+
+        # update the agent data
+        with np.errstate(all='ignore'):
+            sampled_agents = update_matrices(sampling_agents, {'weights': (weights, options.dtype)})
+            sampled_agents = sampled_agents[weights.flat > 0]
+
+        # structure the results
+        from .importance_sampling_results import ImportanceSamplingResults  # noqa
+        results = ImportanceSamplingResults(
+            self, sampled_agents, precise_delta, start_time, time.time(), draws, iteration_stats
+        )
+        output(f"Finished importance sampling after {format_seconds(results.computation_time)}.")
+        output("")
+        output(results)
+        return results
+
+    def _compute_precise_delta(
+            self, precise_agents: RecArray, iteration: Iteration, fp_type: str) -> (
+            Tuple[Array, Dict[Hashable, SolverStats], List[Error]]):
+        """Precisely compute the mean utility so that it can be used to compute importance sampling weights."""
+        errors: List[Error] = []
+        market_indices = get_indices(precise_agents.market_ids)
+
+        # define a factory for precisely estimating delta
+        def market_factory(s: Hashable) -> Tuple[ResultsMarket, Array, Iteration, str]:
+            """Build a market along with arguments used to compute delta."""
+            market_s = ResultsMarket(
+                self.problem, s, self._parameters, self.sigma, self.pi, self.rho,
+                agents_override=precise_agents[market_indices[s]]
+            )
+            delta_s = self.delta[self.problem._product_market_indices[s]]
+            return market_s, delta_s, iteration, fp_type
+
+        # precisely compute delta market-by-market
+        precise_delta = np.zeros_like(self.delta)
+        iteration_stats: Dict[Hashable, SolverStats] = {}
+        generator = generate_items(self.problem.unique_market_ids, market_factory, ResultsMarket.safely_compute_delta)
+        for t, (delta_t, stats_t, errors_t) in generator:
+            precise_delta[self.problem._product_market_indices[t]] = delta_t
+            iteration_stats[t] = stats_t
+            errors.extend(errors_t)
+        return precise_delta, iteration_stats, errors
+
+    def _compute_importance_weights(
+            self, sampling_agents: RecArray, precise_delta: Array, draws: int, seed: Optional[int]) -> (
+            Tuple[Array, List[Error]]):
+        """Compute the importance sampling weights associated with a set of agents."""
+        errors: List[Error] = []
+        market_indices = get_indices(sampling_agents.market_ids)
+
+        # define a factory for computing probabilities
+        def market_factory(s: Hashable) -> Tuple[ResultsMarket]:
+            """Build a market use to compute probabilities."""
+            market_s = ResultsMarket(
+                self.problem, s, self._parameters, self.sigma, self.pi, self.rho, delta=precise_delta,
+                agents_override=sampling_agents[market_indices[s]]
+            )
+            return market_s,
+
+        # compute weights market-by-market
+        state = np.random.RandomState(seed)
+        weights = np.zeros_like(sampling_agents.weights)
+        generator = generate_items(
+            self.problem.unique_market_ids, market_factory, ResultsMarket.safely_compute_probabilities
+        )
+        for t, (probabilities_t, errors_t) in generator:
+            errors.extend(errors_t)
+            with np.errstate(all='ignore'):
+                inside_probabilities_t = probabilities_t.sum(axis=0)
+                probability_cutoffs_t = state.uniform(size=inside_probabilities_t.size)
+                accept_indices_t = np.where(inside_probabilities_t > probability_cutoffs_t)[0]
+                try:
+                    sampled_indices_t = state.choice(accept_indices_t, size=draws, replace=False)
+                except ValueError:
+                    raise RuntimeError(
+                        f"The number of accepted draws in market '{t}' was {accept_indices_t.size}, which is less then "
+                        f"{draws}. Either decrease the number of desired draws in each market or increase the size of "
+                        f"sampling_agent_data and/or sampling_integration."
+                    )
+                weights_t = np.zeros_like(inside_probabilities_t)
+                weights_t[sampled_indices_t] = 1 / inside_probabilities_t[sampled_indices_t]
+                weights[market_indices[t]] = weights_t[:, None] / weights_t.sum()
+        return weights, errors
 
     def _coerce_matrices(self, matrices: Any, market_ids: Array) -> Array:
         """Coerce array-like stacked matrices into a stacked matrix and validate it."""

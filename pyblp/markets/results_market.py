@@ -53,6 +53,17 @@ class ResultsMarket(Market):
         """
         return self.compute_omega_by_theta_jacobian(tilde_costs, xi_jacobian)
 
+    @NumericalErrorHandler(exceptions.DeltaNumericalError)
+    def safely_compute_delta(
+            self, initial_delta: Array, iteration: Iteration, fp_type: str) -> Tuple[Array, SolverStats, List[Error]]:
+        """Compute the mean utility for this market that equates market shares to observed values by solving a fixed
+        point problem, handling any numerical errors.
+        """
+        delta, stats, errors = self.compute_delta(initial_delta, iteration, fp_type)
+        if not stats.converged:
+            errors.append(exceptions.DeltaConvergenceError())
+        return delta, stats, errors
+
     @NumericalErrorHandler(exceptions.PostEstimationNumericalError)
     def safely_compute_aggregate_elasticity(self, factor: float, name: str) -> Tuple[Array, List[Error]]:
         """Estimate the aggregate elasticity of demand with respect to a variable, handling any numerical errors."""
