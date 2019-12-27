@@ -38,16 +38,16 @@ class Products(object):
         Product prices, :math:`p`.
     ZD : `ndarray`
         Full set of demand-side instruments, :math:`Z_D`, which typically consists of excluded demand-side instruments
-        and :math:`X_1^x`.
+        and :math:`X_1^\text{ex}`.
     ZS : `ndarray`
         Full set of supply-side instruments, :math:`Z_S`, which typically consists of excluded supply-side instruments
-        and :math:`X_3`.
+        and :math:`X_3^\text{ex}`.
     X1 : `ndarray`
-        Linear product characteristics, :math:`X_1`.
+        Demand-side linear product characteristics, :math:`X_1`.
     X2 : `ndarray`
-        Nonlinear product characteristics, :math:`X_2`.
+        Demand-side nonlinear product characteristics, :math:`X_2`.
     X3 : `ndarray`
-        Cost product characteristics, :math:`X_3`.
+        Supply-side product characteristics, :math:`X_3`.
 
     """
 
@@ -102,8 +102,6 @@ class Products(object):
         X3_data: Data = {}
         if product_formulations[2] is not None:
             X3, X3_formulations, X3_data = product_formulations[2]._build_matrix(product_data)
-            if 'shares' in X3_data:
-                raise NameError("shares cannot be included in the formulation for X3.")
             if 'prices' in X3_data:
                 raise NameError("prices cannot be included in the formulation for X3.")
 
@@ -116,12 +114,14 @@ class Products(object):
                     if 'prices' not in formulation.names:
                         ZD = X1[:, [index]] if ZD is None else np.c_[ZD, X1[:, [index]]]
 
-        # load excluded supply-side instruments and supplement them with all characteristics in X3
+        # load excluded supply-side instruments and supplement them with exogenous characteristics in X3
         ZS = None
         if instruments and X3 is not None:
             ZS = extract_matrix(product_data, 'supply_instruments')
             if add_exogenous:
-                ZS = X3 if ZS is None else np.c_[ZS, X3]
+                for index, formulation in enumerate(X3_formulations):
+                    if 'shares' not in formulation.names:
+                        ZS = X3[:, [index]] if ZS is None else np.c_[ZS, X3[:, [index]]]
 
         # load fixed effect IDs
         demand_ids = None

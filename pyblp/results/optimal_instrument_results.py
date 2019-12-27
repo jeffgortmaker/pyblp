@@ -26,19 +26,19 @@ class OptimalInstrumentResults(StringRepresentation):
     problem_results : `ProblemResults`
         :class:`ProblemResults` that was used to compute these optimal instrument results.
     demand_instruments : `ndarray`
-        Estimated optimal demand-side instruments for :math:`\theta`, :math:`Z_D^\textit{Opt}`.
+        Estimated optimal demand-side instruments for :math:`\theta`, denoted :math:`Z_D^\text{opt}`.
     supply_instruments : `ndarray`
-        Estimated optimal supply-side instruments for :math:`\theta`, :math:`Z_S^\textit{Opt}`.
+        Estimated optimal supply-side instruments for :math:`\theta`, denoted :math:`Z_S^\text{opt}`.
     supply_shifter_formulation : `Formulation or None`
         :class:`Formulation` configuration for supply shifters that will by default be included in the full set of
         optimal demand-side instruments. This is only constructed if a supply side was estimated, and it can be changed
-        in :meth:`OptimalInstrumentResults.to_problem`. By default, this is the formulation for :math:`X_3` from
-        :class:`Problem` excluding any variables in the formulation for :math:`X_1`.
+        in :meth:`OptimalInstrumentResults.to_problem`. By default, this is the formulation for :math:`X_3^\text{ex}`
+        from :class:`Problem` excluding any variables in the formulation for :math:`X_1^\text{ex}`.
     demand_shifter_formulation : `Formulation or None`
         :class:`Formulation` configuration for demand shifters that will by default be included in the full set of
         optimal supply-side instruments. This is only constructed if a supply side was estimated, and it can be changed
-        in :meth:`OptimalInstrumentResults.to_problem`. By default, this is the formulation for :math:`X_1^x` from
-        :class:`Problem` excluding any variables in the formulation for :math:`X_3`.
+        in :meth:`OptimalInstrumentResults.to_problem`. By default, this is the formulation for :math:`X_1^\text{ex}`
+        from :class:`Problem` excluding any variables in the formulation for :math:`X_3^\text{ex}`.
     inverse_covariance_matrix : `ndarray`
         Inverse of the sample covariance matrix of the estimated :math:`\xi` and :math:`\omega`, which is used to
         normalize the expected Jacobians. If a supply side was not estimated, this is simply the sample estimate of
@@ -50,6 +50,8 @@ class OptimalInstrumentResults(StringRepresentation):
     expected_prices : `ndarray`
         Vector of expected prices conditional on all exogenous variables, :math:`E[p \mid Z]`, which may have been
         specified in :meth:`ProblemResults.compute_optimal_instruments`.
+    expected_shares : `ndarray`
+        Vector of expected marketshares conditional on all exogenous variables, :math:`E[s \mid Z]`.
     computation_time : `float`
         Number of seconds it took to compute optimal excluded instruments.
     draws : `int`
@@ -81,6 +83,7 @@ class OptimalInstrumentResults(StringRepresentation):
     expected_xi_by_theta_jacobian: Array
     expected_omega_by_theta_jacobian: Array
     expected_prices: Array
+    expected_shares: Array
     computation_time: float
     draws: int
     fp_converged: Array
@@ -90,7 +93,7 @@ class OptimalInstrumentResults(StringRepresentation):
     def __init__(
             self, problem_results: ProblemResults, demand_instruments: Array, supply_instruments: Array,
             inverse_covariance_matrix: Array, expected_xi_jacobian: Array, expected_omega_jacobian: Array,
-            expected_prices: Array, start_time: float, end_time: float, draws: int,
+            expected_prices: Array, expected_shares: Array, start_time: float, end_time: float, draws: int,
             iteration_stats: Sequence[Mapping[Hashable, SolverStats]]) -> None:
         """Structure optimal excluded instrument computation results. Also identify supply and demand shifters that will
         be added to the optimal instruments when converting them into a problem.
@@ -102,6 +105,7 @@ class OptimalInstrumentResults(StringRepresentation):
         self.expected_xi_by_theta_jacobian = expected_xi_jacobian
         self.expected_omega_by_theta_jacobian = expected_omega_jacobian
         self.expected_prices = expected_prices
+        self.expected_shares = expected_shares
         self.computation_time = end_time - start_time
         self.draws = draws
         unique_market_ids = problem_results.problem.unique_market_ids
@@ -122,7 +126,7 @@ class OptimalInstrumentResults(StringRepresentation):
             assert self.problem_results.problem.product_formulations[2] is not None
             X1_expressions = self.problem_results.problem.product_formulations[0]._expressions
             X3_expressions = self.problem_results.problem.product_formulations[2]._expressions
-            supply_shifters = {str(e) for e in X3_expressions}
+            supply_shifters = {str(e) for e in X3_expressions if all(str(s) != 'shares' for s in e.free_symbols)}
             demand_shifters = {str(e) for e in X1_expressions if all(str(s) != 'prices' for s in e.free_symbols)}
             if supply_shifters - demand_shifters:
                 supply_shifter_formula = ' + '.join(sorted(supply_shifters - demand_shifters))
@@ -144,7 +148,8 @@ class OptimalInstrumentResults(StringRepresentation):
             self, attributes: Sequence[str] = (
                 'demand_instruments', 'supply_instruments', 'inverse_covariance_matrix',
                 'expected_xi_by_theta_jacobian', 'expected_omega_by_theta_jacobian', 'expected_prices',
-                'computation_time', 'draws', 'fp_converged', 'fp_iterations', 'contraction_evaluations'
+                'expected_shares', 'computation_time', 'draws', 'fp_converged', 'fp_iterations',
+                'contraction_evaluations'
             )) -> dict:
         """Convert these results into a dictionary that maps attribute names to values.
 
@@ -184,35 +189,44 @@ class OptimalInstrumentResults(StringRepresentation):
 
         The optimal excluded demand-side instruments consist of the following:
 
-            1. Estimated optimal demand-side instruments for :math:`\theta`, :math:`Z_D^\textit{Opt}`, excluding columns
-               of instruments for any exogenous linear parameters that were not concentrated out, but rather included in
-               :math:`\theta` by :meth:`Problem.solve`.
+            1. Estimated optimal demand-side instruments for :math:`\theta`, :math:`Z_D^\text{opt}`, excluding columns
+               of instruments for any parameters on exogenous linear characteristics that were not concentrated out, but
+               rather included in :math:`\theta` by :meth:`Problem.solve`.
 
             2. Optimal instruments for any linear demand-side parameters on endogenous product characteristics,
                :math:`\alpha`, which were concentrated out and hence not included in :math:`\theta`. These optimal
-               instruments are simply an integral of the endogenous product characteristics, :math:`X_1^p`, over the
-               joint density of :math:`\xi` and :math:`\omega`. It is only possible to concentrate out :math:`\alpha`
-               when there isn't a supply side, so the approximation of these optimal instruments is simply :math:`X_1^p`
-               evaluated at the constant vector of expected prices, :math:`E[p \mid Z]`, specified in
-               :meth:`ProblemResults.compute_optimal_instruments`.
+               instruments are simply an integral of the endogenous product characteristics, :math:`X_1^\text{en}`, over
+               the joint density of :math:`\xi` and :math:`\omega`. It is only possible to concentrate out
+               :math:`\alpha` when there isn't a supply side, so the approximation of these optimal instruments is
+               simply :math:`X_1^\text{en}` evaluated at the constant vector of expected prices, :math:`E[p \mid Z]`,
+               specified in :meth:`ProblemResults.compute_optimal_instruments`.
 
             3. If a supply side was estimated, any supply shifters, which are by default formulated by
-               :attr:`OptimalInstrumentResults.supply_shifter_formulation`: all characteristics in :math:`X_3` not in
-               :math:`X_1`.
+               :attr:`OptimalInstrumentResults.supply_shifter_formulation`: all characteristics in :math:`X_3^\text{ex}`
+               not in :math:`X_1^\text{ex}`.
 
         Similarly, if a supply side was estimated, the optimal excluded supply-side instruments consist of the
         following:
 
-            1. Estimated optimal supply-side instruments for :math:`\theta`, :math:`Z_S^\textit{Opt}`, excluding columns
-               of instruments for any exogenous linear parameters that were not concentrated out, but rather included in
-               :math:`\theta` by :meth:`Problem.solve`.
+            1. Estimated optimal supply-side instruments for :math:`\theta`, :math:`Z_S^\text{opt}`, excluding columns
+               of instruments for any parameters on exogenous linear characteristics that were not concentrated out, but
+               rather included in :math:`\theta` by :meth:`Problem.solve`.
+
+            2. Optimal instruments for any linear supply-side parameters on endogenous product characteristics,
+               :math:`\gamma^\text{en}`, which were concentrated out an hence not included in :math:`\theta`. This
+               is only relevant if ``shares`` were included in the formulation for :math:`X_3` in :class:`Problem`.
+               The corresponding optimal instruments are simply an integral of the endogenous product characteristics,
+               :math:`X_3^\text{en}`, over the joint density of :math:`\xi` and :math:`\omega`. The approximation of
+               these optimal instruments is simply :math:`X_3^\text{en}` evaluated at the marketshares that arise under
+               the constant vector of expected prices, :math:`E[p \mid Z]`, specified in
+               :meth:`ProblemResults.compute_optimal_instruments`.
 
             2. If a supply side was estimated, any demand shifters, which are by default formulated by
-               :attr:`OptimalInstrumentResults.demand_shifter_formulation`: all characteristics in :math:`X_1^x` not in
-               :math:`X_3`.
+               :attr:`OptimalInstrumentResults.demand_shifter_formulation`: all characteristics in :math:`X_1^\text{ex}`
+               not in :math:`X_3^\text{ex}`.
 
-        As usual, the excluded demand-side instruments will be supplemented with :math:`X_1^x` and the excluded
-        supply-side instruments will be supplemented with :math:`X_3`. The same fixed effects configured in
+        As usual, the excluded demand-side instruments will be supplemented with :math:`X_1^\text{ex}` and the excluded
+        supply-side instruments will be supplemented with :math:`X_3^\text{ex}`. The same fixed effects configured in
         :class:`Problem` will be absorbed.
 
         .. warning::
@@ -269,19 +283,17 @@ class OptimalInstrumentResults(StringRepresentation):
         else:
             demand_shifter_formulation = None
 
-        # identify which parameters in theta are exogenous linear parameters
+        # identify which parameters in theta are are exogenous linear characteristics
         dropped_index = np.zeros(self.problem_results._parameters.P, np.bool)
         for p, parameter in enumerate(self.problem_results._parameters.unfixed):
-            if not isinstance(parameter, LinearCoefficient):
-                continue
-            if 'prices' in parameter.get_product_formulation(self.problem_results.problem).names:
-                continue
-            dropped_index[p] = True
+            if isinstance(parameter, LinearCoefficient):
+                names = parameter.get_product_formulation(self.problem_results.problem).names
+                if 'prices' not in names and 'shares' not in names:
+                    dropped_index[p] = True
 
         # build excluded demand-side instruments
         demand_instruments = self.demand_instruments[:, ~dropped_index]
         if self.problem_results._parameters.eliminated_alpha_index.any():
-            assert self.expected_prices is not None
             demand_instruments = np.c_[
                 demand_instruments,
                 self.problem_results.problem._compute_true_X1(
@@ -300,6 +312,14 @@ class OptimalInstrumentResults(StringRepresentation):
             supply_instruments = self.supply_instruments
         else:
             supply_instruments = self.supply_instruments[:, ~dropped_index]
+            if self.problem_results._parameters.eliminated_endogenous_gamma_index.any():
+                supply_instruments = np.c_[
+                    supply_instruments,
+                    self.problem_results.problem._compute_true_X3(
+                        {'shares': self.expected_shares},
+                        self.problem_results._parameters.eliminated_endogenous_gamma_index.flatten()
+                    )
+                ]
             if demand_shifter_formulation is not None:
                 supply_instruments = np.c_[
                     supply_instruments,

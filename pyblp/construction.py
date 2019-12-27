@@ -156,10 +156,10 @@ def build_blp_instruments(formulation: Formulation, product_data: Mapping) -> Ar
 
     Traditional "sums of characteristics" BLP instruments are
 
-    .. math:: Z^\textit{BLP}(X) = [Z^\textit{BLP,Other}(X), Z^\textit{BLP,Rival}(X)],
+    .. math:: Z^\text{BLP}(X) = [Z^\text{BLP,Other}(X), Z^\text{BLP,Rival}(X)],
 
-    in which :math:`X` is a matrix of product characteristics, :math:`Z^\textit{BLP,Other}(X)` is a second matrix that
-    consists of sums over characteristics of non-rival goods, and :math:`Z^\textit{BLP,Rival}(X)` is a third matrix that
+    in which :math:`X` is a matrix of product characteristics, :math:`Z^\text{BLP,Other}(X)` is a second matrix that
+    consists of sums over characteristics of non-rival goods, and :math:`Z^\text{BLP,Rival}(X)` is a third matrix that
     consists of sums over rival goods. All three matrices have the same dimensions.
 
     .. note::
@@ -172,8 +172,8 @@ def build_blp_instruments(formulation: Formulation, product_data: Mapping) -> Ar
 
     .. math::
 
-       Z_{jt}^\textit{BLP,Other}(X) = \sum_{k \in \mathscr{J}_{ft} \setminus \{j\}} x_{kt}, \\
-       Z_{jt}^\textit{BLP,Rival}(X) = \sum_{k \notin \mathscr{J}_{ft}} x_{kt}.
+       Z_{jt}^\text{BLP,Other}(X) = \sum_{k \in \mathscr{J}_{ft} \setminus \{j\}} x_{kt}, \\
+       Z_{jt}^\text{BLP,Rival}(X) = \sum_{k \notin \mathscr{J}_{ft}} x_{kt}.
 
     .. note::
 
@@ -199,7 +199,7 @@ def build_blp_instruments(formulation: Formulation, product_data: Mapping) -> Ar
     Returns
     -------
     `ndarray`
-        Traditional "sums of characteristics" BLP instruments, :math:`Z^\textit{BLP}(X)`.
+        Traditional "sums of characteristics" BLP instruments, :math:`Z^\text{BLP}(X)`.
 
     Examples
     --------
@@ -244,10 +244,10 @@ def build_differentiation_instruments(
 
     Differentiation instruments in the spirit of :ref:`references:Gandhi and Houde (2017)` are
 
-    .. math:: Z^\textit{Diff}(X) = [Z^\textit{Diff,Other}(X), Z^\textit{Diff,Rival}(X)],
+    .. math:: Z^\text{Diff}(X) = [Z^\text{Diff,Other}(X), Z^\text{Diff,Rival}(X)],
 
-    in which :math:`X` is a matrix of product characteristics, :math:`Z^\textit{Diff,Other}(X)` is a second matrix that
-    consists of sums over functions of differences between non-rival goods, and :math:`Z^\textit{Diff,Rival}(X)` is a
+    in which :math:`X` is a matrix of product characteristics, :math:`Z^\text{Diff,Other}(X)` is a second matrix that
+    consists of sums over functions of differences between non-rival goods, and :math:`Z^\text{Diff,Rival}(X)` is a
     third matrix that consists of sums over rival goods. Without optional interaction terms, all three matrices have the
     same dimensions.
 
@@ -258,14 +258,14 @@ def build_differentiation_instruments(
 
     Let :math:`x_{jt\ell}` be characteristic :math:`\ell` in :math:`X` for product :math:`j` in market :math:`t`, which
     is produced by firm :math:`f`. That is, :math:`j \in \mathscr{J}_{ft}`. Then in the "local" version of
-    :math:`Z^\textit{Diff}(X)`,
+    :math:`Z^\text{Diff}(X)`,
 
     .. math::
        :label: local_instruments
 
-       Z_{jt\ell}^\textit{Diff,Other,Local}(X) =
+       Z_{jt\ell}^\text{Local,Other}(X) =
        \sum_{k \in \mathscr{J}_{ft} \setminus \{j\}} 1(|d_{jkt\ell}| < \text{SD}_\ell), \\
-       Z_{jt\ell}^\textit{Diff,Rival,Local}(X) =
+       Z_{jt\ell}^\text{Local,Rival}(X) =
        \sum_{k \notin \mathscr{J}_{ft}} 1(|d_{jkt\ell}| < \text{SD}_\ell),
 
     where :math:`d_{jkt\ell} = x_{kt\ell} - x_{jt\ell}` is the difference between products :math:`j` and :math:`k` in
@@ -274,14 +274,14 @@ def build_differentiation_instruments(
     :math:`k` are close to each other in terms of characteristic :math:`\ell`.
 
     The intuition behind this "local" version is that demand for products is often most influenced by a small number of
-    other goods that are very similar. For the "quadratic" version of :math:`Z^\textit{Diff}(X)`, which uses a more
+    other goods that are very similar. For the "quadratic" version of :math:`Z^\text{Diff}(X)`, which uses a more
     continuous measure of the distance between goods,
 
     .. math::
        :label: quadratic_instruments
 
-       Z_{jtk}^\textit{Diff,Other,Quad}(X) = \sum_{k \in \mathscr{J}_{ft} \setminus\{j\}} d_{jkt\ell}^2, \\
-       Z_{jtk}^\textit{Diff,Rival,Quad}(X) = \sum_{k \notin \mathscr{J}_{ft}} d_{jkt\ell}^2.
+       Z_{jtk}^\text{Quad,Other}(X) = \sum_{k \in \mathscr{J}_{ft} \setminus\{j\}} d_{jkt\ell}^2, \\
+       Z_{jtk}^\text{Quad,Rival}(X) = \sum_{k \notin \mathscr{J}_{ft}} d_{jkt\ell}^2.
 
     With interaction terms, which reflect covariances between different characteristics, the summands for the "local"
     versions are :math:`1(|d_{jkt\ell}| < \text{SD}_\ell) \times d_{jkt\ell'}` for all characteristics :math:`\ell'`,
@@ -325,7 +325,7 @@ def build_differentiation_instruments(
     Returns
     -------
     `ndarray`
-        Excluded differentiation instruments, :math:`Z^\textit{Diff}(X)`.
+        Excluded differentiation instruments, :math:`Z^\text{Diff}(X)`.
 
     Examples
     --------
@@ -420,10 +420,10 @@ def build_integration(integration: Integration, dimensions: int) -> RecArray:
 
     This function can be used to build custom ``agent_data`` for :class:`Problem` initialization. Specifically, this
     function affords more flexibility than passing an :class:`Integration` configuration directly to :class:`Problem`.
-    For example, if agents have unobserved tastes over only a subset of nonlinear product characteristics (i.e., if
-    ``sigma`` in :meth:`Problem.solve` has columns of zeros), this function can be used to build agent data with fewer
-    columns of integration nodes than the number of unobserved product characteristics, :math:`K_2`. This function can
-    also be used to construct nodes that can be transformed into demographic variables.
+    For example, if agents have unobserved tastes over only a subset of demand-side nonlinear product characteristics
+    (i.e., if ``sigma`` in :meth:`Problem.solve` has columns of zeros), this function can be used to build agent data
+    with fewer columns of integration nodes than the number of unobserved product characteristics, :math:`K_2`. This
+    function can also be used to construct nodes that can be transformed into demographic variables.
 
     To build nodes and weights for multiple markets, this function can be called multiple times, once for each market.
 
@@ -434,7 +434,7 @@ def build_integration(integration: Integration, dimensions: int) -> RecArray:
     dimensions : `int`
         Number of dimensions over which to integrate, or equivalently, the number of columns of integration nodes.
         When an :class:`Integration` configuration is passed directly to :class:`Problem`, this is the number of
-        nonlinear product characteristics, :math:`K_2`.
+        demand-side nonlinear product characteristics, :math:`K_2`.
 
     Returns
     -------

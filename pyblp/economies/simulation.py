@@ -56,21 +56,28 @@ class Simulation(Economy):
     ----------
     product_formulations : `Formulation or sequence of Formulation`
         :class:`Formulation` configuration or a sequence of up to three :class:`Formulation` configurations for the
-        matrix of linear product characteristics, :math:`X_1`, for the matrix of nonlinear product characteristics,
-        :math:`X_2`, and for the matrix of cost characteristics, :math:`X_3`, respectively. If the formulation for
-        :math:`X_2` is not specified or is ``None``, the logit (or nested logit) model will be simulated.
+        matrix of demand-side linear product characteristics, :math:`X_1`, for the matrix of demand-side nonlinear
+        product characteristics, :math:`X_2`, and for the matrix of supply-side characteristics, :math:`X_3`,
+        respectively. If the formulation for :math:`X_2` is not specified or is ``None``, the logit (or nested logit)
+        model will be simulated.
 
-        The ``shares`` variable should not be included in any of the formulations and ``prices`` should be included in
+        The ``shares`` variable should not be included in the formulations for :math:`X_1` or :math:`X_2`. If ``shares``
+        is included in the formulation for :math:`X_3`, care should be taken when solving for equilibrium prices in,
+        for example, :meth:`Simulation.replace_endogenous`, since this routine assumes that marginal costs remain
+        constant.
+
+        The ``prices`` variable should not be included in the formulation for :math:`X_3`, but it should be included in
         the formulation for :math:`X_1` or :math:`X_2` (or both). Variables that cannot be loaded from ``product_data``
         will be drawn from independent standard uniform distributions. Unlike in :class:`Problem`, fixed effect
         absorption is not supported during simulation.
 
         .. warning::
 
-           Characteristics that involve prices, :math:`p`, should always be formulated with the ``prices`` variable. If
-           another name is used, :class:`Simulation` will not understand that the characteristic is endogenous. For
-           example, to include a :math:`p^2` characteristic, include ``I(prices**2)`` in a formula instead of manually
-           including a ``prices_squared`` variable in ``product_data`` and a formula.
+           Characteristics that involve prices, :math:`p`, or shares, :math:`s`, should always be formulated with the
+           ``prices`` and ``shares`` variables, respectively. If another name is used, :class:`Simulation` will not
+           understand that the characteristic is endogenous. For example, to include a :math:`p^2` characteristic,
+           include ``I(prices**2)`` in a formula instead of manually constructing and including a ``prices_squared``
+           variable.
 
     product_data : `structured array-like`
         Each row corresponds to a product. Markets can have differing numbers of products. The convenience function
@@ -129,8 +136,8 @@ class Simulation(Economy):
         be loaded from ``agent_data`` will be drawn from independent standard uniform distributions.
     agent_data : `structured array-like, optional`
         Each row corresponds to an agent. Markets can have differing numbers of agents. Since simulated agents are only
-        used if there are nonlinear product characteristics, agent data should only be specified if :math:`X_2` is
-        formulated in ``product_formulations``. If agent data are specified, market IDs are required:
+        used if there are demand-side nonlinear product characteristics, agent data should only be specified if
+        :math:`X_2` is formulated in ``product_formulations``. If agent data are specified, market IDs are required:
 
             - **market_ids** : (`object, optional`) - IDs that associate agents with markets. The set of distinct IDs
               should be the same as the set in ``product_data``. If ``integration`` is specified, there must be at least
@@ -142,8 +149,8 @@ class Simulation(Economy):
               probabilities.
 
             - **nodes** : (`numeric, optional`) - Unobserved agent characteristics called integration nodes,
-              :math:`\nu`. If there are more than :math:`K_2` columns (the number of nonlinear product characteristics),
-              only the first :math:`K_2` will be used.
+              :math:`\nu`. If there are more than :math:`K_2` columns (the number of demand-side nonlinear product
+              characteristics), only the first :math:`K_2` will be used.
 
         The convenience function :func:`build_integration` can be useful when constructing custom nodes and weights.
 
@@ -164,7 +171,7 @@ class Simulation(Economy):
         required if ``nodes`` and ``weights`` in ``agent_data`` are not specified. It should not be specified if
         :math:`X_2` is not formulated in ``product_formulations``.
 
-        If this configuration is specified, :math:`K_2` columns of nodes (the number of nonlinear product
+        If this configuration is specified, :math:`K_2` columns of nodes (the number of demand-side nonlinear product
         characteristics) will be built. However, if ``sigma`` is left unspecified or is specified with columns fixed at
         zero, fewer columns will be used.
 
@@ -252,11 +259,11 @@ class Simulation(Economy):
     I : `int`
         Number of agents across all markets, :math:`I`.
     K1 : `int`
-        Number of linear product characteristics, :math:`K_1`.
+        Number of demand-side linear product characteristics, :math:`K_1`.
     K2 : `int`
-        Number of nonlinear product characteristics, :math:`K_2`.
+        Number of demand-side nonlinear product characteristics, :math:`K_2`.
     K3 : `int`
-        Number of cost product characteristics, :math:`K_3`.
+        Number of supply-side characteristics, :math:`K_3`.
     D : `int`
         Number of demographic variables, :math:`D`.
     MD : `int`
@@ -456,6 +463,11 @@ class Simulation(Economy):
         by iterating over the :math:`\zeta`-markup contraction in :eq:`zeta_contraction`:
 
         .. math:: p \leftarrow c + \zeta(p).
+
+        .. warning::
+
+           This routine assumes that marginal costs, :math:`c`, remain constant. This may not be the case if ``shares``
+           was included in the formulation for :math:`X_3` in :class:`Simulation`.
 
         .. note::
 

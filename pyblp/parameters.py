@@ -144,9 +144,11 @@ class Parameters(object):
     gamma_bounds: Bounds
     nonzero_sigma_index: Array
     alpha_index: Array
-    eliminated_alpha_index: Array
+    endogenous_gamma_index: Array
     eliminated_beta_index: Array
     eliminated_gamma_index: Array
+    eliminated_alpha_index: Array
+    eliminated_endogenous_gamma_index: Array
     fixed: List[Parameter]
     unfixed: List[Parameter]
     eliminated: List[Parameter]
@@ -193,10 +195,17 @@ class Parameters(object):
             if 'prices' in formulation.names:
                 self.alpha_index[k] = True
 
+        # identify the index of analogous parameters in gamma
+        self.endogenous_gamma_index = np.zeros_like(self.gamma, np.bool)
+        for k, formulation in enumerate(economy._X3_formulations):
+            if 'shares' in formulation.names:
+                self.endogenous_gamma_index[k] = True
+
         # identify eliminated indexes
-        self.eliminated_alpha_index = np.isnan(self.beta) & self.alpha_index
         self.eliminated_beta_index = np.isnan(self.beta)
         self.eliminated_gamma_index = np.isnan(self.gamma)
+        self.eliminated_alpha_index = np.isnan(self.beta) & self.alpha_index
+        self.eliminated_endogenous_gamma_index = np.isnan(self.gamma) & self.endogenous_gamma_index
 
         # there should be at least as many integration node columns as nonzero sigma columns
         if economy.agents.nodes.shape[1] < self.nonzero_sigma_index.sum():

@@ -407,6 +407,11 @@ class Results(abc.ABC, StringRepresentation):
 
         where :math:`O^*` is the ownership matrix associated with firm changes.
 
+        .. warning::
+
+           This routine assumes that marginal costs, :math:`c`, remain constant. This may not be the case if ``shares``
+           was included in the formulation for :math:`X_3` in :class:`Problem`.
+
         Parameters
         ----------
         firm_ids : `array-like, optional`

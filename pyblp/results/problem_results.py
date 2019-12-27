@@ -611,7 +611,7 @@ class ProblemResults(Results):
 
         Following :ref:`references:Newey and West (1987)`, the distance or likelihood ratio-like statistic is
 
-        .. math:: \textit{LR} = J(\hat{\theta^r}) - J(\hat{\theta^u})
+        .. math:: \text{LR} = J(\hat{\theta^r}) - J(\hat{\theta^u})
 
         where :math:`J(\hat{\theta^r})` is the :math:`J` statistic defined in :eq:`J` for this restricted model and
         :math:`J(\hat{\theta^u})` is the :math:`J` statistic for the unrestricted model.
@@ -619,7 +619,7 @@ class ProblemResults(Results):
         .. note::
 
            The statistic can equivalently be written as
-           :math:`\textit{LR} = N[q(\hat{\theta^r}) - q(\hat{\theta^u})]` where the GMM objective value is defined in
+           :math:`\text{LR} = N[q(\hat{\theta^r}) - q(\hat{\theta^u})]` where the GMM objective value is defined in
            :eq:`objective`.
 
         If the restrictions in this model are valid, the distance statistic is asymptotically :math:`\chi^2` with
@@ -662,7 +662,7 @@ class ProblemResults(Results):
 
         .. math::
 
-           \textit{LM} = N\bar{g}(\hat{\theta})'W\bar{G}(\hat{\theta})V\bar{G}(\hat{\theta})'W\bar{g}(\hat{\theta})
+           \text{LM} = N\bar{g}(\hat{\theta})'W\bar{G}(\hat{\theta})V\bar{G}(\hat{\theta})'W\bar{g}(\hat{\theta})
 
         where :math:`\bar{g}(\hat{\theta})` is defined in :eq:`averaged_moments`, :math:`\bar{G}(\hat{\theta})` is
         defined in :eq:`averaged_moments_jacobian`, :math:`W` is the optimal weighting matrix in :eq:`W`, and :math:`V`
@@ -759,6 +759,11 @@ class ProblemResults(Results):
         compute the implied mean utility, :math:`\delta`, and shares, :math:`s`. If a supply side was estimated, the
         implied marginal costs, :math:`c`, and prices, :math:`p`, are computed as well by iterating over the
         :math:`\zeta`-markup contraction in :eq:`zeta_contraction`.
+
+        .. warning::
+
+           This routine assumes that marginal costs, :math:`c`, remain constant. This may not be the case if ``shares``
+           was included in the formulation for :math:`X_3` in :class:`Problem`.
 
         .. note::
 
@@ -897,7 +902,7 @@ class ProblemResults(Results):
     def compute_optimal_instruments(
             self, method: str = 'approximate', draws: int = 1, seed: Optional[int] = None,
             expected_prices: Optional[Any] = None, iteration: Optional[Iteration] = None) -> 'OptimalInstrumentResults':
-        r"""Estimate feasible optimal or efficient instruments, :math:`Z_D^\textit{Opt}` and :math:`Z_S^\textit{Opt}`.
+        r"""Estimate feasible optimal or efficient instruments, :math:`Z_D^\text{opt}` and :math:`Z_S^\text{opt}`.
 
         Optimal instruments have been shown, for example, by :ref:`references:Reynaert and Verboven (2014)` and
         :ref:`references:Conlon and Gortmaker (2019)`, to reduce bias, improve efficiency, and enhance stability of BLP
@@ -910,8 +915,8 @@ class ProblemResults(Results):
            :label: optimal_instruments
 
            \begin{bmatrix}
-               Z_{D,jt}^\textit{Opt} \\
-               Z_{S,jt}^\textit{Opt}
+               Z_{D,jt}^\text{opt} \\
+               Z_{S,jt}^\text{opt}
            \end{bmatrix}
            = \Sigma_{\xi\omega}^{-1}E\left[
            \begin{matrix}
@@ -926,6 +931,11 @@ class ProblemResults(Results):
         The expectation is taken by approximating an integral over the joint density of :math:`\xi` and :math:`\omega`.
         For each error term realization, if not already estimated, equilibrium prices and shares are computed by
         iterating over the :math:`\zeta`-markup contraction in :eq:`zeta_contraction`.
+
+        .. warning::
+
+           This routine assumes that marginal costs, :math:`c`, remain constant. This may not be the case if ``shares``
+           was included in the formulation for :math:`X_3` in :class:`Problem`.
 
         The expected Jacobians are estimated with the average over all computed Jacobian realizations. The
         :math:`2 \times 2` normalizing matrix :math:`\Sigma_{\xi\omega}` is estimated with the sample covariance matrix
@@ -968,8 +978,9 @@ class ProblemResults(Results):
             taken. By default, a seed is not passed to the random number generator.
         expected_prices : `array-like, optional`
             Vector of expected prices conditional on all exogenous variables, :math:`E[p \mid Z]`. By default, if a
-            supply side was estimated, ``iteration`` is used. If only a demand side was estimated, this is by default
-            estimated with the fitted values from a reduced form regression of endogenous prices onto :math:`Z_D`.
+            supply side was estimated and ``shares`` did not enter into the formulation for :math:`X_3` in
+            :class:`Problem`, ``iteration`` is used. Otherwise, this is by default estimated with the fitted values from
+            a reduced form regression of endogenous prices onto :math:`Z_D`.
         iteration : `Iteration, optional`
             :class:`Iteration` configuration used to estimate expected prices by iterating over the :math:`\zeta`-markup
             contraction in :eq:`zeta_contraction`. By default, if a supply side was estimated, this is
@@ -1026,7 +1037,7 @@ class ProblemResults(Results):
             expected_prices = np.c_[np.asarray(expected_prices, options.dtype)]
             if expected_prices.shape != (self.problem.N, 1):
                 raise ValueError(f"expected_prices must be a {self.problem.N}-vector.")
-        elif self.problem.K3 > 0:
+        elif self.problem.K3 > 0 and 'shares' not in {n for f in self.problem._X3_formulations for n in f.names}:
             if iteration is None:
                 iteration = Iteration('simple', {'atol': 1e-12})
             elif not isinstance(iteration, Iteration):
@@ -1044,14 +1055,18 @@ class ProblemResults(Results):
                 errors.append(exceptions.FittedValuesInversionError(covariances, replacement))
             expected_prices = self.problem.products.ZD @ parameters + self.problem.products.prices - prices
 
-        # average over Jacobian realizations
+        # average over realizations
+        computed_expected_prices = np.zeros_like(self.problem.products.prices)
+        expected_shares = np.zeros_like(self.problem.products.shares)
         expected_xi_jacobian = np.zeros_like(self.xi_by_theta_jacobian)
         expected_omega_jacobian = np.zeros_like(self.omega_by_theta_jacobian)
         iteration_stats: List[Dict[Hashable, SolverStats]] = []
         for _ in output_progress(range(draws), draws, start_time):
-            xi_jacobian_i, omega_jacobian_i, iteration_stats_i, errors_i = (
+            prices_i, shares_i, xi_jacobian_i, omega_jacobian_i, iteration_stats_i, errors_i = (
                 self._compute_realizations(expected_prices, iteration, *sample())
             )
+            computed_expected_prices += prices_i / draws
+            expected_shares += shares_i / draws
             expected_xi_jacobian += xi_jacobian_i / draws
             expected_omega_jacobian += omega_jacobian_i / draws
             iteration_stats.append(iteration_stats_i)
@@ -1079,7 +1094,8 @@ class ProblemResults(Results):
         from .optimal_instrument_results import OptimalInstrumentResults  # noqa
         results = OptimalInstrumentResults(
             self, demand_instruments, supply_instruments, inverse_covariance_matrix, expected_xi_jacobian,
-            expected_omega_jacobian, expected_prices, start_time, time.time(), draws, iteration_stats
+            expected_omega_jacobian, computed_expected_prices, expected_shares, start_time, time.time(), draws,
+            iteration_stats
         )
         output(f"Computed optimal instruments after {format_seconds(results.computation_time)}.")
         output("")
@@ -1088,7 +1104,7 @@ class ProblemResults(Results):
 
     def _compute_realizations(
             self, expected_prices: Optional[Array], iteration: Optional[Iteration], xi: Array, omega: Array) -> (
-            Tuple[Array, Array, Dict[Hashable, SolverStats], List[Error]]):
+            Tuple[Array, Array, Array, Array, Dict[Hashable, SolverStats], List[Error]]):
         """If they have not already been estimated, compute the equilibrium prices, shares, and delta associated with a
         realization of xi and omega market-by-market. Then, compute realizations of Jacobians of xi and omega with
         respect to theta.
@@ -1138,7 +1154,7 @@ class ProblemResults(Results):
             errors.extend(supply_errors)
 
         # return all of the information associated with this realization
-        return xi_jacobian, omega_jacobian, iteration_stats, errors
+        return data_override['prices'], data_override['shares'], xi_jacobian, omega_jacobian, iteration_stats, errors
 
     def _compute_demand_realization(self, data_override: Dict[str, Array], delta: Array) -> Tuple[Array, List[Error]]:
         """Compute a realization of the Jacobian of xi with respect to theta market-by-market. If necessary, revert

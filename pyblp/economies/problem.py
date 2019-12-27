@@ -241,8 +241,8 @@ class ProblemEconomy(Economy):
 
                 - ``'both'`` (default) - Also compute the Hessian with central finite differences after optimization
                   finishes. Specifically, analytically compute the gradient :math:`2P` times, perturbing each of the
-                  :math:`P` parameters by :math:`\pm\sqrt{\epsilon^\textit{mach}} / 2` where
-                  :math:`\epsilon^\textit{mach}` is the machine precision.
+                  :math:`P` parameters by :math:`\pm\sqrt{\epsilon^\text{mach}} / 2` where :math:`\epsilon^\text{mach}`
+                  is the machine precision.
 
         error_behavior : `str, optional`
             How to handle any errors. For example, there can sometimes be overflow or underflow when computing
@@ -903,32 +903,39 @@ class Problem(ProblemEconomy):
     ----------
     product_formulations : `Formulation or sequence of Formulation`
         :class:`Formulation` configuration or a sequence of up to three :class:`Formulation` configurations for the
-        matrix of linear product characteristics, :math:`X_1`, for the matrix of nonlinear product characteristics,
-        :math:`X_2`, and for the matrix of cost characteristics, :math:`X_3`, respectively. If the formulation for
-        :math:`X_3` is not specified or is ``None``, a supply side will not be estimated. Similarly, if the formulation
-        for :math:`X_2` is not specified or is ``None``, the logit (or nested logit) model will be estimated.
+        matrix of demand-side linear product characteristics, :math:`X_1`, for the matrix of demand-side nonlinear
+        product characteristics, :math:`X_2`, and for the matrix of supply-side characteristics, :math:`X_3`,
+        respectively. If the formulation for :math:`X_3` is not specified or is ``None``, a supply side will not be
+        estimated. Similarly, if the formulation for :math:`X_2` is not specified or is ``None``, the logit (or nested
+        logit) model will be estimated.
 
         Variable names should correspond to fields in ``product_data``. The ``shares`` variable should not be included
-        in any of the formulations and ``prices`` should be included in the formulation for :math:`X_1` or :math:`X_2`
-        (or both). The ``absorb`` argument of :class:`Formulation` can be used to absorb fixed effects into :math:`X_1`
-        and :math:`X_3`, but not :math:`X_2`. Characteristics in :math:`X_2` should generally be included in
-        :math:`X_1`. The typical exception is characteristics that are collinear with fixed effects that have been
-        absorbed into :math:`X_1`.
+        in the formulations for :math:`X_1` or :math:`X_2`. If ``shares`` is included in the formulation for
+        :math:`X_3`, care should be taken when solving for equilibrium prices in, for example,
+        :meth:`ProblemResults.compute_prices`, since this routine assumes that marginal costs remain constant.
 
-        By default, characteristics in :math:`X_1` that do not involve ``prices``, :math:`X_1^x`, will be combined with
-        excluded demand-side instruments (specified below) to create the full set of demand-side instruments,
-        :math:`Z_D`. Any fixed effects absorbed into :math:`X_1` will also be absorbed into :math:`Z_D`. Similarly,
-        characteristics in :math:`X_3` will be combined with the excluded supply-side instruments to create :math:`Z_S`,
-        and any fixed effects absorbed into :math:`X_3` will also be absorbed into :math:`Z_S`. The ``add_exogenous``
-        flag can be used to disable this behavior.
+        The ``prices`` variable should not be included in the formulation for :math:`X_3`, but it should be included in
+        the formulation for :math:`X_1` or :math:`X_2` (or both). The ``absorb`` argument of :class:`Formulation` can be
+        used to absorb fixed effects into :math:`X_1` and :math:`X_3`, but not :math:`X_2`. Characteristics in
+        :math:`X_2` should generally be included in :math:`X_1`. The typical exception is characteristics that are
+        collinear with fixed effects that have been absorbed into :math:`X_1`.
+
+        By default, characteristics in :math:`X_1` that do not involve ``prices``, :math:`X_1^\text{ex}`, will be
+        combined with excluded demand-side instruments (specified below) to create the full set of demand-side
+        instruments, :math:`Z_D`. Any fixed effects absorbed into :math:`X_1` will also be absorbed into :math:`Z_D`.
+        Similarly, characteristics in :math:`X_3` that do not involve ``shares``, :math:`X_3^\text{ex}`, will be
+        combined with the excluded supply-side instruments to create :math:`Z_S`, and any fixed effects absorbed into
+        :math:`X_3` will also be absorbed into :math:`Z_S`. The ``add_exogenous`` flag can be used to disable this
+        behavior.
 
         .. warning::
 
-           Characteristics that involve prices, :math:`p`, should always be formulated with the ``prices`` variable. If
-           another name is used, :class:`Problem` will not understand that the characteristic is endogenous, so it will
-           be erroneously included in :math:`Z_D`, and derivatives computed with respect to prices will likely be wrong.
-           For example, to include a :math:`p^2` characteristic, include ``I(prices**2)`` in a formula instead of
-           manually including a ``prices_squared`` variable in ``product_data`` and a formula.
+           Characteristics that involve prices, :math:`p`, or shares, :math:`s`, should always be formulated with the
+           ``prices`` and ``shares`` variables, respectively. If another name is used, :class:`Problem` will not
+           understand that the characteristic is endogenous, so it will be erroneously included in :math:`Z_D` or
+           :math:`Z_S`, and derivatives computed with respect to prices or shares will likely be wrong. For example, to
+           include a :math:`p^2` characteristic, include ``I(prices**2)`` in a formula instead of manually constructing
+           and including a ``prices_squared`` variable.
 
     product_data : `structured array-like`
         Each row corresponds to a product. Markets can have differing numbers of products. The following fields are
@@ -949,13 +956,14 @@ class Problem(ProblemEconomy):
         Excluded instruments are typically specified with the following fields:
 
             - **demand_instruments** : (`numeric`) - Excluded demand-side instruments, which, together with the
-              formulated exogenous linear product characteristics, :math:`X_1^x`, constitute the full set of demand-side
-              instruments, :math:`Z_D`. To instead specify the full matrix :math:`Z_D`, set ``add_exogenous`` to
-              ``False``.
+              formulated exogenous demand-side linear product characteristics, :math:`X_1^\text{ex}`, constitute the
+              full set of  demand-side instruments, :math:`Z_D`. To instead specify the full matrix :math:`Z_D`, set
+              ``add_exogenous`` to ``False``.
 
             - **supply_instruments** : (`numeric, optional`) - Excluded supply-side instruments, which, together with
-              the formulated cost characteristics, :math:`X_3`, constitute the full set of supply-side instruments,
-              :math:`Z_S`. To instead specify the full matrix :math:`Z_S`, set ``add_exogenous`` to ``False``.
+              the formulated exogenous supply-side characteristics, :math:`X_3^\text{ex}`, constitute the full set of
+              supply-side instruments, :math:`Z_S`. To instead specify the full matrix :math:`Z_S`, set
+              ``add_exogenous`` to ``False``.
 
         The recommendation in :ref:`references:Conlon and Gortmaker (2019)` is to start with differentiation instruments
         of :ref:`references:Gandhi and Houde (2017)`, which can be built with :func:`build_differentiation_instruments`,
@@ -996,13 +1004,13 @@ class Problem(ProblemEconomy):
     agent_formulation : `Formulation, optional`
         :class:`Formulation` configuration for the matrix of observed agent characteristics called demographics,
         :math:`d`, which will only be included in the model if this formulation is specified. Since demographics are
-        only used if there are nonlinear product characteristics, this formulation should only be specified if
-        :math:`X_2` is formulated in ``product_formulations``. Variable names should correspond to fields in
+        only used if there are demand-side nonlinear product characteristics, this formulation should only be specified
+        if :math:`X_2` is formulated in ``product_formulations``. Variable names should correspond to fields in
         ``agent_data``.
     agent_data : `structured array-like, optional`
         Each row corresponds to an agent. Markets can have differing numbers of agents. Since simulated agents are only
-        used if there are nonlinear product characteristics, agent data should only be specified if :math:`X_2` is
-        formulated in ``product_formulations``. If agent data are specified, market IDs are required:
+        used if there are demand-side nonlinear product characteristics, agent data should only be specified if
+        :math:`X_2` is formulated in ``product_formulations``. If agent data are specified, market IDs are required:
 
             - **market_ids** : (`object`) - IDs that associate agents with markets. The set of distinct IDs should be
               the same as the set in ``product_data``. If ``integration`` is specified, there must be at least as many
@@ -1014,8 +1022,8 @@ class Problem(ProblemEconomy):
               probabilities.
 
             - **nodes** : (`numeric, optional`) - Unobserved agent characteristics called integration nodes,
-              :math:`\nu`. If there are more than :math:`K_2` columns (the number of nonlinear product characteristics),
-              only the first :math:`K_2` will be retained.
+              :math:`\nu`. If there are more than :math:`K_2` columns (the number of demand-side nonlinear product
+              characteristics), only the first :math:`K_2` will be retained.
 
         The convenience function :func:`build_integration` can be useful when constructing custom nodes and weights.
 
@@ -1036,7 +1044,7 @@ class Problem(ProblemEconomy):
         required if ``nodes`` and ``weights`` in ``agent_data`` are not specified. It should not be specified if
         :math:`X_2` is not formulated in ``product_formulations``.
 
-        If this configuration is specified, :math:`K_2` columns of nodes (the number of nonlinear product
+        If this configuration is specified, :math:`K_2` columns of nodes (the number of demand-side nonlinear product
         characteristics) will be built. However, if ``sigma`` in :meth:`Problem.solve` is left unspecified or
         specified with columns fixed at zero, fewer columns will be used.
 
@@ -1051,15 +1059,16 @@ class Problem(ProblemEconomy):
         This specification is only relevant if :math:`X_3` is formulated.
 
     add_exogenous : `bool, optional`
-        Whether to add characteristics in :math:`X_1` that do not involve prices (including absorbed fixed effects) to
-        the ``demand_instruments`` field in ``product_data``, and similarly, whether to add characteristics in
-        :math:`X_3` (including fixed effects) to the ``supply_instruments`` field. This is by default ``True`` so that
-        only excluded instruments need to be specified.
+        Whether to add characteristics in :math:`X_1` that do not involve prices, :math:`X_1^\text{ex}`, to the
+        ``demand_instruments`` field in ``product_data`` (including absorbed fixed effects), and similarly, whether
+        to add characteristics in :math:`X_3` that do not involve shares, :math:`X_3^\text{ex}`, to the
+        ``supply_instruments`` field. This is by default ``True`` so that only excluded instruments need to be
+        specified.
 
         If this is set to ``False``, ``demand_instruments`` and ``supply_instruments`` should specify the full sets of
         demand- and supply-side instruments, :math:`Z_D` and :math:`Z_S`, and fixed effects should be manually absorbed
         (for example, with the :func:`build_matrix` function). This behavior can be useful, for example, when price is
-        not the only endogenous product characteristic over which consumers have preferences. This type of model can be
+        not the only endogenous product characteristic over which consumers have preferences. This model could be
         correctly estimated by manually adding the truly exogenous characteristics in :math:`X_1` to :math:`Z_D`.
 
         .. warning::
@@ -1099,19 +1108,19 @@ class Problem(ProblemEconomy):
     I : `int`
         Number of agents across all markets, :math:`I`.
     K1 : `int`
-        Number of linear product characteristics, :math:`K_1`.
+        Number of demand-side linear product characteristics, :math:`K_1`.
     K2 : `int`
-        Number of nonlinear product characteristics, :math:`K_2`.
+        Number of demand-side nonlinear product characteristics, :math:`K_2`.
     K3 : `int`
-        Number of cost product characteristics, :math:`K_3`.
+        Number of supply-side product characteristics, :math:`K_3`.
     D : `int`
         Number of demographic variables, :math:`D`.
     MD : `int`
         Number of demand-side instruments, :math:`M_D`, which is typically the number of excluded demand-side
-        instruments plus the number of exogenous linear product characteristics, :math:`K_1^x`.
+        instruments plus the number of exogenous demand-side linear product characteristics, :math:`K_1^\text{ex}`.
     MS : `int`
         Number of supply-side instruments, :math:`M_S`, which is typically the number of excluded supply-side
-        instruments plus the number of cost product characteristics, :math:`K_3`.
+        instruments plus the number of exogenous supply-side linear product characteristics, :math:`K_3^\text{ex}`.
     ED : `int`
         Number of absorbed dimensions of demand-side fixed effects, :math:`E_D`.
     ES : `int`

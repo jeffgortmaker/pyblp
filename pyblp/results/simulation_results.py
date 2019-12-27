@@ -133,12 +133,13 @@ class SimulationResults(StringRepresentation):
         as that of the solved simulation.
 
         By default, some simple "sums of characteristics" BLP instruments are constructed. Demand-side instruments are
-        constructed by :func:`build_blp_instruments` from variables in :math:`X_1^x`, along with any supply shifters
-        (variables in :math:`X_3` but not :math:`X_1`). Supply side instruments are constructed from variables in
-        :math:`X_3`, along with any demand shifters (variables in :math:`X_1` but not :math:`X_3`). Instruments will
-        also be constructed from columns of ones if there is variation in :math:`J_t`, the number of products per
-        market. Any constant columns will be dropped. For example, if each firm owns exactly one product in each market,
-        the "rival" columns of instruments will be zero and hence dropped.
+        constructed by :func:`build_blp_instruments` from variables in :math:`X_1^\text{ex}`, along with any supply
+        shifters (variables in :math:`X_3^\text{ex}` but not :math:`X_1^\text{ex}`). Supply side instruments are
+        constructed from variables in :math:`X_3^\text{ex}`, along with any demand shifters (variables in
+        :math:`X_1^\text{ex}` but not :math:`X_3^\text{ex}`). Instruments will also be constructed from columns of ones
+        if there is variation in :math:`J_t`, the number of products per market. Any constant columns will be dropped.
+        For example, if each firm owns exactly one product in each market, the "rival" columns of instruments will be
+        zero and hence dropped.
 
         .. note::
 
@@ -200,7 +201,7 @@ class SimulationResults(StringRepresentation):
         X1_names = self.simulation.product_formulations[0]._names - {'prices'}
         X3_names: Set[str] = set()
         if self.simulation.product_formulations[2] is not None:
-            X3_names = self.simulation.product_formulations[2]._names
+            X3_names = self.simulation.product_formulations[2]._names - {'shares'}
 
         # determine whether there's variation in the number of products per markets
         J_variation = any(i.size < self.simulation._max_J for i in self.simulation._product_market_indices.values())

@@ -93,8 +93,8 @@ class FirstChoiceCovarianceMoment(Moment):
     Parameters
     ----------
     X2_index : `int`
-        Column index of :math:`x_{jt}` in the matrix of nonlinear product characteristics, :math:`X_2`. This should be
-        between zero and :math:`K_2 - 1`, inclusive.
+        Column index of :math:`x_{jt}` in the matrix of demand-side nonlinear product characteristics, :math:`X_2`. This
+        should be between zero and :math:`K_2 - 1`, inclusive.
     demographics_index : `int`
         Column index of the demographic :math:`y_{it}` (which can be any demographic, not just income) in the matrix of
         agent demographics, :math:`d`. This should be between zero and :math:`D - 1`, inclusive.

@@ -24,9 +24,9 @@ The indirect utility of agent :math:`i` from purchasing product :math:`j` in mar
 
 in which the mean utility is, in vector-matrix form,
 
-.. math:: \delta = \underbrace{X_1^p\alpha + X_1^x\beta^x}_{X_1\beta} + \xi.
+.. math:: \delta = \underbrace{X_1^\text{en}\alpha + X_1^\text{ex}\beta^\text{ex}}_{X_1\beta} + \xi.
 
-The :math:`K_1 \times 1` vector of demand-side linear paramterers, :math:`\beta`, is partitioned into two components: :math:`\alpha` is a :math:`K_1^p \times 1` vector of parameters on the :math:`N \times K_1^p` submatrix of endogenous characteristics, :math:`X_1^p`, and :math:`\beta^x` is a :math:`K_1^x \times 1` vector of parameters on the :math:`N \times K_1^x` submatrix of exogenous characteristics, :math:`X_1^x`. Usually, :math:`X_1^p = p`, prices, so :math:`\alpha` is simply a scalar.
+The :math:`K_1 \times 1` vector of demand-side linear parameters, :math:`\beta`, is partitioned into two components: :math:`\alpha` is a :math:`K_1^\text{en} \times 1` vector of parameters on the :math:`N \times K_1^\text{en}` submatrix of endogenous characteristics, :math:`X_1^\text{en}`, and :math:`\beta^\text{ex}` is a :math:`K_1^\text{ex} \times 1` vector of parameters on the :math:`N \times K_1^\text{ex}` submatrix of exogenous characteristics, :math:`X_1^\text{ex}`. Usually, :math:`X_1^\text{en} = p`, prices, so :math:`\alpha` is simply a scalar.
 
 The agent-specific portion of utility in a single market is
 
@@ -50,7 +50,7 @@ There is a one in the denominator because the utility of the outside good is nor
 Supply
 ~~~~~~
 
-Observed supply-side product characteristics are contained in the :math:`N \times K_3` matrix of cost characteristics, :math:`X_3`. Prices cannot be cost characteristics, but non-price product characteristics often overlap with the demand-side characteristics in :math:`X_1` and :math:`X_2`. Unobserved supply-side product characteristics, :math:`\omega`, are a :math:`N \times 1` vector.
+Observed supply-side product characteristics are contained in the :math:`N \times K_3` matrix of supply-side characteristics, :math:`X_3`. Prices cannot be supply-side characteristics, but non-price product characteristics often overlap with the demand-side characteristics in :math:`X_1` and :math:`X_2`. Unobserved supply-side product characteristics, :math:`\omega`, are a :math:`N \times 1` vector.
 
 Firm :math:`f` chooses prices in market :math:`t` to maximize the profits of its products :math:`\mathscr{J}_{ft} \subset \{1, 2, \ldots, J_t\}`:
 
@@ -90,7 +90,7 @@ in which :math:`q(\theta)` is the GMM objective (n.b., in some of the BLP litera
 .. math:: \bar{g} = \begin{bmatrix} \bar{g}_D \\ \bar{g}_S \end{bmatrix} = \frac{1}{N} \begin{bmatrix} \sum_{j,t} Z_{D,jt}'\xi_{jt} \\ \sum_{j,t} Z_{S,jt}'\omega_{jt} \end{bmatrix}
    :label: averaged_moments
 
-where :math:`Z_D` and :math:`Z_S` are :math:`N \times M_D` and :math:`N \times M_S` matrices of demand- and supply-side instruments containing excluded instruments along with :math:`X_1^x` and :math:`X_3`, respectively. When there are only demand- and supply-side moments, :math:`M = M_D + M_S`.
+where :math:`Z_D` and :math:`Z_S` are :math:`N \times M_D` and :math:`N \times M_S` matrices of demand- and supply-side instruments containing excluded instruments along with :math:`X_1^\text{ex}` and :math:`X_3^\text{ex}`, respectively. When there are only demand- and supply-side moments, :math:`M = M_D + M_S`.
 
 The vector :math:`\bar{g}` contains sample analogues of the demand- and supply-side moment conditions :math:`E[g_{D,jt}] = E[g_{S,jt}] = 0` where
 
@@ -116,12 +116,12 @@ With a supply side, marginal costs are then computed according to :eq:`eta`:
 
 Concentrated out linear parameters are recovered with linear IV-GMM:
 
-.. math:: \begin{bmatrix} \hat{\beta}^x \\ \hat{\gamma} \end{bmatrix} = (X'ZWZ'X)^{-1}X'ZWZ'Y(\hat{\theta})
+.. math:: \begin{bmatrix} \hat{\beta}^\text{ex} \\ \hat{\gamma} \end{bmatrix} = (X'ZWZ'X)^{-1}X'ZWZ'Y(\hat{\theta})
    :label: iv
 
 where
 
-.. math:: X = \begin{bmatrix} X_1^x & 0 \\ 0 & X_3 \end{bmatrix}, \quad Z = \begin{bmatrix} Z_D & 0 \\ 0 & Z_S \end{bmatrix}, \quad Y(\hat{\theta}) = \begin{bmatrix} \delta(\hat{\theta}) - X_1^p\hat{\alpha} & 0 \\ 0 & \tilde{c}(\hat{\theta}) \end{bmatrix}.
+.. math:: X = \begin{bmatrix} X_1^\text{ex} & 0 \\ 0 & X_3 \end{bmatrix}, \quad Z = \begin{bmatrix} Z_D & 0 \\ 0 & Z_S \end{bmatrix}, \quad Y(\hat{\theta}) = \begin{bmatrix} \delta(\hat{\theta}) - X_1^\text{en}\hat{\alpha} & 0 \\ 0 & \tilde{c}(\hat{\theta}) \end{bmatrix}.
 
 With only a demand side, :math:`\alpha` can be concentrated out, so :math:`X = X_1`, :math:`Z = Z_D`, and :math:`Y = \delta(\hat{\theta})` recover the full :math:`\hat{\beta}` in :eq:`iv`.
 
