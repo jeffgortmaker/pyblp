@@ -655,10 +655,9 @@ class ProblemEconomy(Economy):
             omega_jacobian = np.full((self.N, parameters.P), np.nan, options.dtype)
             clipped_costs = np.zeros((self.N, 1), np.bool)
         else:
-            supply = self._compute_supply_contributions(
+            tilde_costs, omega_jacobian, clipped_costs, supply_errors = self._compute_supply_contributions(
                 parameters, costs_bounds, sigma, pi, rho, beta, delta, xi_jacobian, progress, compute_gradient
             )
-            tilde_costs, omega_jacobian, clipped_costs, supply_errors = supply
             errors.extend(supply_errors)
 
         # subtract contributions of linear parameters in theta

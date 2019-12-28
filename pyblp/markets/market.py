@@ -10,7 +10,8 @@ from ..configurations.iteration import ContractionResults, Iteration
 from ..economies.economy import Economy
 from ..moments import EconomyMoments, MarketMoments, FirstChoiceCovarianceMoment
 from ..parameters import (
-    LinearCoefficient, NonlinearCoefficient, Parameter, Parameters, PiParameter, RhoParameter, SigmaParameter
+    BetaParameter, GammaParameter, NonlinearCoefficient, Parameter, Parameters, PiParameter, RhoParameter,
+    SigmaParameter
 )
 from ..primitives import Container
 from ..utilities.algebra import approximately_invert, approximately_solve
@@ -147,7 +148,7 @@ class Market(Container):
             X2 = self.products.X2
         return X2 @ self.compute_random_coefficients(sigma, pi)
 
-    def compute_default_bounds(self, parameters: List[Parameter]) -> List[Tuple[Array, Array]]:
+    def compute_default_bounds(self, nonlinear_parameters: List[Parameter]) -> List[Tuple[Array, Array]]:
         """Compute default bounds for nonlinear parameters."""
 
         # define a function to normalize bounds
@@ -165,7 +166,7 @@ class Market(Container):
 
         # compute the bounds parameter-by-parameter
         with np.errstate(divide='ignore', invalid='ignore'):
-            for parameter in parameters:
+            for parameter in nonlinear_parameters:
                 if isinstance(parameter, SigmaParameter):
                     sigma = self.sigma.copy()
                     sigma[parameter.location] = 0
@@ -529,11 +530,13 @@ class Market(Container):
             self, parameter: Parameter, X1_derivatives: Array, X2_derivatives: Array) -> Array:
         """Compute the tangent with respect to a parameter of derivatives of utility with respect to a variable."""
         tangent = np.zeros((self.J, self.I), options.dtype)
-        if isinstance(parameter, LinearCoefficient):
+        if isinstance(parameter, BetaParameter):
             tangent += X1_derivatives[:, [parameter.location[0]]]
         elif isinstance(parameter, NonlinearCoefficient):
             v = parameter.get_agent_characteristic(self)
             tangent += X2_derivatives[:, [parameter.location[0]]] @ v.T
+        else:
+            assert isinstance(parameter, (GammaParameter, RhoParameter))
         return tangent
 
     def compute_probabilities_by_parameter_tangent(
@@ -548,21 +551,23 @@ class Market(Container):
 
         # without nesting, compute only the tangent of probabilities with respect to the parameter
         if self.H == 0:
-            if isinstance(parameter, LinearCoefficient):
+            if isinstance(parameter, BetaParameter):
                 x = parameter.get_product_characteristic(self)
                 probabilities_tangent = probabilities * (x - x.T @ probabilities)
-            else:
-                assert isinstance(parameter, NonlinearCoefficient)
+            elif isinstance(parameter, NonlinearCoefficient):
                 v = parameter.get_agent_characteristic(self)
                 x = parameter.get_product_characteristic(self)
                 probabilities_tangent = probabilities * v.T * (x - x.T @ probabilities)
+            else:
+                assert isinstance(parameter, GammaParameter)
+                probabilities_tangent = np.zeros_like(probabilities)
             return probabilities_tangent, None
 
         # marginal probabilities are needed to compute tangents with nesting
         marginals = self.groups.sum(probabilities)
 
         # compute the tangent of conditional and marginal probabilities with respect to the parameter
-        if isinstance(parameter, LinearCoefficient):
+        if isinstance(parameter, BetaParameter):
             x = parameter.get_product_characteristic(self)
 
             # compute the tangent of conditional probabilities with respect to the parameter
@@ -585,8 +590,7 @@ class Market(Container):
             # compute the tangent of marginal probabilities with respect to the parameter
             B = marginals * A_sums * v.T
             marginals_tangent = B - marginals * B.sum(axis=0, keepdims=True)
-        else:
-            assert isinstance(parameter, RhoParameter)
+        elif isinstance(parameter, RhoParameter):
             group_associations = parameter.get_group_associations(self.groups)
             associations = self.groups.expand(group_associations)
 
@@ -607,6 +611,10 @@ class Market(Container):
                 )
                 marginals_tangent = group_associations * B - marginals * (group_associations.T @ B)
             marginals_tangent[~np.isfinite(marginals_tangent)] = 0
+        else:
+            assert isinstance(parameter, GammaParameter)
+            conditionals_tangent = np.zeros_like(conditionals)
+            marginals_tangent = np.zeros_like(marginals)
 
         # compute the tangent of probabilities with respect to the parameter
         probabilities_tangent = (
@@ -832,13 +840,22 @@ class Market(Container):
     def compute_omega_by_theta_jacobian(self, tilde_costs: Array, xi_jacobian: Array) -> Tuple[Array, List[Error]]:
         """Compute the Jacobian of omega (equivalently, of transformed marginal costs) with respect to theta."""
         errors: List[Error] = []
+
+        # compute the Jacobian of the markup term in the BLP-markup equation with respect to theta
         eta_jacobian, eta_jacobian_errors = self.compute_eta_by_theta_jacobian(xi_jacobian)
         errors.extend(eta_jacobian_errors)
+
+        # transform the Jacobian according to the marginal cost specification
         if self.costs_type == 'linear':
             omega_jacobian = -eta_jacobian
         else:
             assert self.costs_type == 'log'
             omega_jacobian = -eta_jacobian / np.exp(tilde_costs)
+
+        # incorporate the contributions from any parameters in gamma that haven't been concentrated out
+        for p, parameter in enumerate(self.parameters.unfixed):
+            if isinstance(parameter, GammaParameter):
+                omega_jacobian[:, [p]] = -parameter.get_product_characteristic(self)
         return omega_jacobian, errors
 
     def compute_micro(self, delta: Optional[Array] = None) -> Tuple[Array, Array, Array]:

@@ -126,7 +126,6 @@ class ProblemMarket(Market):
         # compute the Jacobian
         micro_jacobian = np.zeros((self.moments.MM, self.parameters.P))
         for p, parameter in enumerate(self.parameters.unfixed):
-            # derivatives with respect to linear parameters are zero
             if isinstance(parameter, LinearCoefficient):
                 continue
 
