@@ -430,6 +430,22 @@ def test_fixed_effects(
 
 
 @pytest.mark.usefixtures('simulated_problem')
+def test_special_ownership(simulated_problem: SimulatedProblemFixture) -> None:
+    """Test that ownership matrices constructed according to special cases take on expected forms."""
+    simulation, simulation_results, _, _, _ = simulated_problem
+
+    # test monopoly ownership matrices
+    monopoly_ownership1 = build_ownership(simulation_results.product_data, 'monopoly')
+    monopoly_ownership2 = build_ownership(simulation_results.product_data, lambda f, g: 1)
+    np.testing.assert_equal(monopoly_ownership1, monopoly_ownership2)
+    assert (monopoly_ownership1[~np.isnan(monopoly_ownership1)] == 1).all()
+
+    # test single product ownership matrices
+    single_ownership = build_ownership(simulation_results.product_data, 'single')
+    assert np.nansum(single_ownership) == simulation.N
+
+
+@pytest.mark.usefixtures('simulated_problem')
 def test_costs(simulated_problem: SimulatedProblemFixture) -> None:
     """Test that marginal costs computed under specified firm IDs and ownership are the same as costs computed when
     firm IDs and ownership are left unspecified.

@@ -1,6 +1,6 @@
 """Data construction."""
 
-from typing import Any, Callable, Dict, Iterator, List, Mapping, Optional
+from typing import Any, Callable, Dict, Iterator, List, Mapping, Optional, Union
 
 import numpy as np
 
@@ -59,7 +59,8 @@ def build_id_data(T: int, J: int, F: int) -> RecArray:
     })
 
 
-def build_ownership(product_data: Mapping, kappa_specification: Optional[Callable[[Any, Any], float]] = None) -> Array:
+def build_ownership(
+        product_data: Mapping, kappa_specification: Optional[Union[str, Callable[[Any, Any], float]]] = None) -> Array:
     r"""Build ownership matrices, :math:`O`.
 
     Ownership matrices are defined by their cooperation matrix counterparts, :math:`\kappa`. For each market :math:`t`,
@@ -70,15 +71,16 @@ def build_ownership(product_data: Mapping, kappa_specification: Optional[Callabl
     ----------
     product_data : `structured array-like`
         Each row corresponds to a product. Markets can have differing numbers of products. The following fields are
-        required:
+        required (except for ``firm_ids`` when ``kappa_specification`` is one of the special cases):
 
             - **market_ids** : (`object`) - IDs that associate products with markets.
 
-            - **firm_ids** : (`object`) - IDs that associate products with firms.
+            - **firm_ids** : (`object`) - IDs that associate products with firms. This field is ignored if
+              ``kappa_specification`` is one of the special cases and not a function.
 
-    kappa_specification : `callable, optional`
-        A function that specifies each market's cooperation matrix, :math:`\kappa`. The function is of the following
-        form::
+    kappa_specification : `str or callable, optional`
+        Specification for each market's cooperation matrix, :math:`\kappa`, which can either be a general function or a
+        string that implements a special case. The general function is is of the following form::
 
             kappa(f, g) -> value
 
@@ -91,6 +93,15 @@ def build_ownership(product_data: Mapping, kappa_specification: Optional[Callabl
 
         If ``firm_ids`` happen to be indices for an actual :math:`\kappa` matrix, ``lambda f, g: kappa[f, g]`` will
         build ownership matrices according to the matrix ``kappa``.
+
+        When one of the special cases is specified, ``firm_ids`` in ``product_data`` are not required and if specified
+        will be ignored:
+
+            - ``'monopoly'`` - Monopoly ownership matrices are all ones: :math:`O_{jk} = 1` for all :math:`j` and
+              :math:`k`.
+
+            - ``'single'`` - Single product firm ownership matrices are identity matrices: :math:`O_{jk} = 1` if
+              :math:`j = k` and :math:`0` otherwise.
 
     Returns
     -------
@@ -114,25 +125,26 @@ def build_ownership(product_data: Mapping, kappa_specification: Optional[Callabl
 
     """
 
-    # extract and validate IDs
-    market_ids = extract_matrix(product_data, 'market_ids')
-    firm_ids = extract_matrix(product_data, 'firm_ids')
-    if market_ids is None:
-        raise KeyError("product_data must have a market_ids field.")
-    if firm_ids is None:
-        raise KeyError("product_data must have a firm_ids field.")
-    if market_ids.shape[1] > 1:
-        raise ValueError("The market_ids field of product_data must be one-dimensional.")
-    if firm_ids.shape[1] > 1:
-        raise ValueError("The firm_ids field of product_data must be one-dimensional.")
-
     # validate or use the default kappa specification
     if kappa_specification is None:
         kappa_specification = lambda f, g: np.where(f == g, 1, 0).astype(options.dtype)
     elif callable(kappa_specification):
         kappa_specification = np.vectorize(kappa_specification, [options.dtype])
-    if not callable(kappa_specification):
-        raise ValueError("kappa_specification must be None or callable.")
+    elif kappa_specification not in {'monopoly', 'single'}:
+        raise ValueError("kappa_specification must be None, callable, 'monopoly', or 'single'.")
+
+    # extract and validate IDs
+    market_ids = extract_matrix(product_data, 'market_ids')
+    firm_ids = extract_matrix(product_data, 'firm_ids')
+    if market_ids is None:
+        raise KeyError("product_data must have a market_ids field.")
+    if market_ids.shape[1] > 1:
+        raise ValueError("The market_ids field of product_data must be one-dimensional.")
+    if callable(kappa_specification):
+        if firm_ids is None:
+            raise KeyError("product_data must have a firm_ids field when kappa_specification is not a special case.")
+        if firm_ids.shape[1] > 1:
+            raise ValueError("The firm_ids field of product_data must be one-dimensional.")
 
     # determine the overall number of products and the maximum number in a market
     market_indices = get_indices(market_ids)
@@ -142,9 +154,16 @@ def build_ownership(product_data: Mapping, kappa_specification: Optional[Callabl
     # construct the ownership matrices
     ownership = np.full((N, max_J), np.nan, options.dtype)
     for indices_t in market_indices.values():
-        ids_t = firm_ids[indices_t]
-        tiled_ids_t = np.tile(np.c_[ids_t], ids_t.size)
-        ownership[indices_t, :ids_t.size] = kappa_specification(tiled_ids_t, tiled_ids_t.T)
+        if kappa_specification == 'monopoly':
+            ownership[indices_t, :indices_t.size] = 1
+        elif kappa_specification == 'single':
+            ownership[indices_t, :indices_t.size] = np.eye(indices_t.size)
+        else:
+            assert callable(kappa_specification) and firm_ids is not None
+            ids_t = firm_ids[indices_t]
+            tiled_ids_t = np.tile(np.c_[ids_t], ids_t.size)
+            ownership[indices_t, :indices_t.size] = kappa_specification(tiled_ids_t, tiled_ids_t.T)
+
     return ownership
 
 
