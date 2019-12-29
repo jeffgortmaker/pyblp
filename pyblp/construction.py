@@ -138,16 +138,19 @@ def build_ownership(product_data: Mapping, kappa_specification: Optional[Callabl
     if not callable(kappa_specification):
         raise ValueError("kappa_specification must be None or callable.")
 
+    # identify markets
+    market_indices = get_indices(market_ids)
+
     # determine the overall number of products and the maximum number in a market
     N = market_ids.size
-    max_J = np.unique(market_ids, return_counts=True)[1].max()
+    max_J = max(i.size for i in market_indices.values())
 
     # construct the ownership matrices
     ownership = np.full((N, max_J), np.nan, options.dtype)
-    for t in np.unique(market_ids):
-        ids_t = firm_ids[market_ids.flat == t]
+    for indices_t in market_indices.values():
+        ids_t = firm_ids[indices_t]
         tiled_ids_t = np.tile(np.c_[ids_t], ids_t.size)
-        ownership[market_ids.flat == t, :ids_t.size] = kappa_specification(tiled_ids_t, tiled_ids_t.T)
+        ownership[indices_t, :ids_t.size] = kappa_specification(tiled_ids_t, tiled_ids_t.T)
     return ownership
 
 
