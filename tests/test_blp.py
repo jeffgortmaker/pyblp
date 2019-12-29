@@ -5,7 +5,6 @@ import tempfile
 from typing import Any, Callable, Dict, List, Optional, Tuple
 import warnings
 
-import linearmodels
 import numpy as np
 import pytest
 import scipy.optimize
@@ -738,7 +737,6 @@ def test_gradient_optionality(simulated_problem: SimulatedProblemFixture, scipy_
     """
     simulation, _, problem, solve_options, _ = simulated_problem
 
-    # define a custom optimization method that doesn't use gradients
     def custom_method(
             initial: Array, bounds: List[Tuple[float, float]], objective_function: Callable, _: Any) -> (
             Tuple[Array, bool]):
@@ -1005,8 +1003,8 @@ def test_objective_gradient(
     updated_solve_options['optimization'] = Optimization('return')
     exact = problem.solve(**updated_solve_options).gradient
 
-    # define a custom optimization routine that tests central finite differences around starting parameter values
     def test_finite_differences(theta: Array, _: Any, objective_function: Callable, __: Any) -> Tuple[Array, bool]:
+        """Test central finite differences around starting parameter values."""
         estimated = np.zeros_like(exact)
         change = 10 * np.sqrt(np.finfo(np.float64).eps)
         for index in range(theta.size):
@@ -1062,10 +1060,10 @@ def test_logit(
     W_options = {'clusters': simulation_results.product_data.clustering_ids} if W_type == 'clustered' else {}
     se_options = {'clusters': simulation_results.product_data.clustering_ids} if se_type == 'clustered' else {}
 
-    # monkey-patch a problematic linearmodels method that shouldn't be called but is anyways
+    # solve the problem with linearmodels, monkey-patching a problematic linearmodels method that shouldn't be called
+    #   but is anyways
+    import linearmodels
     linearmodels.IVLIML._estimate_kappa = lambda _: 1
-
-    # solve the problem with linearmodels
     model = linearmodels.IVGMM(
         delta, exog=None, endog=problem.products.X1, instruments=problem.products.ZD, center=center_moments,
         weight_type=W_type, **W_options

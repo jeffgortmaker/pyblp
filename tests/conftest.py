@@ -40,12 +40,10 @@ def configure() -> Iterator[None]:
         if np.finfo(options.dtype).dtype == old_dtype:
             pytest.skip(f"The {dtype_string} data type is the same as the default one in this environment.")
 
-    # define a patch for SciPy functions
     def patch(uncached: Callable) -> Callable:
         """Patch a function by caching its array arguments."""
         mapping: Dict[Hashable, Array] = {}
 
-        # define the cached function
         def cached(*args: Array, **kwargs: Any) -> Array:
             """Replicate the function, caching its results."""
             nonlocal mapping
@@ -53,6 +51,7 @@ def configure() -> Iterator[None]:
             if key not in mapping:
                 mapping[key] = uncached(*args, **kwargs)
             return mapping[key]
+
         return cached
 
     # patch the functions

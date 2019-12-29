@@ -134,6 +134,7 @@ def update_matrices(matrices: RecArray, update_mapping: Dict) -> RecArray:
                 mapping[(matrices.dtype.fields[key][2], key)] = (matrices[key], matrices[key].dtype)
             else:
                 mapping[key] = (matrices[key], matrices[key].dtype)
+
     return structure_matrices(mapping)
 
 
@@ -155,6 +156,7 @@ def extract_matrix(structured_array_like: Mapping, key: Any) -> Optional[Array]:
             index += 1
             if part.size > 0:
                 parts.append(part)
+
         return np.hstack(parts) if parts else None
 
 
@@ -233,6 +235,7 @@ def format_se(se: Any) -> str:
     for string in ["NAN", "-INF", "+INF"]:
         if string in formatted:
             return formatted.replace(string, f"({string})")
+
     return f"({formatted})"
 
 
@@ -245,6 +248,7 @@ def format_options(mapping: Options) -> str:
         elif isinstance(value, float):
             value = format_number(value)
         strings.append(f'{key}: {value}')
+
     joined = ', '.join(strings)
     return f'{{{joined}}}'
 
@@ -294,18 +298,9 @@ def format_table(
 
 
 def get_indices(ids: Array) -> Dict[Hashable, Array]:
-    """get_indices takes a one-dimensional array input and returns a
-    dictionary such that the keys are the unique values of the array
-    and the values are the indices where the key appears in the array.
-
-    Examples
-    --------
-
-    >>> ids = np.array([1, 2, 1, 2, 3, 3, 1, 2])
-    >>> get_indices(ids)
-    {1: array([0, 2, 6]), 2: array([1, 3, 7]), 3: array([4, 5])}
+    """From a one-dimensional array input, construct a dictionary with keys that are the unique values of the array
+    and values that are the indices where the key appears in the array.
     """
-
     flat = ids.flatten()
     sort_indices = flat.argsort(kind='mergesort')
     sorted_ids = flat[sort_indices]
@@ -535,6 +530,7 @@ class NumericalErrorHandler(object):
             if detector.detected is not None:
                 returned[-1].append(detector.detected)
             return returned
+
         return wrapper
 
 

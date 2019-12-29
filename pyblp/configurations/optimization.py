@@ -222,12 +222,15 @@ class Optimization(StringRepresentation):
         if method == 'return' and self._method_options:
             raise ValueError("The return method does not support any options.")
         if method == 'knitro':
+            # get the location of the Knitro installation
             knitro_dir = self._method_options.pop('knitro_dir')
             if not isinstance(knitro_dir, (Path, str)):
                 raise OSError(
                     "If specified, the knitro_dir optimization option must point to the Knitro installation directory."
                     "Otherwise, the KNITRODIR environment variable must be configured."
                 )
+
+            # add relevant paths
             for subdir in ['lib', 'examples/Python']:
                 full_path = Path(knitro_dir) / subdir
                 if not full_path.is_dir():
@@ -237,6 +240,8 @@ class Optimization(StringRepresentation):
                         f"knitro_dir optimization option should point to the Knitro installation directory."
                     )
                 sys.path.append(str(full_path))
+
+            # make sure that Knitro can be initialized
             with knitro_context_manager():
                 pass
 
@@ -253,13 +258,11 @@ class Optimization(StringRepresentation):
         # initialize counters
         iterations = evaluations = 0
 
-        # define a callback
         def iteration_callback() -> None:
             """Count the number of major iterations."""
             nonlocal iterations
             iterations += 1
 
-        # define a contraction wrapper
         def objective_wrapper(raw_values: Any) -> ObjectiveResults:
             """Normalize arrays so they work with all types of routines. Also count the total number of contraction
             evaluations.
@@ -299,7 +302,6 @@ def scipy_optimizer(
         Tuple[Array, bool]):
     """Optimize with a SciPy method."""
 
-    # wrap the objective function
     def wrapper(x: Array) -> Union[float, Tuple[float, Array]]:
         """Either return the objective value or a tuple including the gradient."""
         if compute_gradient:
@@ -327,7 +329,6 @@ def knitro_optimizer(
         iterations = 0
         cache: Optional[Tuple[Array, ObjectiveResults]] = None
 
-        # define a callback for objective and gradient computation
         def combined_callback(
                 request_code: int, _: Any, __: Any, ___: Any, ____: Any, values: Array, _____: Any,
                 objective_store: Array, ______: Any, gradient_store: Array, *_______: Any) -> int:
@@ -430,6 +431,7 @@ def knitro_context_manager() -> Iterator[Tuple[Any, Any]]:
 
     # modify older version of Knitro to work with NumPy
     try:
+        # noinspection PyUnresolvedReferences
         import knitroNumPy
         knitro.KTR_array_handler._cIntArray = knitroNumPy._cIntArray
         knitro.KTR_array_handler._cDoubleArray = knitroNumPy._cDoubleArray

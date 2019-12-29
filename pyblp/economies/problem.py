@@ -787,7 +787,6 @@ class ProblemEconomy(Economy):
         if self.K2 == 0 and moments.MM == 0 and (parameters.P == 0 or not compute_jacobian):
             delta = self._compute_logit_delta(rho)
         else:
-            # define a factory for solving the demand side of problem markets
             def market_factory(s: Hashable) -> Tuple[ProblemMarket, Array, Array, Iteration, str, bool, bool]:
                 """Build a market along with arguments used to compute delta, micro moment values, and Jacobians."""
                 market_s = ProblemMarket(self, s, parameters, sigma, pi, rho, moments=moments)
@@ -862,7 +861,6 @@ class ProblemEconomy(Economy):
         omega_jacobian = np.zeros((self.N, parameters.P), options.dtype)
         clipped_costs = np.zeros((self.N, 1), np.bool)
 
-        # define a factory for solving the supply side of problem markets
         def market_factory(s: Hashable) -> Tuple[ProblemMarket, Array, Array, Bounds, bool]:
             """Build a market along with arguments used to compute transformed marginal costs and their Jacobian."""
             market_s = ProblemMarket(self, s, parameters, sigma, pi, rho, beta, delta)
@@ -890,6 +888,7 @@ class ProblemEconomy(Economy):
             if np.any(bad_omega_jacobian_index):
                 omega_jacobian[bad_omega_jacobian_index] = progress.omega_jacobian[bad_omega_jacobian_index]
                 errors.append(exceptions.OmegaByThetaJacobianReversionError(bad_omega_jacobian_index))
+
         return tilde_costs, omega_jacobian, clipped_costs, errors
 
 

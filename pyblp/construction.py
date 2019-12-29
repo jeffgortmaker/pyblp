@@ -49,14 +49,10 @@ def build_id_data(T: int, J: int, F: int) -> RecArray:
        \end{examplenotebook}
 
     """
-
-    # validate the counts
     if not isinstance(T, int) or not isinstance(F, int) or T < 1 or F < 1:
         raise ValueError("Both T and F must be positive ints.")
     if not isinstance(J, int) or J < F:
         raise ValueError("J must be an int that is at least F.")
-
-    # build and structure IDs
     return structure_matrices({
         'market_ids': (np.repeat(np.arange(T), J).astype(np.int), np.object),
         'firm_ids': (np.floor(np.tile(np.arange(J), T) * F / J).astype(np.int), np.object)
@@ -138,10 +134,8 @@ def build_ownership(product_data: Mapping, kappa_specification: Optional[Callabl
     if not callable(kappa_specification):
         raise ValueError("kappa_specification must be None or callable.")
 
-    # identify markets
-    market_indices = get_indices(market_ids)
-
     # determine the overall number of products and the maximum number in a market
+    market_indices = get_indices(market_ids)
     N = market_ids.size
     max_J = max(i.size for i in market_indices.values())
 
@@ -388,7 +382,6 @@ def build_differentiation_instruments(
             distances_mapping[k] = x - x.T
             np.fill_diagonal(distances_mapping[k], np.nan)
 
-        # define a function that generates the terms used to create the instruments
         def generate_instrument_terms() -> Iterator[Array]:
             """Generate terms that will be summed to create instruments."""
             for k1 in range(K):
@@ -414,7 +407,6 @@ def build_differentiation_instruments(
             other_blocks[-1].append((ownership * term).sum(axis=1, keepdims=True))
             rival_blocks[-1].append((~ownership * term).sum(axis=1, keepdims=True))
 
-    # stack the blocks
     return np.c_[np.block(other_blocks), np.block(rival_blocks)]
 
 
@@ -463,14 +455,10 @@ def build_integration(integration: Integration, dimensions: int) -> RecArray:
        \end{examplenotebook}
 
     """
-
-    # validate the arguments
     if not isinstance(integration, Integration):
         raise TypeError("integration must be an Integration instance.")
     if not isinstance(dimensions, int) or dimensions < 1:
         raise ValueError("dimensions must be a positive integer.")
-
-    # build and structure the nodes and weights
     nodes, weights = integration._build(dimensions)
     return structure_matrices({
         'weights': (weights, options.dtype),
@@ -518,6 +506,7 @@ def build_matrix(formulation: Formulation, data: Mapping) -> Array:
         matrix, errors = absorb(matrix)
         if errors:
             raise exceptions.MultipleErrors(errors)
+
     return matrix
 
 
@@ -571,4 +560,5 @@ def data_to_dict(data: RecArray) -> Dict[str, Array]:
             if new_key in data.dtype.names:
                 raise KeyError(f"'{key}' cannot be split into columns because '{new_key}' is already a field.")
             mapping[new_key] = data[key][:, index].flatten()
+
     return mapping

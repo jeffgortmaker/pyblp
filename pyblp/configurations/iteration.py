@@ -251,13 +251,11 @@ class Iteration(StringRepresentation):
         # initialize counters
         iterations = evaluations = 0
 
-        # define an iteration callback
         def iteration_callback() -> None:
             """Count the number of major iterations."""
             nonlocal iterations
             iterations += 1
 
-        # define a contraction wrapper
         def contraction_wrapper(raw_values: Any) -> ContractionResults:
             """Normalize arrays so they work with all types of routines. Also count the total number of contraction
             evaluations.
@@ -317,7 +315,6 @@ def scipy_iterator(
     # record whether non-finite values were encountered during fixed point iteration
     failed = False
 
-    # wrap the contraction
     def contraction_wrapper(x: Array) -> Union[Tuple[Array, Array], Array]:
         """Transform the fixed point into a root-finding problem, check for errors, and call the callback function here
         if calling it isn't supported by the routine.

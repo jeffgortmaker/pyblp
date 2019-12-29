@@ -265,7 +265,6 @@ class Parameters(object):
             # market-level computation is needed to compute default bounds
             from .markets.market import Market
 
-            # define a factory for computing default bounds
             def market_factory(s: Hashable) -> Tuple[Market, List[Parameter]]:
                 """Build a market along with arguments used to compute default parameter bounds."""
                 market_s = Market(economy, s, self, self.sigma, self.pi, self.rho)
@@ -480,7 +479,6 @@ class Parameters(object):
             if row_index < sigma_like.shape[1] - 1:
                 data.append([""] * len(se_row))
 
-        # format the table
         return format_table(header, *data, title=f"Nonlinear Coefficient {title}", line_indices=line_indices)
 
     def compress(self) -> Array:
@@ -522,11 +520,15 @@ class Parameters(object):
             (BetaParameter, beta_like),
             (GammaParameter, gamma_like)
         ]
+
+        # fill values of unfixed parameters
         for parameter, value in zip(self.unfixed, theta_like):
             for parameter_type, values in items:
                 if isinstance(parameter, parameter_type):
                     values[parameter.location] = value
                     break
+
+        # if they aren't null, fill values of fixed parameters
         if not nullify:
             sigma_like[np.triu_indices_from(sigma_like, 1)] = 0
             for parameter in self.fixed:
@@ -534,4 +536,5 @@ class Parameters(object):
                     if isinstance(parameter, parameter_type):
                         values[parameter.location] = parameter.value
                         break
+
         return sigma_like, pi_like, rho_like, beta_like, gamma_like

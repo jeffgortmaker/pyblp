@@ -31,6 +31,7 @@ def precisely_identify_collinearity(x: Array) -> Tuple[Array, bool]:
                 collinear = np.abs(r.diagonal()) < options.collinear_atol + options.collinear_rtol * x.std(axis=0)
         except (ValueError, scipy.linalg.LinAlgError, scipy.linalg.LinAlgWarning):
             successful = False
+
     return collinear, successful
 
 
@@ -47,6 +48,7 @@ def precisely_identify_psd(x: Array) -> Tuple[bool, bool]:
                 psd = np.allclose((v.T * s) @ v, x, atol=options.psd_atol, rtol=options.psd_rtol)
         except (ValueError, scipy.linalg.LinAlgError, scipy.linalg.LinAlgWarning):
             psd = successful = False
+
     return psd, successful
 
 
@@ -60,6 +62,7 @@ def precisely_compute_eigenvalues(x: Array) -> Tuple[Array, bool]:
     except (ValueError, scipy.linalg.LinAlgError, scipy.linalg.LinAlgWarning):
         eigenvalues = np.full_like(np.diag(x), np.nan)
         successful = False
+
     return eigenvalues, successful
 
 
@@ -73,6 +76,7 @@ def precisely_solve(a: Array, b: Array) -> Tuple[Array, bool]:
     except (ValueError, scipy.linalg.LinAlgError, scipy.linalg.LinAlgWarning):
         solved = np.full_like(b, np.nan)
         successful = False
+
     return solved, successful
 
 
@@ -86,6 +90,7 @@ def precisely_invert(x: Array) -> Tuple[Array, bool]:
     except (ValueError, scipy.linalg.LinAlgError, scipy.linalg.LinAlgWarning):
         inverted = np.full_like(x, np.nan)
         successful = False
+
     return inverted, successful
 
 
@@ -99,6 +104,7 @@ def approximately_solve(a: Array, b: Array) -> Tuple[Array, Optional[str]]:
     except Exception:
         inverse, replacement = approximately_invert(a)
         solved = inverse @ b
+
     return solved, replacement
 
 
@@ -107,6 +113,7 @@ def approximately_invert(x: Array) -> Tuple[Array, Optional[str]]:
     inverted = np.full_like(x, np.nan)
     replacement = None
     if x.size > 0:
+        # collect the different inversion methods
         methods: List[Tuple[Callable, Optional[str]]] = []
         if options.pseudo_inverses:
             methods.append((scipy.linalg.pinv, None))
@@ -116,6 +123,8 @@ def approximately_invert(x: Array) -> Tuple[Array, Optional[str]]:
             lambda y: np.diag(1 / y.diagonal()),
             "inverted diagonal terms because the Moore-Penrose pseudo-inverse could not be computed"
         ))
+
+        # use the different methods to invert the matrix
         for invert, replacement in methods:
             try:
                 with warnings.catch_warnings():
@@ -128,4 +137,5 @@ def approximately_invert(x: Array) -> Tuple[Array, Optional[str]]:
                 break
             except (scipy.linalg.LinAlgError, scipy.linalg.LinAlgWarning):
                 pass
+
     return inverted, replacement

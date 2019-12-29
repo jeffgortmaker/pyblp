@@ -506,7 +506,6 @@ class ProblemResults(Results):
             header.append(("Covariance Matrix", "Condition Number"))
             values.append(format_number(compute_condition_number(self.parameter_covariances)))
 
-        # format the table
         return format_table(header, values, title="Problem Results Summary")
 
     def _format_cumulative_statistics(self) -> str:
@@ -531,7 +530,6 @@ class ProblemResults(Results):
                 str(self.cumulative_contraction_evaluations.sum())]
             )
 
-        # format the table
         return format_table(header, values, title="Cumulative Statistics")
 
     def to_dict(
@@ -645,14 +643,10 @@ class ProblemResults(Results):
             - :doc:`Tutorial </tutorial>`
 
         """
-
-        # validate the other set of results
         if not isinstance(unrestricted, ProblemResults):
             raise TypeError("unrestricted must be another ProblemResults.")
         if unrestricted.problem.N != self.problem.N:
             raise ValueError("unrestricted must have as many observations as these results.")
-
-        # compute the statistic
         return self.problem.N * float(self.objective - unrestricted.objective)
 
     def run_lm_test(self) -> float:
@@ -851,7 +845,6 @@ class ProblemResults(Results):
         true_X1 = self.problem._compute_true_X1()
         true_X3 = self.problem._compute_true_X3()
 
-        # define a factory for computing bootstrapped prices, shares, and delta in markets
         def market_factory(
                 pair: Tuple[int, Hashable]) -> Tuple[ResultsMarket, Array, Optional[Array], Optional[Iteration]]:
             """Build a market along with arguments used to compute equilibrium prices and shares along with delta."""
@@ -1117,7 +1110,6 @@ class ProblemResults(Results):
         if self.problem.costs_type == 'log':
             costs = np.exp(costs)
 
-        # define a factory for computing realizations of prices, shares, and delta in markets
         def market_factory(s: Hashable) -> Tuple[ResultsMarket, Array, Optional[Array], Optional[Iteration]]:
             """Build a market along with arguments used to compute equilibrium prices and shares along with delta."""
             market_s = ResultsMarket(self.problem, s, self._parameters, self.sigma, self.pi, self.rho, self.beta, delta)
@@ -1153,7 +1145,6 @@ class ProblemResults(Results):
             )
             errors.extend(supply_errors)
 
-        # return all of the information associated with this realization
         return data_override['prices'], data_override['shares'], xi_jacobian, omega_jacobian, iteration_stats, errors
 
     def _compute_demand_realization(self, data_override: Dict[str, Array], delta: Array) -> Tuple[Array, List[Error]]:
@@ -1167,7 +1158,6 @@ class ProblemResults(Results):
         if self._parameters.P == 0:
             return xi_jacobian, errors
 
-        # define a factory for computing the Jacobian of xi with respect to theta in markets
         def market_factory(s: Hashable) -> Tuple[ResultsMarket]:
             """Build a market with the data realization along with arguments used to compute the Jacobian."""
             market_s = ResultsMarket(
@@ -1190,6 +1180,7 @@ class ProblemResults(Results):
         if np.any(bad_jacobian_index):
             xi_jacobian[bad_jacobian_index] = self.xi_by_theta_jacobian[bad_jacobian_index]
             errors.append(exceptions.XiByThetaJacobianReversionError(bad_jacobian_index))
+
         return xi_jacobian, errors
 
     def _compute_supply_realization(
@@ -1200,7 +1191,6 @@ class ProblemResults(Results):
         """
         errors: List[Error] = []
 
-        # define a factory for computing the Jacobian of omega with respect to theta in markets
         def market_factory(s: Hashable) -> Tuple[ResultsMarket, Array, Array]:
             """Build a market with the data realization along with arguments used to compute the Jacobians."""
             market_s = ResultsMarket(
@@ -1229,6 +1219,7 @@ class ProblemResults(Results):
         if np.any(bad_jacobian_index):
             omega_jacobian[bad_jacobian_index] = self.omega_by_theta_jacobian[bad_jacobian_index]
             errors.append(exceptions.OmegaByThetaJacobianReversionError(bad_jacobian_index))
+
         return omega_jacobian, errors
 
     def importance_sampling(
@@ -1378,7 +1369,6 @@ class ProblemResults(Results):
         errors: List[Error] = []
         market_indices = get_indices(precise_agents.market_ids)
 
-        # define a factory for precisely estimating delta
         def market_factory(s: Hashable) -> Tuple[ResultsMarket, Array, Iteration, str]:
             """Build a market along with arguments used to compute delta."""
             market_s = ResultsMarket(
@@ -1396,6 +1386,7 @@ class ProblemResults(Results):
             precise_delta[self.problem._product_market_indices[t]] = delta_t
             iteration_stats[t] = stats_t
             errors.extend(errors_t)
+
         return precise_delta, iteration_stats, errors
 
     def _compute_importance_weights(
@@ -1405,7 +1396,6 @@ class ProblemResults(Results):
         errors: List[Error] = []
         market_indices = get_indices(sampling_agents.market_ids)
 
-        # define a factory for computing probabilities
         def market_factory(s: Hashable) -> Tuple[ResultsMarket]:
             """Build a market use to compute probabilities."""
             market_s = ResultsMarket(
@@ -1437,6 +1427,7 @@ class ProblemResults(Results):
                 weights_t = np.zeros_like(inside_probabilities_t)
                 weights_t[sampled_indices_t] = 1 / inside_probabilities_t[sampled_indices_t]
                 weights[market_indices[t]] = weights_t[:, None] / weights_t.sum()
+
         return weights, errors
 
     def _coerce_matrices(self, matrices: Any, market_ids: Array) -> Array:
@@ -1450,29 +1441,32 @@ class ProblemResults(Results):
 
     def _coerce_optional_costs(self, costs: Optional[Any], market_ids: Array) -> Array:
         """Coerce optional array-like costs into a column vector and validate it."""
-        if costs is not None:
-            costs = np.c_[np.asarray(costs, options.dtype)]
-            rows = sum(i.size for t, i in self.problem._product_market_indices.items() if t in market_ids)
-            if costs.shape != (rows, 1):
-                raise ValueError(f"costs must be None or a {rows}-vector.")
+        if costs is None:
+            return None
+        costs = np.c_[np.asarray(costs, options.dtype)]
+        rows = sum(i.size for t, i in self.problem._product_market_indices.items() if t in market_ids)
+        if costs.shape != (rows, 1):
+            raise ValueError(f"costs must be None or a {rows}-vector.")
         return costs
 
     def _coerce_optional_prices(self, prices: Optional[Any], market_ids: Array) -> Array:
         """Coerce optional array-like prices into a column vector and validate it."""
-        if prices is not None:
-            prices = np.c_[np.asarray(prices, options.dtype)]
-            rows = sum(i.size for t, i in self.problem._product_market_indices.items() if t in market_ids)
-            if prices.shape != (rows, 1):
-                raise ValueError(f"prices must be None or a {rows}-vector.")
+        if prices is None:
+            return None
+        prices = np.c_[np.asarray(prices, options.dtype)]
+        rows = sum(i.size for t, i in self.problem._product_market_indices.items() if t in market_ids)
+        if prices.shape != (rows, 1):
+            raise ValueError(f"prices must be None or a {rows}-vector.")
         return prices
 
     def _coerce_optional_shares(self, shares: Optional[Any], market_ids: Array) -> Array:
         """Coerce optional array-like shares into a column vector and validate it."""
-        if shares is not None:
-            shares = np.c_[np.asarray(shares, options.dtype)]
-            rows = sum(i.size for t, i in self.problem._product_market_indices.items() if t in market_ids)
-            if shares.shape != (rows, 1):
-                raise ValueError(f"shares must be None or a {rows}-vector.")
+        if shares is None:
+            return None
+        shares = np.c_[np.asarray(shares, options.dtype)]
+        rows = sum(i.size for t, i in self.problem._product_market_indices.items() if t in market_ids)
+        if shares.shape != (rows, 1):
+            raise ValueError(f"shares must be None or a {rows}-vector.")
         return shares
 
     def _combine_arrays(
@@ -1488,7 +1482,6 @@ class ProblemResults(Results):
         # keep track of how long it takes to compute the arrays
         start_time = time.time()
 
-        # define a factory for computing arrays in markets
         def market_factory(s: Hashable) -> tuple:
             """Build a market along with arguments used to compute arrays."""
             indices_s = self.problem._product_market_indices[s]

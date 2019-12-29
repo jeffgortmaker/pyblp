@@ -213,7 +213,6 @@ class Formulation(StringRepresentation):
                     if symbol.name in underlying_data:
                         underlying_data[symbol.name] = indicator
 
-        # build the matrix
         matrix = build_matrix(matrix_design, data_mapping)
         return matrix[:, column_indices], column_formulations, underlying_data
 
@@ -242,7 +241,6 @@ class Formulation(StringRepresentation):
                 factor_columns.append(data_mapping[symbol.name])
             ids_columns.append(interact_ids(*factor_columns))
 
-        # build the matrix of IDs
         return np.column_stack(ids_columns)
 
     def _build_absorb(self, ids: Array) -> Callable[[Array], Tuple[Array, List[Error]]]:
@@ -255,7 +253,6 @@ class Formulation(StringRepresentation):
             options=self._absorb_options
         )
 
-        # construct the absorption function
         def absorb(matrix: Array) -> Tuple[Array, List[Error]]:
             """Handle any absorption errors."""
             errors: List[Error] = []
@@ -264,6 +261,7 @@ class Formulation(StringRepresentation):
             except Exception as exception:
                 errors.append(exceptions.AbsorptionError(exception))
             return matrix, errors
+
         return absorb
 
 
@@ -462,6 +460,7 @@ def parse_term_expression(term: patsy.desc.Term) -> sp.Expr:
             expression *= parse_expression(factor.name())
         except Exception as exception:
             raise patsy.PatsyError("Failed to parse a term.", factor.origin) from exception
+
     return expression
 
 
@@ -480,7 +479,6 @@ def parse_expression(string: str, mark_categorical: bool = False) -> sp.Expr:
     mapping = {n: sp.Function(n) for n in patsy_function_names}
     mapping.update({n: getattr(sp, n) for n in sympy_function_names | sympy_class_names})
 
-    # define a function that validates a list of tokens into which the string is broken and adds new symbols
     def transform_tokens(tokens: List[Tuple[int, str]], _: Any, __: Any) -> List[Tuple[int, str]]:
         """Validate a list of tokens and add any unrecognized names as new SymPy symbols."""
         transformed: List[Tuple[int, str]] = []
@@ -500,6 +498,7 @@ def parse_expression(string: str, mark_categorical: bool = False) -> sp.Expr:
                 raise ValueError(f"The name '{value}' is invalid.")
             transformed.extend([(token.NAME, 'Symbol'), (token.OP, '('), (token.NAME, repr(value)), (token.OP, ')')])
             symbol_candidate = value
+
         return transformed
 
     # define a function that validates the appearance of categorical marker functions
@@ -526,6 +525,7 @@ def parse_expression(string: str, mark_categorical: bool = False) -> sp.Expr:
     for name in patsy_function_names:
         if name != 'C' or not mark_categorical:
             expression = expression.replace(mapping[name], sp.Id)
+
     return expression
 
 

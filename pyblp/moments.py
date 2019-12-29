@@ -165,7 +165,6 @@ class Moments(object):
             for m, value in enumerate(values):
                 data[m].append(format_number(value))
 
-        # format the table
         return format_table(header, *data, title=title)
 
 

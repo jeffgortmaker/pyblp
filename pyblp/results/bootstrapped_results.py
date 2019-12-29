@@ -131,29 +131,32 @@ class BootstrappedResults(Results):
 
     def _coerce_optional_costs(self, costs: Optional[Any], market_ids: Array) -> Array:
         """Coerce optional array-like costs into a column vector tensor and validate it."""
-        if costs is not None:
-            costs = np.atleast_3d(np.asarray(costs, options.dtype))
-            rows = sum(i.size for t, i in self.problem._product_market_indices.items() if t in market_ids)
-            if costs.shape != (self.draws, rows, 1):
-                raise ValueError(f"costs must be None or {self.draws} by {rows}.")
+        if costs is None:
+            return None
+        costs = np.atleast_3d(np.asarray(costs, options.dtype))
+        rows = sum(i.size for t, i in self.problem._product_market_indices.items() if t in market_ids)
+        if costs.shape != (self.draws, rows, 1):
+            raise ValueError(f"costs must be None or {self.draws} by {rows}.")
         return costs
 
     def _coerce_optional_prices(self, prices: Optional[Any], market_ids: Array) -> Array:
         """Coerce optional array-like prices into a column vector tensor and validate it."""
-        if prices is not None:
-            prices = np.atleast_3d(np.asarray(prices, options.dtype))
-            rows = sum(i.size for t, i in self.problem._product_market_indices.items() if t in market_ids)
-            if prices.shape != (self.draws, rows, 1):
-                raise ValueError(f"prices must be None or {self.draws} by {rows}.")
+        if prices is None:
+            return None
+        prices = np.atleast_3d(np.asarray(prices, options.dtype))
+        rows = sum(i.size for t, i in self.problem._product_market_indices.items() if t in market_ids)
+        if prices.shape != (self.draws, rows, 1):
+            raise ValueError(f"prices must be None or {self.draws} by {rows}.")
         return prices
 
     def _coerce_optional_shares(self, shares: Optional[Any], market_ids: Array) -> Array:
         """Coerce optional array-like shares into a column vector tensor and validate it."""
-        if shares is not None:
-            shares = np.atleast_3d(np.asarray(shares, options.dtype))
-            rows = sum(i.size for t, i in self.problem._product_market_indices.items() if t in market_ids)
-            if shares.shape != (self.draws, rows, 1):
-                raise ValueError(f"shares must be None or {self.draws} by {rows}.")
+        if shares is None:
+            return shares
+        shares = np.atleast_3d(np.asarray(shares, options.dtype))
+        rows = sum(i.size for t, i in self.problem._product_market_indices.items() if t in market_ids)
+        if shares.shape != (self.draws, rows, 1):
+            raise ValueError(f"shares must be None or {self.draws} by {rows}.")
         return shares
 
     def _combine_arrays(
@@ -169,7 +172,6 @@ class BootstrappedResults(Results):
         # keep track of how long it takes to compute the arrays
         start_time = time.time()
 
-        # define a factory for computing bootstrapped arrays in markets
         def market_factory(pair: Tuple[int, Hashable]) -> tuple:
             """Build a market with bootstrapped data along with arguments used to compute arrays."""
             c, s = pair

@@ -150,8 +150,6 @@ class Market(Container):
 
     def compute_default_bounds(self, nonlinear_parameters: List[Parameter]) -> List[Tuple[Array, Array]]:
         """Compute default bounds for nonlinear parameters."""
-
-        # define a function to normalize bounds
         def normalize(x: float) -> float:
             """Reduce an initial parameter bound by 1% and round it to two significant figures."""
             if not np.isfinite(x) or x == 0:
@@ -186,6 +184,7 @@ class Market(Container):
                 else:
                     assert isinstance(parameter, RhoParameter)
                     bounds.append((0, normalize(1 - min(1, mu_norm / mu_max))))
+
         return bounds
 
     def update_delta_with_variable(self, name: str, variable: Array) -> Array:
@@ -202,6 +201,7 @@ class Market(Container):
         for index, formulation in enumerate(self._X1_formulations):
             if name in formulation.names:
                 delta += self.beta[index] * (formulation.evaluate(self.products, override) - self.products[name])
+
         return delta
 
     def update_mu_with_variable(self, name: str, variable: Array) -> Array:
@@ -217,6 +217,7 @@ class Market(Container):
         for index, formulation in enumerate(self._X2_formulations):
             if name in formulation.names:
                 X2[:, [index]] = formulation.evaluate(self.products, override)
+
         return self.compute_mu(X2)
 
     def compute_X1_derivatives(self, name: str, variable: Optional[Array] = None) -> Array:
@@ -226,6 +227,7 @@ class Market(Container):
         for index, formulation in enumerate(self._X1_formulations):
             if name in formulation.names:
                 derivatives[:, [index]] = formulation.evaluate_derivative(name, self.products, override)
+
         return derivatives
 
     def compute_X2_derivatives(self, name: str, variable: Optional[Array] = None) -> Array:
@@ -235,6 +237,7 @@ class Market(Container):
         for index, formulation in enumerate(self._X2_formulations):
             if name in formulation.names:
                 derivatives[:, [index]] = formulation.evaluate_derivative(name, self.products, override)
+
         return derivatives
 
     def compute_utility_derivatives(self, name: str, variable: Optional[Array] = None) -> Array:
@@ -350,11 +353,9 @@ class Market(Container):
                     jacobian = (probabilities @ weighted_probabilities) / shares
                     return x, None, jacobian
             else:
-                # pre-compute additional components for the nested contraction
                 dampener = 1 - self.rho
                 rho_membership = self.rho * self.get_membership_matrix()
 
-                # define the nested contraction
                 def contraction(x: Array) -> ContractionResults:
                     """Compute the next linear delta and optionally its Jacobian under nesting."""
                     probabilities, conditionals = compute_probabilities(x)
@@ -399,11 +400,9 @@ class Market(Container):
                 jacobian = x / x0.T * (probabilities @ weighted_probabilities) / shares
                 return x, None, jacobian
         else:
-            # pre-compute additional components for the nested contraction
             dampener = 1 - self.rho
             rho_membership = self.rho * self.get_membership_matrix()
 
-            # define the nested contraction
             def contraction(x: Array) -> ContractionResults:
                 """Compute the next exponentiated delta and optionally its Jacobian under nesting."""
                 probabilities, conditionals = compute_probabilities(x)
@@ -506,7 +505,6 @@ class Market(Container):
             derivatives = self.compute_utility_derivatives('prices')
             get_derivatives = lambda _: derivatives
 
-        # define the contraction
         def contraction(x: Array) -> ContractionResults:
             """Compute the next equilibrium prices."""
             zeta, capital_lamda_diagonal = self.compute_zeta(costs, ownership_matrix, get_derivatives(x), x)
@@ -818,7 +816,6 @@ class Market(Container):
                 capital_delta_tangent @ eta + capital_delta_tensor_times_eta.T @ xi_jacobian[:, [p]]
             )
 
-        # return the filled Jacobian
         return eta_jacobian, errors
 
     def compute_xi_by_theta_jacobian(self, delta: Optional[Array] = None) -> Tuple[Array, List[Error]]:
@@ -877,4 +874,5 @@ class Market(Container):
             demeaned_z = z - z.T @ self.agents.weights
             demeaned_d = d - d.T @ self.agents.weights
             micro[m] = demeaned_z.T @ (self.agents.weights * demeaned_d) - moment.value
+
         return micro, micro_probabilities, micro_conditionals

@@ -152,9 +152,13 @@ class Integration(StringRepresentation):
 
     def _build_many(self, dimensions: int, ids: Iterable) -> Tuple[Array, Array, Array]:
         """Build concatenated IDs, nodes, and weights for each ID."""
+
+        # seed any underlying random number generator
         builder = self._builder
         if self._specification in {'monte_carlo', 'lhs', 'mlhs'}:
             builder = functools.partial(builder, state=np.random.RandomState(self._specification_options.get('seed')))
+
+        # build the arrays of IDs, nodes, and weights ID-by-ID
         count = 0
         ids_list: List[Array] = []
         nodes_list: List[Array] = []
@@ -168,6 +172,7 @@ class Integration(StringRepresentation):
             nodes_list.append(nodes)
             weights_list.append(weights)
             count += weights.size
+
         return np.concatenate(ids_list), np.concatenate(nodes_list), np.concatenate(weights_list)
 
     def _build(self, dimensions: int) -> Tuple[Array, Array]:

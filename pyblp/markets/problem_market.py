@@ -57,6 +57,7 @@ class ProblemMarket(Market):
             if compute_micro_covariances:
                 micro_covariances, micro_covariances_errors = self.safely_compute_micro_covariances(micro_probabilities)
                 errors.extend(micro_covariances_errors)
+
         return delta, micro, xi_jacobian, micro_jacobian, micro_covariances, stats, errors
 
     def solve_supply(
@@ -85,6 +86,7 @@ class ProblemMarket(Market):
             )
             errors.extend(omega_jacobian_errors)
             omega_jacobian[clipped_costs.flat] = 0
+
         return tilde_costs, omega_jacobian, clipped_costs, errors
 
     @NumericalErrorHandler(exceptions.DeltaNumericalError)
@@ -148,6 +150,7 @@ class ProblemMarket(Market):
                     demeaned_z_tangent.T @ weighted_demeaned_d +
                     (demeaned_z_jacobian @ weighted_demeaned_d).T @ xi_jacobian[:, [p]]
                 )
+
         return micro_jacobian, errors
 
     @NumericalErrorHandler(exceptions.MicroMomentCovariancesNumericalError)
@@ -156,7 +159,7 @@ class ProblemMarket(Market):
         errors: List[Error] = []
         assert self.moments is not None
 
-        # fill a matrix of de-meaned micro moments for each agent moment-by-moment
+        # fill a matrix of demeaned micro moments for each agent moment-by-moment
         demeaned_agent_micro = np.zeros((self.I, self.moments.MM), options.dtype)
         for m, moment in enumerate(self.moments.micro_moments):
             assert isinstance(moment, FirstChoiceCovarianceMoment)
@@ -195,6 +198,7 @@ class ProblemMarket(Market):
                 errors.append(exceptions.NonpositiveCostsError())
             with np.errstate(all='ignore'):
                 tilde_costs = np.log(costs)
+
         return tilde_costs, clipped_costs, errors
 
     @NumericalErrorHandler(exceptions.OmegaByThetaJacobianNumericalError)

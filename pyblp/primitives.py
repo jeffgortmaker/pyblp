@@ -208,7 +208,6 @@ class Products(object):
         if invalid_names:
             raise NameError(f"These reserved names in product_formulations are invalid: {list(invalid_names)}.")
 
-        # structure products
         return structure_matrices({**product_mapping, **underlying_data})
 
 

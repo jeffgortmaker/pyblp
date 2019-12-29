@@ -546,7 +546,6 @@ class Simulation(Economy):
         # compute a baseline delta that will be updated when shares and prices are replaced
         delta = self.products.X1 @ self.beta + self.xi
 
-        # define a factory for solving simulation markets
         def market_factory(s: Hashable) -> Tuple[SimulationMarket, Array, Array, Iteration]:
             """Build a market along with arguments used to compute prices and shares."""
             assert costs is not None and prices is not None and iteration is not None
@@ -693,7 +692,6 @@ class Simulation(Economy):
         self._validate_fp_type(fp_type)
         self._validate_error_behavior(error_behavior)
 
-        # define a factory for solving simulation markets
         def market_factory(s: Hashable) -> Tuple[SimulationMarket, Array, Iteration, str]:
             """Build a market along with arguments used to compute delta and marginal costs."""
             assert delta is not None and iteration is not None

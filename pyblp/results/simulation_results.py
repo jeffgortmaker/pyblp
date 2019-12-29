@@ -267,7 +267,6 @@ class SimulationResults(StringRepresentation):
         # compute the mean utility
         delta = self.simulation._compute_true_X1(self._data_override) @ self.simulation.beta + self.simulation.xi
 
-        # define a factory for computing market-level micro moments
         def market_factory(s: Hashable) -> Tuple[SimulationResultsMarket]:
             """Build a market along with arguments used to compute micro moments."""
             market_s = SimulationResultsMarket(

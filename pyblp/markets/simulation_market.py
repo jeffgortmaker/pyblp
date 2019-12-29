@@ -80,4 +80,5 @@ class SimulationMarket(Market):
                 errors.append(exceptions.NonpositiveSyntheticCostsError())
             with np.errstate(all='ignore'):
                 tilde_costs = np.log(costs)
+
         return tilde_costs, errors

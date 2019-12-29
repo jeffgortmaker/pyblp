@@ -109,6 +109,7 @@ class Economy(Container, StringRepresentation):
             if value > 0:
                 header.append(f" {key} ")
                 values.append(str(value))
+
         return format_table(header, values, title="Dimensions")
 
     def _format_formulations(self) -> str:
@@ -130,7 +131,6 @@ class Economy(Container, StringRepresentation):
         max_formulations = max(len(r[1:]) for r in data)
         header = ["Column Indices:"] + [f" {i} " for i in range(max_formulations)]
 
-        # format the table
         return format_table(header, *data, title="Formulations")
 
     def _detect_collinearity(self) -> None:
@@ -202,31 +202,34 @@ class Economy(Container, StringRepresentation):
         """Coerce optional array-like firm IDs into a column vector and validate it. By default, assume that firm IDs
         are for all markets.
         """
-        if firm_ids is not None:
-            firm_ids = np.c_[np.asarray(firm_ids, options.dtype)]
-            rows = self.N
-            if market_ids is not None:
-                rows = sum(i.size for t, i in self._product_market_indices.items() if t in market_ids)
-            if firm_ids.shape != (rows, 1):
-                raise ValueError(f"firm_ids must be None or a {rows}-vector.")
+        if firm_ids is None:
+            return None
+        firm_ids = np.c_[np.asarray(firm_ids, options.dtype)]
+        rows = self.N
+        if market_ids is not None:
+            rows = sum(i.size for t, i in self._product_market_indices.items() if t in market_ids)
+        if firm_ids.shape != (rows, 1):
+            raise ValueError(f"firm_ids must be None or a {rows}-vector.")
         return firm_ids
 
     def _coerce_optional_ownership(self, ownership: Optional[Any], market_ids: Optional[Array] = None) -> Array:
         """Coerce optional array-like ownership matrices into a stacked matrix and validate it. By default, assume that
         ownership matrices are for all markets.
         """
-        if ownership is not None:
-            ownership = np.c_[np.asarray(ownership, options.dtype)]
-            rows = self.N
-            columns = self._max_J
-            if market_ids is not None:
-                rows = sum(i.size for t, i in self._product_market_indices.items() if t in market_ids)
-                columns = max(i.size for t, i in self._product_market_indices.items() if t in market_ids)
-            if ownership.shape != (rows, columns):
-                raise ValueError(f"ownership must be None or a {rows} by {columns} matrix.")
+        if ownership is None:
+            return None
+        ownership = np.c_[np.asarray(ownership, options.dtype)]
+        rows = self.N
+        columns = self._max_J
+        if market_ids is not None:
+            rows = sum(i.size for t, i in self._product_market_indices.items() if t in market_ids)
+            columns = max(i.size for t, i in self._product_market_indices.items() if t in market_ids)
+        if ownership.shape != (rows, columns):
+            raise ValueError(f"ownership must be None or a {rows} by {columns} matrix.")
         return ownership
 
-    def _coerce_optional_delta_iteration(self, iteration: Optional[Iteration]) -> Iteration:
+    @staticmethod
+    def _coerce_optional_delta_iteration(iteration: Optional[Iteration]) -> Iteration:
         """Validate or choose a default configuration for iterating over the mean utility."""
         if iteration is None:
             iteration = Iteration('squarem', {'atol': 1e-14})
@@ -234,7 +237,8 @@ class Economy(Container, StringRepresentation):
             raise TypeError("iteration must be None or an Iteration instance.")
         return iteration
 
-    def _coerce_optional_prices_iteration(self, iteration: Optional[Iteration]) -> Iteration:
+    @staticmethod
+    def _coerce_optional_prices_iteration(iteration: Optional[Iteration]) -> Iteration:
         """Validate or choose a default configuration for iteration over prices."""
         if iteration is None:
             iteration = Iteration('simple', {'atol': 1e-12})
@@ -244,7 +248,8 @@ class Economy(Container, StringRepresentation):
             raise ValueError("Analytic Jacobians are not supported for solving this system.")
         return iteration
 
-    def _validate_fp_type(self, fp_type: str) -> None:
+    @staticmethod
+    def _validate_fp_type(fp_type: str) -> None:
         """Validate that the delta fixed point type is supported."""
         if fp_type not in {'safe_linear', 'linear', 'safe_nonlinear', 'nonlinear'}:
             raise ValueError("fp_type must be 'safe_linear', 'linear', 'safe_nonlinear', or 'nonlinear'.")
@@ -255,11 +260,14 @@ class Economy(Container, StringRepresentation):
             index = np.ones(self.K1, np.bool)
         if self.ED == 0 and not data_override:
             return self.products.X1[:, index]
+
+        # compute X1 column-by-column
         columns = []
         for include, formulation in zip(index, self._X1_formulations):
             if include:
                 column = formulation.evaluate(self.products, data_override)
                 columns.append(np.broadcast_to(column, (self.N, 1)).astype(options.dtype))
+
         return np.column_stack(columns)
 
     def _compute_true_X3(
@@ -269,27 +277,33 @@ class Economy(Container, StringRepresentation):
             index = np.ones(self.K3, np.bool)
         if self.ES == 0 and not data_override:
             return self.products.X3[:, index]
+
+        # compute X3 column-by-column
         columns = []
         for include, formulation in zip(index, self._X3_formulations):
             if include:
                 columns.append(formulation.evaluate(self.products, data_override) * np.ones((self.N, 1)))
+
         return np.column_stack(columns)
 
     def _compute_logit_delta(self, rho: Array) -> Array:
-        """Compute the delta that solves the simple logit (or nested logit) model."""
+        """Compute the mean utility that solves the simple logit (or nested logit) model."""
         log_shares = np.log(self.products.shares)
+
+        # compute delta market-by-market
         delta = log_shares.copy()
-        for t in self.unique_market_ids:
-            shares_t = self.products.shares[self._product_market_indices[t]]
+        for t, indices_t in self._product_market_indices.items():
+            shares_t = self.products.shares[indices_t]
             log_outside_share_t = np.log(1 - shares_t.sum())
-            delta[self._product_market_indices[t]] -= log_outside_share_t
+            delta[indices_t] -= log_outside_share_t
             if self.H > 0:
-                log_shares_t = log_shares[self._product_market_indices[t]]
-                groups_t = Groups(self.products.nesting_ids[self._product_market_indices[t]])
+                log_shares_t = log_shares[indices_t]
+                groups_t = Groups(self.products.nesting_ids[indices_t])
                 log_group_shares_t = np.log(groups_t.expand(groups_t.sum(shares_t)))
                 if rho.size == 1:
                     rho_t = np.full_like(shares_t, float(rho))
                 else:
                     rho_t = groups_t.expand(rho[np.searchsorted(self.unique_nesting_ids, groups_t.unique)])
-                delta[self._product_market_indices[t]] -= rho_t * (log_shares_t - log_group_shares_t)
+                delta[indices_t] -= rho_t * (log_shares_t - log_group_shares_t)
+
         return delta
