@@ -152,18 +152,6 @@ class Products(object):
             if np.unique(clustering_ids).size == 1:
                 raise ValueError("The clustering_ids field of product_data must have at least two distinct IDs.")
 
-        # load ownership matrices
-        ownership = None
-        if firm_ids is not None:
-            ownership = extract_matrix(product_data, 'ownership')
-            if ownership is not None:
-                max_J = np.unique(market_ids, return_counts=True)[1].max()
-                if ownership.shape[1] != max_J:
-                    raise ValueError(
-                        f"The ownership field of product_data must have {max_J} columns, which is the number of "
-                        f"products in the market with the most products."
-                    )
-
         # load shares
         shares = extract_matrix(product_data, 'shares')
         if shares is None:
@@ -171,7 +159,8 @@ class Products(object):
         if shares.shape[1] > 1:
             raise ValueError("The shares field of product_data must be one-dimensional.")
         if (shares <= 0).any() or (shares >= 1).any():
-            raise ValueError("The shares field of product_data must consist of values between zero and one, exclusive.")
+            raise ValueError(
+                "The shares field of product_data must consist of values between zero and one, exclusive.")
 
         # verify that shares sum to less than one in each market
         market_groups = Groups(market_ids)
@@ -180,6 +169,18 @@ class Products(object):
             raise ValueError(
                 f"Shares in these markets do not sum to less than 1: {market_groups.unique[bad_shares_index]}"
             )
+
+        # load ownership matrices
+        ownership = None
+        if firm_ids is not None:
+            ownership = extract_matrix(product_data, 'ownership')
+            if ownership is not None:
+                max_J = market_groups.counts.max()
+                if ownership.shape[1] != max_J:
+                    raise ValueError(
+                        f"The ownership field of product_data must have {max_J} columns, which is the number of "
+                        f"products in the market with the most products."
+                    )
 
         # structure product fields as a mapping
         product_mapping: Dict[Union[str, tuple], Tuple[Optional[Array], Any]] = {}
