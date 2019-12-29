@@ -303,7 +303,9 @@ class Results(abc.ABC, StringRepresentation):
         matrices = self._coerce_matrices(matrices, market_ids)
         return self._combine_arrays(ResultsMarket.safely_extract_diagonal_mean, market_ids, market_args=[matrices])
 
-    def compute_costs(self, market_id: Optional[Any] = None) -> Array:
+    def compute_costs(
+            self, firm_ids: Optional[Any] = None, ownership: Optional[Any] = None,
+            market_id: Optional[Any] = None) -> Array:
         r"""Estimate marginal costs, :math:`c`.
 
         Marginal costs are computed with the :math:`\eta`-markup equation in :eq:`eta`:
@@ -312,6 +314,11 @@ class Results(abc.ABC, StringRepresentation):
 
         Parameters
         ----------
+        firm_ids : `array-like, optional`
+            Firm IDs. By default, the ``firm_ids`` field of ``product_data`` in :class:`Problem` will be used.
+        ownership : `array-like, optional`
+            Ownership matrices. By default, standard ownership matrices based on ``firm_ids`` will be used unless the
+            ``ownership`` field of ``product_data`` in :class:`Problem` was specified.
         market_id : `object, optional`
             ID of the market in which to compute marginal costs. By default, marginal costs are computed in all markets
             and stacked.
@@ -328,7 +335,9 @@ class Results(abc.ABC, StringRepresentation):
         """
         output("Computing marginal costs ...")
         market_ids = self._select_market_ids(market_id)
-        return self._combine_arrays(ResultsMarket.safely_compute_costs, market_ids)
+        firm_ids = self.problem._coerce_optional_firm_ids(firm_ids, market_ids)
+        ownership = self.problem._coerce_optional_ownership(ownership, market_ids)
+        return self._combine_arrays(ResultsMarket.safely_compute_costs, market_ids, market_args=[firm_ids, ownership])
 
     def compute_approximate_prices(
             self, firm_ids: Optional[Any] = None, ownership: Optional[Any] = None, costs: Optional[Any] = None,
@@ -357,7 +366,8 @@ class Results(abc.ABC, StringRepresentation):
             be used unless the ``ownership`` field of ``product_data`` in :class:`Problem` was specified.
         costs : `array-like, optional`
             Potentially changed marginal costs, :math:`c^*`. By default, unchanged marginal costs are computed with
-            :meth:`ProblemResults.compute_costs`.
+            :meth:`ProblemResults.compute_costs`. Costs under a changed ownership structure can be computed by
+            specifying the ``firm_ids`` or ``ownership`` arguments of :meth:`ProblemResults.compute_costs`.
         market_id : `object, optional`
             ID of the market in which to compute approximate equilibrium prices. By default, approximate equilibrium
             prices are computed in all markets and stacked.
@@ -422,7 +432,8 @@ class Results(abc.ABC, StringRepresentation):
             be used unless the ``ownership`` field of ``product_data`` in :class:`Problem` was specified.
         costs : `array-like`
             Potentially changed marginal costs, :math:`c^*`. By default, unchanged marginal costs are computed with
-            :meth:`ProblemResults.compute_costs`.
+            :meth:`ProblemResults.compute_costs`. Costs under a changed ownership structure can be computed by
+            specifying the ``firm_ids`` or ``ownership`` arguments of :meth:`ProblemResults.compute_costs`.
         prices : `array-like, optional`
             Prices at which the fixed point iteration routine will start. By default, unchanged prices, :math:`p`, are
             used as starting values. Other reasonable starting prices include the approximate equilibrium prices
@@ -540,7 +551,8 @@ class Results(abc.ABC, StringRepresentation):
             :meth:`ProblemResults.compute_prices`. By default, unchanged prices are used.
         costs : `array-like`
             Marginal costs, :math:`c`. By default, marginal costs are computed with
-            :meth:`ProblemResults.compute_costs`.
+            :meth:`ProblemResults.compute_costs`. Costs under a changed ownership structure can be computed by
+            specifying the ``firm_ids`` or ``ownership`` arguments of :meth:`ProblemResults.compute_costs`.
         market_id : `object, optional`
             ID of the market in which to compute markups. By default, markups are computed in all markets and stacked.
 
@@ -579,7 +591,8 @@ class Results(abc.ABC, StringRepresentation):
             shares are used.
         costs : `array-like`
             Marginal costs, :math:`c`. By default, marginal costs are computed with
-            :meth:`ProblemResults.compute_costs`.
+            :meth:`ProblemResults.compute_costs`. Costs under a changed ownership structure can be computed by
+            specifying the ``firm_ids`` or ``ownership`` arguments of :meth:`ProblemResults.compute_costs`.
         market_id : `object, optional`
             ID of the market in which to compute profits. By default, profits are computed in all markets and stacked.
 

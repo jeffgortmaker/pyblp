@@ -128,10 +128,11 @@ class ResultsMarket(Market):
         return diagonal_mean, errors
 
     @NumericalErrorHandler(exceptions.PostEstimationNumericalError)
-    def safely_compute_costs(self) -> Tuple[Array, List[Error]]:
+    def safely_compute_costs(self, firm_ids: Optional[Array], ownership: Optional[Array]) -> Tuple[Array, List[Error]]:
         """Estimate marginal costs, handling any numerical errors."""
         errors: List[Error] = []
-        eta, eta_errors = self.compute_eta()
+        ownership_matrix = self.get_ownership_matrix(firm_ids, ownership)
+        eta, eta_errors = self.compute_eta(ownership_matrix)
         errors.extend(eta_errors)
         costs = self.products.prices - eta
         return costs, errors

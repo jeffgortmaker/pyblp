@@ -431,6 +431,29 @@ def test_fixed_effects(
 
 
 @pytest.mark.usefixtures('simulated_problem')
+def test_costs(simulated_problem: SimulatedProblemFixture) -> None:
+    """Test that marginal costs computed under specified firm IDs and ownership are the same as costs computed when
+    firm IDs and ownership are left unspecified.
+    """
+    _, simulation_results, _, _, results = simulated_problem
+
+    # compute costs in the simplest way possible
+    costs1 = results.compute_costs()
+
+    # under custom ownership, just test that results are the same under ownership specification
+    if simulation_results.product_data.ownership.size > 0:
+        costs2 = results.compute_costs(ownership=simulation_results.product_data.ownership)
+        np.testing.assert_equal(costs1, costs2)
+        return
+
+    # otherwise, also test that results are the same under a firm IDs specification
+    costs2 = results.compute_costs(firm_ids=simulation_results.product_data.firm_ids)
+    costs3 = results.compute_costs(ownership=build_ownership(simulation_results.product_data))
+    np.testing.assert_equal(costs1, costs2)
+    np.testing.assert_equal(costs1, costs3)
+
+
+@pytest.mark.usefixtures('simulated_problem')
 @pytest.mark.parametrize('ownership', [
     pytest.param(False, id="firm IDs change"),
     pytest.param(True, id="ownership change")
@@ -473,7 +496,7 @@ def test_merger(simulated_problem: SimulatedProblemFixture, ownership: bool, sol
     )
     actual = merger_simulation.replace_endogenous(**solve_options)
 
-    # compute marginal costs get estimated prices and shares
+    # compute marginal costs; get estimated prices and shares
     costs = results.compute_costs()
     results_simulation = Simulation(
         simulation.product_formulations[:2], merger_product_data, results.beta, results.sigma, results.pi,
