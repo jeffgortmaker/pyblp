@@ -128,7 +128,8 @@ class ResultsMarket(Market):
         return diagonal_mean, errors
 
     @NumericalErrorHandler(exceptions.PostEstimationNumericalError)
-    def safely_compute_costs(self, firm_ids: Optional[Array], ownership: Optional[Array]) -> Tuple[Array, List[Error]]:
+    def safely_compute_costs(
+            self, firm_ids: Optional[Array] = None, ownership: Optional[Array] = None) -> Tuple[Array, List[Error]]:
         """Estimate marginal costs, handling any numerical errors."""
         errors: List[Error] = []
         ownership_matrix = self.get_ownership_matrix(firm_ids, ownership)
