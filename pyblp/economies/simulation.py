@@ -483,8 +483,9 @@ class Simulation(Economy):
         Parameters
         ----------
         costs : `array-like, optional`
-            Marginal costs, :math:`c`. By default, :math:`c = X_3\gamma + \omega`. Marginal costs must be specified if
-            :math:`X_3` was not formulated in :class:`Simulation`.
+            Marginal costs, :math:`c`. By default, :math:`c = X_3\gamma + \omega` if ``costs_type`` was ``'linear'`` in
+            :class:`Simulation` (the default), and the exponential of this if it was ``'log'``. Marginal costs must be
+            specified if :math:`X_3` was not formulated in :class:`Simulation`.
         prices : `array-like, optional`
             Prices at which the fixed point iteration routine will start. By default, ``costs``, are used as starting
             values.
