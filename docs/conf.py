@@ -55,9 +55,7 @@ extensions = [
     'nbsphinx'
 ]
 intersphinx_mapping = {
-    'matplotlib': ('https://matplotlib.org/', None),
     'python': ('https://docs.python.org/3.6/', None),
-    'sympy': ('https://docs.sympy.org/latest/', None),
     'numpy': ('https://docs.scipy.org/doc/numpy/', None),
     'patsy': ('https://patsy.readthedocs.io/en/stable/', None),
     'scipy': ('https://docs.scipy.org/doc/scipy/reference/', None),
