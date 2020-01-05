@@ -33,6 +33,7 @@ class Market(Container):
     sigma: Array
     pi: Array
     beta: Optional[Array]
+    gamma: Optional[Array]
     rho_size: int
     group_rho: Array
     rho: Array
@@ -43,8 +44,9 @@ class Market(Container):
 
     def __init__(
             self, economy: Economy, t: Any, parameters: Parameters, sigma: Array, pi: Array, rho: Array,
-            beta: Optional[Array] = None, delta: Optional[Array] = None, moments: Optional[EconomyMoments] = None,
-            data_override: Optional[Dict[str, Array]] = None, agents_override: Optional[RecArray] = None) -> None:
+            beta: Optional[Array] = None, gamma: Optional[Array] = None, delta: Optional[Array] = None,
+            moments: Optional[EconomyMoments] = None, data_override: Optional[Dict[str, Array]] = None,
+            agents_override: Optional[RecArray] = None) -> None:
         """Store or compute information about formulations, data, parameters, and utility."""
 
         # structure relevant data
@@ -96,6 +98,7 @@ class Market(Container):
         self.sigma = sigma
         self.pi = pi
         self.beta = beta
+        self.gamma = gamma
         self.rho_size = rho.size
         if self.rho_size == 1:
             self.group_rho = np.full((self.H, 1), float(rho))
@@ -219,6 +222,30 @@ class Market(Container):
                 X2[:, [index]] = formulation.evaluate(self.products, override)
 
         return self.compute_mu(X2)
+
+    def update_costs_with_variable(self, costs: Array, name: str, variable: Array) -> Array:
+        """Update marginal costs to reflect a changed variable by adding any parameter-weighted characteristic changes
+        to X3, taking into account whether costs are linear or log-linear.
+        """
+        assert self.gamma is not None
+
+        # if the variable does not contribute to X3, costs remain unchanged
+        if not any(name in f.names for f in self._X3_formulations):
+            return costs
+
+        # if the variable does contribute to X3, costs may change
+        costs = costs.copy()
+        override = {name: variable}
+        for index, formulation in enumerate(self._X3_formulations):
+            if name in formulation.names:
+                change = formulation.evaluate(self.products, override) - formulation.evaluate(self.products)
+                if self.costs_type == 'linear':
+                    costs += self.gamma[index] * change
+                else:
+                    assert self.costs_type == 'log'
+                    costs *= np.exp(self.gamma[index] * change)
+
+        return costs
 
     def compute_X1_derivatives(self, name: str, variable: Optional[Array] = None) -> Array:
         """Compute derivatives of X1 with respect to a variable. By default, use unchanged variable values."""
@@ -451,20 +478,21 @@ class Market(Container):
             delta = self.delta
         utility_derivatives = self.compute_utility_derivatives('prices')
         probabilities, conditionals = self.compute_probabilities(delta)
-        shares = self.products.shares
         jacobian = self.compute_shares_by_variable_jacobian(utility_derivatives, probabilities, conditionals)
-        intra_firm_jacobian = ownership_matrix * jacobian
-        eta, replacement = approximately_solve(intra_firm_jacobian, -shares)
+        capital_delta = -ownership_matrix * jacobian
+        eta, replacement = approximately_solve(capital_delta, self.products.shares)
         if replacement:
-            errors.append(exceptions.IntraFirmJacobianInversionError(intra_firm_jacobian, replacement))
+            errors.append(exceptions.IntraFirmJacobianInversionError(capital_delta, replacement))
         return eta, errors
 
     def compute_zeta(
             self, costs: Array, ownership_matrix: Optional[Array] = None, utility_derivatives: Optional[Array] = None,
-            prices: Optional[Array] = None) -> Tuple[Array, Array]:
+            prices: Optional[Array] = None) -> Tuple[Array, Array, Array]:
         """Compute the markup term in the zeta-markup equation. By default, get an unchanged ownership matrix, compute
-        derivatives of utilities with respect to prices, and use unchanged prices. Also return the intermediate
-        diagonal of the capital lambda matrix, which is used for weighting during fixed point iteration.
+        derivatives of utilities with respect to prices, and use unchanged prices. Also return and updated marginal
+        costs (if they depend on shares), along with the intermediate diagonal of the capital lambda matrix, which is
+        used for weighting during fixed point iteration. If prices are specified and X3 depends on shares, update the
+        specified costs according to the shares that arise under these prices.
         """
         if ownership_matrix is None:
             ownership_matrix = self.get_ownership_matrix()
@@ -478,13 +506,14 @@ class Market(Container):
             mu = self.update_mu_with_variable('prices', prices)
             probabilities, conditionals = self.compute_probabilities(delta, mu)
             shares = probabilities @ self.agents.weights
+            costs = self.update_costs_with_variable(costs, 'shares', shares)
         value_derivatives = probabilities * utility_derivatives
         capital_lamda_diagonal = self.compute_capital_lamda(value_derivatives).diagonal()
         capital_lamda_inverse = np.diag(1 / capital_lamda_diagonal)
         capital_gamma = self.compute_capital_gamma(value_derivatives, probabilities, conditionals)
         tilde_capital_omega = capital_lamda_inverse @ (ownership_matrix * capital_gamma).T
         zeta = tilde_capital_omega @ (prices - costs) - capital_lamda_inverse @ shares
-        return zeta, capital_lamda_diagonal
+        return zeta, costs, capital_lamda_diagonal
 
     def compute_equilibrium_prices(
             self, costs: Array, iteration: Iteration, prices: Optional[Array] = None,
@@ -507,8 +536,10 @@ class Market(Container):
 
         def contraction(x: Array) -> ContractionResults:
             """Compute the next equilibrium prices."""
-            zeta, capital_lamda_diagonal = self.compute_zeta(costs, ownership_matrix, get_derivatives(x), x)
-            x = costs + zeta
+            zeta, updated_costs, capital_lamda_diagonal = self.compute_zeta(
+                costs, ownership_matrix, get_derivatives(x), x
+            )
+            x = updated_costs + zeta
             return x, capital_lamda_diagonal, None
 
         # solve the fixed point problem

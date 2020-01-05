@@ -486,9 +486,11 @@ def test_merger(simulated_problem: SimulatedProblemFixture, ownership: bool, sol
     """
     simulation, simulation_results, problem, _, results = simulated_problem
 
-    # custom ownership complicates the test
+    # skip simulations that complicate the test
     if simulation.products.ownership.size > 0:
         return pytest.skip("Merger testing doesn't work with custom ownership.")
+    if 'shares' in str(simulation.product_formulations[2]):
+        return pytest.skip("Merger testing doesn't work with quantity-dependent costs.")
 
     # create changed ownership or firm IDs associated with a merger
     merger_product_data = simulation_results.product_data.copy()

@@ -14,13 +14,17 @@ class SimulationMarket(Market):
     """A market in a simulation of synthetic BLP data."""
 
     def compute_endogenous(
-            self, costs: Array, prices: Array, iteration: Iteration) -> Tuple[Array, Array, SolverStats, List[Error]]:
-        """Compute endogenous prices and shares"""
+            self, costs: Array, prices: Array, iteration: Iteration) -> (
+            Tuple[Array, Array, Array, Array, SolverStats, List[Error]]):
+        """Compute endogenous prices and shares, along with the associated delta and costs."""
         errors: List[Error] = []
         prices, stats, price_errors = self.safely_compute_equilibrium_prices(costs, iteration, prices)
         shares, share_errors = self.safely_compute_shares(prices)
+        with np.errstate(all='ignore'):
+            delta = self.update_delta_with_variable('prices', prices)
+            costs = self.update_costs_with_variable(costs, 'shares', shares)
         errors.extend(price_errors + share_errors)
-        return prices, shares, stats, errors
+        return prices, shares, delta, costs, stats, errors
 
     def compute_exogenous(
             self, initial_delta: Array, iteration: Iteration, fp_type: str) -> (

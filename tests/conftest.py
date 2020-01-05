@@ -99,14 +99,14 @@ def small_logit_simulation() -> SimulationFixture:
 @pytest.fixture(scope='session')
 def large_logit_simulation() -> SimulationFixture:
     """Solve a simulation with ten markets, a linear constant, linear prices, a linear/cost characteristic, another two
-    linear characteristics, another three cost characteristics, and a log-linear cost specification.
+    linear characteristics, another two cost characteristics, and a quantity-dependent, log-linear cost specification.
     """
     id_data = build_id_data(T=10, J=20, F=9)
     simulation = Simulation(
         product_formulations=(
             Formulation('1 + prices + x + y + z'),
             None,
-            Formulation('0 + log(x) + a + b + c')
+            Formulation('0 + log(x) + a + b + shares')
         ),
         product_data={
             'market_ids': id_data.market_ids,
@@ -114,7 +114,7 @@ def large_logit_simulation() -> SimulationFixture:
             'clustering_ids': np.random.RandomState(2).choice(range(30), id_data.size)
         },
         beta=[1, -6, 1, 2, 3],
-        gamma=[0.1, 0.2, 0.3, 0.5],
+        gamma=[0.1, 0.2, 0.3, -0.1],
         xi_variance=0.00001,
         omega_variance=0.00001,
         correlation=0.1,

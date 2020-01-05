@@ -752,12 +752,8 @@ class ProblemResults(Results):
         bounds configured in :meth:`Problem.solve` will also bound parameter draws. Each parameter draw is used to
         compute the implied mean utility, :math:`\delta`, and shares, :math:`s`. If a supply side was estimated, the
         implied marginal costs, :math:`c`, and prices, :math:`p`, are computed as well by iterating over the
-        :math:`\zeta`-markup contraction in :eq:`zeta_contraction`.
-
-        .. warning::
-
-           This routine assumes that marginal costs, :math:`c`, remain constant. This may not be the case if ``shares``
-           was included in the formulation for :math:`X_3` in :class:`Problem`.
+        :math:`\zeta`-markup contraction in :eq:`zeta_contraction`. If marginal costs depend on prices through
+        marketshares, they will be updated to reflect different prices during each iteration of the routine.
 
         .. note::
 
@@ -852,7 +848,7 @@ class ProblemResults(Results):
             indices_s = self.problem._product_market_indices[s]
             market_cs = ResultsMarket(
                 self.problem, s, self._parameters, bootstrapped_sigma[c], bootstrapped_pi[c], bootstrapped_rho[c],
-                bootstrapped_beta[c], self.delta + true_X1 @ (bootstrapped_beta[c] - self.beta)
+                bootstrapped_beta[c], bootstrapped_gamma[c], self.delta + true_X1 @ (bootstrapped_beta[c] - self.beta)
             )
             costs_cs = self.tilde_costs[indices_s] + true_X3[indices_s] @ (bootstrapped_gamma[c] - self.gamma)
             if self.problem.costs_type == 'log':
@@ -923,12 +919,9 @@ class ProblemResults(Results):
         Feasible optimal instruments are estimated by evaluating this expression at an estimated :math:`\hat{\theta}`.
         The expectation is taken by approximating an integral over the joint density of :math:`\xi` and :math:`\omega`.
         For each error term realization, if not already estimated, equilibrium prices and shares are computed by
-        iterating over the :math:`\zeta`-markup contraction in :eq:`zeta_contraction`.
-
-        .. warning::
-
-           This routine assumes that marginal costs, :math:`c`, remain constant. This may not be the case if ``shares``
-           was included in the formulation for :math:`X_3` in :class:`Problem`.
+        iterating over the :math:`\zeta`-markup contraction in :eq:`zeta_contraction`. If marginal costs depend on
+        prices through marketshares, they will be updated to reflect different prices during each iteration of the
+        routine.
 
         The expected Jacobians are estimated with the average over all computed Jacobian realizations. The
         :math:`2 \times 2` normalizing matrix :math:`\Sigma_{\xi\omega}` is estimated with the sample covariance matrix
@@ -1112,7 +1105,9 @@ class ProblemResults(Results):
 
         def market_factory(s: Hashable) -> Tuple[ResultsMarket, Array, Optional[Array], Optional[Iteration]]:
             """Build a market along with arguments used to compute equilibrium prices and shares along with delta."""
-            market_s = ResultsMarket(self.problem, s, self._parameters, self.sigma, self.pi, self.rho, self.beta, delta)
+            market_s = ResultsMarket(
+                self.problem, s, self._parameters, self.sigma, self.pi, self.rho, self.beta, self.gamma, delta
+            )
             costs_s = costs[self.problem._product_market_indices[s]]
             prices_s = expected_prices[self.problem._product_market_indices[s]] if expected_prices is not None else None
             return market_s, costs_s, prices_s, iteration
@@ -1161,7 +1156,7 @@ class ProblemResults(Results):
         def market_factory(s: Hashable) -> Tuple[ResultsMarket]:
             """Build a market with the data realization along with arguments used to compute the Jacobian."""
             market_s = ResultsMarket(
-                self.problem, s, self._parameters, self.sigma, self.pi, self.rho, self.beta, delta,
+                self.problem, s, self._parameters, self.sigma, self.pi, self.rho, self.beta, delta=delta,
                 data_override=data_override
             )
             return market_s,
@@ -1194,7 +1189,7 @@ class ProblemResults(Results):
         def market_factory(s: Hashable) -> Tuple[ResultsMarket, Array, Array]:
             """Build a market with the data realization along with arguments used to compute the Jacobians."""
             market_s = ResultsMarket(
-                self.problem, s, self._parameters, self.sigma, self.pi, self.rho, self.beta, delta,
+                self.problem, s, self._parameters, self.sigma, self.pi, self.rho, self.beta, delta=delta,
                 data_override=data_override
             )
             tilde_costs_s = tilde_costs[self.problem._product_market_indices[s]]
@@ -1486,7 +1481,8 @@ class ProblemResults(Results):
             """Build a market along with arguments used to compute arrays."""
             indices_s = self.problem._product_market_indices[s]
             market_s = ResultsMarket(
-                self.problem, s, self._parameters, self.sigma, self.pi, self.rho, self.beta, self.delta, self._moments
+                self.problem, s, self._parameters, self.sigma, self.pi, self.rho, self.beta, self.gamma, self.delta,
+                self._moments
             )
             if market_ids.size == 1:
                 args_s = market_args

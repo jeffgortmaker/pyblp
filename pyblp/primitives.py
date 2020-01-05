@@ -203,7 +203,7 @@ class Products(object):
         })
 
         # structure and validate variables underlying X1, X2, and X3
-        underlying_data = {k: (v, options.dtype) for k, v in {**X1_data, **X2_data, **X3_data}.items()}
+        underlying_data = {k: (v, options.dtype) for k, v in {**X1_data, **X2_data, **X3_data}.items() if k != 'shares'}
         invalid_names = set(underlying_data) & {k if isinstance(k, str) else k[1] for k in product_mapping}
         if invalid_names:
             raise NameError(f"These reserved names in product_formulations are invalid: {list(invalid_names)}.")

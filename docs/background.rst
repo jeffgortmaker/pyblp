@@ -329,3 +329,5 @@ Equilibrium prices are computed by iterating over the :math:`\zeta`-markup equat
    :label: zeta_contraction
 
 which, unlike :eq:`eta`, is a contraction. Iteration terminates when the norm of firms' first order conditions, :math:`||\Lambda(p)(p - c - \zeta(p))||`, is less than a small number.
+
+If marginal costs depend on quantity, then they also depend on prices and need to be updated during each iteration: :math:`c_{jt} = c_{jt}(s_{jt}(p))`.

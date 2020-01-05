@@ -181,8 +181,8 @@ class BootstrappedResults(Results):
             }
             market_cs = ResultsMarket(
                 self.problem, s, self._parameters, self.bootstrapped_sigma[c], self.bootstrapped_pi[c],
-                self.bootstrapped_rho[c], self.bootstrapped_beta[c], self.bootstrapped_delta[c], self._moments,
-                data_override_c
+                self.bootstrapped_rho[c], self.bootstrapped_beta[c], self.bootstrapped_gamma[c],
+                self.bootstrapped_delta[c], self._moments, data_override_c
             )
             args_cs: List[Optional[Array]] = []
             for market_arg in market_args:

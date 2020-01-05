@@ -433,7 +433,10 @@ class Results(abc.ABC, StringRepresentation):
         costs : `array-like`
             Potentially changed marginal costs, :math:`c^*`. By default, unchanged marginal costs are computed with
             :meth:`ProblemResults.compute_costs`. Costs under a changed ownership structure can be computed by
-            specifying the ``firm_ids`` or ``ownership`` arguments of :meth:`ProblemResults.compute_costs`.
+            specifying the ``firm_ids`` or ``ownership`` arguments of :meth:`ProblemResults.compute_costs`. If marginal
+            costs depend on prices through marketshares, they will be updated to reflect different prices during each
+            iteration of the routine. Updated marginal costs can be obtained by instead using
+            :meth:`Simulation.replace_endogenous`.
         prices : `array-like, optional`
             Prices at which the fixed point iteration routine will start. By default, unchanged prices, :math:`p`, are
             used as starting values. Other reasonable starting prices include the approximate equilibrium prices
@@ -577,7 +580,7 @@ class Results(abc.ABC, StringRepresentation):
             market_id: Optional[Any] = None) -> Array:
         r"""Estimate population-normalized gross expected profits, :math:`\pi`.
 
-        The profit from product :math:`j` in market :math:`t` is
+        With constant costs, the profit from product :math:`j` in market :math:`t` is
 
         .. math:: \pi_{jt} = (p_{jt} - c_{jt})s_{jt}.
 

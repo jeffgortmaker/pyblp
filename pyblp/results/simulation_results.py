@@ -38,6 +38,10 @@ class SimulationResults(StringRepresentation):
         true parameters. If :meth:`Simulation.replace_endogenous` was used to create these results, prices and
         marketshares were replaced. If :meth:`Simulation.replace_exogenous` was used, exogenous characteristics were
         replaced instead. The :func:`data_to_dict` function can be used to convert this into a more usable data type.
+    delta : `ndarray`
+        Simulated mean utility, :math:`\delta`.
+    costs : `ndarray`
+        Simulated marginal costs, :math:`c`.
     computation_time : `float`
         Number of seconds it took to compute prices and marketshares.
     fp_converged : `ndarray`
@@ -59,6 +63,8 @@ class SimulationResults(StringRepresentation):
 
     simulation: 'Simulation'
     product_data: RecArray
+    delta: Array
+    costs: Array
     computation_time: float
     fp_converged: Array
     fp_iterations: Array
@@ -66,14 +72,16 @@ class SimulationResults(StringRepresentation):
     _data_override: Dict[str, Array]
 
     def __init__(
-            self, simulation: 'Simulation', data_override: Dict[str, Array], start_time: float, end_time: float,
-            iteration_stats: Dict[Hashable, SolverStats]) -> None:
+            self, simulation: 'Simulation', data_override: Dict[str, Array], delta: Array, costs: Array,
+            start_time: float, end_time: float, iteration_stats: Dict[Hashable, SolverStats]) -> None:
         """Structure simulation results."""
         self.simulation = simulation
         self.product_data = update_matrices(
             simulation.product_data,
             {k: (v, v.dtype) for k, v in data_override.items()}
         )
+        self.delta = delta
+        self.costs = costs
         self.computation_time = end_time - start_time
         self.fp_converged = np.array(
             [iteration_stats[t].converged for t in simulation.unique_market_ids], dtype=np.bool
@@ -271,7 +279,7 @@ class SimulationResults(StringRepresentation):
             """Build a market along with arguments used to compute micro moments."""
             market_s = SimulationResultsMarket(
                 self.simulation, s, self.simulation._parameters, self.simulation.sigma, self.simulation.pi,
-                self.simulation.rho, self.simulation.beta, delta, moments, self._data_override
+                self.simulation.rho, delta=delta, moments=moments, data_override=self._data_override
             )
             return market_s,
 

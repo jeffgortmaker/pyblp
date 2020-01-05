@@ -464,11 +464,6 @@ class Simulation(Economy):
 
         .. math:: p \leftarrow c + \zeta(p).
 
-        .. warning::
-
-           This routine assumes that marginal costs, :math:`c`, remain constant. This may not be the case if ``shares``
-           was included in the formulation for :math:`X_3` in :class:`Simulation`.
-
         .. note::
 
            To create a simulation under perfect (instead of Bertrand) competition, use an :class:`Iteration`
@@ -485,7 +480,8 @@ class Simulation(Economy):
         costs : `array-like, optional`
             Marginal costs, :math:`c`. By default, :math:`c = X_3\gamma + \omega` if ``costs_type`` was ``'linear'`` in
             :class:`Simulation` (the default), and the exponential of this if it was ``'log'``. Marginal costs must be
-            specified if :math:`X_3` was not formulated in :class:`Simulation`.
+            specified if :math:`X_3` was not formulated in :class:`Simulation`. If marginal costs depend on prices
+            through marketshares, they will be updated to reflect different prices during each iteration of the routine.
         prices : `array-like, optional`
             Prices at which the fixed point iteration routine will start. By default, ``costs``, are used as starting
             values.
@@ -520,7 +516,7 @@ class Simulation(Economy):
         output("Replacing prices and shares ...")
         start_time = time.time()
 
-        # load or compute marginal costs
+        # load or compute marginal costs, which may be updated if shares enter into X3
         if costs is not None:
             costs = np.c_[np.asarray(costs, options.dtype)]
             if costs.shape != (self.N, 1):
@@ -550,27 +546,36 @@ class Simulation(Economy):
         def market_factory(s: Hashable) -> Tuple[SimulationMarket, Array, Array, Iteration]:
             """Build a market along with arguments used to compute prices and shares."""
             assert costs is not None and prices is not None and iteration is not None
-            market_s = SimulationMarket(self, s, self._parameters, self.sigma, self.pi, self.rho, self.beta, delta)
+            market_s = SimulationMarket(
+                self, s, self._parameters, self.sigma, self.pi, self.rho, self.beta, self.gamma, delta
+            )
             costs_s = costs[self._product_market_indices[s]]
             prices_s = prices[self._product_market_indices[s]]
             return market_s, costs_s, prices_s, iteration
 
-        # compute prices and marketshares market-by-market
+        # compute prices and marketshares market-by-market, also collecting potentially updated delta and costs
         data_override = {
             'prices': np.zeros_like(self.products.prices),
             'shares': np.zeros_like(self.products.shares)
         }
+        true_delta = np.zeros_like(delta)
+        true_costs = np.zeros_like(costs)
         iteration_stats: Dict[Hashable, SolverStats] = {}
         generator = generate_items(self.unique_market_ids, market_factory, SimulationMarket.compute_endogenous)
-        for t, (prices_t, shares_t, iteration_stats_t, errors_t) in output_progress(generator, self.T, start_time):
+        generator = output_progress(generator, self.T, start_time)
+        for t, (prices_t, shares_t, delta_t, costs_t, iteration_stats_t, errors_t) in generator:
             data_override['prices'][self._product_market_indices[t]] = prices_t
             data_override['shares'][self._product_market_indices[t]] = shares_t
+            true_delta[self._product_market_indices[t]] = delta_t
+            true_costs[self._product_market_indices[t]] = costs_t
             iteration_stats[t] = iteration_stats_t
             errors.extend(errors_t)
 
         # structure the results
         self._handle_errors(errors, error_behavior)
-        results = SimulationResults(self, data_override, start_time, time.time(), iteration_stats)
+        results = SimulationResults(
+            self, data_override, true_delta, true_costs, start_time, time.time(), iteration_stats
+        )
         output(f"Replaced prices and shares after {format_seconds(results.computation_time)}.")
         output("")
         output(results)
@@ -724,9 +729,16 @@ class Simulation(Economy):
                     (true_tilde_costs - self.omega - self.products.X3 @ self.gamma) / self.gamma[X3_index]
                 )
 
+        # compute non-transformed marginal costs
+        true_costs = true_tilde_costs
+        if self.costs_type == 'log':
+            true_costs = np.exp(true_costs)
+
         # structure the results
         self._handle_errors(errors, error_behavior)
-        results = SimulationResults(self, data_override, start_time, time.time(), iteration_stats)
+        results = SimulationResults(
+            self, data_override, true_delta, true_costs, start_time, time.time(), iteration_stats
+        )
         output(f"Replaced exogenous product characteristics after {format_seconds(results.computation_time)}.")
         output("")
         output(results)

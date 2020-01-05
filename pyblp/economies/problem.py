@@ -863,7 +863,7 @@ class ProblemEconomy(Economy):
 
         def market_factory(s: Hashable) -> Tuple[ProblemMarket, Array, Array, Bounds, bool]:
             """Build a market along with arguments used to compute transformed marginal costs and their Jacobian."""
-            market_s = ProblemMarket(self, s, parameters, sigma, pi, rho, beta, delta)
+            market_s = ProblemMarket(self, s, parameters, sigma, pi, rho, beta, delta=delta)
             last_tilde_costs_s = progress.tilde_costs[self._product_market_indices[s]]
             xi_jacobian_s = xi_jacobian[self._product_market_indices[s]]
             return market_s, last_tilde_costs_s, xi_jacobian_s, costs_bounds, compute_jacobian
