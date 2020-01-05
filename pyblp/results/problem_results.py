@@ -999,8 +999,8 @@ class ProblemResults(Results):
                     variance = np.var(self.xi)
                     sample = lambda: (np.c_[state.normal(0, variance, self.problem.N)], self.omega)
                 else:
-                    covariances = np.cov(self.xi, self.omega, rowvar=False)
-                    sample = lambda: np.hsplit(state.multivariate_normal([0, 0], covariances, self.problem.N), 2)
+                    covariance_matrix = np.cov(self.xi, self.omega, rowvar=False)
+                    sample = lambda: np.hsplit(state.multivariate_normal([0, 0], covariance_matrix, self.problem.N), 2)
             elif method == 'empirical':
                 if self.problem.K3 == 0:
                     sample = lambda: (self.xi[state.choice(self.problem.N, self.problem.N)], self.omega)
