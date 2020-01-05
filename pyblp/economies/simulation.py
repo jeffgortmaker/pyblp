@@ -592,9 +592,9 @@ class Simulation(Economy):
         from :class:`Simulation`, which are assumed to be in equilibrium.
 
         For this method of solving the simulation to be used, there must be an exogenous product characteristic
-        :math:`v` that shows up only in :math:`X_1`, and if there is a supply side, another product characteristic
-        :math:`w` that shows up only in :math:`X_3`. These characteristics will be replaced with values that are
-        consistent with true parameters.
+        :math:`v` that shows up only in :math:`X_1^\text{ex}`, and if there is a supply side, another product
+        characteristic :math:`w` that shows up only in :math:`X_3^\text{ex}`. These characteristics will be replaced
+        with values that are consistent with true parameters.
 
         First, the mean utility :math:`\delta` is computed in each market by iterating over the contraction in
         :eq:`contraction` and :math:`(\delta - \xi - X_1 \beta)\beta_v^{-1}` is added to the :math:`v` from
@@ -612,12 +612,13 @@ class Simulation(Economy):
         Parameters
         ----------
         X1_name : `str`
-            The name of the variable :math:`v` in :math:`X_1` that will be replaced. It should show up only once in
-            the formulation for :math:`X_1` from :class:`Simulation`, and it should not be transformed in any way.
+            The name of the variable :math:`v` in :math:`X_1^\text{ex}` that will be replaced. It should show up only
+            once in the formulation for :math:`X_1` from :class:`Simulation` and it should not be transformed in any
+            way.
         X3_name : `str, optional`
-            The name of the variable :math:`w` in :math:`X_3` that will be replaced. It should show up only once in the
-            formulation for :math:`X_3` from :class:`Simulation`, and it should not be transformed in any way. This will
-            only be used if there is a supply side.
+            The name of the variable :math:`w` in :math:`X_3^\text{ex}` that will be replaced. It should show up only
+            once in the formulation for :math:`X_3` from :class:`Simulation` and it should not be transformed in any
+            way. This will only be used if there is a supply side.
         delta : `array-like, optional`
             Initial values for the mean utility, :math:`\delta`, which the fixed point iteration routine will start
             at. By default, the solution to the logit model in :eq:`logit_delta` is used. If there is a nesting
@@ -668,6 +669,8 @@ class Simulation(Economy):
             raise ValueError("X1_name must appear only once in the formulation for X1.")
         if any(X1_name in f.names for f in self._X2_formulations + self._X3_formulations):
             raise ValueError("X1_name must appear only in the formulation for X1.")
+        if X1_name == 'prices':
+            raise ValueError("X1_name must be an exogenous variable.")
         if self.beta[X1_index] == 0:
             raise ValueError("The parameter in beta on X1_name cannot be zero.")
         X3_index = None
@@ -682,6 +685,8 @@ class Simulation(Economy):
                 raise ValueError("X3_name must appear only once in the formulation for X3.")
             if any(X3_name in f.names for f in self._X1_formulations + self._X2_formulations):
                 raise ValueError("X3_name must appear only in the formulation for X3.")
+            if X3_name == 'shares':
+                raise ValueError("X3_name must be an exogenous variable.")
             if self.gamma[X3_index] == 0:
                 raise ValueError("The parameter in gamma on X3_name cannot be zero.")
 
