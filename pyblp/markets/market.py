@@ -203,7 +203,8 @@ class Market(Container):
         override = {name: variable}
         for index, formulation in enumerate(self._X1_formulations):
             if name in formulation.names:
-                delta += self.beta[index] * (formulation.evaluate(self.products, override) - self.products[name])
+                change = formulation.evaluate(self.products, override) - formulation.evaluate(self.products)
+                delta += self.beta[index] * change
 
         return delta
 
