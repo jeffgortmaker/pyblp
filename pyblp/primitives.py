@@ -329,7 +329,7 @@ class Agents(object):
             if np.any(bad_weights_index):
                 raise ValueError(
                     f"Integration weights in these markets sum to a value that differs from 1 by more than "
-                    f"options.weights_tol: {market_groups.unique[bad_weights_index]}."
+                    f"options.weights_tol: {list(market_groups.unique[bad_weights_index.flat])}."
                 )
 
         # structure agents
