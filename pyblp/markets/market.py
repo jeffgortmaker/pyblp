@@ -512,8 +512,10 @@ class Market(Container):
         capital_lamda_diagonal = self.compute_capital_lamda(value_derivatives).diagonal()
         capital_lamda_inverse = np.diag(1 / capital_lamda_diagonal)
         capital_gamma = self.compute_capital_gamma(value_derivatives, probabilities, conditionals)
-        tilde_capital_omega = capital_lamda_inverse @ (ownership_matrix * capital_gamma).T
-        zeta = tilde_capital_omega @ (prices - costs) - capital_lamda_inverse @ shares
+        zeta = (
+            capital_lamda_inverse @ (ownership_matrix * capital_gamma).T @ (prices - costs) -
+            capital_lamda_inverse @ shares
+        )
         return zeta, costs, capital_lamda_diagonal
 
     def compute_equilibrium_prices(

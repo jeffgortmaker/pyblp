@@ -312,7 +312,7 @@ Counterfactual evaluation, synthetic data simulation, and optimal instrument gen
 
 Instead, :ref:`references:Morrow and Skerlos (2011)` reformulate the solution to :eq:`eta`:
 
-.. math:: p - c = \underbrace{\Lambda^{-1}(O \odot \Gamma)'(p - c) - \Lambda^{-1}}_{\zeta}
+.. math:: p - c = \underbrace{\Lambda^{-1}(O \odot \Gamma)'(p - c) - \Lambda^{-1}s}_{\zeta}
    :label: zeta
 
 where :math:`\Lambda` is a diagonal :math:`J_t \times J_t` matrix approximated by
