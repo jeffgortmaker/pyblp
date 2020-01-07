@@ -63,9 +63,9 @@ In a single market, the corresponding multi-product differentiated Bertrand firs
 
 where the multi-product Bertrand markup :math:`\eta` depends on :math:`\Delta`, a :math:`J_t \times J_t` matrix of intra-firm (negative) demand derivatives:
 
-.. math:: \Delta = -O \odot \frac{\partial s}{\partial p}.
+.. math:: \Delta = -\mathscr{H} \odot \frac{\partial s}{\partial p}.
 
-Here, :math:`O` denotes the market-level ownership matrix, where :math:`O_{jk}` is typically :math:`1` if the same firm produces products :math:`j` and :math:`k`, and :math:`0` otherwise.
+Here, :math:`\mathscr{H}` denotes the market-level ownership or product holdings matrix, where :math:`\mathscr{H}_{jk}` is typically :math:`1` if the same firm produces products :math:`j` and :math:`k`, and :math:`0` otherwise.
 
 To include a supply side, we must specify a functional form for marginal costs:
 
@@ -312,7 +312,7 @@ Counterfactual evaluation, synthetic data simulation, and optimal instrument gen
 
 Instead, :ref:`references:Morrow and Skerlos (2011)` reformulate the solution to :eq:`eta`:
 
-.. math:: p - c = \underbrace{\Lambda^{-1}(O \odot \Gamma)'(p - c) - \Lambda^{-1}s}_{\zeta}
+.. math:: p - c = \underbrace{\Lambda^{-1}(\mathscr{H} \odot \Gamma)'(p - c) - \Lambda^{-1}s}_{\zeta}
    :label: zeta
 
 where :math:`\Lambda` is a diagonal :math:`J_t \times J_t` matrix approximated by

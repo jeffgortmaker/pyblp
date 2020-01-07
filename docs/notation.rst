@@ -89,7 +89,7 @@ Symbol                                                 Dimensions               
 :math:`\tilde{c}`                                      :math:`N \times 1`              Linear or log-linear marginal costs, :math:`c` or :math:`\log c` 
 :math:`\eta`                                           :math:`N \times 1`              Markup term from the BLP-markup equation
 :math:`\zeta`                                          :math:`N \times 1`              Markup term from the :math:`\zeta`-markup equation
-:math:`O`                                              :math:`J_t \times J_t`          Ownership matrix in market :math:`t`
+:math:`\mathscr{H}`                                    :math:`J_t \times J_t`          Ownership or product holdings matrix in market :math:`t`
 :math:`\kappa`                                         :math:`F_t \times F_t`          Cooperation matrix in market :math:`t`
 :math:`\Delta`                                         :math:`J_t \times J_t`          Intra-firm matrix of (negative) demand derivatives in market :math:`t`
 :math:`\Lambda`                                        :math:`J_t \times J_t`          Diagonal matrix used to decompose :math:`\eta` and :math:`\zeta` in market :math:`t`

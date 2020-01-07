@@ -352,9 +352,9 @@ class Results(abc.ABC, StringRepresentation):
 
         in which the markup term is approximated with
 
-        .. math:: \eta^* \approx -\left(O^* \odot \frac{\partial s}{\partial p}\right)^{-1}s
+        .. math:: \eta^* \approx -\left(\mathscr{H}^* \odot \frac{\partial s}{\partial p}\right)^{-1}s
 
-        where :math:`O^*` is the ownership matrix associated with firm changes.
+        where :math:`\mathscr{H}^*` is the ownership or product holding matrix associated with firm changes.
 
         Parameters
         ----------
@@ -413,9 +413,11 @@ class Results(abc.ABC, StringRepresentation):
 
         in which the markup term from :eq:`zeta` is
 
-        .. math:: \zeta^*(p^*) = \Lambda^{-1}(p^*)[O^* \odot \Gamma(p^*)]'(p^* - c^*) - \Lambda^{-1}(p^*)
+        .. math::
 
-        where :math:`O^*` is the ownership matrix associated with firm changes.
+           \zeta^*(p^*) = \Lambda^{-1}(p^*)[\mathscr{H}^* \odot \Gamma(p^*)]'(p^* - c^*) - \Lambda^{-1}(p^*)s(p^*)
+
+        where :math:`\mathscr{H}^*` is the ownership matrix associated with firm changes.
 
         .. warning::
 

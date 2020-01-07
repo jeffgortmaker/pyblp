@@ -63,9 +63,9 @@ def build_ownership(
         product_data: Mapping, kappa_specification: Optional[Union[str, Callable[[Any, Any], float]]] = None) -> Array:
     r"""Build ownership matrices, :math:`O`.
 
-    Ownership matrices are defined by their cooperation matrix counterparts, :math:`\kappa`. For each market :math:`t`,
-    :math:`O_{jk} = \kappa_{fg}` where :math:`j \in \mathscr{J}_{ft}`, the set of products produced by firm :math:`f` in
-    the market, and similarly, :math:`g \in \mathscr{J}_{gt}`.
+    Ownership or product holding matrices are defined by their cooperation matrix counterparts, :math:`\kappa`. For each
+    market :math:`t`, :math:`\mathscr{H}_{jk} = \kappa_{fg}` where :math:`j \in \mathscr{J}_{ft}`, the set of products
+    produced by firm :math:`f` in the market, and similarly, :math:`g \in \mathscr{J}_{gt}`.
 
     Parameters
     ----------
@@ -84,12 +84,12 @@ def build_ownership(
 
             kappa(f, g) -> value
 
-        where ``value`` is :math:`O_{jk}` and both ``f`` and ``g`` are firm IDs from the ``firm_ids`` field of
+        where ``value`` is :math:`\mathscr{H}_{jk}` and both ``f`` and ``g`` are firm IDs from the ``firm_ids`` field of
         ``product_data``.
 
         The default specification, ``lambda: f, g: int(f == g)``, constructs traditional ownership matrices. That is,
-        :math:`\kappa = I`, the identify matrix, implies that :math:`O_{jk}` is :math:`1` if the same firm produces
-        products :math:`j` and :math:`k`, and is :math:`0` otherwise.
+        :math:`\kappa = I`, the identify matrix, implies that :math:`\mathscr{H}_{jk}` is :math:`1` if the same firm
+        produces products :math:`j` and :math:`k`, and is :math:`0` otherwise.
 
         If ``firm_ids`` happen to be indices for an actual :math:`\kappa` matrix, ``lambda f, g: kappa[f, g]`` will
         build ownership matrices according to the matrix ``kappa``.
@@ -97,17 +97,17 @@ def build_ownership(
         When one of the special cases is specified, ``firm_ids`` in ``product_data`` are not required and if specified
         will be ignored:
 
-            - ``'monopoly'`` - Monopoly ownership matrices are all ones: :math:`O_{jk} = 1` for all :math:`j` and
-              :math:`k`.
+            - ``'monopoly'`` - Monopoly ownership matrices are all ones: :math:`\mathscr{H}_{jk} = 1` for all :math:`j`
+              and :math:`k`.
 
-            - ``'single'`` - Single product firm ownership matrices are identity matrices: :math:`O_{jk} = 1` if
-              :math:`j = k` and :math:`0` otherwise.
+            - ``'single'`` - Single product firm ownership matrices are identity matrices: :math:`\mathscr{H}_{jk} = 1`
+              if :math:`j = k` and :math:`0` otherwise.
 
     Returns
     -------
     `ndarray`
-        Stacked :math:`J_t \times J_t` ownership matrices, :math:`O`, for each market :math:`t`. If a market has fewer
-        products than others, extra columns will contain ``numpy.nan``.
+        Stacked :math:`J_t \times J_t` ownership matrices, :math:`\mathscr{H}`, for each market :math:`t`. If a market
+        has fewer products than others, extra columns will contain ``numpy.nan``.
 
     Examples
     --------

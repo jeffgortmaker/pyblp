@@ -89,11 +89,11 @@ class Simulation(Economy):
 
         Custom ownership matrices can be specified as well:
 
-            - **ownership** : (`numeric, optional') - Custom stacked :math:`J_t \times J_t` ownership matrices,
-              :math:`O`, for each market :math:`t`, which can be built with :func:`build_ownership`. By default,
-              standard ownership matrices are built only when they are needed to reduce memory usage. If specified,
-              there should be as many columns as there are products in the market with the most products. Rightmost
-              columns in markets with fewer products will be ignored.
+            - **ownership** : (`numeric, optional') - Custom stacked :math:`J_t \times J_t` ownership or product holding
+              matrices, :math:`\mathscr{H}`, for each market :math:`t`, which can be built with :func:`build_ownership`.
+              By default, standard ownership matrices are built only when they are needed to reduce memory usage. If
+              specified, there should be as many columns as there are products in the market with the most products.
+              Rightmost columns in markets with fewer products will be ignored.
 
         .. note::
 
