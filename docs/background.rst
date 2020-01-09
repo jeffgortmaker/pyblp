@@ -90,7 +90,7 @@ in which :math:`q(\theta)` is the GMM objective (n.b., in some of the BLP litera
 .. math:: \bar{g} = \begin{bmatrix} \bar{g}_D \\ \bar{g}_S \end{bmatrix} = \frac{1}{N} \begin{bmatrix} \sum_{j,t} Z_{D,jt}'\xi_{jt} \\ \sum_{j,t} Z_{S,jt}'\omega_{jt} \end{bmatrix}
    :label: averaged_moments
 
-where :math:`Z_D` and :math:`Z_S` are :math:`N \times M_D` and :math:`N \times M_S` matrices of demand- and supply-side instruments containing excluded instruments along with :math:`X_1^\text{ex}` and :math:`X_3^\text{ex}`, respectively. When there are only demand- and supply-side moments, :math:`M = M_D + M_S`.
+where :math:`Z_D` and :math:`Z_S` are :math:`N \times M_D` and :math:`N \times M_S` matrices of demand- and supply-side instruments.
 
 The vector :math:`\bar{g}` contains sample analogues of the demand- and supply-side moment conditions :math:`E[g_{D,jt}] = E[g_{S,jt}] = 0` where
 
@@ -176,12 +176,12 @@ For heteroscedasticity robust weighting matrices,
 .. math:: S = \frac{1}{N}\sum_{j,t}^N g_{jt}g_{jt}'.
    :label: robust_S
 
-For clustered weighting matrices, which account for arbitrary correlation within :math:`c = 1, 2, \dotsc, C` clusters,
+For clustered weighting matrices with :math:`c = 1, 2, \dotsc, C` clusters,
 
 .. math:: S = \frac{1}{N}\sum_{c=1}^C g_cg_c',
    :label: clustered_S
 
-where, letting the set :math:`\mathscr{J}_c \subset \{1, 2, \ldots, N\}` denote products in cluster :math:`c`,
+where, letting the set :math:`\mathscr{J}_{ct} \subset \{1, 2, \ldots, J_t\}` denote products in cluster :math:`c` and market :math:`t`,
 
 .. math:: g_c = \sum_{t=1}^T \sum_{j\in\mathscr{J}_{ct}} g_{jt}.
 
