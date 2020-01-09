@@ -301,12 +301,21 @@ def scipy_optimizer(
         iteration_callback: Callable[[], None], method: str, compute_gradient: bool, **scipy_options: Any) -> (
         Tuple[Array, bool]):
     """Optimize with a SciPy method."""
+    cache: Optional[Tuple[Array, ObjectiveResults]] = None
 
-    def wrapper(x: Array) -> Union[float, Tuple[float, Array]]:
-        """Either return the objective value or a tuple including the gradient."""
-        if compute_gradient:
-            return objective_function(x)
-        return objective_function(x)[0]
+    def objective_wrapper(values: Array) -> float:
+        """Return a possibly cached objective value."""
+        nonlocal cache
+        if cache is None or not np.array_equal(values, cache[0]):
+            cache = (values.copy(), objective_function(values))
+        return cache[1][0]
+
+    def gradient_wrapper(values: Array) -> Array:
+        """Return a possibly cached gradient."""
+        nonlocal cache
+        if cache is None or not np.array_equal(values, cache[0]):
+            cache = (values.copy(), objective_function(values))
+        return cache[1][1]
 
     # by default use the BFGS approximation for the Hessian
     hess = scipy_options.get('hess', scipy.optimize.BFGS() if method == 'trust-constr' else None)
@@ -314,8 +323,8 @@ def scipy_optimizer(
     # call the SciPy function
     callback = lambda *_: iteration_callback()
     results = scipy.optimize.minimize(
-        wrapper, initial_values, method=method, jac=compute_gradient, hess=hess, bounds=bounds, callback=callback,
-        options=scipy_options
+        objective_wrapper, initial_values, method=method, jac=gradient_wrapper if compute_gradient else False,
+        hess=hess, bounds=bounds, callback=callback, options=scipy_options
     )
     return results.x, results.success
 
@@ -325,7 +334,6 @@ def knitro_optimizer(
         iteration_callback: Callable[[], None], compute_gradient: bool, **knitro_options: Any) -> Tuple[Array, bool]:
     """Optimize with Knitro."""
     with knitro_context_manager() as (knitro, knitro_context):
-        # initialize an iteration counter and and empty cache
         iterations = 0
         cache: Optional[Tuple[Array, ObjectiveResults]] = None
 
