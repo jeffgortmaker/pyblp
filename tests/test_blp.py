@@ -776,7 +776,7 @@ def test_initial_update(simulated_problem: SimulatedProblemFixture) -> None:
 @pytest.mark.usefixtures('simulated_problem')
 @pytest.mark.parametrize('scipy_method', [
     pytest.param('l-bfgs-b', id="L-BFGS-B"),
-    pytest.param('slsqp', id="SLSQP")
+    pytest.param('trust-constr', id="Trust Region")
 ])
 def test_gradient_optionality(simulated_problem: SimulatedProblemFixture, scipy_method: str) -> None:
     """Test that the option of not computing the gradient for simulated data does not affect estimates when the gradient
@@ -789,8 +789,8 @@ def test_gradient_optionality(simulated_problem: SimulatedProblemFixture, scipy_
             Tuple[Array, bool]):
         """Optimize without gradients."""
         wrapper = lambda x: objective_function(x)[0]
-        results = scipy.optimize.minimize(wrapper, initial, method=scipy_method, bounds=bounds)
-        return results.x, results.success
+        optimize_results = scipy.optimize.minimize(wrapper, initial, method=scipy_method, bounds=bounds)
+        return optimize_results.x, optimize_results.success
 
     # solve the problem when not using gradients and when not computing them
     updated_solve_options1 = solve_options.copy()
