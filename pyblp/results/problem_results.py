@@ -252,7 +252,7 @@ class ProblemResults(Results):
     _errors: List[Error]
 
     def __init__(
-            self, progress: 'Progress', last_results: Optional['ProblemResults'], last_step: bool,
+            self, progress: 'Progress', last_results: Optional['ProblemResults'], step: int, last_step: bool,
             step_start_time: float, optimization_start_time: float, optimization_end_time: float,
             optimization_stats: SolverStats, iteration_stats: Sequence[Dict[Hashable, SolverStats]],
             iteration: Iteration, fp_type: str, costs_bounds: Bounds, extra_micro_covariances: Optional[Array],
@@ -293,7 +293,7 @@ class ProblemResults(Results):
                 self._errors.append(exceptions.HessianEigenvaluesError(self.reduced_hessian))
 
         # initialize counts, times, and convergence
-        self.step = 1
+        self.step = step
         self.total_time = self.cumulative_total_time = time.time() - step_start_time
         self.optimization_time = self.cumulative_optimization_time = optimization_end_time - optimization_start_time
         self.converged = self.cumulative_converged = optimization_stats.converged
@@ -315,7 +315,6 @@ class ProblemResults(Results):
         # initialize last results and add to cumulative values
         self.last_results = last_results
         if last_results is not None:
-            self.step += last_results.step
             self.cumulative_total_time += last_results.cumulative_total_time
             self.cumulative_optimization_time += last_results.cumulative_optimization_time
             self.cumulative_converged = last_results.converged and optimization_stats.converged

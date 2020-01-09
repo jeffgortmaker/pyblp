@@ -43,12 +43,12 @@ class ProblemEconomy(Economy):
             beta: Optional[Any] = None, gamma: Optional[Any] = None, sigma_bounds: Optional[Tuple[Any, Any]] = None,
             pi_bounds: Optional[Tuple[Any, Any]] = None, rho_bounds: Optional[Tuple[Any, Any]] = None,
             beta_bounds: Optional[Tuple[Any, Any]] = None, gamma_bounds: Optional[Tuple[Any, Any]] = None,
-            delta: Optional[Any] = None, method: str = '2s', optimization: Optional[Optimization] = None,
-            check_optimality: str = 'both', error_behavior: str = 'revert', error_punishment: float = 1,
-            delta_behavior: str = 'first', iteration: Optional[Iteration] = None, fp_type: str = 'safe_linear',
-            costs_bounds: Optional[Tuple[Any, Any]] = None, W: Optional[Any] = None, center_moments: bool = True,
-            W_type: str = 'robust', se_type: str = 'robust', micro_moments: Sequence[Moment] = (),
-            extra_micro_covariances: Optional[Any] = None) -> ProblemResults:
+            delta: Optional[Any] = None, method: str = '2s', initial_update: bool = False,
+            optimization: Optional[Optimization] = None, check_optimality: str = 'both', error_behavior: str = 'revert',
+            error_punishment: float = 1, delta_behavior: str = 'first', iteration: Optional[Iteration] = None,
+            fp_type: str = 'safe_linear', costs_bounds: Optional[Tuple[Any, Any]] = None, W: Optional[Any] = None,
+            center_moments: bool = True, W_type: str = 'robust', se_type: str = 'robust',
+            micro_moments: Sequence[Moment] = (), extra_micro_covariances: Optional[Any] = None) -> ProblemResults:
         r"""Solve the problem.
 
         The problem is solved in one or more GMM steps. During each step, any parameters in :math:`\hat{\theta}` are
@@ -222,6 +222,10 @@ class ProblemEconomy(Economy):
             iteration, nonlinear parameters and weighting matrices from the last :class:`ProblemResults` are passed as
             arguments.
 
+        initial_update : `bool, optional`
+            Whether to update starting values for the mean utility :math:`\delta`, and the weighting matrix, :math:`W`,
+            at the initial parameter values before the first GMM step (this initial update will be called a zeroth
+            step). By default, initial values are not updated because this requires an additional objective evaluation.
         optimization : `Optimization, optional`
             :class:`Optimization` configuration for how to solve the optimization problem in each GMM step, which is
             only used if there are unfixed nonlinear parameters over which to optimize. By default,
@@ -519,7 +523,7 @@ class ProblemEconomy(Economy):
         hessian = np.zeros((parameters.P, parameters.P), options.dtype)
 
         # iterate over each GMM step
-        step = 1
+        step = 0 if initial_update else 1
         last_results = None
         while True:
             # collect inputs into linear parameter estimation
@@ -565,10 +569,10 @@ class ProblemEconomy(Economy):
                 smallest_objective = min(smallest_objective, progress.objective)
                 return progress.objective, progress.gradient if optimization._compute_gradient else None
 
-            # optimize theta
+            # optimize theta if there are parameters to optimize and this isn't the initial update step
             optimization_stats = SolverStats()
             optimization_start_time = optimization_end_time = time.time()
-            if parameters.P > 0:
+            if parameters.P > 0 and step > 0:
                 output(f"Starting optimization ...")
                 output("")
                 theta, optimization_stats = optimization._optimize(theta, theta_bounds, wrapper)
@@ -581,13 +585,16 @@ class ProblemEconomy(Economy):
                 output(f"Optimization {status} after {format_seconds(optimization_time)}.")
 
             # identify what will be done when computing results
-            last_step = method != '2s' or step == 2
+            initial_step = step == 0
+            last_step = step == 2 or (method == '1s' and step == 1)
             compute_gradient = parameters.P > 0
-            compute_hessian = compute_gradient and check_optimality == 'both'
+            compute_hessian = compute_gradient and check_optimality == 'both' and step > 0
             compute_micro_covariances = moments.MM > 0
 
             # use progress information computed at the optimal theta to compute results for the step
-            if compute_hessian and not last_step:
+            if initial_step:
+                output("Updating starting values for delta and the weighting matrix ...")
+            elif compute_hessian and not last_step:
                 output("Computing the Hessian and and updating the weighting matrix ...")
             elif compute_hessian:
                 output("Computing the Hessian and estimating standard errors ...")
@@ -600,7 +607,7 @@ class ProblemEconomy(Economy):
             )
             optimization_stats.evaluations += 1
             results = ProblemResults(
-                final_progress, last_results, last_step, step_start_time, optimization_start_time,
+                final_progress, last_results, step, last_step, step_start_time, optimization_start_time,
                 optimization_end_time, optimization_stats, iteration_stats, iteration, fp_type, costs_bounds,
                 extra_micro_covariances, center_moments, W_type, se_type
             )
