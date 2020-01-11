@@ -82,7 +82,7 @@ def compute_gmm_moment_covariances(
             g -= g.mean(axis=0)
         if covariance_type == 'clustered':
             g = Groups(clustering_ids).sum(g)
-        S = sum(np.c_[g_n] @ np.c_[g_n].T for g_n in g) / N
+        S = g.T @ g / N
 
     # enforce shape and symmetry
     return np.c_[S + S.T] / 2
