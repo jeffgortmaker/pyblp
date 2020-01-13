@@ -322,17 +322,6 @@ class Agents(object):
                 if nodes.shape[1] > K2:
                     nodes = nodes[:, :K2]
 
-        # verify that weights sum to one in each market
-        if check_weights:
-            market_groups = Groups(market_ids)
-            bad_weights_index = np.abs(1 - market_groups.sum(weights)) > options.weights_tol
-            if np.any(bad_weights_index):
-                raise ValueError(
-                    f"Integration weights in these markets sum to a value that differs from 1 by more than "
-                    f"options.weights_tol: {list(market_groups.unique[bad_weights_index.flat])}."
-                )
-
-        # structure agents
         return structure_matrices({
             'market_ids': (market_ids, np.object),
             'weights': (weights, options.dtype),

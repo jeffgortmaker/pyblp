@@ -1237,9 +1237,8 @@ class ProblemResults(Results):
         would be infeasible to use during estimation, but is feasible here because :math:`\hat{\delta}(\hat{\theta})`
         only needs to be computed once given a :math:`\hat{\theta}`.
 
-        Out of the remaining accepted agents, ``draws`` are randomly selected within each market and given integration
-        weights :math:`w_{it} \propto \frac{1}{1 - s_{0ti}}` with market-specific proportionality constants defined so
-        that in each market, :math:`\sum_i w_{it} = 1`.
+        Out of the remaining accepted agents, :math:`I_t` equal to ``draws`` are randomly selected within each market
+        :math:`t` and assigned integration weights :math:`w_{it} = \frac{1}{I_t} \cdot \frac{1 - s_{0t}}{1 - s_{0ti}}`.
 
         If this procedure accepts fewer than ``draws`` agents in a market, an exception will be raised. A good rule of
         thumb is to provide more candidate draws in each market than ``draws`` divided by :math:`1 - s_{0t}` where
@@ -1419,8 +1418,9 @@ class ProblemResults(Results):
                         f"sampling_agent_data and/or sampling_integration."
                     )
                 weights_t = np.zeros_like(inside_probabilities_t)
-                weights_t[sampled_indices_t] = 1 / inside_probabilities_t[sampled_indices_t]
-                weights[market_indices[t]] = weights_t[:, None] / weights_t.sum()
+                inside_share_t = self.problem.products.shares[self.problem._product_market_indices[t]].sum()
+                weights_t[sampled_indices_t] = inside_share_t / inside_probabilities_t[sampled_indices_t] / draws
+                weights[market_indices[t]] = weights_t[:, None]
 
         return weights, errors
 

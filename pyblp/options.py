@@ -59,8 +59,6 @@ collinear_atol : `float`
     The default absolute tolerance is ``1e-14``. To disable collinearity checks, set
     ``pyblp.options.collinear_atol = pyblp.options.collinear_rtol = 0``.
 
-weights_tol : `float`
-    Tolerance for detecting integration weights that don't sum to one in each market.
 collinear_rtol : `float`
     Relative tolerance for detecting collinear columns, which is by default also ``1e-14``.
 psd_atol : `float`
@@ -88,6 +86,5 @@ verbose_tracebacks = False
 verbose_output = print
 dtype = _np.float64
 pseudo_inverses = True
-weights_tol = 1e-10
 collinear_atol = collinear_rtol = 1e-14
 psd_atol = psd_rtol = 1e-8
