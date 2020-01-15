@@ -348,16 +348,24 @@ class Simulation(Economy):
         # seed the random number generator
         state = np.random.RandomState(seed)
 
-        # load or simulate product variables in sorted order so that a seed always gives the same draws
+        # load or simulate endogenous variables
         market_groups = Groups(market_ids)
+        shares = extract_matrix(product_data, 'shares')
+        prices = extract_matrix(product_data, 'prices')
+        if shares is None:
+            shares = state.uniform(size=market_ids.size) / market_groups.expand(market_groups.counts)
+        if prices is None:
+            prices = state.uniform(size=market_ids.size)
+
+        # load or simulate product variables in sorted order so that a seed always gives the same draws
         product_mapping = {
             'market_ids': (market_ids, np.object),
             'firm_ids': (firm_ids, np.object),
             'nesting_ids': (nesting_ids, np.object),
             'clustering_ids': (clustering_ids, np.object),
             'ownership': (ownership, options.dtype),
-            'shares': (state.uniform(size=market_ids.size) / market_groups.expand(market_groups.counts), options.dtype),
-            'prices': (state.uniform(size=market_ids.size), options.dtype)
+            'shares': (shares, options.dtype),
+            'prices': (prices, options.dtype),
         }
         for formulation in product_formulations:
             if formulation is None:
