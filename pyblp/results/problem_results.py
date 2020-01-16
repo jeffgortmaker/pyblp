@@ -1217,10 +1217,10 @@ class ProblemResults(Results):
         return omega_jacobian, errors
 
     def importance_sampling(
-            self, draws: int, seed: Optional[int] = None, sampling_agent_data: Optional[Mapping] = None,
-            sampling_integration: Optional[Integration] = None, precise_agent_data: Optional[Mapping] = None,
-            precise_integration: Optional[Integration] = None, iteration: Optional[Iteration] = None,
-            fp_type: Optional[str] = None) -> 'ImportanceSamplingResults':
+            self, draws: int, ar_constant: float = 1.0, seed: Optional[int] = None,
+            sampling_agent_data: Optional[Mapping] = None, sampling_integration: Optional[Integration] = None,
+            precise_agent_data: Optional[Mapping] = None, precise_integration: Optional[Integration] = None,
+            iteration: Optional[Iteration] = None, fp_type: Optional[str] = None) -> 'ImportanceSamplingResults':
         r"""Use importance sampling to construct nodes and weights for integration.
 
         Importance sampling is done with the accept/reject procedure of
@@ -1228,9 +1228,10 @@ class ProblemResults(Results):
         ``sampling_integration`` are used to provide a large number of candidate sampling nodes :math:`\nu_{it}`
         and any demographics :math:`d_{it}`.
 
-        Out of these candidate agent data, each candidate agent :math:`i` in market :math:`t` is rejected with
-        probability equal to the probability the candidate agent chooses the outside good, :math:`s_{0ti}`, which is
-        evaluated at the estimated :math:`\hat{\theta}` and :math:`\hat{\delta}(\hat{\theta})`.
+        Out of these candidate agent data, each candidate agent :math:`i` in market :math:`t` is accepted with
+        probability :math:`\frac{1 - s_{0ti}}{M}` where :math:`M \geq 1` is some accept-reject constant. The probability
+        of choosing an inside good :math:`1 - s_{0ti}`, is evaluated at the estimated :math:`\hat{\theta}` and
+        :math:`\hat{\delta}(\hat{\theta})`.
 
         Optionally, ``precise_agent_data`` and/or ``precise_integration`` can be used to more precisely estimate
         :math:`\hat{\delta}(\hat{\theta})`. The idea is that more precise agent data (i.e., more integration nodes)
@@ -1241,13 +1242,14 @@ class ProblemResults(Results):
         :math:`t` and assigned integration weights :math:`w_{it} = \frac{1}{I_t} \cdot \frac{1 - s_{0t}}{1 - s_{0ti}}`.
 
         If this procedure accepts fewer than ``draws`` agents in a market, an exception will be raised. A good rule of
-        thumb is to provide more candidate draws in each market than ``draws`` divided by :math:`1 - s_{0t}` where
-        :math:`s_{0t}` is the share of the outside good in that market.
+        thumb is to provide more candidate draws in each market than :math:`\frac{M \times I_t}{1 - s_{0t}}`.
 
         Parameters
         ----------
         draws : `int, optional`
             Number of draws to take from ``sampling_agent_data`` in each market.
+        ar_constant : `float, optional`
+            Accept/reject constant :math:`M \geq 1`, which is by default, ``1.0``.
         seed : `int, optional`
             Passed to :class:`numpy.random.mtrand.RandomState` to seed the random number generator before importance
             sampling is done. By default, a seed is not passed to the random number generator.
@@ -1305,6 +1307,8 @@ class ProblemResults(Results):
             raise ValueError("Importance sampling is only relevant when there are agent data.")
         if not isinstance(draws, int) or draws < 1:
             raise ValueError("draws must be a positive int.")
+        if not isinstance(ar_constant, (int, float)) or ar_constant < 1:
+            raise ValueError("ar_constant must be a float that is no less than 1.")
         iteration = self.problem._coerce_optional_delta_iteration(iteration)
         self.problem._validate_fp_type(fp_type)
 
@@ -1331,7 +1335,9 @@ class ProblemResults(Results):
             )
 
         # compute importance sampling weights
-        weights, weights_errors = self._compute_importance_weights(sampling_agents, precise_delta, draws, seed)
+        weights, weights_errors = self._compute_importance_weights(
+            sampling_agents, precise_delta, draws, ar_constant, seed
+        )
         errors.extend(weights_errors)
 
         # output a warning about any errors
@@ -1383,8 +1389,8 @@ class ProblemResults(Results):
         return precise_delta, iteration_stats, errors
 
     def _compute_importance_weights(
-            self, sampling_agents: RecArray, precise_delta: Array, draws: int, seed: Optional[int]) -> (
-            Tuple[Array, List[Error]]):
+            self, sampling_agents: RecArray, precise_delta: Array, draws: int, ar_constant: float,
+            seed: Optional[int]) -> Tuple[Array, List[Error]]:
         """Compute the importance sampling weights associated with a set of agents."""
         errors: List[Error] = []
         market_indices = get_indices(sampling_agents.market_ids)
@@ -1406,9 +1412,10 @@ class ProblemResults(Results):
         for t, (probabilities_t, errors_t) in generator:
             errors.extend(errors_t)
             with np.errstate(all='ignore'):
-                inside_probabilities_t = probabilities_t.sum(axis=0)
-                probability_cutoffs_t = state.uniform(size=inside_probabilities_t.size)
-                accept_indices_t = np.where(inside_probabilities_t > probability_cutoffs_t)[0]
+                inside_share_t = self.problem.products.shares[self.problem._product_market_indices[t]].sum()
+                inside_probabilities = probabilities_t.sum(axis=0)
+                probability_cutoffs_t = state.uniform(size=inside_probabilities.size)
+                accept_indices_t = np.where(probability_cutoffs_t < inside_probabilities / ar_constant)[0]
                 try:
                     sampled_indices_t = state.choice(accept_indices_t, size=draws, replace=False)
                 except ValueError:
@@ -1417,9 +1424,8 @@ class ProblemResults(Results):
                         f"{draws}. Either decrease the number of desired draws in each market or increase the size of "
                         f"sampling_agent_data and/or sampling_integration."
                     )
-                weights_t = np.zeros_like(inside_probabilities_t)
-                inside_share_t = self.problem.products.shares[self.problem._product_market_indices[t]].sum()
-                weights_t[sampled_indices_t] = inside_share_t / inside_probabilities_t[sampled_indices_t] / draws
+                weights_t = np.zeros_like(inside_probabilities)
+                weights_t[sampled_indices_t] = inside_share_t / inside_probabilities[sampled_indices_t] / draws
                 weights[market_indices[t]] = weights_t[:, None]
 
         return weights, errors

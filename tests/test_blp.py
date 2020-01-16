@@ -110,6 +110,7 @@ def test_importance_sampling(simulated_problem: SimulatedProblemFixture, precise
     # do importance sampling and verify that the mean utility didn't change if precise integration isn't used
     sampling_results = problem_results.importance_sampling(
         draws=500,
+        ar_constant=2,
         seed=0,
         sampling_integration=Integration('mlhs', 50000, {'seed': 0}),
         precise_integration=simulation.integration if precise_delta else None
