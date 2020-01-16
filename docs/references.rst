@@ -169,6 +169,12 @@ Newey and West (1987)
 Newey, Whitney K., and Kenneth D. West (1987). `Hypothesis testing with efficient method of moments estimation <https://ideas.repec.org/a/ier/iecrev/v28y1987i3p777-87.html>`_. *International Economic Review, 28* (3), 777-787.
 
 
+Owen (2013)
+~~~~~~~~~~~
+
+Owen, Art B. (2013). `Monte Carlo theory, methods and examples <https://statweb.stanford.edu/~owen/mc/>`_.
+
+
 Petrin (2002)
 ~~~~~~~~~~~~~
 

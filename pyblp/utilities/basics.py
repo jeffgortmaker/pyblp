@@ -254,8 +254,8 @@ def format_options(mapping: Options) -> str:
 
 
 def format_table(
-        header: Sequence[Union[str, Sequence[str]]], *data: Sequence, title: Optional[str] = None,
-        include_border: bool = True, include_header: bool = True, line_indices: Container[int] = ()) -> str:
+        header: Sequence, *data: Sequence, title: Optional[str] = None, include_border: bool = True,
+        include_header: bool = True, line_indices: Container[int] = ()) -> str:
     """Format table information as a string, which has fixed widths, vertical lines after any specified indices, and
     optionally a title, border, and header.
     """
