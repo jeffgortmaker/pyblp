@@ -36,6 +36,8 @@ class ImportanceSamplingResults(StringRepresentation):
         Number of seconds it took to do importance sampling.
     draws : `int`
         Number of importance sampling draws in each market.
+    diagnostic_market_ids : `ndarray`
+        Market IDs the correspond to the ordering of the following arrays of weight diagnostics.
     weight_sums : `ndarray`
         Sum of weights in each market: :math:`\sum_i w_{it}`. If importance sampling was successful, weights should not
         sum to numbers too far from one.
@@ -67,6 +69,7 @@ class ImportanceSamplingResults(StringRepresentation):
     precise_delta: Array
     computation_time: float
     draws: int
+    diagnostic_market_ids: Array
     weight_sums: Array
     effective_draws: Array
     effective_draws_for_variance: Array
@@ -97,6 +100,7 @@ class ImportanceSamplingResults(StringRepresentation):
 
         # compute weight sums
         groups = Groups(self.sampled_agents.market_ids)
+        self.diagnostic_market_ids = groups.unique
         self.weight_sums = groups.sum(self.sampled_agents.weights)
 
         # compute effective draws
