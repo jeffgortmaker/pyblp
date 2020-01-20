@@ -409,7 +409,7 @@ def build_differentiation_instruments(
                         yield distances_mapping[k1] * distances_mapping[k2]
                 elif version == 'local':
                     with np.errstate(invalid='ignore'):
-                        close = (np.abs(distances_mapping[k1]) < sd_mapping[k1]).astype(int)
+                        close = (np.abs(distances_mapping[k1]) < sd_mapping[k1]).astype(np.float64)
                     if not interact:
                         yield close
                     else:
@@ -421,7 +421,7 @@ def build_differentiation_instruments(
         # append instrument blocks
         other_blocks.append([])
         rival_blocks.append([])
-        ownership = (firm_ids[indices_t] == firm_ids[indices_t].T).astype(int)
+        ownership = (firm_ids[indices_t] == firm_ids[indices_t].T).astype(np.float64)
         nonownership = 1 - ownership
         for term in generate_instrument_terms():
             other_blocks[-1].append((ownership * term).sum(axis=1, keepdims=True))
