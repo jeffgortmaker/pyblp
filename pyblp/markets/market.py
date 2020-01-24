@@ -731,7 +731,7 @@ class Market(Container):
         if self.H > 0:
             diagonal /= 1 - self.rho[None]
         tensor = np.zeros((self.J, self.J, self.J), options.dtype)
-        tensor[:, np.arange(self.J), np.arange(self.J)] = np.squeeze(diagonal)
+        tensor[:, np.arange(self.J), np.arange(self.J)] = np.c_[np.squeeze(diagonal)]
         return tensor
 
     def compute_capital_gamma_by_parameter_tangent(
@@ -814,7 +814,7 @@ class Market(Container):
         capital_delta_tensor = -ownership[None] * (capital_lamda_tensor - capital_gamma_tensor)
 
         # compute the product of the tensor and eta
-        capital_delta_tensor_times_eta = np.squeeze(capital_delta_tensor @ eta)
+        capital_delta_tensor_times_eta = np.c_[np.squeeze(capital_delta_tensor @ eta)]
 
         # compute derivatives of X1 and X2 with respect to prices
         X1_derivatives = self.compute_X1_derivatives('prices')
