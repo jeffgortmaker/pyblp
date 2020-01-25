@@ -832,6 +832,10 @@ class ProblemEconomy(Economy):
                                     micro_covariances_mapping[t] / moments.pairwise_market_counts[pairwise_indices]
                                 )
 
+                    # enforce shape and symmetry of micro covariances
+                    if compute_micro_covariances:
+                        micro_covariances = np.c_[micro_covariances + micro_covariances.T] / 2
+
         # replace invalid elements in delta and the micro moment values with their last values
         bad_delta_index = ~np.isfinite(delta)
         bad_micro_index = ~np.isfinite(micro)

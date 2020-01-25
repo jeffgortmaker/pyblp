@@ -56,12 +56,16 @@ class IV(object):
 def compute_gmm_weights(S: Array) -> Tuple[Array, List[Error]]:
     """Compute a GMM weighting matrix."""
     errors: List[Error] = []
+
+    # invert the matrix and handle any errors
     W, replacement = approximately_invert(S)
     if replacement:
         errors.append(exceptions.GMMMomentCovariancesInversionError(S, replacement))
     if np.isnan(W).any():
         errors.append(exceptions.InvalidMomentCovariancesError())
-    return W, errors
+
+    # enforce shape and symmetry
+    return np.c_[W + W.T] / 2, errors
 
 
 def compute_gmm_moment_covariances(

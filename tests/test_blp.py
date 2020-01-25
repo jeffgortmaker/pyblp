@@ -707,7 +707,6 @@ def test_second_step(simulated_problem: SimulatedProblemFixture) -> None:
         'delta': results1.delta,
         'W': results1.updated_W
     })
-    old_atol = option
     results2 = problem.solve(**updated_solve_options2)
     assert results1.last_results is None and results2.last_results is None
     assert results1.step == results2.step == 1
