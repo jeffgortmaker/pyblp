@@ -1,14 +1,14 @@
 """Parameters underlying the BLP model."""
 
 import abc
-from typing import Any, Type, Hashable, Iterable, List, Optional, Sequence, Set, TYPE_CHECKING, Tuple, Union
+from typing import Any, Type, Iterable, List, Optional, Sequence, Set, TYPE_CHECKING, Tuple, Union
 
 import numpy as np
 
 from . import options
 from .configurations.formulation import ColumnFormulation
 from .primitives import Container
-from .utilities.basics import Array, Bounds, Groups, format_number, format_se, format_table, generate_items
+from .utilities.basics import Array, Bounds, Groups, format_number, format_se, format_table
 
 
 # only import objects that create import cycles when checking types
@@ -168,10 +168,8 @@ class Parameters(object):
             bounded: bool = False, allow_linear_nans: bool = False) -> None:
         """Coerce parameters into usable formats before storing information about fixed (equal bounds) and unfixed
         (unequal bounds) elements of sigma, pi, rho, beta, and gamma. Also store information about eliminated
-        (concentrated out) parameters in beta and gamma. For unfixed parameters, verify that values have been chosen
-        such that choice probability computation is unlikely to overflow. If bounds are unspecified, determine
-        reasonable bounds as well. If allow_linear_nans is True, allow null linear parameters in order to denote those
-        parameters that will be concentrated out.
+        (concentrated out) parameters in beta and gamma. If allow_linear_nans is True, allow null linear parameters in
+        order to denote those parameters that will be concentrated out.
         """
 
         # store labels
@@ -254,44 +252,15 @@ class Parameters(object):
         # count the number of unfixed parameters
         self.P = len(self.unfixed)
 
-        # skip overflow checks and bound computation if parameters aren't bounded
+        # define default bounds
         if bounded:
-            # identify which parameters need default bounds and initialize default bounds as starting values
-            unbounded_parameters: List[Parameter] = []
             for parameter in self.unfixed:
                 location = parameter.location
-                if isinstance(parameter, SigmaParameter) and sigma_bounds is None:
-                    unbounded_parameters.append(parameter)
-                    self.sigma_bounds[0][location] = self.sigma_bounds[1][location] = self.sigma[location]
-                elif isinstance(parameter, PiParameter) and pi_bounds is None:
-                    unbounded_parameters.append(parameter)
-                    self.pi_bounds[0][location] = self.pi_bounds[1][location] = self.pi[location]
+                if isinstance(parameter, SigmaParameter) and sigma_bounds is None and location[0] == location[1]:
+                    self.sigma_bounds[0][location] = min(0, self.sigma[location])
                 elif isinstance(parameter, RhoParameter) and rho_bounds is None:
-                    unbounded_parameters.append(parameter)
-                    self.rho_bounds[0][location] = self.rho_bounds[1][location] = self.rho[location]
-
-            # market-level computation is needed to compute default bounds
-            from .markets.market import Market
-
-            def market_factory(s: Hashable) -> Tuple[Market, List[Parameter]]:
-                """Build a market along with arguments used to compute default parameter bounds."""
-                market_s = Market(economy, s, self, self.sigma, self.pi, self.rho)
-                return market_s, unbounded_parameters
-
-            # compute default bounds market-by-market
-            for _, bounds_t in generate_items(economy.unique_market_ids, market_factory, Market.compute_default_bounds):
-                for parameter, (lb_t, ub_t) in zip(unbounded_parameters, bounds_t):
-                    location = parameter.location
-                    if isinstance(parameter, SigmaParameter):
-                        self.sigma_bounds[0][location] = min(self.sigma_bounds[0][location], lb_t)
-                        self.sigma_bounds[1][location] = max(self.sigma_bounds[1][location], ub_t)
-                    elif isinstance(parameter, PiParameter):
-                        self.pi_bounds[0][location] = min(self.pi_bounds[0][location], lb_t)
-                        self.pi_bounds[1][location] = max(self.pi_bounds[1][location], ub_t)
-                    else:
-                        assert isinstance(parameter, RhoParameter)
-                        self.rho_bounds[0][location] = min(self.rho_bounds[0][location], lb_t)
-                        self.rho_bounds[1][location] = max(self.rho_bounds[1][location], ub_t)
+                    self.rho_bounds[0][location] = min(0, self.rho[location])
+                    self.rho_bounds[1][location] = max(0.99, self.rho[location])
 
         # identify whether there are any bounds
         self.any_bounds = np.isfinite(self.compress_bounds()).any()

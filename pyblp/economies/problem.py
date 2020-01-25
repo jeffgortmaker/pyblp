@@ -140,11 +140,8 @@ class ProblemEconomy(Economy):
         sigma_bounds : `tuple, optional`
             Configuration for :math:`\Sigma` bounds of the form ``(lb, ub)``, in which both ``lb`` and ``ub`` are of the
             same size as ``sigma``. Each element in ``lb`` and ``ub`` determines the lower and upper bound for its
-            counterpart in ``sigma``. If ``optimization`` does not support bounds, these will be ignored.
-
-            By default, if bounds are supported, the diagonal of ``sigma`` is bounded from below by zero. Conditional on
-            :math:`X_2`, :math:`\mu`, and an initial estimate of :math:`\mu`, default bounds for off-diagonal parameters
-            are chosen to reduce the need for overflow safety precautions.
+            counterpart in ``sigma``. If ``optimization`` does not support bounds, these will be ignored. If bounds are
+            supported, the diagonal of ``sigma`` is by default bounded from below by zero.
 
             Values above the diagonal are ignored. Lower and upper bounds corresponding to zeros in ``sigma`` are set to
             zero. Setting a lower bound equal to an upper bound fixes the corresponding element, removing it from
@@ -154,10 +151,8 @@ class ProblemEconomy(Economy):
         pi_bounds : `tuple, optional`
             Configuration for :math:`\Pi` bounds of the form ``(lb, ub)``, in which both ``lb`` and ``ub`` are of the
             same size as ``pi``. Each element in ``lb`` and ``ub`` determines the lower and upper bound for its
-            counterpart in ``pi``. If ``optimization`` does not support bounds, these will be ignored.
-
-            By default, if bounds are supported, conditional on :math:`X_2`, :math:`d`, and an initial estimate of
-            :math:`\mu`, default bounds are chosen to reduce the need for overflow safety precautions.
+            counterpart in ``pi``. If ``optimization`` does not support bounds, these will be ignored. By default,
+            ``pi`` is unbounded.
 
             Lower and upper bounds corresponding to zeros in ``pi`` are set to zero. Setting a lower bound equal to an
             upper bound fixes the corresponding element, removing it from :math:`\theta`. Both ``None`` and
@@ -168,9 +163,8 @@ class ProblemEconomy(Economy):
             same size as ``rho``. Each element in ``lb`` and ``ub`` determines the lower and upper bound for its
             counterpart in ``rho``. If ``optimization`` does not support bounds, these will be ignored.
 
-            By default, if bounds are supported, all elements are bounded from below by ``0``, which corresponds to the
-            simple logit model. Conditional on an initial estimate of :math:`\mu`, upper bounds are chosen to reduce the
-            need for overflow safety precautions, and are less than ``1`` because larger values are inconsistent with
+            If bounds are supported, ``rho`` is by default bounded from below by ``0``, which corresponds to the simple
+            logit model, and bounded from above by ``0.99`` because values greater than ``1`` are inconsistent with
             utility maximization.
 
             Lower and upper bounds corresponding to zeros in ``rho`` are set to zero. Setting a lower bound equal to an
@@ -182,7 +176,7 @@ class ProblemEconomy(Economy):
             same size as ``beta``. Each element in ``lb`` and ``ub`` determines the lower and upper bound for its
             counterpart in ``beta``. If ``optimization`` does not support bounds, these will be ignored.
 
-            Usually, this is left unspecified, unless there is a supply side, in which case parameters on endogenous
+            Usually, this is left unspecified unless there is a supply side, in which case parameters on endogenous
             product characteristics cannot be concentrated out of the problem. It is generally a good idea to constrain
             such parameters to be nonzero so that the intra-firm Jacobian of shares with respect to prices does not
             become singular.
@@ -232,8 +226,8 @@ class ProblemEconomy(Economy):
             ``Optimization('l-bfgs-b', {'ftol': 0, 'gtol': 1e-8})`` is used. If available, ``Optimization('knitro')``
             may be preferable. Generally, it is recommended to consider a number of different optimization routines and
             starting values, verifying that :math:`\hat{\theta}` satisfies both the first and second order conditions.
-            Routines that do not support bounds will ignore ``sigma_bounds`` and ``pi_bounds``. Choosing a routine that
-            does not use analytic gradients will often down estimation.
+            Choosing a routine that supports bounds (and configuring bounds) is typically a good idea. Choosing a
+            routine that does not use analytic gradients will often down estimation.
         check_optimality : `str, optional`
             How to check for optimality (first and second order conditions) after the optimization routine finishes.
             The following configurations are supported:

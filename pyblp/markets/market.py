@@ -9,10 +9,7 @@ from .. import exceptions, options
 from ..configurations.iteration import ContractionResults, Iteration
 from ..economies.economy import Economy
 from ..moments import EconomyMoments, MarketMoments, FirstChoiceCovarianceMoment
-from ..parameters import (
-    BetaParameter, GammaParameter, NonlinearCoefficient, Parameter, Parameters, PiParameter, RhoParameter,
-    SigmaParameter
-)
+from ..parameters import BetaParameter, GammaParameter, NonlinearCoefficient, Parameter, Parameters, RhoParameter
 from ..primitives import Container
 from ..utilities.algebra import approximately_invert, approximately_solve
 from ..utilities.basics import Array, RecArray, Error, Groups, SolverStats, update_matrices
@@ -165,45 +162,6 @@ class Market(Container):
         if X2 is None:
             X2 = self.products.X2
         return X2 @ self.compute_random_coefficients(sigma, pi)
-
-    def compute_default_bounds(self, nonlinear_parameters: List[Parameter]) -> List[Tuple[Array, Array]]:
-        """Compute default bounds for nonlinear parameters."""
-        def normalize(x: float) -> float:
-            """Reduce an initial parameter bound by 1% and round it to two significant figures."""
-            if not np.isfinite(x) or x == 0:
-                return x
-            reduced = 0.99 * x
-            return np.round(reduced, 1 + int(reduced < 1) - int(np.log10(reduced)))
-
-        # compute common components of default bounds
-        mu_norm = np.abs(self.mu).max()
-        mu_max = np.log(np.finfo(np.float64).max)
-        bounds: List[Tuple[Array, Array]] = []
-
-        # compute the bounds parameter-by-parameter
-        with np.errstate(divide='ignore', invalid='ignore'):
-            for parameter in nonlinear_parameters:
-                if isinstance(parameter, SigmaParameter):
-                    sigma = self.sigma.copy()
-                    sigma[parameter.location] = 0
-                    additional_mu_norm = np.abs(self.compute_mu(sigma=sigma)).max()
-                    v_norm = np.abs(parameter.get_agent_characteristic(self)).max()
-                    x_norm = np.abs(parameter.get_product_characteristic(self)).max()
-                    bound = normalize(max(0, mu_max - additional_mu_norm) / v_norm / x_norm)
-                    bounds.append((-bound if parameter.location[0] != parameter.location[1] else 0, bound))
-                elif isinstance(parameter, PiParameter):
-                    pi = self.pi.copy()
-                    pi[parameter.location] = 0
-                    additional_mu_norm = np.abs(self.compute_mu(pi=pi)).max()
-                    v_norm = np.abs(parameter.get_agent_characteristic(self)).max()
-                    x_norm = np.abs(parameter.get_product_characteristic(self)).max()
-                    bound = normalize(max(0, mu_max - additional_mu_norm) / v_norm / x_norm)
-                    bounds.append((-bound, bound))
-                else:
-                    assert isinstance(parameter, RhoParameter)
-                    bounds.append((0, normalize(1 - min(1, mu_norm / mu_max))))
-
-        return bounds
 
     def update_delta_with_variable(self, name: str, variable: Array) -> Array:
         """Update delta to reflect a changed variable by adding any parameter-weighted characteristic changes to X1."""
