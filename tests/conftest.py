@@ -259,10 +259,10 @@ def medium_blp_simulation() -> SimulationFixture:
 
 @pytest.fixture(scope='session')
 def large_blp_simulation() -> SimulationFixture:
-    """Solve a simulation with 20 markets, varying numbers of products per market, a linear constant, linear/nonlinear
-    prices, a linear/nonlinear/cost characteristic, another three linear characteristics, another two cost
-    characteristics, demographics interacted with prices and the linear/nonlinear/cost characteristic, dense parameter
-    matrices, a log-linear cost specification, and local differentiation instruments.
+    """Solve a simulation with 20 markets, varying numbers of products per market, a linear constant, log-linear
+    coefficients on prices, a linear/nonlinear/cost characteristic, another three linear characteristics, another two
+    cost characteristics, demographics interacted with prices and the linear/nonlinear/cost characteristic, dense
+    parameter matrices, a log-linear cost specification, and local differentiation instruments.
     """
     id_data = build_id_data(T=20, J=20, F=9)
     keep = np.arange(id_data.size)
@@ -270,8 +270,8 @@ def large_blp_simulation() -> SimulationFixture:
     id_data = id_data[keep[:int(0.5 * id_data.size)]]
     simulation = Simulation(
         product_formulations=(
-            Formulation('1 + prices + x + y + z + q'),
-            Formulation('0 + prices + x'),
+            Formulation('1 + x + y + z + q'),
+            Formulation('0 + I(-prices) + x'),
             Formulation('0 + log(x) + log(a) + log(b)')
         ),
         product_data={
@@ -279,21 +279,22 @@ def large_blp_simulation() -> SimulationFixture:
             'firm_ids': id_data.firm_ids,
             'clustering_ids': np.random.RandomState(2).choice(range(30), id_data.size)
         },
-        beta=[1, -10, 1, 2, 3, 1],
+        beta=[1, 1, 2, 3, 1],
         sigma=[
-            [+1.0, 0],
+            [+0.5, 0],
             [-0.1, 2]
         ],
         pi=[
-            [1, 0],
-            [0, 2]
+            [2, 1, 0],
+            [0, 0, 2]
         ],
         gamma=[0.1, 0.2, 0.3],
-        agent_formulation=Formulation('0 + f + g'),
+        agent_formulation=Formulation('1 + f + g'),
         integration=Integration('product', 4),
         xi_variance=0.00001,
         omega_variance=0.00001,
         correlation=0.9,
+        distributions=['lognormal', 'normal'],
         costs_type='log',
         seed=2
     )
@@ -353,10 +354,10 @@ def small_nested_blp_simulation() -> SimulationFixture:
 
 @pytest.fixture(scope='session')
 def large_nested_blp_simulation() -> SimulationFixture:
-    """Solve a simulation with 20 markets, varying numbers of products per market, a linear constant, linear/nonlinear
-    prices, a linear/nonlinear/cost characteristic, another three linear characteristics, another two cost
-    characteristics, demographics interacted with prices and the linear/nonlinear/cost characteristic, three nesting
-    groups with the same nesting parameter, and a log-linear cost specification.
+    """Solve a simulation with 20 markets, varying numbers of products per market, a linear constant, log-normal
+    coefficients on prices, a linear/nonlinear/cost characteristic, another three linear characteristics, another two
+    cost characteristics, demographics interacted with prices and the linear/nonlinear/cost characteristic, three
+    nesting groups with the same nesting parameter, and a log-linear cost specification.
     """
     id_data = build_id_data(T=20, J=20, F=9)
     keep = np.arange(id_data.size)
@@ -364,8 +365,8 @@ def large_nested_blp_simulation() -> SimulationFixture:
     id_data = id_data[keep[:int(0.5 * id_data.size)]]
     simulation = Simulation(
         product_formulations=(
-            Formulation('1 + prices + x + y + z + q'),
-            Formulation('0 + prices + x'),
+            Formulation('1 + x + y + z + q'),
+            Formulation('0 + I(-prices) + x'),
             Formulation('0 + log(x) + log(a) + log(b)')
         ),
         product_data={
@@ -374,22 +375,23 @@ def large_nested_blp_simulation() -> SimulationFixture:
             'nesting_ids': np.random.RandomState(2).choice(['f', 'g', 'h'], id_data.size),
             'clustering_ids': np.random.RandomState(2).choice(range(30), id_data.size)
         },
-        beta=[1, -10, 1, 2, 3, 1],
+        beta=[1, 1, 2, 3, 1],
         sigma=[
-            [1, 0],
-            [0, 2]
+            [0.5, 0],
+            [0.0, 2]
         ],
         pi=[
-            [1, 0],
-            [0, 2]
+            [2, 1, 0],
+            [0, 0, 2]
         ],
         gamma=[0.1, 0.2, 0.3],
         rho=0.1,
-        agent_formulation=Formulation('0 + f + g'),
+        agent_formulation=Formulation('1 + f + g'),
         integration=Integration('product', 4),
         xi_variance=0.00001,
         omega_variance=0.00001,
         correlation=0.9,
+        distributions=['lognormal', 'normal'],
         costs_type='log',
         seed=2
     )

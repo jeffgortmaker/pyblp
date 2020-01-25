@@ -90,6 +90,7 @@ Features
 - Fixed effect absorption
 - Nonlinear functions of product characteristics
 - Concentrating out linear parameters
+- Normal and lognormal random coefficients
 - Parameter bounds and constraints
 - Random coefficients nested logit (RCNL)
 - Varying nesting parameters across groups

@@ -1,6 +1,7 @@
 """Economy underlying the BLP model."""
 
 import abc
+import collections
 import functools
 from typing import Any, Dict, Hashable, List, Mapping, Optional, Sequence
 
@@ -19,6 +20,7 @@ class Economy(Container, StringRepresentation):
 
     product_formulations: Sequence[Optional[Formulation]]
     agent_formulation: Optional[Formulation]
+    distributions: List[str]
     costs_type: str
     unique_market_ids: Array
     unique_firm_ids: Array
@@ -46,7 +48,7 @@ class Economy(Container, StringRepresentation):
     @abc.abstractmethod
     def __init__(
             self, product_formulations: Sequence[Optional[Formulation]], agent_formulation: Optional[Formulation],
-            products: RecArray, agents: RecArray, costs_type: str) -> None:
+            products: RecArray, agents: RecArray, distributions: Optional[Sequence[str]], costs_type: str) -> None:
         """Store information about formulations and data. Any fixed effects should be absorbed after initialization."""
 
         # store data and formulations
@@ -58,11 +60,6 @@ class Economy(Container, StringRepresentation):
         self.unique_market_ids = np.unique(self.products.market_ids.flatten())
         self.unique_firm_ids = np.unique(self.products.firm_ids.flatten())
         self.unique_nesting_ids = np.unique(self.products.nesting_ids).flatten()
-
-        # validate other configuration information
-        if costs_type not in {'linear', 'log'}:
-            raise ValueError("costs_type must be 'linear' or 'log'.")
-        self.costs_type = costs_type
 
         # count dimensions
         self.N = self.products.shape[0]
@@ -95,6 +92,23 @@ class Economy(Container, StringRepresentation):
         if self.ES > 0:
             assert product_formulations[2] is not None
             self._absorb_supply_ids = functools.partial(product_formulations[2]._build_absorb(self.products.supply_ids))
+
+        # validate and store random coefficient distributions
+        if distributions is None:
+            self.distributions = ['normal'] * self.K2
+        else:
+            if not isinstance(distributions, collections.abc.Sequence):
+                raise TypeError("distributions must be None or a sequence.")
+            if len(distributions) != self.K2:
+                raise ValueError(f"distributions must be None or a sequence of length {self.K2}.")
+            if any(d not in {'normal', 'lognormal'} for d in distributions):
+                raise TypeError("distributions must be None or a sequence of 'normal' or 'lognormal' strings.")
+            self.distributions = list(distributions)
+
+        # validate th type of marginal costs
+        if costs_type not in {'linear', 'log'}:
+            raise ValueError("costs_type must be 'linear' or 'log'.")
+        self.costs_type = costs_type
 
     def __str__(self) -> str:
         """Format economy information as a string."""
@@ -270,8 +284,7 @@ class Economy(Container, StringRepresentation):
 
         return np.column_stack(columns)
 
-    def _compute_true_X3(
-            self, data_override: Optional[Mapping] = None, index: Optional[Array] = None) -> Array:
+    def _compute_true_X3(self, data_override: Optional[Mapping] = None, index: Optional[Array] = None) -> Array:
         """Compute X3 or columns of X3 without any absorbed supply-side fixed effects."""
         if index is None:
             index = np.ones(self.K3, np.bool)

@@ -132,17 +132,32 @@ class Market(Container):
         return np.where(tiled_ids == tiled_ids.T, 1, 0)
 
     def compute_random_coefficients(self, sigma: Optional[Array] = None, pi: Optional[Array] = None) -> Array:
-        """Compute the random coefficients by weighting agent characteristics with nonlinear parameters. By default, use
-        unchanged parameters.
-        """
+        """Compute all random coefficients. By default, use unchanged parameter values."""
         if sigma is None:
             sigma = self.sigma
         if pi is None:
             pi = self.pi
+
         coefficients = sigma @ self.agents.nodes.T
         if self.D > 0:
             coefficients += pi @ self.agents.demographics.T
+
+        for k, distribution in enumerate(self.parameters.distributions):
+            if distribution == 'lognormal':
+                coefficients[k] = np.exp(coefficients[k])
+
         return coefficients
+
+    def compute_single_random_coefficient(self, k: int) -> Array:
+        """Compute a single random coefficient."""
+        coefficient = self.sigma[[k], :] @ self.agents.nodes.T
+        if self.D > 0:
+            coefficient += self.pi[[k], :] @ self.agents.demographics.T
+
+        if self.parameters.distributions[k] == 'lognormal':
+            coefficient = np.exp(coefficient)
+
+        return coefficient
 
     def compute_mu(
             self, X2: Optional[Array] = None, sigma: Optional[Array] = None, pi: Optional[Array] = None) -> Array:
@@ -566,6 +581,8 @@ class Market(Container):
             tangent += X1_derivatives[:, [parameter.location[0]]]
         elif isinstance(parameter, NonlinearCoefficient):
             v = parameter.get_agent_characteristic(self)
+            if parameter.get_distribution(self) == 'lognormal':
+                v *= self.compute_single_random_coefficient(parameter.location[0]).T
             tangent += X2_derivatives[:, [parameter.location[0]]] @ v.T
         else:
             assert isinstance(parameter, (GammaParameter, RhoParameter))
@@ -587,8 +604,10 @@ class Market(Container):
                 x = parameter.get_product_characteristic(self)
                 probabilities_tangent = probabilities * (x - x.T @ probabilities)
             elif isinstance(parameter, NonlinearCoefficient):
-                v = parameter.get_agent_characteristic(self)
                 x = parameter.get_product_characteristic(self)
+                v = parameter.get_agent_characteristic(self)
+                if parameter.get_distribution(self) == 'lognormal':
+                    v *= self.compute_single_random_coefficient(parameter.location[0]).T
                 probabilities_tangent = probabilities * v.T * (x - x.T @ probabilities)
             else:
                 assert isinstance(parameter, GammaParameter)
@@ -610,9 +629,12 @@ class Market(Container):
             # compute the tangent of marginal probabilities with respect to the parameter
             B = marginals * A_sums
             marginals_tangent = B - marginals * B.sum(axis=0, keepdims=True)
+
         elif isinstance(parameter, NonlinearCoefficient):
-            v = parameter.get_agent_characteristic(self)
             x = parameter.get_product_characteristic(self)
+            v = parameter.get_agent_characteristic(self)
+            if parameter.get_distribution(self) == 'lognormal':
+                v *= self.compute_single_random_coefficient(parameter.location[0]).T
 
             # compute the tangent of conditional probabilities with respect to the parameter
             A = conditionals * x
@@ -622,6 +644,7 @@ class Market(Container):
             # compute the tangent of marginal probabilities with respect to the parameter
             B = marginals * A_sums * v.T
             marginals_tangent = B - marginals * B.sum(axis=0, keepdims=True)
+
         elif isinstance(parameter, RhoParameter):
             group_associations = parameter.get_group_associations(self.groups)
             associations = self.groups.expand(group_associations)
@@ -643,6 +666,7 @@ class Market(Container):
                 )
                 marginals_tangent = group_associations * B - marginals * (group_associations.T @ B)
             marginals_tangent[~np.isfinite(marginals_tangent)] = 0
+
         else:
             assert isinstance(parameter, GammaParameter)
             conditionals_tangent = np.zeros_like(conditionals)

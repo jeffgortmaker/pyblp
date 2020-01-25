@@ -509,8 +509,9 @@ def test_merger(simulated_problem: SimulatedProblemFixture, ownership: bool, sol
     # get actual prices and shares
     merger_simulation = Simulation(
         simulation.product_formulations, merger_product_data, simulation.beta, simulation.sigma, simulation.pi,
-        simulation.gamma, simulation.rho, simulation.agent_formulation, simulation.agent_data, xi=simulation.xi,
-        omega=simulation.omega, costs_type=simulation.costs_type
+        simulation.gamma, simulation.rho, simulation.agent_formulation,
+        simulation.agent_data, xi=simulation.xi, omega=simulation.omega, distributions=simulation.distributions,
+        costs_type=simulation.costs_type
     )
     actual = merger_simulation.replace_endogenous(**solve_options)
 
@@ -518,7 +519,8 @@ def test_merger(simulated_problem: SimulatedProblemFixture, ownership: bool, sol
     costs = results.compute_costs()
     results_simulation = Simulation(
         simulation.product_formulations[:2], merger_product_data, results.beta, results.sigma, results.pi,
-        rho=results.rho, agent_formulation=simulation.agent_formulation, agent_data=simulation.agent_data, xi=results.xi
+        rho=results.rho, agent_formulation=simulation.agent_formulation, agent_data=simulation.agent_data,
+        xi=results.xi, distributions=simulation.distributions,
     )
     estimated = results_simulation.replace_endogenous(costs, problem.products.prices, **solve_options)
     estimated_prices = results.compute_prices(merger_ids, merger_ownership, costs, **solve_options)
@@ -705,6 +707,7 @@ def test_second_step(simulated_problem: SimulatedProblemFixture) -> None:
         'delta': results1.delta,
         'W': results1.updated_W
     })
+    old_atol = option
     results2 = problem.solve(**updated_solve_options2)
     assert results1.last_results is None and results2.last_results is None
     assert results1.step == results2.step == 1

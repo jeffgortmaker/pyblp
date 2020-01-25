@@ -34,9 +34,9 @@ class ProblemEconomy(Economy):
     @abc.abstractmethod
     def __init__(
             self, product_formulations: Sequence[Optional[Formulation]], agent_formulation: Optional[Formulation],
-            products: RecArray, agents: RecArray, costs_type: str) -> None:
+            products: RecArray, agents: RecArray, distributions: Optional[Sequence[str]], costs_type: str) -> None:
         """Initialize the underlying economy with product and agent data."""
-        super().__init__(product_formulations, agent_formulation, products, agents, costs_type)
+        super().__init__(product_formulations, agent_formulation, products, agents, distributions, costs_type)
 
     def solve(
             self, sigma: Optional[Any] = None, pi: Optional[Any] = None, rho: Optional[Any] = None,
@@ -1053,6 +1053,23 @@ class Problem(ProblemEconomy):
         characteristics) will be built. However, if ``sigma`` in :meth:`Problem.solve` is left unspecified or
         specified with columns fixed at zero, fewer columns will be used.
 
+    distributions : `sequence of str, optional`
+        Random coefficient distributions. By default, random coefficients in :eq:`mu` are assumed to be normally
+        distributed. Non-default distributions can be specified with a list of the following supported strings:
+
+            - ``'normal'`` (default) - The random coefficient is assumed to be normal.
+
+            - ``'lognormal'`` - The random coefficient is assumed to be lognormal. The coefficient's column in :eq:`mu`
+              is exponentiated before being pre-multiplied by :math:`X_2`.
+
+        The list should have as many strings as there are columns in :math:`X_2`. Each string determines the
+        distribution of the random coefficient on the corresponding product characteristic in :math:`X_2`.
+
+        A typical example of a lognormal coefficient is one on prices. Implementing this typically involves having a
+        ``I(-prices)`` in the formulation for :math:`X_2`, and instead of including ``prices`` in :math:`X_1`,
+        including a ``1`` in the ``agent_formulation``. Then the corresponding coefficient in :math:`\Pi` will serve as
+        the mean parameter for the lognormal random coefficient on negative prices, :math:`-p_{jt}`.
+
     costs_type : `str, optional`
         Functional form of the marginal cost function :math:`\tilde{c} = f(c)` in :eq:`costs`. The following
         specifications are supported:
@@ -1102,6 +1119,8 @@ class Problem(ProblemEconomy):
         Unique firm IDs in product data.
     unique_nesting_ids : `ndarray`
         Unique nesting group IDs in product data.
+    distributions : `list of str`
+        Random coefficient distributions.
     costs_type : `str`
         Functional form of the marginal cost function :math:`\tilde{c} = f(c)`.
     T : `int`
@@ -1142,7 +1161,8 @@ class Problem(ProblemEconomy):
     def __init__(
             self, product_formulations: Union[Formulation, Sequence[Optional[Formulation]]], product_data: Mapping,
             agent_formulation: Optional[Formulation] = None, agent_data: Optional[Mapping] = None,
-            integration: Optional[Integration] = None, costs_type: str = 'linear', add_exogenous: bool = True) -> None:
+            integration: Optional[Integration] = None, distributions: Optional[Sequence[str]] = None,
+            costs_type: str = 'linear', add_exogenous: bool = True) -> None:
         """Initialize the underlying economy with product and agent data before absorbing fixed effects."""
 
         # keep track of long it takes to initialize the problem
@@ -1161,7 +1181,7 @@ class Problem(ProblemEconomy):
         # initialize the underlying economy with structured product and agent data
         products = Products(product_formulations, product_data, add_exogenous=add_exogenous)
         agents = Agents(products, agent_formulation, agent_data, integration)
-        super().__init__(product_formulations, agent_formulation, products, agents, costs_type)
+        super().__init__(product_formulations, agent_formulation, products, agents, distributions, costs_type)
 
         # absorb any demand-side fixed effects
         if self._absorb_demand_ids is not None:
@@ -1224,7 +1244,7 @@ class OptimalInstrumentProblem(ProblemEconomy):
         # initialize the underlying economy with structured product and agent data
         super().__init__(
             problem.product_formulations, problem.agent_formulation, updated_products, problem.agents,
-            costs_type=problem.costs_type
+            distributions=problem.distributions, costs_type=problem.costs_type
         )
 
         # absorb any demand-side fixed effects, which have already been absorbed into X1
@@ -1267,7 +1287,7 @@ class ImportanceSamplingProblem(ProblemEconomy):
         # initialize the underlying economy with structured product and agent data
         super().__init__(
             problem.product_formulations, problem.agent_formulation, problem.products, sampled_agents,
-            costs_type=problem.costs_type
+            distributions=problem.distributions, costs_type=problem.costs_type
         )
 
         # output information about the re-created problem

@@ -134,7 +134,8 @@ class SimulationResults(StringRepresentation):
             self, product_formulations: Optional[Union[Formulation, Sequence[Optional[Formulation]]]] = None,
             product_data: Optional[Mapping] = None, agent_formulation: Optional[Formulation] = None,
             agent_data: Optional[Mapping] = None, integration: Optional[Integration] = None,
-            costs_type: Optional[str] = None, add_exogenous: bool = True) -> 'Problem':
+            distributions: Optional[Sequence[str]] = None, costs_type: Optional[str] = None,
+            add_exogenous: bool = True) -> 'Problem':
         """Convert the solved simulation into a problem.
 
         Arguments are the same as those of :class:`Problem`. By default, the structure of the problem will be the same
@@ -166,6 +167,8 @@ class SimulationResults(StringRepresentation):
             By default, :attr:`Simulation.agent_data`.
         integration : `Integration, optional`
             By default, this is unspecified.
+        distributions : `sequence of str, optional`
+            By default, :attr:`Simulation.distributions`.
         costs_type : `str, optional`
             By default, :attr:`Simulation.costs_type`.
         add_exogenous : `bool, optional`
@@ -194,11 +197,14 @@ class SimulationResults(StringRepresentation):
             agent_formulation = self.simulation.agent_formulation
         if agent_data is None:
             agent_data = self.simulation.agent_data
+        if distributions is None:
+            distributions = self.simulation.distributions
         if costs_type is None:
             costs_type = self.simulation.costs_type
         from ..economies.problem import Problem  # noqa
         return Problem(
-            product_formulations, product_data, agent_formulation, agent_data, integration, costs_type, add_exogenous
+            product_formulations, product_data, agent_formulation, agent_data, integration, distributions, costs_type,
+            add_exogenous
         )
 
     def _compute_default_instruments(self) -> Tuple[Array, Array]:

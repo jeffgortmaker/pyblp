@@ -52,6 +52,10 @@ class NonlinearCoefficient(Coefficient):
         """Get the product characteristic associated with the parameter."""
         return market.products.X2[:, [self.location[0]]]
 
+    def get_distribution(self, market: 'Market') -> str:
+        """Get the random coefficient distribution associated with the parameter."""
+        return market.parameters.distributions[self.location[0]]
+
     @abc.abstractmethod
     def get_agent_characteristic(self, market: 'Market') -> Array:
         """Get the agent characteristic associated with the parameter."""
@@ -132,6 +136,7 @@ class Parameters(object):
     rho_labels: List[str]
     beta_labels: List[str]
     gamma_labels: List[str]
+    distributions: List[str]
     sigma: Array
     pi: Array
     rho: Array
@@ -175,6 +180,9 @@ class Parameters(object):
         self.rho_labels = [str(i) for i in economy.unique_nesting_ids]
         self.beta_labels = [str(f) for f in economy._X1_formulations]
         self.gamma_labels = [str(f) for f in economy._X3_formulations]
+
+        # store distributions
+        self.distributions = economy.distributions
 
         # validate and store parameters
         self.sigma = self.initialize_matrix("sigma", "X2 was formulated", sigma, [(economy.K2, economy.K2)])
@@ -431,18 +439,21 @@ class Parameters(object):
             pi_se_like: Optional[Array] = None) -> str:
         """Format matrices (and optional standard errors) of the same size as sigma and pi as a string."""
 
+        # determine whether a distributions column is necessary
+        distributions_column = any(d != 'normal' for d in self.distributions)
+
         # construct the header
-        line_indices: Set[int] = set()
-        header = ["Sigma:"] + self.sigma_labels
+        line_indices: Set[int] = {0} if distributions_column else set()
+        header = (["Distributions:"] if distributions_column else []) + ["Sigma:"] + self.sigma_labels
         if self.pi_labels:
             line_indices.add(len(header) - 1)
             header.extend(["Pi:"] + self.pi_labels)
 
         # construct the data
         data: List[List[str]] = []
-        for row_index, row_label in enumerate(self.sigma_labels):
+        for row_index, (row_distribution, row_label) in enumerate(zip(self.distributions, self.sigma_labels)):
             # add a row of values
-            values_row = [row_label]
+            values_row = ([row_distribution.title()] if distributions_column else []) + [row_label]
             for column_index in range(row_index + 1):
                 values_row.append(format_number(sigma_like[row_index, column_index]))
             values_row.extend([""] * (sigma_like.shape[1] - row_index - 1))
@@ -463,7 +474,7 @@ class Parameters(object):
             unfixed_pi_indices = {p.location[1] for p in relevant_unfixed if isinstance(p, PiParameter)}
 
             # add a row of standard errors
-            se_row = [""]
+            se_row = (2 if distributions_column else 1) * [""]
             for column_index in range(row_index + 1):
                 se = sigma_se_like[row_index, column_index]
                 se_row.append(format_se(se) if column_index in unfixed_sigma_indices else "")

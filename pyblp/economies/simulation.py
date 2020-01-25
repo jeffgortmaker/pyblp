@@ -191,6 +191,23 @@ class Simulation(Economy):
     correlation : `float, optional`
         Correlation between :math:`\xi` and :math:`\omega`. The default value is ``0.9``. This is ignored if ``xi`` or
         ``omega`` is specified.
+    distributions : `sequence of str, optional`
+        Random coefficient distributions. By default, random coefficients in :eq:`mu` are assumed to be normally
+        distributed. Non-default distributions can be specified with a list of the following supported strings:
+
+            - ``'normal'`` (default) - The random coefficient is assumed to be normal.
+
+            - ``'lognormal'`` - The random coefficient is assumed to be lognormal. The coefficient's column in :eq:`mu`
+              is exponentiated before being pre-multiplied by :math:`X_2`.
+
+        The list should have as many strings as there are columns in :math:`X_2`. Each string determines the
+        distribution of the random coefficient on the corresponding product characteristic in :math:`X_2`.
+
+        A typical example of a lognormal coefficient is one on prices. Implementing this typically involves having a
+        ``I(-prices)`` in the formulation for :math:`X_2`, and instead of including ``prices`` in :math:`X_1`,
+        including a ``1`` in the ``agent_formulation``. Then the corresponding coefficient in :math:`\Pi` will serve as
+        the mean parameter for the lognormal random coefficient on negative prices, :math:`-p_{jt}`.
+
     costs_type : `str, optional`
         Specification of the marginal cost function :math:`\tilde{c} = f(c)` in :eq:`costs`. The following
         specifications are supported:
@@ -248,6 +265,8 @@ class Simulation(Economy):
         Unobserved demand-side product characteristics, :math:`\xi`.
     omega : `ndarray`
         Unobserved supply-side product characteristics, :math:`\omega`.
+    distributions : `list of str`
+        Random coefficient distributions.
     costs_type : `str`
         Functional form of the marginal cost function :math:`\tilde{c} = f(c)`.
     T : `int`
@@ -305,7 +324,8 @@ class Simulation(Economy):
             rho: Optional[Any] = None, agent_formulation: Optional[Formulation] = None,
             agent_data: Optional[Mapping] = None, integration: Optional[Integration] = None, xi: Optional[Any] = None,
             omega: Optional[Any] = None, xi_variance: float = 1, omega_variance: float = 1, correlation: float = 0.9,
-            costs_type: str = 'linear', seed: Optional[int] = None) -> None:
+            distributions: Optional[Sequence[str]] = None, costs_type: str = 'linear', seed: Optional[int] = None) -> (
+            None):
         """Load or simulate all data except for synthetic prices and shares."""
 
         # keep track of long it takes to initialize the simulation
@@ -420,7 +440,7 @@ class Simulation(Economy):
         agents = Agents(products, agent_formulation, self.agent_data)
 
         # initialize the underlying economy
-        super().__init__(product_formulations, agent_formulation, products, agents, costs_type)
+        super().__init__(product_formulations, agent_formulation, products, agents, distributions, costs_type)
 
         # load or simulate the structural errors
         self.xi = xi
