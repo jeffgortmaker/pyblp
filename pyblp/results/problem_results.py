@@ -245,6 +245,7 @@ class ProblemResults(Results):
     reduced_hessian_eigenvalues: Array
     W: Array
     updated_W: Array
+    _scaled_objective: bool
     _iteration: Iteration
     _fp_type: str
     _costs_bounds: Bounds
@@ -255,8 +256,8 @@ class ProblemResults(Results):
             self, progress: 'Progress', last_results: Optional['ProblemResults'], step: int, last_step: bool,
             step_start_time: float, optimization_start_time: float, optimization_end_time: float,
             optimization_stats: SolverStats, iteration_stats: Sequence[Dict[Hashable, SolverStats]],
-            iteration: Iteration, fp_type: str, costs_bounds: Bounds, extra_micro_covariances: Optional[Array],
-            center_moments: bool, W_type: str, se_type: str) -> None:
+            scaled_objective: bool, iteration: Iteration, fp_type: str, costs_bounds: Bounds,
+            extra_micro_covariances: Optional[Array], center_moments: bool, W_type: str, se_type: str) -> None:
         """Compute cumulative progress statistics, update weighting matrices, and estimate standard errors."""
         super().__init__(progress.problem, progress.parameters, progress.moments)
         self._errors = progress.errors
@@ -280,6 +281,7 @@ class ProblemResults(Results):
         self.hessian = progress.hessian
         self.reduced_hessian = progress.reduced_hessian
         self.clipped_costs = progress.clipped_costs
+        self._scaled_objective = scaled_objective
         self._iteration = iteration
         self._fp_type = fp_type
         self._costs_bounds = costs_bounds
@@ -601,7 +603,7 @@ class ProblemResults(Results):
             - :doc:`Tutorial </tutorial>`
 
         """
-        return self.problem.N * float(self.objective)
+        return (1 if self._scaled_objective else self.problem.N) * float(self.objective)
 
     def run_distance_test(self, unrestricted: 'ProblemResults') -> float:
         r"""Test the validity of model restrictions with the distance test.
@@ -645,8 +647,10 @@ class ProblemResults(Results):
         if not isinstance(unrestricted, ProblemResults):
             raise TypeError("unrestricted must be another ProblemResults.")
         if unrestricted.problem.N != self.problem.N:
-            raise ValueError("unrestricted must have as many observations as these results.")
-        return self.problem.N * float(self.objective - unrestricted.objective)
+            raise ValueError("unrestricted must have the same number of observations. as these results.")
+        restricted_J = (1 if self._scaled_objective else self.problem.N) * self.objective
+        unrestricted_J = (1 if unrestricted._scaled_objective else unrestricted.problem.N) * unrestricted.objective
+        return restricted_J - unrestricted_J
 
     def run_lm_test(self) -> float:
         r"""Test the validity of model restrictions with the Lagrange multiplier test.

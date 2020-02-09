@@ -44,11 +44,12 @@ class ProblemEconomy(Economy):
             pi_bounds: Optional[Tuple[Any, Any]] = None, rho_bounds: Optional[Tuple[Any, Any]] = None,
             beta_bounds: Optional[Tuple[Any, Any]] = None, gamma_bounds: Optional[Tuple[Any, Any]] = None,
             delta: Optional[Any] = None, method: str = '2s', initial_update: bool = False,
-            optimization: Optional[Optimization] = None, check_optimality: str = 'both', error_behavior: str = 'revert',
-            error_punishment: float = 1, delta_behavior: str = 'first', iteration: Optional[Iteration] = None,
-            fp_type: str = 'safe_linear', costs_bounds: Optional[Tuple[Any, Any]] = None, W: Optional[Any] = None,
-            center_moments: bool = True, W_type: str = 'robust', se_type: str = 'robust',
-            micro_moments: Sequence[Moment] = (), extra_micro_covariances: Optional[Any] = None) -> ProblemResults:
+            optimization: Optional[Optimization] = None, scale_objective: bool = False, check_optimality: str = 'both',
+            error_behavior: str = 'revert', error_punishment: float = 1, delta_behavior: str = 'first',
+            iteration: Optional[Iteration] = None, fp_type: str = 'safe_linear',
+            costs_bounds: Optional[Tuple[Any, Any]] = None, W: Optional[Any] = None, center_moments: bool = True,
+            W_type: str = 'robust', se_type: str = 'robust', micro_moments: Sequence[Moment] = (),
+            extra_micro_covariances: Optional[Any] = None) -> ProblemResults:
         r"""Solve the problem.
 
         The problem is solved in one or more GMM steps. During each step, any parameters in :math:`\hat{\theta}` are
@@ -228,6 +229,11 @@ class ProblemEconomy(Economy):
             starting values, verifying that :math:`\hat{\theta}` satisfies both the first and second order conditions.
             Choosing a routine that supports bounds (and configuring bounds) is typically a good idea. Choosing a
             routine that does not use analytic gradients will often down estimation.
+        scale_objective : `bool, optional`
+            Whether to scale the objective in :eq:`objective` by :math:`N`, the number of observations, in which case
+            the objective after two GMM steps is equal to the :math:`J` statistic from :ref:`references:Hansen (1982)`.
+            By default, the objective is not scaled by :math:`N`, but scaling it may be preferable because objectives
+            across different problem sizes may then be more comparable.
         check_optimality : `str, optional`
             How to check for optimality (first and second order conditions) after the optimization routine finishes.
             The following configurations are supported:
@@ -533,8 +539,8 @@ class ProblemEconomy(Economy):
 
             # wrap computation of progress information with step-specific information
             compute_step_progress = functools.partial(
-                self._compute_progress, parameters, moments, iv, W, error_behavior, error_punishment, delta_behavior,
-                iteration, fp_type, costs_bounds
+                self._compute_progress, parameters, moments, iv, W, scale_objective, error_behavior, error_punishment,
+                delta_behavior, iteration, fp_type, costs_bounds
             )
 
             # initialize optimization progress
@@ -602,8 +608,8 @@ class ProblemEconomy(Economy):
             optimization_stats.evaluations += 1
             results = ProblemResults(
                 final_progress, last_results, step, last_step, step_start_time, optimization_start_time,
-                optimization_end_time, optimization_stats, iteration_stats, iteration, fp_type, costs_bounds,
-                extra_micro_covariances, center_moments, W_type, se_type
+                optimization_end_time, optimization_stats, iteration_stats, scale_objective, iteration, fp_type,
+                costs_bounds, extra_micro_covariances, center_moments, W_type, se_type
             )
             self._handle_errors(results._errors, error_behavior)
             output(f"Computed results after {format_seconds(results.total_time - results.optimization_time)}.")
@@ -628,10 +634,10 @@ class ProblemEconomy(Economy):
             step_start_time = time.time()
 
     def _compute_progress(
-            self, parameters: Parameters, moments: EconomyMoments, iv: IV, W: Array, error_behavior: str,
-            error_punishment: float, delta_behavior: str, iteration: Iteration, fp_type: str, costs_bounds: Bounds,
-            theta: Array, progress: 'InitialProgress', compute_gradient: bool, compute_hessian: bool,
-            compute_micro_covariances: bool) -> 'Progress':
+            self, parameters: Parameters, moments: EconomyMoments, iv: IV, W: Array, scale_objective: bool,
+            error_behavior: str, error_punishment: float, delta_behavior: str, iteration: Iteration, fp_type: str,
+            costs_bounds: Bounds, theta: Array, progress: 'InitialProgress', compute_gradient: bool,
+            compute_hessian: bool, compute_micro_covariances: bool) -> 'Progress':
         """Compute demand- and supply-side contributions before recovering the linear parameters and structural error
         terms. Then, form the GMM objective value and its gradient. Finally, handle any errors that were encountered
         before structuring relevant progress information.
@@ -704,6 +710,8 @@ class ProblemEconomy(Economy):
         with np.errstate(all='ignore'):
             mean_g = np.r_[compute_gmm_moments_mean(u_list, Z_list), micro]
             objective = mean_g.T @ W @ mean_g
+            if scale_objective:
+                objective *= self.N
         if not np.isfinite(np.squeeze(objective)):
             objective = progress.objective
             errors.append(exceptions.ObjectiveReversionError())
@@ -714,6 +722,8 @@ class ProblemEconomy(Economy):
             with np.errstate(all='ignore'):
                 mean_G = np.r_[compute_gmm_moments_jacobian_mean(jacobian_list, Z_list), micro_jacobian]
                 gradient = 2 * (mean_G.T @ W @ mean_g)
+                if scale_objective:
+                    gradient *= self.N
             bad_gradient_index = ~np.isfinite(gradient)
             if np.any(bad_gradient_index):
                 gradient[bad_gradient_index] = progress.gradient[bad_gradient_index]
@@ -742,8 +752,8 @@ class ProblemEconomy(Economy):
         hessian = np.full_like(progress.hessian, np.nan)
         if compute_hessian:
             compute_progress = lambda x: self._compute_progress(
-                parameters, moments, iv, W, error_behavior, error_punishment, delta_behavior, iteration, fp_type,
-                costs_bounds, x, progress, compute_gradient=True, compute_hessian=False,
+                parameters, moments, iv, W, scale_objective, error_behavior, error_punishment, delta_behavior,
+                iteration, fp_type, costs_bounds, x, progress, compute_gradient=True, compute_hessian=False,
                 compute_micro_covariances=False
             )
             change = np.sqrt(np.finfo(np.float64).eps)
