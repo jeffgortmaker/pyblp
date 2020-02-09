@@ -647,7 +647,7 @@ class ProblemResults(Results):
         if not isinstance(unrestricted, ProblemResults):
             raise TypeError("unrestricted must be another ProblemResults.")
         if unrestricted.problem.N != self.problem.N:
-            raise ValueError("unrestricted must have the same number of observations. as these results.")
+            raise ValueError("unrestricted must have the same number of observations as these results.")
         restricted_J = (1 if self._scaled_objective else self.problem.N) * self.objective
         unrestricted_J = (1 if unrestricted._scaled_objective else unrestricted.problem.N) * unrestricted.objective
         return restricted_J - unrestricted_J
