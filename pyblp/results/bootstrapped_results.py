@@ -9,9 +9,11 @@ import numpy as np
 from .problem_results import ProblemResults
 from .results import Results
 from .. import exceptions, options
+from ..configurations.integration import Integration
 from ..markets.results_market import ResultsMarket
+from ..primitives import Agents
 from ..utilities.basics import (
-    Array, Error, SolverStats, format_seconds, format_table, generate_items, output, output_progress
+    Array, Error, SolverStats, format_seconds, format_table, generate_items, get_indices, output, output_progress
 )
 
 
@@ -88,7 +90,10 @@ class BootstrappedResults(Results):
             bootstrapped_shares: Array, bootstrapped_delta: Array, start_time: float, end_time: float, draws: int,
             iteration_stats: Mapping[Hashable, SolverStats]) -> None:
         """Structure bootstrapped problem results."""
-        super().__init__(problem_results.problem, problem_results._parameters, problem_results._moments)
+        super().__init__(
+            problem_results.problem, problem_results._parameters, problem_results._moments, problem_results._iteration,
+            problem_results._fp_type
+        )
         self.problem_results = problem_results
         self.bootstrapped_sigma = bootstrapped_sigma
         self.bootstrapped_pi = bootstrapped_pi
@@ -161,16 +166,26 @@ class BootstrappedResults(Results):
 
     def _combine_arrays(
             self, compute_market_results: Callable, market_ids: Array, fixed_args: Sequence = (),
-            market_args: Sequence = ()) -> Array:
+            market_args: Sequence = (), agent_data: Optional[Mapping] = None,
+            integration: Optional[Integration] = None) -> Array:
         """Compute arrays for one or all markets and stack them into a single tensor. An array for a single market is
         computed by passing fixed_args (identical for all markets) and market_args (matrices with as many rows as there
         are products that are restricted to the market) to compute_market_results, a ResultsMarket method that returns
-        the output for the market and any errors encountered during computation.
+        the output for the market and any errors encountered during computation. Agent data and an integration
+        configuration can be optionally specified to override agent data.
         """
         errors: List[Error] = []
 
         # keep track of how long it takes to compute the arrays
         start_time = time.time()
+
+        # structure or construct different agent data
+        if agent_data is None and integration is None:
+            agents = self.problem.agents
+            agents_market_indices = self.problem._agent_market_indices
+        else:
+            agents = Agents(self.problem.products, self.problem.agent_formulation, agent_data, integration)
+            agents_market_indices = get_indices(agents.market_ids)
 
         def market_factory(pair: Tuple[int, Hashable]) -> tuple:
             """Build a market with bootstrapped data along with arguments used to compute arrays."""
@@ -182,7 +197,7 @@ class BootstrappedResults(Results):
             market_cs = ResultsMarket(
                 self.problem, s, self._parameters, self.bootstrapped_sigma[c], self.bootstrapped_pi[c],
                 self.bootstrapped_rho[c], self.bootstrapped_beta[c], self.bootstrapped_gamma[c],
-                self.bootstrapped_delta[c], self._moments, data_override_c
+                self.bootstrapped_delta[c], self._moments, data_override_c, agents[agents_market_indices[s]]
             )
             args_cs: List[Optional[Array]] = []
             for market_arg in market_args:

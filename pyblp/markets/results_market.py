@@ -54,12 +54,11 @@ class ResultsMarket(Market):
         return self.compute_omega_by_theta_jacobian(tilde_costs, xi_jacobian)
 
     @NumericalErrorHandler(exceptions.DeltaNumericalError)
-    def safely_compute_delta(
-            self, initial_delta: Array, iteration: Iteration, fp_type: str) -> Tuple[Array, List[Error]]:
+    def safely_compute_delta(self, iteration: Iteration, fp_type: str) -> Tuple[Array, List[Error]]:
         """Compute the mean utility for this market that equates market shares to observed values by solving a fixed
-        point problem, handling any numerical errors.
+        point problem (starting at the delta with which this market was initialized), handling any numerical errors.
         """
-        delta, stats, errors = self.compute_delta(initial_delta, iteration, fp_type)
+        delta, stats, errors = self.compute_delta(self.delta, iteration, fp_type)
         if not stats.converged:
             errors.append(exceptions.DeltaConvergenceError())
         return delta, errors

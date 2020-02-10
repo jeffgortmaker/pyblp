@@ -246,8 +246,6 @@ class ProblemResults(Results):
     W: Array
     updated_W: Array
     _scaled_objective: bool
-    _iteration: Iteration
-    _fp_type: str
     _costs_bounds: Bounds
     _se_type: str
     _errors: List[Error]
@@ -259,7 +257,7 @@ class ProblemResults(Results):
             scaled_objective: bool, iteration: Iteration, fp_type: str, costs_bounds: Bounds,
             extra_micro_covariances: Optional[Array], center_moments: bool, W_type: str, se_type: str) -> None:
         """Compute cumulative progress statistics, update weighting matrices, and estimate standard errors."""
-        super().__init__(progress.problem, progress.parameters, progress.moments)
+        super().__init__(progress.problem, progress.parameters, progress.moments, iteration, fp_type)
         self._errors = progress.errors
         self.problem = progress.problem
         self.W = progress.W
@@ -282,8 +280,6 @@ class ProblemResults(Results):
         self.reduced_hessian = progress.reduced_hessian
         self.clipped_costs = progress.clipped_costs
         self._scaled_objective = scaled_objective
-        self._iteration = iteration
-        self._fp_type = fp_type
         self._costs_bounds = costs_bounds
         self._se_type = se_type
 
@@ -1372,93 +1368,6 @@ class ProblemResults(Results):
 
         return weights, errors
 
-    def compute_delta(
-            self, agent_data: Optional[Mapping] = None, integration: Optional[Integration] = None,
-            iteration: Optional[Iteration] = None, fp_type: Optional[str] = None) -> Array:
-        r"""Compute the mean utility, :math:`\delta`.
-
-        This method can be used to compute the mean utility at the estimated parameters with a different integration
-        configuration or fixed point iteration settings than those used during estimation. The estimated
-        :attr:`ProblemResults.delta` will be used as starting values for the fixed point routine.
-
-        A more precisely estimated mean utility can be used, for example, by
-        :meth:`ProblemResults.importance_sampling`.
-
-        Parameters
-        ----------
-        agent_data : `structured array-like, optional`
-            Agent data that will be used to compute :math:`\delta`. By default, ``agent_data`` in :class:`Problem` is
-            used. For more information, refer to :class:`Problem`.
-        integration : `Integration, optional`
-            :class:`Integration` configuration that will be used to compute :math:`\delta`, which will replace any
-            ``nodes`` field in ``agent_data``. This configuration is required if ``agent_data`` is specified without a
-            nodes field. By default, ``agent_data`` in :class:`Problem` is used. For more information, refer to
-            :class:`Problem`.
-        iteration : `Iteration, optional`
-            :class:`Iteration` configuration for how to solve the fixed point problem used to compute :math:`\delta` in
-            each market. By default, ``iteration`` in :meth:`Problem.solve` is used. For more information, refer to
-            :meth:`Problem.solve`.
-        fp_type : `str, optional`
-            Configuration for the type of contraction mapping used to compute :math:`\delta` in each market. By default,
-            ``fp_type`` in :meth:`Problem.solve` is used. For more information, refer to :meth:`Problem.solve`.
-
-        Returns
-        -------
-        `ndarray`
-           Estimated :math:`\delta`.
-
-        Examples
-        --------
-            - :doc:`Tutorial </tutorial>`
-
-        """
-        errors: List[Error] = []
-
-        # keep track of long it takes to compute delta
-        output("Computing delta ...")
-        start_time = time.time()
-
-        # structure or construct different agent data
-        if agent_data is None and integration is None:
-            agents = self.problem.agents
-            agents_market_indices = self.problem._agent_market_indices
-        else:
-            agents = Agents(self.problem.products, self.problem.agent_formulation, agent_data, integration)
-            agents_market_indices = get_indices(agents.market_ids)
-
-        # use the same iteration scheme as during estimation if it isn't explicitly specified
-        if iteration is None:
-            iteration = self._iteration
-        if fp_type is None:
-            fp_type = self._fp_type
-
-        def market_factory(s: Hashable) -> Tuple[ResultsMarket, Array, Iteration, str]:
-            """Build a market along with arguments used to compute delta."""
-            assert iteration is not None and fp_type is not None
-            market_s = ResultsMarket(
-                self.problem, s, self._parameters, self.sigma, self.pi, self.rho,
-                agents_override=agents[agents_market_indices[s]]
-            )
-            delta_s = self.delta[self.problem._product_market_indices[s]]
-            return market_s, delta_s, iteration, fp_type
-
-        # compute delta market-by-market
-        delta = np.zeros_like(self.delta)
-        generator = generate_items(self.problem.unique_market_ids, market_factory, ResultsMarket.safely_compute_delta)
-        for t, (delta_t, errors_t) in generator:
-            delta[self.problem._product_market_indices[t]] = delta_t
-            errors.extend(errors_t)
-
-        # output a warning about any errors
-        if errors:
-            output("")
-            output(exceptions.MultipleErrors(errors))
-            output("")
-
-        output(f"Finished computing delta after {format_seconds(time.time() - start_time)}.")
-        output("")
-        return delta
-
     def _coerce_matrices(self, matrices: Any, market_ids: Array) -> Array:
         """Coerce array-like stacked matrices into a stacked matrix and validate it."""
         matrices = np.c_[np.asarray(matrices, options.dtype)]
@@ -1500,23 +1409,33 @@ class ProblemResults(Results):
 
     def _combine_arrays(
             self, compute_market_results: Callable, market_ids: Array, fixed_args: Sequence = (),
-            market_args: Sequence = ()) -> Array:
+            market_args: Sequence = (), agent_data: Optional[Mapping] = None,
+            integration: Optional[Integration] = None) -> Array:
         """Compute arrays for one or all markets and stack them into a single matrix. An array for a single market is
         computed by passing fixed_args (identical for all markets) and market_args (matrices with as many rows as there
         are products that are restricted to the market) to compute_market_results, a ResultsMarket method that returns
-        the output for the market any errors encountered during computation.
+        the output for the market any errors encountered during computation. Agent data and an integration configuration
+        can be optionally specified to override agent data.
         """
         errors: List[Error] = []
 
         # keep track of how long it takes to compute the arrays
         start_time = time.time()
 
+        # structure or construct different agent data
+        if agent_data is None and integration is None:
+            agents = self.problem.agents
+            agents_market_indices = self.problem._agent_market_indices
+        else:
+            agents = Agents(self.problem.products, self.problem.agent_formulation, agent_data, integration)
+            agents_market_indices = get_indices(agents.market_ids)
+
         def market_factory(s: Hashable) -> tuple:
             """Build a market along with arguments used to compute arrays."""
             indices_s = self.problem._product_market_indices[s]
             market_s = ResultsMarket(
                 self.problem, s, self._parameters, self.sigma, self.pi, self.rho, self.beta, self.gamma, self.delta,
-                self._moments
+                self._moments, agents_override=agents[agents_market_indices[s]]
             )
             if market_ids.size == 1:
                 args_s = market_args

@@ -1,10 +1,11 @@
 """Economy-level structuring of abstract BLP problem results."""
 
 import abc
-from typing import Any, Callable, Optional, Sequence, TYPE_CHECKING
+from typing import Any, Callable, Mapping, Optional, Sequence, TYPE_CHECKING
 
 import numpy as np
 
+from ..configurations.integration import Integration
 from ..configurations.iteration import Iteration
 from ..markets.results_market import ResultsMarket
 from ..moments import EconomyMoments
@@ -23,12 +24,18 @@ class Results(abc.ABC, StringRepresentation):
     problem: 'ProblemEconomy'
     _parameters: Parameters
     _moments: EconomyMoments
+    _iteration: Iteration
+    _fp_type: str
 
-    def __init__(self, problem: 'ProblemEconomy', parameters: Parameters, moments: EconomyMoments) -> None:
+    def __init__(
+            self, problem: 'ProblemEconomy', parameters: Parameters, moments: EconomyMoments, iteration: Iteration,
+            fp_type: str) -> None:
         """Store the underlying problem and parameter information."""
         self.problem = problem
         self._parameters = parameters
         self._moments = moments
+        self._iteration = iteration
+        self._fp_type = fp_type
 
     def _select_market_ids(self, market_id: Optional[Any] = None) -> Array:
         """Select either a single market ID or all unique IDs."""
@@ -57,10 +64,12 @@ class Results(abc.ABC, StringRepresentation):
     @abc.abstractmethod
     def _combine_arrays(
             self, compute_market_results: Callable, market_ids: Array, fixed_args: Sequence = (),
-            market_args: Sequence = ()) -> Array:
+            market_args: Sequence = (), agent_data: Optional[Mapping] = None,
+            integration: Optional[Integration] = None) -> Array:
         """Combine arrays from one or all markets, which are computed by passing fixed_args (identical for all markets)
         and market_args (arrays that need to be restricted to markets) to compute_market_results, a ResultsMarket method
-        that returns the output for the market and any errors encountered during computation.
+        that returns the output for the market and any errors encountered during computation. Agent data and an
+        integration configuration can be optionally specified to override agent data.
         """
 
     def compute_aggregate_elasticities(
@@ -338,6 +347,61 @@ class Results(abc.ABC, StringRepresentation):
         firm_ids = self.problem._coerce_optional_firm_ids(firm_ids, market_ids)
         ownership = self.problem._coerce_optional_ownership(ownership, market_ids)
         return self._combine_arrays(ResultsMarket.safely_compute_costs, market_ids, market_args=[firm_ids, ownership])
+
+    def compute_delta(
+            self, agent_data: Optional[Mapping] = None, integration: Optional[Integration] = None,
+            iteration: Optional[Iteration] = None, fp_type: Optional[str] = None, market_id: Optional[Any] = None) -> (
+            Array):
+        r"""Compute mean utilities, :math:`\delta`.
+
+        This method can be used to compute mean utilities at the estimated parameters with a different integration
+        configuration or with different fixed point iteration settings than those used during estimation. The estimated
+        :attr:`ProblemResults.delta` will be used as starting values for the fixed point routine.
+
+        A more precisely estimated mean utility can be used, for example, by
+        :meth:`ProblemResults.importance_sampling`.
+
+        Parameters
+        ----------
+        agent_data : `structured array-like, optional`
+            Agent data that will be used to compute :math:`\delta`. By default, ``agent_data`` in :class:`Problem` is
+            used. For more information, refer to :class:`Problem`.
+        integration : `Integration, optional`
+            :class:`Integration` configuration that will be used to compute :math:`\delta`, which will replace any
+            ``nodes`` field in ``agent_data``. This configuration is required if ``agent_data`` is specified without a
+            nodes field. By default, ``agent_data`` in :class:`Problem` is used. For more information, refer to
+            :class:`Problem`.
+        iteration : `Iteration, optional`
+            :class:`Iteration` configuration for how to solve the fixed point problem used to compute :math:`\delta` in
+            each market. By default, ``iteration`` in :meth:`Problem.solve` is used. For more information, refer to
+            :meth:`Problem.solve`.
+        fp_type : `str, optional`
+            Configuration for the type of contraction mapping used to compute :math:`\delta` in each market. By default,
+            ``fp_type`` in :meth:`Problem.solve` is used. For more information, refer to :meth:`Problem.solve`.
+        market_id : `object, optional`
+            ID of the market in which to compute mean utilities. By default, mean utilities is computed in all markets
+            and stacked.
+
+        Returns
+        -------
+        `ndarray`
+           Mean utilities, :math:`\delta`.
+
+        Examples
+        --------
+            - :doc:`Tutorial </tutorial>`
+
+        """
+        output("Computing delta ...")
+        market_ids = self._select_market_ids(market_id)
+        if iteration is None:
+            iteration = self._iteration
+        if fp_type is None:
+            fp_type = self._fp_type
+        return self._combine_arrays(
+            ResultsMarket.safely_compute_delta, market_ids, fixed_args=[iteration, fp_type], agent_data=agent_data,
+            integration=integration
+        )
 
     def compute_approximate_prices(
             self, firm_ids: Optional[Any] = None, ownership: Optional[Any] = None, costs: Optional[Any] = None,
