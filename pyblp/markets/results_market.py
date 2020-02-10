@@ -173,14 +173,15 @@ class ResultsMarket(Market):
         return prices, errors
 
     @NumericalErrorHandler(exceptions.PostEstimationNumericalError)
-    def safely_compute_shares(self, prices: Optional[Array]) -> Tuple[Array, List[Error]]:
-        """Estimate shares evaluated at specified prices. By default, use unchanged prices, handling any numerical
-        errors.
+    def safely_compute_shares(self, prices: Optional[Array], delta: Optional[Array]) -> Tuple[Array, List[Error]]:
+        """Estimate shares evaluated at specified prices. By default, use unchanged prices and mean utilities, handling
+        any numerical errors.
         """
         errors: List[Error] = []
         if prices is None:
             prices = self.products.prices
-        delta = self.update_delta_with_variable('prices', prices)
+        if delta is None:
+            delta = self.update_delta_with_variable('prices', prices)
         mu = self.update_mu_with_variable('prices', prices)
         shares = self.compute_probabilities(delta, mu)[0] @ self.agents.weights
         return shares, errors

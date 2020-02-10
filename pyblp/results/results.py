@@ -50,6 +50,10 @@ class Results(abc.ABC, StringRepresentation):
         """Coerce array-like stacked arrays into a stacked array and validate it."""
 
     @abc.abstractmethod
+    def _coerce_optional_delta(self, delta: Optional[Any], market_ids: Array) -> Array:
+        """Coerce optional array-like mean utilities into an array and validate it."""
+
+    @abc.abstractmethod
     def _coerce_optional_costs(self, costs: Optional[Any], market_ids: Array) -> Array:
         """Coerce optional array-like costs into an array and validate it."""
 
@@ -352,14 +356,15 @@ class Results(abc.ABC, StringRepresentation):
             self, agent_data: Optional[Mapping] = None, integration: Optional[Integration] = None,
             iteration: Optional[Iteration] = None, fp_type: Optional[str] = None, market_id: Optional[Any] = None) -> (
             Array):
-        r"""Compute mean utilities, :math:`\delta`.
+        r"""Estimate mean utilities, :math:`\delta`.
 
         This method can be used to compute mean utilities at the estimated parameters with a different integration
         configuration or with different fixed point iteration settings than those used during estimation. The estimated
         :attr:`ProblemResults.delta` will be used as starting values for the fixed point routine.
 
         A more precisely estimated mean utility can be used, for example, by
-        :meth:`ProblemResults.importance_sampling`.
+        :meth:`ProblemResults.importance_sampling`. It can also be used to :meth:`ProblemResults.compute_shares` to
+        compare the performance of different integration routines.
 
         Parameters
         ----------
@@ -537,8 +542,13 @@ class Results(abc.ABC, StringRepresentation):
             market_args=[firm_ids, ownership, costs, prices]
         )
 
-    def compute_shares(self, prices: Optional[Any] = None, market_id: Optional[Any] = None) -> Array:
-        r"""Estimate shares evaluated at specified prices.
+    def compute_shares(
+            self, prices: Optional[Any] = None, delta: Optional[Any] = None, agent_data: Optional[Mapping] = None,
+            integration: Optional[Integration] = None, market_id: Optional[Any] = None) -> Array:
+        r"""Estimate shares.
+
+        It may be desirable to compute the shares associated with equilibrium prices that have been computed, for
+        example, by :meth:`ProblemResults.compute_prices`.
 
         .. note::
 
@@ -546,11 +556,30 @@ class Results(abc.ABC, StringRepresentation):
            :class:`Simulation` for the counterfactual can be initialized with the estimated parameters, structural
            errors, and marginal costs from these results, and then solved with :meth:`Simulation.replace_endogenous`.
 
+        Alternatively, this method can also be used to evaluate the performance of different numerical integration
+        configurations. One way to do so is to use :meth:`ProblemResults.compute_delta` to compute mean utilities
+        with a very precise integration rule (one that is infeasible to use during estimation), use these same mean
+        utilities and integration rule to precisely compute shares, and then compare error between these
+        precisely-computed shares and shares computed with less precise (but feasible to use during estimation)
+        integration rules, still using the precisely-computed mean utilities.
+
         Parameters
         ----------
-        prices : `array-like`
+        prices : `array-like, optional`
             Prices at which to evaluate shares, such as equilibrium prices, :math:`p^*`, computed by
             :meth:`ProblemResults.compute_prices`. By default, unchanged prices are used.
+        delta : `array-like, optional`
+            Mean utilities that will be used to evaluate shares, such as those computed more precisely by
+            :meth:`ProblemResults.compute_delta`. By default, the estimated :attr:`ProblemResults.delta` is used,
+            and updated with any specified ``prices``.
+        agent_data : `structured array-like, optional`
+            Agent data that will be used to compute shares. By default, ``agent_data`` in :class:`Problem` is used. For
+            more information, refer to :class:`Problem`.
+        integration : `Integration, optional`
+            :class:`Integration` configuration that will be used to compute shares, which will replace any ``nodes``
+            field in ``agent_data``. This configuration is required if ``agent_data`` is specified without a nodes
+            field. By default, ``agent_data`` in :class:`Problem` is used. For more information, refer to
+            :class:`Problem`.
         market_id : `object, optional`
             ID of the market in which to compute shares. By default, shares are computed in all markets and stacked.
 
@@ -567,7 +596,11 @@ class Results(abc.ABC, StringRepresentation):
         output("Computing shares ...")
         market_ids = self._select_market_ids(market_id)
         prices = self._coerce_optional_prices(prices, market_ids)
-        return self._combine_arrays(ResultsMarket.safely_compute_shares, market_ids, market_args=[prices])
+        delta = self._coerce_optional_delta(delta, market_ids)
+        return self._combine_arrays(
+            ResultsMarket.safely_compute_shares, market_ids, market_args=[prices, delta], agent_data=agent_data,
+            integration=integration
+        )
 
     def compute_hhi(
             self, firm_ids: Optional[Any] = None, shares: Optional[Any] = None, market_id: Optional[Any] = None) -> (

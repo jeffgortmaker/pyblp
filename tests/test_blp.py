@@ -550,9 +550,11 @@ def test_merger(simulated_problem: SimulatedProblemFixture, ownership: bool, sol
 @pytest.mark.usefixtures('simulated_problem')
 def test_shares(simulated_problem: SimulatedProblemFixture) -> None:
     """Test that shares computed from estimated parameters are essentially equal to actual shares."""
-    _, simulation_results, _, _, results = simulated_problem
-    shares = results.compute_shares()
-    np.testing.assert_allclose(simulation_results.product_data.shares, shares, atol=1e-14, rtol=0, verbose=True)
+    simulation, simulation_results, _, _, results = simulated_problem
+    shares1 = results.compute_shares()
+    shares2 = results.compute_shares(agent_data=simulation.agent_data, delta=results.delta)
+    np.testing.assert_allclose(simulation_results.product_data.shares, shares1, atol=1e-14, rtol=0, verbose=True)
+    np.testing.assert_allclose(simulation_results.product_data.shares, shares2, atol=1e-14, rtol=0, verbose=True)
 
 
 @pytest.mark.usefixtures('simulated_problem')

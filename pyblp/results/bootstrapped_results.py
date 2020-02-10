@@ -134,6 +134,16 @@ class BootstrappedResults(Results):
             raise ValueError(f"matrices must be {self.draws} by {rows} by {columns}.")
         return matrices
 
+    def _coerce_optional_delta(self, delta: Optional[Any], market_ids: Array) -> Array:
+        """Coerce optional array-like mean utilities into a column vector tensor and validate it."""
+        if delta is None:
+            return None
+        delta = np.atleast_3d(np.asarray(delta, options.dtype))
+        rows = sum(i.size for t, i in self.problem._product_market_indices.items() if t in market_ids)
+        if delta.shape != (self.draws, rows, 1):
+            raise ValueError(f"delta must be None or {self.draws} by {rows}.")
+        return delta
+
     def _coerce_optional_costs(self, costs: Optional[Any], market_ids: Array) -> Array:
         """Coerce optional array-like costs into a column vector tensor and validate it."""
         if costs is None:
