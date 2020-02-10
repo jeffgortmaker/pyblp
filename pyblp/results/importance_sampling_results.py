@@ -1,11 +1,11 @@
 """Economy-level structuring of importance sampling results."""
 
-from typing import Dict, Hashable, Sequence, TYPE_CHECKING
+from typing import Sequence, TYPE_CHECKING
 
 import numpy as np
 
 from .problem_results import ProblemResults
-from ..utilities.basics import Array, Groups, RecArray, SolverStats, StringRepresentation, format_seconds, format_table
+from ..utilities.basics import Array, Groups, RecArray, StringRepresentation, format_seconds, format_table
 
 
 # only import objects that create import cycles when checking types
@@ -29,9 +29,6 @@ class ImportanceSamplingResults(StringRepresentation):
     sampled_agents : `Agents`
         Importance sampling agent data structured as :class:`Agents`. The :func:`data_to_dict` function can be used to
         convert this into a more usable data type.
-    precise_delta : `ndarray`
-        Estimated :math:`\hat{\delta}(\hat{\theta})` used to do importance sampling. By default, this is
-        :attr:`ProblemResults.delta`.
     computation_time : `float`
         Number of seconds it took to do importance sampling.
     draws : `int`
@@ -47,16 +44,6 @@ class ImportanceSamplingResults(StringRepresentation):
         Effective sample sizes for variance estimates in each market: :math:`\frac{(\sum_i w_i^2)^2}{\sum_i w_i^4}`.
     effective_draws_for_skewness : `ndarray`
         Effective sample sizes for gauging skewness in each market: :math:`\frac{(\sum_i w_i^2)^3}{(\sum_i w_i^3)^2}`.
-    fp_converged : `ndarray`
-        Flags for convergence of the iteration routine used to compute :attr:`ImportanceSamplingResults.precise_delta`
-        in each market. Flags are in the same order as :attr:`Problem.unique_market_ids`.
-    fp_iterations : `ndarray`
-        Number of major iterations completed by the iteration routine used to compute
-        :attr:`ImportanceSamplingResults.precise_delta` in each market. Numbers are in the same order as
-        :attr:`Problem.unique_market_ids`.
-    contraction_evaluations : `ndarray`
-        Number of times the contraction used to compute :attr:`ImportanceSamplingResults.precise_delta` was evaluated in
-        each market. Numbers are in the same order as :attr:`Problem.unique_market_ids`.
 
     Examples
     --------
@@ -66,7 +53,6 @@ class ImportanceSamplingResults(StringRepresentation):
 
     problem_results: ProblemResults
     sampled_agents: RecArray
-    precise_delta: Array
     computation_time: float
     draws: int
     diagnostic_market_ids: Array
@@ -74,29 +60,15 @@ class ImportanceSamplingResults(StringRepresentation):
     effective_draws: Array
     effective_draws_for_variance: Array
     effective_draws_for_skewness: Array
-    fp_converged: Array
-    fp_iterations: Array
-    contraction_evaluations: Array
 
     def __init__(
-            self, problem_results: ProblemResults, sampled_agents: RecArray, precise_delta: Array, start_time: float,
-            end_time: float, draws: int, iteration_stats: Dict[Hashable, SolverStats]) -> None:
+            self, problem_results: ProblemResults, sampled_agents: RecArray, start_time: float, end_time: float,
+            draws: int) -> None:
         """Structure importance sampling results and compute diagnostics."""
         self.problem_results = problem_results
         self.sampled_agents = sampled_agents
-        self.precise_delta = precise_delta
         self.computation_time = end_time - start_time
         self.draws = draws
-        unique_market_ids = problem_results.problem.unique_market_ids
-        self.fp_converged = np.array(
-            [iteration_stats[t].converged if iteration_stats else True for t in unique_market_ids], dtype=np.bool
-        )
-        self.fp_iterations = np.array(
-            [iteration_stats[t].iterations if iteration_stats else 0 for t in unique_market_ids], dtype=np.int
-        )
-        self.contraction_evaluations = np.array(
-            [iteration_stats[t].evaluations if iteration_stats else 0 for t in unique_market_ids], dtype=np.int
-        )
 
         # compute weight sums
         groups = Groups(self.sampled_agents.market_ids)
@@ -121,15 +93,12 @@ class ImportanceSamplingResults(StringRepresentation):
             np.min(self.effective_draws).astype(int), np.min(self.effective_draws_for_variance).astype(int),
             np.min(self.effective_draws_for_skewness).astype(int), np.min(self.weight_sums), np.max(self.weight_sums)
         ]
-        if self.fp_iterations.sum() > 0 or self.contraction_evaluations.sum() > 0:
-            header.extend([("Fixed Point", "Iterations"), ("Contraction", "Evaluations")])
-            values.extend([self.fp_iterations.sum(), self.contraction_evaluations.sum()])
         return format_table(header, values, title="Importance Sampling Results Summary")
 
     def to_dict(
             self, attributes: Sequence[str] = (
-                'sampled_agents', 'precise_delta', 'computation_time', 'draws', 'fp_converged', 'fp_iterations',
-                'contraction_evaluations'
+                'sampled_agents', 'computation_time', 'draws', 'diagnostic_market_ids', 'weight_sums',
+                'effective_draws', 'effective_draws_for_variance', 'effective_draws_for_skewness'
             )) -> dict:
         """Convert these results into a dictionary that maps attribute names to values.
 

@@ -235,7 +235,6 @@ class Agents(object):
     def __new__(
             cls, products: RecArray, agent_formulation: Optional[Formulation] = None,
             agent_data: Optional[Mapping] = None, integration: Optional[Integration] = None,
-            agent_data_name: str = "agent_data", integration_name: str = "integration",
             check_weights: bool = True) -> RecArray:
         """Structure agent data."""
 
@@ -251,8 +250,8 @@ class Agents(object):
         if K2 == 0:
             if agent_formulation is not None or agent_data is not None or integration is not None:
                 raise ValueError(
-                    f"Since X2 is not formulated, none of agent_formulation, {agent_data_name}, and {integration_name} "
-                    f"should be specified."
+                    f"Since X2 is not formulated, none of agent_formulation, agent_data, and integration should be "
+                    f"specified."
                 )
             market_ids = np.unique(products.market_ids)
             weights = np.ones_like(market_ids, options.dtype)
@@ -262,9 +261,7 @@ class Agents(object):
                 if not isinstance(agent_formulation, Formulation):
                     raise TypeError("agent_formulation must be None or a Formulation instance.")
                 if agent_data is None:
-                    raise ValueError(
-                        f"Since agent_formulation is specified, {agent_data_name} must be specified as well."
-                    )
+                    raise ValueError(f"Since agent_formulation is specified, agent_data must be specified as well.")
                 if agent_formulation._absorbed_terms:
                     raise ValueError("agent_formulation does not support fixed effect absorption.")
                 demographics, demographics_formulations, _ = agent_formulation._build_matrix(agent_data)
@@ -273,18 +270,16 @@ class Agents(object):
             if agent_data is not None:
                 market_ids = extract_matrix(agent_data, 'market_ids')
                 if market_ids is None:
-                    raise KeyError(f"{agent_data_name} must have a market_ids field.")
+                    raise KeyError(f"agent_data must have a market_ids field.")
                 if market_ids.shape[1] > 1:
-                    raise ValueError(f"The market_ids field of {agent_data_name} must be one-dimensional.")
+                    raise ValueError(f"The market_ids field of agent_data must be one-dimensional.")
                 if set(np.unique(products.market_ids)) != set(np.unique(market_ids)):
-                    raise ValueError(
-                        f"The market_ids field of {agent_data_name} must have the same IDs as product data."
-                    )
+                    raise ValueError(f"The market_ids field of agent_data must have the same IDs as product data.")
 
             # build nodes and weights
             if integration is not None:
                 if not isinstance(integration, Integration):
-                    raise ValueError(f"{integration_name} must be None or an Integration instance.")
+                    raise ValueError(f"integration must be None or an Integration instance.")
                 loaded_market_ids = market_ids
                 market_ids, nodes, weights = integration._build_many(K2, np.unique(products.market_ids))
 
@@ -296,7 +291,7 @@ class Agents(object):
                         built_rows = (market_ids == t).sum()
                         loaded_rows = (loaded_market_ids == t).sum()
                         if built_rows > loaded_rows:
-                            raise ValueError(f"Market '{t}' in {agent_data_name} must have at least {built_rows} rows.")
+                            raise ValueError(f"Market '{t}' in agent_data must have at least {built_rows} rows.")
                         demographics_t = demographics[loaded_market_ids.flat == t]
                         if built_rows < loaded_rows:
                             demographics_t = demographics_t[:built_rows]
@@ -306,17 +301,17 @@ class Agents(object):
             # load any unbuilt nodes and weights
             if integration is None:
                 if agent_data is None:
-                    raise ValueError(f"Since {integration_name} is None, {agent_data_name} must be specified.")
+                    raise ValueError(f"Since integration is None, agent_data must be specified.")
                 nodes = extract_matrix(agent_data, 'nodes')
                 weights = extract_matrix(agent_data, 'weights')
                 if nodes is None:
-                    raise KeyError(f"Since {integration_name} is None, {agent_data_name} must have nodes.")
+                    raise KeyError(f"Since integration is None, agent_data must have nodes.")
                 if weights is None:
                     if check_weights:
-                        raise KeyError(f"Since {integration_name} is None, {agent_data_name} must have weights.")
+                        raise KeyError(f"Since integration is None, agent_data must have weights.")
                     weights = np.full((nodes.shape[0], 1), np.nan, options.dtype)
                 if weights.shape[1] != 1:
-                    raise ValueError(f"The weights field of {agent_data_name} must be one-dimensional.")
+                    raise ValueError(f"The weights field of agent_data must be one-dimensional.")
 
                 # delete columns of nodes if there are too many
                 if nodes.shape[1] > K2:

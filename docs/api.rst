@@ -141,6 +141,13 @@ Importance sampling can be used to create new integration nodes and weights. Its
 
    ProblemResults.importance_sampling
 
+Sometimes it is desirable (for example, during importance sampling) to compute the mean utility with more precision at the estimated parameters. The following method can do this.
+
+.. autosummary::
+   :toctree: _api
+
+   ProblemResults.compute_delta
+
 
 Boostrapped Problem Results Class
 ---------------------------------
@@ -154,7 +161,7 @@ Parametric bootstrap computation returns the following class.
 
    BootstrappedResults
 
-This class has all of the same methods as :class:`ProblemResults`, except for :meth:`ProblemResults.bootstrap`, :meth:`ProblemResults.compute_optimal_instruments`, and :meth:`ProblemResults.importance_sampling`. It can also be converted into a dictionary.
+This class has all of the same methods as :class:`ProblemResults`, except for :meth:`ProblemResults.bootstrap`, :meth:`ProblemResults.compute_optimal_instruments`, :meth:`ProblemResults.importance_sampling`, and :meth:`ProblemResults.compute_delta`. It can also be converted into a dictionary.
 
 .. autosummary::
    :toctree: _api
