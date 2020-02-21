@@ -24,11 +24,9 @@ class Integration(StringRepresentation):
               generator.
 
             - ``'halton'`` - Generate nodes according to the Halton. Different primes (2, 3, 5, etc.) are used for
-              different dimensions. Integration weights are ``1 / size``. In line with best practices, by default the
-              first ``1000`` values in each dimension are discarded, for every point taken ``10`` points are skipped,
-              and the resulting sequences are randomly ordered in different dimensions. The ``discard``, ``skip``, and
-              ``scramble`` options can be used to modify these default options, and the ``seed`` option can be used
-              to set the seed for scrambling behavior.
+              different dimensions. Integration weights are ``1 / size``. By default, the first ``100`` values in each
+              dimension are discarded to eliminate correlation between dimensions. The ``discard`` field of ``options``
+              can be used to increase this number.
 
             - ``'lhs'`` - Generate nodes according to Latin Hypercube Sampling (LHS). Integration weights are
               ``1 / size``. The ``seed`` field of ``options`` can be used to seed the random number generator.
@@ -60,8 +58,8 @@ class Integration(StringRepresentation):
         The number of draws if ``specification`` is ``'monte_carlo'``, ``'lhs'``, or ``'mlhs'``, and the level of the
         quadrature rule otherwise.
     specification_options : `dict, optional`
-        Options for the integration specification. The ``'monte_carlo'``, ``'halton'``, ``'lhs'``, and ``'mlhs'``
-        specifications support the following option:
+        Options for the integration specification. The ``'monte_carlo'``, ``'lhs'``, and ``'mlhs'`` specifications
+        support the following option:
 
             - **seed** : (`int`) - Passed to :class:`numpy.random.mtrand.RandomState` to seed the random number
               generator before building integration nodes. By default, a seed is not passed to the random number
@@ -70,13 +68,8 @@ class Integration(StringRepresentation):
         The ``'halton'`` specification supports the following option:
 
             - **discard** : (`int`) - How many values at the beginning of each dimension's Halton sequence to discard.
-              By default, the first ``1000`` values in each dimension are discarded.
-
-            - **skip** : (`int`) - For each point taken, how many other points in the sequence to skip. By default,
-              ``10`` points are skipped for every point taken.
-
-            - **scramble** : (`bool`) - After creating integration nodes in every dimension, whether to randomly order
-              the nodes in each dimension. By default, nodes are scrambled.
+              Discarding values at the start of each dimension's sequence is the simplest way to eliminate correlation
+              between dimensions. By default, the first ``100`` values in each dimension are discarded.
 
     Examples
     --------
@@ -138,24 +131,17 @@ class Integration(StringRepresentation):
         # set default options
         self._specification_options: Options = {}
         if specification == 'halton':
-            self._specification_options.update({
-                'discard': 1000,
-                'skip': 10,
-                'scramble': True,
-            })
+            self._specification_options['discard'] = 100
 
         # update and validate options
         self._specification_options.update(specification_options or {})
-        if specification in {'monte_carlo', 'halton', 'lhs', 'mlhs'}:
+        if specification in {'monte_carlo', 'lhs', 'mlhs'}:
             if not isinstance(self._specification_options.get('seed', 0), int):
                 raise ValueError("The specification option seed must be an integer.")
         elif specification == 'halton':
             discard = self._specification_options['discard']
-            skip = self._specification_options['skip']
             if not isinstance(discard, int) or discard < 0:
                 raise ValueError("The specification option discard must be a nonnegative integer.")
-            if not isinstance(skip, int) or skip < 0:
-                raise ValueError("The specification option skip must be a nonnegative integer.")
 
     def __str__(self) -> str:
         """Format the configuration as a string."""
@@ -169,7 +155,7 @@ class Integration(StringRepresentation):
 
         # seed any underlying random number generator
         builder = self._builder
-        if self._specification in {'monte_carlo', 'halton', 'lhs', 'mlhs'}:
+        if self._specification in {'monte_carlo', 'lhs', 'mlhs'}:
             builder = functools.partial(builder, state=np.random.RandomState(self._specification_options.get('seed')))
 
         # build the arrays of IDs, nodes, and weights ID-by-ID
@@ -179,11 +165,7 @@ class Integration(StringRepresentation):
         weights_list: List[Array] = []
         for i in ids:
             if self._specification == 'halton':
-                start = self._specification_options['discard'] + (1 + self._specification_options['skip']) * count
-                nodes, weights = builder(
-                    dimensions, self._size, start, self._specification_options['skip'],
-                    self._specification_options['scramble']
-                )
+                nodes, weights = builder(dimensions, self._size, start=self._specification_options['discard'] + count)
             else:
                 nodes, weights = builder(dimensions, self._size)
             ids_list.append(np.repeat(i, weights.size))
@@ -196,13 +178,10 @@ class Integration(StringRepresentation):
     def _build(self, dimensions: int) -> Tuple[Array, Array]:
         """Build nodes and weights."""
         builder = self._builder
-        if self._specification in {'monte_carlo', 'halton', 'lhs', 'mlhs'}:
+        if self._specification in {'monte_carlo', 'lhs', 'mlhs'}:
             builder = functools.partial(builder, state=np.random.RandomState(self._specification_options.get('seed')))
         if self._specification == 'halton':
-            return builder(
-                dimensions, self._size, self._specification_options['discard'], self._specification_options['skip'],
-                self._specification_options['scramble']
-            )
+            return builder(dimensions, self._size, start=self._specification_options['discard'])
         return builder(dimensions, self._size)
 
 
@@ -213,9 +192,7 @@ def monte_carlo(dimensions: int, size: int, state: np.random.RandomState) -> Tup
     return nodes, weights
 
 
-def halton(
-        dimensions: int, size: int, start: int, skip: int, scramble: bool, state: np.random.RandomState) -> (
-        Tuple[Array, Array]):
+def halton(dimensions: int, size: int, start: int) -> Tuple[Array, Array]:
     """Generate nodes and weights for integration according to the Halton sequence."""
 
     # generate Halton sequences
@@ -225,16 +202,12 @@ def halton(
         for index in range(size):
             value = 0.0
             denominator = 1.0
-            quotient = start + (1 + skip) * index
+            quotient = start + index
             while quotient > 0:
                 quotient, remainder = divmod(quotient, base)
                 denominator *= base
                 value += remainder / denominator
             sequences[index, dimension] = value
-
-        # scramble the sequence
-        if scramble:
-            sequences[:, dimension] = sequences[state.permutation(size), dimension]
 
     # transform the sequences and construct weights
     nodes = scipy.stats.norm().ppf(sequences)
