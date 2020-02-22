@@ -175,6 +175,12 @@ Owen (2013)
 Owen, Art B. (2013). `Monte Carlo theory, methods and examples <https://statweb.stanford.edu/~owen/mc/>`_.
 
 
+Owen (2017)
+~~~~~~~~~~~
+
+Owen, Art B. (2017). `A randomized Halton algorithm in R <https://arxiv.org/pdf/1706.02808.pdf>`_.
+
+
 Petrin (2002)
 ~~~~~~~~~~~~~
 

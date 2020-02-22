@@ -23,10 +23,12 @@ class Integration(StringRepresentation):
               weights are ``1 / size``. The ``seed`` field of ``options`` can be used to seed the random number
               generator.
 
-            - ``'halton'`` - Generate nodes according to the Halton. Different primes (2, 3, 5, etc.) are used for
-              different dimensions. Integration weights are ``1 / size``. By default, the first ``100`` values in each
-              dimension are discarded to eliminate correlation between dimensions. The ``discard`` field of ``options``
-              can be used to increase this number.
+            - ``'halton'`` - Generate nodes according to the Halton. A different prime (starting with 2, 3, 5, etc.) is
+              used for each dimension of integration. To eliminate correlation between dimensions, the first ``1000``
+              values are by default discarded in each dimension. To further improve performance (particularly in
+              settings with many dimensions), sequences are also by default scrambled with the algorithm of
+              :ref:`references:Owen (2017)`. The ``discard``, ``scramble``, and ``seed`` fields of ``options`` can be
+              used to configure these default settings.
 
             - ``'lhs'`` - Generate nodes according to Latin Hypercube Sampling (LHS). Integration weights are
               ``1 / size``. The ``seed`` field of ``options`` can be used to seed the random number generator.
@@ -47,7 +49,7 @@ class Integration(StringRepresentation):
               Gauss-Hermite quadrature rule. Weights can be negative.
 
         Best practice for low dimensions is probably to use ``'product'`` to a relatively high degree of polynomial
-        accuracy. In higher dimensions, ``'grid'`` appears to scale the best. For more information, see
+        accuracy. In higher dimensions, ``'grid'`` or ``'halton'`` appears to scale the best. For more information, see
         :ref:`references:Judd and Skrainka (2011)` and :ref:`references:Conlon and Gortmaker (2019)`.
 
         Sparse grids are constructed in analogously to the Matlab function `nwspgr <http://www.sparse-grids.de/>`_
@@ -55,21 +57,25 @@ class Integration(StringRepresentation):
         :ref:`references:Heiss and Winschel (2008)`.
 
     size : `int`
-        The number of draws if ``specification`` is ``'monte_carlo'``, ``'lhs'``, or ``'mlhs'``, and the level of the
-        quadrature rule otherwise.
+        The number of draws if ``specification`` is ``'monte_carlo'``, ``'halton'``, ``'lhs'``, or ``'mlhs'``, and the
+        level of the quadrature rule otherwise.
     specification_options : `dict, optional`
-        Options for the integration specification. The ``'monte_carlo'``, ``'lhs'``, and ``'mlhs'`` specifications
-        support the following option:
+        Options for the integration specification. The ``'monte_carlo'``, ``'halton'``, ``'lhs'``, and ``'mlhs'``
+        specifications support the following option:
 
             - **seed** : (`int`) - Passed to :class:`numpy.random.mtrand.RandomState` to seed the random number
               generator before building integration nodes. By default, a seed is not passed to the random number
-              generator.
+              generator. For ``'halton'`` draws, this is only relevant if ``scramble`` is ``True`` (which is the
+              default).
 
-        The ``'halton'`` specification supports the following option:
+        The ``'halton'`` specification supports the following options:
 
             - **discard** : (`int`) - How many values at the beginning of each dimension's Halton sequence to discard.
               Discarding values at the start of each dimension's sequence is the simplest way to eliminate correlation
-              between dimensions. By default, the first ``100`` values in each dimension are discarded.
+              between dimensions. By default, the first ``1000`` values in each dimension are discarded.
+
+            - **scramble** : (`bool`) - Whether to scramble the sequences with the algorithm of
+              :ref:`references:Owen (2017)`. By default, sequences are scrambled.
 
     Examples
     --------
@@ -131,14 +137,17 @@ class Integration(StringRepresentation):
         # set default options
         self._specification_options: Options = {}
         if specification == 'halton':
-            self._specification_options['discard'] = 100
+            self._specification_options.update({
+                'discard': 1000,
+                'scramble': True,
+            })
 
         # update and validate options
         self._specification_options.update(specification_options or {})
-        if specification in {'monte_carlo', 'lhs', 'mlhs'}:
+        if specification in {'monte_carlo', 'halton', 'lhs', 'mlhs'}:
             if not isinstance(self._specification_options.get('seed', 0), int):
                 raise ValueError("The specification option seed must be an integer.")
-        elif specification == 'halton':
+        if specification == 'halton':
             discard = self._specification_options['discard']
             if not isinstance(discard, int) or discard < 0:
                 raise ValueError("The specification option discard must be a nonnegative integer.")
@@ -155,7 +164,7 @@ class Integration(StringRepresentation):
 
         # seed any underlying random number generator
         builder = self._builder
-        if self._specification in {'monte_carlo', 'lhs', 'mlhs'}:
+        if self._specification in {'monte_carlo', 'halton', 'lhs', 'mlhs'}:
             builder = functools.partial(builder, state=np.random.RandomState(self._specification_options.get('seed')))
 
         # build the arrays of IDs, nodes, and weights ID-by-ID
@@ -165,7 +174,8 @@ class Integration(StringRepresentation):
         weights_list: List[Array] = []
         for i in ids:
             if self._specification == 'halton':
-                nodes, weights = builder(dimensions, self._size, start=self._specification_options['discard'] + count)
+                start = self._specification_options['discard'] + count
+                nodes, weights = builder(dimensions, self._size, start, self._specification_options['scramble'])
             else:
                 nodes, weights = builder(dimensions, self._size)
             ids_list.append(np.repeat(i, weights.size))
@@ -178,10 +188,11 @@ class Integration(StringRepresentation):
     def _build(self, dimensions: int) -> Tuple[Array, Array]:
         """Build nodes and weights."""
         builder = self._builder
-        if self._specification in {'monte_carlo', 'lhs', 'mlhs'}:
+        if self._specification in {'monte_carlo', 'halton', 'lhs', 'mlhs'}:
             builder = functools.partial(builder, state=np.random.RandomState(self._specification_options.get('seed')))
         if self._specification == 'halton':
-            return builder(dimensions, self._size, start=self._specification_options['discard'])
+            start = self._specification_options['discard']
+            return builder(dimensions, self._size, start, self._specification_options['scramble'])
         return builder(dimensions, self._size)
 
 
@@ -192,22 +203,21 @@ def monte_carlo(dimensions: int, size: int, state: np.random.RandomState) -> Tup
     return nodes, weights
 
 
-def halton(dimensions: int, size: int, start: int) -> Tuple[Array, Array]:
+def halton(dimensions: int, size: int, start: int, scramble: bool, state: np.random.RandomState) -> Tuple[Array, Array]:
     """Generate nodes and weights for integration according to the Halton sequence."""
 
     # generate Halton sequences
     sequences = np.zeros((size, dimensions))
     for dimension in range(dimensions):
         base = get_prime(dimension)
-        for index in range(size):
-            value = 0.0
-            denominator = 1.0
-            quotient = start + index
-            while quotient > 0:
-                quotient, remainder = divmod(quotient, base)
-                denominator *= base
-                value += remainder / denominator
-            sequences[index, dimension] = value
+        factor = 1 / base
+        indices = np.arange(start, start + size)
+        while 1 - factor < 1:
+            indices, remainders = np.divmod(indices, base)
+            if scramble:
+                remainders = state.permutation(base)[remainders]
+            sequences[:, dimension] += factor * remainders
+            factor /= base
 
     # transform the sequences and construct weights
     nodes = scipy.stats.norm().ppf(sequences)
