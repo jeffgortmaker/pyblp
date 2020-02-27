@@ -151,8 +151,10 @@ class ProblemResults(Results):
     micro : `ndarray`
         Averaged micro moments, :math:`\bar{g}_M`, in :eq:`averaged_micro_moments`.
     objective : `float`
-        GMM objective value, :math:`q(\hat{\theta})`, defined in :eq:`objective`. Note that in some of the BLP
-        literature (and earlier versions of this package), this expression was previously scaled by :math:`N^2`.
+        GMM objective value, :math:`q(\hat{\theta})`, defined in :eq:`objective`. If ``scale_objective`` was ``True`` in
+        :meth:`Problem.solve` (which is the default), this value was scaled by :math:`N` so that objective values are
+        more comparable across different problem sizes. Note that in some of the BLP literature (and earlier versions of
+        this package), this expression was previously scaled by :math:`N^2`.
     xi_by_theta_jacobian : `ndarray`
         Estimated :math:`\frac{\partial\xi}{\partial\theta} = \frac{\partial\delta}{\partial\theta}`, which is used to
         compute the gradient and standard errors.
@@ -578,7 +580,8 @@ class ProblemResults(Results):
         .. note::
 
            The statistic can equivalently be written as :math:`J = Nq(\hat{\theta})` where the GMM objective value is
-           defined in :eq:`objective`.
+           defined in :eq:`objective`, or the same but without the :math:`N` if the GMM objective value was scaled by
+           :math:`N`, which is the default behavior.
 
         When the overidentifying restrictions in this model are valid, the :math:`J` statistic is asymptotically
         :math:`\chi^2` with degrees of freedom equal to the number of overidentifying restrictions. This requires that
@@ -615,7 +618,8 @@ class ProblemResults(Results):
 
            The statistic can equivalently be written as
            :math:`\text{LR} = N[q(\hat{\theta^r}) - q(\hat{\theta^u})]` where the GMM objective value is defined in
-           :eq:`objective`.
+           :eq:`objective`, or the same but without the :math:`N` if the GMM objective value was scaled by :math:`N`,
+           which is the default behavior.
 
         If the restrictions in this model are valid, the distance statistic is asymptotically :math:`\chi^2` with
         degrees of freedom equal to the number of restrictions.

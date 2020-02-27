@@ -44,7 +44,7 @@ class ProblemEconomy(Economy):
             pi_bounds: Optional[Tuple[Any, Any]] = None, rho_bounds: Optional[Tuple[Any, Any]] = None,
             beta_bounds: Optional[Tuple[Any, Any]] = None, gamma_bounds: Optional[Tuple[Any, Any]] = None,
             delta: Optional[Any] = None, method: str = '2s', initial_update: bool = False,
-            optimization: Optional[Optimization] = None, scale_objective: bool = False, check_optimality: str = 'both',
+            optimization: Optional[Optimization] = None, scale_objective: bool = True, check_optimality: str = 'both',
             error_behavior: str = 'revert', error_punishment: float = 1, delta_behavior: str = 'first',
             iteration: Optional[Iteration] = None, fp_type: str = 'safe_linear',
             costs_bounds: Optional[Tuple[Any, Any]] = None, W: Optional[Any] = None, center_moments: bool = True,
@@ -232,8 +232,11 @@ class ProblemEconomy(Economy):
         scale_objective : `bool, optional`
             Whether to scale the objective in :eq:`objective` by :math:`N`, the number of observations, in which case
             the objective after two GMM steps is equal to the :math:`J` statistic from :ref:`references:Hansen (1982)`.
-            By default, the objective is not scaled by :math:`N`, but scaling it may be preferable because objectives
-            across different problem sizes may then be more comparable.
+            By default, the objective is scaled by :math:`N`.
+
+            In theory the scale of the objective should not matter, but in practice having similar objective values for
+            different problem sizes is helpful because similar optimization tolerances can be used.
+
         check_optimality : `str, optional`
             How to check for optimality (first and second order conditions) after the optimization routine finishes.
             The following configurations are supported:
