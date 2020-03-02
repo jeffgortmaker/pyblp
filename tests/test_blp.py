@@ -1113,7 +1113,7 @@ def test_logit(
     # solve the problem with linearmodels, monkey-patching a problematic linearmodels method that shouldn't be called
     #   but is anyways
     import linearmodels
-    linearmodels.IVLIML._estimate_kappa = lambda _: 1
+    linearmodels.iv.model._IVLSModelBase._estimate_kappa = lambda _: 1
     model = linearmodels.IVGMM(
         delta, exog=None, endog=problem.products.X1, instruments=problem.products.ZD, center=center_moments,
         weight_type=W_type, **W_options
