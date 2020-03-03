@@ -4,6 +4,23 @@ Version Notes
 These notes will only include major changes.
 
 
+0.9
+---
+
+- More control over matrices of instruments
+- Split off fixed effect absorption into companion package PyHDFE
+- Scrambled Halton and Modified Latin Hypercube (MLHS) integration
+- Importance sampling
+- Quantity dependent marginal costs
+- Speed up various matrix construction routines
+- Option to do initial GMM update at starting values
+- Update BLP example data to better replicate original paper
+- Lognormal random coefficients
+- Removed outdated default parameter bounds
+- Change default objective scaling for more comparable objective values across problem sizes
+- Add post-estimation routines to simplify integration error comparison
+
+
 0.8
 ---
 
