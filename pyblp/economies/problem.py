@@ -981,7 +981,7 @@ class Problem(ProblemEconomy):
               supply-side instruments, :math:`Z_S`. To instead specify the full matrix :math:`Z_S`, set
               ``add_exogenous`` to ``False``.
 
-        The recommendation in :ref:`references:Conlon and Gortmaker (2019)` is to start with differentiation instruments
+        The recommendation in :ref:`references:Conlon and Gortmaker (2020)` is to start with differentiation instruments
         of :ref:`references:Gandhi and Houde (2017)`, which can be built with :func:`build_differentiation_instruments`,
         and then compute feasible optimal instruments with :func:`ProblemResults.compute_optimal_instruments` in the
         second stage.

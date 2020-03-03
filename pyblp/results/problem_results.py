@@ -897,7 +897,7 @@ class ProblemResults(Results):
         r"""Estimate feasible optimal or efficient instruments, :math:`Z_D^\text{opt}` and :math:`Z_S^\text{opt}`.
 
         Optimal instruments have been shown, for example, by :ref:`references:Reynaert and Verboven (2014)` and
-        :ref:`references:Conlon and Gortmaker (2019)`, to reduce bias, improve efficiency, and enhance stability of BLP
+        :ref:`references:Conlon and Gortmaker (2020)`, to reduce bias, improve efficiency, and enhance stability of BLP
         estimates.
 
         Optimal instruments in the spirit of :ref:`references:Amemiya (1977)` or :ref:`references:Chamberlain (1987)`

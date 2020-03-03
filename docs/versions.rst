@@ -9,7 +9,7 @@ These notes will only include major changes.
 
 - More control over matrices of instruments
 - Split off fixed effect absorption into companion package PyHDFE
-- Scrambled Halton and Modified Latin Hypercube (MLHS) integration
+- Scrambled Halton and Modified Latin Hypercube Sampling (MLHS) integration
 - Importance sampling
 - Quantity dependent marginal costs
 - Speed up various matrix construction routines

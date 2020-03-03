@@ -1,7 +1,7 @@
 Background
 ==========
 
-The following sections provide a very brief overview of the BLP model and how it is estimated. This goal is to concisely introduce the notation and terminology used throughout the rest of the documentation. For a more in-depth overview, refer to :ref:`references:Conlon and Gortmaker (2019)`.
+The following sections provide a very brief overview of the BLP model and how it is estimated. This goal is to concisely introduce the notation and terminology used throughout the rest of the documentation. For a more in-depth overview, refer to :ref:`references:Conlon and Gortmaker (2020)`.
 
 
 The Model

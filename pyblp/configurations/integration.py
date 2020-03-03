@@ -50,7 +50,7 @@ class Integration(StringRepresentation):
 
         Best practice for low dimensions is probably to use ``'product'`` to a relatively high degree of polynomial
         accuracy. In higher dimensions, ``'grid'`` or ``'halton'`` appears to scale the best. For more information, see
-        :ref:`references:Judd and Skrainka (2011)` and :ref:`references:Conlon and Gortmaker (2019)`.
+        :ref:`references:Judd and Skrainka (2011)` and :ref:`references:Conlon and Gortmaker (2020)`.
 
         Sparse grids are constructed in analogously to the Matlab function `nwspgr <http://www.sparse-grids.de/>`_
         created by Florian Heiss and Viktor Winschel. For more information, see

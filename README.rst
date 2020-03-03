@@ -32,7 +32,7 @@ Development of the package has been guided by the work of many researchers and p
 Citation
 --------
 
-If you use PyBLP in your research, we ask that you also cite `Conlon and Gortmaker (2019) <https://jeffgortmaker.com/files/pyblp.pdf>`_, which describes the advances implemented in the package.
+If you use PyBLP in your research, we ask that you also cite `Conlon and Gortmaker (2020) <https://jeffgortmaker.com/files/pyblp.pdf>`_, which describes the advances implemented in the package.
 
 
 Installation
