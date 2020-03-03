@@ -530,7 +530,7 @@ def build_matrix(formulation: Formulation, data: Mapping) -> Array:
     return matrix
 
 
-def data_to_dict(data: RecArray) -> Dict[str, Array]:
+def data_to_dict(data: RecArray, ignore_empty: bool = True) -> Dict[str, Array]:
     r"""Convert a NumPy record array into a dictionary.
 
     Most data in PyBLP are structured as NumPy record arrays (e.g., :attr:`Problem.products` and
@@ -545,6 +545,8 @@ def data_to_dict(data: RecArray) -> Dict[str, Array]:
     ----------
     data : `recarray`
         Record array created by PyBLP.
+    ignore_empty : `bool, optional`
+        Whether to ignore matrices with zero size. By default, these are ignored.
 
     Returns
     -------
@@ -568,10 +570,13 @@ def data_to_dict(data: RecArray) -> Dict[str, Array]:
     """
     if not isinstance(data, np.recarray):
         raise TypeError("data must be a NumPy record array.")
+
     mapping: Dict[str, Array] = {}
     for key in data.dtype.names:
         if len(data[key].shape) > 2:
             raise ValueError("Arrays with more than two dimensions are not supported.")
+        if ignore_empty and data[key].size == 0:
+            continue
         if len(data[key].shape) == 1 or data[key].shape[1] == 1 or data[key].size == 0:
             mapping[key] = data[key].flatten()
             continue
