@@ -47,15 +47,19 @@ class ProblemMarket(Market):
         micro_jacobian = np.full((self.moments.MM, self.parameters.P), np.nan, options.dtype)
         micro_covariances = np.full((self.moments.MM, self.moments.MM), np.nan, options.dtype)
         if self.moments.MM > 0:
-            micro, micro_probabilities, micro_conditionals, micro_errors = self.safely_compute_micro(valid_delta)
+            micro, probabilities, conditionals, inside_probabilities, inside_conditionals, micro_errors = (
+                self.safely_compute_micro(valid_delta)
+            )
             errors.extend(micro_errors)
             if compute_jacobian:
                 micro_jacobian, micro_jacobian_errors = self.safely_compute_micro_by_theta_jacobian(
-                    valid_delta, micro_probabilities, micro_conditionals, xi_jacobian
+                    valid_delta, probabilities, conditionals, inside_probabilities, inside_conditionals, xi_jacobian
                 )
                 errors.extend(micro_jacobian_errors)
             if compute_micro_covariances:
-                micro_covariances, micro_covariances_errors = self.safely_compute_micro_covariances(micro_probabilities)
+                micro_covariances, micro_covariances_errors = self.safely_compute_micro_covariances(
+                    probabilities, inside_probabilities
+                )
                 errors.extend(micro_covariances_errors)
 
         return delta, micro, xi_jacobian, micro_jacobian, micro_covariances, stats, errors
@@ -106,24 +110,30 @@ class ProblemMarket(Market):
         return self.compute_xi_by_theta_jacobian(delta)
 
     @NumericalErrorHandler(exceptions.MicroMomentsNumericalError)
-    def safely_compute_micro(self, delta: Array) -> Tuple[Array, Array, Array, List[Error]]:
+    def safely_compute_micro(self, delta: Array) -> Tuple[Array, Array, Array, Array, Array, List[Error]]:
         """Compute micro moments, handling any numerical errors."""
         errors: List[Error] = []
-        micro, micro_probabilities, micro_conditionals = self.compute_micro(delta)
-        return micro, micro_probabilities, micro_conditionals, errors
+        micro, probabilities, conditionals, inside_probabilities, inside_conditionals = self.compute_micro(delta)
+        return micro, probabilities, conditionals, inside_probabilities, inside_conditionals, errors
 
     @NumericalErrorHandler(exceptions.MicroMomentsByThetaJacobianNumericalError)
     def safely_compute_micro_by_theta_jacobian(
-            self, delta: Array, micro_probabilities: Array, micro_conditionals: Array, xi_jacobian: Array) -> (
-            Tuple[Array, List[Error]]):
+            self, delta: Array, probabilities: Array, conditionals: Array, inside_probabilities: Array,
+            inside_conditionals: Array, xi_jacobian: Array) -> (Tuple[Array, List[Error]]):
         """Compute the Jacobian of micro moments with respect to theta, handling any numerical errors."""
         errors: List[Error] = []
         assert self.moments is not None
 
-        # compute the transposed tensor derivative of probabilities (with the outside option eliminated from the choice
-        #   set) with respect to xi
-        micro_probabilities_tensor, _ = self.compute_probabilities_by_xi_tensor(micro_probabilities, micro_conditionals)
-        micro_probabilities_tensor = micro_probabilities_tensor.swapaxes(1, 2)
+        # compute transposed tensor derivatives of probabilities with respect to xi
+        probabilities_tensor = inside_probabilities_tensor = None
+        if any(not m.conditional for m in self.moments.micro_moments):
+            probabilities_tensor, _ = self.compute_probabilities_by_xi_tensor(probabilities, conditionals)
+            probabilities_tensor = probabilities_tensor.swapaxes(1, 2)
+        if any(m.conditional for m in self.moments.micro_moments):
+            inside_probabilities_tensor, _ = self.compute_probabilities_by_xi_tensor(
+                inside_probabilities, inside_conditionals
+            )
+            inside_probabilities_tensor = inside_probabilities_tensor.swapaxes(1, 2)
 
         # compute the Jacobian
         micro_jacobian = np.zeros((self.moments.MM, self.parameters.P))
@@ -131,17 +141,25 @@ class ProblemMarket(Market):
             if isinstance(parameter, LinearCoefficient):
                 continue
 
-            # compute the tangent of probabilities (with the outside option removed from the choice set) with
-            #   respect to the parameter
-            micro_probabilities_tangent, _ = self.compute_probabilities_by_parameter_tangent(
-                parameter, micro_probabilities, micro_conditionals, delta
-            )
+            # compute tangents of probabilities respect to the parameter
+            probabilities_tangent = inside_probabilities_tangent = None
+            if any(not m.conditional for m in self.moments.micro_moments):
+                probabilities_tangent, _ = self.compute_probabilities_by_parameter_tangent(
+                    parameter, probabilities, conditionals, delta
+                )
+            if any(m.conditional for m in self.moments.micro_moments):
+                inside_probabilities_tangent, _ = self.compute_probabilities_by_parameter_tangent(
+                    parameter, inside_probabilities, inside_conditionals, delta
+                )
 
             # fill the gradient of micro moments with respect to the parameter moment-by-moment
             for m, moment in enumerate(self.moments.micro_moments):
                 assert isinstance(moment, FirstChoiceCovarianceMoment)
-                z_tangent = micro_probabilities_tangent.T @ self.products.X2[:, [moment.X2_index]]
-                z_jacobian = np.squeeze(micro_probabilities_tensor @ self.products.X2[:, [moment.X2_index]])
+                moment_tangent = inside_probabilities_tangent if moment.conditional else probabilities_tangent
+                moment_tensor = inside_probabilities_tensor if moment.conditional else probabilities_tensor
+                assert moment_tangent is not None and moment_tensor is not None
+                z_tangent = moment_tangent.T @ self.products.X2[:, [moment.X2_index]]
+                z_jacobian = np.squeeze(moment_tensor @ self.products.X2[:, [moment.X2_index]])
                 d = self.agents.demographics[:, [moment.demographics_index]]
                 demeaned_z_tangent = z_tangent - z_tangent.T @ self.agents.weights
                 demeaned_z_jacobian = z_jacobian - z_jacobian @ self.agents.weights
@@ -154,7 +172,8 @@ class ProblemMarket(Market):
         return micro_jacobian, errors
 
     @NumericalErrorHandler(exceptions.MicroMomentCovariancesNumericalError)
-    def safely_compute_micro_covariances(self, micro_probabilities: Array) -> Tuple[Array, List[Error]]:
+    def safely_compute_micro_covariances(
+            self, probabilities: Array, inside_probabilities: Array) -> Tuple[Array, List[Error]]:
         """Compute micro moment covariances, handling any numerical errors."""
         errors: List[Error] = []
         assert self.moments is not None
@@ -163,7 +182,9 @@ class ProblemMarket(Market):
         demeaned_agent_micro = np.zeros((self.I, self.moments.MM), options.dtype)
         for m, moment in enumerate(self.moments.micro_moments):
             assert isinstance(moment, FirstChoiceCovarianceMoment)
-            z = micro_probabilities.T @ self.products.X2[:, [moment.X2_index]]
+            moment_probabilities = inside_probabilities if moment.conditional else probabilities
+            assert moment_probabilities is not None
+            z = moment_probabilities.T @ self.products.X2[:, [moment.X2_index]]
             d = self.agents.demographics[:, [moment.demographics_index]]
             demeaned_z = z - z.T @ self.agents.weights
             demeaned_d = d - d.T @ self.agents.weights

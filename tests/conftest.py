@@ -271,7 +271,7 @@ def large_blp_simulation() -> SimulationFixture:
     simulation = Simulation(
         product_formulations=(
             Formulation('1 + x + y + z + q'),
-            Formulation('0 + I(-prices) + x'),
+            Formulation('1 + I(-prices) + x'),
             Formulation('0 + log(x) + log(a) + log(b)')
         ),
         product_data={
@@ -281,10 +281,12 @@ def large_blp_simulation() -> SimulationFixture:
         },
         beta=[1, 1, 2, 3, 1],
         sigma=[
-            [+0.5, 0],
-            [-0.1, 2]
+            [0, +0.0, 0],
+            [0, +0.5, 0],
+            [0, -0.1, 2]
         ],
         pi=[
+            [0, 0, 0],
             [2, 1, 0],
             [0, 0, 2]
         ],
@@ -294,7 +296,7 @@ def large_blp_simulation() -> SimulationFixture:
         xi_variance=0.00001,
         omega_variance=0.00001,
         correlation=0.9,
-        distributions=['lognormal', 'normal'],
+        distributions=['normal', 'lognormal', 'normal'],
         costs_type='log',
         seed=2
     )
@@ -311,11 +313,9 @@ def large_blp_simulation() -> SimulationFixture:
     }
     simulated_micro_moments = [
         FirstChoiceCovarianceMoment(
-            X2_index=1, demographics_index=1, value=0, market_ids=simulation.unique_market_ids[:5]
+            X2_index=2, demographics_index=1, value=0, market_ids=simulation.unique_market_ids[:5]
         ),
-        FirstChoiceCovarianceMoment(
-            X2_index=0, demographics_index=1, value=0, market_ids=simulation.unique_market_ids[-3:]
-        )
+        FirstChoiceCovarianceMoment(X2_index=0, demographics_index=1, value=0, conditional=False)
     ]
     return simulation, simulation_results, simulated_data_override, simulated_micro_moments
 
@@ -446,7 +446,7 @@ def simulated_problem(request: Any) -> SimulatedProblemFixture:
         micro_values = simulation_results.compute_micro(simulated_micro_moments)
         for moment, value in zip(simulated_micro_moments, micro_values):
             micro_moments.append(FirstChoiceCovarianceMoment(
-                moment.X2_index, moment.demographics_index, value, moment.market_ids
+                moment.X2_index, moment.demographics_index, value, moment.conditional, moment.market_ids
             ))
 
     # initialize and solve the problem

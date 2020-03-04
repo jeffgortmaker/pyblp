@@ -871,24 +871,29 @@ class Market(Container):
                 omega_jacobian[:, [p]] = -parameter.get_product_characteristic(self)
         return omega_jacobian, errors
 
-    def compute_micro(self, delta: Optional[Array] = None) -> Tuple[Array, Array, Array]:
+    def compute_micro(self, delta: Optional[Array] = None) -> Tuple[Array, Array, Array, Array, Array]:
         """Compute micro moments. By default, use the delta with which this market was initialized. Also return the
-        probabilities with the outside option eliminated so they can be re-used when computing other things related to
-        micro moments.
+        probabilities so they can be re-used when computing other micro moment-related outputs.
         """
         assert self.moments is not None
 
-        # compute probabilities with the outside option eliminated
-        micro_probabilities, micro_conditionals = self.compute_probabilities(delta, eliminate_outside=True)
+        # pre-compute probabilities
+        probabilities = conditionals = inside_probabilities = inside_conditionals = None
+        if any(not m.conditional for m in self.moments.micro_moments):
+            probabilities, conditionals = self.compute_probabilities(delta)
+        if any(m.conditional for m in self.moments.micro_moments):
+            inside_probabilities, inside_conditionals = self.compute_probabilities(delta, eliminate_outside=True)
 
         # compute the micro moments
         micro = np.zeros((self.moments.MM, 1), options.dtype)
         for m, moment in enumerate(self.moments.micro_moments):
             assert isinstance(moment, FirstChoiceCovarianceMoment)
-            z = micro_probabilities.T @ self.products.X2[:, [moment.X2_index]]
+            moment_probabilities = inside_probabilities if moment.conditional else probabilities
+            assert moment_probabilities is not None
+            z = moment_probabilities.T @ self.products.X2[:, [moment.X2_index]]
             d = self.agents.demographics[:, [moment.demographics_index]]
             demeaned_z = z - z.T @ self.agents.weights
             demeaned_d = d - d.T @ self.agents.weights
             micro[m] = demeaned_z.T @ (self.agents.weights * demeaned_d) - moment.value
 
-        return micro, micro_probabilities, micro_conditionals
+        return micro, probabilities, conditionals, inside_probabilities, inside_conditionals

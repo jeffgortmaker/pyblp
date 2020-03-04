@@ -19,13 +19,15 @@ class Moment(StringRepresentation):
     """Information about a single micro moment."""
 
     value: Array
+    conditional: bool
     market_ids: Optional[Array]
 
-    def __init__(self, value: float, market_ids: Optional[Sequence] = None) -> None:
+    def __init__(self, value: float, conditional: bool = True, market_ids: Optional[Sequence] = None) -> None:
         """Validate information about the moment to the greatest extent possible without an economy instance."""
         self.value = np.asarray(value, options.dtype)
         if self.value.size != 1:
             raise ValueError("The micro moment value must be a scalar.")
+        self.conditional = bool(conditional)
         self.market_ids = None
         if market_ids is not None:
             self.market_ids = np.asarray(market_ids, np.object)
@@ -68,8 +70,8 @@ class Moment(StringRepresentation):
 
 
 class FirstChoiceCovarianceMoment(Moment):
-    r"""Configuration for micro moments that match covariances between product and agent characteristics, conditional on
-    purchasing non-outside goods.
+    r"""Configuration for micro moments that match covariances between product and agent characteristics, which can also
+    be used to match covariances agent characteristics and inside or outside good purchase probability.
 
     For example, survey data can often be used to compute the covariance :math:`\sigma_{xy}` between a product
     characteristic, :math:`x_{jt}`, and an agent demographic such as income, :math:`y_{it}`, conditional on purchasing a
@@ -79,12 +81,21 @@ class FirstChoiceCovarianceMoment(Moment):
     .. math:: g_{M,mti} = (z_{it} - \bar{z}_t)(y_{it} - \bar{y}_t) - \sigma_{xy}
 
     where :math:`\bar{z}_t = \sum_i w_{it} z_{it}`, :math:`\bar{y}_t = \sum_i w_{it} y_{it}`, and conditional on
-    purchasing a non-outside good, the expected value of :math:`x_{jt}` for agent :math:`i` is
+    purchasing an inside good, the expected value of :math:`x_{jt}` for agent :math:`i` is
 
     .. math:: z_{it} = \sum_{j=1}^{J_t} x_{jt}s_{j(-0)ti}
 
     where :math:`s_{j(-0)ti}` is the probability of choosing :math:`j` when the outside option is removed from the
     choice set.
+
+    When the moment is constructed with a constant product characteristic :math:`x_{jt} = 1` and without conditioning on
+    purchasing an inside good, this expression simplifies to
+
+    .. math:: g_{M,mti} = -(s_{0ti} - s_{0t})(y_{it} - \bar{y}_t) - \sigma_{xy},
+
+    which is negative the covariance between the demographic and the probability of purchasing the outside good, or
+    equivalently, the covariance between the demographic and the probability of purchasing any inside good. The outside
+    good share is :math:`s_{0t} = \sum_i w_{it} s_{0ti} = 1 - \sum_j s_{jt}`.
 
     Integrals of these micro moments are approximated within and averaged across a set :math:`\mathscr{T}_m` of markets
     in which the micro data used to compute :math:`\sigma_{xy}` is relevant, which gives :math:`\bar{g}_{M,m}` in
@@ -94,12 +105,18 @@ class FirstChoiceCovarianceMoment(Moment):
     ----------
     X2_index : `int`
         Column index of :math:`x_{jt}` in the matrix of demand-side nonlinear product characteristics, :math:`X_2`. This
-        should be between zero and :math:`K_2 - 1`, inclusive.
+        should be between zero and :math:`K_2 - 1`, inclusive. If the goal is to match the covariance between a
+        demographic and inside purchase probability, this index should point to a constant characteristic
+        :math:`x_{jt} = 1` and ``conditional`` should be set to ``False``.
     demographics_index : `int`
         Column index of the demographic :math:`y_{it}` (which can be any demographic, not just income) in the matrix of
         agent demographics, :math:`d`. This should be between zero and :math:`D - 1`, inclusive.
     value : `float`
         Value of the covariance :math:`\sigma_{xy}` estimated from micro data.
+    conditional : `bool, optional`
+        Whether to condition on purchase of an inside good when computing :math:`z_{it}`, which is the default. The
+        typical case when this should be set to ``False`` is when the goal is to match the covariance between a
+        demographic and inside purchase probability.
     market_ids : `array-like, optional`
         Distinct market IDs over which the micro moments will be averaged to get :math:`\bar{g}_{M,m}`. These are also
         the only markets in which the moments will be computed. By default, the moments are computed for and averaged
@@ -116,9 +133,10 @@ class FirstChoiceCovarianceMoment(Moment):
     demographics_index: int
 
     def __init__(
-            self, X2_index: int, demographics_index: int, value: float, market_ids: Optional[Sequence] = None) -> None:
+            self, X2_index: int, demographics_index: int, value: float, conditional: bool = True,
+            market_ids: Optional[Sequence] = None) -> None:
         """Validate information about the moment to the greatest extent possible without an economy instance."""
-        super().__init__(value, market_ids)
+        super().__init__(value, conditional, market_ids)
         if not isinstance(X2_index, int) or X2_index < 0:
             raise ValueError("X2_index must be a positive int.")
         if not isinstance(demographics_index, int) or demographics_index < 0:
@@ -128,7 +146,8 @@ class FirstChoiceCovarianceMoment(Moment):
 
     def _format_value(self) -> str:
         """Construct a string expression for the covariance moment."""
-        return f"Cov(X2 Column {self.X2_index}, Demographic Column {self.demographics_index})"
+        condition_text = " | Inside" if self.conditional else ""
+        return f"Cov(X2 Column {self.X2_index}, Demographic Column {self.demographics_index}{condition_text})"
 
     def _validate(self, economy: 'Economy') -> None:
         """Check that matrix indices are valid in the economy."""
