@@ -58,8 +58,9 @@ class DeltaNumericalError(NumericalError):
     r"""Encountered a numerical error when computing :math:`\delta`.
 
     This problem is often due to prior problems, overflow, or nonpositive shares, and can sometimes be mitigated by
-    choosing smaller initial parameter values, setting more conservative bounds, rescaling data, removing outliers,
-    changing the floating point precision, or using different optimization, iteration, or integration configurations.
+    choosing smaller initial parameter values, setting more conservative bounds on parameters or shares, rescaling data,
+    removing outliers, changing the floating point precision, or using different optimization, iteration, or integration
+    configurations.
 
     """
 
@@ -187,6 +188,10 @@ class AbsorptionError(DerivedError):
     """
 
 
+class ClippedSharesError(Error):
+    r"""Shares were clipped during the final iteration of the fixed point routine for computing :math:`\delta`."""
+
+
 class ThetaConvergenceError(Error):
     """The optimization routine failed to converge.
 
@@ -200,8 +205,8 @@ class DeltaConvergenceError(Error):
     r"""The fixed point computation of :math:`\delta` failed to converge.
 
     This problem can sometimes be mitigated by increasing the maximum number of fixed point iterations, increasing the
-    fixed point tolerance, choosing more reasonable initial parameter values, setting more conservative bounds, or using
-    different iteration or optimization configurations.
+    fixed point tolerance, choosing more reasonable initial parameter values, setting more conservative parameter or
+    share bounds, or using different iteration or optimization configurations.
 
     """
 

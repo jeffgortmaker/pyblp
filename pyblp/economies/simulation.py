@@ -16,7 +16,7 @@ from ..parameters import Parameters
 from ..primitives import Agents, Products
 from ..results.simulation_results import SimulationResults
 from ..utilities.basics import (
-    Array, Error, Groups, SolverStats, RecArray, extract_matrix, format_seconds, generate_items, output,
+    Array, Bounds, Error, Groups, SolverStats, RecArray, extract_matrix, format_seconds, generate_items, output,
     output_progress, structure_matrices
 )
 
@@ -611,7 +611,8 @@ class Simulation(Economy):
 
     def replace_exogenous(
             self, X1_name: str, X3_name: Optional[str] = None, delta: Optional[Any] = None,
-            iteration: Optional[Iteration] = None, fp_type: str = 'safe_linear', error_behavior: str = 'raise') -> (
+            iteration: Optional[Iteration] = None, fp_type: str = 'safe_linear',
+            shares_bounds: Optional[Tuple[Any, Any]] = (1e-300, None), error_behavior: str = 'raise') -> (
             SimulationResults):
         r"""Replace exogenous product characteristics with values that are consistent with true parameters.
 
@@ -661,6 +662,11 @@ class Simulation(Economy):
         fp_type : `str, optional`
             Configuration for the type of contraction mapping used to compute :math:`\delta`. For information about
             the different types, refer to the same argument in :meth:`Problem.solve`.
+        shares_bounds : `tuple, optional`
+            Configuration for :math:`s_{jt}(\delta, \theta)` bounds of the form ``(lb, ub)``, in which both ``lb`` and
+            ``ub`` are floats or ``None``. By default, simulated shares are bounded from below by ``1e-300``. This is
+            only relevant if ``fp_type`` is ``'safe_linear'`` or ``'linear'``. Bounding shares in the contraction does
+            nothing with a nonlinear fixed point. For more information, refer to :meth:`Problem.solve`.
         error_behavior : `str, optional`
             How to handle errors when computing :math:`\delta` and :math:`\tilde{c}`. The following behaviors are
             supported:
@@ -728,15 +734,16 @@ class Simulation(Economy):
 
         # validate other settings
         iteration = self._coerce_optional_delta_iteration(iteration)
+        shares_bounds = self._coerce_optional_bounds(shares_bounds, 'shares_bounds')
         self._validate_fp_type(fp_type)
         self._validate_error_behavior(error_behavior)
 
-        def market_factory(s: Hashable) -> Tuple[SimulationMarket, Array, Iteration, str]:
+        def market_factory(s: Hashable) -> Tuple[SimulationMarket, Array, Iteration, str, Bounds]:
             """Build a market along with arguments used to compute delta and marginal costs."""
-            assert delta is not None and iteration is not None
+            assert delta is not None and iteration is not None and shares_bounds is not None
             market_s = SimulationMarket(self, s, self._parameters, self.sigma, self.pi, self.rho, self.beta)
             delta_s = delta[self._product_market_indices[s]]
-            return market_s, delta_s, iteration, fp_type
+            return market_s, delta_s, iteration, fp_type, shares_bounds
 
         # compute delta and marginal costs market-by-market
         true_delta = np.zeros_like(self.xi)

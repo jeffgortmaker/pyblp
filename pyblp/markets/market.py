@@ -12,7 +12,7 @@ from ..moments import EconomyMoments, MarketMoments, FirstChoiceCovarianceMoment
 from ..parameters import BetaParameter, GammaParameter, NonlinearCoefficient, Parameter, Parameters, RhoParameter
 from ..primitives import Container
 from ..utilities.algebra import approximately_invert, approximately_solve
-from ..utilities.basics import Array, RecArray, Error, Groups, SolverStats, update_matrices
+from ..utilities.basics import Array, Bounds, RecArray, Error, Groups, SolverStats, update_matrices
 
 
 class Market(Container):
@@ -320,11 +320,15 @@ class Market(Container):
         return probabilities, conditionals
 
     def compute_delta(
-            self, initial_delta: Array, iteration: Iteration, fp_type: str) -> Tuple[Array, SolverStats, List[Error]]:
+            self, initial_delta: Array, iteration: Iteration, fp_type: str, shares_bounds: Bounds) -> (
+            Tuple[Array, Array, SolverStats, List[Error]]):
         """Compute the mean utility for this market that equates market shares to observed values by solving a fixed
         point problem.
         """
         errors: List[Error] = []
+
+        # default assumption is that no shares were clipped at the end of fixed point iteration
+        clipped_shares = np.zeros((self.J, 1), np.bool)
 
         # if there is no heterogeneity, use the closed-form solution
         if self.K2 == 0:
@@ -334,12 +338,38 @@ class Market(Container):
             if self.H > 0:
                 log_group_shares = np.log(self.groups.expand(self.groups.sum(self.products.shares)))
                 delta -= self.rho * (log_shares - log_group_shares)
-            return delta, SolverStats(), errors
+            return delta, clipped_shares, SolverStats(), errors
 
         # solve for delta with a linear fixed point
         if 'linear' in fp_type:
             log_shares = np.log(self.products.shares)
             compute_probabilities = functools.partial(self.compute_probabilities, safe='safe' in fp_type)
+
+            # define the function used to clip shares outside of potentially pre-specified bounds
+            clip_shares = lambda _: None
+            if np.isfinite(shares_bounds).all():
+                def clip_shares(shares: Array) -> None:
+                    """Clip shares from below and above."""
+                    nonlocal clipped_shares
+                    small_shares = shares < shares_bounds[0]
+                    shares[small_shares] = shares_bounds[0]
+                    large_shares = shares > shares_bounds[1]
+                    shares[large_shares] = shares_bounds[1]
+                    clipped_shares = small_shares | large_shares
+
+            elif np.isfinite(shares_bounds[0]):
+                def clip_shares(shares: Array) -> None:
+                    """Clip shares from below."""
+                    nonlocal clipped_shares
+                    clipped_shares = shares < shares_bounds[0]
+                    shares[clipped_shares] = shares_bounds[0]
+
+            elif np.isfinite(shares_bounds[1]):
+                def clip_shares(shares: Array) -> None:
+                    """Clip shares from above."""
+                    nonlocal clipped_shares
+                    clipped_shares = shares > shares_bounds[1]
+                    shares[clipped_shares] = shares_bounds[1]
 
             # define the linear contraction
             if self.H == 0:
@@ -347,6 +377,7 @@ class Market(Container):
                     """Compute the next linear delta and optionally its Jacobian."""
                     probabilities = compute_probabilities(x)[0]
                     shares = probabilities @ self.agents.weights
+                    clip_shares(shares)
                     x = x + log_shares - np.log(shares)
                     if not iteration._compute_jacobian:
                         return x, None, None
@@ -361,6 +392,7 @@ class Market(Container):
                     """Compute the next linear delta and optionally its Jacobian under nesting."""
                     probabilities, conditionals = compute_probabilities(x)
                     shares = probabilities @ self.agents.weights
+                    clip_shares(shares)
                     x = x + (log_shares - np.log(shares)) * dampener
                     if not iteration._compute_jacobian:
                         return x, None, None
@@ -372,7 +404,7 @@ class Market(Container):
 
             # solve the linear fixed point problem
             delta, stats = iteration._iterate(initial_delta, contraction)
-            return delta, stats, errors
+            return delta, clipped_shares, stats, errors
 
         # solve for delta with a nonlinear fixed point
         assert 'nonlinear' in fp_type
@@ -420,7 +452,7 @@ class Market(Container):
         # solve the nonlinear fixed point problem
         exp_delta, stats = iteration._iterate(np.exp(initial_delta), contraction)
         delta = np.log(exp_delta)
-        return delta, stats, errors
+        return delta, clipped_shares, stats, errors
 
     def compute_capital_lamda(self, value_derivatives: Array) -> Array:
         """Compute the diagonal capital lambda matrix used to decompose markups."""

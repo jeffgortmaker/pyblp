@@ -3,7 +3,7 @@
 import abc
 import collections
 import functools
-from typing import Any, Dict, Hashable, List, Mapping, Optional, Sequence
+from typing import Any, Dict, Hashable, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -12,7 +12,9 @@ from ..configurations.formulation import Formulation
 from ..configurations.iteration import Iteration
 from ..primitives import Container
 from ..utilities.algebra import precisely_identify_collinearity, precisely_identify_psd
-from ..utilities.basics import Array, Error, Groups, RecArray, StringRepresentation, format_table, get_indices, output
+from ..utilities.basics import (
+    Array, Bounds, Error, Groups, RecArray, StringRepresentation, format_table, get_indices, output
+)
 
 
 class Economy(Container, StringRepresentation):
@@ -267,6 +269,24 @@ class Economy(Container, StringRepresentation):
         """Validate that the delta fixed point type is supported."""
         if fp_type not in {'safe_linear', 'linear', 'safe_nonlinear', 'nonlinear'}:
             raise ValueError("fp_type must be 'safe_linear', 'linear', 'safe_nonlinear', or 'nonlinear'.")
+
+    @staticmethod
+    def _coerce_optional_bounds(bounds: Optional[Tuple[Any, Any]], name: str) -> Bounds:
+        """Validate or choose default bounds for some object."""
+        if bounds is None:
+            return (-np.inf, +np.inf)
+        if len(bounds) != 2:
+            raise ValueError(f"{name} must be a tuple of the form (lb, ub).")
+        bounds = (np.asarray(bounds[0], options.dtype), np.asarray(bounds[1], options.dtype))
+        bounds[0][np.isnan(bounds[0])] = -np.inf
+        bounds[1][np.isnan(bounds[1])] = +np.inf
+        if bounds[0].size != 1:
+            raise ValueError(f"The lower bound in {name} must be None or a float.")
+        if bounds[1].size != 1:
+            raise ValueError(f"The upper bound in {name} must be None or a float.")
+        if bounds[0] > bounds[1]:
+            raise ValueError(f"The lower bound in {name} cannot be larger than the upper bound.")
+        return bounds
 
     def _compute_true_X1(self, data_override: Optional[Mapping] = None, index: Optional[Array] = None) -> Array:
         """Compute X1 or columns of X1 without any absorbed demand-side fixed effects."""

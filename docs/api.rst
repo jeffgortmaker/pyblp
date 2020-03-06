@@ -362,6 +362,7 @@ When errors occur, they will either be displayed as warnings or raised as except
    exceptions.EquilibriumRealizationNumericalError
    exceptions.PostEstimationNumericalError
    exceptions.AbsorptionError
+   exceptions.ClippedSharesError
    exceptions.ThetaConvergenceError
    exceptions.DeltaConvergenceError
    exceptions.SyntheticPricesConvergenceError

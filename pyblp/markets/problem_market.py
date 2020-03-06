@@ -16,8 +16,9 @@ class ProblemMarket(Market):
     """A market underlying the BLP problem."""
 
     def solve_demand(
-            self, delta: Array, last_delta: Array, iteration: Iteration, fp_type: str, compute_jacobian: bool,
-            compute_micro_covariances: bool) -> Tuple[Array, Array, Array, Array, Array, SolverStats, List[Error]]:
+            self, delta: Array, last_delta: Array, iteration: Iteration, fp_type: str, shares_bounds: Bounds,
+            compute_jacobian: bool, compute_micro_covariances: bool) -> (
+            Tuple[Array, Array, Array, Array, Array, Array, SolverStats, List[Error]]):
         """Compute the mean utility for this market that equates market shares to observed values by solving a fixed
         point problem. Then, if compute_jacobian is True, compute the Jacobian of xi (equivalently, of delta) with
         respect to theta. Finally, compute any micro moments, their Jacobian with respect to theta, and, if
@@ -27,7 +28,7 @@ class ProblemMarket(Market):
         errors: List[Error] = []
 
         # solve the contraction
-        delta, stats, delta_errors = self.safely_compute_delta(delta, iteration, fp_type)
+        delta, clipped_shares, stats, delta_errors = self.safely_compute_delta(delta, iteration, fp_type, shares_bounds)
         errors.extend(delta_errors)
 
         # replace invalid values in delta with their last computed values
@@ -62,7 +63,7 @@ class ProblemMarket(Market):
                 )
                 errors.extend(micro_covariances_errors)
 
-        return delta, micro, xi_jacobian, micro_jacobian, micro_covariances, stats, errors
+        return delta, micro, xi_jacobian, micro_jacobian, micro_covariances, clipped_shares, stats, errors
 
     def solve_supply(
             self, last_tilde_costs: Array, xi_jacobian: Array, costs_bounds: Bounds, compute_jacobian: bool) -> (
@@ -95,14 +96,15 @@ class ProblemMarket(Market):
 
     @NumericalErrorHandler(exceptions.DeltaNumericalError)
     def safely_compute_delta(
-            self, initial_delta: Array, iteration: Iteration, fp_type: str) -> Tuple[Array, SolverStats, List[Error]]:
+            self, initial_delta: Array, iteration: Iteration, fp_type: str, shares_bounds: Bounds) -> (
+            Tuple[Array, Array, SolverStats, List[Error]]):
         """Compute the mean utility for this market that equates market shares to observed values by solving a fixed
         point problem, handling any numerical errors.
         """
-        delta, stats, errors = self.compute_delta(initial_delta, iteration, fp_type)
+        delta, clipped_shares, stats, errors = self.compute_delta(initial_delta, iteration, fp_type, shares_bounds)
         if not stats.converged:
             errors.append(exceptions.DeltaConvergenceError())
-        return delta, stats, errors
+        return delta, clipped_shares, stats, errors
 
     @NumericalErrorHandler(exceptions.XiByThetaJacobianNumericalError)
     def safely_compute_xi_by_theta_jacobian(self, delta: Array) -> Tuple[Array, List[Error]]:

@@ -7,7 +7,7 @@ import numpy as np
 from .market import Market
 from .. import exceptions, options
 from ..configurations.iteration import Iteration
-from ..utilities.basics import Array, Error, SolverStats, NumericalErrorHandler
+from ..utilities.basics import Array, Bounds, Error, SolverStats, NumericalErrorHandler
 
 
 class SimulationMarket(Market):
@@ -27,11 +27,11 @@ class SimulationMarket(Market):
         return prices, shares, delta, costs, stats, errors
 
     def compute_exogenous(
-            self, initial_delta: Array, iteration: Iteration, fp_type: str) -> (
+            self, initial_delta: Array, iteration: Iteration, fp_type: str, shares_bounds: Bounds) -> (
             Tuple[Array, Array, SolverStats, List[Error]]):
         """Compute delta and transformed marginal costs, which map to the exogenous product characteristics."""
         errors: List[Error] = []
-        delta, stats, delta_errors = self.safely_compute_delta(initial_delta, iteration, fp_type)
+        delta, stats, delta_errors = self.safely_compute_delta(initial_delta, iteration, fp_type, shares_bounds)
         errors.extend(delta_errors)
         tilde_costs = np.zeros((self.J, 0), options.dtype)
         if self.K3 > 0:
@@ -58,9 +58,12 @@ class SimulationMarket(Market):
 
     @NumericalErrorHandler(exceptions.SyntheticDeltaNumericalError)
     def safely_compute_delta(
-            self, initial_delta: Array, iteration: Iteration, fp_type: str) -> Tuple[Array, SolverStats, List[Error]]:
+            self, initial_delta: Array, iteration: Iteration, fp_type: str, shares_bounds: Bounds) -> (
+            Tuple[Array, SolverStats, List[Error]]):
         """Compute delta, handling any numerical errors."""
-        delta, stats, errors = self.compute_delta(initial_delta, iteration, fp_type)
+        delta, clipped_shares, stats, errors = self.compute_delta(initial_delta, iteration, fp_type, shares_bounds)
+        if clipped_shares.any():
+            errors.append(exceptions.ClippedSharesError())
         if not stats.converged:
             errors.append(exceptions.SyntheticDeltaConvergenceError())
         return delta, stats, errors

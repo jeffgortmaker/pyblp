@@ -134,6 +134,11 @@ class ProblemResults(Results):
         Bounds for :math:`\gamma` that were used during optimization, which are of the form ``(lb, ub)``.
     delta : `ndarray`
         Estimated mean utility, :math:`\delta(\hat{\theta})`.
+    clipped_shares : `ndarray`
+        Vector of booleans indicator whether the associated simulated shares were clipped during the last fixed point
+        iteration to compute :math:`\delta(\hat{\theta})`. All elements will be ``False`` if ``shares_bounds`` in
+        :meth:`Problem.solve` is disabled (by default shares are bounded from below by a small number to alleviate
+        issues with underflow and negative shares).
     tilde_costs : `ndarray`
         Estimated transformed marginal costs, :math:`\tilde{c}(\hat{\theta})` from :eq:`costs`. If ``costs_bounds`` were
         specified in :meth:`Problem.solve`, :math:`c` may have been clipped.
@@ -230,6 +235,7 @@ class ProblemResults(Results):
     beta_bounds: Bounds
     gamma_bounds: Bounds
     delta: Array
+    clipped_shares: Array
     tilde_costs: Array
     clipped_costs: Array
     xi: Array
@@ -248,6 +254,7 @@ class ProblemResults(Results):
     W: Array
     updated_W: Array
     _scaled_objective: bool
+    _shares_bounds: Bounds
     _costs_bounds: Bounds
     _se_type: str
     _errors: List[Error]
@@ -256,7 +263,7 @@ class ProblemResults(Results):
             self, progress: 'Progress', last_results: Optional['ProblemResults'], step: int, last_step: bool,
             step_start_time: float, optimization_start_time: float, optimization_end_time: float,
             optimization_stats: SolverStats, iteration_stats: Sequence[Dict[Hashable, SolverStats]],
-            scaled_objective: bool, iteration: Iteration, fp_type: str, costs_bounds: Bounds,
+            scaled_objective: bool, iteration: Iteration, fp_type: str, shares_bounds: Bounds, costs_bounds: Bounds,
             extra_micro_covariances: Optional[Array], center_moments: bool, W_type: str, se_type: str) -> None:
         """Compute cumulative progress statistics, update weighting matrices, and estimate standard errors."""
         super().__init__(progress.problem, progress.parameters, progress.moments, iteration, fp_type)
@@ -280,8 +287,10 @@ class ProblemResults(Results):
         self.projected_gradient_norm = progress.projected_gradient_norm
         self.hessian = progress.hessian
         self.reduced_hessian = progress.reduced_hessian
+        self.clipped_shares = progress.clipped_shares
         self.clipped_costs = progress.clipped_costs
         self._scaled_objective = scaled_objective
+        self._shares_bounds = shares_bounds
         self._costs_bounds = costs_bounds
         self._se_type = se_type
 
@@ -491,7 +500,10 @@ class ProblemResults(Results):
                     format_number(self.reduced_hessian_eigenvalues.max())
                 ])
 
-        # add a count of any clipped marginal costs
+        # add counts of any clipped shares or marginal costs
+        if np.isfinite(self._shares_bounds).any():
+            header.append(("Clipped", "Shares"))
+            values.append(self.clipped_shares.sum())
         if np.isfinite(self._costs_bounds).any():
             header.append(("Clipped", "Costs"))
             values.append(self.clipped_costs.sum())
@@ -539,8 +551,8 @@ class ProblemResults(Results):
                 'fp_iterations', 'cumulative_fp_iterations', 'contraction_evaluations',
                 'cumulative_contraction_evaluations', 'parameters', 'parameter_covariances', 'theta', 'sigma', 'pi',
                 'rho', 'beta', 'gamma', 'sigma_se', 'pi_se', 'rho_se', 'beta_se', 'gamma_se', 'sigma_bounds',
-                'pi_bounds', 'rho_bounds', 'beta_bounds', 'gamma_bounds', 'delta', 'tilde_costs', 'clipped_costs', 'xi',
-                'omega', 'micro', 'objective', 'xi_by_theta_jacobian', 'omega_by_theta_jacobian',
+                'pi_bounds', 'rho_bounds', 'beta_bounds', 'gamma_bounds', 'delta', 'tilde_costs', 'clipped_shares',
+                'clipped_costs', 'xi', 'omega', 'micro', 'objective', 'xi_by_theta_jacobian', 'omega_by_theta_jacobian',
                 'micro_by_theta_jacobian', 'gradient', 'projected_gradient', 'projected_gradient_norm', 'hessian',
                 'reduced_hessian', 'reduced_hessian_eigenvalues', 'W', 'updated_W'
             )) -> dict:

@@ -47,9 +47,9 @@ class ProblemEconomy(Economy):
             optimization: Optional[Optimization] = None, scale_objective: bool = True, check_optimality: str = 'both',
             error_behavior: str = 'revert', error_punishment: float = 1, delta_behavior: str = 'first',
             iteration: Optional[Iteration] = None, fp_type: str = 'safe_linear',
-            costs_bounds: Optional[Tuple[Any, Any]] = None, W: Optional[Any] = None, center_moments: bool = True,
-            W_type: str = 'robust', se_type: str = 'robust', micro_moments: Sequence[Moment] = (),
-            extra_micro_covariances: Optional[Any] = None) -> ProblemResults:
+            shares_bounds: Optional[Tuple[Any, Any]] = (1e-300, None), costs_bounds: Optional[Tuple[Any, Any]] = None,
+            W: Optional[Any] = None, center_moments: bool = True, W_type: str = 'robust', se_type: str = 'robust',
+            micro_moments: Sequence[Moment] = (), extra_micro_covariances: Optional[Any] = None) -> ProblemResults:
         r"""Solve the problem.
 
         The problem is solved in one or more GMM steps. During each step, any parameters in :math:`\hat{\theta}` are
@@ -318,14 +318,31 @@ class ProblemEconomy(Economy):
             analytically in the logit model with :eq:`logit_delta` and in the nested logit model with
             :eq:`nested_logit_delta`.
 
+        shares_bounds : `tuple, optional`
+            Configuration for :math:`s_{jt}(\delta, \theta)` bounds in the contraction in :eq:`contraction` of the form
+            ``(lb, ub)``, in which both ``lb`` and ``ub`` are floats or ``None``. By default, simulated shares are
+            bounded from below by ``1e-300``. This is only relevant if ``fp_type`` is ``'safe_linear'`` or ``'linear'``.
+            Bounding shares in the contraction does nothing with a nonlinear fixed point.
+
+            It can be particularly helpful to bound shares in the contraction from below by a small number to prevent
+            the contraction from failing when there are issues with zero or negative simulated shares. Zero shares can
+            occur when there are underflow issues and negative shares can occur when there are issues with the numerical
+            integration routine having negative integration weights (e.g., for sparse grid integration).
+
+            The idea is that a small lower bound will allow the contraction to converge even when it encounters some
+            issues with small or negative shares. However, if these issues are unlikely, disabling this behavior can
+            speed up the iteration routine because fewer checks will be done.
+
+            Both ``None`` and ``numpy.nan`` are converted to ``-numpy.inf`` in ``lb`` and to ``numpy.inf`` in ``ub``.
+
         costs_bounds : `tuple, optional`
-            Configuration for :math:`c` bounds of the form ``(lb, ub)``, in which both ``lb`` and ``ub`` are floats.
-            This is only relevant if :math:`X_3` was formulated by ``product_formulations`` in :class:`Problem`. By
-            default, marginal costs are unbounded.
+            Configuration for :math:`c_{jt}(\theta)` bounds of the form ``(lb, ub)``, in which both ``lb`` and ``ub``
+            are floats or ``None``. This is only relevant if :math:`X_3` was formulated by ``product_formulations`` in
+            :class:`Problem`. By default, marginal costs are unbounded.
 
             When ``costs_type`` in :class:`Problem` is ``'log'``, nonpositive :math:`c(\hat{\theta})` values can create
-            problems when computing :math:`\tilde{c}(\hat{\theta}) = \log c(\hat{\theta})`. One solution is to set
-            ``lb`` to a small number. Rows in Jacobians associated with clipped marginal costs will be zero.
+            problems when computing :math:`\tilde{c}(\theta) = \log c(\theta)`. One solution is to set ``lb`` to a small
+            number. Rows in Jacobians associated with clipped marginal costs will be zero.
 
             Both ``None`` and ``numpy.nan`` are converted to ``-numpy.inf`` in ``lb`` and to ``numpy.inf`` in ``ub``.
 
@@ -430,21 +447,9 @@ class ProblemEconomy(Economy):
         if 'clustered' in {W_type, se_type} and 'clustering_ids' not in self.products.dtype.names:
             raise ValueError("W_type or se_type is 'clustered' but clustering_ids were not specified in product_data.")
 
-        # configure or validate costs bounds
-        if costs_bounds is None:
-            costs_bounds = (-np.inf, +np.inf)
-        else:
-            if len(costs_bounds) != 2:
-                raise ValueError("costs_bounds must be a tuple of the form (lb, ub).")
-            costs_bounds = (np.asarray(costs_bounds[0], options.dtype), np.asarray(costs_bounds[1], options.dtype))
-            costs_bounds[0][np.isnan(costs_bounds[0])] = -np.inf
-            costs_bounds[1][np.isnan(costs_bounds[1])] = +np.inf
-            if costs_bounds[0].size != 1:
-                raise ValueError(f"The lower bound in costs_bounds must be None or a float.")
-            if costs_bounds[1].size != 1:
-                raise ValueError(f"The upper bound in costs_bounds must be None or a float.")
-            if costs_bounds[0] > costs_bounds[1]:
-                raise ValueError("The lower bound in costs_bounds cannot be larger than the upper bound.")
+        # configure or validate bounds on shares and costs
+        shares_bounds = self._coerce_optional_bounds(shares_bounds, 'shares_bounds')
+        costs_bounds = self._coerce_optional_bounds(costs_bounds, 'costs_bounds')
 
         # validate and structure micro moments before outputting related information
         moments = EconomyMoments(self, micro_moments)
@@ -543,7 +548,7 @@ class ProblemEconomy(Economy):
             # wrap computation of progress information with step-specific information
             compute_step_progress = functools.partial(
                 self._compute_progress, parameters, moments, iv, W, scale_objective, error_behavior, error_punishment,
-                delta_behavior, iteration, fp_type, costs_bounds
+                delta_behavior, iteration, fp_type, shares_bounds, costs_bounds
             )
 
             # initialize optimization progress
@@ -558,14 +563,14 @@ class ProblemEconomy(Economy):
             def wrapper(new_theta: Array, iterations: int, evaluations: int) -> ObjectiveResults:
                 """Compute and output progress associated with a single objective evaluation."""
                 nonlocal iteration_stats, smallest_objective, progress
-                assert optimization is not None and costs_bounds is not None
+                assert optimization is not None and shares_bounds is not None and costs_bounds is not None
                 progress = compute_step_progress(
                     new_theta, progress, optimization._compute_gradient, compute_hessian=False,
                     compute_micro_covariances=False
                 )
                 iteration_stats.append(progress.iteration_stats)
                 formatted_progress = progress.format(
-                    optimization, costs_bounds, step, iterations, evaluations, smallest_objective
+                    optimization, shares_bounds, costs_bounds, step, iterations, evaluations, smallest_objective
                 )
                 if formatted_progress:
                     output(formatted_progress)
@@ -612,7 +617,7 @@ class ProblemEconomy(Economy):
             results = ProblemResults(
                 final_progress, last_results, step, last_step, step_start_time, optimization_start_time,
                 optimization_end_time, optimization_stats, iteration_stats, scale_objective, iteration, fp_type,
-                costs_bounds, extra_micro_covariances, center_moments, W_type, se_type
+                shares_bounds, costs_bounds, extra_micro_covariances, center_moments, W_type, se_type
             )
             self._handle_errors(results._errors, error_behavior)
             output(f"Computed results after {format_seconds(results.total_time - results.optimization_time)}.")
@@ -639,8 +644,8 @@ class ProblemEconomy(Economy):
     def _compute_progress(
             self, parameters: Parameters, moments: EconomyMoments, iv: IV, W: Array, scale_objective: bool,
             error_behavior: str, error_punishment: float, delta_behavior: str, iteration: Iteration, fp_type: str,
-            costs_bounds: Bounds, theta: Array, progress: 'InitialProgress', compute_gradient: bool,
-            compute_hessian: bool, compute_micro_covariances: bool) -> 'Progress':
+            shares_bounds: Bounds, costs_bounds: Bounds, theta: Array, progress: 'InitialProgress',
+            compute_gradient: bool, compute_hessian: bool, compute_micro_covariances: bool) -> 'Progress':
         """Compute demand- and supply-side contributions before recovering the linear parameters and structural error
         terms. Then, form the GMM objective value and its gradient. Finally, handle any errors that were encountered
         before structuring relevant progress information.
@@ -651,9 +656,9 @@ class ProblemEconomy(Economy):
         sigma, pi, rho, beta, gamma = parameters.expand(theta)
 
         # compute demand-side contributions
-        delta, micro, xi_jacobian, micro_jacobian, micro_covariances, iteration_stats, demand_errors = (
+        delta, micro, xi_jacobian, micro_jacobian, micro_covariances, clipped_shares, iteration_stats, demand_errors = (
             self._compute_demand_contributions(
-                parameters, moments, iteration, fp_type, sigma, pi, rho, progress, compute_gradient,
+                parameters, moments, iteration, fp_type, shares_bounds, sigma, pi, rho, progress, compute_gradient,
                 compute_micro_covariances
             )
         )
@@ -756,8 +761,8 @@ class ProblemEconomy(Economy):
         if compute_hessian:
             compute_progress = lambda x: self._compute_progress(
                 parameters, moments, iv, W, scale_objective, error_behavior, error_punishment, delta_behavior,
-                iteration, fp_type, costs_bounds, x, progress, compute_gradient=True, compute_hessian=False,
-                compute_micro_covariances=False
+                iteration, fp_type, shares_bounds, costs_bounds, x, progress, compute_gradient=True,
+                compute_hessian=False, compute_micro_covariances=False
             )
             change = np.sqrt(np.finfo(np.float64).eps)
             for p in range(parameters.P):
@@ -774,51 +779,56 @@ class ProblemEconomy(Economy):
         return Progress(
             self, parameters, moments, W, theta, objective, gradient, hessian, next_delta, delta, tilde_costs, micro,
             xi_jacobian, omega_jacobian, micro_jacobian, micro_covariances, xi, omega, beta, gamma, iteration_stats,
-            clipped_costs, errors
+            clipped_shares, clipped_costs, errors
         )
 
     def _compute_demand_contributions(
-            self, parameters: Parameters, moments: EconomyMoments, iteration: Iteration, fp_type: str, sigma: Array,
-            pi: Array, rho: Array, progress: 'InitialProgress', compute_jacobian: bool,
-            compute_micro_covariances: bool) -> (
-            Tuple[Array, Array, Array, Array, Array, Dict[Hashable, SolverStats], List[Error]]):
+            self, parameters: Parameters, moments: EconomyMoments, iteration: Iteration, fp_type: str,
+            shares_bounds: Bounds, sigma: Array, pi: Array, rho: Array, progress: 'InitialProgress',
+            compute_jacobian: bool, compute_micro_covariances: bool) -> (
+            Tuple[Array, Array, Array, Array, Array, Array, Dict[Hashable, SolverStats], List[Error]]):
         """Compute delta and the Jacobian of xi (equivalently, of delta) with respect to theta market-by-market. If
         there are any micro moments, compute them (taking the average across relevant markets) along with their
         Jacobian and covariances. Revert any problematic elements to their last values.
         """
         errors: List[Error] = []
 
-        # initialize delta, micro moments, their Jacobians, micro moment covariances, and fixed point statistics so that
-        #   they can be filled
+        # initialize delta, micro moments, their Jacobians, micro moment covariances, indices of clipped shares, and
+        #   fixed point statistics so that they can be filled
         delta = np.zeros((self.N, 1), options.dtype)
         micro = np.zeros((moments.MM, 1), options.dtype)
         xi_jacobian = np.zeros((self.N, parameters.P), options.dtype)
         micro_jacobian = np.zeros((moments.MM, parameters.P), options.dtype)
         micro_covariances = np.zeros((moments.MM, moments.MM), options.dtype)
+        clipped_shares = np.zeros((self.N, 1), np.bool)
         iteration_stats: Dict[Hashable, SolverStats] = {}
 
         # when possible and when a gradient isn't needed, compute delta with a closed-form solution
         if self.K2 == 0 and moments.MM == 0 and (parameters.P == 0 or not compute_jacobian):
             delta = self._compute_logit_delta(rho)
         else:
-            def market_factory(s: Hashable) -> Tuple[ProblemMarket, Array, Array, Iteration, str, bool, bool]:
+            def market_factory(s: Hashable) -> Tuple[ProblemMarket, Array, Array, Iteration, str, Bounds, bool, bool]:
                 """Build a market along with arguments used to compute delta, micro moment values, and Jacobians."""
                 market_s = ProblemMarket(self, s, parameters, sigma, pi, rho, moments=moments)
                 delta_s = progress.next_delta[self._product_market_indices[s]]
                 last_delta_s = progress.delta[self._product_market_indices[s]]
-                return market_s, delta_s, last_delta_s, iteration, fp_type, compute_jacobian, compute_micro_covariances
+                return (
+                    market_s, delta_s, last_delta_s, iteration, fp_type, shares_bounds, compute_jacobian,
+                    compute_micro_covariances
+                )
 
             # compute delta, micro moments, their Jacobians, and micro moment covariances market-by-market
             micro_mapping: Dict[Hashable, Array] = {}
             micro_jacobian_mapping: Dict[Hashable, Array] = {}
             micro_covariances_mapping: Dict[Hashable, Array] = {}
             generator = generate_items(self.unique_market_ids, market_factory, ProblemMarket.solve_demand)
-            for t, (delta_t, micro_t, xi_jacobian_t, micro_jacobian_t, covariances_t, stats_t, errors_t) in generator:
+            for t, (delta_t, micro_t, xi_jac_t, micro_jac_t, covariances_t, clipped_t, stats_t, errors_t) in generator:
                 delta[self._product_market_indices[t]] = delta_t
-                xi_jacobian[self._product_market_indices[t], :parameters.P] = xi_jacobian_t
+                xi_jacobian[self._product_market_indices[t], :parameters.P] = xi_jac_t
                 micro_mapping[t] = micro_t
-                micro_jacobian_mapping[t] = micro_jacobian_t
+                micro_jacobian_mapping[t] = micro_jac_t
                 micro_covariances_mapping[t] = covariances_t
+                clipped_shares[self._product_market_indices[t]] = clipped_t
                 iteration_stats[t] = stats_t
                 errors.extend(errors_t)
 
@@ -863,7 +873,8 @@ class ProblemEconomy(Economy):
             if np.any(bad_micro_jacobian_index):
                 micro_jacobian[bad_micro_jacobian_index] = progress.micro_jacobian[bad_micro_jacobian_index]
                 errors.append(exceptions.MicroMomentsByThetaJacobianReversionError(bad_micro_jacobian_index))
-        return delta, micro, xi_jacobian, micro_jacobian, micro_covariances, iteration_stats, errors
+
+        return delta, micro, xi_jacobian, micro_jacobian, micro_covariances, clipped_shares, iteration_stats, errors
 
     def _compute_supply_contributions(
             self, parameters: Parameters, costs_bounds: Bounds, sigma: Array, pi: Array, rho: Array, beta: Array,
@@ -1357,6 +1368,7 @@ class Progress(InitialProgress):
     beta: Array
     gamma: Array
     iteration_stats: Dict[Hashable, SolverStats]
+    clipped_shares: Array
     clipped_costs: Array
     errors: List[Error]
     projected_gradient: Array
@@ -1368,7 +1380,7 @@ class Progress(InitialProgress):
             objective: Array, gradient: Array, hessian: Array, next_delta: Array, delta: Array, tilde_costs: Array,
             micro: Array, xi_jacobian: Array, omega_jacobian: Array, micro_jacobian: Array, micro_covariances: Array,
             xi: Array, omega: Array, beta: Array, gamma: Array, iteration_stats: Dict[Hashable, SolverStats],
-            clipped_costs: Array, errors: List[Error]) -> None:
+            clipped_shares: Array, clipped_costs: Array, errors: List[Error]) -> None:
         """Store progress information, compute the projected gradient and its norm, and compute the reduced Hessian."""
         super().__init__(
             problem, parameters, moments, W, theta, objective, gradient, hessian, next_delta, delta, tilde_costs, micro,
@@ -1380,6 +1392,7 @@ class Progress(InitialProgress):
         self.beta = beta
         self.gamma = gamma
         self.iteration_stats = iteration_stats or {}
+        self.clipped_shares = clipped_shares
         self.clipped_costs = clipped_costs
         self.errors = errors or []
 
@@ -1402,8 +1415,8 @@ class Progress(InitialProgress):
                 self.projected_gradient_norm = np.abs(self.projected_gradient).max()
 
     def format(
-            self, optimization: Optimization, costs_bounds: Bounds, step: int, iterations: int, evaluations: int,
-            smallest_objective: Array) -> str:
+            self, optimization: Optimization, shares_bounds: Bounds, costs_bounds: Bounds, step: int, iterations: int,
+            evaluations: int, smallest_objective: Array) -> str:
         """Format a universal display of optimization progress as a string. The first iteration will include the
         progress table header. If there are any errors, information about them will be formatted as well, regardless of
         whether or not a universal display is to be used. The smallest_objective is the smallest objective value
@@ -1438,7 +1451,10 @@ class Progress(InitialProgress):
             str(sum(s.evaluations for s in self.iteration_stats.values()))
         ]
 
-        # add a count of any clipped marginal costs
+        # add a count of any clipped shares or marginal costs
+        if np.isfinite(shares_bounds).any():
+            header.append(("Clipped", "Shares"))
+            values.append(str(self.clipped_shares.sum()))
         if np.isfinite(costs_bounds).any():
             header.append(("Clipped", "Costs"))
             values.append(str(self.clipped_costs.sum()))

@@ -1,7 +1,7 @@
 """Economy-level structuring of abstract BLP problem results."""
 
 import abc
-from typing import Any, Callable, Mapping, Optional, Sequence, TYPE_CHECKING
+from typing import Any, Callable, Mapping, Optional, Sequence, Tuple, TYPE_CHECKING
 
 import numpy as np
 
@@ -354,8 +354,8 @@ class Results(abc.ABC, StringRepresentation):
 
     def compute_delta(
             self, agent_data: Optional[Mapping] = None, integration: Optional[Integration] = None,
-            iteration: Optional[Iteration] = None, fp_type: Optional[str] = None, market_id: Optional[Any] = None) -> (
-            Array):
+            iteration: Optional[Iteration] = None, fp_type: Optional[str] = None,
+            shares_bounds: Optional[Tuple[Any, Any]] = (1e-300, None), market_id: Optional[Any] = None) -> Array:
         r"""Estimate mean utilities, :math:`\delta`.
 
         This method can be used to compute mean utilities at the estimated parameters with a different integration
@@ -383,6 +383,11 @@ class Results(abc.ABC, StringRepresentation):
         fp_type : `str, optional`
             Configuration for the type of contraction mapping used to compute :math:`\delta` in each market. By default,
             ``fp_type`` in :meth:`Problem.solve` is used. For more information, refer to :meth:`Problem.solve`.
+        shares_bounds : `tuple, optional`
+            Configuration for :math:`s_{jt}(\delta, \theta)` bounds of the form ``(lb, ub)``, in which both ``lb`` and
+            ``ub`` are floats or ``None``. By default, simulated shares are bounded from below by ``1e-300``. This is
+            only relevant if ``fp_type`` is ``'safe_linear'`` or ``'linear'``. Bounding shares in the contraction does
+            nothing with a nonlinear fixed point. For more information, refer to :meth:`Problem.solve`.
         market_id : `object, optional`
             ID of the market in which to compute mean utilities. By default, mean utilities is computed in all markets
             and stacked.
@@ -403,9 +408,10 @@ class Results(abc.ABC, StringRepresentation):
             iteration = self._iteration
         if fp_type is None:
             fp_type = self._fp_type
+        shares_bounds = self.problem._coerce_optional_bounds(shares_bounds, 'shares_bounds')
         return self._combine_arrays(
-            ResultsMarket.safely_compute_delta, market_ids, fixed_args=[iteration, fp_type], agent_data=agent_data,
-            integration=integration
+            ResultsMarket.safely_compute_delta, market_ids, fixed_args=[iteration, fp_type, shares_bounds],
+            agent_data=agent_data, integration=integration
         )
 
     def compute_approximate_prices(
