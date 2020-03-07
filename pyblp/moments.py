@@ -71,7 +71,7 @@ class Moment(StringRepresentation):
 
 class FirstChoiceCovarianceMoment(Moment):
     r"""Configuration for micro moments that match covariances between product and agent characteristics, which can also
-    be used to match covariances agent characteristics and inside or outside good purchase probability.
+    be used to match covariances between agent characteristics and inside or outside good purchase probability.
 
     For example, survey data can often be used to compute the covariance :math:`\sigma_{xy}` between a product
     characteristic, :math:`x_{jt}`, and an agent demographic such as income, :math:`y_{it}`, conditional on purchasing a
