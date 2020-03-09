@@ -1,5 +1,6 @@
 """Algebraic routines."""
 
+import itertools
 import warnings
 from typing import Callable, List, Optional, Tuple
 
@@ -139,3 +140,71 @@ def approximately_invert(x: Array) -> Tuple[Array, Optional[str]]:
                 pass
 
     return inverted, replacement
+
+
+def duplication_matrix(n: int) -> Array:
+    """Construct the unique matrix D, which for any n x n symmetric matrix A satisfies D * vech(A) = vec(A). See
+    Definition 3.2a in Magnus and Neudecker (1980).
+    """
+    L = elimination_matrix(n)
+    K = commutation_matrix(n)
+    D = L.T + K @ L.T - L.T @ L @ K @ L.T
+    return D
+
+
+def elimination_matrix(n: int) -> Array:
+    """Construct the unique matrix L, which for any n x n symmetric matrix A satisfies L * vec(A) = vech(A). See
+    Definition 3.1b in Magnus and Neudecker (1980).
+    """
+    L = np.zeros((n * (n + 1) // 2, n**2), np.int)
+
+    for i in range(n):
+        for j in range(i + 1):
+            u = np.zeros((n * (n + 1) // 2, 1), np.int)
+            u[j * n + i - j * (j + 1) // 2] = 1
+
+            E = np.zeros((n, n), np.int)
+            E[i, j] = 1
+
+            L += u @ vec(E)[None, :]
+
+    return L
+
+
+def commutation_matrix(n: int) -> Array:
+    """Construct the unique matrix K, which for any n x n symmetric matrix A satisfies K * vec(A) = vec(A'). See
+    Definition 2.1b in Magnus and Neudecker (1980).
+    """
+    K = np.zeros((n**2, n**2), np.int)
+
+    for i, j in itertools.product(range(n), repeat=2):
+        E = np.zeros((n, n), np.int)
+        E[i, j] = 1
+
+        K += np.kron(E, E.T)
+
+    return K
+
+
+def vec(x: Array) -> Array:
+    """Ravel a matrix A in Fortran order to construct vec(A)."""
+    return np.ravel(x, order='F')
+
+
+def vech(x: Array) -> Array:
+    """Ravel the lower triangle of a square matrix A in Fortran order to construct vech(A)."""
+    return x.T[np.triu_indices_from(x)]
+
+
+def vech_to_lower(x: Array, n: int) -> Array:
+    """Convert vech(A) into the lower triangular n x n matrix A."""
+    A = np.zeros((n, n), dtype=x.dtype)
+    A[np.triu_indices(n)] = x.flat
+    return A.T
+
+
+def vech_to_full(x: Array, n: int) -> Array:
+    """Convert vech(A) into the full, symmetric n x n matrix A."""
+    A = vech_to_lower(x, n)
+    A[np.triu_indices(n, k=1)] = A.T[np.triu_indices(n, k=1)]
+    return A

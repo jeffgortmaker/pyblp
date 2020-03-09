@@ -1072,6 +1072,24 @@ def test_objective_gradient(
 
 
 @pytest.mark.usefixtures('simulated_problem')
+def test_sigma_squared_se(simulated_problem: SimulatedProblemFixture) -> None:
+    """Test that standard errors for sigma * sigma' computed with the delta method match a simple expression for when
+    sigma is diagonal.
+    """
+    _, _, problem, _, results = simulated_problem
+
+    # skip some unneeded tests
+    if problem.K2 == 0:
+        return pytest.skip("There's nothing to test without random coefficients.")
+    if (np.tril(results.sigma, k=-1) != 0).any():
+        return pytest.skip("There isn't a simple expression for when sigma isn't diagonal.")
+
+    # compute standard errors with the simple expression and compare
+    sigma_squared_se = np.nan_to_num(2 * results.sigma.diagonal() * results.sigma_se.diagonal())
+    np.testing.assert_allclose(sigma_squared_se, results.sigma_squared_se.diagonal(), atol=1e-14, rtol=0)
+
+
+@pytest.mark.usefixtures('simulated_problem')
 @pytest.mark.parametrize('method', [
     pytest.param('1s', id="one-step"),
     pytest.param('2s', id="two-step")

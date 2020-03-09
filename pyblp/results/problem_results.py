@@ -14,7 +14,7 @@ from ..configurations.iteration import Iteration
 from ..markets.results_market import ResultsMarket
 from ..primitives import Agents
 from ..utilities.algebra import (
-    approximately_invert, approximately_solve, compute_condition_number, precisely_compute_eigenvalues
+    approximately_invert, approximately_solve, compute_condition_number, precisely_compute_eigenvalues, vech_to_full
 )
 from ..utilities.basics import (
     Array, Bounds, Error, Mapping, RecArray, SolverStats, format_number, format_seconds, format_table, generate_items,
@@ -22,7 +22,7 @@ from ..utilities.basics import (
 )
 from ..utilities.statistics import (
     compute_gmm_moment_covariances, compute_gmm_moments_mean, compute_gmm_parameter_covariances,
-    compute_gmm_moments_jacobian_mean, compute_gmm_weights
+    compute_gmm_moments_jacobian_mean, compute_gmm_weights, compute_sigma_squared_vector_covariances
 )
 
 
@@ -104,6 +104,8 @@ class ProblemResults(Results):
         non-concentrated out elements from :math:`\hat{\gamma}`.
     sigma : `ndarray`
         Estimated Cholesky root of the covariance matrix for unobserved taste heterogeneity, :math:`\hat{\Sigma}`.
+    sigma_squared : `ndarray`
+        Estimated covariance matrix for unobserved taste heterogeneity, :math:`\hat{\Sigma}\hat{\Sigma}'`.
     pi : `ndarray`
         Estimated parameters that measures how agent tastes vary with demographics, :math:`\hat{\Pi}`.
     rho : `ndarray`
@@ -114,6 +116,9 @@ class ProblemResults(Results):
         Estimated supply-side linear parameters, :math:`\hat{\gamma}`.
     sigma_se : `ndarray`
         Estimated standard errors for :math:`\hat{\Sigma}`, which are not estimated in the first step of two-step GMM.
+    sigma_squared_se : `ndarray`
+        Estimated standard errors for :math:`\hat{\Sigma}\hat{\Sigma}'`, which are computed with the delta method, and
+        are not estimated in the first step of two-step GMM.
     pi_se : `ndarray`
         Estimated standard errors for :math:`\hat{\Pi}`, which are not estimated in the first step of two-step GMM.
     rho_se : `ndarray`
@@ -220,11 +225,13 @@ class ProblemResults(Results):
     parameter_covariances: Array
     theta: Array
     sigma: Array
+    sigma_squared: Array
     pi: Array
     rho: Array
     beta: Array
     gamma: Array
     sigma_se: Array
+    sigma_squared_se: Array
     pi_se: Array
     rho_se: Array
     beta_se: Array
@@ -341,6 +348,7 @@ class ProblemResults(Results):
 
         # store estimated parameters and information about them (beta and gamma have already been stored above)
         self.sigma, self.pi, self.rho, _, _ = self._parameters.expand(self.theta)
+        self.sigma_squared = self.sigma @ self.sigma.T
         self.parameters = np.c_[np.r_[
             self.theta,
             self.beta[self._parameters.eliminated_beta_index],
@@ -365,6 +373,7 @@ class ProblemResults(Results):
             # only compute parameter covariances and standard errors if this is the last step
             self.parameter_covariances = np.full((self.parameters.size, self.parameters.size), np.nan, options.dtype)
             se = np.full((self.parameters.size, 1), np.nan, options.dtype)
+            sigma_squared_vector_se = np.full((self.problem.K2 * (self.problem.K2 + 1) // 2, 1), np.nan, options.dtype)
             if last_step:
                 S_for_covariances = S_for_weights
                 if se_type != W_type or center_moments:
@@ -384,9 +393,17 @@ class ProblemResults(Results):
                 )
                 self._errors.extend(se_errors)
 
+                # use the delta method to compute covariances for the parameters in sigma squared
+                theta_covariances = self.parameter_covariances[:self._parameters.P, :self._parameters.P]
+                sigma_vector_covariances = self._parameters.extract_sigma_vector_covariances(theta_covariances)
+                sigma_squared_vector_covariances = compute_sigma_squared_vector_covariances(
+                    self.sigma, sigma_vector_covariances
+                )
+
                 # compute standard errors
                 se = np.sqrt(np.c_[self.parameter_covariances.diagonal()] / self.problem.N)
-                if np.isnan(se).any():
+                sigma_squared_vector_se = np.sqrt(np.c_[sigma_squared_vector_covariances.diagonal()] / self.problem.N)
+                if np.isnan(se).any() or np.isnan(sigma_squared_vector_se).any():
                     self._errors.append(exceptions.InvalidParameterCovariancesError())
 
         # expand standard errors
@@ -397,6 +414,7 @@ class ProblemResults(Results):
         self.sigma_se, self.pi_se, self.rho_se, self.beta_se, self.gamma_se = (
             self._parameters.expand(theta_se, nullify=True)
         )
+        self.sigma_squared_se = vech_to_full(sigma_squared_vector_se, self.problem.K2)
         self.beta_se[self._parameters.eliminated_beta_index] = eliminated_beta_se.flatten()
         self.gamma_se[self._parameters.eliminated_gamma_index] = eliminated_gamma_se.flatten()
 
@@ -416,7 +434,8 @@ class ProblemResults(Results):
         # add sections formatting estimates and micro moments values
         sections.append(self._parameters.format_estimates(
             f"Estimates ({se_description} in Parentheses)", self.sigma, self.pi, self.rho, self.beta, self.gamma,
-            self.sigma_se, self.pi_se, self.rho_se, self.beta_se, self.gamma_se
+            self.sigma_squared, self.sigma_se, self.pi_se, self.rho_se, self.beta_se, self.gamma_se,
+            self.sigma_squared_se
         ))
         if self._moments.MM > 0:
             sections.append(self._moments.format("Micro Moment Values", self.micro))

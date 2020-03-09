@@ -5,7 +5,7 @@ from typing import List, Tuple
 import numpy as np
 import scipy.linalg
 
-from .algebra import approximately_invert
+from .algebra import approximately_invert, duplication_matrix, elimination_matrix
 from .basics import Array, Error, Groups
 from .. import exceptions
 
@@ -138,3 +138,19 @@ def compute_gmm_moments_jacobian_mean(jacobian_list: List[Array], Z_list: List[A
     Z_transpose_stack = np.dstack(np.split(scipy.linalg.block_diag(*Z_list), len(jacobian_list)))
     jacobian_stack = np.dstack(jacobian_list).swapaxes(1, 2)
     return (Z_transpose_stack @ jacobian_stack).mean(axis=0)
+
+
+def compute_sigma_squared_vector_covariances(sigma: Array, sigma_vector_covariances: Array) -> Array:
+    """Use the delta method to transform the asymptotic covariance matrix of vech(sigma) into the asymptotic covariance
+    matrix of vech(sigma * sigma') where sigma is a lower triangular Cholesky root of parameters. See Section 10.5.4 in
+    the Handbook of Matrices (Lutkepohl and Lutkepohl).
+    """
+    if sigma_vector_covariances.size == 0:
+        return sigma_vector_covariances
+
+    k = sigma.shape[0]
+    L = elimination_matrix(k)
+    D = duplication_matrix(k)
+    I = np.eye(k)
+    jacobian = 2 * scipy.linalg.pinv(D) @ np.kron(sigma, I) @ L.T
+    return jacobian @ sigma_vector_covariances @ jacobian.T

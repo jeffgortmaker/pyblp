@@ -8,6 +8,7 @@ import numpy as np
 from . import options
 from .configurations.formulation import ColumnFormulation
 from .primitives import Container
+from .utilities.algebra import vech
 from .utilities.basics import Array, Bounds, Groups, format_number, format_se, format_table
 
 
@@ -138,6 +139,7 @@ class Parameters(object):
     gamma_labels: List[str]
     distributions: List[str]
     sigma: Array
+    sigma_squared: Array
     pi: Array
     rho: Array
     beta: Array
@@ -147,6 +149,7 @@ class Parameters(object):
     rho_bounds: Bounds
     beta_bounds: Bounds
     gamma_bounds: Bounds
+    diagonal_sigma: bool
     nonzero_sigma_index: Array
     alpha_index: Array
     endogenous_gamma_index: Array
@@ -191,6 +194,12 @@ class Parameters(object):
 
         # fill the upper triangle of sigma with zeros
         self.sigma[np.triu_indices(economy.K2, 1)] = 0
+
+        # construct sigma squared (the underlying covariance matrix)
+        self.sigma_squared = self.sigma @ self.sigma.T
+
+        # identify whether sigma is a diagonal matrix
+        self.diagonal_sigma = not (np.tril(self.sigma, k=-1) != 0).any()
 
         # identify the index of nonzero columns in sigma
         self.nonzero_sigma_index = np.sum(self.sigma, axis=0) > 0
@@ -338,7 +347,9 @@ class Parameters(object):
 
     def format(self, title: str) -> str:
         """Format fixed and unfixed parameter values as a string."""
-        return self.format_theta_parameters(title, self.sigma, self.pi, self.rho, self.beta, self.gamma)
+        return self.format_theta_parameters(
+            title, self.sigma, self.pi, self.rho, self.beta, self.gamma, self.sigma_squared
+        )
 
     def format_lower_bounds(self, title: str) -> str:
         """Format lower bounds for fixed and unfixed parameter values as a string."""
@@ -356,12 +367,14 @@ class Parameters(object):
 
     def format_theta_parameters(
             self, title: str, sigma_like: Array, pi_like: Array, rho_like: Array, beta_like: Array,
-            gamma_like: Array) -> str:
+            gamma_like: Array, sigma_squared_like: Optional[Array] = None) -> str:
         """Format fixed and unfixed parameter-like values as a string. Skip sections of parameters without any that
         are in theta.
         """
         items = [
-            (NonlinearCoefficient, lambda: self.format_nonlinear_coefficients(title, sigma_like, pi_like)),
+            (NonlinearCoefficient, lambda: self.format_nonlinear_coefficients(
+                title, sigma_like, pi_like, sigma_squared_like
+            )),
             (RhoParameter, lambda: self.format_rho(title, rho_like)),
             (BetaParameter, lambda: self.format_beta(title, beta_like)),
             (GammaParameter, lambda: self.format_gamma(title, gamma_like))
@@ -369,11 +382,14 @@ class Parameters(object):
         return "\n\n".join(f() for t, f in items if any(isinstance(p, t) for p in self.fixed + self.unfixed))
 
     def format_estimates(
-            self, title: str, sigma: Array, pi: Array, rho: Array, beta: Array, gamma: Array, sigma_se: Array,
-            pi_se: Array, rho_se: Array, beta_se: Array, gamma_se: Array) -> str:
+            self, title: str, sigma: Array, pi: Array, rho: Array, beta: Array, gamma: Array, sigma_squared: Array,
+            sigma_se: Array, pi_se: Array, rho_se: Array, beta_se: Array, gamma_se: Array,
+            sigma_squared_se: Array) -> str:
         """Format all estimates and their standard errors as a string."""
         items = [
-            (sigma, lambda: self.format_nonlinear_coefficients(title, sigma, pi, sigma_se, pi_se)),
+            (sigma, lambda: self.format_nonlinear_coefficients(
+                title, sigma, pi, sigma_squared, sigma_se, pi_se, sigma_squared_se
+            )),
             (rho, lambda: self.format_rho(title, rho, rho_se)),
             (beta, lambda: self.format_beta(title, beta, beta_se)),
             (gamma, lambda: self.format_gamma(title, gamma, gamma_se))
@@ -404,16 +420,24 @@ class Parameters(object):
         return format_table(header, *data, title=title)
 
     def format_nonlinear_coefficients(
-            self, title: str, sigma_like: Array, pi_like: Array, sigma_se_like: Optional[Array] = None,
-            pi_se_like: Optional[Array] = None) -> str:
+            self, title: str, sigma_like: Array, pi_like: Array, sigma_squared_like: Optional[Array] = None,
+            sigma_se: Optional[Array] = None, pi_se: Optional[Array] = None,
+            sigma_squared_se: Optional[Array] = None) -> str:
         """Format matrices (and optional standard errors) of the same size as sigma and pi as a string."""
 
         # determine whether a distributions column is necessary
         distributions_column = any(d != 'normal' for d in self.distributions)
 
+        # only add sigma squared columns if the covariance matrix has off-diagonal terms
+        if self.diagonal_sigma:
+            sigma_squared_like = sigma_squared_se = None
+
         # construct the header
         line_indices: Set[int] = {0} if distributions_column else set()
         header = (["Distributions:"] if distributions_column else []) + ["Sigma:"] + self.sigma_labels
+        if sigma_squared_like is not None:
+            line_indices.add(len(header) - 1)
+            header.extend(["Sigma Squared:"] + self.sigma_labels)
         if self.pi_labels:
             line_indices.add(len(header) - 1)
             header.extend(["Pi:"] + self.pi_labels)
@@ -426,6 +450,10 @@ class Parameters(object):
             for column_index in range(row_index + 1):
                 values_row.append(format_number(sigma_like[row_index, column_index]))
             values_row.extend([""] * (sigma_like.shape[1] - row_index - 1))
+            if sigma_squared_like is not None:
+                values_row.append(row_label)
+                for column_index in range(sigma_squared_like.shape[1]):
+                    values_row.append(format_number(sigma_squared_like[row_index, column_index]))
             if pi_like.shape[1] > 0:
                 values_row.append(row_label)
                 for column_index in range(pi_like.shape[1]):
@@ -433,9 +461,8 @@ class Parameters(object):
             data.append(values_row)
 
             # only add a row of standard errors if standard errors are specified
-            if sigma_se_like is None:
+            if sigma_se is None:
                 continue
-            assert pi_se_like is not None
 
             # determine which columns in this row correspond to unfixed parameters
             relevant_unfixed = {p for p in self.unfixed if p.location[0] == row_index}
@@ -445,13 +472,18 @@ class Parameters(object):
             # add a row of standard errors
             se_row = (2 if distributions_column else 1) * [""]
             for column_index in range(row_index + 1):
-                se = sigma_se_like[row_index, column_index]
+                se = sigma_se[row_index, column_index]
                 se_row.append(format_se(se) if column_index in unfixed_sigma_indices else "")
             se_row.extend([""] * (sigma_like.shape[1] - row_index - 1))
-            if pi_se_like.shape[1] > 0:
+            if sigma_squared_se is not None:
                 se_row.append("")
-                for column_index in range(pi_se_like.shape[1]):
-                    se = pi_se_like[row_index, column_index]
+                for column_index in range(sigma_squared_se.shape[1]):
+                    se = sigma_squared_se[row_index, column_index]
+                    se_row.append(format_se(se))
+            if pi_se is not None and pi_se.shape[1] > 0:
+                se_row.append("")
+                for column_index in range(pi_se.shape[1]):
+                    se = pi_se[row_index, column_index]
                     se_row.append(format_se(se) if column_index in unfixed_pi_indices else "")
             data.append(se_row)
 
@@ -518,3 +550,16 @@ class Parameters(object):
                         break
 
         return sigma_like, pi_like, rho_like, beta_like, gamma_like
+
+    def extract_sigma_vector_covariances(self, theta_covariances: Array) -> Array:
+        """Extract the sub-matrix of covariances for vech(sigma) from a full covariance matrix for theta."""
+        assert theta_covariances.shape == (self.P, self.P)
+
+        # identify indices in theta for elements in vech(sigma), with NaN representing fixed elements
+        sigma_indices = self.expand(np.arange(self.P), nullify=True)[0]
+        sigma_vector_indices = vech(sigma_indices)
+
+        # extract corresponding rows and columns from the theta covariances, taking zeros for fixed elements
+        padded_covariances = np.pad(theta_covariances, pad_width=(0, 1), constant_values=0)
+        indices = np.nan_to_num(sigma_vector_indices, nan=self.P).astype(np.int)
+        return padded_covariances[indices, :][:, indices]
