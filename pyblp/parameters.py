@@ -560,6 +560,6 @@ class Parameters(object):
         sigma_vector_indices = vech(sigma_indices)
 
         # extract corresponding rows and columns from the theta covariances, taking zeros for fixed elements
-        padded_covariances = np.pad(theta_covariances, pad_width=(0, 1), constant_values=0)
+        padded_covariances = np.pad(theta_covariances, pad_width=(0, 1), mode='constant', constant_values=0)
         indices = np.nan_to_num(sigma_vector_indices, nan=self.P).astype(np.int)
         return padded_covariances[indices, :][:, indices]
