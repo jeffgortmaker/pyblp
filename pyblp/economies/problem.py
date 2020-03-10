@@ -84,6 +84,10 @@ class ProblemEconomy(Economy):
             if not fixed by ``sigma_bounds``, starting values for unknown elements in :math:`\theta`. If any columns are
             fixed at zero, only the first few columns of integration nodes (specified in :class:`Problem`) will be used.
 
+            To have nonzero covariances for only a subset of the random coefficients, the characteristics for those
+            random coefficients with zero covariances should come first in :math:`X_2`. This can be seen by looking at
+            the expression for :math:`\Sigma\Sigma'`, the actual covariance matrix of the random coefficients.
+
         pi : `array-like, optional`
             Configuration for which elements in the matrix of parameters that measures how agent tastes vary with
             demographics, :math:`\Pi`, are fixed at zero and starting values for the other elements, which, if not fixed
