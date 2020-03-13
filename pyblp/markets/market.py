@@ -125,6 +125,8 @@ class Market(Container):
             return np.where(tiled_ids == tiled_ids.T, 1, 0)
         if self.products.ownership.shape[1] > 0:
             return self.products.ownership[:, :self.J]
+        if self.products.firm_ids.size == 0:
+            raise ValueError("Either firm IDs or an ownership matrix must have been specified.")
         tiled_ids = np.tile(self.products.firm_ids, self.J)
         return np.where(tiled_ids == tiled_ids.T, 1, 0)
 
