@@ -34,9 +34,12 @@ class ProblemEconomy(Economy):
     @abc.abstractmethod
     def __init__(
             self, product_formulations: Sequence[Optional[Formulation]], agent_formulation: Optional[Formulation],
-            products: RecArray, agents: RecArray, distributions: Optional[Sequence[str]], costs_type: str) -> None:
+            products: RecArray, agents: RecArray, distributions: Optional[Sequence[str]], epsilon_scale: float,
+            costs_type: str) -> None:
         """Initialize the underlying economy with product and agent data."""
-        super().__init__(product_formulations, agent_formulation, products, agents, distributions, costs_type)
+        super().__init__(
+            product_formulations, agent_formulation, products, agents, distributions, epsilon_scale, costs_type
+        )
 
     def solve(
             self, sigma: Optional[Any] = None, pi: Optional[Any] = None, rho: Optional[Any] = None,
@@ -1096,6 +1099,35 @@ class Problem(ProblemEconomy):
         including a ``1`` in the ``agent_formulation``. Then the corresponding coefficient in :math:`\Pi` will serve as
         the mean parameter for the lognormal random coefficient on negative prices, :math:`-p_{jt}`.
 
+    epsilon_scale : `float, optional`
+        Factor by which the Type I Extreme Value idiosyncratic preference term, :math:`\epsilon_{jti}`, is scaled. By
+        default, :math:`\epsilon_{jti}` is not scaled. The typical use of this parameter is to approximate the pure
+        characteristics model of :ref:`references:Berry and Pakes (2007)` by choosing a value smaller than ``1.0``. As
+        this scaling factor approaches zero, the model approaches the pure characteristics model in which there is no
+        idiosyncratic preference term.
+
+        In practice, this is implemented by dividing :math:`V_{jti} = \delta_{jt} + \mu_{jti}` by the scaling factor
+        when solving for the mean utility :math:`\delta_{jt}`. For small scaling factors, this leads to large values
+        of :math:`V_{jti}`, which when exponentiated in the logit expression can lead to overflow issues discussed in
+        :ref:`references:Berry and Pakes (2007)`. The safe versions of the contraction mapping discussed in the
+        documentation for ``fp_type`` in :meth:`Problem.solve` (which is used by default) eliminate overflow issues at
+        the cost of introducing fewer (but still common for a small scaling factor) underflow issues. Throughout the
+        contraction mapping, some values of the simulated shares :math:`s_{jt}(\delta, \hat{\theta})` can underflow to
+        zero, causing the contraction to fail when taking logs. By default, ``shares_bounds`` in :meth:`Problem.solve`
+        bounds these simulated shares from below by ``1e-300``, which eliminates these underflow issues at the cost
+        of making it more difficult for iteration routines to converge.
+
+        With this in mind, scaling epsilon is not supported for nonlinear contractions, and is also not supported when
+        there are nesting groups, since these further complicate the problem. In practice, if the goal is to approximate
+        the pure characteristics model, it is a good idea to slowly decrease the scale of epsilon (e.g., starting with
+        ``0.5``, trying ``0.1``, etc.) until the contraction begins to fail. To further decrease the scale, there are a
+        few things that can help. One is passing a different :class:`Iteration` configuration to ``iteration`` in
+        :meth:`Problem.solve`, such as ``'lm'``, which can be robust in this situation. Another is to set
+        ``pyblp.options.dtype = np.longdouble`` when on a system that supports extended precision (see :mod:`options`
+        for more information about this) and choose a smaller lower bound by configuring ``shares_bounds`` in
+        :meth:`Problem.solve`. Ultimately the model will stop being solvable at a certain point, and this point will
+        vary by problem, so approximating the pure characteristics model requires some degree of experimentation.
+
     costs_type : `str, optional`
         Functional form of the marginal cost function :math:`\tilde{c} = f(c)` in :eq:`costs`. The following
         specifications are supported:
@@ -1147,6 +1179,8 @@ class Problem(ProblemEconomy):
         Unique nesting group IDs in product data.
     distributions : `list of str`
         Random coefficient distributions.
+    epsilon_scale : `float`
+        Factor by which the Type I Extreme Value idiosyncratic preference term, :math:`\epsilon_{jti}`, is scaled.
     costs_type : `str`
         Functional form of the marginal cost function :math:`\tilde{c} = f(c)`.
     T : `int`
@@ -1188,7 +1222,7 @@ class Problem(ProblemEconomy):
             self, product_formulations: Union[Formulation, Sequence[Optional[Formulation]]], product_data: Mapping,
             agent_formulation: Optional[Formulation] = None, agent_data: Optional[Mapping] = None,
             integration: Optional[Integration] = None, distributions: Optional[Sequence[str]] = None,
-            costs_type: str = 'linear', add_exogenous: bool = True) -> None:
+            epsilon_scale: float = 1.0, costs_type: str = 'linear', add_exogenous: bool = True) -> None:
         """Initialize the underlying economy with product and agent data before absorbing fixed effects."""
 
         # keep track of long it takes to initialize the problem
@@ -1207,7 +1241,9 @@ class Problem(ProblemEconomy):
         # initialize the underlying economy with structured product and agent data
         products = Products(product_formulations, product_data, add_exogenous=add_exogenous)
         agents = Agents(products, agent_formulation, agent_data, integration)
-        super().__init__(product_formulations, agent_formulation, products, agents, distributions, costs_type)
+        super().__init__(
+            product_formulations, agent_formulation, products, agents, distributions, epsilon_scale, costs_type
+        )
 
         # absorb any demand-side fixed effects
         if self._absorb_demand_ids is not None:
@@ -1270,7 +1306,7 @@ class OptimalInstrumentProblem(ProblemEconomy):
         # initialize the underlying economy with structured product and agent data
         super().__init__(
             problem.product_formulations, problem.agent_formulation, updated_products, problem.agents,
-            distributions=problem.distributions, costs_type=problem.costs_type
+            distributions=problem.distributions, epsilon_scale=problem.epsilon_scale, costs_type=problem.costs_type
         )
 
         # absorb any demand-side fixed effects, which have already been absorbed into X1
@@ -1313,7 +1349,7 @@ class ImportanceSamplingProblem(ProblemEconomy):
         # initialize the underlying economy with structured product and agent data
         super().__init__(
             problem.product_formulations, problem.agent_formulation, problem.products, sampled_agents,
-            distributions=problem.distributions, costs_type=problem.costs_type
+            distributions=problem.distributions, epsilon_scale=problem.epsilon_scale, costs_type=problem.costs_type
         )
 
         # output information about the re-created problem

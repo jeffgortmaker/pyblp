@@ -19,6 +19,7 @@ class Market(Container):
     """A market underlying the BLP model."""
 
     groups: Groups
+    epsilon_scale: float
     costs_type: str
     J: int
     I: int
@@ -71,6 +72,7 @@ class Market(Container):
         self.groups = Groups(self.products.nesting_ids)
 
         # store other configuration information
+        self.epsilon_scale = economy.epsilon_scale
         self.costs_type = economy.costs_type
 
         # count dimensions
@@ -247,8 +249,13 @@ class Market(Container):
         """Compute derivatives of utility with respect to a variable. By default, use unchanged variable values."""
         assert self.beta is not None
         derivatives = np.tile(self.compute_X1_derivatives(name, variable) @ np.nan_to_num(self.beta), self.I)
+
         if self.K2 > 0:
             derivatives += self.compute_X2_derivatives(name, variable) @ self.compute_random_coefficients()
+
+        if self.epsilon_scale != 1:
+            derivatives /= self.epsilon_scale
+
         return derivatives
 
     def compute_probabilities(
@@ -273,6 +280,7 @@ class Market(Container):
 
         # compute exponentiated utilities, optionally re-scaling the logit expression
         if not linear:
+            assert self.epsilon_scale == 1
             exp_utilities = np.array(delta * mu)
             if self.H > 0:
                 exp_utilities **= 1 / (1 - self.rho)
@@ -280,9 +288,15 @@ class Market(Container):
             utilities = delta + mu
             if self.H > 0:
                 utilities /= 1 - self.rho
+
+            if self.epsilon_scale != 1:
+                assert self.H == 0
+                utilities /= self.epsilon_scale
+
             if safe:
                 utility_reduction = np.clip(utilities.max(axis=0, keepdims=True), 0, None)
                 utilities -= utility_reduction
+
             exp_utilities = np.exp(utilities)
 
         # compute any components used to re-scale the logit expression
@@ -337,9 +351,15 @@ class Market(Container):
             log_shares = np.log(self.products.shares)
             log_outside_share = np.log(1 - self.products.shares.sum())
             delta = log_shares - log_outside_share
+
             if self.H > 0:
                 log_group_shares = np.log(self.groups.expand(self.groups.sum(self.products.shares)))
                 delta -= self.rho * (log_shares - log_group_shares)
+
+            if self.epsilon_scale != 1:
+                assert self.H == 0
+                delta *= self.epsilon_scale
+
             return delta, clipped_shares, SolverStats(), errors
 
         # solve for delta with a linear fixed point
@@ -409,7 +429,7 @@ class Market(Container):
             return delta, clipped_shares, stats, errors
 
         # solve for delta with a nonlinear fixed point
-        assert 'nonlinear' in fp_type
+        assert 'nonlinear' in fp_type and self.epsilon_scale == 1
         if 'safe' in fp_type:
             utility_reduction = np.clip(self.mu.max(axis=0, keepdims=True), 0, None)
             exp_mu = np.exp(self.mu - utility_reduction)
@@ -459,8 +479,10 @@ class Market(Container):
     def compute_capital_lamda(self, value_derivatives: Array) -> Array:
         """Compute the diagonal capital lambda matrix used to decompose markups."""
         diagonal = value_derivatives @ self.agents.weights
+
         if self.H > 0:
             diagonal /= 1 - self.rho
+
         return np.diagflat(diagonal)
 
     def compute_capital_gamma(
@@ -468,9 +490,11 @@ class Market(Container):
         """Compute the dense capital gamma matrix used to decompose markups."""
         weighted_value_derivatives = self.agents.weights * value_derivatives.T
         capital_gamma = probabilities @ weighted_value_derivatives
+
         if self.H > 0:
             membership = self.get_membership_matrix()
             capital_gamma += self.rho / (1 - self.rho) * membership * (conditionals @ weighted_value_derivatives)
+
         return capital_gamma
 
     def compute_eta(
@@ -484,6 +508,7 @@ class Market(Container):
         if delta is None:
             assert self.delta is not None
             delta = self.delta
+
         utility_derivatives = self.compute_utility_derivatives('prices')
         probabilities, conditionals = self.compute_probabilities(delta)
         jacobian = self.compute_shares_by_variable_jacobian(utility_derivatives, probabilities, conditionals)
@@ -491,6 +516,7 @@ class Market(Container):
         eta, replacement = approximately_solve(capital_delta, self.products.shares)
         if replacement:
             errors.append(exceptions.IntraFirmJacobianInversionError(capital_delta, replacement))
+
         return eta, errors
 
     def compute_zeta(
@@ -515,6 +541,7 @@ class Market(Container):
             probabilities, conditionals = self.compute_probabilities(delta, mu)
             shares = probabilities @ self.agents.weights
             costs = self.update_costs_with_variable(costs, 'shares', shares)
+
         value_derivatives = probabilities * utility_derivatives
         capital_lamda_diagonal = self.compute_capital_lamda(value_derivatives).diagonal()
         capital_lamda_inverse = np.diag(1 / capital_lamda_diagonal)
@@ -560,6 +587,7 @@ class Market(Container):
         """Compute shares evaluated at specific prices. By default, use unchanged prices."""
         if prices is None:
             prices = self.products.prices
+
         delta = self.update_delta_with_variable('prices', prices)
         mu = self.update_mu_with_variable('prices', prices)
         shares = self.compute_probabilities(delta, mu)[0] @ self.agents.weights
@@ -578,6 +606,10 @@ class Market(Container):
             tangent += X2_derivatives[:, [parameter.location[0]]] @ v.T
         else:
             assert isinstance(parameter, (GammaParameter, RhoParameter))
+
+        if self.epsilon_scale != 1:
+            tangent /= self.epsilon_scale
+
         return tangent
 
     def compute_probabilities_by_parameter_tangent(
@@ -604,6 +636,10 @@ class Market(Container):
             else:
                 assert isinstance(parameter, GammaParameter)
                 probabilities_tangent = np.zeros_like(probabilities)
+
+            if self.epsilon_scale != 1:
+                probabilities_tangent /= self.epsilon_scale
+
             return probabilities_tangent, None
 
         # marginal probabilities are needed to compute tangents with nesting
@@ -679,6 +715,10 @@ class Market(Container):
         probabilities_tensor = -probabilities[None] * probabilities[None].swapaxes(0, 1)
         probabilities_tensor[np.diag_indices(self.J)] += probabilities
         conditionals_tensor = None
+
+        if self.epsilon_scale != 1:
+            probabilities_tensor /= self.epsilon_scale
+
         if self.H > 0:
             assert conditionals is not None
             membership = self.get_membership_matrix()
@@ -692,6 +732,7 @@ class Market(Container):
             )
             probabilities_tensor[np.diag_indices(self.J)] += multiplied_probabilities
             conditionals_tensor[np.diag_indices(self.J)] += multiplied_conditionals
+
         return probabilities_tensor, conditionals_tensor
 
     def compute_shares_by_variable_jacobian(
@@ -712,11 +753,16 @@ class Market(Container):
         diagonal_shares = np.diagflat(self.products.shares)
         weighted_probabilities = self.agents.weights * probabilities.T
         jacobian = diagonal_shares - probabilities @ weighted_probabilities
+
+        if self.epsilon_scale != 1:
+            jacobian /= self.epsilon_scale
+
         if self.H > 0:
             membership = self.get_membership_matrix()
             jacobian += self.rho / (1 - self.rho) * (
                 diagonal_shares - membership * (conditionals @ weighted_probabilities)
             )
+
         return jacobian
 
     def compute_shares_by_theta_jacobian(
@@ -726,17 +772,20 @@ class Market(Container):
         for p, parameter in enumerate(self.parameters.unfixed):
             tangent, _ = self.compute_probabilities_by_parameter_tangent(parameter, probabilities, conditionals, delta)
             jacobian[:, [p]] = tangent @ self.agents.weights
+
         return jacobian
 
     def compute_capital_lamda_by_parameter_tangent(
             self, parameter: Parameter, value_derivatives: Array, value_derivatives_tangent: Array) -> Array:
         """Compute the tangent of the diagonal capital lambda matrix with respect to a parameter."""
         diagonal = value_derivatives_tangent @ self.agents.weights
+
         if self.H > 0:
             diagonal /= 1 - self.rho
             if isinstance(parameter, RhoParameter):
                 associations = self.groups.expand(parameter.get_group_associations(self.groups))
                 diagonal += associations / (1 - self.rho)**2 * (value_derivatives @ self.agents.weights)
+
         return np.diagflat(diagonal)
 
     def compute_capital_lamda_by_xi_tensor(self, value_derivatives_tensor: Array) -> Array:
@@ -744,8 +793,10 @@ class Market(Container):
         axis.
         """
         diagonal = value_derivatives_tensor @ self.agents.weights
+
         if self.H > 0:
             diagonal /= 1 - self.rho[None]
+
         tensor = np.zeros((self.J, self.J, self.J), options.dtype)
         tensor[:, np.arange(self.J), np.arange(self.J)] = np.c_[np.squeeze(diagonal)]
         return tensor
@@ -761,6 +812,7 @@ class Market(Container):
             probabilities_tangent @ weighted_value_derivatives +
             probabilities @ weighted_value_derivatives_tangent
         )
+
         if self.H > 0:
             assert conditionals is not None and conditionals_tangent is not None
             membership = self.get_membership_matrix()
@@ -771,6 +823,7 @@ class Market(Container):
             if isinstance(parameter, RhoParameter):
                 associations = self.groups.expand(parameter.get_group_associations(self.groups))
                 tangent += associations * membership / (1 - self.rho)**2 * (conditionals @ weighted_value_derivatives)
+
         return tangent
 
     def compute_capital_gamma_by_xi_tensor(
@@ -785,6 +838,7 @@ class Market(Container):
             probabilities_tensor @ weighted_value_derivatives +
             weighted_probabilities @ value_derivatives_tensor.swapaxes(1, 2)
         )
+
         if self.H > 0:
             assert conditionals is not None and conditionals_tensor is not None
             membership = self.get_membership_matrix()
@@ -793,6 +847,7 @@ class Market(Container):
                 conditionals_tensor @ weighted_value_derivatives +
                 weighted_conditionals @ value_derivatives_tensor.swapaxes(1, 2)
             )
+
         return tensor
 
     def compute_eta_by_theta_jacobian(self, xi_jacobian: Array) -> Tuple[Array, List[Error]]:
@@ -876,12 +931,14 @@ class Market(Container):
         if delta is None:
             assert self.delta is not None
             delta = self.delta
+
         probabilities, conditionals = self.compute_probabilities(delta)
         shares_by_xi_jacobian = self.compute_shares_by_xi_jacobian(probabilities, conditionals)
         shares_by_theta_jacobian = self.compute_shares_by_theta_jacobian(delta, probabilities, conditionals)
         xi_by_theta_jacobian, replacement = approximately_solve(shares_by_xi_jacobian, -shares_by_theta_jacobian)
         if replacement:
             errors.append(exceptions.SharesByXiJacobianInversionError(shares_by_xi_jacobian, replacement))
+
         return xi_by_theta_jacobian, errors
 
     def compute_omega_by_theta_jacobian(self, tilde_costs: Array, xi_jacobian: Array) -> Tuple[Array, List[Error]]:

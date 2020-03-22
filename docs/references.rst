@@ -55,6 +55,12 @@ Berry, Levinsohn, and Pakes (2004)
 Berry, Steven, James Levinsohn, and Ariel Pakes (2004). `Differentiated products demand systems from a combination of micro and macro data: The new car market <https://ideas.repec.org/a/ucp/jpolec/v112y2004i1p68-105.html>`_. *Journal of Political Economy, 112* (1), 68-105.
 
 
+Berry and Pakes (2007)
+~~~~~~~~~~~~~~~~~~~~~~
+
+Berry, Steven, and Ariel Pakes (2007). `The pure characteristics demand model <https://ideas.repec.org/a/ier/iecrev/v48y2007i4p1193-1225.html>`_. *International Economic Review, 48* (4), 1193-1225.
+
+
 Brenkers and Verboven (2006)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

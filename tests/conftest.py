@@ -70,8 +70,8 @@ def configure() -> Iterator[None]:
 
 @pytest.fixture(scope='session')
 def small_logit_simulation() -> SimulationFixture:
-    """Solve a simulation with two markets, a linear constant, linear prices, a linear characteristic, and a cost
-    characteristic
+    """Solve a simulation with two markets, a linear constant, linear prices, a linear characteristic, a cost
+    characteristic, and a scaled epsilon.
     """
     id_data = build_id_data(T=2, J=18, F=3)
     simulation = Simulation(
@@ -90,7 +90,8 @@ def small_logit_simulation() -> SimulationFixture:
         xi_variance=0.001,
         omega_variance=0.001,
         correlation=0.7,
-        seed=0
+        epsilon_scale=0.5,
+        seed=0,
     )
     simulation_results = simulation.replace_exogenous('x', 'a')
     return simulation, simulation_results, {}, []
@@ -128,7 +129,7 @@ def large_logit_simulation() -> SimulationFixture:
 @pytest.fixture(scope='session')
 def small_nested_logit_simulation() -> SimulationFixture:
     """Solve a simulation with four markets, linear prices, two linear characteristics, two cost characteristics, and
-    two nesting groups with different nesting parameters
+    two nesting groups with different nesting parameters.
     """
     id_data = build_id_data(T=4, J=18, F=3)
     simulation = Simulation(
@@ -220,7 +221,8 @@ def small_blp_simulation() -> SimulationFixture:
 @pytest.fixture(scope='session')
 def medium_blp_simulation() -> SimulationFixture:
     """Solve a simulation with four markets, linear/nonlinear/cost constants, two linear characteristics, two cost
-    characteristics, a demographic interacted with second-degree prices, and an alternative ownership structure.
+    characteristics, a demographic interacted with second-degree prices, an alternative ownership structure, and a
+    scaled epsilon.
     """
     id_data = build_id_data(T=4, J=25, F=6)
     simulation = Simulation(
@@ -250,7 +252,8 @@ def medium_blp_simulation() -> SimulationFixture:
         xi_variance=0.0001,
         omega_variance=0.0001,
         correlation=0.8,
-        seed=1
+        epsilon_scale=0.7,
+        seed=1,
     )
     simulation_results = simulation.replace_endogenous()
     simulated_micro_moments = [FirstChoiceCovarianceMoment(X2_index=1, demographics_index=0, value=0)]
@@ -421,7 +424,7 @@ def large_nested_blp_simulation() -> SimulationFixture:
     pytest.param(['small_nested_blp', False], id="small nested BLP simulation without supply"),
     pytest.param(['small_nested_blp', True], id="small nested BLP simulation with supply"),
     pytest.param(['large_nested_blp', False], id="large nested BLP simulation without supply"),
-    pytest.param(['large_nested_blp', True], id="large nested BLP simulation with supply")
+    pytest.param(['large_nested_blp', True], id="large nested BLP simulation with supply"),
 ])
 def simulated_problem(request: Any) -> SimulatedProblemFixture:
     """Configure and solve a simulated problem, either with or without supply-side data. Preclude overflow with rho

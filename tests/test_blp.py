@@ -41,6 +41,8 @@ def test_accuracy(simulated_problem: SimulatedProblemFixture, solve_options_upda
     # skip different iteration configurations when they won't matter
     if simulation.K2 == 0 and {'delta_behavior', 'fp_type', 'iteration'} & set(solve_options_update):
         return pytest.skip("A different iteration configuration has no impact when there is no heterogeneity.")
+    if simulation.epsilon_scale != 1 and 'nonlinear' in solve_options_update.get('fp_type', 'safe_linear'):
+        return pytest.skip("Nonlinear fixed point configurations are not supported when epsilon is scaled.")
 
     # update the default options and solve the problem
     updated_solve_options = solve_options.copy()
@@ -310,7 +312,11 @@ def test_fixed_effects(
         product_formulations1[2] = Formulation(
             product_formulations[2]._formula, supply_id_formula, absorb_method, absorb_options
         )
-    problem1 = Problem(product_formulations1, product_data, problem.agent_formulation, simulation.agent_data)
+    problem1 = Problem(
+        product_formulations1, product_data, problem.agent_formulation, simulation.agent_data,
+        distributions=simulation.distributions, epsilon_scale=simulation.epsilon_scale,
+        costs_type=simulation.costs_type
+    )
     problem_results1 = problem1.solve(**solve_options1)
 
     # solve the first stage of a problem in which fixed effects are included as indicator variables
@@ -322,7 +328,11 @@ def test_fixed_effects(
     if ES > 0:
         assert product_formulations[2] is not None
         product_formulations2[2] = Formulation(f'{product_formulations[2]._formula} + {supply_id_formula}')
-    problem2 = Problem(product_formulations2, product_data, problem.agent_formulation, simulation.agent_data)
+    problem2 = Problem(
+        product_formulations2, product_data, problem.agent_formulation, simulation.agent_data,
+        distributions=simulation.distributions, epsilon_scale=simulation.epsilon_scale,
+        costs_type=simulation.costs_type
+    )
     solve_options2['beta'] = np.r_[
         solve_options2['beta'],
         np.full((problem2.K1 - solve_options2['beta'].size, 1), np.nan)
@@ -345,7 +355,11 @@ def test_fixed_effects(
             product_formulations3[2] = Formulation(
                 f'{product_formulations[2]._formula} + {supply_id_names[0]}', ' + '.join(supply_id_names[1:]) or None
             )
-        problem3 = Problem(product_formulations3, product_data, problem.agent_formulation, simulation.agent_data)
+        problem3 = Problem(
+            product_formulations3, product_data, problem.agent_formulation, simulation.agent_data,
+            distributions=simulation.distributions, epsilon_scale=simulation.epsilon_scale,
+            costs_type=simulation.costs_type
+        )
         solve_options3['beta'] = np.r_[
             solve_options3['beta'],
             np.full((problem3.K1 - solve_options3['beta'].size, 1), np.nan)
@@ -509,7 +523,7 @@ def test_merger(simulated_problem: SimulatedProblemFixture, ownership: bool, sol
         simulation.product_formulations, merger_product_data, simulation.beta, simulation.sigma, simulation.pi,
         simulation.gamma, simulation.rho, simulation.agent_formulation,
         simulation.agent_data, xi=simulation.xi, omega=simulation.omega, distributions=simulation.distributions,
-        costs_type=simulation.costs_type
+        epsilon_scale=simulation.epsilon_scale, costs_type=simulation.costs_type
     )
     actual = merger_simulation.replace_endogenous(**solve_options)
 
@@ -518,7 +532,7 @@ def test_merger(simulated_problem: SimulatedProblemFixture, ownership: bool, sol
     results_simulation = Simulation(
         simulation.product_formulations[:2], merger_product_data, results.beta, results.sigma, results.pi,
         rho=results.rho, agent_formulation=simulation.agent_formulation, agent_data=simulation.agent_data,
-        xi=results.xi, distributions=simulation.distributions,
+        xi=results.xi, distributions=simulation.distributions, epsilon_scale=simulation.epsilon_scale
     )
     estimated = results_simulation.replace_endogenous(costs, problem.products.prices, **solve_options)
     estimated_prices = results.compute_prices(merger_ids, merger_ownership, costs, **solve_options)
@@ -744,7 +758,7 @@ def test_return(simulated_problem: SimulatedProblemFixture) -> None:
     results = problem.solve(**updated_solve_options)
     for key, initial in initial_values.items():
         if initial is not None:
-            np.testing.assert_allclose(initial, getattr(results, key), atol=1e-14, rtol=0, err_msg=key)
+            np.testing.assert_allclose(initial, getattr(results, key), atol=1e-14, rtol=1e-14, err_msg=key)
 
 
 @pytest.mark.usefixtures('simulated_problem')
@@ -1112,7 +1126,7 @@ def test_logit(
     _, simulation_results, problem, _, _ = simulated_problem
 
     # skip more complicated simulations
-    if problem.K2 > 0 or problem.K3 > 0 or problem.H > 0:
+    if problem.K2 > 0 or problem.K3 > 0 or problem.H > 0 or problem.epsilon_scale != 1:
         return pytest.skip("This simulation cannot be tested against linearmodels.")
 
     # solve the problem

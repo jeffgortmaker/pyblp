@@ -23,6 +23,7 @@ class Economy(Container, StringRepresentation):
     product_formulations: Sequence[Optional[Formulation]]
     agent_formulation: Optional[Formulation]
     distributions: List[str]
+    epsilon_scale: float
     costs_type: str
     unique_market_ids: Array
     unique_firm_ids: Array
@@ -50,7 +51,8 @@ class Economy(Container, StringRepresentation):
     @abc.abstractmethod
     def __init__(
             self, product_formulations: Sequence[Optional[Formulation]], agent_formulation: Optional[Formulation],
-            products: RecArray, agents: RecArray, distributions: Optional[Sequence[str]], costs_type: str) -> None:
+            products: RecArray, agents: RecArray, distributions: Optional[Sequence[str]], epsilon_scale: float,
+            costs_type: str) -> None:
         """Store information about formulations and data. Any fixed effects should be absorbed after initialization."""
 
         # store data and formulations
@@ -95,7 +97,7 @@ class Economy(Container, StringRepresentation):
             assert product_formulations[2] is not None
             self._absorb_supply_ids = functools.partial(product_formulations[2]._build_absorb(self.products.supply_ids))
 
-        # validate and store random coefficient distributions
+        # validate random coefficient distributions
         if distributions is None:
             self.distributions = ['normal'] * self.K2
         else:
@@ -107,7 +109,14 @@ class Economy(Container, StringRepresentation):
                 raise TypeError("distributions must be None or a sequence of 'normal' or 'lognormal' strings.")
             self.distributions = list(distributions)
 
-        # validate th type of marginal costs
+        # validate the scale of epsilon
+        if not isinstance(epsilon_scale, (int, float)) or epsilon_scale <= 0:
+            raise ValueError("epsilon_scale must be a positive float.")
+        if epsilon_scale != 1 and self.H > 0:
+            raise ValueError("epsilon_scale must equal 1 when there are nesting groups.")
+        self.epsilon_scale = float(epsilon_scale)
+
+        # validate the type of marginal costs
         if costs_type not in {'linear', 'log'}:
             raise ValueError("costs_type must be 'linear' or 'log'.")
         self.costs_type = costs_type
@@ -264,17 +273,18 @@ class Economy(Container, StringRepresentation):
             raise ValueError("Analytic Jacobians are not supported for solving this system.")
         return iteration
 
-    @staticmethod
-    def _validate_fp_type(fp_type: str) -> None:
+    def _validate_fp_type(self, fp_type: str) -> None:
         """Validate that the delta fixed point type is supported."""
         if fp_type not in {'safe_linear', 'linear', 'safe_nonlinear', 'nonlinear'}:
             raise ValueError("fp_type must be 'safe_linear', 'linear', 'safe_nonlinear', or 'nonlinear'.")
+        if fp_type in {'safe_nonlinear', 'nonlinear'} and self.epsilon_scale != 1:
+            raise ValueError("When epsilon_scale is not 1, fp_type must be 'safe_linear' or 'linear'.")
 
     @staticmethod
     def _coerce_optional_bounds(bounds: Optional[Tuple[Any, Any]], name: str) -> Bounds:
         """Validate or choose default bounds for some object."""
         if bounds is None:
-            return (-np.inf, +np.inf)
+            return -np.inf, +np.inf
         if len(bounds) != 2:
             raise ValueError(f"{name} must be a tuple of the form (lb, ub).")
         bounds = (np.asarray(bounds[0], options.dtype), np.asarray(bounds[1], options.dtype))
@@ -338,5 +348,10 @@ class Economy(Container, StringRepresentation):
                 else:
                     rho_t = groups_t.expand(rho[np.searchsorted(self.unique_nesting_ids, groups_t.unique)])
                 delta[indices_t] -= rho_t * (log_shares_t - log_group_shares_t)
+
+        # delta needs to be scaled if the error term is scaled
+        if self.epsilon_scale != 1:
+            assert self.H == 0
+            delta *= self.epsilon_scale
 
         return delta

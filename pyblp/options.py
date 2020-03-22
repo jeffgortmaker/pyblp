@@ -29,7 +29,7 @@ dtype : `dtype`
     sufficient to solve many utility floating point problems.
 
     The precision of ``numpy.longdouble`` depends on the platform on which NumPy is installed. If the platform in use
-    does not support extended precision, using ``numpy.longdouble`` may lead to unreliably results. For example, on
+    does not support extended precision, using ``numpy.longdouble`` may lead to unreliable results. For example, on
     Windows, NumPy is usually compiled such that ``numpy.longdouble`` often behaves like ``numpy.float64``. Precisions
     can be compared with :class:`numpy.finfo` by running ``np.finfo(np.float64)`` and ``np.finfo(np.longdouble)``. For
     more information, refer to

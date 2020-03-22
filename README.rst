@@ -97,6 +97,7 @@ Features
 - Normal and lognormal random coefficients
 - Parameter bounds and constraints
 - Random coefficients nested logit (RCNL)
+- Approximation to the pure characteristics model
 - Varying nesting parameters across groups
 - Logit and nested logit benchmarks
 - Classic BLP instruments
@@ -134,7 +135,6 @@ Features Slated for Future Versions
 - Mathematical Program with Equilibrium Constraints (MPEC)
 - Generalized Empirical Likelihood (GEL)
 - Discrete types
-- Pure characteristics model
 - Newton methods for computing equilibrium prices
 
 

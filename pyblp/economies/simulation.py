@@ -208,6 +208,18 @@ class Simulation(Economy):
         including a ``1`` in the ``agent_formulation``. Then the corresponding coefficient in :math:`\Pi` will serve as
         the mean parameter for the lognormal random coefficient on negative prices, :math:`-p_{jt}`.
 
+    epsilon_scale : `float, optional`
+        Factor by which the Type I Extreme Value idiosyncratic preference term, :math:`\epsilon_{jti}`, is scaled. By
+        default, :math:`\epsilon_{jti}` is not scaled. The typical use of this parameter is to approximate the pure
+        characteristics model of :ref:`references:Berry and Pakes (2007)` by choosing a value smaller than ``1.0``. As
+        this scaling factor approaches zero, the model approaches the pure characteristics model in which there is no
+        idiosyncratic preference term.
+
+        For more information about choosing this parameter and estimating models where it is smaller than ``1.0``, refer
+        to the same argument in :meth:`Problem.solve`. In some situations, it may be easier to solve simulations with
+        small epsilon scaling factors by using :meth:`Simulation.replace_exogenous` rather than
+        :meth:`Simulation.replace_endogenous`.
+
     costs_type : `str, optional`
         Specification of the marginal cost function :math:`\tilde{c} = f(c)` in :eq:`costs`. The following
         specifications are supported:
@@ -267,6 +279,8 @@ class Simulation(Economy):
         Unobserved supply-side product characteristics, :math:`\omega`.
     distributions : `list of str`
         Random coefficient distributions.
+    epsilon_scale : `float`
+        Factor by which the Type I Extreme Value idiosyncratic preference term, :math:`\epsilon_{jti}`, is scaled.
     costs_type : `str`
         Functional form of the marginal cost function :math:`\tilde{c} = f(c)`.
     T : `int`
@@ -324,8 +338,8 @@ class Simulation(Economy):
             rho: Optional[Any] = None, agent_formulation: Optional[Formulation] = None,
             agent_data: Optional[Mapping] = None, integration: Optional[Integration] = None, xi: Optional[Any] = None,
             omega: Optional[Any] = None, xi_variance: float = 1, omega_variance: float = 1, correlation: float = 0.9,
-            distributions: Optional[Sequence[str]] = None, costs_type: str = 'linear', seed: Optional[int] = None) -> (
-            None):
+            distributions: Optional[Sequence[str]] = None, epsilon_scale: float = 1.0, costs_type: str = 'linear',
+            seed: Optional[int] = None) -> None:
         """Load or simulate all data except for synthetic prices and shares."""
 
         # keep track of long it takes to initialize the simulation
@@ -440,7 +454,9 @@ class Simulation(Economy):
         agents = Agents(products, agent_formulation, self.agent_data)
 
         # initialize the underlying economy
-        super().__init__(product_formulations, agent_formulation, products, agents, distributions, costs_type)
+        super().__init__(
+            product_formulations, agent_formulation, products, agents, distributions, epsilon_scale, costs_type
+        )
 
         # load or simulate the structural errors
         self.xi = xi
@@ -618,7 +634,9 @@ class Simulation(Economy):
 
         This method implements a less common way of solving the simulation. It may be preferable to
         :meth:`Simulation.replace_endogenous` when for some reason it is desirable to retain the prices and marketshares
-        from :class:`Simulation`, which are assumed to be in equilibrium.
+        from :class:`Simulation`, which are assumed to be in equilibrium. For example, it can be helpful when
+        approximating the pure characteristics model of :ref:`references:Berry and Pakes (2007)` by setting a small
+        ``epsilon_scale`` value in :class:`Simulation`.
 
         For this method of solving the simulation to be used, there must be an exogenous product characteristic
         :math:`v` that shows up only in :math:`X_1^\text{ex}`, and if there is a supply side, another product
