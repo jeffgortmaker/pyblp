@@ -1123,10 +1123,11 @@ class Problem(ProblemEconomy):
         ``0.5``, trying ``0.1``, etc.) until the contraction begins to fail. To further decrease the scale, there are a
         few things that can help. One is passing a different :class:`Iteration` configuration to ``iteration`` in
         :meth:`Problem.solve`, such as ``'lm'``, which can be robust in this situation. Another is to set
-        ``pyblp.options.dtype = np.longdouble`` when on a system that supports extended precision (see :mod:`options`
-        for more information about this) and choose a smaller lower bound by configuring ``shares_bounds`` in
-        :meth:`Problem.solve`. Ultimately the model will stop being solvable at a certain point, and this point will
-        vary by problem, so approximating the pure characteristics model requires some degree of experimentation.
+        ``pyblp.options.dtype = np.longdouble`` when on a system that supports extended precision (see
+        :mod:`~pyblp.options` for more information about this) and choose a smaller lower bound by configuring
+        ``shares_bounds`` in :meth:`Problem.solve`. Ultimately the model will stop being solvable at a certain point,
+        and this point will vary by problem, so approximating the pure characteristics model requires some degree of
+        experimentation.
 
     costs_type : `str, optional`
         Functional form of the marginal cost function :math:`\tilde{c} = f(c)` in :eq:`costs`. The following
