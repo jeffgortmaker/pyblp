@@ -246,17 +246,17 @@ In the spirit of :ref:`references:Imbens and Lancaster (1994)`, :ref:`references
 
 Each micro moment :math:`m` is approximated in a set :math:`T_m \subset T` of markets in which its micro data are relevant and then averaged across these markets:
 
-.. math:: \bar{g}_{M,m} \approx \frac{1}{T_m} \sum_{t \in T_m} \sum_{i \in I_t} w_{it} g_{M,mti}.
+.. math:: \bar{g}_{M,m} \approx \frac{1}{T_m} \sum_{t \in T_m} \sum_{i \in I_t} w_{it} g_{M,imt}.
    :label: averaged_micro_moments
 
-The vector :math:`\bar{g}_M` contains sample analogues of micro moment conditions :math:`E[g_{M,mti}] = 0` where :math:`g_{M,mti}` is typically a function of choice probabilities, data in market :math:`t`, and a statistic computed from survey data that the moment aims to match.
+The vector :math:`\bar{g}_M` contains sample analogues of micro moment conditions :math:`E[g_{M,imt}] = 0` where :math:`g_{M,imt}` is typically a function of choice probabilities, data in market :math:`t`, and a statistic computed from survey data that the moment aims to match.
 
 Mico moments are computed for each :math:`\theta` and contribute to the GMM objective :math:`q(\theta)` in :eq:`objective`. Their derivatives with respect to :math:`\theta` are added as rows to :math:`\bar{G}` in :eq:`averaged_moments_jacobian`, and blocks are added to both :math:`W` and :math:`S` in :eq:`2sls_W` and :eq:`W`. The covariance between standard moments and micro moments is assumed to be zero, so these matrices are block-diagonal. The covariance between micro moments :math:`m` and :math:`n` in :math:`S` is set to zero if :math:`T_{mn} = T_m \cap T_n = \emptyset` and otherwise is approximated by
 
-.. math:: \text{Cov}(\bar{g}_{M,m}, \bar{g}_{M,n}) \approx \frac{1}{T_{mn}} \sum_{t \in T_{mn}} \sum_{i \in I_t} w_{it}(g_{M,mti} - \bar{g}_{M,mt})(g_{M,nti} - \bar{g}_{M,nt})
+.. math:: \text{Cov}(\bar{g}_{M,m}, \bar{g}_{M,n}) \approx \frac{1}{T_{mn}} \sum_{t \in T_{mn}} \sum_{i \in I_t} w_{it}(g_{M,imt} - \bar{g}_{M,mt})(g_{M,int} - \bar{g}_{M,nt})
    :label: averaged_micro_moment_covariances
 
-where :math:`\bar{g}_{M,mt} = \sum_i w_{it} g_{M,mti}`.
+where :math:`\bar{g}_{M,mt} = \sum_i w_{it} g_{M,imt}`.
 
 
 Random Coefficients Nested Logit

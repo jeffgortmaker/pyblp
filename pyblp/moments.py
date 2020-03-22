@@ -78,20 +78,20 @@ class FirstChoiceCovarianceMoment(Moment):
     non-outside good. With this covariance, a micro moment :math:`m` in market :math:`t` for agent :math:`i` can be
     defined by
 
-    .. math:: g_{M,mti} = (z_{it} - \bar{z}_t)(y_{it} - \bar{y}_t) - \sigma_{xy}
+    .. math:: g_{M,imt} = (z_{it} - \bar{z}_t)(y_{it} - \bar{y}_t) - \sigma_{xy}
 
     where :math:`\bar{z}_t = \sum_i w_{it} z_{it}`, :math:`\bar{y}_t = \sum_i w_{it} y_{it}`, and conditional on
     purchasing an inside good, the expected value of :math:`x_{jt}` for agent :math:`i` is
 
-    .. math:: z_{it} = \sum_{j \in J_t} x_{jt}s_{j(-0)ti}
+    .. math:: z_{it} = \sum_{j \in J_t} x_{jt}s_{ij(-0)t}
 
-    where :math:`s_{j(-0)ti}` is the probability of choosing :math:`j` when the outside option is removed from the
+    where :math:`s_{ij(-0)t}` is the probability of choosing :math:`j` when the outside option is removed from the
     choice set.
 
     When the moment is constructed with a constant product characteristic :math:`x_{jt} = 1` and without conditioning on
     purchasing an inside good, this expression simplifies to
 
-    .. math:: g_{M,mti} = -(s_{i0t} - s_{0t})(y_{it} - \bar{y}_t) - \sigma_{xy},
+    .. math:: g_{M,imt} = -(s_{i0t} - s_{0t})(y_{it} - \bar{y}_t) - \sigma_{xy},
 
     which is negative the covariance between the demographic and the probability of purchasing the outside good, or
     equivalently, the covariance between the demographic and the probability of purchasing any inside good. The outside
