@@ -36,14 +36,14 @@ class SimulationResults(StringRepresentation):
     product_data : `recarray`
         Simulated :attr:`Simulation.product_data` with product characteristics replaced so as to be consistent with the
         true parameters. If :meth:`Simulation.replace_endogenous` was used to create these results, prices and
-        marketshares were replaced. If :meth:`Simulation.replace_exogenous` was used, exogenous characteristics were
+        market shares were replaced. If :meth:`Simulation.replace_exogenous` was used, exogenous characteristics were
         replaced instead. The :func:`data_to_dict` function can be used to convert this into a more usable data type.
     delta : `ndarray`
         Simulated mean utility, :math:`\delta`.
     costs : `ndarray`
         Simulated marginal costs, :math:`c`.
     computation_time : `float`
-        Number of seconds it took to compute prices and marketshares.
+        Number of seconds it took to compute prices and market shares.
     fp_converged : `ndarray`
         Flags for convergence of the iteration routine used to compute prices or :math:`\delta` (depending on the method
         used to create these results) in each market. Flags are in the same order as
@@ -142,13 +142,13 @@ class SimulationResults(StringRepresentation):
         as that of the solved simulation.
 
         By default, some simple "sums of characteristics" BLP instruments are constructed. Demand-side instruments are
-        constructed by :func:`build_blp_instruments` from variables in :math:`X_1^\text{ex}`, along with any supply
-        shifters (variables in :math:`X_3^\text{ex}` but not :math:`X_1^\text{ex}`). Supply side instruments are
-        constructed from variables in :math:`X_3^\text{ex}`, along with any demand shifters (variables in
-        :math:`X_1^\text{ex}` but not :math:`X_3^\text{ex}`). Instruments will also be constructed from columns of ones
-        if there is variation in :math:`J_t`, the number of products per market. Any constant columns will be dropped.
-        For example, if each firm owns exactly one product in each market, the "rival" columns of instruments will be
-        zero and hence dropped.
+        constructed by :func:`build_blp_instruments` from variables in :math:`X_1^{\text{ex}}`, along with any supply
+        shifters (variables in :math:`X_3^{\text{ex}}` but not :math:`X_1^{\text{ex}}`). Supply side instruments are
+        constructed from variables in :math:`X_3^{\text{ex}}`, along with any demand shifters (variables in
+        :math:`X_1^{\text{ex}}` but not :math:`X_3^{\text{ex}}`). Instruments will also be constructed from columns of
+        ones if there is variation in :math:`J_t`, the number of products per market. Any constant columns will be
+        dropped. For example, if each firm owns exactly one product in each market, the "rival" columns of instruments
+        will be zero and hence dropped.
 
         .. note::
 

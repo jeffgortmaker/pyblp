@@ -45,7 +45,7 @@ class BootstrappedResults(Results):
         Bootstrapped prices, :math:`p`. If a supply side was not estimated, these are unchanged prices. Otherwise, they
         are equilibrium prices implied by each draw.
     bootstrapped_shares : `ndarray`
-        Bootstrapped marketshares, :math:`s`, implied by each draw.
+        Bootstrapped market shares, :math:`s`, implied by each draw.
     bootstrapped_delta : `ndarray`
         Bootstrapped mean utility, :math:`\delta`, implied by each draw.
     computation_time : `float`

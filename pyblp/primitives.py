@@ -31,7 +31,8 @@ class Products(object):
     clustering_ids : `ndarray`
         IDs used to compute clustered standard errors.
     ownership : `ndarray`
-        Stacked :math:`J_t \times J_t` ownership matrices, :math:`O`, for each market :math:`t`.
+        Stacked :math:`J_t \times J_t` ownership or product holding matrices, :math:`\mathscr{H}`, for each market
+        :math:`t`.
     shares : `ndarray`
         Marketshares, :math:`s`.
     prices : `ndarray`

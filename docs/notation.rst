@@ -7,63 +7,54 @@ The notation in PyBLP is a customized amalgamation of the notation employed by :
 Indices
 -------
 
-=========  =====================
+=========  ==================
 Index      Description
-=========  =====================
+=========  ==================
 :math:`j`  Products
 :math:`t`  Markets
-:math:`i`  Agents or individuals
+:math:`i`  Agents/individuals
 :math:`f`  Firms
 :math:`h`  Nests
 :math:`c`  Clusters
 :math:`m`  Micro moments
-=========  =====================
+=========  ==================
 
 
-Dimensions
-----------
+Dimensions/Sets
+---------------
 
-========================  ==================================================================================================
-Dimension                 Description
-========================  ==================================================================================================
-:math:`T`                 Markets
-:math:`N`                 Products across all markets
-:math:`F`                 Firms across all markets
-:math:`I`                 Agents across all markets
-:math:`J_t`               Products in market :math:`t`
-:math:`F_t`               Firms in market :math:`t`
-:math:`I_t`               Agents in market :math:`t`
-:math:`K_1`               Demand-side linear product characteristics
-:math:`K_1^\text{ex}`     Exogenous demand-side linear product characteristics
-:math:`K_1^\text{en}`     Endogenous demand-side linear product characteristics
-:math:`K_2`               Demand-side nonlinear product characteristics
-:math:`K_3`               Supply-side product characteristics
-:math:`K_3^\text{ex}`     Exogenous supply-side product characteristics
-:math:`K_3^\text{en}`     Endogenous supply-side product characteristics
-:math:`D`                 Demographic variables
-:math:`M_D`               Demand-side instruments
-:math:`M_S`               Supply-side instruments
-:math:`M_M`               Micro moments
-:math:`M`                 Moments: the sum of :math:`M_D`, :math:`M_S`, and :math:`M_M`
-:math:`E_D`               Absorbed dimensions of demand-side fixed effects
-:math:`E_S`               Absorbed dimensions of supply-side fixed effects
-:math:`H`                 Nesting groups
-:math:`C`                 Clusters
-:math:`P`                 Parameters
-========================  ==================================================================================================
-
-
-Sets
-----
-
-========================  ========================================================
-Set                       Description
-========================  ========================================================
-:math:`\mathscr{J}_{ft}`  Products produced by firm :math:`f` in market :math:`t`
-:math:`\mathscr{J}_{ht}`  Products in nesting group :math:`h` and market :math:`t`
-:math:`\mathscr{J}_{ct}`  Products in cluster :math:`c` and market :math:`t`
-:math:`\mathscr{T}_m`     Markets over which micro moment :math:`m` is averaged
-========================  ========================================================
+=====================  ==========================================================================
+Dimension/Set          Description
+=====================  ==========================================================================
+:math:`T`              Markets
+:math:`N`              Products across all markets
+:math:`F`              Firms across all markets
+:math:`I`              Agents across all markets
+:math:`J_t`            Products in market :math:`t`
+:math:`F_t`            Firms in market :math:`t`
+:math:`J_{ft}`         Products produced by firm :math:`f` in market :math:`t`
+:math:`I_t`            Agents in market :math:`t`
+:math:`K_1`            Demand-side linear product characteristics
+:math:`K_1^\text{ex}`  Exogenous demand-side linear product characteristics
+:math:`K_1^\text{en}`  Endogenous demand-side linear product characteristics
+:math:`K_2`            Demand-side nonlinear product characteristics
+:math:`K_3`            Supply-side product characteristics
+:math:`K_3^\text{ex}`  Exogenous supply-side product characteristics
+:math:`K_3^\text{en}`  Endogenous supply-side product characteristics
+:math:`D`              Demographic variables
+:math:`M_D`            Demand-side instruments
+:math:`M_S`            Supply-side instruments
+:math:`M_M`            Micro moments
+:math:`T_m`            Markets over which micro moment :math:`m` is averaged
+:math:`T_{mn}`         Markets over which micro moments :math:`m` and :math:`n` are both averaged
+:math:`M`              All moments
+:math:`E_D`            Absorbed dimensions of demand-side fixed effects
+:math:`E_S`            Absorbed dimensions of supply-side fixed effects
+:math:`H`              Nesting groups
+:math:`J_{ht}`         Products in nesting group :math:`h` and market :math:`t`
+:math:`C`              Clusters
+:math:`J_{ct}`         Products in cluster :math:`c` and market :math:`t`
+=====================  ==========================================================================
 
 
 Matrices, Vectors, and Scalars
@@ -82,9 +73,9 @@ Symbol                                                 Dimensions               
 :math:`\xi`                                            :math:`N \times 1`              Unobserved demand-side product characteristics
 :math:`\omega`                                         :math:`N \times 1`              Unobserved supply-side product characteristics
 :math:`p`                                              :math:`N \times 1`              Prices
-:math:`s` (:math:`s_{jt}`)                             :math:`N \times 1`              Marketshares
+:math:`s` (:math:`s_{jt}`)                             :math:`N \times 1`              Market shares
 :math:`s` (:math:`s_{ht}`)                             :math:`H \times 1`              Group shares in a market :math:`t`
-:math:`s` (:math:`s_{jti}`)                            :math:`N \times I_t`            Choice probabilities in a market :math:`t`
+:math:`s` (:math:`s_{ijt}`)                            :math:`N \times I_t`            Choice probabilities in a market :math:`t`
 :math:`c`                                              :math:`N \times 1`              Marginal costs
 :math:`\tilde{c}`                                      :math:`N \times 1`              Linear or log-linear marginal costs, :math:`c` or :math:`\log c` 
 :math:`\eta`                                           :math:`N \times 1`              Markup term from the BLP-markup equation
@@ -100,11 +91,11 @@ Symbol                                                 Dimensions               
 :math:`\delta`                                         :math:`N \times 1`              Mean utility
 :math:`\mu`                                            :math:`J_t \times I_t`          Agent-specific portion of utility in market :math:`t`
 :math:`\epsilon`                                       :math:`N \times 1`              Type I Extreme Value idiosyncratic preferences
-:math:`\bar{\epsilon}` (:math:`\bar{\epsilon}_{jti}`)  :math:`N \times 1`              Type I Extreme Value term used to decompose :math:`\epsilon`
-:math:`\bar{\epsilon}` (:math:`\bar{\epsilon}_{hti}`)  :math:`N \times 1`              Group-specific term used to decompose :math:`\epsilon`
+:math:`\bar{\epsilon}` (:math:`\bar{\epsilon}_{ijt}`)  :math:`N \times 1`              Type I Extreme Value term used to decompose :math:`\epsilon`
+:math:`\bar{\epsilon}` (:math:`\bar{\epsilon}_{iht}`)  :math:`N \times 1`              Group-specific term used to decompose :math:`\epsilon`
 :math:`U`                                              :math:`J_t \times I_t`          Indirect utilities
-:math:`V` (:math:`V_{jti}`)                            :math:`J_t \times I_t`          Indirect utilities minus :math:`\epsilon`
-:math:`V` (:math:`V_{hti}`)                            :math:`J_t \times I_t`          Inclusive value of a nesting group
+:math:`V` (:math:`V_{ijt}`)                            :math:`J_t \times I_t`          Indirect utilities minus :math:`\epsilon`
+:math:`V` (:math:`V_{iht}`)                            :math:`J_t \times I_t`          Inclusive value of a nesting group
 :math:`\pi` (:math:`\pi_{jt}`)                         :math:`N \times 1`              Population-normalized gross expected profits
 :math:`\pi` (:math:`\pi_{ft}`)                         :math:`F_t \times 1`            Population-normalized gross expected profits of a firm in market :math:`t`
 :math:`\beta`                                          :math:`K_1 \times 1`            Demand-side linear parameters

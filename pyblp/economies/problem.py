@@ -55,22 +55,22 @@ class ProblemEconomy(Economy):
             micro_moments: Sequence[Moment] = (), extra_micro_covariances: Optional[Any] = None) -> ProblemResults:
         r"""Solve the problem.
 
-        The problem is solved in one or more GMM steps. During each step, any parameters in :math:`\hat{\theta}` are
-        optimized to minimize the GMM objective value. If there are no parameters in :math:`\hat{\theta}` (for example,
-        in the logit model there are no nonlinear parameters and all linear parameters can be concentrated out), the
-        objective is evaluated once during the step.
+        The problem is solved in one or more GMM steps. During each step, any parameters in :math:`\theta` are optimized
+        to minimize the GMM objective value, giving the estimated :math:`\hat{\theta}`. If there are no parameters in
+        :math:`\theta` (for example, in the logit model there are no nonlinear parameters and all linear parameters can
+        be concentrated out), the objective is evaluated once during the step.
 
-        If there are nonlinear parameters, the mean utility, :math:`\delta(\hat{\theta})` is computed market-by-market
-        with fixed point iteration. Otherwise, it is computed analytically according to the solution of the logit model.
-        If a supply side is to be estimated, marginal costs, :math:`c(\hat{\theta})`, are also computed
-        market-by-market. Linear parameters are then estimated, which are used to recover structural error terms, which
-        in turn are used to form the objective value. By default, the objective gradient is computed as well.
+        If there are nonlinear parameters, the mean utility, :math:`\delta(\theta)` is computed market-by-market with
+        fixed point iteration. Otherwise, it is computed analytically according to the solution of the logit model. If a
+        supply side is to be estimated, marginal costs, :math:`c(\theta)`, are also computed market-by-market. Linear
+        parameters are then estimated, which are used to recover structural error terms, which in turn are used to form
+        the objective value. By default, the objective gradient is computed as well.
 
         .. note::
 
            This method supports :func:`parallel` processing. If multiprocessing is used, market-by-market computation of
-           :math:`\delta(\hat{\theta})` (and :math:`\tilde{c}(\hat{\theta})` if a supply side is estimated), along with
-           associated Jacobians, will be distributed among the processes.
+           :math:`\delta(\theta)` (and :math:`\tilde{c}(\theta)` if a supply side is estimated), along with associated
+           Jacobians, will be distributed among the processes.
 
         Parameters
         ----------
@@ -254,18 +254,17 @@ class ProblemEconomy(Economy):
                   time when, for example, there are a large number of parameters.
 
                 - ``'both'`` (default) - Also compute the Hessian with central finite differences after optimization
-                  finishes. Specifically, analytically compute the gradient :math:`2P` times, perturbing each of the
-                  :math:`P` parameters by :math:`\pm\sqrt{\epsilon^\text{mach}} / 2` where :math:`\epsilon^\text{mach}`
-                  is the machine precision.
+                  finishes. Specifically, perturb each parameter twice by :math:`\pm\sqrt{\epsilon^\text{mach}} / 2`
+                  where :math:`\epsilon^\text{mach}` is the machine precision.
 
         error_behavior : `str, optional`
             How to handle any errors. For example, there can sometimes be overflow or underflow when computing
-            :math:`\delta(\hat{\theta})` at a large :math:`\hat{\theta}`. The following behaviors are supported:
+            :math:`\delta(\theta)` at a large :math:`\hat{\theta}`. The following behaviors are supported:
 
                 - ``'revert'`` (default) - Revert problematic values to their last computed values. If there are
-                  problematic values during the first objective evaluation, revert values in
-                  :math:`\delta(\hat{\theta})` to their starting values; in :math:`\tilde{c}(\hat{\theta})`, to prices;
-                  in the objective, to ``1e10``; and in other matrices such as Jacobians, to zeros.
+                  problematic values during the first objective evaluation, revert values in :math:`\delta(\theta)` to
+                  their starting values; in :math:`\tilde{c}(\hat{\theta})`, to prices; in the objective, to ``1e10``;
+                  and in other matrices such as Jacobians, to zeros.
 
                 - ``'punish'`` - Set the objective to ``1`` and its gradient to all zeros. This option along with a
                   large ``error_punishment`` can be helpful for routines that do not use analytic gradients.
@@ -275,33 +274,33 @@ class ProblemEconomy(Economy):
         error_punishment : `float, optional`
             How to scale the GMM objective value after an error. By default, the objective value is not scaled.
         delta_behavior : `str, optional`
-            Configuration for the values at which the fixed point computation of :math:`\delta(\hat{\theta})` in each
-            market will start. This configuration is only relevant if there are unfixed nonlinear parameters over which
-            to optimize. The following behaviors are supported:
+            Configuration for the values at which the fixed point computation of :math:`\delta(\theta)` in each market
+            will start. This configuration is only relevant if there are unfixed nonlinear parameters over which to
+            optimize. The following behaviors are supported:
 
                 - ``'first'`` (default) - Start at the values configured by ``delta`` during the first GMM step, and at
                   the values computed by the last GMM step for each subsequent step.
 
-                - ``'last'`` - Start at the values of :math:`\delta(\hat{\theta})` computed during the last objective
+                - ``'last'`` - Start at the values of :math:`\delta(\theta)` computed during the last objective
                   evaluation, or, if this is the first evaluation, at the values configured by ``delta``. This behavior
                   tends to speed up computation but may introduce some instability into estimation.
 
         iteration : `Iteration, optional`
             :class:`Iteration` configuration for how to solve the fixed point problem used to compute
-            :math:`\delta(\hat{\theta})` in each market. This configuration is only relevant if there are nonlinear
+            :math:`\delta(\theta)` in each market. This configuration is only relevant if there are nonlinear
             parameters, since :math:`\delta` can be estimated analytically in the logit model. By default,
             ``Iteration('squarem', {'atol': 1e-14})`` is used. Newton-based routines such as ``Iteration('lm'`)`` that
             compute the Jacobian can often be faster (especially when there are nesting parameters), but the
-            non-Jacobian SQUAREM routine is used by default because it speed is often comparable and in practice it can
+            Jacobian-free SQUAREM routine is used by default because it speed is often comparable and in practice it can
             be slightly more stable.
         fp_type : `str, optional`
-            Configuration for the type of contraction mapping used to compute :math:`\delta(\hat{\theta})`. The
-            following types are supported:
+            Configuration for the type of contraction mapping used to compute :math:`\delta(\theta)`. The following
+            types are supported:
 
                 - ``'safe_linear'`` (default) - The standard linear contraction mapping in :eq:`contraction` (or
                   :eq:`nested_contraction` when there is nesting) with safeguards against numerical overflow.
-                  Specifically, :math:`\max_j V_{jti}` (or :math:`\max_j V_{jti} / (1 - \rho_{h(j)})` when there is
-                  nesting) is subtracted from :math:`V_{jti}` and the logit expression for choice probabilities in
+                  Specifically, :math:`\max_j V_{ijt}` (or :math:`\max_j V_{ijt} / (1 - \rho_{h(j)})` when there is
+                  nesting) is subtracted from :math:`V_{ijt}` and the logit expression for choice probabilities in
                   :eq:`probabilities` (or :eq:`nested_probabilities`) is re-scaled accordingly. Such re-scaling is known
                   as the log-sum-exp trick.
 
@@ -309,16 +308,16 @@ class ProblemEconomy(Economy):
                   This option may be preferable to ``'safe_linear'`` if utilities are reasonably small and unlikely to
                   create overflow problems.
 
-                - ``'nonlinear'`` - Iteration over :math:`\exp(\delta_{jt})` instead of :math:`\delta_{jt}`. This can be
+                - ``'nonlinear'`` - Iteration over :math:`\exp \delta_{jt}` instead of :math:`\delta_{jt}`. This can be
                   faster than ``'linear'`` because it involves fewer logarithms. Also, following
-                  :ref:`references:Brunner, Heiss, Romahn, and Weiser (2017)`, the :math:`\exp(\delta_{jt})` term can be
+                  :ref:`references:Brunner, Heiss, Romahn, and Weiser (2017)`, the :math:`\exp \delta_{jt}` term can be
                   cancelled out of the expression because it also appears in the numerator of :eq:`probabilities` in the
-                  definition of :math:`s_{jt}(\delta, \hat{\theta})`. This second trick only works when there are no
+                  definition of :math:`s_{jt}(\delta, \theta)`. This second trick only works when there are no
                   nesting parameters.
 
                 - ``'safe_nonlinear'`` - Exponentiated version with minimal safeguards against numerical overflow.
-                  Specifically, :math:`\max_j \mu_{jti}` is subtracted from :math:`\mu_{jti}`. This helps with stability
-                  but is less helpful than subtracting from the full :math:`V_{jti}`, so this version is less stable
+                  Specifically, :math:`\max_j \mu_{ijt}` is subtracted from :math:`\mu_{ijt}`. This helps with stability
+                  but is less helpful than subtracting from the full :math:`V_{ijt}`, so this version is less stable
                   than ``'safe_linear'``.
 
             This option is only relevant if ``sigma`` or ``pi`` are specified because :math:`\delta` can be estimated
@@ -347,7 +346,7 @@ class ProblemEconomy(Economy):
             are floats or ``None``. This is only relevant if :math:`X_3` was formulated by ``product_formulations`` in
             :class:`Problem`. By default, marginal costs are unbounded.
 
-            When ``costs_type`` in :class:`Problem` is ``'log'``, nonpositive :math:`c(\hat{\theta})` values can create
+            When ``costs_type`` in :class:`Problem` is ``'log'``, nonpositive :math:`c(\theta)` values can create
             problems when computing :math:`\tilde{c}(\theta) = \log c(\theta)`. One solution is to set ``lb`` to a small
             number. Rows in Jacobians associated with clipped marginal costs will be zero.
 
@@ -1100,22 +1099,22 @@ class Problem(ProblemEconomy):
         the mean parameter for the lognormal random coefficient on negative prices, :math:`-p_{jt}`.
 
     epsilon_scale : `float, optional`
-        Factor by which the Type I Extreme Value idiosyncratic preference term, :math:`\epsilon_{jti}`, is scaled. By
-        default, :math:`\epsilon_{jti}` is not scaled. The typical use of this parameter is to approximate the pure
+        Factor by which the Type I Extreme Value idiosyncratic preference term, :math:`\epsilon_{ijt}`, is scaled. By
+        default, :math:`\epsilon_{ijt}` is not scaled. The typical use of this parameter is to approximate the pure
         characteristics model of :ref:`references:Berry and Pakes (2007)` by choosing a value smaller than ``1.0``. As
         this scaling factor approaches zero, the model approaches the pure characteristics model in which there is no
         idiosyncratic preference term.
 
-        In practice, this is implemented by dividing :math:`V_{jti} = \delta_{jt} + \mu_{jti}` by the scaling factor
+        In practice, this is implemented by dividing :math:`V_{ijt} = \delta_{jt} + \mu_{ijt}` by the scaling factor
         when solving for the mean utility :math:`\delta_{jt}`. For small scaling factors, this leads to large values
-        of :math:`V_{jti}`, which when exponentiated in the logit expression can lead to overflow issues discussed in
+        of :math:`V_{ijt}`, which when exponentiated in the logit expression can lead to overflow issues discussed in
         :ref:`references:Berry and Pakes (2007)`. The safe versions of the contraction mapping discussed in the
         documentation for ``fp_type`` in :meth:`Problem.solve` (which is used by default) eliminate overflow issues at
         the cost of introducing fewer (but still common for a small scaling factor) underflow issues. Throughout the
-        contraction mapping, some values of the simulated shares :math:`s_{jt}(\delta, \hat{\theta})` can underflow to
-        zero, causing the contraction to fail when taking logs. By default, ``shares_bounds`` in :meth:`Problem.solve`
-        bounds these simulated shares from below by ``1e-300``, which eliminates these underflow issues at the cost
-        of making it more difficult for iteration routines to converge.
+        contraction mapping, some values of the simulated shares :math:`s_{jt}(\delta, \theta)` can underflow to zero,
+        causing the contraction to fail when taking logs. By default, ``shares_bounds`` in :meth:`Problem.solve` bounds
+        these simulated shares from below by ``1e-300``, which eliminates these underflow issues at the cost of making
+        it more difficult for iteration routines to converge.
 
         With this in mind, scaling epsilon is not supported for nonlinear contractions, and is also not supported when
         there are nesting groups, since these further complicate the problem. In practice, if the goal is to approximate
@@ -1181,7 +1180,7 @@ class Problem(ProblemEconomy):
     distributions : `list of str`
         Random coefficient distributions.
     epsilon_scale : `float`
-        Factor by which the Type I Extreme Value idiosyncratic preference term, :math:`\epsilon_{jti}`, is scaled.
+        Factor by which the Type I Extreme Value idiosyncratic preference term, :math:`\epsilon_{ijt}`, is scaled.
     costs_type : `str`
         Functional form of the marginal cost function :math:`\tilde{c} = f(c)`.
     T : `int`

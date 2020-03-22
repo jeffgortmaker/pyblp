@@ -75,21 +75,21 @@ class ProblemResults(Results):
     cumulative_objective_evaluations : `int`
         Sum of :attr:`ProblemResults.objective_evaluations` for this step and all prior steps.
     fp_converged : `ndarray`
-        Flags for convergence of the iteration routine used to compute :math:`\delta(\hat{\theta})` in each market
-        during each objective evaluation. Rows are in the same order as :attr:`Problem.unique_market_ids` and column
-        indices correspond to objective evaluations.
+        Flags for convergence of the iteration routine used to compute :math:`\delta(\theta)` in each market during each
+        objective evaluation. Rows are in the same order as :attr:`Problem.unique_market_ids` and column indices
+        correspond to objective evaluations.
     cumulative_fp_converged : `ndarray`
         Concatenation of :attr:`ProblemResults.fp_converged` for this step and all prior steps.
     fp_iterations : `ndarray`
-        Number of major iterations completed by the iteration routine used to compute :math:`\delta(\hat{\theta})` in
-        each market during each objective evaluation. Rows are in the same order as
-        :attr:`Problem.unique_market_ids` and column indices correspond to objective evaluations.
+        Number of major iterations completed by the iteration routine used to compute :math:`\delta(\theta)` in each
+        market during each objective evaluation. Rows are in the same order as :attr:`Problem.unique_market_ids` and
+        column indices correspond to objective evaluations.
     cumulative_fp_iterations : `ndarray`
         Concatenation of :attr:`ProblemResults.fp_iterations` for this step and all prior steps.
     contraction_evaluations : `ndarray`
-        Number of times the contraction used to compute :math:`\delta(\hat{\theta})` was evaluated in each market during
-        each objective evaluation. Rows are in the same order as :attr:`Problem.unique_market_ids` and column
-        indices correspond to objective evaluations.
+        Number of times the contraction used to compute :math:`\delta(\theta)` was evaluated in each market during each
+        objective evaluation. Rows are in the same order as :attr:`Problem.unique_market_ids` and column indices
+        correspond to objective evaluations.
     cumulative_contraction_evaluations : `ndarray`
         Concatenation of :attr:`ProblemResults.contraction_evaluations` for this step and all prior steps.
     parameters : `ndarray`
@@ -568,12 +568,13 @@ class ProblemResults(Results):
                 'converged', 'cumulative_converged', 'optimization_iterations', 'cumulative_optimization_iterations',
                 'objective_evaluations', 'cumulative_objective_evaluations', 'fp_converged', 'cumulative_fp_converged',
                 'fp_iterations', 'cumulative_fp_iterations', 'contraction_evaluations',
-                'cumulative_contraction_evaluations', 'parameters', 'parameter_covariances', 'theta', 'sigma', 'pi',
-                'rho', 'beta', 'gamma', 'sigma_se', 'pi_se', 'rho_se', 'beta_se', 'gamma_se', 'sigma_bounds',
-                'pi_bounds', 'rho_bounds', 'beta_bounds', 'gamma_bounds', 'delta', 'tilde_costs', 'clipped_shares',
-                'clipped_costs', 'xi', 'omega', 'micro', 'objective', 'xi_by_theta_jacobian', 'omega_by_theta_jacobian',
-                'micro_by_theta_jacobian', 'gradient', 'projected_gradient', 'projected_gradient_norm', 'hessian',
-                'reduced_hessian', 'reduced_hessian_eigenvalues', 'W', 'updated_W'
+                'cumulative_contraction_evaluations', 'parameters', 'parameter_covariances', 'theta', 'sigma',
+                'sigma_squared', 'pi', 'rho', 'beta', 'gamma', 'sigma_se', 'sigma_squared_se', 'pi_se', 'rho_se',
+                'beta_se', 'gamma_se', 'sigma_bounds', 'pi_bounds', 'rho_bounds', 'beta_bounds', 'gamma_bounds',
+                'delta', 'tilde_costs', 'clipped_shares', 'clipped_costs', 'xi', 'omega', 'micro', 'objective',
+                'xi_by_theta_jacobian', 'omega_by_theta_jacobian', 'micro_by_theta_jacobian', 'gradient',
+                'projected_gradient', 'projected_gradient_norm', 'hessian', 'reduced_hessian',
+                'reduced_hessian_eigenvalues', 'W', 'updated_W'
             )) -> dict:
         """Convert these results into a dictionary that maps attribute names to values.
 
@@ -640,15 +641,15 @@ class ProblemResults(Results):
 
         Following :ref:`references:Newey and West (1987)`, the distance or likelihood ratio-like statistic is
 
-        .. math:: \text{LR} = J(\hat{\theta^r}) - J(\hat{\theta^u})
+        .. math:: \text{LR} = J(\hat{\theta}^r) - J(\hat{\theta}^u)
 
-        where :math:`J(\hat{\theta^r})` is the :math:`J` statistic defined in :eq:`J` for this restricted model and
-        :math:`J(\hat{\theta^u})` is the :math:`J` statistic for the unrestricted model.
+        where :math:`J(\hat{\theta}^r)` is the :math:`J` statistic defined in :eq:`J` for this restricted model and
+        :math:`J(\hat{\theta}^u)` is the :math:`J` statistic for the unrestricted model.
 
         .. note::
 
            The statistic can equivalently be written as
-           :math:`\text{LR} = N[q(\hat{\theta^r}) - q(\hat{\theta^u})]` where the GMM objective value is defined in
+           :math:`\text{LR} = N[q(\hat{\theta}^r) - q(\hat{\theta}^u)]` where the GMM objective value is defined in
            :eq:`objective`, or the same but without the :math:`N` if the GMM objective value was scaled by :math:`N`,
            which is the default behavior.
 
@@ -787,7 +788,7 @@ class ProblemResults(Results):
         compute the implied mean utility, :math:`\delta`, and shares, :math:`s`. If a supply side was estimated, the
         implied marginal costs, :math:`c`, and prices, :math:`p`, are computed as well by iterating over the
         :math:`\zeta`-markup contraction in :eq:`zeta_contraction`. If marginal costs depend on prices through
-        marketshares, they will be updated to reflect different prices during each iteration of the routine.
+        market shares, they will be updated to reflect different prices during each iteration of the routine.
 
         .. note::
 
@@ -954,7 +955,7 @@ class ProblemResults(Results):
         The expectation is taken by approximating an integral over the joint density of :math:`\xi` and :math:`\omega`.
         For each error term realization, if not already estimated, equilibrium prices and shares are computed by
         iterating over the :math:`\zeta`-markup contraction in :eq:`zeta_contraction`. If marginal costs depend on
-        prices through marketshares, they will be updated to reflect different prices during each iteration of the
+        prices through market shares, they will be updated to reflect different prices during each iteration of the
         routine.
 
         The expected Jacobians are estimated with the average over all computed Jacobian realizations. The
@@ -1259,20 +1260,20 @@ class ProblemResults(Results):
 
         Importance sampling is done with the accept/reject procedure of
         :ref:`references:Berry, Levinsohn, and Pakes (1995)`. First, ``agent_data`` and/or ``integration`` are used to
-        provide a large number of candidate sampling nodes :math:`\nu_{it}` and any demographics :math:`d_{it}`.
+        provide a large number of candidate sampling nodes :math:`\nu` and any demographics :math:`d`.
 
         Out of these candidate agent data, each candidate agent :math:`i` in market :math:`t` is accepted with
-        probability :math:`\frac{1 - s_{0ti}}{M}` where :math:`M \geq 1` is some accept-reject constant. The probability
-        of choosing an inside good :math:`1 - s_{0ti}`, is evaluated at the estimated :math:`\hat{\theta}` and
-        :math:`\hat{\delta}(\hat{\theta})`.
+        probability :math:`\frac{1 - s_{i0t}}{M}` where :math:`M \geq 1` is some accept-reject constant. The probability
+        of choosing an inside good :math:`1 - s_{i0t}`, is evaluated at the estimated :math:`\hat{\theta}` and
+        :math:`\delta(\hat{\theta})`.
 
         Optionally, :meth:`ProblemResults.compute_delta` can be used to provide a more precise
-        :math:`\hat{\delta}(\hat{\theta})` than the estimated :attr:`ProblemResults.delta`. The idea is that more
-        precise agent data (i.e., more integration nodes) would be infeasible to use during estimation, but is feasible
-        here because :math:`\hat{\delta}(\hat{\theta})` only needs to be computed once given a :math:`\hat{\theta}`.
+        :math:`\delta(\hat{\theta})` than the estimated :attr:`ProblemResults.delta`. The idea is that more precise
+        agent data (i.e., more integration nodes) would be infeasible to use during estimation, but is feasible here
+        because :math:`\delta(\hat{\theta})` only needs to be computed once given a :math:`\hat{\theta}`.
 
         Out of the remaining accepted agents, :math:`I_t` equal to ``draws`` are randomly selected within each market
-        :math:`t` and assigned integration weights :math:`w_{it} = \frac{1}{I_t} \cdot \frac{1 - s_{0t}}{1 - s_{0ti}}`.
+        :math:`t` and assigned integration weights :math:`w_{it} = \frac{1}{I_t} \cdot \frac{1 - s_{0t}}{1 - s_{i0t}}`.
 
         If this procedure accepts fewer than ``draws`` agents in a market, an exception will be raised. A good rule of
         thumb is to provide more candidate draws in each market than :math:`\frac{M \times I_t}{1 - s_{0t}}`.
@@ -1295,8 +1296,8 @@ class ProblemResults(Results):
             replace any ``nodes`` field in ``sampling_agent_data``. This configuration is required if
             ``sampling_agent_data`` is specified without a ``nodes`` field.
         delta : `array-like, optional`
-            More precise :math:`\hat{\delta}(\hat{\theta})` than the estimated :attr:`ProblemResults.delta`, which can
-            be computed by passing a more precise integration rule to :meth:`ProblemResults.compute_delta`. By default,
+            More precise :math:`\delta(\hat{\theta})` than the estimated :attr:`ProblemResults.delta`, which can be
+            computed by passing a more precise integration rule to :meth:`ProblemResults.compute_delta`. By default,
             :attr:`ProblemResults.delta` is used.
 
         Returns

@@ -64,8 +64,8 @@ def build_ownership(
     r"""Build ownership matrices, :math:`O`.
 
     Ownership or product holding matrices are defined by their cooperation matrix counterparts, :math:`\kappa`. For each
-    market :math:`t`, :math:`\mathscr{H}_{jk} = \kappa_{fg}` where :math:`j \in \mathscr{J}_{ft}`, the set of products
-    produced by firm :math:`f` in the market, and similarly, :math:`g \in \mathscr{J}_{gt}`.
+    market :math:`t`, :math:`\mathscr{H}_{jk} = \kappa_{fg}` where :math:`j \in J_{ft}`, the set of products
+    produced by firm :math:`f` in the market, and similarly, :math:`g \in J_{gt}`.
 
     Parameters
     ----------
@@ -184,12 +184,12 @@ def build_blp_instruments(formulation: Formulation, product_data: Mapping) -> Ar
        constant column of firm IDs and keep only the first half of the instrument columns.
 
     Let :math:`x_{jt}` be the vector of characteristics in :math:`X` for product :math:`j` in market :math:`t`, which is
-    produced by firm :math:`f`. That is, :math:`j \in \mathscr{J}_{ft}`. Then,
+    produced by firm :math:`f`. That is, :math:`j \in J_{ft}`. Then,
 
     .. math::
 
-       Z_{jt}^\text{BLP,Other}(X) = \sum_{k \in \mathscr{J}_{ft} \setminus \{j\}} x_{kt}, \\
-       Z_{jt}^\text{BLP,Rival}(X) = \sum_{k \notin \mathscr{J}_{ft}} x_{kt}.
+       Z_{jt}^\text{BLP,Other}(X) = \sum_{k \in J_{ft} \setminus \{j\}} x_{kt}, \\
+       Z_{jt}^\text{BLP,Rival}(X) = \sum_{k \notin J_{ft}} x_{kt}.
 
     .. note::
 
@@ -273,16 +273,16 @@ def build_differentiation_instruments(
        goods, specify a constant column of firm IDs and keep only the first half of the instrument columns.
 
     Let :math:`x_{jt\ell}` be characteristic :math:`\ell` in :math:`X` for product :math:`j` in market :math:`t`, which
-    is produced by firm :math:`f`. That is, :math:`j \in \mathscr{J}_{ft}`. Then in the "local" version of
+    is produced by firm :math:`f`. That is, :math:`j \in J_{ft}`. Then in the "local" version of
     :math:`Z^\text{Diff}(X)`,
 
     .. math::
        :label: local_instruments
 
        Z_{jt\ell}^\text{Local,Other}(X) =
-       \sum_{k \in \mathscr{J}_{ft} \setminus \{j\}} 1(|d_{jkt\ell}| < \text{SD}_\ell), \\
+       \sum_{k \in J_{ft} \setminus \{j\}} 1(|d_{jkt\ell}| < \text{SD}_\ell), \\
        Z_{jt\ell}^\text{Local,Rival}(X) =
-       \sum_{k \notin \mathscr{J}_{ft}} 1(|d_{jkt\ell}| < \text{SD}_\ell),
+       \sum_{k \notin J_{ft}} 1(|d_{jkt\ell}| < \text{SD}_\ell),
 
     where :math:`d_{jkt\ell} = x_{kt\ell} - x_{jt\ell}` is the difference between products :math:`j` and :math:`k` in
     terms of characteristic :math:`\ell`, :math:`\text{SD}_\ell` is the standard deviation of these pairwise differences
@@ -296,8 +296,8 @@ def build_differentiation_instruments(
     .. math::
        :label: quadratic_instruments
 
-       Z_{jtk}^\text{Quad,Other}(X) = \sum_{k \in \mathscr{J}_{ft} \setminus\{j\}} d_{jkt\ell}^2, \\
-       Z_{jtk}^\text{Quad,Rival}(X) = \sum_{k \notin \mathscr{J}_{ft}} d_{jkt\ell}^2.
+       Z_{jtk}^\text{Quad,Other}(X) = \sum_{k \in J_{ft} \setminus\{j\}} d_{jkt\ell}^2, \\
+       Z_{jtk}^\text{Quad,Rival}(X) = \sum_{k \notin J_{ft}} d_{jkt\ell}^2.
 
     With interaction terms, which reflect covariances between different characteristics, the summands for the "local"
     versions are :math:`1(|d_{jkt\ell}| < \text{SD}_\ell) \times d_{jkt\ell'}` for all characteristics :math:`\ell'`,

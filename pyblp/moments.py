@@ -83,7 +83,7 @@ class FirstChoiceCovarianceMoment(Moment):
     where :math:`\bar{z}_t = \sum_i w_{it} z_{it}`, :math:`\bar{y}_t = \sum_i w_{it} y_{it}`, and conditional on
     purchasing an inside good, the expected value of :math:`x_{jt}` for agent :math:`i` is
 
-    .. math:: z_{it} = \sum_{j=1}^{J_t} x_{jt}s_{j(-0)ti}
+    .. math:: z_{it} = \sum_{j \in J_t} x_{jt}s_{j(-0)ti}
 
     where :math:`s_{j(-0)ti}` is the probability of choosing :math:`j` when the outside option is removed from the
     choice set.
@@ -91,14 +91,14 @@ class FirstChoiceCovarianceMoment(Moment):
     When the moment is constructed with a constant product characteristic :math:`x_{jt} = 1` and without conditioning on
     purchasing an inside good, this expression simplifies to
 
-    .. math:: g_{M,mti} = -(s_{0ti} - s_{0t})(y_{it} - \bar{y}_t) - \sigma_{xy},
+    .. math:: g_{M,mti} = -(s_{i0t} - s_{0t})(y_{it} - \bar{y}_t) - \sigma_{xy},
 
     which is negative the covariance between the demographic and the probability of purchasing the outside good, or
     equivalently, the covariance between the demographic and the probability of purchasing any inside good. The outside
-    good share is :math:`s_{0t} = \sum_i w_{it} s_{0ti} = 1 - \sum_j s_{jt}`.
+    good share is :math:`s_{0t} = \sum_i w_{it} s_{i0t} = 1 - \sum_j s_{jt}`.
 
-    Integrals of these micro moments are approximated within and averaged across a set :math:`\mathscr{T}_m` of markets
-    in which the micro data used to compute :math:`\sigma_{xy}` is relevant, which gives :math:`\bar{g}_{M,m}` in
+    Integrals of these micro moments are approximated within and averaged across a set :math:`T_m` of markets in which
+    the micro data used to compute :math:`\sigma_{xy}` is relevant, which gives :math:`\bar{g}_{M,m}` in
     :eq:`averaged_micro_moments`.
 
     Parameters

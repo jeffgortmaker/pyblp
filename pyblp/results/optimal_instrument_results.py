@@ -51,7 +51,7 @@ class OptimalInstrumentResults(StringRepresentation):
         Vector of expected prices conditional on all exogenous variables, :math:`E[p \mid Z]`, which may have been
         specified in :meth:`ProblemResults.compute_optimal_instruments`.
     expected_shares : `ndarray`
-        Vector of expected marketshares conditional on all exogenous variables, :math:`E[s \mid Z]`.
+        Vector of expected market shares conditional on all exogenous variables, :math:`E[s \mid Z]`.
     computation_time : `float`
         Number of seconds it took to compute optimal excluded instruments.
     draws : `int`
@@ -217,7 +217,7 @@ class OptimalInstrumentResults(StringRepresentation):
                is only relevant if ``shares`` were included in the formulation for :math:`X_3` in :class:`Problem`.
                The corresponding optimal instruments are simply an integral of the endogenous product characteristics,
                :math:`X_3^\text{en}`, over the joint density of :math:`\xi` and :math:`\omega`. The approximation of
-               these optimal instruments is simply :math:`X_3^\text{en}` evaluated at the marketshares that arise under
+               these optimal instruments is simply :math:`X_3^\text{en}` evaluated at the market shares that arise under
                the constant vector of expected prices, :math:`E[p \mid Z]`, specified in
                :meth:`ProblemResults.compute_optimal_instruments`.
 

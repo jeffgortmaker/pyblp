@@ -39,11 +39,13 @@ class ImportanceSamplingResults(StringRepresentation):
         Sum of weights in each market: :math:`\sum_i w_{it}`. If importance sampling was successful, weights should not
         sum to numbers too far from one.
     effective_draws : `ndarray`
-        Effective sample sizes in each market: :math:`\frac{(\sum_i w_{it})^2}{\sum_i w_i^2}`.
+        Effective sample sizes in each market: :math:`\frac{(\sum_i w_{it})^2}{\sum_i w_{it}^2}`.
     effective_draws_for_variance : `ndarray`
-        Effective sample sizes for variance estimates in each market: :math:`\frac{(\sum_i w_i^2)^2}{\sum_i w_i^4}`.
+        Effective sample sizes for variance estimates in each market:
+        :math:`\frac{(\sum_i w_{it}^2)^2}{\sum_i w_{it}^4}`.
     effective_draws_for_skewness : `ndarray`
-        Effective sample sizes for gauging skewness in each market: :math:`\frac{(\sum_i w_i^2)^3}{(\sum_i w_i^3)^2}`.
+        Effective sample sizes for gauging skewness in each market:
+        :math:`\frac{(\sum_i w_{it}^2)^3}{(\sum_i w_{it}^3)^2}`.
 
     Examples
     --------

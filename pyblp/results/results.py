@@ -82,7 +82,7 @@ class Results(abc.ABC, StringRepresentation):
 
         In market :math:`t`, the aggregate elasticity of demand is
 
-        .. math:: \mathscr{E} = \sum_{j=1}^{J_t} \frac{s_{jt}(x + \Delta x) - s_{jt}}{\Delta},
+        .. math:: \mathscr{E} = \sum_{j \in J_t} \frac{s_{jt}(x + \Delta x) - s_{jt}}{\Delta},
 
         in which :math:`\Delta` is a scalar factor and :math:`s_{jt}(x + \Delta x)` is the share of product :math:`j` in
         market :math:`t`, evaluated at the scaled values of the variable.
@@ -120,9 +120,9 @@ class Results(abc.ABC, StringRepresentation):
     def compute_elasticities(self, name: str = 'prices', market_id: Optional[Any] = None) -> Array:
         r"""Estimate matrices of elasticities of demand, :math:`\varepsilon`, with respect to a variable, :math:`x`.
 
-        For each market, the value in row :math:`j` and column :math:`k` of :math:`\varepsilon` is
+        In market :math:`t`, the value in row :math:`j` and column :math:`k` of :math:`\varepsilon` is
 
-        .. math:: \varepsilon_{jk} = \frac{x_k}{s_j}\frac{\partial s_j}{\partial x_k}.
+        .. math:: \varepsilon_{jk} = \frac{x_{kt}}{s_{jt}}\frac{\partial s_{jt}}{\partial x_{kt}}.
 
         Parameters
         ----------
@@ -153,13 +153,19 @@ class Results(abc.ABC, StringRepresentation):
     def compute_diversion_ratios(self, name: str = 'prices', market_id: Optional[Any] = None) -> Array:
         r"""Estimate matrices of diversion ratios, :math:`\mathscr{D}`, with respect to a variable, :math:`x`.
 
-        For each market, the value in row :math:`j` and column :math:`k \neq j` is
+        In market :math:`t`, the value in row :math:`j` and column :math:`k \neq j` is
 
-        .. math:: \mathscr{D}_{jk} = -\frac{\partial s_k}{\partial x_j} \Big/ \frac{\partial s_j}{\partial x_j}.
+        .. math::
+
+           \mathscr{D}_{jk} =
+           -\frac{\partial s_{kt}}{\partial x_{jt}} \Big/ \frac{\partial s_{jt}}{\partial x_{jt}}.
 
         Diversion ratios for the outside good are reported on diagonals:
 
-        .. math:: \mathscr{D}_{jj} = -\frac{\partial s_0}{\partial x_j} \Big/ \frac{\partial s_j}{\partial x_j}.
+        .. math::
+
+           \mathscr{D}_{jj} =
+           -\frac{\partial s_{0t}}{\partial x_{jt}} \Big/ \frac{\partial s_{jt}}{\partial x_{jt}}.
 
         Unlike :meth:`ProblemResults.compute_long_run_diversion_ratios`, this gives the marginal treatment effect (MTE)
         version of the diversion ratio. For more information, see :ref:`references:Conlon and Mortimer (2018)`.
@@ -193,14 +199,14 @@ class Results(abc.ABC, StringRepresentation):
     def compute_long_run_diversion_ratios(self, market_id: Optional[Any] = None) -> Array:
         r"""Estimate matrices of long-run diversion ratios, :math:`\bar{\mathscr{D}}`.
 
-        For each market, the value in row :math:`j` and column :math:`k \neq j` is
+        In market :math:`t`, the value in row :math:`j` and column :math:`k \neq j` is
 
-        .. math:: \bar{\mathscr{D}}_{jk} = \frac{s_{k(-j)} - s_k}{s_j},
+        .. math:: \bar{\mathscr{D}}_{jk} = \frac{s_{k(-j)t} - s_{kt}}{s_{jt}},
 
-        in which :math:`s_{k(-j)}` is the share of product :math:`k` computed with :math:`j` removed from the choice
+        in which :math:`s_{k(-j)t}` is the share of product :math:`k` computed with :math:`j` removed from the choice
         set. Long-run diversion ratios for the outside good are reported on diagonals:
 
-        .. math:: \bar{\mathscr{D}}_{jj} = \frac{s_{0(-j)} - s_0}{s_j}.
+        .. math:: \bar{\mathscr{D}}_{jj} = \frac{s_{0(-j)t} - s_0}{s_{jt}}.
 
         Unlike :meth:`ProblemResults.compute_diversion_ratios`, this gives the average treatment effect (ATE) version of
         the diversion ratio. For more information, see :ref:`references:Conlon and Mortimer (2018)`.
@@ -233,7 +239,7 @@ class Results(abc.ABC, StringRepresentation):
 
         For each market, the value in row :math:`j` and column `i` is given by :eq:`probabilities` when there are random
         coefficients, and by :eq:`nested_probabilities` when there is additionally a nested structure. For the logit
-        and nested logit models, choice probabilities are marketshares.
+        and nested logit models, choice probabilities are market shares.
 
         Parameters
         ----------
@@ -266,7 +272,7 @@ class Results(abc.ABC, StringRepresentation):
             Stacked matrices, such as estimates of :math:`\varepsilon`, computed by
             :meth:`ProblemResults.compute_elasticities`; :math:`\mathscr{D}`, computed by
             :meth:`ProblemResults.compute_diversion_ratios`; :math:`\bar{\mathscr{D}}`, computed by
-            :meth:`ProblemResults.compute_long_run_diversion_ratios`; or :math:`s_{jti}` computed by
+            :meth:`ProblemResults.compute_long_run_diversion_ratios`; or :math:`s_{ijt}` computed by
             :meth:`ProblemResults.compute_probabilities`.
 
         Returns
@@ -295,7 +301,7 @@ class Results(abc.ABC, StringRepresentation):
             Stacked matrices, such as estimates of :math:`\varepsilon`, computed by
             :meth:`ProblemResults.compute_elasticities`; :math:`\mathscr{D}`, computed by
             :meth:`ProblemResults.compute_diversion_ratios`; :math:`\bar{\mathscr{D}}`, computed by
-            :meth:`ProblemResults.compute_long_run_diversion_ratios`; or :math:`s_{jti}` computed by
+            :meth:`ProblemResults.compute_long_run_diversion_ratios`; or :math:`s_{ijt}` computed by
             :meth:`ProblemResults.compute_probabilities`.
 
         Returns
@@ -511,7 +517,7 @@ class Results(abc.ABC, StringRepresentation):
             Potentially changed marginal costs, :math:`c^*`. By default, unchanged marginal costs are computed with
             :meth:`ProblemResults.compute_costs`. Costs under a changed ownership structure can be computed by
             specifying the ``firm_ids`` or ``ownership`` arguments of :meth:`ProblemResults.compute_costs`. If marginal
-            costs depend on prices through marketshares, they will be updated to reflect different prices during each
+            costs depend on prices through market shares, they will be updated to reflect different prices during each
             iteration of the routine. Updated marginal costs can be obtained by instead using
             :meth:`Simulation.replace_endogenous`.
         prices : `array-like, optional`
@@ -615,7 +621,7 @@ class Results(abc.ABC, StringRepresentation):
 
         The index in market :math:`t` is
 
-        .. math:: \text{HHI} = 10,000 \times \sum_{f=1}^{F_t} \left(\sum_{j \in \mathscr{J}_{ft}} s_j\right)^2.
+        .. math:: \text{HHI} = \text{10,000} \times \sum_{f \in F_t} \left(\sum_{j \in J_{ft}} s_{jt}\right)^2.
 
         Parameters
         ----------
@@ -728,25 +734,25 @@ class Results(abc.ABC, StringRepresentation):
 
         Assuming away nonlinear income effects, the surplus in market :math:`t` is
 
-        .. math:: \text{CS} = \sum_{i=1}^{I_t} w_{it}\text{CS}_{it},
+        .. math:: \text{CS} = \sum_{i \in I_t} w_{it}\text{CS}_{it},
 
         in which the consumer surplus for individual :math:`i` is
 
         .. math::
 
            \text{CS}_{it} =
-           \log\left(1 + \sum_{j=1}^{J_t} \exp V_{jti}\right) \Big/
-           \left(-\frac{\partial V_{1ti}}{\partial p_{1t}}\right),
+           \log\left(1 + \sum_{j \in J_t} \exp V_{ijt}\right) \Big/
+           \left(-\frac{\partial V_{i1t}}{\partial p_{1t}}\right),
 
         or with nesting parameters,
 
         .. math::
 
            \text{CS}_{it} =
-           \log\left(1 + \sum_{h=1}^H \exp V_{hti}\right) \Big/
-           \left(-\frac{\partial V_{1ti}}{\partial p_{1t}}\right)
+           \log\left(1 + \sum_{h \in H} \exp V_{iht}\right) \Big/
+           \left(-\frac{\partial V_{i1t}}{\partial p_{1t}}\right)
 
-        where :math:`V_{jti}` is defined in :eq:`utilities` and :math:`V_{hti}` is defined in :eq:`inclusive_value`.
+        where :math:`V_{ijt}` is defined in :eq:`utilities` and :math:`V_{iht}` is defined in :eq:`inclusive_value`.
 
         .. warning::
 

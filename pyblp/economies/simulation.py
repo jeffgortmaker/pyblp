@@ -40,9 +40,9 @@ class Simulation(Economy):
            :meth:`Problem.solve` to evaluate in a Monte Carlo study how well the true parameters can be recovered.
 
     If data for variables (used to formulate product characteristics in :math:`X_1`, :math:`X_2`, and :math:`X_3`, as
-    well as agent demographics, :math:`d`, and endogenous prices and marketshares :math:`p` and :math:`s`) are not
+    well as agent demographics, :math:`d`, and endogenous prices and market shares :math:`p` and :math:`s`) are not
     provided, the values for each unspecified variable are drawn independently from the standard uniform distribution.
-    In each market :math:`t`, marketshares are divided by the number of products in the market :math:`J_t`. Typically,
+    In each market :math:`t`, market shares are divided by the number of products in the market :math:`J_t`. Typically,
     :meth:`Simulation.replace_endogenous` is used to replace prices and shares with equilibrium values that are
     consistent with true parameters.
 
@@ -209,8 +209,8 @@ class Simulation(Economy):
         the mean parameter for the lognormal random coefficient on negative prices, :math:`-p_{jt}`.
 
     epsilon_scale : `float, optional`
-        Factor by which the Type I Extreme Value idiosyncratic preference term, :math:`\epsilon_{jti}`, is scaled. By
-        default, :math:`\epsilon_{jti}` is not scaled. The typical use of this parameter is to approximate the pure
+        Factor by which the Type I Extreme Value idiosyncratic preference term, :math:`\epsilon_{ijt}`, is scaled. By
+        default, :math:`\epsilon_{ijt}` is not scaled. The typical use of this parameter is to approximate the pure
         characteristics model of :ref:`references:Berry and Pakes (2007)` by choosing a value smaller than ``1.0``. As
         this scaling factor approaches zero, the model approaches the pure characteristics model in which there is no
         idiosyncratic preference term.
@@ -280,7 +280,7 @@ class Simulation(Economy):
     distributions : `list of str`
         Random coefficient distributions.
     epsilon_scale : `float`
-        Factor by which the Type I Extreme Value idiosyncratic preference term, :math:`\epsilon_{jti}`, is scaled.
+        Factor by which the Type I Extreme Value idiosyncratic preference term, :math:`\epsilon_{ijt}`, is scaled.
     costs_type : `str`
         Functional form of the marginal cost function :math:`\tilde{c} = f(c)`.
     T : `int`
@@ -501,9 +501,9 @@ class Simulation(Economy):
     def replace_endogenous(
             self, costs: Optional[Any] = None, prices: Optional[Any] = None, iteration: Optional[Iteration] = None,
             error_behavior: str = 'raise') -> SimulationResults:
-        r"""Replace simulated prices and marketshares with equilibrium values that are consistent with true parameters.
+        r"""Replace simulated prices and market shares with equilibrium values that are consistent with true parameters.
 
-        This method is the standard way of solving the simulation. Prices and marketshares are computed in each market
+        This method is the standard way of solving the simulation. Prices and market shares are computed in each market
         by iterating over the :math:`\zeta`-markup contraction in :eq:`zeta_contraction`:
 
         .. math:: p \leftarrow c + \zeta(p).
@@ -525,7 +525,8 @@ class Simulation(Economy):
             Marginal costs, :math:`c`. By default, :math:`c = X_3\gamma + \omega` if ``costs_type`` was ``'linear'`` in
             :class:`Simulation` (the default), and the exponential of this if it was ``'log'``. Marginal costs must be
             specified if :math:`X_3` was not formulated in :class:`Simulation`. If marginal costs depend on prices
-            through marketshares, they will be updated to reflect different prices during each iteration of the routine.
+            through market shares, they will be updated to reflect different prices during each iteration of the
+            routine.
         prices : `array-like, optional`
             Prices at which the fixed point iteration routine will start. By default, ``costs``, are used as starting
             values.
@@ -597,7 +598,7 @@ class Simulation(Economy):
             prices_s = prices[self._product_market_indices[s]]
             return market_s, costs_s, prices_s, iteration
 
-        # compute prices and marketshares market-by-market, also collecting potentially updated delta and costs
+        # compute prices and market shares market-by-market, also collecting potentially updated delta and costs
         data_override = {
             'prices': np.zeros_like(self.products.prices),
             'shares': np.zeros_like(self.products.shares)
@@ -633,8 +634,8 @@ class Simulation(Economy):
         r"""Replace exogenous product characteristics with values that are consistent with true parameters.
 
         This method implements a less common way of solving the simulation. It may be preferable to
-        :meth:`Simulation.replace_endogenous` when for some reason it is desirable to retain the prices and marketshares
-        from :class:`Simulation`, which are assumed to be in equilibrium. For example, it can be helpful when
+        :meth:`Simulation.replace_endogenous` when for some reason it is desirable to retain the prices and market
+        shares from :class:`Simulation`, which are assumed to be in equilibrium. For example, it can be helpful when
         approximating the pure characteristics model of :ref:`references:Berry and Pakes (2007)` by setting a small
         ``epsilon_scale`` value in :class:`Simulation`.
 
