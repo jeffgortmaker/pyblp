@@ -29,7 +29,7 @@ setup(
     description="BLP demand estimation with Python 3",
     long_description=read('README.rst').split('description-start')[1].strip(),
     version=version_match.group(1),
-    author="Jeff Gortmaker",
+    author="Jeff Gortmaker, Christopher T. Conlon",
     author_email="jeff@jeffgortmaker.com",
     license="MIT",
     classifiers=[

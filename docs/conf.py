@@ -29,7 +29,7 @@ exclude_patterns = ['_build', '_downloads', 'notebooks', 'templates', '**.ipynb_
 # configure project information
 language = 'en'
 project = 'PyBLP'
-author = 'Jeff Gortmaker'
+author = 'Jeff Gortmaker and Christopher T. Conlon'
 copyright = f'{datetime.datetime.now().year}, {author}'
 release = version = pyblp.__version__
 
