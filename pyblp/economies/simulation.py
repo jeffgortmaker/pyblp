@@ -26,7 +26,8 @@ class Simulation(Economy):
 
     Any data left unspecified are simulated during initialization. Simulated prices and shares can be replaced by
     :meth:`Simulation.replace_endogenous` with equilibrium values that are consistent with true parameters. Less
-    commonly, simulated exogenous variables can be replaced instead by :meth:`Simulation.replace_exogenous`. Simulations
+    commonly, simulated exogenous variables can be replaced instead by :meth:`Simulation.replace_exogenous`. To choose
+    your own prices, refer to the first note in :meth:`Simulation.replace_endogenous`. Simulations
     are typically used for two purposes:
 
         1. Solving for equilibrium prices and shares under more complicated counterfactuals than is possible with
@@ -510,9 +511,13 @@ class Simulation(Economy):
 
         .. note::
 
-           To create a simulation under perfect (instead of Bertrand) competition, use an :class:`Iteration`
-           configuration with ``method='return'``. This will set prices equal to the default starting values for the
-           iteration routine, which are marginal costs.
+           To not replace prices, pass the desired prices to ``prices`` and use an :class:`Iteration` configuration with
+           ``method='return'``. This just uses the iteration "routine" that simply returns the the starting values,
+           which are ``prices``.
+
+           Using this same fake iteration routine and not setting prices will result in a simulation under perfect
+           (instead of Bertrand) competition because the default starting values for the iteration routine are marginal
+           costs.
 
         .. note::
 
