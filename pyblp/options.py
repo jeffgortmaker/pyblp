@@ -31,12 +31,12 @@ dtype : `dtype`
     The precision of ``numpy.longdouble`` depends on the platform on which NumPy is installed. If the platform in use
     does not support extended precision, using ``numpy.longdouble`` may lead to unreliable results. For example, on
     Windows, NumPy is usually compiled such that ``numpy.longdouble`` often behaves like ``numpy.float64``. Precisions
-    can be compared with :class:`numpy.finfo` by running ``np.finfo(np.float64)`` and ``np.finfo(np.longdouble)``. For
-    more information, refer to
+    can be compared with :class:`numpy.finfo` by running ``numpy.finfo(numpy.float64)`` and
+    ``numpy.finfo(numpy.longdouble)``. For more information, refer to
     `this discussion <https://docs.scipy.org/doc/numpy-1.13.0/user/basics.types.html#extended-precision>`_.
 
-    If extended precisions is supported, the data type can be switched with ``pyblp.options.dtype = np.longdouble``. On
-    Windows, it is often easier to install Linux in a virtual machine than it is to build NumPy from source with a
+    If extended precisions is supported, the data type can be switched with ``pyblp.options.dtype = numpy.longdouble``.
+    On Windows, it is often easier to install Linux in a virtual machine than it is to build NumPy from source with a
     non-standard compiler.
 
 pseudo_inverses : `bool`
@@ -59,6 +59,10 @@ collinear_atol : `float`
     The default absolute tolerance is ``1e-14``. To disable collinearity checks, set
     ``pyblp.options.collinear_atol = pyblp.options.collinear_rtol = 0``.
 
+weights_tol : `float`
+    Tolerance for detecting integration weights that do not sum to one in each market, which is by default ``1e-10``. In
+    most setups weights should essentially sum to one, but for example with importance sampling they may be slightly
+    different. Warnings can be disabled by setting this to ``numpy.inf``.
 collinear_rtol : `float`
     Relative tolerance for detecting collinear columns, which is by default also ``1e-14``.
 psd_atol : `float`
@@ -70,7 +74,7 @@ psd_atol : `float`
     where ``abs`` is the element's absolute value.
 
     The default tolerance is ``1e-8``. To disable positive semidefinite checks, set
-    ``pyblp.options.psd_atol = pyblp.options.psd_rtol = np.inf``.
+    ``pyblp.options.psd_atol = pyblp.options.psd_rtol = numpy.inf``.
 
 psd_rtol : `float`
     Relative tolerance for detecting non-positive definite matrices, which is by default also ``1e-8``.
@@ -86,5 +90,6 @@ verbose_tracebacks = False
 verbose_output = print
 dtype = _np.float64
 pseudo_inverses = True
+weights_tol = 1e-10
 collinear_atol = collinear_rtol = 1e-14
 psd_atol = psd_rtol = 1e-8
