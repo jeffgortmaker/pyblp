@@ -10,14 +10,15 @@ import pytest
 import scipy.linalg
 
 from pyblp import (
-    Formulation, Integration, Problem, ProblemResults, FirstChoiceCovarianceMoment, Simulation, SimulationResults,
+    Formulation, Integration, Problem, ProblemResults, DemographicExpectationMoment, DemographicCovarianceMoment,
+    DiversionProbabilityMoment, DiversionCovarianceMoment, Simulation, SimulationResults,
     build_differentiation_instruments, build_id_data, build_matrix, build_ownership, options
 )
 from pyblp.utilities.basics import update_matrices, Array, Data, Options
 
 
 # define common types
-SimulationFixture = Tuple[Simulation, SimulationResults, Dict[str, Array], List[FirstChoiceCovarianceMoment]]
+SimulationFixture = Tuple[Simulation, SimulationResults, Dict[str, Array], List[Any]]
 SimulatedProblemFixture = Tuple[Simulation, SimulationResults, Problem, Options, ProblemResults]
 
 
@@ -228,7 +229,7 @@ def medium_blp_simulation() -> SimulationFixture:
     simulation = Simulation(
         product_formulations=(
             Formulation('1 + x + y'),
-            Formulation('1 + I(prices ** 2)'),
+            Formulation('1 + I(prices**2)'),
             Formulation('1 + a + b')
         ),
         product_data={
@@ -256,7 +257,9 @@ def medium_blp_simulation() -> SimulationFixture:
         seed=1,
     )
     simulation_results = simulation.replace_endogenous()
-    simulated_micro_moments = [FirstChoiceCovarianceMoment(X2_index=1, demographics_index=0, value=0)]
+    simulated_micro_moments = [DemographicCovarianceMoment(
+        X2_index=0, demographics_index=0, value=0, market_ids=[simulation.unique_market_ids[2]]
+    )]
     return simulation, simulation_results, {}, simulated_micro_moments
 
 
@@ -268,9 +271,15 @@ def large_blp_simulation() -> SimulationFixture:
     parameter matrices, a log-linear cost specification, and local differentiation instruments.
     """
     id_data = build_id_data(T=20, J=20, F=9)
+
     keep = np.arange(id_data.size)
     np.random.RandomState(0).shuffle(keep)
     id_data = id_data[keep[:int(0.5 * id_data.size)]]
+
+    product_ids = id_data.market_ids.copy()
+    for t in np.unique(id_data.market_ids):
+        product_ids[id_data.market_ids == t] = np.arange((id_data.market_ids == t).sum())
+
     simulation = Simulation(
         product_formulations=(
             Formulation('1 + x + y + z + q'),
@@ -280,6 +289,7 @@ def large_blp_simulation() -> SimulationFixture:
         product_data={
             'market_ids': id_data.market_ids,
             'firm_ids': id_data.firm_ids,
+            'product_ids': product_ids,
             'clustering_ids': np.random.RandomState(2).choice(range(30), id_data.size)
         },
         beta=[1, 1, 2, 3, 1],
@@ -315,10 +325,22 @@ def large_blp_simulation() -> SimulationFixture:
         ]
     }
     simulated_micro_moments = [
-        FirstChoiceCovarianceMoment(
-            X2_index=2, demographics_index=1, value=0, market_ids=simulation.unique_market_ids[:5]
+        DemographicExpectationMoment(product_id=0, demographics_index=1, value=0),
+        DemographicExpectationMoment(
+            product_id=None, demographics_index=1, value=0, market_ids=simulation.unique_market_ids[1:4]
         ),
-        FirstChoiceCovarianceMoment(X2_index=0, demographics_index=1, value=0, conditional=False)
+        DemographicCovarianceMoment(
+            X2_index=0, demographics_index=2, value=0, market_ids=simulation.unique_market_ids[3:5]
+        ),
+        DiversionProbabilityMoment(
+            product_id1=1, product_id2=0, value=0, market_ids=simulation.unique_market_ids[6:10]
+        ),
+        DiversionProbabilityMoment(
+            product_id1=1, product_id2=None, value=0, market_ids=[simulation.unique_market_ids[9]]
+        ),
+        DiversionCovarianceMoment(
+            X2_index1=1, X2_index2=1, value=0, market_ids=[simulation.unique_market_ids[12]]
+        ),
     ]
     return simulation, simulation_results, simulated_data_override, simulated_micro_moments
 
@@ -363,9 +385,11 @@ def large_nested_blp_simulation() -> SimulationFixture:
     nesting groups with the same nesting parameter, and a log-linear cost specification.
     """
     id_data = build_id_data(T=20, J=20, F=9)
+
     keep = np.arange(id_data.size)
     np.random.RandomState(0).shuffle(keep)
     id_data = id_data[keep[:int(0.5 * id_data.size)]]
+
     simulation = Simulation(
         product_formulations=(
             Formulation('1 + x + y + z + q'),
@@ -396,13 +420,12 @@ def large_nested_blp_simulation() -> SimulationFixture:
         correlation=0.9,
         distributions=['lognormal', 'normal'],
         costs_type='log',
-        seed=2
+        seed=2,
     )
     simulation_results = simulation.replace_endogenous()
-    simulated_micro_moments = [
-        FirstChoiceCovarianceMoment(X2_index=0, demographics_index=0, value=0),
-        FirstChoiceCovarianceMoment(X2_index=1, demographics_index=1, value=0)
-    ]
+    simulated_micro_moments = [DemographicExpectationMoment(
+        product_id=None, demographics_index=1, value=0, market_ids=simulation.unique_market_ids[3:5]
+    )]
     return simulation, simulation_results, {}, simulated_micro_moments
 
 
@@ -444,13 +467,27 @@ def simulated_problem(request: Any) -> SimulatedProblemFixture:
         )
 
     # compute micro moments
-    micro_moments = []
+    micro_moments: List[Any] = []
     if simulated_micro_moments:
         micro_values = simulation_results.compute_micro(simulated_micro_moments)
         for moment, value in zip(simulated_micro_moments, micro_values):
-            micro_moments.append(FirstChoiceCovarianceMoment(
-                moment.X2_index, moment.demographics_index, value, moment.conditional, moment.market_ids
-            ))
+            if isinstance(moment, DemographicExpectationMoment):
+                micro_moments.append(DemographicExpectationMoment(
+                    moment.product_id, moment.demographics_index, value, moment.market_ids
+                ))
+            elif isinstance(moment, DemographicCovarianceMoment):
+                micro_moments.append(DemographicCovarianceMoment(
+                    moment.X2_index, moment.demographics_index, value, moment.market_ids
+                ))
+            elif isinstance(moment, DiversionProbabilityMoment):
+                micro_moments.append(DiversionProbabilityMoment(
+                    moment.product_id1, moment.product_id2, value, moment.market_ids
+                ))
+            else:
+                assert isinstance(moment, DiversionCovarianceMoment)
+                micro_moments.append(DiversionCovarianceMoment(
+                    moment.X2_index1, moment.X2_index2, value, moment.market_ids
+                ))
 
     # initialize and solve the problem
     problem = simulation_results.to_problem(simulation.product_formulations[:2 + int(supply)], product_data)

@@ -1,14 +1,17 @@
 """Market underlying the BLP model."""
 
 import functools
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 import numpy as np
 
 from .. import exceptions, options
 from ..configurations.iteration import ContractionResults, Iteration
 from ..economies.economy import Economy
-from ..moments import EconomyMoments, MarketMoments, FirstChoiceCovarianceMoment
+from ..moments import (
+    EconomyMoments, MarketMoments, Moment, DemographicExpectationMoment, DemographicCovarianceMoment,
+    DiversionProbabilityMoment, DiversionCovarianceMoment
+)
 from ..parameters import BetaParameter, GammaParameter, NonlinearCoefficient, Parameter, Parameters, RhoParameter
 from ..primitives import Container
 from ..utilities.algebra import approximately_invert, approximately_solve
@@ -112,6 +115,12 @@ class Market(Container):
 
         # store moments relevant to this market
         self.moments = None if moments is None else MarketMoments(moments, t)
+
+    def get_product(self, product_id: Any) -> int:
+        """Get the product index associated with a product ID. This assumes that the market has already been validated
+        to make sure that the product ID appears exactly once.
+        """
+        return int(np.argmax(self.products.product_ids == product_id))
 
     def get_membership_matrix(self) -> Array:
         """Build a membership matrix from nesting IDs."""
@@ -333,6 +342,7 @@ class Market(Container):
         conditionals[~np.isfinite(conditionals)] = 0
         marginals = exp_weighted_inclusives / (scale + (scale_weights * exp_weighted_inclusives[None]).sum(axis=1))
         probabilities = conditionals * self.groups.expand(marginals)
+
         return probabilities, conditionals
 
     def compute_delta(
@@ -962,29 +972,115 @@ class Market(Container):
                 omega_jacobian[:, [p]] = -parameter.get_product_characteristic(self)
         return omega_jacobian, errors
 
-    def compute_micro(self, delta: Optional[Array] = None) -> Tuple[Array, Array, Array, Array, Array]:
-        """Compute micro moments. By default, use the delta with which this market was initialized. Also return the
-        probabilities so they can be re-used when computing other micro moment-related outputs.
+    def compute_micro(
+            self, delta: Optional[Array] = None) -> (
+            Tuple[
+                Array, Optional[Array], Optional[Array], Optional[Array], Optional[Array], Dict[int, Array],
+                Dict[int, Optional[Array]], Dict[int, Array], Dict[int, Optional[Array]]
+            ]):
+        """Compute micro moments. By default, use the delta with which this market was initialized. Return any
+        probabilities that were used so they don't have to be re-computed when computing related outputs.
         """
         assert self.moments is not None
 
         # pre-compute probabilities
-        probabilities = conditionals = inside_probabilities = inside_conditionals = None
-        if any(not m.conditional for m in self.moments.micro_moments):
+        probabilities = conditionals = None
+        requires_probabilities = (DemographicExpectationMoment, DiversionProbabilityMoment)
+        if any(isinstance(m, requires_probabilities) for m in self.moments.micro_moments):
             probabilities, conditionals = self.compute_probabilities(delta)
-        if any(m.conditional for m in self.moments.micro_moments):
+
+        # pre-compute probabilities conditional on purchasing an inside good
+        inside_probabilities = inside_conditionals = None
+        requires_inside_probabilities = (DemographicCovarianceMoment, DiversionCovarianceMoment)
+        if any(isinstance(m, requires_inside_probabilities) for m in self.moments.micro_moments):
             inside_probabilities, inside_conditionals = self.compute_probabilities(delta, eliminate_outside=True)
+
+        # pre-compute second choice probabilities
+        eliminated_probabilities: Dict[int, Array] = {}
+        eliminated_conditionals: Dict[int, Optional[Array]] = {}
+        for moment in self.moments.micro_moments:
+            if isinstance(moment, DiversionProbabilityMoment):
+                j = self.get_product(moment.product_id1)
+                if j not in eliminated_probabilities:
+                    eliminated_probabilities[j], eliminated_conditionals[j] = self.compute_probabilities(
+                        delta, eliminate_product=j
+                    )
+
+        # pre-compute second choice probabilities conditional on purchasing an inside good
+        inside_eliminated_probabilities: Dict[int, Array] = {}
+        inside_eliminated_conditionals: Dict[int, Optional[Array]] = {}
+        if any(isinstance(m, DiversionCovarianceMoment) for m in self.moments.micro_moments):
+            for j in range(self.J):
+                inside_eliminated_probabilities[j], inside_eliminated_conditionals[j] = self.compute_probabilities(
+                    delta, eliminate_outside=True, eliminate_product=j
+                )
 
         # compute the micro moments
         micro = np.zeros((self.moments.MM, 1), options.dtype)
         for m, moment in enumerate(self.moments.micro_moments):
-            assert isinstance(moment, FirstChoiceCovarianceMoment)
-            moment_probabilities = inside_probabilities if moment.conditional else probabilities
-            assert moment_probabilities is not None
-            z = moment_probabilities.T @ self.products.X2[:, [moment.X2_index]]
-            d = self.agents.demographics[:, [moment.demographics_index]]
-            demeaned_z = z - z.T @ self.agents.weights
-            demeaned_d = d - d.T @ self.agents.weights
-            micro[m] = demeaned_z.T @ (self.agents.weights * demeaned_d) - moment.value
+            micro[m] = self.agents.weights.T @ self.compute_agent_micro_moment(
+                moment, probabilities, inside_probabilities, eliminated_probabilities, inside_eliminated_probabilities
+            )
 
-        return micro, probabilities, conditionals, inside_probabilities, inside_conditionals
+        return (
+            micro, probabilities, conditionals, inside_probabilities, inside_conditionals, eliminated_probabilities,
+            eliminated_conditionals, inside_eliminated_probabilities, inside_eliminated_conditionals
+        )
+
+    def compute_agent_micro_moment(
+            self, moment: Moment, probabilities: Optional[Array], inside_probabilities: Optional[Array],
+            eliminated_probabilities: Dict[int, Array], inside_eliminated_probabilities: Dict[int, Array]) -> Array:
+        """Compute agent-specific micro moments, which will be aggregated up into means or covariances."""
+
+        # match a demographic expectation for agents who choose a certain inside good
+        if isinstance(moment, DemographicExpectationMoment) and moment.product_id is not None:
+            assert probabilities is not None
+            j = self.get_product(moment.product_id)
+            d = self.agents.demographics[:, [moment.demographics_index]]
+            return d * probabilities[[j]].T / self.products.shares[j] - moment.value
+
+        # match a demographic expectation for agents who choose the outside good
+        if isinstance(moment, DemographicExpectationMoment) and moment.product_id is None:
+            assert probabilities is not None
+            d = self.agents.demographics[:, [moment.demographics_index]]
+            outside_probabilities = 1 - probabilities.sum(axis=0, keepdims=True).T
+            outside_share = 1 - self.products.shares.sum()
+            return d * outside_probabilities / outside_share - moment.value
+
+        # match a covariance between a product characteristic and a demographic
+        if isinstance(moment, DemographicCovarianceMoment):
+            assert inside_probabilities is not None
+            x = self.products.X2[:, [moment.X2_index]]
+            d = self.agents.demographics[:, [moment.demographics_index]]
+            z = inside_probabilities.T @ x
+            demeaned_z = z - self.agents.weights.T @ z
+            demeaned_d = d - self.agents.weights.T @ d
+            return demeaned_z * demeaned_d - moment.value
+
+        # match the second choice probability of a certain inside good for agents who choose a certain inside good
+        if isinstance(moment, DiversionProbabilityMoment) and moment.product_id2 is not None:
+            assert probabilities is not None
+            j = self.get_product(moment.product_id1)
+            k = self.get_product(moment.product_id2)
+            numerator = probabilities[[j]].T * eliminated_probabilities[j][[k]].T
+            return numerator / self.products.shares[j] - moment.value
+
+        # match the second choice probability of the outside good for agents who choose a certain inside good
+        if isinstance(moment, DiversionProbabilityMoment) and moment.product_id2 is None:
+            assert probabilities is not None
+            j = self.get_product(moment.product_id1)
+            eliminated_outside_probabilities = 1 - eliminated_probabilities[j].sum(axis=0, keepdims=True).T
+            outside_share = 1 - self.products.shares.sum()
+            numerator = probabilities[[j]].T * eliminated_outside_probabilities
+            return numerator / outside_share - moment.value
+
+        # match a covariance between product characteristics of first and second choices
+        assert isinstance(moment, DiversionCovarianceMoment)
+        assert inside_probabilities is not None
+        x1 = self.products.X2[:, [moment.X2_index1]]
+        x2 = self.products.X2[:, [moment.X2_index2]]
+        z1 = inside_probabilities.T @ x1
+        z2 = cast(Array, sum(inside_eliminated_probabilities.values())).T @ x2
+        demeaned_z1 = z1 - self.agents.weights.T @ z1
+        demeaned_z2 = z2 - self.agents.weights.T @ z2
+        return demeaned_z1 * demeaned_z2 - moment.value

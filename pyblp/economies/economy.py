@@ -28,6 +28,7 @@ class Economy(Container, StringRepresentation):
     unique_market_ids: Array
     unique_firm_ids: Array
     unique_nesting_ids: Array
+    unique_product_ids: Array
     T: int
     N: int
     F: int
@@ -63,7 +64,8 @@ class Economy(Container, StringRepresentation):
         # identify unique markets and nests
         self.unique_market_ids = np.unique(self.products.market_ids.flatten())
         self.unique_firm_ids = np.unique(self.products.firm_ids.flatten())
-        self.unique_nesting_ids = np.unique(self.products.nesting_ids).flatten()
+        self.unique_nesting_ids = np.unique(self.products.nesting_ids.flatten())
+        self.unique_product_ids = np.unique(self.products.product_ids.flatten())
 
         # count dimensions
         self.N = self.products.shape[0]
@@ -222,6 +224,29 @@ class Economy(Container, StringRepresentation):
         names = {n for f in formulations for n in f.names}
         if name not in names:
             raise NameError(f"The name '{name}' is not one of the underlying variables, {list(sorted(names))}.")
+
+    def _validate_product_id(self, product_id: Optional[Any], market_ids: Optional[Array] = None) -> None:
+        """Validate that a product ID is either None or one that's in the data (or in specific markets if specified).
+        Also verify that the product appears only once in each relevant market.
+        """
+        if product_id is None:
+            return
+        if self.unique_product_ids.size == 0:
+            raise ValueError(f"Product IDs must have been specified.")
+        if market_ids is None:
+            market_ids = self.unique_market_ids
+        for t in market_ids:
+            count = (self.products.product_ids[self._product_market_indices[t]] == product_id).sum()
+            if count == 0:
+                raise ValueError(
+                    f"product_id '{product_id}' is not one of the product IDs in market '{t}': "
+                    f"{list(sorted(self.products.product_ids[self._product_market_indices[t]]))}."
+                )
+            if count > 1:
+                raise ValueError(
+                    f"Product IDs should be unique within markets, but ID '{product_id}' shows up {count} times in "
+                    f"market '{t}'."
+                )
 
     def _coerce_optional_firm_ids(self, firm_ids: Optional[Any], market_ids: Optional[Array] = None) -> Array:
         """Coerce optional array-like firm IDs into a column vector and validate it. By default, assume that firm IDs

@@ -398,10 +398,10 @@ class ProblemEconomy(Economy):
             block-diagonal with a micro moment block equal to the covariance matrix defined in
             :eq:`averaged_micro_moment_covariances` plus any ``extra_micro_covariances``.
 
-        micro_moments : `sequence of FirstChoiceCovarianceMoment, optional`
-            Configurations for the :math:`M_M` micro moments that will be added to the standard set of moments. The only
-            type of micro moment currently supported is the :class:`FirstChoiceCovarianceMoment`. By default, no micro
-            moments are used, so :math:`M_M = 0`.
+        micro_moments : `sequence of Moment, optional`
+            Configurations for the :math:`M_M` micro moments that will be added to the standard set of moments. For a
+            list of supported micro moments, refer to :ref:`api:Micro Moment Classes`. By default, no micro moments are
+            used, so :math:`M_M = 0`.
 
             If micro moments are specified, the micro moment block in ``W`` should usually be replaced by a matrix that
             better reflects micro moment covariances and the size of the micro dataset relative to :math:`N`. If micro
@@ -1024,15 +1024,21 @@ class Problem(ProblemEconomy):
             - **nesting_ids** (`object, optional`) - IDs that associate products with nesting groups. When these IDs are
               specified, ``rho`` must be specified in :meth:`Problem.solve` as well.
 
+        To use certain types of micro moments, product IDs must be specified:
+
+            - **product_ids** (`object, optional`) - IDs that identify individual products within markets. The IDs
+              referenced by :class:`DemographicExpectationMoment` or :class:`DiversionProbabilityMoment` must be unique
+              within the relevant markets.
+
         Finally, clustering groups can be specified to account for within-group correlation while updating the weighting
         matrix and estimating standard errors:
 
             - **clustering_ids** (`object, optional`) - Cluster group IDs, which will be used if ``W_type`` or
               ``se_type`` in :meth:`Problem.solve` is ``'clustered'``.
 
-        Along with ``market_ids``, ``firm_ids``, ``nesting_ids``, ``clustering_ids``, and ``prices``, the names of any
-        additional fields can typically be used as variables in ``product_formulations``. However, there are a few
-        variable names such as ``'X1'``, which are reserved for use by :class:`Products`.
+        Along with ``market_ids``, ``firm_ids``, ``nesting_ids``, ``product_ids``, ``clustering_ids``, and ``prices``,
+        the names of any additional fields can typically be used as variables in ``product_formulations``. However,
+        there are a few variable names such as ``'X1'``, which are reserved for use by :class:`Products`.
 
     agent_formulation : `Formulation, optional`
         :class:`Formulation` configuration for the matrix of observed agent characteristics called demographics,
@@ -1175,6 +1181,8 @@ class Problem(ProblemEconomy):
         Unique market IDs in product and agent data.
     unique_firm_ids : `ndarray`
         Unique firm IDs in product data.
+    unique_product_ids : `ndarray`
+        Unique product IDs in product data.
     unique_nesting_ids : `ndarray`
         Unique nesting group IDs in product data.
     distributions : `list of str`

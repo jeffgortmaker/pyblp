@@ -103,14 +103,20 @@ class Simulation(Economy):
            ``ownership`` field with three columns can be replaced by three one-dimensional fields: ``ownership0``,
            ``ownership1``, and ``ownership2``.
 
+        To use certain types of micro moments, product IDs must be specified:
+
+            - **product_ids** (`object, optional`) - IDs that identify individual products within markets. The IDs
+              referenced by :class:`DemographicExpectationMoment` or :class:`DiversionProbabilityMoment` must be unique
+              within the relevant markets.
+
         To simulate a nested logit or random coefficients nested logit (RCNL) model, nesting groups must be specified:
 
             - **nesting_ids** (`object, optional`) - IDs that associate products with nesting groups. When these IDs are
               specified, ``rho`` must be specified as well.
 
-        Along with ``market_ids``, ``firm_ids``, and ``nesting_ids``, the names of any additional fields can typically
-        be used as variables in ``product_formulations``. However, there are a few variable names such as ``'X1'``,
-        which are reserved for use by :class:`Products`.
+        Along with ``market_ids``, ``firm_ids``, ``product_ids``, and ``nesting_ids``, the names of any additional
+        fields can typically be used as variables in ``product_formulations``. However, there are a few variable names
+        such as ``'X1'``, which are reserved for use by :class:`Products`.
 
     beta : `array-like`
         Vector of demand-side linear parameters, :math:`\beta`. Elements correspond to columns in :math:`X_1`, which
@@ -262,6 +268,8 @@ class Simulation(Economy):
         Unique market IDs in product and agent data.
     unique_firm_ids : `ndarray`
         Unique firm IDs in product data.
+    unique_product_ids : `ndarray`
+        Unique product IDs in product data.
     unique_nesting_ids : `ndarray`
         Unique nesting IDs in product data.
     beta : `ndarray`
@@ -369,6 +377,7 @@ class Simulation(Economy):
         market_ids = extract_matrix(product_data, 'market_ids')
         firm_ids = extract_matrix(product_data, 'firm_ids')
         nesting_ids = extract_matrix(product_data, 'nesting_ids')
+        product_ids = extract_matrix(product_data, 'product_ids')
         clustering_ids = extract_matrix(product_data, 'clustering_ids')
         ownership = extract_matrix(product_data, 'ownership')
         if market_ids is None:
@@ -397,6 +406,7 @@ class Simulation(Economy):
             'market_ids': (market_ids, np.object),
             'firm_ids': (firm_ids, np.object),
             'nesting_ids': (nesting_ids, np.object),
+            'product_ids': (product_ids, np.object),
             'clustering_ids': (clustering_ids, np.object),
             'ownership': (ownership, options.dtype),
             'shares': (shares, options.dtype),

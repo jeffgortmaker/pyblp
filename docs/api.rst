@@ -61,13 +61,16 @@ Once initialized, the following method solves the problem.
 Micro Moment Classes
 --------------------
 
-Micro moment configurations can be passed to :meth:`Problem.solve`. Only one type of micro moment is currently supported.
+Micro moment configurations can be passed to :meth:`Problem.solve`.
 
 .. autosummary::
    :toctree: _api
    :template: class_with_signature.rst
 
-   FirstChoiceCovarianceMoment
+   DemographicExpectationMoment
+   DemographicCovarianceMoment
+   DiversionProbabilityMoment
+   DiversionCovarianceMoment
 
 
 Problem Results Class

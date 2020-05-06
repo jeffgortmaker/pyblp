@@ -255,9 +255,9 @@ class SimulationResults(StringRepresentation):
 
         Parameters
         ----------
-        micro_moments : `sequence of FirstChoiceCovarianceMoment`
-            Configurations for the averaged micro moments that will be computed. The only type of micro moment currently
-            supported is the :class:`FirstChoiceCovarianceMoment`.
+        micro_moments : `sequence of Moment`
+            Configurations for the averaged micro moments that will be computed. For a list of supported micro moments,
+            refer to :ref:`api:Micro Moment Classes`.
 
         Returns
         -------

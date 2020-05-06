@@ -11,7 +11,9 @@ from .construction import (
 )
 from .economies.problem import ImportanceSamplingProblem, OptimalInstrumentProblem, Problem
 from .economies.simulation import Simulation
-from .moments import FirstChoiceCovarianceMoment
+from .moments import (
+    DemographicExpectationMoment, DemographicCovarianceMoment, DiversionProbabilityMoment, DiversionCovarianceMoment
+)
 from .primitives import Agents, Products
 from .results.bootstrapped_results import BootstrappedResults
 from .results.importance_sampling_results import ImportanceSamplingResults
@@ -25,6 +27,7 @@ __all__ = [
     'data', 'exceptions', 'options', 'Formulation', 'Integration', 'Iteration', 'Optimization', 'build_blp_instruments',
     'build_differentiation_instruments', 'build_id_data', 'build_integration', 'build_matrix', 'build_ownership',
     'data_to_dict', 'ImportanceSamplingProblem', 'OptimalInstrumentProblem', 'Problem', 'Simulation',
-    'FirstChoiceCovarianceMoment', 'Agents', 'Products', 'BootstrappedResults', 'ImportanceSamplingResults',
+    'DemographicExpectationMoment', 'DemographicCovarianceMoment', 'DiversionProbabilityMoment',
+    'DiversionCovarianceMoment', 'Agents', 'Products', 'BootstrappedResults', 'ImportanceSamplingResults',
     'OptimalInstrumentResults', 'ProblemResults', 'SimulationResults', 'parallel', '__version__'
 ]
