@@ -39,6 +39,15 @@ dtype : `dtype`
     On Windows, it is often easier to install Linux in a virtual machine than it is to build NumPy from source with a
     non-standard compiler.
 
+finite_differences_epsilon : `float`
+    Perturbation :math:`\epsilon` used to numerically approximate derivatives with central finite differences:
+
+    .. math:: f'(x) = \frac{f(x + \epsilon / 2) - f(x - \epsilon / 2)}{\epsilon}.
+
+    By default, this is the square root of the machine epsilon: ``numpy.sqrt(numpy.finfo(options.dtype).eps)``. The
+    typical example where this is used is when computing the Hessian, but it may also be used to compute Jacobians
+    required for standard errors when analytic gradients are disabled.
+
 pseudo_inverses : `bool`
     Whether to compute Moore-Penrose pseudo-inverses of matrices with :func:`scipy.linalg.pinv` instead of their classic
     inverses with :func:`scipy.linalg.inv`. This is by default ``True``, so pseudo-inverses will be used. Up to small
@@ -89,6 +98,7 @@ verbose = True
 verbose_tracebacks = False
 verbose_output = print
 dtype = _np.float64
+finite_differences_epsilon = _np.sqrt(_np.finfo(dtype).eps)
 pseudo_inverses = True
 weights_tol = 1e-10
 collinear_atol = collinear_rtol = 1e-14

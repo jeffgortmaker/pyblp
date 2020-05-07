@@ -23,7 +23,7 @@ from ..results.problem_results import ProblemResults
 from ..utilities.algebra import precisely_invert
 from ..utilities.basics import (
     Array, Bounds, Error, RecArray, SolverStats, format_number, format_seconds, format_table, generate_items, output,
-    update_matrices
+    update_matrices, compute_finite_differences
 )
 from ..utilities.statistics import IV, compute_gmm_moments_mean, compute_gmm_moments_jacobian_mean
 
@@ -48,8 +48,8 @@ class ProblemEconomy(Economy):
             beta_bounds: Optional[Tuple[Any, Any]] = None, gamma_bounds: Optional[Tuple[Any, Any]] = None,
             delta: Optional[Any] = None, method: str = '2s', initial_update: bool = False,
             optimization: Optional[Optimization] = None, scale_objective: bool = True, check_optimality: str = 'both',
-            error_behavior: str = 'revert', error_punishment: float = 1, delta_behavior: str = 'first',
-            iteration: Optional[Iteration] = None, fp_type: str = 'safe_linear',
+            finite_differences: bool = False, error_behavior: str = 'revert', error_punishment: float = 1,
+            delta_behavior: str = 'first', iteration: Optional[Iteration] = None, fp_type: str = 'safe_linear',
             shares_bounds: Optional[Tuple[Any, Any]] = (1e-300, None), costs_bounds: Optional[Tuple[Any, Any]] = None,
             W: Optional[Any] = None, center_moments: bool = True, W_type: str = 'robust', se_type: str = 'robust',
             micro_moments: Sequence[Moment] = (), extra_micro_covariances: Optional[Any] = None) -> ProblemResults:
@@ -254,8 +254,17 @@ class ProblemEconomy(Economy):
                   time when, for example, there are a large number of parameters.
 
                 - ``'both'`` (default) - Also compute the Hessian with central finite differences after optimization
-                  finishes. Specifically, perturb each parameter twice by :math:`\pm\sqrt{\epsilon^\text{mach}} / 2`
-                  where :math:`\epsilon^\text{mach}` is the machine precision.
+                  finishes.
+
+        finite_differences : `bool, optional`
+            Whether to use finite differences to compute Jacobians and the gradient instead of analytic expressions.
+            Since finite differences comes with numerical approximation error and is typically slower, analytic
+            expressions are used by default.
+
+            One situation in which finite differences may be preferable is when there are a sufficiently large number of
+            products and integration nodes in individual markets so as to make computing analytic Jacobians infeasible
+            because of large memory requirements. Note that an analytic expression for the Hessian has not been
+            implemented, so when computed it is always approximated with finite differences.
 
         error_behavior : `str, optional`
             How to handle any errors. For example, there can sometimes be overflow or underflow when computing
@@ -554,7 +563,7 @@ class ProblemEconomy(Economy):
             # wrap computation of progress information with step-specific information
             compute_step_progress = functools.partial(
                 self._compute_progress, parameters, moments, iv, W, scale_objective, error_behavior, error_punishment,
-                delta_behavior, iteration, fp_type, shares_bounds, costs_bounds
+                delta_behavior, iteration, fp_type, shares_bounds, costs_bounds, finite_differences
             )
 
             # initialize optimization progress
@@ -650,8 +659,9 @@ class ProblemEconomy(Economy):
     def _compute_progress(
             self, parameters: Parameters, moments: EconomyMoments, iv: IV, W: Array, scale_objective: bool,
             error_behavior: str, error_punishment: float, delta_behavior: str, iteration: Iteration, fp_type: str,
-            shares_bounds: Bounds, costs_bounds: Bounds, theta: Array, progress: 'InitialProgress',
-            compute_gradient: bool, compute_hessian: bool, compute_micro_covariances: bool) -> 'Progress':
+            shares_bounds: Bounds, costs_bounds: Bounds, finite_differences: bool, theta: Array,
+            progress: 'InitialProgress', compute_gradient: bool, compute_hessian: bool,
+            compute_micro_covariances: bool) -> 'Progress':
         """Compute demand- and supply-side contributions before recovering the linear parameters and structural error
         terms. Then, form the GMM objective value and its gradient. Finally, handle any errors that were encountered
         before structuring relevant progress information.
@@ -662,9 +672,10 @@ class ProblemEconomy(Economy):
         sigma, pi, rho, beta, gamma = parameters.expand(theta)
 
         # compute demand-side contributions
+        compute_jacobians = compute_gradient and not finite_differences
         delta, micro, xi_jacobian, micro_jacobian, micro_covariances, clipped_shares, iteration_stats, demand_errors = (
             self._compute_demand_contributions(
-                parameters, moments, iteration, fp_type, shares_bounds, sigma, pi, rho, progress, compute_gradient,
+                parameters, moments, iteration, fp_type, shares_bounds, sigma, pi, rho, progress, compute_jacobians,
                 compute_micro_covariances
             )
         )
@@ -676,10 +687,35 @@ class ProblemEconomy(Economy):
             omega_jacobian = np.full((self.N, parameters.P), np.nan, options.dtype)
             clipped_costs = np.zeros((self.N, 1), np.bool)
         else:
+            compute_jacobian = compute_gradient and not finite_differences
             tilde_costs, omega_jacobian, clipped_costs, supply_errors = self._compute_supply_contributions(
-                parameters, costs_bounds, sigma, pi, rho, beta, delta, xi_jacobian, progress, compute_gradient
+                parameters, costs_bounds, sigma, pi, rho, beta, delta, xi_jacobian, progress, compute_jacobian
             )
             errors.extend(supply_errors)
+
+        # optionally compute Jacobians with central finite differences
+        if compute_gradient and finite_differences and parameters.P > 0:
+            def compute_perturbed_stack(perturbed_theta: Array) -> Array:
+                """Evaluate a stack of xi, micro moments, and omega at a perturbed parameter vector."""
+                perturbed_progress = self._compute_progress(
+                    parameters, moments, iv, W, scale_objective, error_behavior, error_punishment, delta_behavior,
+                    iteration, fp_type, shares_bounds, costs_bounds, finite_differences=False, theta=perturbed_theta,
+                    progress=progress, compute_gradient=False, compute_hessian=False, compute_micro_covariances=False
+                )
+                perturbed_stack = perturbed_progress.iv_delta
+                if moments.MM > 0:
+                    perturbed_stack = np.r_[perturbed_stack, perturbed_progress.micro]
+                if self.K3 > 0:
+                    perturbed_stack = np.r_[perturbed_stack, perturbed_progress.iv_tilde_costs]
+                return perturbed_stack
+
+            # compute and unstack the Jacobians
+            stack_jacobian = compute_finite_differences(compute_perturbed_stack, theta)
+            xi_jacobian = stack_jacobian[:self.N]
+            if moments.MM > 0:
+                micro_jacobian = stack_jacobian[self.N:self.N + moments.MM]
+            if self.K3 > 0:
+                omega_jacobian = stack_jacobian[-self.N:]
 
         # subtract contributions of linear parameters in theta
         iv_delta = delta.copy()
@@ -762,36 +798,33 @@ class ProblemEconomy(Economy):
             assert delta_behavior == 'first'
             next_delta = progress.next_delta
 
-        # compute the hessian with central finite differences
+        # optionally compute the Hessian with central finite differences
         hessian = np.full_like(progress.hessian, np.nan)
         if compute_hessian:
-            compute_progress = lambda x: self._compute_progress(
-                parameters, moments, iv, W, scale_objective, error_behavior, error_punishment, delta_behavior,
-                iteration, fp_type, shares_bounds, costs_bounds, x, progress, compute_gradient=True,
-                compute_hessian=False, compute_micro_covariances=False
-            )
-            change = np.sqrt(np.finfo(np.float64).eps)
-            for p in range(parameters.P):
-                theta1 = theta.copy()
-                theta2 = theta.copy()
-                theta1[p] += change / 2
-                theta2[p] -= change / 2
-                hessian[:, [p]] = (compute_progress(theta1).gradient - compute_progress(theta2).gradient) / change
+            def compute_perturbed_gradient(perturbed_theta: Array) -> Array:
+                """Evaluate the gradient at a perturbed parameter vector."""
+                perturbed_progress = self._compute_progress(
+                    parameters, moments, iv, W, scale_objective, error_behavior, error_punishment, delta_behavior,
+                    iteration, fp_type, shares_bounds, costs_bounds, finite_differences, perturbed_theta, progress,
+                    compute_gradient=True, compute_hessian=False, compute_micro_covariances=False
+                )
+                return perturbed_progress.gradient
 
-            # enforce shape and symmetry
+            # compute the Hessian, enforcing shape and symmetry
+            hessian = compute_finite_differences(compute_perturbed_gradient, theta)
             hessian = np.c_[hessian + hessian.T] / 2
 
         # structure progress
         return Progress(
             self, parameters, moments, W, theta, objective, gradient, hessian, next_delta, delta, tilde_costs, micro,
-            xi_jacobian, omega_jacobian, micro_jacobian, micro_covariances, xi, omega, beta, gamma, iteration_stats,
-            clipped_shares, clipped_costs, errors
+            xi_jacobian, omega_jacobian, micro_jacobian, micro_covariances, iv_delta, iv_tilde_costs, xi, omega, beta,
+            gamma, iteration_stats, clipped_shares, clipped_costs, errors
         )
 
     def _compute_demand_contributions(
             self, parameters: Parameters, moments: EconomyMoments, iteration: Iteration, fp_type: str,
             shares_bounds: Bounds, sigma: Array, pi: Array, rho: Array, progress: 'InitialProgress',
-            compute_jacobian: bool, compute_micro_covariances: bool) -> (
+            compute_jacobians: bool, compute_micro_covariances: bool) -> (
             Tuple[Array, Array, Array, Array, Array, Array, Dict[Hashable, SolverStats], List[Error]]):
         """Compute delta and the Jacobian of xi (equivalently, of delta) with respect to theta market-by-market. If
         there are any micro moments, compute them (taking the average across relevant markets) along with their
@@ -810,7 +843,7 @@ class ProblemEconomy(Economy):
         iteration_stats: Dict[Hashable, SolverStats] = {}
 
         # when possible and when a gradient isn't needed, compute delta with a closed-form solution
-        if self.K2 == 0 and moments.MM == 0 and (parameters.P == 0 or not compute_jacobian):
+        if self.K2 == 0 and moments.MM == 0 and (parameters.P == 0 or not compute_jacobians):
             delta = self._compute_logit_delta(rho)
         else:
             def market_factory(s: Hashable) -> Tuple[ProblemMarket, Array, Array, Iteration, str, Bounds, bool, bool]:
@@ -819,7 +852,7 @@ class ProblemEconomy(Economy):
                 delta_s = progress.next_delta[self._product_market_indices[s]]
                 last_delta_s = progress.delta[self._product_market_indices[s]]
                 return (
-                    market_s, delta_s, last_delta_s, iteration, fp_type, shares_bounds, compute_jacobian,
+                    market_s, delta_s, last_delta_s, iteration, fp_type, shares_bounds, compute_jacobians,
                     compute_micro_covariances
                 )
 
@@ -870,7 +903,7 @@ class ProblemEconomy(Economy):
             errors.append(exceptions.MicroMomentsReversionError(bad_micro_index))
 
         # replace invalid elements in the Jacobians with their last values
-        if compute_jacobian:
+        if compute_jacobians:
             bad_xi_jacobian_index = ~np.isfinite(xi_jacobian)
             bad_micro_jacobian_index = ~np.isfinite(micro_jacobian)
             if np.any(bad_xi_jacobian_index):
@@ -1427,14 +1460,17 @@ class Progress(InitialProgress):
             self, problem: ProblemEconomy, parameters: Parameters, moments: EconomyMoments, W: Array, theta: Array,
             objective: Array, gradient: Array, hessian: Array, next_delta: Array, delta: Array, tilde_costs: Array,
             micro: Array, xi_jacobian: Array, omega_jacobian: Array, micro_jacobian: Array, micro_covariances: Array,
-            xi: Array, omega: Array, beta: Array, gamma: Array, iteration_stats: Dict[Hashable, SolverStats],
-            clipped_shares: Array, clipped_costs: Array, errors: List[Error]) -> None:
+            iv_delta: Array, iv_tilde_costs: Array, xi: Array, omega: Array, beta: Array, gamma: Array,
+            iteration_stats: Dict[Hashable, SolverStats], clipped_shares: Array, clipped_costs: Array,
+            errors: List[Error]) -> None:
         """Store progress information, compute the projected gradient and its norm, and compute the reduced Hessian."""
         super().__init__(
             problem, parameters, moments, W, theta, objective, gradient, hessian, next_delta, delta, tilde_costs, micro,
             xi_jacobian, omega_jacobian, micro_jacobian
         )
         self.micro_covariances = micro_covariances
+        self.iv_delta = iv_delta
+        self.iv_tilde_costs = iv_tilde_costs
         self.xi = xi
         self.omega = omega
         self.beta = beta

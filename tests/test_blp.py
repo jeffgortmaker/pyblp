@@ -12,7 +12,7 @@ import scipy.optimize
 from pyblp import (
     Formulation, Integration, Iteration, Optimization, Problem, Simulation, build_ownership, data_to_dict, parallel
 )
-from pyblp.utilities.basics import Array, Options, update_matrices
+from pyblp.utilities.basics import Array, Options, update_matrices, compute_finite_differences
 from .conftest import SimulatedProblemFixture
 
 
@@ -601,23 +601,10 @@ def test_shares_by_prices_jacobian(simulated_problem: SimulatedProblemFixture) -
     shares = product_data.shares[product_data.market_ids.flat == t]
     prices = product_data.prices[product_data.market_ids.flat == t]
 
-    # extract the Jacobian from the analytic expression for elasticities
+    # extract the Jacobian from the analytic expression for elasticities and approximate it with finite differences
     exact = results.compute_elasticities(market_id=t) * shares / prices.T
-
-    # estimate the Jacobian with central finite differences
-    estimated = np.zeros_like(exact)
-    change = np.sqrt(np.finfo(np.float64).eps)
-    for index in range(estimated.shape[1]):
-        prices1 = prices.copy()
-        prices2 = prices.copy()
-        prices1[index] += change / 2
-        prices2[index] -= change / 2
-        shares1 = results.compute_shares(prices1, market_id=t)
-        shares2 = results.compute_shares(prices2, market_id=t)
-        estimated[:, [index]] = (shares1 - shares2) / change
-
-    # compare the two Jacobians
-    np.testing.assert_allclose(exact, estimated, atol=1e-8, rtol=0)
+    approximate = compute_finite_differences(lambda p: results.compute_shares(p, market_id=t), prices)
+    np.testing.assert_allclose(exact, approximate, atol=1e-8, rtol=0)
 
 
 @pytest.mark.usefixtures('simulated_problem')
@@ -795,32 +782,43 @@ def test_initial_update(simulated_problem: SimulatedProblemFixture) -> None:
     pytest.param('l-bfgs-b', id="L-BFGS-B"),
     pytest.param('trust-constr', id="Trust Region")
 ])
-def test_gradient_optionality(simulated_problem: SimulatedProblemFixture, scipy_method: str) -> None:
+def test_gradient_optionality(
+        simulated_problem: SimulatedProblemFixture, scipy_method: str) -> None:
     """Test that the option of not computing the gradient for simulated data does not affect estimates when the gradient
-    isn't used.
+    isn't used. Allow Jacobian-based results to differ slightly more when finite differences are used to compute them.
     """
     simulation, _, problem, solve_options, _ = simulated_problem
+
+    # this test only requires a few optimization iterations (enough for gradient problems to be clear)
+    method_options = {'maxiter': 3}
 
     def custom_method(
             initial: Array, bounds: List[Tuple[float, float]], objective_function: Callable, _: Any) -> (
             Tuple[Array, bool]):
         """Optimize without gradients."""
-        wrapper = lambda x: objective_function(x)[0]
-        optimize_results = scipy.optimize.minimize(wrapper, initial, method=scipy_method, bounds=bounds)
+        optimize_results = scipy.optimize.minimize(
+            lambda x: objective_function(x)[0], initial, method=scipy_method, bounds=bounds, options=method_options
+        )
         return optimize_results.x, optimize_results.success
 
     # solve the problem when not using gradients and when not computing them
     updated_solve_options1 = solve_options.copy()
     updated_solve_options2 = solve_options.copy()
     updated_solve_options1['optimization'] = Optimization(custom_method)
-    updated_solve_options2['optimization'] = Optimization(scipy_method, compute_gradient=False)
+    updated_solve_options2['optimization'] = Optimization(scipy_method, method_options, compute_gradient=False)
+    updated_solve_options2['finite_differences'] = True
     results1 = problem.solve(**updated_solve_options1)
     results2 = problem.solve(**updated_solve_options2)
 
-    # test that all arrays are essentially identical
+    # test that all arrays close
     for key, result1 in results1.__dict__.items():
         if isinstance(result1, np.ndarray) and result1.dtype != np.object:
-            np.testing.assert_allclose(result1, getattr(results2, key), atol=1e-14, rtol=0, err_msg=key)
+            atol = 1e-14
+            rtol = 0.0
+            if any(s in key for s in ['gradient', '_jacobian', '_se', '_covariances']):
+                atol = 1e-6
+                rtol = 1e-2
+            np.testing.assert_allclose(result1, getattr(results2, key), atol=atol, rtol=rtol, err_msg=key)
 
 
 @pytest.mark.usefixtures('simulated_problem')
@@ -1069,15 +1067,8 @@ def test_objective_gradient(
 
     def test_finite_differences(theta: Array, _: Any, objective_function: Callable, __: Any) -> Tuple[Array, bool]:
         """Test central finite differences around starting parameter values."""
-        estimated = np.zeros_like(exact)
-        change = 10 * np.sqrt(np.finfo(np.float64).eps)
-        for index in range(theta.size):
-            theta1 = theta.copy()
-            theta2 = theta.copy()
-            theta1[index] += change / 2
-            theta2[index] -= change / 2
-            estimated[index] = (objective_function(theta1)[0] - objective_function(theta2)[0]) / change
-        np.testing.assert_allclose(estimated, exact, atol=1e-8, rtol=1e-3)
+        approximated = compute_finite_differences(lambda x: objective_function(x)[0], theta, epsilon_scale=10.0)
+        np.testing.assert_allclose(approximated.flatten(), exact.flatten(), atol=1e-8, rtol=1e-3)
         return theta, True
 
     # test the gradient

@@ -114,9 +114,13 @@ class Optimization(StringRepresentation):
     compute_gradient : `bool, optional`
         Whether to compute an analytic objective gradient during optimization, which must be ``False`` if ``method``
         does not use analytic gradients, and must be ``True`` if ``method`` is ``'newton-cg'``, which requires an
-        analytic gradient. By default, analytic gradients are computed. Not using an analytic gradient will likely slow
+        analytic gradient.
+
+        By default, analytic gradients are computed. Not using an analytic gradient will likely slow
         down estimation a good deal. If ``False``, an analytic gradient may still be computed once at the end of
-        optimization to compute optimization results.
+        optimization to compute optimization results. To always use finite differences, ``finite_differences`` in
+        :meth:`Problem.solve` can be set to ``True``.
+
     universal_display : `bool, optional`
         Whether to format optimization progress such that the display looks the same for all routines. By default, the
         universal display is used and some ``method_options`` are used to prevent default displays from showing up.

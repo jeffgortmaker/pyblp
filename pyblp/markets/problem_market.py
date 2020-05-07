@@ -20,13 +20,13 @@ class ProblemMarket(Market):
 
     def solve_demand(
             self, delta: Array, last_delta: Array, iteration: Iteration, fp_type: str, shares_bounds: Bounds,
-            compute_jacobian: bool, compute_micro_covariances: bool) -> (
+            compute_jacobians: bool, compute_micro_covariances: bool) -> (
             Tuple[Array, Array, Array, Array, Array, Array, SolverStats, List[Error]]):
         """Compute the mean utility for this market that equates market shares to observed values by solving a fixed
-        point problem. Then, if compute_jacobian is True, compute the Jacobian of xi (equivalently, of delta) with
-        respect to theta. Finally, compute any micro moments, their Jacobian with respect to theta, and, if
-        compute_micro_covariances is True, their covariances. Replace null elements in delta with their last values
-        before computing micro moments and Jacobians.
+        point problem. Then, if compute_jacobians is True, compute the Jacobian of xi (equivalently, of delta) with
+        respect to theta. Finally, compute any micro moments, their Jacobian with respect to theta (if compute_jacobians
+        is True), and, if compute_micro_covariances is True, their covariances. Replace null elements in delta with
+        their last values before computing micro moments and Jacobians.
         """
         errors: List[Error] = []
 
@@ -41,7 +41,7 @@ class ProblemMarket(Market):
 
         # compute the Jacobian
         xi_jacobian = np.full((self.J, self.parameters.P), np.nan, options.dtype)
-        if compute_jacobian:
+        if compute_jacobians:
             xi_jacobian, xi_jacobian_errors = self.safely_compute_xi_by_theta_jacobian(valid_delta)
             errors.extend(xi_jacobian_errors)
 
@@ -59,7 +59,7 @@ class ProblemMarket(Market):
                 self.safely_compute_micro(valid_delta)
             )
             errors.extend(micro_errors)
-            if compute_jacobian:
+            if compute_jacobians:
                 micro_jacobian, micro_jacobian_errors = self.safely_compute_micro_by_theta_jacobian(
                     valid_delta, probabilities, conditionals, inside_probabilities, inside_conditionals,
                     eliminated_probabilities, eliminated_conditionals, inside_eliminated_sum,
