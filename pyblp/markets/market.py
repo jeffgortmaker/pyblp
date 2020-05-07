@@ -976,7 +976,7 @@ class Market(Container):
             self, delta: Optional[Array] = None) -> (
             Tuple[
                 Array, Optional[Array], Optional[Array], Optional[Array], Optional[Array], Dict[int, Array],
-                Dict[int, Optional[Array]], Dict[int, Array], Dict[int, Optional[Array]]
+                Dict[int, Optional[Array]], Optional[Array], Dict[int, Array], Dict[int, Optional[Array]]
             ]):
         """Compute micro moments. By default, use the delta with which this market was initialized. Return any
         probabilities that were used so they don't have to be re-computed when computing related outputs.
@@ -1006,30 +1006,36 @@ class Market(Container):
                         delta, eliminate_product=j
                     )
 
-        # pre-compute second choice probabilities conditional on purchasing an inside good
+        # pre-compute second choice probabilities conditional on purchasing an inside good (also compute the sum of
+        #   inside probability products over all first choices)
+        inside_eliminated_sum = None
         inside_eliminated_probabilities: Dict[int, Array] = {}
         inside_eliminated_conditionals: Dict[int, Optional[Array]] = {}
         if any(isinstance(m, DiversionCovarianceMoment) for m in self.moments.micro_moments):
+            assert inside_probabilities is not None
+            inside_eliminated_sum = np.zeros((self.J, self.I), options.dtype)
             for j in range(self.J):
                 inside_eliminated_probabilities[j], inside_eliminated_conditionals[j] = self.compute_probabilities(
                     delta, eliminate_outside=True, eliminate_product=j
                 )
+                inside_eliminated_sum += inside_probabilities[[j]] * inside_eliminated_probabilities[j]
 
         # compute the micro moments
         micro = np.zeros((self.moments.MM, 1), options.dtype)
         for m, moment in enumerate(self.moments.micro_moments):
             micro[m] = self.agents.weights.T @ self.compute_agent_micro_moment(
-                moment, probabilities, inside_probabilities, eliminated_probabilities, inside_eliminated_probabilities
+                moment, probabilities, inside_probabilities, eliminated_probabilities, inside_eliminated_sum
             )
 
         return (
             micro, probabilities, conditionals, inside_probabilities, inside_conditionals, eliminated_probabilities,
-            eliminated_conditionals, inside_eliminated_probabilities, inside_eliminated_conditionals
+            eliminated_conditionals, inside_eliminated_sum, inside_eliminated_probabilities,
+            inside_eliminated_conditionals
         )
 
     def compute_agent_micro_moment(
             self, moment: Moment, probabilities: Optional[Array], inside_probabilities: Optional[Array],
-            eliminated_probabilities: Dict[int, Array], inside_eliminated_probabilities: Dict[int, Array]) -> Array:
+            eliminated_probabilities: Dict[int, Array], inside_eliminated_sum: Optional[Array]) -> Array:
         """Compute agent-specific micro moments, which will be aggregated up into means or covariances."""
 
         # match a demographic expectation for agents who choose a certain inside good
@@ -1076,16 +1082,11 @@ class Market(Container):
 
         # match a covariance between product characteristics of first and second choices
         assert isinstance(moment, DiversionCovarianceMoment)
-        assert inside_probabilities is not None
-
-        probabilities_product = np.zeros((self.J, self.I), options.dtype)
-        for j in range(self.J):
-            probabilities_product += inside_probabilities[[j]] * inside_eliminated_probabilities[j]
-
+        assert inside_probabilities is not None and inside_eliminated_sum is not None
         x1 = self.products.X2[:, [moment.X2_index1]]
         x2 = self.products.X2[:, [moment.X2_index2]]
         z1 = inside_probabilities.T @ x1
-        z2 = probabilities_product.T @ x2
+        z2 = inside_eliminated_sum.T @ x2
         demeaned_z1 = z1 - self.agents.weights.T @ z1
         demeaned_z2 = z2 - self.agents.weights.T @ z2
         return demeaned_z1 * demeaned_z2 - moment.value

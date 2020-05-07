@@ -53,7 +53,8 @@ class ProblemMarket(Market):
         if self.moments.MM > 0:
             (
                 micro, probabilities, conditionals, inside_probabilities, inside_conditionals, eliminated_probabilities,
-                eliminated_conditionals, inside_eliminated_probabilities, inside_eliminated_conditionals, micro_errors
+                eliminated_conditionals, inside_eliminated_sum, inside_eliminated_probabilities,
+                inside_eliminated_conditionals, micro_errors
             ) = (
                 self.safely_compute_micro(valid_delta)
             )
@@ -61,13 +62,13 @@ class ProblemMarket(Market):
             if compute_jacobian:
                 micro_jacobian, micro_jacobian_errors = self.safely_compute_micro_by_theta_jacobian(
                     valid_delta, probabilities, conditionals, inside_probabilities, inside_conditionals,
-                    eliminated_probabilities, eliminated_conditionals, inside_eliminated_probabilities,
-                    inside_eliminated_conditionals, xi_jacobian
+                    eliminated_probabilities, eliminated_conditionals, inside_eliminated_sum,
+                    inside_eliminated_probabilities, inside_eliminated_conditionals, xi_jacobian
                 )
                 errors.extend(micro_jacobian_errors)
             if compute_micro_covariances:
                 micro_covariances, micro_covariances_errors = self.safely_compute_micro_covariances(
-                    probabilities, inside_probabilities, eliminated_probabilities, inside_eliminated_probabilities
+                    probabilities, inside_probabilities, eliminated_probabilities, inside_eliminated_sum
                 )
                 errors.extend(micro_covariances_errors)
 
@@ -124,19 +125,21 @@ class ProblemMarket(Market):
             self, delta: Array) -> (
             Tuple[
                 Array, Optional[Array], Optional[Array], Optional[Array], Optional[Array], Dict[int, Array],
-                Dict[int, Optional[Array]], Dict[int, Array], Dict[int, Optional[Array]], List[Error]
+                Dict[int, Optional[Array]], Optional[Array], Dict[int, Array], Dict[int, Optional[Array]], List[Error]
             ]):
         """Compute micro moments, handling any numerical errors."""
         errors: List[Error] = []
         (
             micro, probabilities, conditionals, inside_probabilities, inside_conditionals, eliminated_probabilities,
-            eliminated_conditionals, inside_eliminated_probabilities, inside_eliminated_conditionals
+            eliminated_conditionals, inside_eliminated_sum, inside_eliminated_probabilities,
+            inside_eliminated_conditionals
         ) = (
             self.compute_micro(delta)
         )
         return (
             micro, probabilities, conditionals, inside_probabilities, inside_conditionals, eliminated_probabilities,
-            eliminated_conditionals, inside_eliminated_probabilities, inside_eliminated_conditionals, errors
+            eliminated_conditionals, inside_eliminated_sum, inside_eliminated_probabilities,
+            inside_eliminated_conditionals, errors
         )
 
     @NumericalErrorHandler(exceptions.MicroMomentsByThetaJacobianNumericalError)
@@ -144,7 +147,7 @@ class ProblemMarket(Market):
             self, delta: Array, probabilities: Optional[Array], conditionals: Optional[Array],
             inside_probabilities: Optional[Array], inside_conditionals: Optional[Array],
             eliminated_probabilities: Dict[int, Array], eliminated_conditionals: Dict[int, Optional[Array]],
-            inside_eliminated_probabilities: Dict[int, Array],
+            inside_eliminated_sum: Optional[Array], inside_eliminated_probabilities: Dict[int, Array],
             inside_eliminated_conditionals: Dict[int, Optional[Array]], xi_jacobian: Array) -> (
             Tuple[Array, List[Error]]):
         """Compute the Jacobian of micro moments with respect to theta, handling any numerical errors."""
@@ -170,12 +173,19 @@ class ProblemMarket(Market):
                 eliminated_probabilities[j], eliminated_conditionals[j]
             )
 
-        # pre-compute the same but for second choice probabilities conditional on purchasing an inside good
-        inside_eliminated_tensors = {}
-        for j in inside_eliminated_probabilities:
-            inside_eliminated_tensors[j], _ = self.compute_probabilities_by_xi_tensor(
-                inside_eliminated_probabilities[j], inside_eliminated_conditionals[j]
-            )
+        # pre-compute the same but for the sum of inside probability products over all first choices
+        inside_eliminated_sum_tensor = None
+        if inside_eliminated_probabilities:
+            assert inside_probabilities is not None and inside_tensor is not None
+            inside_eliminated_sum_tensor = np.zeros((self.J, self.J, self.I), options.dtype)
+            for j in range(self.J):
+                inside_eliminated_tensor_j, _ = self.compute_probabilities_by_xi_tensor(
+                    inside_eliminated_probabilities[j], inside_eliminated_conditionals[j]
+                )
+                inside_eliminated_sum_tensor += (
+                    inside_tensor[:, [j], :] * inside_eliminated_probabilities[j][None] +
+                    inside_probabilities[[j]][None] * inside_eliminated_tensor_j
+                )
 
         # compute the Jacobian
         micro_jacobian = np.zeros((self.moments.MM, self.parameters.P))
@@ -204,19 +214,26 @@ class ProblemMarket(Market):
                     parameter, eliminated_probabilities[j], eliminated_conditionals[j], delta
                 )
 
-            # compute the same but for second choice probabilities conditional on purchasing an inside good
-            inside_eliminated_tangents = {}
-            for j in inside_eliminated_probabilities:
-                inside_eliminated_tangents[j], _ = self.compute_probabilities_by_parameter_tangent(
-                    parameter, inside_eliminated_probabilities[j], inside_eliminated_conditionals[j], delta
-                )
+            # compute the same but for the sum of inside probability products over all first choices
+            inside_eliminated_sum_tangent = None
+            if inside_eliminated_probabilities:
+                assert inside_probabilities is not None and inside_tangent is not None
+                inside_eliminated_sum_tangent = np.zeros((self.J, self.I), options.dtype)
+                for j in range(self.J):
+                    inside_eliminated_sum_tangent_j, _ = self.compute_probabilities_by_parameter_tangent(
+                        parameter, inside_eliminated_probabilities[j], inside_eliminated_conditionals[j], delta
+                    )
+                    inside_eliminated_sum_tangent += (
+                        inside_tangent[[j]] * inside_eliminated_probabilities[j] +
+                        inside_probabilities[[j]] * inside_eliminated_sum_tangent_j
+                    )
 
             # fill the gradient of micro moments with respect to the parameter
             for m, moment in enumerate(self.moments.micro_moments):
                 tangent_m, jacobian_m = self.compute_agent_micro_moment_derivatives(
                     moment, probabilities, probabilities_tensor, probabilities_tangent, inside_probabilities,
                     inside_tensor, inside_tangent, eliminated_probabilities, eliminated_tensors, eliminated_tangents,
-                    inside_eliminated_probabilities, inside_eliminated_tensors, inside_eliminated_tangents
+                    inside_eliminated_sum, inside_eliminated_sum_tensor, inside_eliminated_sum_tangent
                 )
                 micro_jacobian[m, p] = self.agents.weights.T @ (tangent_m + jacobian_m @ xi_jacobian[:, [p]])
 
@@ -227,8 +244,8 @@ class ProblemMarket(Market):
             probabilities_tangent: Optional[Array], inside_probabilities: Optional[Array],
             inside_tensor: Optional[Array], inside_tangent: Optional[Array], eliminated_probabilities: Dict[int, Array],
             eliminated_tensors: Dict[int, Array], eliminated_tangents: Dict[int, Array],
-            inside_eliminated_probabilities: Dict[int, Array], inside_eliminated_tensors: Dict[int, Array],
-            inside_eliminated_tangents: Dict[int, Array]) -> Tuple[Array, Array]:
+            inside_eliminated_sum: Optional[Array], inside_eliminated_sum_tensor: Optional[Array],
+            inside_eliminated_sum_tangent: Optional[Array]) -> Tuple[Array, Array]:
         """Holding xi fixed, compute the tangent of agent-specific micro moments with respect to a parameter. Also
         compute their Jacobian with respect to xi.
         """
@@ -306,30 +323,17 @@ class ProblemMarket(Market):
 
         # handle a covariance between product characteristics of first and second choices
         assert isinstance(moment, DiversionCovarianceMoment)
-        assert inside_probabilities is not None and inside_tangent is not None and inside_tensor is not None
-
-        probabilities_product = np.zeros((self.J, self.I), options.dtype)
-        probabilities_product_tangent = np.zeros((self.J, self.I), options.dtype)
-        probabilities_product_tensor = np.zeros((self.J, self.J, self.I), options.dtype)
-        for j in range(self.J):
-            probabilities_product += inside_probabilities[[j]] * inside_eliminated_probabilities[j]
-            probabilities_product_tangent += (
-                inside_tangent[[j]] * inside_eliminated_probabilities[j] +
-                inside_probabilities[[j]] * inside_eliminated_tangents[j]
-            )
-            probabilities_product_tensor += (
-                inside_tensor[:, [j], :] * inside_eliminated_probabilities[j][None] +
-                inside_probabilities[[j]][None] * inside_eliminated_tensors[j]
-            )
-
+        assert inside_probabilities is not None and inside_eliminated_sum is not None
+        assert inside_tangent is not None and inside_eliminated_sum_tangent is not None
+        assert inside_tensor is not None and inside_eliminated_sum_tensor is not None
         x1 = self.products.X2[:, [moment.X2_index1]]
         x2 = self.products.X2[:, [moment.X2_index2]]
         z1 = inside_probabilities.T @ x1
         z1_tangent = inside_tangent.T @ x1
         z1_jacobian = np.squeeze(inside_tensor.swapaxes(1, 2) @ x1, axis=2).T
-        z2 = probabilities_product.T @ x2
-        z2_tangent = probabilities_product_tangent.T @ x2
-        z2_jacobian = np.squeeze(probabilities_product_tensor.swapaxes(1, 2) @ x2, axis=2).T
+        z2 = inside_eliminated_sum.T @ x2
+        z2_tangent = inside_eliminated_sum_tangent.T @ x2
+        z2_jacobian = np.squeeze(inside_eliminated_sum_tensor.swapaxes(1, 2) @ x2, axis=2).T
         demeaned_z1 = z1 - self.agents.weights.T @ z1
         demeaned_z1_tangent = z1_tangent - self.agents.weights.T @ z1_tangent
         demeaned_z1_jacobian = z1_jacobian - self.agents.weights.T @ z1_jacobian
@@ -343,7 +347,7 @@ class ProblemMarket(Market):
     @NumericalErrorHandler(exceptions.MicroMomentCovariancesNumericalError)
     def safely_compute_micro_covariances(
             self, probabilities: Optional[Array], inside_probabilities: Optional[Array],
-            eliminated_probabilities: Dict[int, Array], inside_eliminated_probabilities: Dict[int, Array]) -> (
+            eliminated_probabilities: Dict[int, Array], inside_eliminated_sum: Optional[Array]) -> (
             Tuple[Array, List[Error]]):
         """Compute micro moment covariances, handling any numerical errors."""
         errors: List[Error] = []
@@ -353,7 +357,7 @@ class ProblemMarket(Market):
         demeaned_agent_micro = np.zeros((self.I, self.moments.MM), options.dtype)
         for m, moment in enumerate(self.moments.micro_moments):
             agent_micro_m = self.compute_agent_micro_moment(
-                moment, probabilities, inside_probabilities, eliminated_probabilities, inside_eliminated_probabilities
+                moment, probabilities, inside_probabilities, eliminated_probabilities, inside_eliminated_sum
             )
             demeaned_agent_micro[:, [m]] = agent_micro_m - self.agents.weights.T @ agent_micro_m
 
