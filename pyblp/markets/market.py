@@ -1,7 +1,7 @@
 """Market underlying the BLP model."""
 
 import functools
-from typing import Any, Dict, List, Optional, Tuple, cast
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -1077,10 +1077,15 @@ class Market(Container):
         # match a covariance between product characteristics of first and second choices
         assert isinstance(moment, DiversionCovarianceMoment)
         assert inside_probabilities is not None
+
+        probabilities_product = np.zeros((self.J, self.I), options.dtype)
+        for j in range(self.J):
+            probabilities_product += inside_probabilities[[j]] * inside_eliminated_probabilities[j]
+
         x1 = self.products.X2[:, [moment.X2_index1]]
         x2 = self.products.X2[:, [moment.X2_index2]]
         z1 = inside_probabilities.T @ x1
-        z2 = cast(Array, sum(inside_eliminated_probabilities.values())).T @ x2
+        z2 = probabilities_product.T @ x2
         demeaned_z1 = z1 - self.agents.weights.T @ z1
         demeaned_z2 = z2 - self.agents.weights.T @ z2
         return demeaned_z1 * demeaned_z2 - moment.value

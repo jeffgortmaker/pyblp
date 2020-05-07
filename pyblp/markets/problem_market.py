@@ -1,6 +1,6 @@
 """Market-level BLP problem functionality."""
 
-from typing import Dict, List, Tuple, cast
+from typing import Dict, List, Tuple
 
 import numpy as np
 
@@ -307,14 +307,29 @@ class ProblemMarket(Market):
         # handle a covariance between product characteristics of first and second choices
         assert isinstance(moment, DiversionCovarianceMoment)
         assert inside_probabilities is not None and inside_tangent is not None and inside_tensor is not None
+
+        probabilities_product = np.zeros((self.J, self.I), options.dtype)
+        probabilities_product_tangent = np.zeros((self.J, self.I), options.dtype)
+        probabilities_product_tensor = np.zeros((self.J, self.J, self.I), options.dtype)
+        for j in range(self.J):
+            probabilities_product += inside_probabilities[[j]] * inside_eliminated_probabilities[j]
+            probabilities_product_tangent += (
+                inside_tangent[[j]] * inside_eliminated_probabilities[j] +
+                inside_probabilities[[j]] * inside_eliminated_tangents[j]
+            )
+            probabilities_product_tensor += (
+                inside_tensor[:, [j], :] * inside_eliminated_probabilities[j][None] +
+                inside_probabilities[[j]][None] * inside_eliminated_tensors[j]
+            )
+
         x1 = self.products.X2[:, [moment.X2_index1]]
         x2 = self.products.X2[:, [moment.X2_index2]]
         z1 = inside_probabilities.T @ x1
         z1_tangent = inside_tangent.T @ x1
         z1_jacobian = np.squeeze(inside_tensor.swapaxes(1, 2) @ x1, axis=2).T
-        z2 = cast(Array, sum(inside_eliminated_probabilities.values())).T @ x2
-        z2_tangent = cast(Array, sum(inside_eliminated_tangents.values())).T @ x2
-        z2_jacobian = np.squeeze(cast(Array, sum(inside_eliminated_tensors.values())).swapaxes(1, 2) @ x2, axis=2).T
+        z2 = probabilities_product.T @ x2
+        z2_tangent = probabilities_product_tangent.T @ x2
+        z2_jacobian = np.squeeze(probabilities_product_tensor.swapaxes(1, 2) @ x2, axis=2).T
         demeaned_z1 = z1 - self.agents.weights.T @ z1
         demeaned_z1_tangent = z1_tangent - self.agents.weights.T @ z1_tangent
         demeaned_z1_jacobian = z1_jacobian - self.agents.weights.T @ z1_jacobian
