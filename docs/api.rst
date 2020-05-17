@@ -147,7 +147,7 @@ Importance sampling can be used to create new integration nodes and weights. Its
 
 
 Bootstrapped Problem Results Class
----------------------------------
+----------------------------------
 
 Parametric bootstrap computation returns the following class.
 
