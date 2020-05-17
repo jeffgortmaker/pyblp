@@ -137,6 +137,16 @@ class ProblemResults(Results):
         Bounds for :math:`\beta` that were used during optimization, which are of the form ``(lb, ub)``.
     gamma_bounds : `tuple`
         Bounds for :math:`\gamma` that were used during optimization, which are of the form ``(lb, ub)``.
+    sigma_labels : `list of str`
+        Variable labels for rows and columns of :math:`\Sigma`, which are derived from the formulation for :math:`X_2`.
+    pi_labels : `list of str`
+        Variable labels for columns of :math:`\Pi`, which are derived from the formulation for demographics.
+    rho_labels : `list of str`
+        Variable labels for :math:`\rho`. If :math:`\rho` is not a scalar, this is :attr:`Problem.unique_nesting_ids`.
+    beta_labels : `list of str`
+        Variable labels for :math:`\beta`, which are derived from the formulation for :math:`X_1`.
+    gamma_labels : `list of str`
+        Variable labels for :math:`\gamma`, which are derived from the formulation for :math:`X_3`.
     delta : `ndarray`
         Estimated mean utility, :math:`\delta(\hat{\theta})`.
     clipped_shares : `ndarray`
@@ -241,6 +251,11 @@ class ProblemResults(Results):
     rho_bounds: Bounds
     beta_bounds: Bounds
     gamma_bounds: Bounds
+    sigma_labels: List[str]
+    pi_labels: List[str]
+    rho_labels: List[str]
+    beta_labels: List[str]
+    gamma_labels: List[str]
     delta: Array
     clipped_shares: Array
     tilde_costs: Array
@@ -359,6 +374,11 @@ class ProblemResults(Results):
         self.rho_bounds = self._parameters.rho_bounds
         self.beta_bounds = self._parameters.beta_bounds
         self.gamma_bounds = self._parameters.gamma_bounds
+        self.sigma_labels = self._parameters.sigma_labels
+        self.pi_labels = self._parameters.pi_labels
+        self.rho_labels = self._parameters.rho_labels
+        self.beta_labels = self._parameters.beta_labels
+        self.gamma_labels = self._parameters.gamma_labels
 
         # ignore computational errors when updating the weighting matrix and computing covariances
         with np.errstate(all='ignore'):
@@ -571,10 +591,10 @@ class ProblemResults(Results):
                 'cumulative_contraction_evaluations', 'parameters', 'parameter_covariances', 'theta', 'sigma',
                 'sigma_squared', 'pi', 'rho', 'beta', 'gamma', 'sigma_se', 'sigma_squared_se', 'pi_se', 'rho_se',
                 'beta_se', 'gamma_se', 'sigma_bounds', 'pi_bounds', 'rho_bounds', 'beta_bounds', 'gamma_bounds',
-                'delta', 'tilde_costs', 'clipped_shares', 'clipped_costs', 'xi', 'omega', 'micro', 'objective',
-                'xi_by_theta_jacobian', 'omega_by_theta_jacobian', 'micro_by_theta_jacobian', 'gradient',
-                'projected_gradient', 'projected_gradient_norm', 'hessian', 'reduced_hessian',
-                'reduced_hessian_eigenvalues', 'W', 'updated_W'
+                'sigma_labels', 'pi_labels', 'rho_labels', 'beta_labels', 'gamma_labels', 'delta', 'tilde_costs',
+                'clipped_shares', 'clipped_costs', 'xi', 'omega', 'micro', 'objective', 'xi_by_theta_jacobian',
+                'omega_by_theta_jacobian', 'micro_by_theta_jacobian', 'gradient', 'projected_gradient',
+                'projected_gradient_norm', 'hessian', 'reduced_hessian', 'reduced_hessian_eigenvalues', 'W', 'updated_W'
             )) -> dict:
         """Convert these results into a dictionary that maps attribute names to values.
 
