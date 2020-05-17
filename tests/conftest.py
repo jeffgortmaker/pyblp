@@ -336,6 +336,9 @@ def large_blp_simulation() -> SimulationFixture:
             product_id1=1, product_id2=0, value=0, market_ids=simulation.unique_market_ids[6:10]
         ),
         DiversionProbabilityMoment(
+            product_id1=None, product_id2=1, value=0, market_ids=[simulation.unique_market_ids[8]]
+        ),
+        DiversionProbabilityMoment(
             product_id1=1, product_id2=None, value=0, market_ids=[simulation.unique_market_ids[9]]
         ),
         DiversionCovarianceMoment(

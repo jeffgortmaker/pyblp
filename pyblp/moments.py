@@ -143,8 +143,8 @@ class DemographicCovarianceMoment(Moment):
 
     .. math:: z_{it} = \sum_{j \in J_t} x_{jt}s_{ij(-0)t}
 
-    where :math:`s_{ij(-0)t}` is the probability of :math:`i` choosing :math:`j` when the outside option is removed from
-    the choice set.
+    where :math:`s_{ij(-0)t} = s_{ijt} / (1 - s_{i0t})` is the probability of :math:`i` choosing :math:`j` when the
+    outside option is removed from the choice set.
 
     Integrals of these micro moments are approximated within and averaged across a set :math:`T_m` of markets in which
     the micro data used to compute :math:`v_m` are relevant, which gives :math:`\bar{g}_{M,m}` in
@@ -209,8 +209,13 @@ class DiversionProbabilityMoment(Moment):
 
     .. math:: g_{M,imt} = \frac{s_{ik(-j)t} s_{ijt}}{s_{jt}} - v_m
 
-    where :math:`s_{ik(-j)t}` is the probability of :math:`i` choosing :math:`k` when :math:`j` is removed from the
-    choice set.
+    where :math:`s_{ik(-j)t} = s_{ijt} / (1 - s_{ijt})` is the probability of :math:`i` choosing :math:`k` when
+    :math:`j` is removed from the choice set. Rearranging terms gives the equivalent definition
+
+    .. math:: g_{M,imt} = \frac{s_{ik(-j)t} - s_{ikt}}{s_{jt}} - v_m,
+
+    which is more reminiscent of the long-run diversion ratios :math:`\bar{\mathscr{D}}_{jk}` computed by
+    :meth:`ProblemResults.compute_long_run_diversion_ratios`.
 
     Integrals of these micro moments are approximated within and averaged across a set :math:`T_m` of markets in which
     the micro data used to compute :math:`v_m` are relevant, which gives :math:`\bar{g}_{M,m}` in
@@ -219,9 +224,9 @@ class DiversionProbabilityMoment(Moment):
     Parameters
     ----------
     product_id1 : `object`
-        ID of the first choice product :math:`j`, which cannot be the outside option. There must be exactly one of this
-        ID in the ``product_ids`` field of ``product_data`` in :class:`Problem` or :class:`Simulation` for each market
-        over which this micro moment will be averaged.
+        ID of the first choice product :math:`j` or ``None`` to denote the outside option :math:`j = 0`. There must be
+        exactly one of this ID in the ``product_ids`` field of ``product_data`` in :class:`Problem` or
+        :class:`Simulation` for each market over which this micro moment will be averaged.
     product_id2 : `object`
         ID of the second choice product :math:`k` or ``None`` to denote the outside option :math:`j = 0`. If not
         ``None``, there must be exactly one of this ID for each market over which this micro moment will be averaged.
@@ -239,7 +244,7 @@ class DiversionProbabilityMoment(Moment):
 
     """
 
-    product_id1: Any
+    product_id1: Optional[Any]
     product_id2: Optional[Any]
 
     def __init__(
@@ -247,14 +252,14 @@ class DiversionProbabilityMoment(Moment):
             market_ids: Optional[Sequence] = None) -> None:
         """Validate information about the moment to the greatest extent possible without an economy instance."""
         super().__init__(value, market_ids)
-        if product_id1 is None:
-            raise ValueError("product_id1 cannot be None because the outside option cannot be removed.")
+        if product_id1 is None and product_id2 is None:
+            raise ValueError("At least one of product_id1 or product_id2 must be not None.")
         self.product_id1 = product_id1
         self.product_id2 = product_id2
 
     def _format_value(self) -> str:
         """Construct a string expression for the covariance moment."""
-        product1 = f"'{self.product_id1}'"
+        product1 = "Outside" if self.product_id1 is None else f"'{self.product_id1}'"
         product2 = "Outside" if self.product_id2 is None else f"'{self.product_id2}'"
         return f"P({product1} First, {product2} Second)"
 
@@ -284,7 +289,7 @@ class DiversionCovarianceMoment(Moment):
     .. math::
 
        z_{it}^{(1)} = \sum_{j \in J_t} x_{jt}^{(1)} s_{ij(-0)t}, \quad
-       z_{it}^{(2)} = \sum_{j, k \in J_t} x_{kt}^{(2)} s_{ij(-0)t} s_{ik(-0,j)t}
+       z_{it}^{(2)} = \sum_{j, k \in J_t} x_{kt}^{(2)} s_{ik(-0,j)t} s_{ij(-0)t}
 
     where :math:`s_{ij(-0)t}` is the probability of choosing :math:`j` when the outside option is removed from the
     choice set and :math:`s_{ik(-0,j)t}` is the probability of choosing :math:`k` when both the outside option and

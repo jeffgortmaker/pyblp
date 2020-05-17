@@ -985,14 +985,16 @@ class Market(Container):
 
         # pre-compute probabilities
         probabilities = conditionals = None
-        requires_probabilities = (DemographicExpectationMoment, DiversionProbabilityMoment)
-        if any(isinstance(m, requires_probabilities) for m in self.moments.micro_moments):
+        if any(isinstance(m, DemographicExpectationMoment) for m in self.moments.micro_moments):
             probabilities, conditionals = self.compute_probabilities(delta)
 
         # pre-compute probabilities conditional on purchasing an inside good
         inside_probabilities = inside_conditionals = None
-        requires_inside_probabilities = (DemographicCovarianceMoment, DiversionCovarianceMoment)
-        if any(isinstance(m, requires_inside_probabilities) for m in self.moments.micro_moments):
+        requires_inside_probabilities = lambda m: any([
+            isinstance(m, (DemographicCovarianceMoment, DiversionCovarianceMoment)),
+            isinstance(m, DiversionProbabilityMoment) and m.product_id1 is None,
+        ])
+        if any(requires_inside_probabilities(m) for m in self.moments.micro_moments):
             inside_probabilities, inside_conditionals = self.compute_probabilities(delta, eliminate_outside=True)
 
         # pre-compute second choice probabilities
@@ -1038,13 +1040,6 @@ class Market(Container):
             eliminated_probabilities: Dict[int, Array], inside_eliminated_sum: Optional[Array]) -> Array:
         """Compute agent-specific micro moments, which will be aggregated up into means or covariances."""
 
-        # match a demographic expectation for agents who choose a certain inside good
-        if isinstance(moment, DemographicExpectationMoment) and moment.product_id is not None:
-            assert probabilities is not None
-            j = self.get_product(moment.product_id)
-            d = self.agents.demographics[:, [moment.demographics_index]]
-            return d * probabilities[[j]].T / self.products.shares[j] - moment.value
-
         # match a demographic expectation for agents who choose the outside good
         if isinstance(moment, DemographicExpectationMoment) and moment.product_id is None:
             assert probabilities is not None
@@ -1052,6 +1047,13 @@ class Market(Container):
             outside_probabilities = 1 - probabilities.sum(axis=0, keepdims=True).T
             outside_share = 1 - self.products.shares.sum()
             return d * outside_probabilities / outside_share - moment.value
+
+        # match a demographic expectation for agents who choose a certain inside good
+        if isinstance(moment, DemographicExpectationMoment):
+            assert probabilities is not None
+            j = self.get_product(moment.product_id)
+            d = self.agents.demographics[:, [moment.demographics_index]]
+            return d * probabilities[[j]].T / self.products.shares[j] - moment.value
 
         # match a covariance between a product characteristic and a demographic
         if isinstance(moment, DemographicCovarianceMoment):
@@ -1063,22 +1065,28 @@ class Market(Container):
             demeaned_d = d - self.agents.weights.T @ d
             return demeaned_z * demeaned_d - moment.value
 
-        # match the second choice probability of a certain inside good for agents who choose a certain inside good
-        if isinstance(moment, DiversionProbabilityMoment) and moment.product_id2 is not None:
-            assert probabilities is not None
-            j = self.get_product(moment.product_id1)
+        # match the second choice probability of a certain inside good for agents who choose the outside good
+        if isinstance(moment, DiversionProbabilityMoment) and moment.product_id1 is None:
+            assert inside_probabilities is not None
             k = self.get_product(moment.product_id2)
-            numerator = probabilities[[j]].T * eliminated_probabilities[j][[k]].T
-            return numerator / self.products.shares[j] - moment.value
+            outside_share = 1 - self.products.shares.sum()
+            numerator = inside_probabilities[[k]].T - self.products.shares[k]
+            return numerator / outside_share - moment.value
 
         # match the second choice probability of the outside good for agents who choose a certain inside good
         if isinstance(moment, DiversionProbabilityMoment) and moment.product_id2 is None:
-            assert probabilities is not None
             j = self.get_product(moment.product_id1)
-            eliminated_outside_probabilities = 1 - eliminated_probabilities[j].sum(axis=0, keepdims=True).T
+            eliminated_outside_probabilities = 1 - eliminated_probabilities[j].sum(axis=0, keepdims=True)
             outside_share = 1 - self.products.shares.sum()
-            numerator = probabilities[[j]].T * eliminated_outside_probabilities
-            return numerator / outside_share - moment.value
+            numerator = eliminated_outside_probabilities.T - outside_share
+            return numerator / self.products.shares[j] - moment.value
+
+        # match the second choice probability of a certain inside good for agents who choose a certain inside good
+        if isinstance(moment, DiversionProbabilityMoment):
+            j = self.get_product(moment.product_id1)
+            k = self.get_product(moment.product_id2)
+            numerator = eliminated_probabilities[j][[k]].T - self.products.shares[k]
+            return numerator / self.products.shares[j] - moment.value
 
         # match a covariance between product characteristics of first and second choices
         assert isinstance(moment, DiversionCovarianceMoment)
