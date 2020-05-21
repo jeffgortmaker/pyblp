@@ -16,6 +16,13 @@ verbose_output : `callable`
     Function used to output status updates. The default function is simply ``print``. The function can be changed, for
     example, to include an indicator that statuses are from this package, with
     ``pyblp.verbose_output = lambda x: print(f"pyblp: {x}")``.
+flush_output : `bool`
+    Whether to call ``sys.stdout.flush()`` after outputting a status update. By default, output is not flushed to
+    standard output. To force standard output flushes after every status update, set
+    ``pyblp.options.flush_output = True`. This may be particularly desirable for R users who are calling PyBLP from
+    `reticulate <https://github.com/rstudio/reticulate>`_, since standard output is typically not automatically flushed
+    to the screen in this environment. If PyBLP is imported as ``pyblp``, this setting can be enabled in R with
+    ``pyblp$options$flush_output <- TRUE``.
 dtype : `dtype`
     The data type used for internal calculations, which is by default ``numpy.float64``. The other recommended option is
     ``numpy.longdouble``, which is the only extended precision floating point type currently supported by NumPy.
@@ -97,6 +104,7 @@ digits = 7
 verbose = True
 verbose_tracebacks = False
 verbose_output = print
+flush_output = False
 dtype = _np.float64
 finite_differences_epsilon = _np.sqrt(_np.finfo(dtype).eps)
 pseudo_inverses = True

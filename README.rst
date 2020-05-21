@@ -72,6 +72,7 @@ For example, the `reticulate <https://github.com/rstudio/reticulate>`_ package m
 
     library(reticulate)
     pyblp <- import("pyblp")
+    pyblp$options$flush_output <- TRUE
 
 Similarly, `PyCall <https://github.com/JuliaPy/PyCall.jl>`_ can be used to incorporate PyBLP into a Julia workflow::
 

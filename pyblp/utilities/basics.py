@@ -5,6 +5,7 @@ import functools
 import inspect
 import multiprocessing.pool
 import re
+import sys
 import time
 import traceback
 from typing import (
@@ -197,6 +198,8 @@ def output(message: Any) -> None:
         if not callable(options.verbose_output):
             raise TypeError("options.verbose_output should be callable.")
         options.verbose_output(str(message))
+        if options.flush_output:
+            sys.stdout.flush()
 
 
 def output_progress(iterable: Iterable, length: int, start_time: float) -> Iterator:
