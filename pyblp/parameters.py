@@ -202,7 +202,7 @@ class Parameters(object):
         self.diagonal_sigma = not (np.tril(self.sigma, k=-1) != 0).any()
 
         # identify the index of nonzero columns in sigma
-        self.nonzero_sigma_index = np.sum(self.sigma, axis=0) > 0
+        self.nonzero_sigma_index = np.any(self.sigma != 0, axis=0)
 
         # identify the index of alpha in beta
         self.alpha_index = np.zeros_like(self.beta, np.bool)
