@@ -63,7 +63,7 @@ class Integration(StringRepresentation):
         Options for the integration specification. The ``'monte_carlo'``, ``'halton'``, ``'lhs'``, and ``'mlhs'``
         specifications support the following option:
 
-            - **seed** : (`int`) - Passed to :class:`numpy.random.mtrand.RandomState` to seed the random number
+            - **seed** : (`int`) - Passed to :class:`numpy.random.RandomState` to seed the random number
               generator before building integration nodes. By default, a seed is not passed to the random number
               generator. For ``'halton'`` draws, this is only relevant if ``scramble`` is ``True`` (which is the
               default).

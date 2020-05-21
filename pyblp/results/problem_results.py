@@ -823,7 +823,7 @@ class ProblemResults(Results):
             The number of draws that will be taken from the joint distribution of the parameters. The default value is
             ``1000``.
         seed : `int, optional`
-            Passed to :class:`numpy.random.mtrand.RandomState` to seed the random number generator before any draws are
+            Passed to :class:`numpy.random.RandomState` to seed the random number generator before any draws are
             taken. By default, a seed is not passed to the random number generator.
         iteration : `Iteration, optional`
             :class:`Iteration` configuration used to compute bootstrapped prices by iterating over the
@@ -1015,7 +1015,7 @@ class ProblemResults(Results):
             draws is ``1``, even though it will be ignored. For ``'normal'`` or empirical, larger numbers such as
             ``100`` or ``1000`` are recommended.
         seed : `int, optional`
-            Passed to :class:`numpy.random.mtrand.RandomState` to seed the random number generator before any draws are
+            Passed to :class:`numpy.random.RandomState` to seed the random number generator before any draws are
             taken. By default, a seed is not passed to the random number generator.
         expected_prices : `array-like, optional`
             Vector of expected prices conditional on all exogenous variables, :math:`E[p \mid Z]`. By default, if a
@@ -1305,8 +1305,8 @@ class ProblemResults(Results):
         ar_constant : `float, optional`
             Accept/reject constant :math:`M \geq 1`, which is by default, ``1.0``.
         seed : `int, optional`
-            Passed to :class:`numpy.random.mtrand.RandomState` to seed the random number generator before importance
-            sampling is done. By default, a seed is not passed to the random number generator.
+            Passed to :class:`numpy.random.RandomState` to seed the random number generator before importance sampling
+            is done. By default, a seed is not passed to the random number generator.
         agent_data : `structured array-like, optional`
             Agent data from which draws will be sampled, which should have the same structure as ``agent_data`` in
             :class:`Problem`. The ``weights`` field does not need to be specified, and if it is specified it will be
