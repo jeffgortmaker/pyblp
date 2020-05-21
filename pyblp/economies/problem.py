@@ -1095,7 +1095,8 @@ class Problem(ProblemEconomy):
 
             - **nodes** : (`numeric, optional`) - Unobserved agent characteristics called integration nodes,
               :math:`\nu`. If there are more than :math:`K_2` columns (the number of demand-side nonlinear product
-              characteristics), only the first :math:`K_2` will be retained.
+              characteristics), only the first :math:`K_2` will be retained. If any columns of ``sigma`` in
+              :meth:`Problem.solve` are fixed at zero, only the first few columns of these nodes will be used.
 
         The convenience function :func:`build_integration` can be useful when constructing custom nodes and weights.
 
