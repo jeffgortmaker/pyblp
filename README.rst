@@ -130,7 +130,6 @@ Features
 Features Slated for Future Versions
 -----------------------------------
 
-- Other micro moments
 - Fast, "Robust," and Approximately Correct (FRAC) estimation
 - Analytic Hessians
 - Mathematical Program with Equilibrium Constraints (MPEC)
