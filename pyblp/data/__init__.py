@@ -15,7 +15,8 @@ BLP_PRODUCTS_LOCATION : `str`
     :ref:`references:Berry, Levinsohn, and Pakes (1995)`.
 
     The file also includes a set of excluded instruments. First, "sums of characteristics" BLP instruments from the
-    original paper were computed with :func:`~pyblp.build_blp_instruments`. As in the original paper, the "rival"
+    original paper were computed with :func:`~pyblp.build_blp_instruments`. The examples section in the documentation
+    for this function shows how to construct these instruments from scratch. As in the original paper, the "rival"
     instrument constructed from the ``trend`` variable was excluded due to collinearity issues, and the ``mpd``
     variable was added to the set of excluded instruments for supply.
 

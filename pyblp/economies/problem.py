@@ -1036,6 +1036,9 @@ class Problem(ProblemEconomy):
         and then compute feasible optimal instruments with :func:`ProblemResults.compute_optimal_instruments` in the
         second stage.
 
+        For guidance on how to construct instruments and add them to product data, refer to the examples in the
+        documentation for the :func:`build_blp_instruments` and :func:`build_differentiation_instruments` functions.
+
         If ``firm_ids`` are specified, custom ownership matrices can be specified as well:
 
             - **ownership** : (`numeric, optional`) - Custom stacked :math:`J_t \times J_t` ownership or product
