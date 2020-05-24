@@ -50,12 +50,13 @@ def test_accuracy(simulated_problem: SimulatedProblemFixture, solve_options_upda
     updated_solve_options.update({k: 0.5 * solve_options[k] for k in ['sigma', 'pi', 'rho', 'beta']})
     results = problem.solve(**updated_solve_options)
 
-    # test the accuracy of the estimated parameters
+    # test the accuracy of the estimated parameters (give a bit more leeway during a second GMM step)
+    rtol = 0.1 if results.step == 1 else 0.15
     keys = ['sigma', 'pi', 'rho', 'beta']
     if problem.K3 > 0:
         keys.append('gamma')
     for key in keys:
-        np.testing.assert_allclose(getattr(simulation, key), getattr(results, key), atol=0, rtol=0.1, err_msg=key)
+        np.testing.assert_allclose(getattr(simulation, key), getattr(results, key), atol=0, rtol=rtol, err_msg=key)
 
 
 @pytest.mark.usefixtures('simulated_problem')
