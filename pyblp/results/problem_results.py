@@ -565,10 +565,10 @@ class ProblemResults(Results):
         header = [("Computation", "Time")]
         values = [format_seconds(self.cumulative_total_time)]
 
-        # add optimization iterations
+        # add optimization convergence and iterations
         if self._parameters.P > 0:
-            header.append(("Optimization", "Iterations"))
-            values.append(str(self.cumulative_optimization_iterations))
+            header.extend([("Optimizer", "Converged"), ("Optimization", "Iterations")])
+            values.extend(["Yes" if self.cumulative_converged else "No", str(self.cumulative_optimization_iterations)])
 
         # add evaluations and iterations
         header.append(("Objective", "Evaluations"))
