@@ -296,7 +296,7 @@ def large_blp_simulation() -> SimulationFixture:
         sigma=[
             [0, +0.0, 0],
             [0, +0.5, 0],
-            [0, -0.1, 2]
+            [0, -0.2, 2]
         ],
         pi=[
             [0, 0, 0],
