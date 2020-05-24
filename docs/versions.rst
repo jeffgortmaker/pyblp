@@ -4,6 +4,17 @@ Version Notes
 These notes will only include major changes.
 
 
+0.10
+----
+
+- Simplify micro moment API
+- Second choice or diversion micro moments
+- Add share clipping to make fixed point more robust
+- Report covariance matrix estimates in addition to Cholesky root
+- Approximation to the pure characteristics model
+- Add option to always use finite differences
+
+
 0.9
 ---
 
