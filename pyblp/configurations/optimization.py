@@ -456,7 +456,12 @@ def knitro_context_manager() -> Iterator[Tuple[Any, Any]]:
     # create the Knitro context and attempt to free it if anything goes wrong
     knitro_context = None
     try:
-        knitro_context = knitro.KTR_new()
+        knitro_context = None
+        try:
+            knitro_context = knitro.KTR_new()
+        except RuntimeError as exception:
+            if 'Error while initializing parameter' not in str(exception):
+                raise
         if not knitro_context:
             raise OSError(
                 "Failed to find a Knitro license. Make sure that Knitro is properly installed. You may have to create "
