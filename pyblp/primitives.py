@@ -174,9 +174,8 @@ class Products(object):
         market_groups = Groups(market_ids)
         bad_shares_index = market_groups.sum(shares) >= 1
         if np.any(bad_shares_index):
-            raise ValueError(
-                f"Shares in these markets do not sum to less than 1: {market_groups.unique[bad_shares_index]}"
-            )
+            bad_market_ids = market_groups.unique[bad_shares_index.flat]
+            raise ValueError(f"Shares in these markets do not sum to less than 1: {bad_market_ids}.")
 
         # load ownership matrices
         ownership = None
