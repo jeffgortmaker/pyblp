@@ -589,6 +589,21 @@ def test_probabilities(simulated_problem: SimulatedProblemFixture) -> None:
 
 
 @pytest.mark.usefixtures('simulated_problem')
+def test_surplus(simulated_problem: SimulatedProblemFixture) -> None:
+    """Test that integrating over individual-level surpluses gives market-level surpluses."""
+    _, _, problem, _, results = simulated_problem
+
+    # compute surpluses for a single market
+    t = problem.products.market_ids[0]
+    surpluses = results.compute_consumer_surpluses(market_id=t, keep_all=True)
+    surplus = results.compute_consumer_surpluses(market_id=t)
+
+    # test that we get the same result when manually integrating over surpluses
+    weights = problem.agents.weights[problem.agents.market_ids.flat == t]
+    np.testing.assert_allclose(surpluses @ weights, surplus, atol=1e-14, rtol=0, verbose=True)
+
+
+@pytest.mark.usefixtures('simulated_problem')
 def test_shares_by_prices_jacobian(simulated_problem: SimulatedProblemFixture) -> None:
     """Use central finite differences to test that analytic values in the Jacobian of shares with respect to prices are
     essentially equal.

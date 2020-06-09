@@ -729,7 +729,8 @@ class Results(abc.ABC, StringRepresentation):
             ResultsMarket.safely_compute_profits, market_ids, market_args=[prices, shares, costs]
         )
 
-    def compute_consumer_surpluses(self, prices: Optional[Any] = None, market_id: Optional[Any] = None) -> Array:
+    def compute_consumer_surpluses(
+            self, prices: Optional[Any] = None, market_id: Optional[Any] = None, keep_all: bool = False) -> Array:
         r"""Estimate population-normalized consumer surpluses, :math:`\text{CS}`.
 
         Assuming away nonlinear income effects, the surplus in market :math:`t` is
@@ -769,12 +770,19 @@ class Results(abc.ABC, StringRepresentation):
         market_id : `object, optional`
             ID of the market in which to compute consumer surplus. By default, consumer surpluses are computed in all
             markets and stacked.
+        keep_all : `bool, optional`
+            Whether to keep all individuals' surpluses :math:`\text{CS}_{it}` or just market-level surpluses.
+            By default only market-level surpluses are returned, but returning all surpluses will be important for
+            analysis by agent type or demographic category.
 
         Returns
         -------
         `ndarray`
-            Estimated population-normalized consumer surpluses, :math:`\text{CS}`. If ``market_ids`` was not specified,
-            rows are in the same order as :attr:`Problem.unique_market_ids`.
+            Estimated population-normalized consumer surpluses, :math:`\text{CS}` (or individuals' surpluses if
+            ``keep_all`` is ``True``). If ``market_ids`` was not specified, rows are in the same order as
+            :attr:`Problem.unique_market_ids`. If ``keep_all`` is ``True``, columns for a market are in the same order
+            as agents for the market. If a market has fewer agents than others, extra columns will contain
+            ``numpy.nan``.
 
         Examples
         --------
@@ -784,4 +792,6 @@ class Results(abc.ABC, StringRepresentation):
         output("Computing consumer surpluses with the equation that assumes away nonlinear income effects ...")
         market_ids = self._select_market_ids(market_id)
         prices = self._coerce_optional_prices(prices, market_ids)
-        return self._combine_arrays(ResultsMarket.safely_compute_consumer_surplus, market_ids, market_args=[prices])
+        return self._combine_arrays(
+            ResultsMarket.safely_compute_consumer_surplus, market_ids, fixed_args=[keep_all], market_args=[prices]
+        )

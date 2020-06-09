@@ -233,9 +233,9 @@ class ResultsMarket(Market):
         return profits, errors
 
     @NumericalErrorHandler(exceptions.PostEstimationNumericalError)
-    def safely_compute_consumer_surplus(self, prices: Optional[Array]) -> Tuple[Array, List[Error]]:
-        """Estimate population-normalized consumer surplus. By default, use unchanged prices, handling any numerical
-        errors.
+    def safely_compute_consumer_surplus(self, keep_all: bool, prices: Optional[Array]) -> Tuple[Array, List[Error]]:
+        """Estimate population-normalized consumer surplus or keep all individual-level surpluses. By default, use
+        unchanged prices, handling any numerical errors.
         """
         errors: List[Error] = []
         if prices is None:
@@ -267,7 +267,12 @@ class ResultsMarket(Market):
         # compute the derivatives of utility with respect to prices, which are assumed to be constant across products
         derivatives = -self.compute_utility_derivatives('prices')[0]
 
-        # compute consumer surplus
+        # compute individual-level consumer surpluses
         numerator = np.log(np.exp(log_scale) + (scale_weights * exp_utilities).sum(axis=0, keepdims=True)) - log_scale
-        consumer_surplus = (numerator / derivatives) @ self.agents.weights
-        return consumer_surplus, errors
+        surpluses = numerator / derivatives
+        if keep_all:
+            return surpluses, errors
+
+        # integrate over agents
+        surplus = surpluses @ self.agents.weights
+        return surplus, errors
