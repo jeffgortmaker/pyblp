@@ -22,7 +22,8 @@ setup(
     extras_require={
         'tests': ['pytest', 'pytest-xdist', 'linearmodels'],
         'docs': [
-            'sphinx', 'pandas', 'ipython', 'matplotlib', 'astunparse', 'sphinx-rtd-theme', 'nbsphinx'
+            'sphinx==2.0.0', 'pandas', 'ipython', 'matplotlib', 'astunparse', 'sphinx-rtd-theme==0.4.3',
+            'nbsphinx==0.5.0'
         ],
     },
     include_package_data=True,
