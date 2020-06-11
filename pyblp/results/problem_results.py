@@ -170,6 +170,10 @@ class ProblemResults(Results):
         :math:`\Delta\omega(\hat{\theta})` in :eq:`fe`. That is, fixed effects are not included.
     micro : `ndarray`
         Averaged micro moments, :math:`\bar{g}_M`, in :eq:`averaged_micro_moments`.
+    micro_values : `ndarray`
+        Simulated micro moment values, :math:`v_{mt}`. Rows are in the same order as :attr:`Problem.unique_market_ids`.
+        Columns are in the same order as :attr:`ProblemResults.micro`. If a micro moment is not computed in one or more
+        markets, the associated values will be ``numpy.nan``.
     objective : `float`
         GMM objective value, :math:`q(\hat{\theta})`, defined in :eq:`objective`. If ``scale_objective`` was ``True`` in
         :meth:`Problem.solve` (which is the default), this value was scaled by :math:`N` so that objective values are
@@ -263,6 +267,7 @@ class ProblemResults(Results):
     xi: Array
     omega: Array
     micro: Array
+    micro_values: Array
     objective: Array
     xi_by_theta_jacobian: Array
     omega_by_theta_jacobian: Array
@@ -296,6 +301,7 @@ class ProblemResults(Results):
         self.delta = progress.delta
         self.tilde_costs = progress.tilde_costs
         self.micro = progress.micro
+        self.micro_values = progress.micro_values
         self.xi_by_theta_jacobian = progress.xi_jacobian
         self.omega_by_theta_jacobian = progress.omega_jacobian
         self.micro_by_theta_jacobian = progress.micro_jacobian

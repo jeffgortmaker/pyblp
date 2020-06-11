@@ -673,7 +673,10 @@ class ProblemEconomy(Economy):
 
         # compute demand-side contributions
         compute_jacobians = compute_gradient and not finite_differences
-        delta, micro, xi_jacobian, micro_jacobian, micro_covariances, clipped_shares, iteration_stats, demand_errors = (
+        (
+            delta, micro, xi_jacobian, micro_jacobian, micro_covariances, micro_values, clipped_shares, iteration_stats,
+            demand_errors
+        ) = (
             self._compute_demand_contributions(
                 parameters, moments, iteration, fp_type, shares_bounds, sigma, pi, rho, progress, compute_jacobians,
                 compute_micro_covariances
@@ -817,28 +820,29 @@ class ProblemEconomy(Economy):
         # structure progress
         return Progress(
             self, parameters, moments, W, theta, objective, gradient, hessian, next_delta, delta, tilde_costs, micro,
-            xi_jacobian, omega_jacobian, micro_jacobian, micro_covariances, iv_delta, iv_tilde_costs, xi, omega, beta,
-            gamma, iteration_stats, clipped_shares, clipped_costs, errors
+            xi_jacobian, omega_jacobian, micro_jacobian, micro_covariances, micro_values, iv_delta, iv_tilde_costs, xi,
+            omega, beta, gamma, iteration_stats, clipped_shares, clipped_costs, errors
         )
 
     def _compute_demand_contributions(
             self, parameters: Parameters, moments: EconomyMoments, iteration: Iteration, fp_type: str,
             shares_bounds: Bounds, sigma: Array, pi: Array, rho: Array, progress: 'InitialProgress',
             compute_jacobians: bool, compute_micro_covariances: bool) -> (
-            Tuple[Array, Array, Array, Array, Array, Array, Dict[Hashable, SolverStats], List[Error]]):
+            Tuple[Array, Array, Array, Array, Array, Array, Array, Dict[Hashable, SolverStats], List[Error]]):
         """Compute delta and the Jacobian of xi (equivalently, of delta) with respect to theta market-by-market. If
         there are any micro moments, compute them (taking the average across relevant markets) along with their
         Jacobian and covariances. Revert any problematic elements to their last values.
         """
         errors: List[Error] = []
 
-        # initialize delta, micro moments, their Jacobians, micro moment covariances, indices of clipped shares, and
-        #   fixed point statistics so that they can be filled
+        # initialize delta, micro moments, their Jacobians, micro moment covariances, micro moment values, indices of
+        #   clipped shares, and fixed point statistics so that they can be filled
         delta = np.zeros((self.N, 1), options.dtype)
         micro = np.zeros((moments.MM, 1), options.dtype)
         xi_jacobian = np.zeros((self.N, parameters.P), options.dtype)
         micro_jacobian = np.zeros((moments.MM, parameters.P), options.dtype)
         micro_covariances = np.zeros((moments.MM, moments.MM), options.dtype)
+        micro_values = np.full((self.T, moments.MM), np.nan, options.dtype)
         clipped_shares = np.zeros((self.N, 1), np.bool)
         iteration_stats: Dict[Hashable, SolverStats] = {}
 
@@ -856,31 +860,35 @@ class ProblemEconomy(Economy):
                     compute_micro_covariances
                 )
 
-            # compute delta, micro moments, their Jacobians, and micro moment covariances market-by-market
-            micro_mapping: Dict[Hashable, Array] = {}
+            # compute delta, micro moment values, their Jacobians, and micro moment covariances market-by-market
             micro_jacobian_mapping: Dict[Hashable, Array] = {}
             micro_covariances_mapping: Dict[Hashable, Array] = {}
             generator = generate_items(self.unique_market_ids, market_factory, ProblemMarket.solve_demand)
-            for t, (delta_t, micro_t, xi_jac_t, micro_jac_t, covariances_t, clipped_t, stats_t, errors_t) in generator:
+            for t, generated_t in generator:
+                (
+                    delta_t, micro_values_t, xi_jacobian_t, micro_jacobian_t, micro_covariances_t, clipped_shares_t,
+                    iteration_stats_t, errors_t
+                ) = generated_t
                 delta[self._product_market_indices[t]] = delta_t
-                xi_jacobian[self._product_market_indices[t], :parameters.P] = xi_jac_t
-                micro_mapping[t] = micro_t
-                micro_jacobian_mapping[t] = micro_jac_t
-                micro_covariances_mapping[t] = covariances_t
-                clipped_shares[self._product_market_indices[t]] = clipped_t
-                iteration_stats[t] = stats_t
+                xi_jacobian[self._product_market_indices[t], :parameters.P] = xi_jacobian_t
+                micro_values[self._market_indices[t], moments.market_indices[t]] = micro_values_t.flat
+                micro_jacobian_mapping[t] = micro_jacobian_t
+                micro_covariances_mapping[t] = micro_covariances_t
+                clipped_shares[self._product_market_indices[t]] = clipped_shares_t
+                iteration_stats[t] = iteration_stats_t
                 errors.extend(errors_t)
 
-            # average micro moments, their Jacobian, and their covariances across all markets (this is done after
+            # aggregate micro moments, their Jacobian, and their covariances across all markets (this is done after
             #   market-by-market computation to preserve numerical stability with different market orderings)
             if moments.MM > 0:
                 with np.errstate(all='ignore'):
                     for t in self.unique_market_ids:
                         indices = moments.market_indices[t]
                         if indices.size > 0:
-                            micro[indices] += micro_mapping[t] / moments.market_counts[indices]
-                            micro_jacobian[indices, :parameters.P] += (
-                                micro_jacobian_mapping[t] / moments.market_counts[indices]
+                            differences = moments.market_values[t] - micro_values[self._market_indices[t], indices]
+                            micro[indices] += differences[:, None] / moments.market_counts[indices, None]
+                            micro_jacobian[indices, :parameters.P] -= (
+                                micro_jacobian_mapping[t] / moments.market_counts[indices, None]
                             )
                             if compute_micro_covariances:
                                 pairwise_indices = tuple(np.meshgrid(indices, indices))
@@ -913,7 +921,10 @@ class ProblemEconomy(Economy):
                 micro_jacobian[bad_micro_jacobian_index] = progress.micro_jacobian[bad_micro_jacobian_index]
                 errors.append(exceptions.MicroMomentsByThetaJacobianReversionError(bad_micro_jacobian_index))
 
-        return delta, micro, xi_jacobian, micro_jacobian, micro_covariances, clipped_shares, iteration_stats, errors
+        return (
+            delta, micro, xi_jacobian, micro_jacobian, micro_covariances, micro_values, clipped_shares, iteration_stats,
+            errors
+        )
 
     def _compute_supply_contributions(
             self, parameters: Parameters, costs_bounds: Bounds, sigma: Array, pi: Array, rho: Array, beta: Array,
@@ -1448,6 +1459,7 @@ class Progress(InitialProgress):
     """Structured information about estimation progress."""
 
     micro_covariances: Array
+    micro_values: Array
     xi: Array
     omega: Array
     beta: Array
@@ -1464,8 +1476,8 @@ class Progress(InitialProgress):
             self, problem: ProblemEconomy, parameters: Parameters, moments: EconomyMoments, W: Array, theta: Array,
             objective: Array, gradient: Array, hessian: Array, next_delta: Array, delta: Array, tilde_costs: Array,
             micro: Array, xi_jacobian: Array, omega_jacobian: Array, micro_jacobian: Array, micro_covariances: Array,
-            iv_delta: Array, iv_tilde_costs: Array, xi: Array, omega: Array, beta: Array, gamma: Array,
-            iteration_stats: Dict[Hashable, SolverStats], clipped_shares: Array, clipped_costs: Array,
+            micro_values: Array, iv_delta: Array, iv_tilde_costs: Array, xi: Array, omega: Array, beta: Array,
+            gamma: Array, iteration_stats: Dict[Hashable, SolverStats], clipped_shares: Array, clipped_costs: Array,
             errors: List[Error]) -> None:
         """Store progress information, compute the projected gradient and its norm, and compute the reduced Hessian."""
         super().__init__(
@@ -1473,6 +1485,7 @@ class Progress(InitialProgress):
             xi_jacobian, omega_jacobian, micro_jacobian
         )
         self.micro_covariances = micro_covariances
+        self.micro_values = micro_values
         self.iv_delta = iv_delta
         self.iv_tilde_costs = iv_tilde_costs
         self.xi = xi

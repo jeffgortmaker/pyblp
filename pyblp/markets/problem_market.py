@@ -24,9 +24,9 @@ class ProblemMarket(Market):
             Tuple[Array, Array, Array, Array, Array, Array, SolverStats, List[Error]]):
         """Compute the mean utility for this market that equates market shares to observed values by solving a fixed
         point problem. Then, if compute_jacobians is True, compute the Jacobian of xi (equivalently, of delta) with
-        respect to theta. Finally, compute any micro moments, their Jacobian with respect to theta (if compute_jacobians
-        is True), and, if compute_micro_covariances is True, their covariances. Replace null elements in delta with
-        their last values before computing micro moments and Jacobians.
+        respect to theta. Finally, compute any micro moment values, their Jacobian with respect to theta (if
+        compute_jacobians is True), and, if compute_micro_covariances is True, their covariances. Replace null elements
+        in delta with their last values before computing micro moments and Jacobians.
         """
         errors: List[Error] = []
 
@@ -47,16 +47,16 @@ class ProblemMarket(Market):
 
         # compute micro moments, their Jacobian, and their covariances
         assert self.moments is not None
-        micro = np.zeros((self.moments.MM, 0), options.dtype)
+        micro_values = np.zeros((self.moments.MM, 0), options.dtype)
         micro_jacobian = np.full((self.moments.MM, self.parameters.P), np.nan, options.dtype)
         micro_covariances = np.full((self.moments.MM, self.moments.MM), np.nan, options.dtype)
         if self.moments.MM > 0:
             (
-                micro, probabilities, conditionals, inside_probabilities, inside_conditionals, eliminated_probabilities,
-                eliminated_conditionals, inside_eliminated_sum, inside_eliminated_probabilities,
-                inside_eliminated_conditionals, micro_errors
+                micro_values, probabilities, conditionals, inside_probabilities, inside_conditionals,
+                eliminated_probabilities, eliminated_conditionals, inside_eliminated_sum,
+                inside_eliminated_probabilities, inside_eliminated_conditionals, micro_errors
             ) = (
-                self.safely_compute_micro(valid_delta)
+                self.safely_compute_micro_values(valid_delta)
             )
             errors.extend(micro_errors)
             if compute_jacobians:
@@ -72,7 +72,7 @@ class ProblemMarket(Market):
                 )
                 errors.extend(micro_covariances_errors)
 
-        return delta, micro, xi_jacobian, micro_jacobian, micro_covariances, clipped_shares, stats, errors
+        return delta, micro_values, xi_jacobian, micro_jacobian, micro_covariances, clipped_shares, stats, errors
 
     def solve_supply(
             self, last_tilde_costs: Array, xi_jacobian: Array, costs_bounds: Bounds, compute_jacobian: bool) -> (
@@ -121,24 +121,24 @@ class ProblemMarket(Market):
         return self.compute_xi_by_theta_jacobian(delta)
 
     @NumericalErrorHandler(exceptions.MicroMomentsNumericalError)
-    def safely_compute_micro(
+    def safely_compute_micro_values(
             self, delta: Array) -> (
             Tuple[
                 Array, Optional[Array], Optional[Array], Optional[Array], Optional[Array], Dict[int, Array],
                 Dict[int, Optional[Array]], Optional[Array], Dict[int, Array], Dict[int, Optional[Array]], List[Error]
             ]):
-        """Compute micro moments, handling any numerical errors."""
+        """Compute micro moment values, handling any numerical errors."""
         errors: List[Error] = []
         (
-            micro, probabilities, conditionals, inside_probabilities, inside_conditionals, eliminated_probabilities,
-            eliminated_conditionals, inside_eliminated_sum, inside_eliminated_probabilities,
+            micro_values, probabilities, conditionals, inside_probabilities, inside_conditionals,
+            eliminated_probabilities, eliminated_conditionals, inside_eliminated_sum, inside_eliminated_probabilities,
             inside_eliminated_conditionals
         ) = (
-            self.compute_micro(delta)
+            self.compute_micro_values(delta)
         )
         return (
-            micro, probabilities, conditionals, inside_probabilities, inside_conditionals, eliminated_probabilities,
-            eliminated_conditionals, inside_eliminated_sum, inside_eliminated_probabilities,
+            micro_values, probabilities, conditionals, inside_probabilities, inside_conditionals,
+            eliminated_probabilities, eliminated_conditionals, inside_eliminated_sum, inside_eliminated_probabilities,
             inside_eliminated_conditionals, errors
         )
 
@@ -230,7 +230,7 @@ class ProblemMarket(Market):
 
             # fill the gradient of micro moments with respect to the parameter
             for m, moment in enumerate(self.moments.micro_moments):
-                tangent_m, jacobian_m = self.compute_agent_micro_moment_derivatives(
+                tangent_m, jacobian_m = self.compute_agent_micro_derivatives(
                     moment, probabilities_tensor, probabilities_tangent, inside_probabilities, inside_tensor,
                     inside_tangent, eliminated_tensors, eliminated_tangents, inside_eliminated_sum,
                     inside_eliminated_sum_tensor, inside_eliminated_sum_tangent
@@ -239,7 +239,7 @@ class ProblemMarket(Market):
 
         return micro_jacobian, errors
 
-    def compute_agent_micro_moment_derivatives(
+    def compute_agent_micro_derivatives(
             self, moment: Moment, probabilities_tensor: Optional[Array],
             probabilities_tangent: Optional[Array], inside_probabilities: Optional[Array],
             inside_tensor: Optional[Array], inside_tangent: Optional[Array], eliminated_tensors: Dict[int, Array],
@@ -345,7 +345,7 @@ class ProblemMarket(Market):
         # fill a matrix of demeaned micro moments for each agent moment-by-moment
         demeaned_agent_micro = np.zeros((self.I, self.moments.MM), options.dtype)
         for m, moment in enumerate(self.moments.micro_moments):
-            agent_micro_m = self.compute_agent_micro_moment(
+            agent_micro_m = self.compute_agent_micro_values(
                 moment, probabilities, inside_probabilities, eliminated_probabilities, inside_eliminated_sum
             )
             demeaned_agent_micro[:, [m]] = agent_micro_m - self.agents.weights.T @ agent_micro_m

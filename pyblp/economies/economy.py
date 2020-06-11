@@ -42,6 +42,7 @@ class Economy(Container, StringRepresentation):
     ED: int
     ES: int
     H: int
+    _market_indices: Dict[Hashable, int]
     _product_market_indices: Dict[Hashable, Array]
     _agent_market_indices: Dict[Hashable, Array]
     _max_J: int
@@ -83,6 +84,7 @@ class Economy(Container, StringRepresentation):
         self.H = self.unique_nesting_ids.size
 
         # identify market indices
+        self._market_indices = {t: i for i, t in enumerate(self.unique_market_ids)}
         self._product_market_indices = get_indices(self.products.market_ids)
         self._agent_market_indices = get_indices(self.agents.market_ids)
 

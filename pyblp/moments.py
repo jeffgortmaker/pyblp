@@ -18,22 +18,28 @@ if TYPE_CHECKING:
 class Moment(StringRepresentation):
     """Information about a single micro moment."""
 
-    value: Array
+    values: Array
     market_ids: Optional[Array]
 
-    def __init__(self, value: float, market_ids: Optional[Sequence] = None) -> None:
+    def __init__(self, values: Any, market_ids: Optional[Sequence] = None) -> None:
         """Validate information about the moment to the greatest extent possible without an economy instance."""
-        self.value = np.asarray(value, options.dtype)
-        if self.value.size != 1:
-            raise ValueError("The micro moment value must be a scalar.")
-
+        self.values = np.asarray(values, options.dtype)
         self.market_ids = None
         if market_ids is not None:
             self.market_ids = np.asarray(market_ids, np.object)
+
+            # check for duplicates
             unique, counts = np.unique(self.market_ids, return_counts=True)
             duplicates = unique[counts > 1]
             if duplicates.size > 0:
                 raise ValueError(f"The following market IDs are duplicated in market_ids: {duplicates}.")
+
+            # validate shape against values
+            if self.values.size not in {1, self.market_ids.size}:
+                raise ValueError(
+                    f"Micro moment values must be a scalar or, when market IDs are not None, have the same number of "
+                    f"values as the number of market IDs."
+                )
 
     def __str__(self) -> str:
         """Format information about the micro moment as a string."""
@@ -45,39 +51,36 @@ class Moment(StringRepresentation):
             return "All"
         return ", ".join(str(t) for t in self.market_ids)
 
+    @abc.abstractmethod
     def _format_moment(self) -> str:
         """Construct a string expression for the micro moment."""
-        formatted = self._format_value()
-        if self.value < 0:
-            formatted = f"{formatted} + {format_number(float(self.value))[1:]}"
-        elif self.value > 0:
-            formatted = f"{formatted} - {format_number(float(self.value))[1:]}"
-        return formatted
-
-    @abc.abstractmethod
-    def _format_value(self) -> str:
-        """Construct a string expression for the micro moment value."""
 
     def _validate(self, economy: 'Economy') -> None:
-        """Check that all market IDs associated with this moment are in the economy."""
+        """Check that all market IDs associated with this moment are in the economy. If the moment is associated with
+        all markets, validate the shape of its values.
+        """
         if self.market_ids is not None:
             extra_ids = set(self.market_ids) - set(economy.unique_market_ids)
             if extra_ids:
                 raise ValueError(f"market_ids contains the following extra IDs: {sorted(extra_ids)}.")
+        elif self.values.size not in {1, economy.unique_market_ids.size}:
+            raise ValueError(
+                f"Micro moment values must be a scalar or, when market IDs are None, have the same number of values as"
+                f"the number of distinct markets."
+            )
 
 
 class DemographicExpectationMoment(Moment):
     r"""Configuration for micro moments that match expectations of demographics for agents who choose certain products.
 
     For example, micro data can sometimes be used to compute the mean of a demographic such as income, :math:`y_{it}`,
-    for agents who choose product :math:`j`. With the value :math:`v_m` of this mean, a micro moment :math:`m` in market
-    :math:`t` for agent :math:`i` can be defined by
+    for agents who choose product :math:`j`. With the value :math:`\mathscr{V}_{mt}` of this mean, a micro moment
+    :math:`m` in market :math:`t` can be defined by :math:`g_{M,mt} = \mathscr{V}_{mt} - v_{mt}` where
 
-    .. math:: g_{M,imt} = \frac{y_{it} s_{ijt}}{s_{jt}} - v_m.
+    .. math:: v_{mt} = \frac{E[y_{it}s_{ijt}]}{s_{jt}}.
 
-    Integrals of these micro moments are approximated within and averaged across a set :math:`T_m` of markets in which
-    the micro data used to compute :math:`v_m` are relevant, which gives :math:`\bar{g}_{M,m}` in
-    :eq:`averaged_micro_moments`.
+    Integrals of these micro moments are averaged across a set :math:`T_m` of markets, which gives
+    :math:`\bar{g}_{M,m}` in :eq:`averaged_micro_moments`.
 
     Parameters
     ----------
@@ -88,13 +91,15 @@ class DemographicExpectationMoment(Moment):
     demographics_index : `int`
         Column index of the demographic :math:`y_{it}` (which can be any demographic, not just income) in the matrix of
         agent demographics, :math:`d`. This should be between zero and :math:`D - 1`, inclusive.
-    value : `float`
-        Value :math:`v_m` of the mean estimated from micro data.
+    values : `float`
+        Values :math:`\mathscr{V}_{mt}` of the statistic estimated from micro data. If a scalar is specified, then
+        :math:`\mathscr{V}_{mt} = \mathscr{V}_m` is assumed to be constant across all markets in which the moment is
+        relevant. Otherwise, this should have as many elements as ``market_ids``, or as the total number of markets if
+        ``market_ids`` is ``None``.
     market_ids : `array-like, optional`
         Distinct market IDs over which the micro moments will be averaged to get :math:`\bar{g}_{M,m}`. These are also
         the only markets in which the moments will be computed. By default, the moments are computed for and averaged
-        across all markets. That is, by default, it is assumed that the specified ``value`` is relevant for and on
-        average the same for all markets.
+        across all markets.
 
     Examples
     --------
@@ -106,16 +111,16 @@ class DemographicExpectationMoment(Moment):
     demographics_index: int
 
     def __init__(
-            self, product_id: Optional[Any], demographics_index: int, value: float,
+            self, product_id: Optional[Any], demographics_index: int, values: Any,
             market_ids: Optional[Sequence] = None) -> None:
         """Validate information about the moment to the greatest extent possible without an economy instance."""
-        super().__init__(value, market_ids)
+        super().__init__(values, market_ids)
         if not isinstance(demographics_index, int) or demographics_index < 0:
             raise ValueError("demographics_index must be a positive int.")
         self.product_id = product_id
         self.demographics_index = demographics_index
 
-    def _format_value(self) -> str:
+    def _format_moment(self) -> str:
         """Construct a string expression for the covariance moment."""
         product = "Outside" if self.product_id is None else f"'{self.product_id}'"
         return f"E[Demographic Column {self.demographics_index} | {product}]"
@@ -133,22 +138,20 @@ class DemographicCovarianceMoment(Moment):
 
     For example, micro data can sometimes be used to compute the sample covariance between a product characteristic
     :math:`x_{jt}` of an agent's choice :math:`j`, and a demographic such as income, :math:`y_{it}`, amongst those
-    agents who purchase an inside good. With the value :math:`v_m` of this sample covariance, a micro moment :math:`m`
-    in market :math:`t` for agent :math:`i` can be defined by
+    agents who purchase an inside good. With the value :math:`\mathscr{V}_{mt}` of this sample covariance, a micro
+    moment :math:`m` in market :math:`t` can be defined by :math:`g_{M,mt} = \mathscr{V}_{mt} - v_{mt}` where
 
-    .. math:: g_{M,imt} = (z_{it} - \bar{z}_t)(y_{it} - \bar{y}_t) - v_m
+    .. math:: v_{mt} = \text{Cov}(y_{it}, z_{it})
 
-    where :math:`\bar{z}_t = \sum_i w_{it} z_{it}`, :math:`\bar{y}_t = \sum_i w_{it} y_{it}`, and conditional on
-    choosing an inside good, the expected value of :math:`x_{jt}` for agent :math:`i` is
+    where conditional on choosing an inside good, the expected value of :math:`x_{jt}` for agent :math:`i` is
 
     .. math:: z_{it} = \sum_{j \in J_t} x_{jt}s_{ij(-0)t}
 
     where :math:`s_{ij(-0)t} = s_{ijt} / (1 - s_{i0t})` is the probability of :math:`i` choosing :math:`j` when the
     outside option is removed from the choice set.
 
-    Integrals of these micro moments are approximated within and averaged across a set :math:`T_m` of markets in which
-    the micro data used to compute :math:`v_m` are relevant, which gives :math:`\bar{g}_{M,m}` in
-    :eq:`averaged_micro_moments`.
+    Integrals of these micro moments are averaged across a set :math:`T_m` of markets, which gives
+    :math:`\bar{g}_{M,m}` in :eq:`averaged_micro_moments`.
 
     Parameters
     ----------
@@ -158,13 +161,15 @@ class DemographicCovarianceMoment(Moment):
     demographics_index : `int`
         Column index of the demographic :math:`y_{it}` (which can be any demographic, not just income) in the matrix of
         agent demographics, :math:`d`. This should be between zero and :math:`D - 1`, inclusive.
-    value : `float`
-        Value :math:`v_m` of the sample covariance estimated from micro data.
+    values : `float`
+        Values :math:`\mathscr{V}_{mt}` of the statistic estimated from micro data. If a scalar is specified, then
+        :math:`\mathscr{V}_{mt} = \mathscr{V}_m` is assumed to be constant across all markets in which the moment is
+        relevant. Otherwise, this should have as many elements as ``market_ids``, or as the total number of markets if
+        ``market_ids`` is ``None``.
     market_ids : `array-like, optional`
         Distinct market IDs over which the micro moments will be averaged to get :math:`\bar{g}_{M,m}`. These are also
         the only markets in which the moments will be computed. By default, the moments are computed for and averaged
-        across all markets. That is, by default, it is assumed that the specified ``value`` is relevant for and on
-        average the same for all markets.
+        across all markets.
 
     Examples
     --------
@@ -176,9 +181,9 @@ class DemographicCovarianceMoment(Moment):
     demographics_index: int
 
     def __init__(
-            self, X2_index: int, demographics_index: int, value: float, market_ids: Optional[Sequence] = None) -> None:
+            self, X2_index: int, demographics_index: int, values: Any, market_ids: Optional[Sequence] = None) -> None:
         """Validate information about the moment to the greatest extent possible without an economy instance."""
-        super().__init__(value, market_ids)
+        super().__init__(values, market_ids)
         if not isinstance(X2_index, int) or X2_index < 0:
             raise ValueError("X2_index must be a positive int.")
         if not isinstance(demographics_index, int) or demographics_index < 0:
@@ -186,9 +191,9 @@ class DemographicCovarianceMoment(Moment):
         self.X2_index = X2_index
         self.demographics_index = demographics_index
 
-    def _format_value(self) -> str:
+    def _format_moment(self) -> str:
         """Construct a string expression for the covariance moment."""
-        return f"Cov(X2 Column {self.X2_index}, Demographic Column {self.demographics_index} | Inside)"
+        return f"Cov(X2 Column {self.X2_index}, Demographic Column {self.demographics_index})"
 
     def _validate(self, economy: 'Economy') -> None:
         """Check that matrix indices are valid in the economy."""
@@ -205,21 +210,21 @@ class DiversionProbabilityMoment(Moment):
 
     For example, micro data can sometimes be used to compute the share of agents who would choose product :math:`k` if
     :math:`j` were removed from the choice set, out of those agents whose first choice is :math:`j`. With the value
-    :math:`v_m` of this share, a micro moment :math:`m` in market :math:`t` for agent :math:`i` can be defined by
+    :math:`\mathscr{V}_{mt}` of this share, a micro moment :math:`m` in market :math:`t` can be defined by
+    :math:`g_{M,mt} = \mathscr{V}_{mt} - v_{mt}` where
 
-    .. math:: g_{M,imt} = \frac{s_{ik(-j)t} s_{ijt}}{s_{jt}} - v_m
+    .. math:: v_{mt} = \frac{E[s_{ik(-j)t} s_{ijt}]}{s_{jt}}
 
     where :math:`s_{ik(-j)t} = s_{ijt} / (1 - s_{ijt})` is the probability of :math:`i` choosing :math:`k` when
     :math:`j` is removed from the choice set. Rearranging terms gives the equivalent definition
 
-    .. math:: g_{M,imt} = \frac{s_{ik(-j)t} - s_{ikt}}{s_{jt}} - v_m,
+    .. math:: g_{M,mt} = \mathscr{V}_{mt} - \frac{s_{k(-j)t} - s_{kt}}{s_{jt}},
 
     which is more reminiscent of the long-run diversion ratios :math:`\bar{\mathscr{D}}_{jk}` computed by
     :meth:`ProblemResults.compute_long_run_diversion_ratios`.
 
-    Integrals of these micro moments are approximated within and averaged across a set :math:`T_m` of markets in which
-    the micro data used to compute :math:`v_m` are relevant, which gives :math:`\bar{g}_{M,m}` in
-    :eq:`averaged_micro_moments`.
+    Integrals of these micro moments are averaged across a set :math:`T_m` of markets, which gives
+    :math:`\bar{g}_{M,m}` in :eq:`averaged_micro_moments`.
 
     Parameters
     ----------
@@ -230,13 +235,15 @@ class DiversionProbabilityMoment(Moment):
     product_id2 : `object`
         ID of the second choice product :math:`k` or ``None`` to denote the outside option :math:`j = 0`. If not
         ``None``, there must be exactly one of this ID for each market over which this micro moment will be averaged.
-    value : `float`
-        Value :math:`v_m` of the share estimated from micro data.
+    values : `float`
+        Values :math:`\mathscr{V}_{mt}` of the statistic estimated from micro data. If a scalar is specified, then
+        :math:`\mathscr{V}_{mt} = \mathscr{V}_m` is assumed to be constant across all markets in which the moment is
+        relevant. Otherwise, this should have as many elements as ``market_ids``, or as the total number of markets if
+        ``market_ids`` is ``None``.
     market_ids : `array-like, optional`
         Distinct market IDs over which the micro moments will be averaged to get :math:`\bar{g}_{M,m}`. These are also
         the only markets in which the moments will be computed. By default, the moments are computed for and averaged
-        across all markets. That is, by default, it is assumed that the specified ``value`` is relevant for and on
-        average the same for all markets.
+        across all markets.
 
     Examples
     --------
@@ -248,16 +255,16 @@ class DiversionProbabilityMoment(Moment):
     product_id2: Optional[Any]
 
     def __init__(
-            self, product_id1: Any, product_id2: Optional[Any], value: float,
+            self, product_id1: Any, product_id2: Optional[Any], values: Any,
             market_ids: Optional[Sequence] = None) -> None:
         """Validate information about the moment to the greatest extent possible without an economy instance."""
-        super().__init__(value, market_ids)
+        super().__init__(values, market_ids)
         if product_id1 is None and product_id2 is None:
             raise ValueError("At least one of product_id1 or product_id2 must be not None.")
         self.product_id1 = product_id1
         self.product_id2 = product_id2
 
-    def _format_value(self) -> str:
+    def _format_moment(self) -> str:
         """Construct a string expression for the covariance moment."""
         product1 = "Outside" if self.product_id1 is None else f"'{self.product_id1}'"
         product2 = "Outside" if self.product_id2 is None else f"'{self.product_id2}'"
@@ -277,14 +284,14 @@ class DiversionCovarianceMoment(Moment):
     For example, survey data can sometimes be used to compute the sample covariance between a product characteristic
     :math:`x_{jt}^{(1)}` of an agent's first choice :math:`j` and either the same or a different product characteristic
     :math:`x_{kt}^{(2)}` of the agent's second choice :math:`k` if :math:`j` were removed from the choice set, amongst
-    those agents whose first and second choices are both inside goods. With the value :math:`v_m` of this sample
-    covariance, a micro moment :math:`m` in market :math:`t` for agent :math:`i` can be defined by
+    those agents whose first and second choices are both inside goods. With the value :math:`\mathscr{V}_{mt}` of this
+    sample covariance, a micro moment :math:`m` in market :math:`t` can be defined by
+    :math:`g_{M,mt} = \mathscr{V}_{mt} - v_{mt}` where
 
-    .. math:: g_{M,imt} = (z_{it}^{(1)} - \bar{z}_t^{(1)})(z_{it}^{(2)} - \bar{z}_t^{(2)}) - v_m
+    .. math:: v_{mt} = \text{Cov}(z_{it}^{(1)}, z_{it}^{(2)})
 
-    where :math:`\bar{z}_t^{(1)} = \sum_i w_{it} z_{it}^{(1)}`, :math:`\bar{z}_t^{(2)} = \sum_i w_{it} z_{it}^{(2)}`,
-    and conditional on purchasing inside goods, the expected values of :math:`x_{jt}^{(1)}` and :math:`x_{kt}^{(2)}` for
-    agent :math:`i` are
+    where conditional on purchasing inside goods, the expected values of :math:`x_{jt}^{(1)}` and
+    :math:`x_{kt}^{(2)}` for agent :math:`i` are
 
     .. math::
 
@@ -295,9 +302,8 @@ class DiversionCovarianceMoment(Moment):
     choice set and :math:`s_{ik(-0,j)t}` is the probability of choosing :math:`k` when both the outside option and
     :math:`j` are removed from the choice set.
 
-    Integrals of these micro moments are approximated within and averaged across a set :math:`T_m` of markets in which
-    the micro data used to compute :math:`v_m` are relevant, which gives :math:`\bar{g}_{M,m}` in
-    :eq:`averaged_micro_moments`.
+    Integrals of these micro moments are averaged across a set :math:`T_m` of markets, which gives
+    :math:`\bar{g}_{M,m}` in :eq:`averaged_micro_moments`.
 
     Parameters
     ----------
@@ -307,13 +313,15 @@ class DiversionCovarianceMoment(Moment):
     X2_index2 : `int`
         Column index of :math:`x_{kt}^{(2)}` in the matrix of demand-side nonlinear product characteristics,
         :math:`X_2`. This should be between zero and :math:`K_2 - 1`, inclusive.
-    value : `float`
-        Value :math:`v_m` of the sample covariance estimated from micro data.
+    values : `float`
+        Values :math:`\mathscr{V}_{mt}` of the statistic estimated from micro data. If a scalar is specified, then
+        :math:`\mathscr{V}_{mt} = \mathscr{V}_m` is assumed to be constant across all markets in which the moment is
+        relevant. Otherwise, this should have as many elements as ``market_ids``, or as the total number of markets if
+        ``market_ids`` is ``None``.
     market_ids : `array-like, optional`
         Distinct market IDs over which the micro moments will be averaged to get :math:`\bar{g}_{M,m}`. These are also
         the only markets in which the moments will be computed. By default, the moments are computed for and averaged
-        across all markets. That is, by default, it is assumed that the specified ``value`` is relevant for and on
-        average the same for all markets.
+        across all markets.
 
     Examples
     --------
@@ -324,9 +332,9 @@ class DiversionCovarianceMoment(Moment):
     X2_index1: int
     X2_index2: int
 
-    def __init__(self, X2_index1: int, X2_index2: int, value: float, market_ids: Optional[Sequence] = None) -> None:
+    def __init__(self, X2_index1: int, X2_index2: int, values: Any, market_ids: Optional[Sequence] = None) -> None:
         """Validate information about the moment to the greatest extent possible without an economy instance."""
-        super().__init__(value, market_ids)
+        super().__init__(values, market_ids)
         if not isinstance(X2_index1, int) or X2_index1 < 0:
             raise ValueError("X2_index1 must be a positive int.")
         if not isinstance(X2_index2, int) or X2_index2 < 0:
@@ -334,9 +342,9 @@ class DiversionCovarianceMoment(Moment):
         self.X2_index1 = X2_index1
         self.X2_index2 = X2_index2
 
-    def _format_value(self) -> str:
+    def _format_moment(self) -> str:
         """Construct a string expression for the covariance moment."""
-        return f"Cov(X2 Column {self.X2_index1} First, X2 Column {self.X2_index2} Second | Inside)"
+        return f"Cov(X2 Column {self.X2_index1} First, X2 Column {self.X2_index2} Second)"
 
     def _validate(self, economy: 'Economy') -> None:
         """Check that matrix indices are valid in the economy."""
@@ -362,14 +370,14 @@ class Moments(object):
         """Format micro moments (and optionally their values) as a string."""
 
         # construct the leftmost part of the table that always shows up
-        header = ["Index", "Markets", "Moment"]
+        header = ["Index", "Markets", "Type"]
         data: List[List[str]] = []
         for m, moment in enumerate(self.micro_moments):
             data.append([str(m), moment._format_markets(), moment._format_moment()])
 
         # add moment values
         if values is not None:
-            header.append("Value")
+            header.append("Moment")
             for m, value in enumerate(values):
                 data[m].append(format_number(value))
 
@@ -380,6 +388,7 @@ class EconomyMoments(Moments):
     """Information about a sequence of micro moments in an economy."""
 
     market_indices: Dict[Hashable, Array]
+    market_values: Array
     market_counts: Array
     pairwise_market_counts: Array
 
@@ -400,14 +409,23 @@ class EconomyMoments(Moments):
         # store basic moment information
         super().__init__(micro_moments)
 
-        # identify market indices
+        # identify moment indices that are relevant in each market along with the associated observed micro values
         self.market_indices: Dict[Hashable, Array] = {}
+        self.market_values: Dict[Hashable, Array] = {}
         for t in economy.unique_market_ids:
-            market_index_t = np.array([m.market_ids is None or t in m.market_ids for m in self.micro_moments])
-            self.market_indices[t] = np.flatnonzero(market_index_t)
+            indices = []
+            values = []
+            for m, moment in enumerate(self.micro_moments):
+                market_ids_m = economy.unique_market_ids if moment.market_ids is None else moment.market_ids
+                if t in market_ids_m:
+                    indices.append(m)
+                    values.append(moment.values if moment.values.size == 1 else moment.values[market_ids_m == t])
+
+            self.market_indices[t] = np.array(indices, np.int)
+            self.market_values[t] = np.array(values, options.dtype).flatten()
 
         # count the number of markets associated with moments
-        self.market_counts = np.zeros((self.MM, 1), np.int)
+        self.market_counts = np.zeros(self.MM, np.int)
         self.pairwise_market_counts = np.zeros((self.MM, self.MM), np.int)
         for m, moment_m in enumerate(self.micro_moments):
             market_ids_m = set(economy.unique_market_ids if moment_m.market_ids is None else moment_m.market_ids)

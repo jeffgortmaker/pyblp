@@ -11,8 +11,8 @@ class SimulationResultsMarket(Market):
     """A market in a solved simulation of synthetic BLP data."""
 
     @NumericalErrorHandler(exceptions.SyntheticMicroMomentsNumericalError)
-    def safely_compute_micro(self) -> Tuple[Array, List[Error]]:
+    def safely_compute_micro_values(self) -> Tuple[Array, List[Error]]:
         """Compute micro moments, handling any numerical errors."""
         errors: List[Error] = []
-        micro = self.compute_micro()[0]
-        return micro, errors
+        micro_values = self.compute_micro_values()[0]
+        return micro_values, errors

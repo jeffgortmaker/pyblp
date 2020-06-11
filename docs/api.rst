@@ -295,7 +295,7 @@ Simulation results can also be used to compute micro moment values.
 .. autosummary::
    :toctree: _api
 
-   SimulationResults.compute_micro
+   SimulationResults.compute_micro_values
 
 
 Structured Data Classes

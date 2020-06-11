@@ -247,22 +247,22 @@ class SimulationResults(StringRepresentation):
             supply_instruments = np.c_[supply_instruments, demand_shifters]
         return demand_instruments, supply_instruments
 
-    def compute_micro(self, micro_moments: Sequence[Moment]) -> Array:
-        r"""Compute averaged micro moment values, :math:`\bar{g}_M`.
-
-        Typically, this method is used to compute the values that micro moments aim to match. This can be done by
-        setting ``value=0`` in each of the configured ``micro_moments``.
+    def compute_micro_values(self, micro_moments: Sequence[Moment]) -> Array:
+        r"""Compute simulated micro moment values :math:`v_{mt}`.
 
         Parameters
         ----------
         micro_moments : `sequence of Moment`
-            Configurations for the averaged micro moments that will be computed. For a list of supported micro moments,
-            refer to :ref:`api:Micro Moment Classes`.
+            Configurations for the micro moments. For a list of supported moments, refer to
+            :ref:`api:Micro Moment Classes`. Since only :math:`v_{mt}`'s are computed, the ``values`` given when
+            initializing the moments will be ignored.
 
         Returns
         -------
         `ndarray`
-            Averaged micro moments, :math:`\bar{g}_M`, in :eq:`averaged_micro_moments`.
+            Micro moment values, :math:`v_{mt}`. Rows are in the same order as :attr:`Simulation.unique_market_ids`.
+            Columns are in the same order as ``micro_moments``. If a micro moment is not computed in one or more
+            markets, the associated values will be ``numpy.nan``.
 
         Examples
         --------
@@ -271,7 +271,7 @@ class SimulationResults(StringRepresentation):
         """
         errors: List[Error] = []
 
-        # keep track of long it takes to compute micro moments
+        # keep track of long it takes to compute micro moment values
         output("Computing micro moment values ...")
         start_time = time.time()
 
@@ -286,29 +286,21 @@ class SimulationResults(StringRepresentation):
         delta = self.simulation._compute_true_X1(self._data_override) @ self.simulation.beta + self.simulation.xi
 
         def market_factory(s: Hashable) -> Tuple[SimulationResultsMarket]:
-            """Build a market along with arguments used to compute micro moments."""
+            """Build a market along with arguments used to compute micro moment values."""
             market_s = SimulationResultsMarket(
                 self.simulation, s, self.simulation._parameters, self.simulation.sigma, self.simulation.pi,
                 self.simulation.rho, delta=delta, moments=moments, data_override=self._data_override
             )
             return market_s,
 
-        # compute micro moments (averaged across markets) market-by-market
-        micro_mapping: Dict[Hashable, Array] = {}
+        # compute micro moments values market-by-market
+        micro_values = np.full((self.simulation.T, moments.MM), np.nan, options.dtype)
         generator = generate_items(
-            self.simulation.unique_market_ids, market_factory, SimulationResultsMarket.safely_compute_micro
+            self.simulation.unique_market_ids, market_factory, SimulationResultsMarket.safely_compute_micro_values
         )
-        for t, (micro_t, errors_t) in generator:
-            micro_mapping[t] = micro_t
+        for t, (micro_values_t, errors_t) in generator:
+            micro_values[self.simulation._market_indices[t], moments.market_indices[t]] = micro_values_t.flat
             errors.extend(errors_t)
-
-        # average micro moments across all markets (this is done after market-by-market computation to preserve
-        #   numerical stability with different market orderings)
-        micro = np.zeros((moments.MM, 1), options.dtype)
-        for t in self.simulation.unique_market_ids:
-            indices = moments.market_indices[t]
-            if indices.size > 0:
-                micro[indices] += micro_mapping[t] / moments.market_counts[indices]
 
         # output a warning about any errors
         if errors:
@@ -321,4 +313,4 @@ class SimulationResults(StringRepresentation):
         output("")
         output(f"Finished after {format_seconds(end_time - start_time)}.")
         output("")
-        return micro
+        return micro_values
