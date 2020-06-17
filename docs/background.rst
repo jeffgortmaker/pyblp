@@ -253,7 +253,7 @@ The vector :math:`\bar{g}_M` contains sample analogues of micro moment condition
 
 Mico moments are computed for each :math:`\theta` and contribute to the GMM objective :math:`q(\theta)` in :eq:`objective`. Their derivatives with respect to :math:`\theta` are added as rows to :math:`\bar{G}` in :eq:`averaged_moments_jacobian`, and blocks are added to both :math:`W` and :math:`S` in :eq:`2sls_W` and :eq:`W`. The covariance between standard moments and micro moments is assumed to be zero, so these matrices are block-diagonal. The covariance between micro moments :math:`m` and :math:`n` in :math:`S` is set to zero if :math:`T_{mn} = T_m \cap T_n = \emptyset` and otherwise is
 
-.. math:: \text{Cov}(\bar{g}_{M,m}, \bar{g}_{M,n}) = \frac{1}{T_{mn}} \sum_{t \in T_{mn}} \text{Cov}(g_{M,mt}, g_{M,nt}).
+.. math:: \text{Cov}(\bar{g}_{M,m}, \bar{g}_{M,n}) = \frac{1}{T_{mn}^2} \sum_{t \in T_{mn}} \text{Cov}(g_{M,mt}, g_{M,nt}).
    :label: averaged_micro_moment_covariances
 
 

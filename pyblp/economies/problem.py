@@ -893,7 +893,7 @@ class ProblemEconomy(Economy):
                             if compute_micro_covariances:
                                 pairwise_indices = tuple(np.meshgrid(indices, indices))
                                 micro_covariances[pairwise_indices] += (
-                                    micro_covariances_mapping[t] / moments.pairwise_market_counts[pairwise_indices]
+                                    micro_covariances_mapping[t] / moments.pairwise_market_counts[pairwise_indices]**2
                                 )
 
                     # enforce shape and symmetry of micro covariances
