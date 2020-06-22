@@ -885,16 +885,13 @@ class ProblemEconomy(Economy):
                     for t in self.unique_market_ids:
                         indices = moments.market_indices[t]
                         if indices.size > 0:
+                            counts = moments.market_counts[indices, None]
                             differences = moments.market_values[t] - micro_values[self._market_indices[t], indices]
-                            micro[indices] += differences[:, None] / moments.market_counts[indices, None]
-                            micro_jacobian[indices, :parameters.P] -= (
-                                micro_jacobian_mapping[t] / moments.market_counts[indices, None]
-                            )
+                            micro[indices] += differences[:, None] / counts
+                            micro_jacobian[indices, :parameters.P] -= micro_jacobian_mapping[t] / counts
                             if compute_micro_covariances:
                                 pairwise_indices = tuple(np.meshgrid(indices, indices))
-                                micro_covariances[pairwise_indices] += (
-                                    micro_covariances_mapping[t] / moments.pairwise_market_counts[pairwise_indices]**2
-                                )
+                                micro_covariances[pairwise_indices] += micro_covariances_mapping[t] / counts / counts.T
 
                     # enforce shape and symmetry of micro covariances
                     if compute_micro_covariances:
