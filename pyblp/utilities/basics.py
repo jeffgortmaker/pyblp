@@ -153,6 +153,16 @@ def extract_matrix(structured_array_like: Mapping, key: Any) -> Optional[Array]:
             try:
                 part = np.c_[structured_array_like[f'{key}{index}']]
             except Exception:
+                # output a warning if there's a 1 but no 0 (this is a common mistake)
+                if index == 0:
+                    try:
+                        structured_array_like[f'{key}{index + 1}']
+                    except Exception:
+                        pass
+                    else:
+                        output("")
+                        output(f"Warning: '{key}{index + 1}' was specified but not '{key}{index}'.")
+                        output("")
                 break
             index += 1
             if part.size > 0:
