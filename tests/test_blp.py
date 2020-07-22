@@ -637,8 +637,9 @@ def test_elasticity_aggregates_and_means(simulated_problem: SimulatedProblemFixt
         verbose=True
     )
 
-    # test the same inequality but for all non-price variables
-    for name in {n for f in simulation._X1_formulations + simulation._X2_formulations for n in f.names} - {'prices'}:
+    # test the same inequality but for all non-price variables (including the mean utility)
+    names = {n for f in simulation._X1_formulations + simulation._X2_formulations for n in f.names}
+    for name in names - {'prices'} | {None}:
         np.testing.assert_array_less(
             np.abs(results.compute_aggregate_elasticities(factor, name)),
             np.abs(results.extract_diagonal_means(results.compute_elasticities(name))),
@@ -661,8 +662,9 @@ def test_diversion_ratios(simulated_problem: SimulatedProblemFixture) -> None:
     np.testing.assert_allclose(ratios.sum(axis=1), 1, atol=1e-14, rtol=0)
     np.testing.assert_allclose(long_run_ratios.sum(axis=1), 1, atol=1e-14, rtol=0)
 
-    # test ratios based on other variables
-    for name in {n for f in simulation._X1_formulations + simulation._X2_formulations for n in f.names} - {'prices'}:
+    # test ratios based on other variables (including mean utilities)
+    names = {n for f in simulation._X1_formulations + simulation._X2_formulations for n in f.names}
+    for name in names - {'prices'} | {None}:
         ratios = results.compute_diversion_ratios(name, market_id=t)
         np.testing.assert_allclose(ratios.sum(axis=1), 1, atol=1e-14, rtol=0, err_msg=name)
 

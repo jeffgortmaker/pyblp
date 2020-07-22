@@ -220,12 +220,14 @@ class Economy(Container, StringRepresentation):
             output(exceptions.MultipleErrors(errors))
             output("")
 
-    def _validate_name(self, name: str) -> None:
-        """Validate that a name corresponds to a variable in X1, X2, or X3."""
+    def _validate_name(self, name: Optional[str]) -> None:
+        """Validate that a name is either None or corresponds to a variable in X1, X2, or X3."""
+        if name is None:
+            return
         formulations = self._X1_formulations + self._X2_formulations + self._X3_formulations
         names = {n for f in formulations for n in f.names}
         if name not in names:
-            raise NameError(f"The name '{name}' is not one of the underlying variables, {list(sorted(names))}.")
+            raise NameError(f"'{name}' is not None or one of the underlying variables, {list(sorted(names))}.")
 
     def _validate_product_id(self, product_id: Optional[Any], market_ids: Optional[Array] = None) -> None:
         """Validate that a product ID is either None or one that's in the data (or in specific markets if specified).

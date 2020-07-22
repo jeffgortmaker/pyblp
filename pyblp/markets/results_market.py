@@ -67,30 +67,44 @@ class ResultsMarket(Market):
         return delta, errors
 
     @NumericalErrorHandler(exceptions.PostEstimationNumericalError)
-    def safely_compute_aggregate_elasticity(self, factor: float, name: str) -> Tuple[Array, List[Error]]:
+    def safely_compute_aggregate_elasticity(self, factor: float, name: Optional[str]) -> Tuple[Array, List[Error]]:
         """Estimate the aggregate elasticity of demand with respect to a variable, handling any numerical errors."""
         errors: List[Error] = []
-        scaled_variable = (1 + factor) * self.products[name]
-        delta = self.update_delta_with_variable(name, scaled_variable)
-        mu = self.update_mu_with_variable(name, scaled_variable)
+        if name is None:
+            assert self.delta is not None
+            delta = (1 + factor) * self.delta
+            mu = self.mu
+        else:
+            scaled_variable = (1 + factor) * self.products[name]
+            delta = self.update_delta_with_variable(name, scaled_variable)
+            mu = self.update_mu_with_variable(name, scaled_variable)
         shares = self.compute_probabilities(delta, mu)[0] @ self.agents.weights
         aggregate_elasticities = (shares - self.products.shares).sum() / factor
         return aggregate_elasticities, errors
 
     @NumericalErrorHandler(exceptions.PostEstimationNumericalError)
-    def safely_compute_elasticities(self, name: str) -> Tuple[Array, List[Error]]:
+    def safely_compute_elasticities(self, name: Optional[str]) -> Tuple[Array, List[Error]]:
         """Estimate a matrix of elasticities of demand with respect to a variable, handling any numerical errors."""
         errors: List[Error] = []
-        derivatives = self.compute_utility_derivatives(name)
+        if name is None:
+            assert self.delta is not None
+            derivatives = np.ones((self.J, self.I), options.dtype)
+            variable = self.delta
+        else:
+            derivatives = self.compute_utility_derivatives(name)
+            variable = self.products[name]
         jacobian = self.compute_shares_by_variable_jacobian(derivatives)
-        elasticities = jacobian * self.products[name].T / self.products.shares
+        elasticities = jacobian * variable.T / self.products.shares
         return elasticities, errors
 
     @NumericalErrorHandler(exceptions.PostEstimationNumericalError)
-    def safely_compute_diversion_ratios(self, name: str) -> Tuple[Array, List[Error]]:
+    def safely_compute_diversion_ratios(self, name: Optional[str]) -> Tuple[Array, List[Error]]:
         """Estimate a matrix of diversion ratios with respect to a variable, handling any numerical errors."""
         errors: List[Error] = []
-        derivatives = self.compute_utility_derivatives(name)
+        if name is None:
+            derivatives = np.ones((self.J, self.I), options.dtype)
+        else:
+            derivatives = self.compute_utility_derivatives(name)
         jacobian = self.compute_shares_by_variable_jacobian(derivatives)
         jacobian_diagonal = np.c_[jacobian.diagonal()]
         np.fill_diagonal(jacobian, -jacobian.sum(axis=1))

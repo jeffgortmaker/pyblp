@@ -77,7 +77,7 @@ class Results(abc.ABC, StringRepresentation):
         """
 
     def compute_aggregate_elasticities(
-            self, factor: float = 0.1, name: str = 'prices', market_id: Optional[Any] = None) -> Array:
+            self, factor: float = 0.1, name: Optional[str] = 'prices', market_id: Optional[Any] = None) -> Array:
         r"""Estimate aggregate elasticities of demand, :math:`\mathscr{E}`, with respect to a variable, :math:`x`.
 
         In market :math:`t`, the aggregate elasticity of demand is
@@ -92,7 +92,8 @@ class Results(abc.ABC, StringRepresentation):
         factor : `float, optional`
             The scalar factor, :math:`\Delta`.
         name : `str, optional`
-            Name of the variable, :math:`x`. By default, :math:`x = p`, prices.
+            Name of the variable, :math:`x`. By default, :math:`x = p`, prices. If this is ``None``, the variable will
+            be :math:`x = \delta`, the mean utility.
         market_id : `object, optional`
             ID of the market in which to compute aggregate elasticities. By default, aggregate elasticities are computed
             in all markets and stacked.
@@ -108,7 +109,7 @@ class Results(abc.ABC, StringRepresentation):
             - :doc:`Tutorial </tutorial>`
 
         """
-        output(f"Computing aggregate elasticities with respect to {name} ...")
+        output(f"Computing aggregate elasticities with respect to {name or 'the mean utility'} ...")
         if not isinstance(factor, float):
             raise ValueError("factor must be a float.")
         self.problem._validate_name(name)
@@ -117,7 +118,7 @@ class Results(abc.ABC, StringRepresentation):
             ResultsMarket.safely_compute_aggregate_elasticity, market_ids, fixed_args=[factor, name]
         )
 
-    def compute_elasticities(self, name: str = 'prices', market_id: Optional[Any] = None) -> Array:
+    def compute_elasticities(self, name: Optional[str] = 'prices', market_id: Optional[Any] = None) -> Array:
         r"""Estimate matrices of elasticities of demand, :math:`\varepsilon`, with respect to a variable, :math:`x`.
 
         In market :math:`t`, the value in row :math:`j` and column :math:`k` of :math:`\varepsilon` is
@@ -127,7 +128,8 @@ class Results(abc.ABC, StringRepresentation):
         Parameters
         ----------
         name : `str, optional`
-            Name of the variable, :math:`x`. By default, :math:`x = p`, prices.
+            Name of the variable, :math:`x`. By default, :math:`x = p`, prices. If this is ``None``, the variable will
+            be :math:`x = \delta`, the mean utility.
         market_id : `object, optional`
             ID of the market in which to compute elasticities. By default, elasticities are computed in all markets and
             stacked.
@@ -145,12 +147,12 @@ class Results(abc.ABC, StringRepresentation):
             - :doc:`Tutorial </tutorial>`
 
         """
-        output(f"Computing elasticities with respect to {name} ...")
+        output(f"Computing elasticities with respect to {name or 'the mean utility'} ...")
         self.problem._validate_name(name)
         market_ids = self._select_market_ids(market_id)
         return self._combine_arrays(ResultsMarket.safely_compute_elasticities, market_ids, fixed_args=[name])
 
-    def compute_diversion_ratios(self, name: str = 'prices', market_id: Optional[Any] = None) -> Array:
+    def compute_diversion_ratios(self, name: Optional[str] = 'prices', market_id: Optional[Any] = None) -> Array:
         r"""Estimate matrices of diversion ratios, :math:`\mathscr{D}`, with respect to a variable, :math:`x`.
 
         In market :math:`t`, the value in row :math:`j` and column :math:`k \neq j` is
@@ -173,7 +175,8 @@ class Results(abc.ABC, StringRepresentation):
         Parameters
         ----------
         name : `str, optional`
-            Name of the variable, :math:`x`. By default, :math:`x = p`, prices.
+            Name of the variable, :math:`x`. By default, :math:`x = p`, prices. If this is ``None``, the variable will
+            be :math:`x = \delta`, the mean utility.
         market_id : `object, optional`
             ID of the market in which to compute diversion ratios. By default, diversion ratios are computed in all
             markets and stacked.
@@ -191,7 +194,7 @@ class Results(abc.ABC, StringRepresentation):
             - :doc:`Tutorial </tutorial>`
 
         """
-        output(f"Computing diversion ratios with respect to {name} ...")
+        output(f"Computing diversion ratios with respect to {name or 'the mean utility'} ...")
         self.problem._validate_name(name)
         market_ids = self._select_market_ids(market_id)
         return self._combine_arrays(ResultsMarket.safely_compute_diversion_ratios, market_ids, fixed_args=[name])
