@@ -1,6 +1,6 @@
 """Market-level structuring of BLP results."""
 
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 import numpy as np
 
@@ -247,7 +247,9 @@ class ResultsMarket(Market):
         return profits, errors
 
     @NumericalErrorHandler(exceptions.PostEstimationNumericalError)
-    def safely_compute_consumer_surplus(self, keep_all: bool, prices: Optional[Array]) -> Tuple[Array, List[Error]]:
+    def safely_compute_consumer_surplus(
+            self, keep_all: bool, eliminate_product_ids: Optional[Any], prices: Optional[Array]) -> (
+            Tuple[Array, List[Error]]):
         """Estimate population-normalized consumer surplus or keep all individual-level surpluses. By default, use
         unchanged prices, handling any numerical errors.
         """
@@ -269,6 +271,15 @@ class ResultsMarket(Market):
         utility_reduction = np.clip(utilities.max(axis=0, keepdims=True), 0, None)
         exp_utilities = np.exp(utilities - utility_reduction)
         scale_weights = 1
+
+        # eliminate any products from the choice set
+        if eliminate_product_ids is not None:
+            for product_id in eliminate_product_ids:
+                if product_id in self.products.product_ids:
+                    j = self.get_product(product_id)
+                    exp_utilities[j] = 0
+
+        # handle nesting
         if self.H == 0:
             log_scale = -utility_reduction
         else:

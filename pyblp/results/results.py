@@ -733,7 +733,8 @@ class Results(abc.ABC, StringRepresentation):
         )
 
     def compute_consumer_surpluses(
-            self, prices: Optional[Any] = None, market_id: Optional[Any] = None, keep_all: bool = False) -> Array:
+            self, prices: Optional[Any] = None, market_id: Optional[Any] = None, keep_all: bool = False,
+            eliminate_product_ids: Optional[Any] = None) -> Array:
         r"""Estimate population-normalized consumer surpluses, :math:`\text{CS}`.
 
         Assuming away nonlinear income effects, the surplus in market :math:`t` is
@@ -758,6 +759,10 @@ class Results(abc.ABC, StringRepresentation):
 
         where :math:`V_{ijt}` is defined in :eq:`utilities` and :math:`V_{iht}` is defined in :eq:`inclusive_value`.
 
+        Comparing consumer surpluses with the same values computed after eliminating one or more products from the
+        agents' choice sets (i.e. setting :math:`exp V_{ijt} = 0` for eliminated products :math:`j`) gives a measure of
+        willingness to pay. This can be done with the ``eliminate_product_ids`` argument.
+
         .. warning::
 
            :math:`\frac{\partial V_{1ti}}{\partial p_{1t}}` is the derivative of utility for the first product with
@@ -777,6 +782,10 @@ class Results(abc.ABC, StringRepresentation):
             Whether to keep all individuals' surpluses :math:`\text{CS}_{it}` or just market-level surpluses.
             By default only market-level surpluses are returned, but returning all surpluses will be important for
             analysis by agent type or demographic category.
+        eliminate_product_ids : `sequence of object, optional`
+            IDs of the products to eliminate from the choice set. These IDs should show up in the ``product_ids`` field
+            of ``product_data`` in :class:`Problem`. Eliminating one or more products and comparing consumer surpluses
+            gives a measure of willingness to pay for these products.
 
         Returns
         -------
@@ -796,5 +805,6 @@ class Results(abc.ABC, StringRepresentation):
         market_ids = self._select_market_ids(market_id)
         prices = self._coerce_optional_prices(prices, market_ids)
         return self._combine_arrays(
-            ResultsMarket.safely_compute_consumer_surplus, market_ids, fixed_args=[keep_all], market_args=[prices]
+            ResultsMarket.safely_compute_consumer_surplus, market_ids, fixed_args=[keep_all, eliminate_product_ids],
+            market_args=[prices]
         )

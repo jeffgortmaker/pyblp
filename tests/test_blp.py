@@ -690,6 +690,15 @@ def test_result_positivity(simulated_problem: SimulatedProblemFixture) -> None:
     test_positive(results.compute_profits(changed_prices, changed_shares, market_id=t))
     test_positive(results.compute_consumer_surpluses(changed_prices, market_id=t))
 
+    # compute willingness to pay when the simulation has product IDs and test its positivity
+    if simulation.products.product_ids.size > 0:
+        unique_product_ids = np.unique(simulation.products.product_ids[simulation.products.market_ids == t])
+        eliminate0 = results.compute_consumer_surpluses(market_id=t)
+        eliminate1 = results.compute_consumer_surpluses(market_id=t, eliminate_product_ids=unique_product_ids[:1])
+        eliminate2 = results.compute_consumer_surpluses(market_id=t, eliminate_product_ids=unique_product_ids[:2])
+        test_positive(eliminate0 - eliminate1)
+        test_positive(eliminate1 - eliminate2)
+
 
 @pytest.mark.usefixtures('simulated_problem')
 def test_second_step(simulated_problem: SimulatedProblemFixture) -> None:
