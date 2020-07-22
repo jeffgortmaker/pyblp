@@ -759,16 +759,16 @@ class Results(abc.ABC, StringRepresentation):
 
         where :math:`V_{ijt}` is defined in :eq:`utilities` and :math:`V_{iht}` is defined in :eq:`inclusive_value`.
 
-        Comparing consumer surpluses with the same values computed after eliminating one or more products from the
-        agents' choice sets (i.e. setting :math:`exp V_{ijt} = 0` for eliminated products :math:`j`) gives a measure of
-        willingness to pay. This can be done with the ``eliminate_product_ids`` argument.
-
         .. warning::
 
            :math:`\frac{\partial V_{1ti}}{\partial p_{1t}}` is the derivative of utility for the first product with
            respect to its price. The first product is chosen arbitrarily because this method assumes that there are no
            nonlinear income effects, which implies that this derivative is the same for all products. Computed consumer
            surpluses will likely be incorrect if prices are formulated in a nonlinear fashion like ``log(prices)``.
+
+        Comparing consumer surpluses with the same values computed after eliminating one or more products from the
+        agents' choice sets (i.e. setting :math:`\exp V_{ijt} = 0` for eliminated products :math:`j`) gives a measure of
+        willingness to pay. This can be done with the ``eliminate_product_ids`` argument.
 
         Parameters
         ----------
