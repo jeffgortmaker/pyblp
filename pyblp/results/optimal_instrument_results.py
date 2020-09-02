@@ -3,6 +3,7 @@
 from typing import Hashable, Optional, Sequence, TYPE_CHECKING
 
 import numpy as np
+import patsy
 
 from .problem_results import ProblemResults
 from ..configurations.formulation import Formulation
@@ -124,13 +125,26 @@ class OptimalInstrumentResults(StringRepresentation):
         if self.problem_results.problem.K3 > 0:
             assert self.problem_results.problem.product_formulations[0] is not None
             assert self.problem_results.problem.product_formulations[2] is not None
+
+            X1_terms = self.problem_results.problem.product_formulations[0]._terms
+            X3_terms = self.problem_results.problem.product_formulations[2]._terms
             X1_expressions = self.problem_results.problem.product_formulations[0]._expressions
             X3_expressions = self.problem_results.problem.product_formulations[2]._expressions
-            supply_shifters = {str(e) for e in X3_expressions if all(str(s) != 'shares' for s in e.free_symbols)}
-            demand_shifters = {str(e) for e in X1_expressions if all(str(s) != 'prices' for s in e.free_symbols)}
+
+            supply_shifters = set()
+            for term, expression in zip(X3_terms, X3_expressions):
+                if all(str(s) != 'shares' for s in expression.free_symbols) and term.name() != 'Intercept':
+                    supply_shifters.add(term.name())
+
+            demand_shifters = set()
+            for term, expression in zip(X1_terms, X1_expressions):
+                if all(str(s) != 'prices' for s in expression.free_symbols) and term.name() != 'Intercept':
+                    demand_shifters.add(term.name())
+
             if supply_shifters - demand_shifters:
                 supply_shifter_formula = ' + '.join(sorted(supply_shifters - demand_shifters))
                 self.supply_shifter_formulation = Formulation(f'{supply_shifter_formula} - 1')
+
             if demand_shifters - supply_shifters:
                 demand_shifter_formula = ' + '.join(sorted(demand_shifters - supply_shifters))
                 self.demand_shifter_formulation = Formulation(f'{demand_shifter_formula} - 1')
@@ -177,7 +191,8 @@ class OptimalInstrumentResults(StringRepresentation):
 
     def to_problem(
             self, supply_shifter_formulation: Optional[Formulation] = None,
-            demand_shifter_formulation: Optional[Formulation] = None) -> 'OptimalInstrumentProblem':
+            demand_shifter_formulation: Optional[Formulation] = None, product_data: Optional[Mapping] = None) -> (
+            'OptimalInstrumentProblem'):
         r"""Re-create the problem with estimated feasible optimal instruments.
 
         The re-created problem will be exactly the same, except that instruments will be replaced with estimated
@@ -244,6 +259,10 @@ class OptimalInstrumentResults(StringRepresentation):
             :class:`Formulation` configuration for demand shifters to be included in the set of optimal supply-side
             instruments. This is only used if a supply side was estimated. Intercepts will be ignored. By default,
             :attr:`OptimalInstrumentResults.demand_shifter_formulation` is used.
+        product_data : `structured array-like`
+            Product data used instead of what was saved from ``product_data`` when initializing the original
+            :class:`Problem`. This may need to be specified if either the supply or demand shifter formulation contains
+            some term that was not stored into memory, such as a categorical variable or a mathematical expression.
 
         Returns
         -------
@@ -256,6 +275,10 @@ class OptimalInstrumentResults(StringRepresentation):
             - :doc:`Tutorial </tutorial>`
 
         """
+
+        # either use the stored variables as product data or any provided data
+        if product_data is None:
+            product_data = self.problem_results.problem.products
 
         # configure or validate the supply shifter formulation
         if self.problem_results.problem.K3 == 0:
@@ -302,10 +325,16 @@ class OptimalInstrumentResults(StringRepresentation):
                 )
             ]
         if supply_shifter_formulation is not None:
-            demand_instruments = np.c_[
-                demand_instruments,
-                supply_shifter_formulation._build_matrix(self.problem_results.problem.products)[0]
-            ]
+            try:
+                demand_instruments = np.c_[
+                    demand_instruments, supply_shifter_formulation._build_matrix(product_data)[0]
+                ]
+            except patsy.PatsyError as exception:
+                message = (
+                    "Failed to construct supply shifters from their formulation. You may need to specify "
+                    "product_data if not all variables in the formulation were saved when initializing the problem."
+                )
+                raise patsy.PatsyError(message) from exception
 
         # build excluded supply-side instruments
         if self.problem_results.problem.K3 == 0:
@@ -321,10 +350,16 @@ class OptimalInstrumentResults(StringRepresentation):
                     )
                 ]
             if demand_shifter_formulation is not None:
-                supply_instruments = np.c_[
-                    supply_instruments,
-                    demand_shifter_formulation._build_matrix(self.problem_results.problem.products)[0]
-                ]
+                try:
+                    supply_instruments = np.c_[
+                        supply_instruments, demand_shifter_formulation._build_matrix(product_data)[0]
+                    ]
+                except patsy.PatsyError as exception:
+                    message = (
+                        "Failed to construct demand shifters from their formulation. You may need to specify "
+                        "product_data if not all variables in the formulation were saved when initializing the problem."
+                    )
+                    raise patsy.PatsyError(message) from exception
 
         # initialize the problem
         from ..economies.problem import OptimalInstrumentProblem  # noqa
