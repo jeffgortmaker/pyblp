@@ -203,16 +203,16 @@ where
 Standard Errors
 ~~~~~~~~~~~~~~~
 
-The covariance matrix of the estimated parameters is
+An estimate of the asymptotic covariance matrix is
 
-.. math:: \text{Var}(\hat{\theta}) = (\bar{G}'W\bar{G})^{-1}\bar{G}'WSW\bar{G}(\bar{G}'W\bar{G})^{-1}.
+.. math:: \hat{\text{Var}}(\sqrt{N}(\hat{\theta} - \theta)) = (\bar{G}'W\bar{G})^{-1}\bar{G}'WSW\bar{G}(\bar{G}'W\bar{G})^{-1}.
    :label: covariances
 
 Standard errors are the square root of the diagonal of this matrix divided by :math:`N`.
 
 If the weighting matrix was chosen such that :math:`W = S^{-1}`, this simplifies to
 
-.. math:: \text{Var}(\hat{\theta}) = (\bar{G}'W\bar{G})^{-1}.
+.. math:: \hat{\text{Var}}(\sqrt{N}(\hat{\theta} - \theta)) = (\bar{G}'W\bar{G})^{-1}.
    :label: unadjusted_covariances
 
 Standard errors extracted from this simpler expression are called unadjusted.

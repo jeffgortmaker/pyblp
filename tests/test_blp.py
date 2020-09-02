@@ -169,6 +169,23 @@ def test_bootstrap(simulated_problem: SimulatedProblemFixture) -> None:
 
 
 @pytest.mark.usefixtures('simulated_problem')
+def test_bootstrap_se(simulated_problem: SimulatedProblemFixture) -> None:
+    """Test that bootstrapped SEs are close to analytic ones. Or at least the same order of magnitude -- especially for
+    large numbers of RCs they may not necessarily be very close to each other.
+    """
+    _, _, _, _, problem_results = simulated_problem
+
+    # compute bootstrapped results (ignore supply side iteration because we will only use the parameter draws)
+    bootstrapped_results = problem_results.bootstrap(draws=1000, seed=0, iteration=Iteration('return'))
+
+    # compare SEs
+    for key in ['sigma', 'pi', 'rho', 'beta', 'gamma']:
+        analytic_se = np.nan_to_num(getattr(problem_results, f'{key}_se'))
+        bootstrapped_se = getattr(bootstrapped_results, f'bootstrapped_{key}').std(axis=0)
+        np.testing.assert_allclose(analytic_se, bootstrapped_se, atol=0.001, rtol=0.5, err_msg=key)
+
+
+@pytest.mark.usefixtures('simulated_problem')
 def test_result_serialization(simulated_problem: SimulatedProblemFixture) -> None:
     """Test that result objects can be serialized after being converted to dictionaries."""
     _, simulation_results, _, _, problem_results = simulated_problem

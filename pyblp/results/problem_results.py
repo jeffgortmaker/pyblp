@@ -96,8 +96,10 @@ class ProblemResults(Results):
         Stacked parameters in the following order: :math:`\hat{\theta}`, concentrated out elements of
         :math:`\hat{\beta}`, and concentrated out elements of :math:`\hat{\gamma}`.
     parameter_covariances : `ndarray`
-        Estimated covariance matrix of the stacked parameters, from which standard errors are extracted. Parameter
-        covariances are not estimated during the first step of two-step GMM.
+        Estimated covariance matrix for :math:`\sqrt{N}(\hat{\theta} - \theta)`, in which :math:`\theta` are the stacked
+        parameters. Standard errors are extracted from the diagonal of this matrix. Note that the estimated covariance
+        matrix of :math:`\hat{\theta}` is the same as this, but divided by :math:`N`. Parameter covariances are not
+        estimated during the first step of two-step GMM.
     theta : `ndarray`
         Estimated unfixed parameters, :math:`\hat{\theta}`, in the following order: :math:`\hat{\Sigma}`,
         :math:`\hat{\Pi}`, :math:`\hat{\rho}`, non-concentrated out elements from :math:`\hat{\beta}`, and
@@ -721,7 +723,7 @@ class ProblemResults(Results):
 
         where :math:`\bar{g}(\hat{\theta})` is defined in :eq:`averaged_moments`, :math:`\bar{G}(\hat{\theta})` is
         defined in :eq:`averaged_moments_jacobian`, :math:`W` is the optimal weighting matrix in :eq:`W`, and :math:`V`
-        is the covariance matrix of parameters in :eq:`covariances`.
+        is the covariance matrix of :math:`\sqrt{N}(\hat{\theta} - \theta)` in :eq:`covariances`.
 
         If the restrictions in this model are valid, the Lagrange multiplier statistic is asymptotically :math:`\chi^2`
         with degrees of freedom equal to the number of restrictions.
@@ -755,7 +757,7 @@ class ProblemResults(Results):
 
         where the restrictions are :math:`r(\theta) = 0` under the test's null hypothesis, their Jacobian is
         :math:`R(\theta) = \frac{\partial r(\theta)}{\partial\theta}`, and :math:`V` is the covariance matrix of
-        parameters in :eq:`covariances`.
+        :math:`\sqrt{N}(\hat{\theta} - \theta)` in :eq:`covariances`.
 
         If the restrictions are valid, the Wald statistic is asymptotically :math:`\chi^2` with degrees of freedom equal
         to the number of restrictions.
@@ -809,12 +811,13 @@ class ProblemResults(Results):
         can be used to construct, for example, confidence intervals for post-estimation outputs.
 
         For each bootstrap draw, parameters are drawn from the estimated multivariate normal distribution of all
-        parameters defined by :attr:`ProblemResults.parameters` and :attr:`ProblemResults.parameter_covariances`. Any
-        bounds configured in :meth:`Problem.solve` will also bound parameter draws. Each parameter draw is used to
-        compute the implied mean utility, :math:`\delta`, and shares, :math:`s`. If a supply side was estimated, the
-        implied marginal costs, :math:`c`, and prices, :math:`p`, are computed as well by iterating over the
-        :math:`\zeta`-markup contraction in :eq:`zeta_contraction`. If marginal costs depend on prices through
-        market shares, they will be updated to reflect different prices during each iteration of the routine.
+        parameters defined by :attr:`ProblemResults.parameters` and :attr:`ProblemResults.parameter_covariances`
+        (where the second covariance matrix is divided by :math:`N`). Any bounds configured in :meth:`Problem.solve`
+        will also bound parameter draws. Each parameter draw is used to compute the implied mean utility,
+        :math:`\delta`, and shares, :math:`s`. If a supply side was estimated, the implied marginal costs, :math:`c`,
+        and prices, :math:`p`, are computed as well by iterating over the :math:`\zeta`-markup contraction in
+        :eq:`zeta_contraction`. If marginal costs depend on prices through market shares, they will be updated to
+        reflect different prices during each iteration of the routine.
 
         .. note::
 
@@ -870,7 +873,7 @@ class ProblemResults(Results):
         # draw from the asymptotic distribution implied by the estimated parameters
         state = np.random.RandomState(seed)
         bootstrapped_parameters = np.atleast_3d(state.multivariate_normal(
-            self.parameters.flatten(), self.parameter_covariances, draws
+            self.parameters.flatten(), self.parameter_covariances / self.problem.N, draws
         ))
 
         # extract the parameters
