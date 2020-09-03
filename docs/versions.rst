@@ -4,6 +4,13 @@ Version Notes
 These notes will only include major changes.
 
 
+0.11
+----
+
+- Elasticities and diversion ratios with respect to mean utility
+- Willingness to pay calculations
+
+
 0.10
 ----
 
