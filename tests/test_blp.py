@@ -134,16 +134,11 @@ def test_importance_sampling(simulated_problem: SimulatedProblemFixture) -> None
 
 @pytest.mark.usefixtures('simulated_problem')
 def test_bootstrap(simulated_problem: SimulatedProblemFixture) -> None:
-    """Test that post-estimation output medians are within 10% parametric bootstrap confidence intervals."""
-    _, _, problem, solve_options, _ = simulated_problem
+    """Test that post-estimation output medians are within 5% parametric bootstrap confidence intervals."""
+    _, _, problem, solve_options, problem_results = simulated_problem
 
-    # use second-step results to compute bootstrapped output
-    solve_options = solve_options.copy()
-    solve_options['method'] = '2s'
-    results = problem.solve(**solve_options)
-
-    # create bootstrapped results (use only a few draws for speed)
-    bootstrapped_results = results.bootstrap(draws=100, seed=0)
+    # create bootstrapped results (use only a few draws and don't iterate for speed)
+    bootstrapped_results = problem_results.bootstrap(draws=100, seed=0, iteration=Iteration('return'))
 
     # test that post-estimation outputs are within 95% confidence intervals
     t = problem.products.market_ids[0]
@@ -159,11 +154,11 @@ def test_bootstrap(simulated_problem: SimulatedProblemFixture) -> None:
         "approximate prices in t": lambda r: r.compute_approximate_prices(merger_ids_t, market_id=t)
     }
     for name, method in method_mapping.items():
-        values = method(results)
+        values = method(problem_results)
         bootstrapped_values = method(bootstrapped_results)
         median = np.median(values)
         bootstrapped_medians = np.nanmedian(bootstrapped_values, axis=range(1, bootstrapped_values.ndim))
-        lb, ub = np.percentile(bootstrapped_medians, [5, 95])
+        lb, ub = np.percentile(bootstrapped_medians, [2.5, 97.5])
         np.testing.assert_array_less(np.squeeze(lb), np.squeeze(median) + 1e-14, err_msg=name)
         np.testing.assert_array_less(np.squeeze(median), np.squeeze(ub) + 1e-14, err_msg=name)
 
