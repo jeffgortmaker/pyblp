@@ -179,7 +179,7 @@ class Economy(Container, StringRepresentation):
         }
         matrix_labels.update({
             'ZD': [f'demand_instruments{i}' for i in range(self.MD - len(matrix_labels['ZD']))] + matrix_labels['ZD'],
-            'ZS': [f'demand_instruments{i}' for i in range(self.MD - len(matrix_labels['ZS']))] + matrix_labels['ZS']
+            'ZS': [f'demand_instruments{i}' for i in range(self.MS - len(matrix_labels['ZS']))] + matrix_labels['ZS']
         })
 
         # check each matrix for collinearity
