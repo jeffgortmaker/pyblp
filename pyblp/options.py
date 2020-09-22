@@ -19,7 +19,7 @@ verbose_output : `callable`
 flush_output : `bool`
     Whether to call ``sys.stdout.flush()`` after outputting a status update. By default, output is not flushed to
     standard output. To force standard output flushes after every status update, set
-    ``pyblp.options.flush_output = True`. This may be particularly desirable for R users who are calling PyBLP from
+    ``pyblp.options.flush_output = True``. This may be particularly desirable for R users who are calling PyBLP from
     `reticulate <https://github.com/rstudio/reticulate>`_, since standard output is typically not automatically flushed
     to the screen in this environment. If PyBLP is imported as ``pyblp``, this setting can be enabled in R with
     ``pyblp$options$flush_output <- TRUE``.
