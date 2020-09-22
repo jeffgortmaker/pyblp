@@ -414,7 +414,7 @@ def build_differentiation_instruments(
                         yield close
                     else:
                         for k2 in range(K):
-                            yield close * distances_mapping[k2]
+                            yield close * np.nan_to_num(distances_mapping[k2])
                 else:
                     raise ValueError("version must be 'local' or 'quadratic'.")
 
