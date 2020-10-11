@@ -37,9 +37,13 @@ class Iteration(StringRepresentation):
 
             - ``'anderson'`` - Use the :func:`scipy.optimize.root` Anderson method.
 
+            - ``'linearmixing'`` - Use the :func:`scipy.optimize.root` uses a scalar Jacobian approximation method.
+
             - ``'krylov'`` - Use the :func:`scipy.optimize.root` Krylov approximation for inverse Jacobian method.
 
             - ``'diagbroyden'`` - Use the :func:`scipy.optimize.root` diagonal Broyden Jacobian approximation method.
+            
+            - ``'excitingmixing'`` - Use the :func:`scipy.optimize.root` a tuned diagonal Jacobian approximation.
 
             - ``'df-sane'`` - Use the :func:`scipy.optimize.root` derivative-free spectral method.
 
@@ -148,7 +152,9 @@ class Iteration(StringRepresentation):
             'broyden1': (functools.partial(scipy_iterator), "Broyden's good method implemented in SciPy"),
             'broyden2': (functools.partial(scipy_iterator), "Broyden's bad method implemented in SciPy"),
             'anderson': (functools.partial(scipy_iterator), "Anderson's method implemented in SciPy"),
+            'linearmixing': (functools.partial(scipy_iterator), "the scalar Jacobian method implemented in SciPy"),
             'diagbroyden': (functools.partial(scipy_iterator), "Broyden's diagonal method implemented in SciPy"),
+            'excitingmixing': (functools.partial(scipy_iterator), "the tuned diagonal Jacobian method implemented in SciPy"),
             'krylov': (functools.partial(scipy_iterator), "Krylov method implemented in SciPy"),
             'df-sane': (functools.partial(scipy_iterator), "the derivative-free spectral method implemented in SciPy"),
         }
