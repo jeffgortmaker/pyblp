@@ -93,6 +93,7 @@ Features
 - Demographic interactions
 - Micro moments that match demographic expectations and covariances
 - Second choice micro moments that match probabilities and covariances
+- Custom micro moments
 - Fixed effect absorption
 - Nonlinear functions of product characteristics
 - Concentrating out linear parameters

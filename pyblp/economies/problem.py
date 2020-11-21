@@ -16,7 +16,7 @@ from ..configurations.integration import Integration
 from ..configurations.iteration import Iteration
 from ..configurations.optimization import ObjectiveResults, Optimization
 from ..markets.problem_market import ProblemMarket
-from ..moments import Moment, EconomyMoments
+from ..moments import Moment, CustomMoment, EconomyMoments
 from ..parameters import Parameters
 from ..primitives import Agents, Products
 from ..results.problem_results import ProblemResults
@@ -261,10 +261,13 @@ class ProblemEconomy(Economy):
             Since finite differences comes with numerical approximation error and is typically slower, analytic
             expressions are used by default.
 
-            One situation in which finite differences may be preferable is when there are a sufficiently large number of
-            products and integration nodes in individual markets so as to make computing analytic Jacobians infeasible
-            because of large memory requirements. Note that an analytic expression for the Hessian has not been
-            implemented, so when computed it is always approximated with finite differences.
+            Note that when using any :class:`CustomMoment` micro moments, this must be ``True`` because custom micro
+            moments do not currently work with analytic derivatives.
+
+            Another situation in which finite differences may be preferable is when there are a sufficiently large
+            number of products and integration nodes in individual markets so as to make computing analytic Jacobians
+            infeasible because of large memory requirements. Note that an analytic expression for the Hessian has not
+            been implemented, so when computed it is always approximated with finite differences.
 
         error_behavior : `str, optional`
             How to handle any errors. For example, there can sometimes be overflow or underflow when computing
@@ -471,6 +474,8 @@ class ProblemEconomy(Economy):
         if moments.MM > 0:
             output("")
             output(moments.format("Micro Moments"))
+            if any(isinstance(m, CustomMoment) for m in moments.micro_moments) and not finite_differences:
+                raise ValueError("finite_differences currently must be True when there are any custom micro moments.")
             if extra_micro_covariances is not None:
                 extra_micro_covariances = np.c_[np.asarray(extra_micro_covariances, options.dtype)]
                 if extra_micro_covariances.shape != (moments.MM, moments.MM):

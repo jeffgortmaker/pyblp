@@ -1,5 +1,6 @@
 """Primary tests."""
 
+import functools
 import pickle
 import tempfile
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -10,7 +11,8 @@ import pytest
 import scipy.optimize
 
 from pyblp import (
-    Formulation, Integration, Iteration, Optimization, Problem, Simulation, build_ownership, data_to_dict, parallel
+    Agents, CustomMoment, DemographicCovarianceMoment, Formulation, Integration, Iteration, Optimization, Problem,
+    Products, Simulation, build_ownership, data_to_dict, parallel
 )
 from pyblp.utilities.basics import Array, Options, update_matrices, compute_finite_differences
 from .conftest import SimulatedProblemFixture
@@ -1040,6 +1042,60 @@ def test_extra_demographics(simulated_problem: SimulatedProblemFixture) -> None:
     for key in problem.agents.dtype.names:
         if problem.agents[key].dtype != np.object:
             np.testing.assert_allclose(problem.agents[key], new_problem.agents[key], atol=1e-14, rtol=0, err_msg=key)
+
+
+@pytest.mark.usefixtures('simulated_problem')
+def test_custom_moments(simulated_problem: SimulatedProblemFixture) -> None:
+    """Test that custom moments that replicate built-in micro moments yield the same results."""
+    _, _, problem, solve_options, _ = simulated_problem
+
+    # skip problems without demographic covariance moments
+    micro_moments = solve_options['micro_moments']
+    if not any(isinstance(m, DemographicCovarianceMoment) for m in micro_moments):
+        return pytest.skip("There are no demographic covariance moments.")
+
+    def compute_custom(
+            moment: DemographicCovarianceMoment, _: Array, __: Array, ___: Array, products: Products,
+            agents: Agents, ____: Array, _____: Array, probabilities: Array) -> Array:
+        """Replicate a demographic covariance moment."""
+        x = products.X2[:, [moment.X2_index]]
+        d = agents.demographics[:, [moment.demographics_index]]
+        inside_probabilities = probabilities / probabilities.sum(axis=0, keepdims=True)
+        z = inside_probabilities.T @ x
+        demeaned_z = z - agents.weights.T @ z
+        demeaned_d = d - agents.weights.T @ d
+        return demeaned_z * demeaned_d
+
+    # replace demographic covariance moments with custom ones that replicate their behavior
+    replicated_micro_moments = []
+    for micro_moment in micro_moments:
+        if not isinstance(micro_moment, DemographicCovarianceMoment):
+            replicated_micro_moments.append(micro_moment)
+        else:
+            replicated_micro_moments.append(CustomMoment(
+                micro_moment.values, functools.partial(compute_custom, micro_moment), micro_moment.market_ids,
+                name=f"Replicated {micro_moment}"
+            ))
+
+    # obtain results under the built-in micro moments (just return at the initial values for speed)
+    updated_solve_options = solve_options.copy()
+    updated_solve_options.update({
+        'finite_differences': True,
+        'optimization': Optimization('return'),
+    })
+    results = problem.solve(**updated_solve_options)
+
+    # obtain results under the replicated micro moments
+    replicated_solve_options = updated_solve_options.copy()
+    replicated_solve_options['micro_moments'] = replicated_micro_moments
+    replicated_results = problem.solve(**replicated_solve_options)
+
+    # test that all arrays in the results are essentially identical (there is numerical here here from computing inside
+    #   probabilities directly vs. compute them as functions of standard choice probabilities; this goes away when
+    #   computing both in the same way)
+    for key, result in results.__dict__.items():
+        if isinstance(result, np.ndarray) and result.dtype != np.object:
+            np.testing.assert_allclose(result, getattr(replicated_results, key), atol=1e-8, rtol=0, err_msg=key)
 
 
 @pytest.mark.usefixtures('simulated_problem')

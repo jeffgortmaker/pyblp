@@ -10,7 +10,7 @@ from ..configurations.iteration import ContractionResults, Iteration
 from ..economies.economy import Economy
 from ..moments import (
     EconomyMoments, MarketMoments, Moment, DemographicExpectationMoment, DemographicCovarianceMoment,
-    DiversionProbabilityMoment, DiversionCovarianceMoment
+    DiversionProbabilityMoment, DiversionCovarianceMoment, CustomMoment
 )
 from ..parameters import BetaParameter, GammaParameter, NonlinearCoefficient, Parameter, Parameters, RhoParameter
 from ..primitives import Container
@@ -21,6 +21,7 @@ from ..utilities.basics import Array, Bounds, RecArray, Error, Groups, SolverSta
 class Market(Container):
     """A market underlying the BLP model."""
 
+    t: Any
     groups: Groups
     epsilon_scale: float
     costs_type: str
@@ -51,6 +52,7 @@ class Market(Container):
         """Store or compute information about formulations, data, parameters, and utility."""
 
         # structure relevant data
+        self.t = t
         super().__init__(
             economy.products[economy._product_market_indices[t]],
             economy.agents[economy._agent_market_indices[t]] if agents_override is None else agents_override
@@ -982,10 +984,17 @@ class Market(Container):
         probabilities that were used so they don't have to be re-computed when computing related outputs.
         """
         assert self.moments is not None
+        if delta is None:
+            assert self.delta is not None
+            delta = self.delta
 
         # pre-compute probabilities
         probabilities = conditionals = None
-        if any(isinstance(m, DemographicExpectationMoment) for m in self.moments.micro_moments):
+        requires_probabilities = lambda m: any([
+            isinstance(m, DemographicExpectationMoment),
+            isinstance(m, CustomMoment),
+        ])
+        if any(requires_probabilities(m) for m in self.moments.micro_moments):
             probabilities, conditionals = self.compute_probabilities(delta)
 
         # pre-compute probabilities conditional on purchasing an inside good
@@ -1026,7 +1035,7 @@ class Market(Container):
         micro_values = np.zeros((self.moments.MM, 1), options.dtype)
         for m, moment in enumerate(self.moments.micro_moments):
             micro_values[m] = self.agents.weights.T @ self.compute_agent_micro_values(
-                moment, probabilities, inside_probabilities, eliminated_probabilities, inside_eliminated_sum
+                moment, delta, probabilities, inside_probabilities, eliminated_probabilities, inside_eliminated_sum
             )
 
         return (
@@ -1036,7 +1045,7 @@ class Market(Container):
         )
 
     def compute_agent_micro_values(
-            self, moment: Moment, probabilities: Optional[Array], inside_probabilities: Optional[Array],
+            self, moment: Moment, delta: Array, probabilities: Optional[Array], inside_probabilities: Optional[Array],
             eliminated_probabilities: Dict[int, Array], inside_eliminated_sum: Optional[Array]) -> Array:
         """Compute agent-specific micro moment values, which will be aggregated up into means or covariances."""
 
@@ -1089,12 +1098,22 @@ class Market(Container):
             return numerator / self.products.shares[j]
 
         # match a covariance between product characteristics of first and second choices
-        assert isinstance(moment, DiversionCovarianceMoment)
-        assert inside_probabilities is not None and inside_eliminated_sum is not None
-        x1 = self.products.X2[:, [moment.X2_index1]]
-        x2 = self.products.X2[:, [moment.X2_index2]]
-        z1 = inside_probabilities.T @ x1
-        z2 = inside_eliminated_sum.T @ x2
-        demeaned_z1 = z1 - self.agents.weights.T @ z1
-        demeaned_z2 = z2 - self.agents.weights.T @ z2
-        return demeaned_z1 * demeaned_z2
+        if isinstance(moment, DiversionCovarianceMoment):
+            assert inside_probabilities is not None and inside_eliminated_sum is not None
+            x1 = self.products.X2[:, [moment.X2_index1]]
+            x2 = self.products.X2[:, [moment.X2_index2]]
+            z1 = inside_probabilities.T @ x1
+            z2 = inside_eliminated_sum.T @ x2
+            demeaned_z1 = z1 - self.agents.weights.T @ z1
+            demeaned_z2 = z2 - self.agents.weights.T @ z2
+            return demeaned_z1 * demeaned_z2
+
+        # match a custom moment
+        assert isinstance(moment, CustomMoment)
+        values = moment.compute_custom(
+            self.t, self.sigma, self.pi, self.rho, self.products, self.agents, delta, self.mu, probabilities
+        )
+        values = np.asarray(values, options.dtype)
+        if values.size != self.I:
+            raise ValueError("compute_custom must return a vector with as many elements as there are agents.")
+        return np.c_[values.flatten()]

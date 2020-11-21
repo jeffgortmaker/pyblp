@@ -2,7 +2,8 @@
 
 import abc
 import collections
-from typing import Any, Dict, Hashable, List, Optional, Sequence, TYPE_CHECKING
+import functools
+from typing import Any, Callable, Dict, Hashable, List, Optional, Sequence, TYPE_CHECKING
 
 import numpy as np
 
@@ -353,6 +354,92 @@ class DiversionCovarianceMoment(Moment):
             raise ValueError(f"X2_index1 must be between 0 and K2 = {economy.K2}, inclusive.")
         if self.X2_index2 >= economy.K2:
             raise ValueError(f"X2_index2 must be between 0 and K2 = {economy.K2}, inclusive.")
+
+
+class CustomMoment(Moment):
+    r"""Configuration for custom micro moments.
+
+    This configuration requires values :math:`\mathscr{V}_{mt}` computed from survey data, for example. It also requires
+    a function that computes these values' simulated counterparts in order to form a micro moment :math:`m` in market
+    :math:`t` defined by :math:`g_{M,mt} = \mathscr{V}_{mt} - v_{mt}` where
+
+    .. math:: v_{mt} = \sum_{i \in I_t} w_{it} v_{imt},
+
+    a simulated integral over agent-specific micro values :math:`v_{imt}` computed according to a custom function.
+
+    .. warning::
+
+       Custom micro moments do not currently work with analytic derivatives, so you must set ``finite_differences=True``
+       in :meth:`Problem.solve` when using them. This may slow down optimization and slightly reduce the numerical
+       accuracy of standard errors.
+
+    Parameters
+    ----------
+    values : `float`
+        Values :math:`\mathscr{V}_{mt}` of the statistic estimated from micro data. If a scalar is specified, then
+        :math:`\mathscr{V}_{mt} = \mathscr{V}_m` is assumed to be constant across all markets in which the moment is
+        relevant. Otherwise, this should have as many elements as ``market_ids``, or as the total number of markets if
+        ``market_ids`` is ``None``.
+    compute_custom : `callable`
+        Function that computes :math:`v_{imt}` in a single market :math:`t`, which is of the following form::
+
+            compute_custom(t, sigma, pi, rho, products, agents, delta, mu, probabilities) -> values
+
+        where
+
+            - ``t`` is the ID of the market in which the :math:`v_{imt}` should be computed;
+
+            - ``sigma`` is the Cholesky root of the covariance matrix for unobserved taste heterogeneity,
+              :math:`\Sigma`, which will be empty if there are no such parameters;
+
+            - ``pi`` are parameters that measure how agent tastes vary with demographics, :math:`\Pi`, which will be
+              empty if there are no such parameters;
+
+            - ``rho`` is a :math:`J_t \times 1` vector with parameters that measure within nesting group correlations
+              for each product, :math:`\rho_{h(j)}`, which will be empty if there is no nesting structure;
+
+            - ``products`` is a :class:`Products` instance containing product data for the current market;
+
+            - ``agents`` is an :class:`Agents` instance containing agent data for the current market;
+
+            - ``delta`` is a :math:`J_t \times 1` vector of mean utilities :math:`\delta_{jt}`;
+
+            - ``mu`` is a :math:`J_t \times I_t` matrix of agent-specific utilities :math:`\mu_{ijt}`;
+
+            - ``probabilities`` is a :math:`J_t \times I_t` matrix of choice probabilities :math:`s_{ijt}`; and
+
+            - ``values`` is an :math:`I_t \times 1`` vector of agent-specific micro values :math:`v_{imt}`.
+
+    market_ids : `array-like, optional`
+        Distinct market IDs over which the micro moments will be averaged to get :math:`\bar{g}_{M,m}`. These are also
+        the only markets in which the moments will be computed. By default, the moments are computed for and averaged
+        across all markets.
+    name : `str, optional`
+        Name of the custom moment, which will be used when displaying information about micro moments. By default, this
+        is ``"Custom"``.
+
+    Examples
+    --------
+        - :doc:`Tutorial </tutorial>`
+
+    """
+
+    compute_custom: functools.partial
+    name: str
+
+    def __init__(
+            self, values: Any, compute_custom: Callable, market_ids: Optional[Sequence] = None,
+            name: str = "Custom") -> None:
+        """Validate information about the moment to the greatest extent possible without an economy instance."""
+        super().__init__(values, market_ids)
+        if not callable(compute_custom):
+            raise ValueError("compute_custom must be callable.")
+        self.compute_custom = functools.partial(compute_custom)
+        self.name = name
+
+    def _format_moment(self) -> str:
+        """The expression for the moment is just the specified name."""
+        return self.name
 
 
 class Moments(object):
