@@ -251,7 +251,7 @@ Each micro moment :math:`m` is approximated in a set :math:`T_m \subset T` of ma
 
 The vector :math:`\bar{g}_M` contains sample analogues of micro moment conditions :math:`E[g_{M,mt}] = 0` where :math:`g_{M,mt}` is typically a function of choice choice probabilities, data in market :math:`t`, and a statistic :math:`\mathcal{V}_{mt}` computed from survey data that the moment aims to match.
 
-Mico moments are computed for each :math:`\theta` and contribute to the GMM objective :math:`q(\theta)` in :eq:`objective`. Their derivatives with respect to :math:`\theta` are added as rows to :math:`\bar{G}` in :eq:`averaged_moments_jacobian`, and blocks are added to both :math:`W` and :math:`S` in :eq:`2sls_W` and :eq:`W`. The covariance between standard moments and micro moments is assumed to be zero, so these matrices are block-diagonal. The covariance between micro moments :math:`m` and :math:`n` in :math:`S` is set to zero if :math:`T_{mn} = T_m \cap T_n = \emptyset` and otherwise is
+Micro moments are computed for each :math:`\theta` and contribute to the GMM objective :math:`q(\theta)` in :eq:`objective`. Their derivatives with respect to :math:`\theta` are added as rows to :math:`\bar{G}` in :eq:`averaged_moments_jacobian`, and blocks are added to both :math:`W` and :math:`S` in :eq:`2sls_W` and :eq:`W`. The covariance between standard moments and micro moments is assumed to be zero, so these matrices are block-diagonal. The covariance between micro moments :math:`m` and :math:`n` in :math:`S` is set to zero if :math:`T_{mn} = T_m \cap T_n = \emptyset` and otherwise is
 
 .. math:: \text{Cov}(\bar{g}_{M,m}, \bar{g}_{M,n}) = \frac{1}{T_m \times T_n} \sum_{t \in T_{mn}} \text{Cov}(g_{M,mt}, g_{M,nt}).
    :label: averaged_micro_moment_covariances
