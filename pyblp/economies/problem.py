@@ -774,7 +774,10 @@ class ProblemEconomy(Economy):
             objective = progress.objective
             errors.append(exceptions.ObjectiveReversionError())
 
-        # compute the gradient and replace any invalid elements with their last values
+        # compute the gradient and replace any invalid elements with their last values (even if we concentrate out
+        #   linear parameters, it turns out that one can use orthogonality conditions to show that treating the linear
+        #   parameters as fixed is fine, so that we can treat xi and omega Jacobians as equal to delta and transformed
+        #   marginal cost Jacobians when computing the gradient)
         gradient = np.full_like(progress.gradient, np.nan)
         if compute_gradient:
             with np.errstate(all='ignore'):
@@ -834,9 +837,9 @@ class ProblemEconomy(Economy):
             shares_bounds: Bounds, sigma: Array, pi: Array, rho: Array, progress: 'InitialProgress',
             compute_jacobians: bool, compute_micro_covariances: bool) -> (
             Tuple[Array, Array, Array, Array, Array, Array, Array, Dict[Hashable, SolverStats], List[Error]]):
-        """Compute delta and the Jacobian of xi (equivalently, of delta) with respect to theta market-by-market. If
-        there are any micro moments, compute them (taking the average across relevant markets) along with their
-        Jacobian and covariances. Revert any problematic elements to their last values.
+        """Compute delta and the Jacobian (holding beta fixed) of xi (equivalently, of delta) with respect to theta
+        market-by-market. If there are any micro moments, compute them (taking the average across relevant markets)
+        along with their Jacobian and covariances. Revert any problematic elements to their last values.
         """
         errors: List[Error] = []
 
@@ -932,8 +935,9 @@ class ProblemEconomy(Economy):
             self, parameters: Parameters, costs_bounds: Bounds, sigma: Array, pi: Array, rho: Array, beta: Array,
             delta: Array, xi_jacobian: Array, progress: 'InitialProgress', compute_jacobian: bool) -> (
             Tuple[Array, Array, Array, List[Error]]):
-        """Compute transformed marginal costs and the Jacobian of omega (equivalently, of transformed marginal costs)
-        with respect to theta market-by-market. Revert any problematic elements to their last values.
+        """Compute transformed marginal costs and the Jacobian (holding gamma fixed) of omega (equivalently, of
+        transformed marginal costs) with respect to theta market-by-market. Revert any problematic elements to their
+        last values.
         """
         errors: List[Error] = []
 

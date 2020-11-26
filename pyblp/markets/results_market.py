@@ -40,16 +40,16 @@ class ResultsMarket(Market):
 
     @NumericalErrorHandler(exceptions.XiByThetaJacobianRealizationNumericalError)
     def safely_compute_xi_by_theta_jacobian_realization(self) -> Tuple[Array, List[Error]]:
-        """Compute the Jacobian of xi (equivalently, of delta) with respect to theta for a realization of the market,
-        handling any numerical errors.
+        """Compute the Jacobian (holding beta fixed) of xi (equivalently, of delta) with respect to theta for a
+        realization of the market, handling any numerical errors.
         """
         return self.compute_xi_by_theta_jacobian()
 
     @NumericalErrorHandler(exceptions.OmegaByThetaJacobianRealizationNumericalError)
     def safely_compute_omega_by_theta_jacobian_realization(
             self, tilde_costs: Array, xi_jacobian: Array) -> Tuple[Array, List[Error]]:
-        """Compute the Jacobian of omega (equivalently, of transformed marginal costs) with respect to theta for a
-        realization of the market, handling any numerical errors.
+        """Compute the Jacobian (holding gamma fixed) of omega (equivalently, of transformed marginal costs) with
+        respect to theta for a realization of the market, handling any numerical errors.
         """
         return self.compute_omega_by_theta_jacobian(tilde_costs, xi_jacobian)
 

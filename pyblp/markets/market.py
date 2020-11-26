@@ -721,8 +721,8 @@ class Market(Container):
 
     def compute_probabilities_by_xi_tensor(
             self, probabilities: Array, conditionals: Optional[Array]) -> Tuple[Array, Optional[Array]]:
-        """Use choice probabilities to compute their tensor derivatives with respect to xi (equivalently, to delta),
-        indexed with the first axis.
+        """Use choice probabilities to compute their tensor derivatives (holding beta fixed) with respect to xi
+        (equivalently, to delta), indexed with the first axis.
         """
         probabilities_tensor = -probabilities[None] * probabilities[None].swapaxes(0, 1)
         probabilities_tensor[np.diag_indices(self.J)] += probabilities
@@ -761,7 +761,7 @@ class Market(Container):
         return capital_lamda - capital_gamma
 
     def compute_shares_by_xi_jacobian(self, probabilities: Array, conditionals: Optional[Array]) -> Array:
-        """Compute the Jacobian of shares with respect to xi (equivalently, to delta)."""
+        """Compute the Jacobian (holding beta fixed) of shares with respect to xi (equivalently, to delta)."""
         diagonal_shares = np.diagflat(self.products.shares)
         weighted_probabilities = self.agents.weights * probabilities.T
         jacobian = diagonal_shares - probabilities @ weighted_probabilities
@@ -883,12 +883,13 @@ class Market(Container):
             errors.append(exceptions.IntraFirmJacobianInversionError(capital_delta, replacement))
         eta = capital_delta_inverse @ self.products.shares
 
-        # compute the tensor derivative with respect to xi (equivalently, to delta), indexed with the first axis, of
-        #   derivatives of aggregate inclusive values
+        # compute the tensor derivative (holding beta fixed) with respect to xi (equivalently, to delta), indexed with
+        # the first axis, of derivatives of aggregate inclusive values
         probabilities_tensor, conditionals_tensor = self.compute_probabilities_by_xi_tensor(probabilities, conditionals)
         value_derivatives_tensor = probabilities_tensor * utility_derivatives
 
-        # compute the tensor derivative of capital delta with respect to xi (equivalently, to delta)
+        # compute the tensor derivatives (holding beta fixed) of capital delta with respect to xi (equivalently, to
+        #   delta)
         capital_lamda_tensor = self.compute_capital_lamda_by_xi_tensor(value_derivatives_tensor)
         capital_gamma_tensor = self.compute_capital_gamma_by_xi_tensor(
             value_derivatives, value_derivatives_tensor, probabilities, probabilities_tensor, conditionals,
@@ -936,8 +937,8 @@ class Market(Container):
         return eta_jacobian, errors
 
     def compute_xi_by_theta_jacobian(self, delta: Optional[Array] = None) -> Tuple[Array, List[Error]]:
-        """Use the Implicit Function Theorem to compute the Jacobian of xi (equivalently, of delta) with respect to
-        theta. By default, use unchanged delta values.
+        """Use the Implicit Function Theorem to compute the Jacobian (holding beta fixed) of xi (equivalently, of delta)
+        with respect to theta. By default, use unchanged delta values.
         """
         errors: List[Error] = []
         if delta is None:
@@ -954,7 +955,9 @@ class Market(Container):
         return xi_by_theta_jacobian, errors
 
     def compute_omega_by_theta_jacobian(self, tilde_costs: Array, xi_jacobian: Array) -> Tuple[Array, List[Error]]:
-        """Compute the Jacobian of omega (equivalently, of transformed marginal costs) with respect to theta."""
+        """Compute the Jacobian (holding gamma fixed) of omega (equivalently, of transformed marginal costs) with
+        respect to theta.
+        """
         errors: List[Error] = []
 
         # compute the Jacobian of the markup term in the BLP-markup equation with respect to theta

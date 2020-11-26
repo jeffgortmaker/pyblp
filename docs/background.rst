@@ -156,12 +156,13 @@ Writing :math:`\delta` as an implicit function of :math:`s` in :eq:`shares` give
 
 The supply-side Jacobian is derived from the definition of :math:`\tilde{c}` in :eq:`costs`:
 
-.. math:: \frac{\partial\omega}{\partial\theta} = \frac{\partial\tilde{c}}{\partial\theta_p} = -\frac{\partial\tilde{c}}{\partial c}\frac{\partial\eta}{\partial\theta}.
+.. math:: \frac{\partial\omega}{\partial\theta} = \frac{\partial\tilde{c}}{\partial\theta} = -\frac{\partial\tilde{c}}{\partial c}\frac{\partial\eta}{\partial\theta}.
 
 The second term in this expression is derived from the definition of :math:`\eta` in :eq:`eta`:
 
 .. math:: \frac{\partial\eta}{\partial\theta} = -\Delta^{-1}\left(\frac{\partial\Delta}{\partial\theta}\eta + \frac{\partial\Delta}{\partial\xi}\eta\frac{\partial\xi}{\partial\theta}\right).
 
+One thing to note is that :math:`\frac{\partial\xi}{\partial\theta} = \frac{\partial\delta}{\partial\theta}` and :math:`\frac{\partial\omega}{\partial\theta} = \frac{\partial\tilde{c}}{\partial\theta}` need not hold during optimization if we concentrate out linear parameters because these are then functions of :math:`\theta`. Fortunately, one can use orthogonality conditions to show that it is fine to treat these parameters as fixed when computing the gradient.
 
 Weighting Matrices
 ~~~~~~~~~~~~~~~~~~

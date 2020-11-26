@@ -86,8 +86,8 @@ class MicroMomentsNumericalError(NumericalError):
 
 
 class XiByThetaJacobianNumericalError(NumericalError):
-    r"""Encountered a numerical error when computing the Jacobian of :math:`\xi` (equivalently, of :math:`\delta`)
-    with respect to :math:`\theta`.
+    r"""Encountered a numerical error when computing the Jacobian (holding :math:`\beta` fixed) of :math:`\xi`
+    (equivalently, of :math:`\delta`) with respect to :math:`\theta`.
 
     This problem is often due to prior problems, overflow, or nonpositive shares, and can sometimes be mitigated by
     choosing smaller initial parameter values, setting more conservative bounds, rescaling data, removing outliers,
@@ -97,8 +97,8 @@ class XiByThetaJacobianNumericalError(NumericalError):
 
 
 class OmegaByThetaJacobianNumericalError(NumericalError):
-    r"""Encountered a numerical error when computing the Jacobian of :math:`\omega` (equivalently, of transformed
-    marginal costs) with respect to :math:`\theta`.
+    r"""Encountered a numerical error when computing the Jacobian (holding :math:`\gamma` fixed) of :math:`\omega`
+    (equivalently, of transformed marginal costs) with respect to :math:`\theta`.
 
     This problem is often due to prior problems or overflow, and can sometimes be mitigated by choosing smaller initial
     parameter values, setting more conservative bounds, rescaling data, removing outliers, changing the floating point
@@ -162,15 +162,15 @@ class EquilibriumRealizationNumericalError(NumericalError):
 
 
 class XiByThetaJacobianRealizationNumericalError(NumericalError):
-    r"""Encountered a numerical error when computing a realization of the Jacobian of :math:`\xi` (equivalently, of
-    :math:`\delta`) with respect to :math:`\theta`.
+    r"""Encountered a numerical error when computing a realization of the Jacobian (holding :math:`\beta` fixed) of
+    :math:`\xi` (equivalently, of :math:`\delta`) with respect to :math:`\theta`.
 
     """
 
 
 class OmegaByThetaJacobianRealizationNumericalError(NumericalError):
-    r"""Encountered a numerical error when computing a realization of the Jacobian of :math:`\omega` (equivalently, of
-    transformed marginal costs) with respect to :math:`\theta`.
+    r"""Encountered a numerical error when computing a realization of the Jacobian (holding :math:`\gamma` fixed) of
+    :math:`\omega` (equivalently, of transformed marginal costs) with respect to :math:`\theta`.
 
     """
 
@@ -260,15 +260,15 @@ class MicroMomentsReversionError(MultipleReversionError):
 
 
 class XiByThetaJacobianReversionError(MultipleReversionError):
-    r"""Reverted problematic elements in the Jacobian of :math:`\xi` (equivalently, of :math:`\delta`) with respect to
-    :math:`\theta`.
+    r"""Reverted problematic elements in the Jacobian (holding :math:`\beta` fixed) of :math:`\xi` (equivalently, of
+    :math:`\delta`) with respect to :math:`\theta`.
 
     """
 
 
 class OmegaByThetaJacobianReversionError(MultipleReversionError):
-    r"""Reverted problematic elements in the Jacobian of :math:`\omega` (equivalently, of transformed marginal costs)
-    with respect to :math:`\theta`.
+    r"""Reverted problematic elements in the Jacobian (holding :math:`\gamma` fixed) of :math:`\omega` (equivalently, of
+    transformed marginal costs) with respect to :math:`\theta`.
 
     """
 
@@ -290,8 +290,8 @@ class FittedValuesInversionError(InversionReplacementError):
 
 
 class SharesByXiJacobianInversionError(InversionReplacementError):
-    r"""Failed to invert a Jacobian of shares with respect to :math:`\xi` when computing the Jacobian of :math:`\xi`
-    (equivalently, of :math:`\delta`) with respect to :math:`\theta`.
+    r"""Failed to invert a Jacobian of shares with respect to :math:`\xi` when computing the Jacobian (holding
+    :math:`\beta` fixed) of :math:`\xi` (equivalently, of :math:`\delta`) with respect to :math:`\theta`.
 
     """
 

@@ -23,10 +23,10 @@ class ProblemMarket(Market):
             compute_jacobians: bool, compute_micro_covariances: bool) -> (
             Tuple[Array, Array, Array, Array, Array, Array, SolverStats, List[Error]]):
         """Compute the mean utility for this market that equates market shares to observed values by solving a fixed
-        point problem. Then, if compute_jacobians is True, compute the Jacobian of xi (equivalently, of delta) with
-        respect to theta. Finally, compute any micro moment values, their Jacobian with respect to theta (if
-        compute_jacobians is True), and, if compute_micro_covariances is True, their covariances. Replace null elements
-        in delta with their last values before computing micro moments and Jacobians.
+        point problem. Then, if compute_jacobians is True, compute the Jacobian (holding beta fixed) of xi
+        (equivalently, of delta) with respect to theta. Finally, compute any micro moment values, their Jacobian with
+        respect to theta (if compute_jacobians is True), and, if compute_micro_covariances is True, their covariances.
+        Replace null elements in delta with their last values before computing micro moments and Jacobians.
         """
         errors: List[Error] = []
 
@@ -78,8 +78,8 @@ class ProblemMarket(Market):
             self, last_tilde_costs: Array, xi_jacobian: Array, costs_bounds: Bounds, compute_jacobian: bool) -> (
             Tuple[Array, Array, Array, List[Error]]):
         """Compute transformed marginal costs for this market. Then, if compute_jacobian is True, compute the Jacobian
-        of omega (equivalently, of transformed marginal costs) with respect to theta. Replace null elements in
-        transformed marginal costs with their last values before computing their Jacobian.
+        (holding gamma fixed) of omega (equivalently, of transformed marginal costs) with respect to theta. Replace null
+        elements in transformed marginal costs with their last values before computing their Jacobian.
         """
         errors: List[Error] = []
 
@@ -117,7 +117,9 @@ class ProblemMarket(Market):
 
     @NumericalErrorHandler(exceptions.XiByThetaJacobianNumericalError)
     def safely_compute_xi_by_theta_jacobian(self, delta: Array) -> Tuple[Array, List[Error]]:
-        """Compute the Jacobian of xi (equivalently, of delta) with respect to theta, handling any numerical errors."""
+        """Compute the Jacobian (holding beta fixed) of xi (equivalently, of delta) with respect to theta, handling any
+        numerical errors.
+        """
         return self.compute_xi_by_theta_jacobian(delta)
 
     @NumericalErrorHandler(exceptions.MicroMomentsNumericalError)
@@ -384,7 +386,7 @@ class ProblemMarket(Market):
     @NumericalErrorHandler(exceptions.OmegaByThetaJacobianNumericalError)
     def safely_compute_omega_by_theta_jacobian(
             self, tilde_costs: Array, xi_jacobian: Array) -> Tuple[Array, List[Error]]:
-        """Compute the Jacobian of omega (equivalently, of transformed marginal costs) with respect to theta, handling
-        any numerical errors.
+        """Compute the Jacobian (holding gamma fixed) of omega (equivalently, of transformed marginal costs) with
+        respect to theta, handling any numerical errors.
         """
         return self.compute_omega_by_theta_jacobian(tilde_costs, xi_jacobian)
