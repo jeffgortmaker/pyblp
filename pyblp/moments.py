@@ -383,9 +383,11 @@ class CustomMoment(Moment):
     compute_custom : `callable`
         Function that computes :math:`v_{imt}` in a single market :math:`t`, which is of the following form::
 
-            compute_custom(t, sigma, pi, rho, products, agents, delta, mu, probabilities) -> values
+            compute_custom(t, sigma, pi, rho, products, agents, delta, mu, probabilities, compute_derivatives) -> values
 
         where
+
+            - ``values`` is an :math:`I_t \times 1`` vector of agent-specific micro values :math:`v_{imt}`;
 
             - ``t`` is the ID of the market in which the :math:`v_{imt}` should be computed;
 
@@ -408,7 +410,14 @@ class CustomMoment(Moment):
 
             - ``probabilities`` is a :math:`J_t \times I_t` matrix of choice probabilities :math:`s_{ijt}`; and
 
-            - ``values`` is an :math:`I_t \times 1`` vector of agent-specific micro values :math:`v_{imt}`.
+            - ``compute_derivatives`` is a function of the following form::
+
+                  compute_derivatives() -> derivatives
+
+              where ``derivatives`` is a :math:`J_t \times I_t \times P` array of derivatives
+              :math:`\frac{\partial s_{ijt}}{\partial \theta_p}`. For many types of custom moments, this function will
+              not be needed, but some moments such as those based on scores may require derivatives. For the ordering of
+              the :math:`P` parameters in :math:`\theta`, refer to :attr:`ProblemResults.theta`.
 
     market_ids : `array-like, optional`
         Distinct market IDs over which the micro moments will be averaged to get :math:`\bar{g}_{M,m}`. These are also

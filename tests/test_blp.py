@@ -1055,8 +1055,8 @@ def test_custom_moments(simulated_problem: SimulatedProblemFixture) -> None:
         return pytest.skip("There are no demographic covariance moments.")
 
     def compute_custom(
-            moment: DemographicCovarianceMoment, _: Array, __: Array, ___: Array, products: Products,
-            agents: Agents, ____: Array, _____: Array, probabilities: Array) -> Array:
+            moment: DemographicCovarianceMoment, _: Any, __: Array, ___: Array, ____: Array, products: Products,
+            agents: Agents, _____: Array, ______: Array, probabilities: Array, _______: Callable) -> Array:
         """Replicate a demographic covariance moment."""
         x = products.X2[:, [moment.X2_index]]
         d = agents.demographics[:, [moment.demographics_index]]
@@ -1096,6 +1096,54 @@ def test_custom_moments(simulated_problem: SimulatedProblemFixture) -> None:
     for key, result in results.__dict__.items():
         if isinstance(result, np.ndarray) and result.dtype != np.object:
             np.testing.assert_allclose(result, getattr(replicated_results, key), atol=1e-8, rtol=0, err_msg=key)
+
+
+@pytest.mark.usefixtures('simulated_problem')
+def test_probabilities_by_theta_derivatives(simulated_problem: SimulatedProblemFixture) -> None:
+    """Check that the derivatives computed for custom moments match finite differences."""
+    _, _, problem, solve_options, original_results = simulated_problem
+
+    # skip problems without nonlinear parameters or with too many
+    if not 0 < original_results.theta.size < 4:
+        return pytest.skip("There are either no nonlinear parameters or too many.")
+
+    def compute_custom(
+            t: Any, _: Array, __: Array, ___: Array, ____: Products, agents: Agents, _____: Array, ______: Array,
+            _______: Array, compute_derivatives: Callable) -> Array:
+        """Compute the exact derivatives and also approximate them with finite differences."""
+        def compute_flat_probabilities(theta: Array) -> Array:
+            """Compute probabilities at a perturbed theta."""
+            sigma, pi, rho, beta, gamma = original_results._parameters.expand(theta)
+            perturbed_solve_options = solve_options.copy()
+            perturbed_solve_options.update({
+                'sigma': sigma,
+                'pi': pi,
+                'rho': rho,
+                'beta': beta,
+                'gamma': gamma,
+                'optimization': Optimization('return'),
+            })
+            perturbed_results = problem.solve(**perturbed_solve_options)
+            return perturbed_results.compute_probabilities(market_id=[t]).flatten()
+
+        # compute the derivatives analytically and with finite differences
+        exact = compute_derivatives()
+        approximated = compute_finite_differences(compute_flat_probabilities, original_results.theta)
+        approximated = approximated.reshape(exact.shape)
+
+        # test that they are approximately the same (error from the fixed point bubbles up so this can't be very
+        #   precise) and return a dummy vector of agent-specific moments so the routine doesn't fail
+        np.testing.assert_allclose(approximated, exact, atol=1e-2, rtol=1e-2)
+        return np.zeros_like(agents.weights)
+
+    # have a custom micro moment call the testing function
+    updated_solve_options = solve_options.copy()
+    updated_solve_options.update({
+        'finite_differences': True,
+        'optimization': Optimization('return'),
+        'micro_moments': [CustomMoment(0, compute_custom, [problem.unique_market_ids[0]])]
+    })
+    problem.solve(**updated_solve_options)
 
 
 @pytest.mark.usefixtures('simulated_problem')

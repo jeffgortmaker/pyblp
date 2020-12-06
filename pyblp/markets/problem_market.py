@@ -68,7 +68,8 @@ class ProblemMarket(Market):
                 errors.extend(micro_jacobian_errors)
             if compute_micro_covariances:
                 micro_covariances, micro_covariances_errors = self.safely_compute_micro_covariances(
-                    valid_delta, probabilities, inside_probabilities, eliminated_probabilities, inside_eliminated_sum
+                    valid_delta, probabilities, conditionals, inside_probabilities, eliminated_probabilities,
+                    inside_eliminated_sum
                 )
                 errors.extend(micro_covariances_errors)
 
@@ -337,9 +338,9 @@ class ProblemMarket(Market):
 
     @NumericalErrorHandler(exceptions.MicroMomentCovariancesNumericalError)
     def safely_compute_micro_covariances(
-            self, delta: Array, probabilities: Optional[Array], inside_probabilities: Optional[Array],
-            eliminated_probabilities: Dict[int, Array], inside_eliminated_sum: Optional[Array]) -> (
-            Tuple[Array, List[Error]]):
+            self, delta: Array, probabilities: Optional[Array], conditionals: Optional[Array],
+            inside_probabilities: Optional[Array], eliminated_probabilities: Dict[int, Array],
+            inside_eliminated_sum: Optional[Array]) -> Tuple[Array, List[Error]]:
         """Compute micro moment covariances, handling any numerical errors."""
         errors: List[Error] = []
         assert self.moments is not None
@@ -348,7 +349,8 @@ class ProblemMarket(Market):
         demeaned_agent_micro = np.zeros((self.I, self.moments.MM), options.dtype)
         for m, moment in enumerate(self.moments.micro_moments):
             agent_micro_m = self.compute_agent_micro_values(
-                moment, delta, probabilities, inside_probabilities, eliminated_probabilities, inside_eliminated_sum
+                moment, delta, probabilities, conditionals, inside_probabilities, eliminated_probabilities,
+                inside_eliminated_sum
             )
             demeaned_agent_micro[:, [m]] = agent_micro_m - self.agents.weights.T @ agent_micro_m
 

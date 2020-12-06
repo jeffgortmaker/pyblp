@@ -1038,7 +1038,8 @@ class Market(Container):
         micro_values = np.zeros((self.moments.MM, 1), options.dtype)
         for m, moment in enumerate(self.moments.micro_moments):
             micro_values[m] = self.agents.weights.T @ self.compute_agent_micro_values(
-                moment, delta, probabilities, inside_probabilities, eliminated_probabilities, inside_eliminated_sum
+                moment, delta, probabilities, conditionals, inside_probabilities, eliminated_probabilities,
+                inside_eliminated_sum
             )
 
         return (
@@ -1048,8 +1049,9 @@ class Market(Container):
         )
 
     def compute_agent_micro_values(
-            self, moment: Moment, delta: Array, probabilities: Optional[Array], inside_probabilities: Optional[Array],
-            eliminated_probabilities: Dict[int, Array], inside_eliminated_sum: Optional[Array]) -> Array:
+            self, moment: Moment, delta: Array, probabilities: Optional[Array], conditionals: Optional[Array],
+            inside_probabilities: Optional[Array], eliminated_probabilities: Dict[int, Array],
+            inside_eliminated_sum: Optional[Array]) -> Array:
         """Compute agent-specific micro moment values, which will be aggregated up into means or covariances."""
 
         # match a demographic expectation for agents who choose the outside good
@@ -1111,10 +1113,27 @@ class Market(Container):
             demeaned_z2 = z2 - self.agents.weights.T @ z2
             return demeaned_z1 * demeaned_z2
 
+        def compute_derivatives() -> Array:
+            """Compute derivatives of probabilities with respect to theta for use by some custom micro moments."""
+
+            # compute contributions from direct dependence on theta
+            probabilities_by_theta = np.zeros((self.J, self.I, self.parameters.P), options.dtype)
+            for p, parameter in enumerate(self.parameters.unfixed):
+                probabilities_by_theta[:, :, p], _ = self.compute_probabilities_by_parameter_tangent(
+                    parameter, probabilities, conditionals, delta
+                )
+
+            # compute contributions from indirect dependence on theta through delta
+            probabilities_by_xi, _ = self.compute_probabilities_by_xi_tensor(probabilities, conditionals)
+            xi_by_theta, _ = self.compute_xi_by_theta_jacobian(delta)
+
+            return probabilities_by_theta + np.moveaxis(probabilities_by_xi, 0, 2) @ xi_by_theta
+
         # match a custom moment
         assert isinstance(moment, CustomMoment)
         values = moment.compute_custom(
-            self.t, self.sigma, self.pi, self.rho, self.products, self.agents, delta, self.mu, probabilities
+            self.t, self.sigma, self.pi, self.rho, self.products, self.agents, delta, self.mu, probabilities,
+            compute_derivatives
         )
         values = np.asarray(values, options.dtype)
         if values.size != self.I:
