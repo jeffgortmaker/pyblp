@@ -185,10 +185,7 @@ class ProblemMarket(Market):
                 inside_eliminated_tensor_j, _ = self.compute_probabilities_by_xi_tensor(
                     inside_eliminated_probabilities[j], inside_eliminated_conditionals[j]
                 )
-                inside_eliminated_sum_tensor += (
-                    inside_tensor[:, [j], :] * inside_eliminated_probabilities[j][None] +
-                    inside_probabilities[[j]][None] * inside_eliminated_tensor_j
-                )
+                inside_eliminated_sum_tensor += inside_probabilities[[j]][None] * inside_eliminated_tensor_j
 
         # compute the Jacobian
         micro_jacobian = np.zeros((self.moments.MM, self.parameters.P))
@@ -202,6 +199,7 @@ class ProblemMarket(Market):
                 probabilities_tangent, _ = self.compute_probabilities_by_parameter_tangent(
                     parameter, probabilities, conditionals, delta
                 )
+                probabilities_tangent += (probabilities_tensor * xi_jacobian[:, [p], None]).sum(axis=0)
 
             # pre-compute the same but for probabilities conditional on purchasing an inside good
             inside_tangent = None
@@ -209,6 +207,7 @@ class ProblemMarket(Market):
                 inside_tangent, _ = self.compute_probabilities_by_parameter_tangent(
                     parameter, inside_probabilities, inside_conditionals, delta
                 )
+                inside_tangent += (inside_tensor * xi_jacobian[:, [p], None]).sum(axis=0)
 
             # compute the same but for second choice probabilities
             eliminated_tangents = {}
@@ -216,125 +215,97 @@ class ProblemMarket(Market):
                 eliminated_tangents[j], _ = self.compute_probabilities_by_parameter_tangent(
                     parameter, eliminated_probabilities[j], eliminated_conditionals[j], delta
                 )
+                eliminated_tangents[j] += (eliminated_tensors[j] * xi_jacobian[:, [p], None]).sum(axis=0)
 
             # compute the same but for the sum of inside probability products over all first choices
             inside_eliminated_sum_tangent = None
             if inside_eliminated_probabilities:
                 assert inside_probabilities is not None and inside_tangent is not None
-                inside_eliminated_sum_tangent = np.zeros((self.J, self.I), options.dtype)
+                inside_eliminated_sum_tangent = (inside_eliminated_sum_tensor * xi_jacobian[:, [p], None]).sum(axis=0)
                 for j in range(self.J):
-                    inside_eliminated_sum_tangent_j, _ = self.compute_probabilities_by_parameter_tangent(
+                    inside_eliminated_tangent_j, _ = self.compute_probabilities_by_parameter_tangent(
                         parameter, inside_eliminated_probabilities[j], inside_eliminated_conditionals[j], delta
                     )
                     inside_eliminated_sum_tangent += (
                         inside_tangent[[j]] * inside_eliminated_probabilities[j] +
-                        inside_probabilities[[j]] * inside_eliminated_sum_tangent_j
+                        inside_probabilities[[j]] * inside_eliminated_tangent_j
                     )
 
             # fill the gradient of micro moments with respect to the parameter
             for m, moment in enumerate(self.moments.micro_moments):
-                tangent_m, jacobian_m = self.compute_agent_micro_derivatives(
-                    moment, probabilities_tensor, probabilities_tangent, inside_probabilities, inside_tensor,
-                    inside_tangent, eliminated_tensors, eliminated_tangents, inside_eliminated_sum,
-                    inside_eliminated_sum_tensor, inside_eliminated_sum_tangent
+                micro_jacobian[m, p] = self.agents.weights.T @ self.compute_agent_micro_tangent(
+                    moment, probabilities_tangent, inside_probabilities, inside_tangent, eliminated_tangents,
+                    inside_eliminated_sum, inside_eliminated_sum_tangent
                 )
-                micro_jacobian[m, p] = self.agents.weights.T @ (tangent_m + jacobian_m @ xi_jacobian[:, [p]])
 
         return micro_jacobian, errors
 
-    def compute_agent_micro_derivatives(
-            self, moment: Moment, probabilities_tensor: Optional[Array],
-            probabilities_tangent: Optional[Array], inside_probabilities: Optional[Array],
-            inside_tensor: Optional[Array], inside_tangent: Optional[Array], eliminated_tensors: Dict[int, Array],
-            eliminated_tangents: Dict[int, Array], inside_eliminated_sum: Optional[Array],
-            inside_eliminated_sum_tensor: Optional[Array], inside_eliminated_sum_tangent: Optional[Array]) -> (
+    def compute_agent_micro_tangent(
+            self, moment: Moment, probabilities_tangent: Optional[Array], inside_probabilities: Optional[Array],
+            inside_tangent: Optional[Array], eliminated_tangents: Dict[int, Array],
+            inside_eliminated_sum: Optional[Array], inside_eliminated_sum_tangent: Optional[Array]) -> (
             Tuple[Array, Array]):
-        """Holding xi fixed, compute the tangent of agent-specific micro moments with respect to a parameter. Also
-        compute their Jacobian with respect to xi.
-        """
+        """Compute the tangent of agent-specific micro moments with respect to a parameter."""
 
         # handle a demographic expectation for agents who choose the outside good
         if isinstance(moment, DemographicExpectationMoment) and moment.product_id is None:
-            assert probabilities_tangent is not None and probabilities_tensor is not None
+            assert probabilities_tangent is not None
             d = self.agents.demographics[:, [moment.demographics_index]]
             outside_probabilities_tangent = -probabilities_tangent.sum(axis=0, keepdims=True).T
-            outside_probabilities_jacobian = -probabilities_tensor.sum(axis=1).T
             outside_share = 1 - self.products.shares.sum()
-            tangent = d * outside_probabilities_tangent / outside_share
-            jacobian = d * outside_probabilities_jacobian / outside_share
-            return tangent, jacobian
+            return d * outside_probabilities_tangent / outside_share
 
         # handle a demographic expectation for agents who choose a certain inside good
         if isinstance(moment, DemographicExpectationMoment):
-            assert probabilities_tangent is not None and probabilities_tensor is not None
+            assert probabilities_tangent is not None
             j = self.get_product(moment.product_id)
             d = self.agents.demographics[:, [moment.demographics_index]]
-            tangent = d * probabilities_tangent[[j]].T / self.products.shares[j]
-            jacobian = d * probabilities_tensor[:, j, :].T / self.products.shares[j]
-            return tangent, jacobian
+            return d * probabilities_tangent[[j]].T / self.products.shares[j]
 
         # handle a covariance between a product characteristic and a demographic
         if isinstance(moment, DemographicCovarianceMoment):
-            assert inside_tangent is not None and inside_tensor is not None
+            assert inside_tangent is not None
             x = self.products.X2[:, [moment.X2_index]]
             d = self.agents.demographics[:, [moment.demographics_index]]
             z_tangent = inside_tangent.T @ x
-            z_jacobian = np.squeeze(inside_tensor.swapaxes(1, 2) @ x, axis=2).T
             demeaned_z_tangent = z_tangent - self.agents.weights.T @ z_tangent
-            demeaned_z_jacobian = z_jacobian - self.agents.weights.T @ z_jacobian
             demeaned_d = d - self.agents.weights.T @ d
-            tangent = demeaned_z_tangent * demeaned_d
-            jacobian = demeaned_z_jacobian * demeaned_d
-            return tangent, jacobian
+            return demeaned_z_tangent * demeaned_d
 
         # handle the second choice probability of a certain inside good for agents who choose the outside good
         if isinstance(moment, DiversionProbabilityMoment) and moment.product_id1 is None:
-            assert inside_tangent is not None and inside_tensor is not None
+            assert inside_tangent is not None
             k = self.get_product(moment.product_id2)
             outside_share = 1 - self.products.shares.sum()
-            tangent = inside_tangent[[k]].T / outside_share
-            jacobian = inside_tensor[:, k, :].T / outside_share
-            return tangent, jacobian
+            return inside_tangent[[k]].T / outside_share
 
         # handle the second choice probability of the outside good for agents who choose a certain inside good
         if isinstance(moment, DiversionProbabilityMoment) and moment.product_id2 is None:
             j = self.get_product(moment.product_id1)
             eliminated_outside_tangent = -eliminated_tangents[j].sum(axis=0, keepdims=True)
-            eliminated_outside_tensor = -eliminated_tensors[j].sum(axis=1)
-            tangent = eliminated_outside_tangent.T / self.products.shares[j]
-            jacobian = eliminated_outside_tensor.T / self.products.shares[j]
-            return tangent, jacobian
+            return eliminated_outside_tangent.T / self.products.shares[j]
 
         # handle the second choice probability of a certain inside good for agents who choose a certain inside good
         if isinstance(moment, DiversionProbabilityMoment):
             j = self.get_product(moment.product_id1)
             k = self.get_product(moment.product_id2)
-            tangent = eliminated_tangents[j][[k]].T / self.products.shares[j]
-            jacobian = eliminated_tensors[j][:, k, :].T / self.products.shares[j]
-            return tangent, jacobian
+            return eliminated_tangents[j][[k]].T / self.products.shares[j]
 
         # handle a covariance between product characteristics of first and second choices
         assert isinstance(moment, DiversionCovarianceMoment)
         assert inside_probabilities is not None and inside_eliminated_sum is not None
         assert inside_tangent is not None and inside_eliminated_sum_tangent is not None
-        assert inside_tensor is not None and inside_eliminated_sum_tensor is not None
         x1 = self.products.X2[:, [moment.X2_index1]]
         x2 = self.products.X2[:, [moment.X2_index2]]
         z1 = inside_probabilities.T @ x1
         z1_tangent = inside_tangent.T @ x1
-        z1_jacobian = np.squeeze(inside_tensor.swapaxes(1, 2) @ x1, axis=2).T
         z2 = inside_eliminated_sum.T @ x2
         z2_tangent = inside_eliminated_sum_tangent.T @ x2
-        z2_jacobian = np.squeeze(inside_eliminated_sum_tensor.swapaxes(1, 2) @ x2, axis=2).T
         demeaned_z1 = z1 - self.agents.weights.T @ z1
         demeaned_z1_tangent = z1_tangent - self.agents.weights.T @ z1_tangent
-        demeaned_z1_jacobian = z1_jacobian - self.agents.weights.T @ z1_jacobian
         demeaned_z2 = z2 - self.agents.weights.T @ z2
         demeaned_z2_tangent = z2_tangent - self.agents.weights.T @ z2_tangent
-        demeaned_z2_jacobian = z2_jacobian - self.agents.weights.T @ z2_jacobian
-        tangent = demeaned_z1_tangent * demeaned_z2 + demeaned_z1 * demeaned_z2_tangent
-        jacobian = demeaned_z1_jacobian * demeaned_z2 + demeaned_z1 * demeaned_z2_jacobian
-        return tangent, jacobian
+        return demeaned_z1_tangent * demeaned_z2 + demeaned_z1 * demeaned_z2_tangent
 
     @NumericalErrorHandler(exceptions.MicroMomentCovariancesNumericalError)
     def safely_compute_micro_covariances(
