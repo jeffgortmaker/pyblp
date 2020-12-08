@@ -1,5 +1,6 @@
 """Primary tests."""
 
+import copy
 import functools
 import pickle
 import tempfile
@@ -47,7 +48,7 @@ def test_accuracy(simulated_problem: SimulatedProblemFixture, solve_options_upda
         return pytest.skip("Nonlinear fixed point configurations are not supported when epsilon is scaled.")
 
     # update the default options and solve the problem
-    updated_solve_options = solve_options.copy()
+    updated_solve_options = copy.deepcopy(solve_options)
     updated_solve_options.update(solve_options_update)
     updated_solve_options.update({k: 0.5 * solve_options[k] for k in ['sigma', 'pi', 'rho', 'beta']})
     results = problem.solve(**updated_solve_options)
@@ -73,7 +74,7 @@ def test_optimal_instruments(simulated_problem: SimulatedProblemFixture, compute
     simulation, _, problem, solve_options, problem_results = simulated_problem
 
     # compute optimal instruments and update the problem (only use a few draws to speed up the test)
-    compute_options = compute_options.copy()
+    compute_options = copy.deepcopy(compute_options)
     compute_options.update({
         'draws': 5,
         'seed': 0
@@ -81,7 +82,7 @@ def test_optimal_instruments(simulated_problem: SimulatedProblemFixture, compute
     new_problem = problem_results.compute_optimal_instruments(**compute_options).to_problem()
 
     # update the default options and solve the problem
-    updated_solve_options = solve_options.copy()
+    updated_solve_options = copy.deepcopy(solve_options)
     updated_solve_options.update({k: 0.5 * solve_options[k] for k in ['sigma', 'pi', 'rho', 'beta']})
     new_results = new_problem.solve(**updated_solve_options)
 
@@ -122,7 +123,7 @@ def test_importance_sampling(simulated_problem: SimulatedProblemFixture) -> None
 
     # solve the new problem
     new_problem = sampling_results.to_problem()
-    updated_solve_options = solve_options.copy()
+    updated_solve_options = copy.deepcopy(solve_options)
     updated_solve_options.update({k: 0.5 * solve_options[k] for k in ['sigma', 'pi', 'rho', 'beta']})
     new_results = new_problem.solve(**updated_solve_options)
 
@@ -208,7 +209,7 @@ def test_trivial_changes(simulated_problem: SimulatedProblemFixture, solve_optio
     simulation, _, problem, solve_options, results = simulated_problem
 
     # solve the problem with the updated options
-    updated_solve_options = solve_options.copy()
+    updated_solve_options = copy.deepcopy(solve_options)
     updated_solve_options.update(solve_options_update)
     updated_results = problem.solve(**updated_solve_options)
 
@@ -270,7 +271,7 @@ def test_fixed_effects(
 
     # configure the optimization routine to only do a few iterations to save time and never get to the point where small
     #   numerical differences between methods build up into noticeable differences
-    solve_options = solve_options.copy()
+    solve_options = copy.deepcopy(solve_options)
     solve_options['optimization'] = Optimization('l-bfgs-b', {'maxfun': 3})
 
     # make product data mutable and add instruments
@@ -314,7 +315,7 @@ def test_fixed_effects(
     supply_id_formula = ' + '.join(supply_id_names)
 
     # solve the first stage of a problem in which the fixed effects are absorbed
-    solve_options1 = solve_options.copy()
+    solve_options1 = copy.deepcopy(solve_options)
     product_formulations1 = product_formulations.copy()
     if ED > 0:
         assert product_formulations[0] is not None
@@ -334,7 +335,7 @@ def test_fixed_effects(
     problem_results1 = problem1.solve(**solve_options1)
 
     # solve the first stage of a problem in which fixed effects are included as indicator variables
-    solve_options2 = solve_options.copy()
+    solve_options2 = copy.deepcopy(solve_options)
     product_formulations2 = product_formulations.copy()
     if ED > 0:
         assert product_formulations[0] is not None
@@ -357,7 +358,7 @@ def test_fixed_effects(
     if ED == ES == 0:
         problem_results3 = problem_results2
     else:
-        solve_options3 = solve_options.copy()
+        solve_options3 = copy.deepcopy(solve_options)
         product_formulations3 = product_formulations.copy()
         if ED > 0:
             assert product_formulations[0] is not None
@@ -520,7 +521,7 @@ def test_merger(simulated_problem: SimulatedProblemFixture, ownership: bool, sol
         return pytest.skip("Merger testing doesn't work with quantity-dependent costs.")
 
     # create changed ownership or firm IDs associated with a merger
-    merger_product_data = simulation_results.product_data.copy()
+    merger_product_data = copy.deepcopy(simulation_results.product_data)
     if ownership:
         merger_ids = None
         merger_ownership = build_ownership(merger_product_data, lambda f, g: 1 if f == g or (f < 2 and g < 2) else 0)
@@ -722,7 +723,7 @@ def test_second_step(simulated_problem: SimulatedProblemFixture) -> None:
     simulation, _, problem, solve_options, _ = simulated_problem
 
     # use two steps and remove sigma bounds so that it can't get stuck at zero
-    updated_solve_options = solve_options.copy()
+    updated_solve_options = copy.deepcopy(solve_options)
     updated_solve_options.update({
         'method': '2s',
         'sigma_bounds': (np.full_like(simulation.sigma, -np.inf), np.full_like(simulation.sigma, +np.inf))
@@ -734,12 +735,12 @@ def test_second_step(simulated_problem: SimulatedProblemFixture) -> None:
     assert results12.step == 2 and results12.last_results.step == 1
 
     # get results from the first step
-    updated_solve_options1 = updated_solve_options.copy()
+    updated_solve_options1 = copy.deepcopy(updated_solve_options)
     updated_solve_options1['method'] = '1s'
     results1 = problem.solve(**updated_solve_options1)
 
     # get results from the second step
-    updated_solve_options2 = updated_solve_options1.copy()
+    updated_solve_options2 = copy.deepcopy(updated_solve_options1)
     updated_solve_options2.update({
         'sigma': results1.sigma,
         'pi': results1.pi,
@@ -774,7 +775,7 @@ def test_return(simulated_problem: SimulatedProblemFixture) -> None:
         'gamma': simulation.gamma if problem.K3 > 0 else None,
         'delta': problem.products.X1 @ simulation.beta + simulation.xi
     }
-    updated_solve_options = solve_options.copy()
+    updated_solve_options = copy.deepcopy(solve_options)
     updated_solve_options.update({
         'optimization': Optimization('return'),
         'iteration': Iteration('return'),
@@ -794,12 +795,12 @@ def test_initial_update(simulated_problem: SimulatedProblemFixture) -> None:
     simulation, _, problem, solve_options, _ = simulated_problem
 
     # obtain initial results at the starting values
-    initial_solve_options = solve_options.copy()
+    initial_solve_options = copy.deepcopy(solve_options)
     initial_solve_options['optimization'] = Optimization('return')
     initial_results = problem.solve(**initial_solve_options)
 
     # manually solve the problem with initial weighting matrix and delta values
-    manual_solve_options = solve_options.copy()
+    manual_solve_options = copy.deepcopy(solve_options)
     manual_solve_options.update({
         'W': initial_results.updated_W,
         'delta': initial_results.delta
@@ -807,7 +808,7 @@ def test_initial_update(simulated_problem: SimulatedProblemFixture) -> None:
     manual_results = problem.solve(**manual_solve_options)
 
     # automatically do the same
-    automatic_solve_options = solve_options.copy()
+    automatic_solve_options = copy.deepcopy(solve_options)
     automatic_solve_options['initial_update'] = True
     automatic_results = problem.solve(**automatic_solve_options)
 
@@ -842,8 +843,8 @@ def test_gradient_optionality(
         return optimize_results.x, optimize_results.success
 
     # solve the problem when not using gradients and when not computing them
-    updated_solve_options1 = solve_options.copy()
-    updated_solve_options2 = solve_options.copy()
+    updated_solve_options1 = copy.deepcopy(solve_options)
+    updated_solve_options2 = copy.deepcopy(solve_options)
     updated_solve_options1['optimization'] = Optimization(custom_method)
     updated_solve_options2['optimization'] = Optimization(scipy_method, method_options, compute_gradient=False)
     updated_solve_options2['finite_differences'] = True
@@ -882,7 +883,7 @@ def test_bounds(simulated_problem: SimulatedProblemFixture, method: str) -> None
     simulation, _, problem, solve_options, _ = simulated_problem
 
     # skip optimization methods that haven't been configured properly
-    updated_solve_options = solve_options.copy()
+    updated_solve_options = copy.deepcopy(solve_options)
     try:
         updated_solve_options['optimization'] = Optimization(
             method,
@@ -892,7 +893,7 @@ def test_bounds(simulated_problem: SimulatedProblemFixture, method: str) -> None
         return pytest.skip(f"Failed to use the {method} method in this environment: {exception}.")
 
     # solve the problem when unbounded
-    unbounded_solve_options = updated_solve_options.copy()
+    unbounded_solve_options = copy.deepcopy(updated_solve_options)
     unbounded_solve_options.update({
         'sigma_bounds': (np.full_like(simulation.sigma, -np.inf), np.full_like(simulation.sigma, +np.inf)),
         'pi_bounds': (np.full_like(simulation.pi, -np.inf), np.full_like(simulation.pi, +np.inf)),
@@ -950,7 +951,7 @@ def test_bounds(simulated_problem: SimulatedProblemFixture, method: str) -> None
             binding_gamma_bounds[1][gamma_index] = gamma_value + ub_scale * np.abs(gamma_value)
 
         # update options with the binding bounds
-        binding_solve_options = updated_solve_options.copy()
+        binding_solve_options = copy.deepcopy(updated_solve_options)
         binding_solve_options.update({
             'sigma': np.clip(binding_solve_options['sigma'], *binding_sigma_bounds),
             'pi': np.clip(binding_solve_options['pi'], *binding_pi_bounds),
@@ -1078,7 +1079,7 @@ def test_custom_moments(simulated_problem: SimulatedProblemFixture) -> None:
             ))
 
     # obtain results under the built-in micro moments (just return at the initial values for speed)
-    updated_solve_options = solve_options.copy()
+    updated_solve_options = copy.deepcopy(solve_options)
     updated_solve_options.update({
         'finite_differences': True,
         'optimization': Optimization('return'),
@@ -1086,7 +1087,7 @@ def test_custom_moments(simulated_problem: SimulatedProblemFixture) -> None:
     results = problem.solve(**updated_solve_options)
 
     # obtain results under the replicated micro moments
-    replicated_solve_options = updated_solve_options.copy()
+    replicated_solve_options = copy.deepcopy(updated_solve_options)
     replicated_solve_options['micro_moments'] = replicated_micro_moments
     replicated_results = problem.solve(**replicated_solve_options)
 
@@ -1114,7 +1115,7 @@ def test_probabilities_by_theta_derivatives(simulated_problem: SimulatedProblemF
         def compute_flat_probabilities(theta: Array) -> Array:
             """Compute probabilities at a perturbed theta."""
             sigma, pi, rho, beta, gamma = original_results._parameters.expand(theta)
-            perturbed_solve_options = solve_options.copy()
+            perturbed_solve_options = copy.deepcopy(solve_options)
             perturbed_solve_options.update({
                 'sigma': sigma,
                 'pi': pi,
@@ -1137,7 +1138,7 @@ def test_probabilities_by_theta_derivatives(simulated_problem: SimulatedProblemF
         return np.zeros_like(agents.weights)
 
     # have a custom micro moment call the testing function
-    updated_solve_options = solve_options.copy()
+    updated_solve_options = copy.deepcopy(solve_options)
     updated_solve_options.update({
         'finite_differences': True,
         'optimization': Optimization('return'),
@@ -1179,7 +1180,7 @@ def test_objective_gradient(
         return pytest.skip("There are no moments to test.")
 
     # configure the options used to solve the problem
-    updated_solve_options = solve_options.copy()
+    updated_solve_options = copy.deepcopy(solve_options)
     updated_solve_options.update({k: 0.9 * solve_options[k] for k in ['sigma', 'pi', 'rho', 'beta']})
 
     # optionally include linear parameters in theta
@@ -1191,7 +1192,7 @@ def test_objective_gradient(
             updated_solve_options['gamma'][-1] = 0.9 * simulation.gamma[-1]
 
     # zero out weighting matrix blocks to only test individual contributions of the gradient
-    updated_solve_options['W'] = problem_results.W.copy()
+    updated_solve_options['W'] = copy.deepcopy(problem_results.W)
     if not demand:
         updated_solve_options['W'][:problem.MD, :problem.MD] = 0
     if not supply and problem.K3 > 0:

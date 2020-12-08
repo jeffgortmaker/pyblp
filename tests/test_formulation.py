@@ -1,5 +1,6 @@
 """Tests of formulation of data matrices."""
 
+import copy
 import itertools
 import traceback
 from typing import Any, Callable, Iterable, Mapping, Sequence, Type
@@ -140,7 +141,7 @@ def test_ids(
     """Test that equivalent formulas build IDs as expected."""
 
     # create convenience columns of tuples of categorical variables
-    formula_data = formula_data.copy()
+    formula_data = copy.deepcopy(formula_data)
     for (key1, values1), (key2, values2), (key3, values3) in itertools.product(formula_data.items(), repeat=3):
         key12 = f'{key1}{key2}'
         key123 = f'{key1}{key2}{key3}'
