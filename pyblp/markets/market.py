@@ -271,15 +271,13 @@ class Market(Container):
 
     def compute_probabilities(
             self, delta: Array = None, mu: Optional[Array] = None, linear: bool = True, safe: bool = True,
-            utility_reduction: Optional[Array] = None, numerator: Optional[Array] = None,
-            eliminate_outside: bool = False, eliminate_product: Optional[int] = None) -> Tuple[Array, Optional[Array]]:
+            utility_reduction: Optional[Array] = None, numerator: Optional[Array] = None) -> (
+            Tuple[Array, Optional[Array]]):
         """Compute choice probabilities. By default, use unchanged delta and mu values. If linear is False, delta and mu
         must be specified and already be exponentiated. If safe is True, scale the logit equation by the exponential of
         negative the maximum utility for each agent, and if utility_reduction is specified, it should be values that
         have already been subtracted from the specified utility for each agent. If the numerator is specified, it will
-        be used as the numerator in the non-nested logit expression. If eliminate_outside is True, eliminate the outside
-        option from the choice set. If eliminate_product is specified, eliminate the product associated with the
-        specified index from the choice set.
+        be used as the numerator in the non-nested logit expression.
         """
         if delta is None:
             assert self.delta is not None
@@ -320,14 +318,6 @@ class Market(Container):
                 if self.rho_size > 1:
                     scale_weights = np.exp(-utility_reduction[None] * (self.group_rho.T - self.group_rho)[..., None])
 
-        # optionally eliminate the outside option from the choice set
-        if eliminate_outside:
-            scale = 0
-
-        # optionally eliminate a product from the choice set
-        if eliminate_product is not None:
-            exp_utilities[eliminate_product] = 0
-
         # compute standard probabilities
         if self.H == 0:
             if numerator is None:
@@ -346,6 +336,39 @@ class Market(Container):
         probabilities = conditionals * self.groups.expand(marginals)
 
         return probabilities, conditionals
+
+    def compute_eliminated_probabilities(
+            self, probabilities: Optional[Array] = None, outside: bool = False, product: Optional[int] = None) -> Array:
+        """Compute probabilities with the outside option, an inside product, or both removed from the choice set. By
+        default, compute probabilities.
+        """
+        if probabilities is None:
+            probabilities, _ = self.compute_probabilities()
+
+        # compute the denominator of the expression
+        if outside and product is not None:
+            denominator = np.delete(probabilities, product, axis=0).sum(axis=0, keepdims=True)
+        elif outside:
+            denominator = probabilities.sum(axis=0, keepdims=True)
+        elif product is not None:
+            denominator = 1 - probabilities[[product]]
+        else:
+            return probabilities
+
+        # if the eliminated product was chosen with certainty up to numerical error, give the remaining products
+        #   equal chances of being chosen
+        zero_denominator = denominator == 0
+        if not zero_denominator.any():
+            eliminated = probabilities / denominator
+        else:
+            eliminated = np.where(zero_denominator, 1, probabilities)
+            eliminated /= np.where(zero_denominator, self.J - int(outside and product is not None), denominator)
+
+        # the probability of choosing an eliminated inside product is zero
+        if product is not None:
+            eliminated[product] = 0
+
+        return eliminated
 
     def compute_delta(
             self, initial_delta: Array, iteration: Iteration, fp_type: str, shares_bounds: Bounds) -> (
@@ -979,10 +1002,7 @@ class Market(Container):
 
     def compute_micro_values(
             self, delta: Optional[Array] = None) -> (
-            Tuple[
-                Array, Optional[Array], Optional[Array], Optional[Array], Optional[Array], Dict[int, Array],
-                Dict[int, Optional[Array]], Optional[Array], Dict[int, Array], Dict[int, Optional[Array]]
-            ]):
+            Tuple[Array, Array, Optional[Array], Optional[Array], Dict[int, Array], Optional[Array], Dict[int, Array]]):
         """Compute micro moment values. By default, use the delta with which this market was initialized. Return any
         probabilities that were used so they don't have to be re-computed when computing related outputs.
         """
@@ -992,45 +1012,35 @@ class Market(Container):
             delta = self.delta
 
         # pre-compute probabilities
-        probabilities = conditionals = None
-        requires_probabilities = lambda m: any([
-            isinstance(m, DemographicExpectationMoment),
-            isinstance(m, CustomMoment),
-        ])
-        if any(requires_probabilities(m) for m in self.moments.micro_moments):
-            probabilities, conditionals = self.compute_probabilities(delta)
+        probabilities, conditionals = self.compute_probabilities(delta)
 
         # pre-compute probabilities conditional on purchasing an inside good
-        inside_probabilities = inside_conditionals = None
+        inside_probabilities = None
         requires_inside_probabilities = lambda m: any([
             isinstance(m, (DemographicCovarianceMoment, DiversionCovarianceMoment)),
             isinstance(m, DiversionProbabilityMoment) and m.product_id1 is None,
         ])
         if any(requires_inside_probabilities(m) for m in self.moments.micro_moments):
-            inside_probabilities, inside_conditionals = self.compute_probabilities(delta, eliminate_outside=True)
+            inside_probabilities = self.compute_eliminated_probabilities(probabilities, outside=True)
 
         # pre-compute second choice probabilities
         eliminated_probabilities: Dict[int, Array] = {}
-        eliminated_conditionals: Dict[int, Optional[Array]] = {}
         for moment in self.moments.micro_moments:
             if isinstance(moment, DiversionProbabilityMoment):
                 j = self.get_product(moment.product_id1)
                 if j not in eliminated_probabilities:
-                    eliminated_probabilities[j], eliminated_conditionals[j] = self.compute_probabilities(
-                        delta, eliminate_product=j
-                    )
+                    eliminated_probabilities[j] = self.compute_eliminated_probabilities(probabilities, product=j)
 
         # pre-compute second choice probabilities conditional on purchasing an inside good (also compute the sum of
         #   inside probability products over all first choices)
         inside_eliminated_sum = None
         inside_eliminated_probabilities: Dict[int, Array] = {}
-        inside_eliminated_conditionals: Dict[int, Optional[Array]] = {}
         if any(isinstance(m, DiversionCovarianceMoment) for m in self.moments.micro_moments):
             assert inside_probabilities is not None
             inside_eliminated_sum = np.zeros((self.J, self.I), options.dtype)
             for j in range(self.J):
-                inside_eliminated_probabilities[j], inside_eliminated_conditionals[j] = self.compute_probabilities(
-                    delta, eliminate_outside=True, eliminate_product=j
+                inside_eliminated_probabilities[j] = self.compute_eliminated_probabilities(
+                    probabilities, outside=True, product=j
                 )
                 inside_eliminated_sum += inside_probabilities[[j]] * inside_eliminated_probabilities[j]
 
@@ -1043,13 +1053,12 @@ class Market(Container):
             )
 
         return (
-            micro_values, probabilities, conditionals, inside_probabilities, inside_conditionals,
-            eliminated_probabilities, eliminated_conditionals, inside_eliminated_sum, inside_eliminated_probabilities,
-            inside_eliminated_conditionals
+            micro_values, probabilities, conditionals, inside_probabilities, eliminated_probabilities,
+            inside_eliminated_sum, inside_eliminated_probabilities
         )
 
     def compute_agent_micro_values(
-            self, moment: Moment, delta: Array, probabilities: Optional[Array], conditionals: Optional[Array],
+            self, moment: Moment, delta: Array, probabilities: Array, conditionals: Optional[Array],
             inside_probabilities: Optional[Array], eliminated_probabilities: Dict[int, Array],
             inside_eliminated_sum: Optional[Array]) -> Array:
         """Compute agent-specific micro moment values, which will be aggregated up into means or covariances."""
