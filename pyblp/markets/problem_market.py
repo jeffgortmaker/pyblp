@@ -222,7 +222,7 @@ class ProblemMarket(Market):
         else:
             return probabilities_tangent
 
-        # if any choice probabilities are zero up to numerical error, assume these derivatives are zero
+        # if any choice probabilities are zero up to numerical error, assume the associated derivatives are zero
         with np.errstate(all='ignore'):
             ratio = eliminated / probabilities
             ratio[~np.isfinite(ratio)] = 0

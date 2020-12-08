@@ -271,13 +271,14 @@ class Market(Container):
 
     def compute_probabilities(
             self, delta: Array = None, mu: Optional[Array] = None, linear: bool = True, safe: bool = True,
-            utility_reduction: Optional[Array] = None, numerator: Optional[Array] = None) -> (
-            Tuple[Array, Optional[Array]]):
+            utility_reduction: Optional[Array] = None, numerator: Optional[Array] = None,
+            eliminate_outside: bool = False, eliminate_product: Optional[int] = None) -> Tuple[Array, Optional[Array]]:
         """Compute choice probabilities. By default, use unchanged delta and mu values. If linear is False, delta and mu
         must be specified and already be exponentiated. If safe is True, scale the logit equation by the exponential of
         negative the maximum utility for each agent, and if utility_reduction is specified, it should be values that
         have already been subtracted from the specified utility for each agent. If the numerator is specified, it will
-        be used as the numerator in the non-nested logit expression.
+        be used as the numerator in the non-nested logit expression. If any products are eliminated, eliminate the
+        outside option, an inside product, or both from the choice set.
         """
         if delta is None:
             assert self.delta is not None
@@ -318,6 +319,14 @@ class Market(Container):
                 if self.rho_size > 1:
                     scale_weights = np.exp(-utility_reduction[None] * (self.group_rho.T - self.group_rho)[..., None])
 
+        # optionally eliminate the outside option from the choice set
+        if eliminate_outside:
+            scale = 0
+
+        # optionally eliminate a product from the choice set
+        if eliminate_product is not None:
+            exp_utilities[eliminate_product] = 0
+
         # compute standard probabilities
         if self.H == 0:
             if numerator is None:
@@ -338,12 +347,12 @@ class Market(Container):
         return probabilities, conditionals
 
     def compute_eliminated_probabilities(
-            self, probabilities: Optional[Array] = None, outside: bool = False, product: Optional[int] = None) -> Array:
-        """Compute probabilities with the outside option, an inside product, or both removed from the choice set. By
-        default, compute probabilities.
+            self, probabilities: Array, delta: Optional[Array] = None, outside: bool = False,
+            product: Optional[int] = None) -> Array:
+        """Convert choice probabilities into probabilities with the outside option, an inside product, or both removed
+        from the choice set. If there are any errors, revert to the full derivation of these eliminated probabilities,
+        using the delta with which this market was initialized.
         """
-        if probabilities is None:
-            probabilities, _ = self.compute_probabilities()
 
         # compute the denominator of the expression
         if outside and product is not None:
@@ -355,18 +364,17 @@ class Market(Container):
         else:
             return probabilities
 
-        # if the eliminated product was chosen with certainty up to numerical error, give the remaining products
-        #   equal chances of being chosen
-        zero_denominator = denominator == 0
-        if not zero_denominator.any():
+        # try to compute the eliminated probabilities, ignoring any divisions by zero or underflow
+        with np.errstate(all='ignore'):
             eliminated = probabilities / denominator
-        else:
-            eliminated = np.where(zero_denominator, 1, probabilities)
-            eliminated /= np.where(zero_denominator, self.J - int(outside and product is not None), denominator)
 
         # the probability of choosing an eliminated inside product is zero
         if product is not None:
             eliminated[product] = 0
+
+        # if there were any errors, compute the eliminated probabilities directly
+        if not np.isfinite(eliminated).all():
+            eliminated, _ = self.compute_probabilities(delta, eliminate_outside=outside, eliminate_product=product)
 
         return eliminated
 
@@ -1021,7 +1029,7 @@ class Market(Container):
             isinstance(m, DiversionProbabilityMoment) and m.product_id1 is None,
         ])
         if any(requires_inside_probabilities(m) for m in self.moments.micro_moments):
-            inside_probabilities = self.compute_eliminated_probabilities(probabilities, outside=True)
+            inside_probabilities = self.compute_eliminated_probabilities(probabilities, delta, outside=True)
 
         # pre-compute second choice probabilities
         eliminated_probabilities: Dict[int, Array] = {}
@@ -1029,7 +1037,7 @@ class Market(Container):
             if isinstance(moment, DiversionProbabilityMoment):
                 j = self.get_product(moment.product_id1)
                 if j not in eliminated_probabilities:
-                    eliminated_probabilities[j] = self.compute_eliminated_probabilities(probabilities, product=j)
+                    eliminated_probabilities[j] = self.compute_eliminated_probabilities(probabilities, delta, product=j)
 
         # pre-compute second choice probabilities conditional on purchasing an inside good (also compute the sum of
         #   inside probability products over all first choices)
@@ -1040,7 +1048,7 @@ class Market(Container):
             inside_eliminated_sum = np.zeros((self.J, self.I), options.dtype)
             for j in range(self.J):
                 inside_eliminated_probabilities[j] = self.compute_eliminated_probabilities(
-                    probabilities, outside=True, product=j
+                    probabilities, delta, outside=True, product=j
                 )
                 inside_eliminated_sum += inside_probabilities[[j]] * inside_eliminated_probabilities[j]
 
