@@ -194,8 +194,8 @@ class ProblemMarket(Market):
             # fill the gradient of micro moments with respect to the parameter
             for m, moment in enumerate(self.moments.micro_moments):
                 micro_jacobian[m, p] = self.agents.weights.T @ moment._compute_agent_values_tangent(
-                    self, probabilities_tangent, inside_probabilities, inside_tangent, eliminated_tangents,
-                    inside_eliminated_sum, inside_eliminated_sum_tangent
+                    self, p, delta, probabilities, probabilities_tangent, inside_probabilities, inside_tangent,
+                    eliminated_tangents, inside_eliminated_sum, inside_eliminated_sum_tangent
                 )
 
         return micro_jacobian, errors

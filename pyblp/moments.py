@@ -94,9 +94,10 @@ class Moment(StringRepresentation):
 
     @abc.abstractmethod
     def _compute_agent_values_tangent(
-            self, market: 'Market', probabilities_tangent: Array, inside_probabilities: Optional[Array],
-            inside_tangent: Optional[Array], eliminated_tangents: Dict[int, Array],
-            inside_eliminated_sum: Optional[Array], inside_eliminated_sum_tangent: Optional[Array]) -> Array:
+            self, market: 'Market', p: int, delta: Array, probabilities: Array, probabilities_tangent: Array,
+            inside_probabilities: Optional[Array], inside_tangent: Optional[Array],
+            eliminated_tangents: Dict[int, Array], inside_eliminated_sum: Optional[Array],
+            inside_eliminated_sum_tangent: Optional[Array]) -> Array:
         """Compute the tangent of agent-specific micro moments with respect to a parameter."""
 
 
@@ -180,9 +181,10 @@ class DemographicExpectationMoment(Moment):
         return d * probabilities[[j]].T / market.products.shares[j]
 
     def _compute_agent_values_tangent(
-            self, market: 'Market', probabilities_tangent: Array, inside_probabilities: Optional[Array],
-            inside_tangent: Optional[Array], eliminated_tangents: Dict[int, Array],
-            inside_eliminated_sum: Optional[Array], inside_eliminated_sum_tangent: Optional[Array]) -> Array:
+            self, market: 'Market', p: int, delta: Array, probabilities: Array, probabilities_tangent: Array,
+            inside_probabilities: Optional[Array], inside_tangent: Optional[Array],
+            eliminated_tangents: Dict[int, Array], inside_eliminated_sum: Optional[Array],
+            inside_eliminated_sum_tangent: Optional[Array]) -> Array:
         """Compute the tangent of agent-specific micro moments with respect to a parameter."""
         d = market.agents.demographics[:, [self.demographics_index]]
 
@@ -281,9 +283,10 @@ class DemographicCovarianceMoment(Moment):
         return demeaned_z * demeaned_d
 
     def _compute_agent_values_tangent(
-            self, market: 'Market', probabilities_tangent: Array, inside_probabilities: Optional[Array],
-            inside_tangent: Optional[Array], eliminated_tangents: Dict[int, Array],
-            inside_eliminated_sum: Optional[Array], inside_eliminated_sum_tangent: Optional[Array]) -> Array:
+            self, market: 'Market', p: int, delta: Array, probabilities: Array, probabilities_tangent: Array,
+            inside_probabilities: Optional[Array], inside_tangent: Optional[Array],
+            eliminated_tangents: Dict[int, Array], inside_eliminated_sum: Optional[Array],
+            inside_eliminated_sum_tangent: Optional[Array]) -> Array:
         """Compute the tangent of agent-specific micro moments with respect to a parameter."""
         assert inside_tangent is not None
         x = market.products.X2[:, [self.X2_index]]
@@ -398,9 +401,10 @@ class DiversionProbabilityMoment(Moment):
         return numerator / market.products.shares[j]
 
     def _compute_agent_values_tangent(
-            self, market: 'Market', probabilities_tangent: Array, inside_probabilities: Optional[Array],
-            inside_tangent: Optional[Array], eliminated_tangents: Dict[int, Array],
-            inside_eliminated_sum: Optional[Array], inside_eliminated_sum_tangent: Optional[Array]) -> Array:
+            self, market: 'Market', p: int, delta: Array, probabilities: Array, probabilities_tangent: Array,
+            inside_probabilities: Optional[Array], inside_tangent: Optional[Array],
+            eliminated_tangents: Dict[int, Array], inside_eliminated_sum: Optional[Array],
+            inside_eliminated_sum_tangent: Optional[Array]) -> Array:
         """Compute the tangent of agent-specific micro moments with respect to a parameter."""
 
         # handle the second choice probability of a certain inside good for agents who choose the outside good
@@ -514,9 +518,10 @@ class DiversionCovarianceMoment(Moment):
         return demeaned_z1 * demeaned_z2
 
     def _compute_agent_values_tangent(
-            self, market: 'Market', probabilities_tangent: Array, inside_probabilities: Optional[Array],
-            inside_tangent: Optional[Array], eliminated_tangents: Dict[int, Array],
-            inside_eliminated_sum: Optional[Array], inside_eliminated_sum_tangent: Optional[Array]) -> Array:
+            self, market: 'Market', p: int, delta: Array, probabilities: Array, probabilities_tangent: Array,
+            inside_probabilities: Optional[Array], inside_tangent: Optional[Array],
+            eliminated_tangents: Dict[int, Array], inside_eliminated_sum: Optional[Array],
+            inside_eliminated_sum_tangent: Optional[Array]) -> Array:
         """Compute the tangent of agent-specific micro moments with respect to a parameter."""
         assert inside_probabilities is not None and inside_tangent is not None
         assert inside_eliminated_sum is not None and inside_eliminated_sum_tangent is not None
@@ -560,11 +565,9 @@ class CustomMoment(Moment):
     compute_custom : `callable`
         Function that computes :math:`v_{imt}` in a single market :math:`t`, which is of the following form::
 
-            compute_custom(t, sigma, pi, rho, products, agents, delta, mu, probabilities, compute_derivatives) -> values
+            compute_custom(t, sigma, pi, rho, products, agents, delta, mu, probabilities) -> custom
 
         where
-
-            - ``values`` is an :math:`I_t \times 1`` vector of agent-specific micro values :math:`v_{imt}`;
 
             - ``t`` is the ID of the market in which the :math:`v_{imt}` should be computed;
 
@@ -587,14 +590,34 @@ class CustomMoment(Moment):
 
             - ``probabilities`` is a :math:`J_t \times I_t` matrix of choice probabilities :math:`s_{ijt}`; and
 
-            - ``compute_derivatives`` is a function of the following form::
+            - ``custom`` is an :math:`I_t \times 1`` vector of agent-specific micro values :math:`v_{imt}`.
 
-                  compute_derivatives() -> derivatives
+    compute_custom_derivatives : `callable, optional`
+        Function that computes :math:`\frac{\partial v_{imt}}{\partial \theta_p}` in a single market :math:`t`, which is
+        of the following form::
 
-              where ``derivatives`` is a :math:`J_t \times I_t \times P` array of derivatives
-              :math:`\frac{\partial s_{ijt}}{\partial \theta_p}`. For many types of custom moments, this function will
-              not be needed, but some moments such as those based on scores may require derivatives. For the ordering of
-              the :math:`P` parameters in :math:`\theta`, refer to :attr:`ProblemResults.theta`.
+            compute_custom_derivatives(t, sigma, pi, rho, products, agents, delta, mu, probabilities, p, derivatives) ->
+            custom_derivatives
+
+        where the first few arguments are the same as above,
+
+            - ``p`` is the index :math:`p \in \{0, \dots, P - 1\}` of :math:`\theta_p` (for the ordering of the
+              :math:`P` parameters in :math:`\theta`, see :attr:`ProblemResults.theta`),
+
+            - ``derivatives`` is a :math:`J_t \times I_t` matrix of derivatives
+              :math:`\frac{\partial s_{ijt}}{\partial \theta_p}`, and
+
+            - ``custom_derivatives`` is an :math:`I_t \times 1` vector of agent-specific micro value derivatives
+              :math:`\frac{\partial v_{imt}}{\partial \theta_p}`.
+
+        If this function is left unspecified, you must set ``finite_differences=True`` in :meth:`Problem.solve` when
+        using custom moments. This may slow down optimization and slightly reduce the numerical accuracy of standard
+        errors.
+
+        If you specify this function, to check that you have implemented derivatives correctly, you can pass
+        ``optimization=Optimization('return')`` to :meth:`Problem.solve` when evaluating the gradient with
+        ``finite_differences=True`` and ``finite_differences=False``. If the numerical gradient is close to the analytic
+        one, this suggests that you have implemented derivatives correctly.
 
     market_ids : `array-like, optional`
         Distinct market IDs over which the micro moments will be averaged to get :math:`\bar{g}_{M,m}`. These are also
@@ -610,18 +633,25 @@ class CustomMoment(Moment):
 
     """
 
-    compute_custom: functools.partial
     name: str
+    compute_custom: functools.partial
+    compute_custom_derivatives: Optional[functools.partial]
 
     def __init__(
-            self, values: Any, compute_custom: Callable, market_ids: Optional[Sequence] = None,
-            name: str = "Custom") -> None:
+            self, values: Any, compute_custom: Callable, compute_custom_derivatives: Optional[Callable] = None,
+            market_ids: Optional[Sequence] = None, name: str = "Custom") -> None:
         """Validate information about the moment to the greatest extent possible without an economy instance."""
         if not callable(compute_custom):
             raise ValueError("compute_custom must be callable.")
+        if compute_custom_derivatives is not None and not callable(compute_custom_derivatives):
+            raise ValueError("compute_custom_derivatives must be None or callable.")
         super().__init__(values, market_ids)
-        self.compute_custom = functools.partial(compute_custom)
         self.name = name
+        self.compute_custom = functools.partial(compute_custom)
+        if compute_custom_derivatives is None:
+            self.compute_custom_derivatives = None
+        else:
+            self.compute_custom_derivatives = functools.partial(compute_custom_derivatives)
 
     def _format_moment(self) -> str:
         """The expression for the moment is just the specified name."""
@@ -632,34 +662,30 @@ class CustomMoment(Moment):
             inside_probabilities: Optional[Array], eliminated_probabilities: Dict[int, Array],
             inside_eliminated_sum: Optional[Array]) -> Array:
         """Compute agent-specific micro moment values, which will be aggregated up into means or covariances."""
-        def compute_derivatives() -> Array:
-            """Compute derivatives of probabilities with respect to theta for use by some custom micro moments."""
-            probabilities_by_theta = np.zeros((market.J, market.I, market.parameters.P), options.dtype)
-            for p, parameter in enumerate(market.parameters.unfixed):
-                probabilities_by_theta[:, :, p], _ = market.compute_probabilities_by_parameter_tangent(
-                    parameter, probabilities, conditionals, delta
-                )
-
-            probabilities_by_xi, _ = market.compute_probabilities_by_xi_tensor(probabilities, conditionals)
-            xi_by_theta, _ = market.compute_xi_by_theta_jacobian(delta)
-            return probabilities_by_theta + np.moveaxis(probabilities_by_xi, 0, 2) @ xi_by_theta
-
-        # match a custom moment
         values = self.compute_custom(
             market.t, market.sigma, market.pi, market.rho, market.products, market.agents, delta, market.mu,
-            probabilities, compute_derivatives
+            probabilities
         )
         values = np.asarray(values, options.dtype)
         if values.size != market.I:
-            raise ValueError("compute_custom must return a vector with as many elements as there are agents.")
-        return np.c_[values.flatten()]
+            raise ValueError("compute_custom must return a vector with as many elements as agents.")
+        return values.reshape((market.I, 1))
 
     def _compute_agent_values_tangent(
-            self, market: 'Market', probabilities_tangent: Array, inside_probabilities: Optional[Array],
-            inside_tangent: Optional[Array], eliminated_tangents: Dict[int, Array],
-            inside_eliminated_sum: Optional[Array], inside_eliminated_sum_tangent: Optional[Array]) -> Array:
+            self, market: 'Market', p: int, delta: Array, probabilities: Array, probabilities_tangent: Array,
+            inside_probabilities: Optional[Array], inside_tangent: Optional[Array],
+            eliminated_tangents: Dict[int, Array], inside_eliminated_sum: Optional[Array],
+            inside_eliminated_sum_tangent: Optional[Array]) -> Array:
         """Compute the tangent of agent-specific micro moments with respect to a parameter."""
-        raise NotImplementedError
+        assert self.compute_custom_derivatives is not None
+        derivatives = self.compute_custom_derivatives(
+            market.t, market.sigma, market.pi, market.rho, market.products, market.agents, delta, market.mu,
+            probabilities, p, probabilities_tangent
+        )
+        derivatives = np.asarray(derivatives, options.dtype)
+        if derivatives.size != market.I:
+            raise ValueError("compute_custom_derivatives must return a vector with as many elements as agents.")
+        return derivatives.reshape((market.I, 1))
 
 
 class Moments(object):

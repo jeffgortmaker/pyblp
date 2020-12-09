@@ -1047,17 +1047,12 @@ def test_extra_demographics(simulated_problem: SimulatedProblemFixture) -> None:
 
 @pytest.mark.usefixtures('simulated_problem')
 def test_custom_moments(simulated_problem: SimulatedProblemFixture) -> None:
-    """Test that custom moments that replicate built-in micro moments yield the same results."""
+    """Test that custom moments designed to replicate built-in micro moments yield the same results."""
     _, _, problem, solve_options, _ = simulated_problem
 
-    # skip problems without demographic covariance moments
-    micro_moments = solve_options['micro_moments']
-    if not any(isinstance(m, DemographicCovarianceMoment) for m in micro_moments):
-        return pytest.skip("There are no demographic covariance moments.")
-
-    def compute_custom(
+    def replicate_demographic_covariance(
             moment: DemographicCovarianceMoment, _: Any, __: Array, ___: Array, ____: Array, products: Products,
-            agents: Agents, _____: Array, ______: Array, probabilities: Array, _______: Callable) -> Array:
+            agents: Agents, _____: Array, ______: Array, probabilities: Array) -> Array:
         """Replicate a demographic covariance moment."""
         x = products.X2[:, [moment.X2_index]]
         d = agents.demographics[:, [moment.demographics_index]]
@@ -1067,23 +1062,42 @@ def test_custom_moments(simulated_problem: SimulatedProblemFixture) -> None:
         demeaned_d = d - agents.weights.T @ d
         return demeaned_z * demeaned_d
 
+    def replicate_demographic_covariance_derivatives(
+            moment: DemographicCovarianceMoment, _: Any, __: Array, ___: Array, ____: Array, products: Products,
+            agents: Agents, _____: Array, ______: Array, probabilities: Array, _______: Any, derivatives: Array) -> (
+            Array):
+        """Replicate derivatives for a demographic covariance moment."""
+        denominator = probabilities.sum(axis=0, keepdims=True)
+        denominator_tangent = derivatives.sum(axis=0, keepdims=True)
+        inside_tangent = 1 / denominator * (derivatives - probabilities / denominator * denominator_tangent)
+        x = products.X2[:, [moment.X2_index]]
+        d = agents.demographics[:, [moment.demographics_index]]
+        z_tangent = inside_tangent.T @ x
+        demeaned_z_tangent = z_tangent - agents.weights.T @ z_tangent
+        demeaned_d = d - agents.weights.T @ d
+        return demeaned_z_tangent * demeaned_d
+
     # replace demographic covariance moments with custom ones that replicate their behavior
     replicated_micro_moments = []
-    for micro_moment in micro_moments:
+    for micro_moment in solve_options['micro_moments']:
         if not isinstance(micro_moment, DemographicCovarianceMoment):
             replicated_micro_moments.append(micro_moment)
         else:
             replicated_micro_moments.append(CustomMoment(
-                micro_moment.values, functools.partial(compute_custom, micro_moment), micro_moment.market_ids,
+                micro_moment.values,
+                functools.partial(replicate_demographic_covariance, micro_moment),
+                functools.partial(replicate_demographic_covariance_derivatives, micro_moment),
+                micro_moment.market_ids,
                 name=f"Replicated {micro_moment}"
             ))
 
-    # obtain results under the built-in micro moments (just return at the initial values for speed)
+    # skip problems without any replicated moments
+    if not any(isinstance(m, CustomMoment) for m in replicated_micro_moments):
+        return pytest.skip("No micro moments were replicated.")
+
+    # obtain results under the original micro moments
     updated_solve_options = copy.deepcopy(solve_options)
-    updated_solve_options.update({
-        'finite_differences': True,
-        'optimization': Optimization('return'),
-    })
+    updated_solve_options['optimization'] = Optimization('return')
     results = problem.solve(**updated_solve_options)
 
     # obtain results under the replicated micro moments
@@ -1091,60 +1105,10 @@ def test_custom_moments(simulated_problem: SimulatedProblemFixture) -> None:
     replicated_solve_options['micro_moments'] = replicated_micro_moments
     replicated_results = problem.solve(**replicated_solve_options)
 
-    # test that all arrays in the results are essentially identical (there is numerical here here from computing inside
-    #   probabilities directly vs. compute them as functions of standard choice probabilities; this goes away when
-    #   computing both in the same way)
+    # test that all arrays in the results are essentially identical
     for key, result in results.__dict__.items():
         if isinstance(result, np.ndarray) and result.dtype != np.object:
-            np.testing.assert_allclose(result, getattr(replicated_results, key), atol=1e-8, rtol=0, err_msg=key)
-
-
-@pytest.mark.usefixtures('simulated_problem')
-def test_probabilities_by_theta_derivatives(simulated_problem: SimulatedProblemFixture) -> None:
-    """Check that the derivatives computed for custom moments match finite differences."""
-    _, _, problem, solve_options, original_results = simulated_problem
-
-    # skip problems without nonlinear parameters or with too many
-    if not 0 < original_results.theta.size < 4:
-        return pytest.skip("There are either no nonlinear parameters or too many.")
-
-    def compute_custom(
-            t: Any, _: Array, __: Array, ___: Array, ____: Products, agents: Agents, _____: Array, ______: Array,
-            _______: Array, compute_derivatives: Callable) -> Array:
-        """Compute the exact derivatives and also approximate them with finite differences."""
-        def compute_flat_probabilities(theta: Array) -> Array:
-            """Compute probabilities at a perturbed theta."""
-            sigma, pi, rho, beta, gamma = original_results._parameters.expand(theta)
-            perturbed_solve_options = copy.deepcopy(solve_options)
-            perturbed_solve_options.update({
-                'sigma': sigma,
-                'pi': pi,
-                'rho': rho,
-                'beta': beta,
-                'gamma': gamma,
-                'optimization': Optimization('return'),
-            })
-            perturbed_results = problem.solve(**perturbed_solve_options)
-            return perturbed_results.compute_probabilities(market_id=[t]).flatten()
-
-        # compute the derivatives analytically and with finite differences
-        exact = compute_derivatives()
-        approximated = compute_finite_differences(compute_flat_probabilities, original_results.theta)
-        approximated = approximated.reshape(exact.shape)
-
-        # test that they are approximately the same (error from the fixed point bubbles up so this can't be very
-        #   precise) and return a dummy vector of agent-specific moments so the routine doesn't fail
-        np.testing.assert_allclose(approximated, exact, atol=1e-2, rtol=1e-2)
-        return np.zeros_like(agents.weights)
-
-    # have a custom micro moment call the testing function
-    updated_solve_options = copy.deepcopy(solve_options)
-    updated_solve_options.update({
-        'finite_differences': True,
-        'optimization': Optimization('return'),
-        'micro_moments': [CustomMoment(0, compute_custom, [problem.unique_market_ids[0]])]
-    })
-    problem.solve(**updated_solve_options)
+            np.testing.assert_allclose(result, getattr(replicated_results, key), atol=1e-14, rtol=0, err_msg=key)
 
 
 @pytest.mark.usefixtures('simulated_problem')
