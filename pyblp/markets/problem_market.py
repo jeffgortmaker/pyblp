@@ -170,14 +170,14 @@ class ProblemMarket(Market):
             inside_tangent = None
             if inside_probabilities is not None:
                 inside_tangent = self.compute_eliminated_probabilities_by_parameter_tangent(
-                    probabilities, probabilities_tangent, inside_probabilities, outside=True
+                    probabilities, probabilities_tangent, inside_probabilities, eliminate_outside=True
                 )
 
             # compute the same but for second choice probabilities
             eliminated_tangents = {}
             for j in eliminated_probabilities:
                 eliminated_tangents[j] = self.compute_eliminated_probabilities_by_parameter_tangent(
-                    probabilities, probabilities_tangent, eliminated_probabilities[j], product=j
+                    probabilities, probabilities_tangent, eliminated_probabilities[j], eliminate_product=j
                 )
 
             # compute the same but for the sum of inside probability products over all first choices
@@ -187,8 +187,8 @@ class ProblemMarket(Market):
                 inside_eliminated_sum_tangent = np.zeros((self.J, self.I), options.dtype)
                 for j in range(self.J):
                     inside_eliminated_tangent = self.compute_eliminated_probabilities_by_parameter_tangent(
-                        probabilities, probabilities_tangent, inside_eliminated_probabilities[j], outside=True,
-                        product=j
+                        probabilities, probabilities_tangent, inside_eliminated_probabilities[j],
+                        eliminate_outside=True, eliminate_product=j
                     )
                     inside_eliminated_sum_tangent += (
                         inside_tangent[[j]] * inside_eliminated_probabilities[j] +
@@ -206,19 +206,19 @@ class ProblemMarket(Market):
 
     @staticmethod
     def compute_eliminated_probabilities_by_parameter_tangent(
-            probabilities: Array, probabilities_tangent: Array, eliminated: Array, outside: bool = False,
-            product: Optional[int] = None) -> Array:
+            probabilities: Array, probabilities_tangent: Array, eliminated: Array, eliminate_outside: bool = False,
+            eliminate_product: Optional[int] = None) -> Array:
         """Compute the tangent with respect to a parameter of probabilities with the outside option, an inside product,
         or both removed from the choice set.
         """
 
         # compute the tangent of the denominator in the expression for eliminated probabilities
-        if outside and product is not None:
-            denominator_tangent = np.delete(probabilities_tangent, product, axis=0).sum(axis=0, keepdims=True)
-        elif outside:
+        if eliminate_outside and eliminate_product is not None:
+            denominator_tangent = np.delete(probabilities_tangent, eliminate_product, axis=0).sum(axis=0, keepdims=True)
+        elif eliminate_outside:
             denominator_tangent = probabilities_tangent.sum(axis=0, keepdims=True)
-        elif product is not None:
-            denominator_tangent = -probabilities_tangent[[product]]
+        elif eliminate_product is not None:
+            denominator_tangent = -probabilities_tangent[[eliminate_product]]
         else:
             return probabilities_tangent
 

@@ -347,20 +347,20 @@ class Market(Container):
         return probabilities, conditionals
 
     def compute_eliminated_probabilities(
-            self, probabilities: Array, delta: Optional[Array] = None, outside: bool = False,
-            product: Optional[int] = None) -> Array:
+            self, probabilities: Array, delta: Optional[Array] = None, eliminate_outside: bool = False,
+            eliminate_product: Optional[int] = None) -> Array:
         """Convert choice probabilities into probabilities with the outside option, an inside product, or both removed
         from the choice set. If there are any errors, revert to the full derivation of these eliminated probabilities,
         using the delta with which this market was initialized.
         """
 
         # compute the denominator of the expression
-        if outside and product is not None:
-            denominator = np.delete(probabilities, product, axis=0).sum(axis=0, keepdims=True)
-        elif outside:
+        if eliminate_outside and eliminate_product is not None:
+            denominator = np.delete(probabilities, eliminate_product, axis=0).sum(axis=0, keepdims=True)
+        elif eliminate_outside:
             denominator = probabilities.sum(axis=0, keepdims=True)
-        elif product is not None:
-            denominator = 1 - probabilities[[product]]
+        elif eliminate_product is not None:
+            denominator = 1 - probabilities[[eliminate_product]]
         else:
             return probabilities
 
@@ -369,12 +369,14 @@ class Market(Container):
             eliminated = probabilities / denominator
 
         # the probability of choosing an eliminated inside product is zero
-        if product is not None:
-            eliminated[product] = 0
+        if eliminate_product is not None:
+            eliminated[eliminate_product] = 0
 
         # if there were any errors, compute the eliminated probabilities directly
         if not np.isfinite(eliminated).all():
-            eliminated, _ = self.compute_probabilities(delta, eliminate_outside=outside, eliminate_product=product)
+            eliminated, _ = self.compute_probabilities(
+                delta, eliminate_outside=eliminate_outside, eliminate_product=eliminate_product
+            )
 
         return eliminated
 
@@ -1029,7 +1031,7 @@ class Market(Container):
             isinstance(m, DiversionProbabilityMoment) and m.product_id1 is None,
         ])
         if any(requires_inside_probabilities(m) for m in self.moments.micro_moments):
-            inside_probabilities = self.compute_eliminated_probabilities(probabilities, delta, outside=True)
+            inside_probabilities = self.compute_eliminated_probabilities(probabilities, delta, eliminate_outside=True)
 
         # pre-compute second choice probabilities
         eliminated_probabilities: Dict[int, Array] = {}
@@ -1037,7 +1039,9 @@ class Market(Container):
             if isinstance(moment, DiversionProbabilityMoment):
                 j = self.get_product(moment.product_id1)
                 if j not in eliminated_probabilities:
-                    eliminated_probabilities[j] = self.compute_eliminated_probabilities(probabilities, delta, product=j)
+                    eliminated_probabilities[j] = self.compute_eliminated_probabilities(
+                        probabilities, delta, eliminate_product=j
+                    )
 
         # pre-compute second choice probabilities conditional on purchasing an inside good (also compute the sum of
         #   inside probability products over all first choices)
@@ -1048,7 +1052,7 @@ class Market(Container):
             inside_eliminated_sum = np.zeros((self.J, self.I), options.dtype)
             for j in range(self.J):
                 inside_eliminated_probabilities[j] = self.compute_eliminated_probabilities(
-                    probabilities, delta, outside=True, product=j
+                    probabilities, delta, eliminate_outside=True, eliminate_product=j
                 )
                 inside_eliminated_sum += inside_probabilities[[j]] * inside_eliminated_probabilities[j]
 
