@@ -7,10 +7,6 @@ import numpy as np
 from .market import Market
 from .. import exceptions, options
 from ..configurations.iteration import Iteration
-from ..moments import (
-    Moment, DemographicExpectationMoment, DemographicCovarianceMoment, DiversionProbabilityMoment,
-    DiversionCovarianceMoment
-)
 from ..parameters import LinearCoefficient
 from ..utilities.basics import Array, Bounds, Error, Optional, SolverStats, NumericalErrorHandler
 
@@ -197,8 +193,8 @@ class ProblemMarket(Market):
 
             # fill the gradient of micro moments with respect to the parameter
             for m, moment in enumerate(self.moments.micro_moments):
-                micro_jacobian[m, p] = self.agents.weights.T @ self.compute_agent_micro_tangent(
-                    moment, probabilities_tangent, inside_probabilities, inside_tangent, eliminated_tangents,
+                micro_jacobian[m, p] = self.agents.weights.T @ moment._compute_agent_values_tangent(
+                    self, probabilities_tangent, inside_probabilities, inside_tangent, eliminated_tangents,
                     inside_eliminated_sum, inside_eliminated_sum_tangent
                 )
 
@@ -229,76 +225,9 @@ class ProblemMarket(Market):
 
         return ratio * (probabilities_tangent - eliminated * denominator_tangent)
 
-    def compute_agent_micro_tangent(
-            self, moment: Moment, probabilities_tangent: Optional[Array], inside_probabilities: Optional[Array],
-            inside_tangent: Optional[Array], eliminated_tangents: Dict[int, Array],
-            inside_eliminated_sum: Optional[Array], inside_eliminated_sum_tangent: Optional[Array]) -> (
-            Tuple[Array, Array]):
-        """Compute the tangent of agent-specific micro moments with respect to a parameter."""
-
-        # handle a demographic expectation for agents who choose the outside good
-        if isinstance(moment, DemographicExpectationMoment) and moment.product_id is None:
-            assert probabilities_tangent is not None
-            d = self.agents.demographics[:, [moment.demographics_index]]
-            outside_probabilities_tangent = -probabilities_tangent.sum(axis=0, keepdims=True).T
-            outside_share = 1 - self.products.shares.sum()
-            return d * outside_probabilities_tangent / outside_share
-
-        # handle a demographic expectation for agents who choose a certain inside good
-        if isinstance(moment, DemographicExpectationMoment):
-            assert probabilities_tangent is not None
-            j = self.get_product(moment.product_id)
-            d = self.agents.demographics[:, [moment.demographics_index]]
-            return d * probabilities_tangent[[j]].T / self.products.shares[j]
-
-        # handle a covariance between a product characteristic and a demographic
-        if isinstance(moment, DemographicCovarianceMoment):
-            assert inside_tangent is not None
-            x = self.products.X2[:, [moment.X2_index]]
-            d = self.agents.demographics[:, [moment.demographics_index]]
-            z_tangent = inside_tangent.T @ x
-            demeaned_z_tangent = z_tangent - self.agents.weights.T @ z_tangent
-            demeaned_d = d - self.agents.weights.T @ d
-            return demeaned_z_tangent * demeaned_d
-
-        # handle the second choice probability of a certain inside good for agents who choose the outside good
-        if isinstance(moment, DiversionProbabilityMoment) and moment.product_id1 is None:
-            assert inside_tangent is not None
-            k = self.get_product(moment.product_id2)
-            outside_share = 1 - self.products.shares.sum()
-            return inside_tangent[[k]].T / outside_share
-
-        # handle the second choice probability of the outside good for agents who choose a certain inside good
-        if isinstance(moment, DiversionProbabilityMoment) and moment.product_id2 is None:
-            j = self.get_product(moment.product_id1)
-            eliminated_outside_tangent = -eliminated_tangents[j].sum(axis=0, keepdims=True)
-            return eliminated_outside_tangent.T / self.products.shares[j]
-
-        # handle the second choice probability of a certain inside good for agents who choose a certain inside good
-        if isinstance(moment, DiversionProbabilityMoment):
-            j = self.get_product(moment.product_id1)
-            k = self.get_product(moment.product_id2)
-            return eliminated_tangents[j][[k]].T / self.products.shares[j]
-
-        # handle a covariance between product characteristics of first and second choices
-        assert isinstance(moment, DiversionCovarianceMoment)
-        assert inside_probabilities is not None and inside_eliminated_sum is not None
-        assert inside_tangent is not None and inside_eliminated_sum_tangent is not None
-        x1 = self.products.X2[:, [moment.X2_index1]]
-        x2 = self.products.X2[:, [moment.X2_index2]]
-        z1 = inside_probabilities.T @ x1
-        z1_tangent = inside_tangent.T @ x1
-        z2 = inside_eliminated_sum.T @ x2
-        z2_tangent = inside_eliminated_sum_tangent.T @ x2
-        demeaned_z1 = z1 - self.agents.weights.T @ z1
-        demeaned_z1_tangent = z1_tangent - self.agents.weights.T @ z1_tangent
-        demeaned_z2 = z2 - self.agents.weights.T @ z2
-        demeaned_z2_tangent = z2_tangent - self.agents.weights.T @ z2_tangent
-        return demeaned_z1_tangent * demeaned_z2 + demeaned_z1 * demeaned_z2_tangent
-
     @NumericalErrorHandler(exceptions.MicroMomentCovariancesNumericalError)
     def safely_compute_micro_covariances(
-            self, delta: Array, probabilities: Optional[Array], conditionals: Optional[Array],
+            self, delta: Array, probabilities: Array, conditionals: Optional[Array],
             inside_probabilities: Optional[Array], eliminated_probabilities: Dict[int, Array],
             inside_eliminated_sum: Optional[Array]) -> Tuple[Array, List[Error]]:
         """Compute micro moment covariances, handling any numerical errors."""
@@ -308,8 +237,8 @@ class ProblemMarket(Market):
         # fill a matrix of demeaned micro moments for each agent moment-by-moment
         demeaned_agent_micro = np.zeros((self.I, self.moments.MM), options.dtype)
         for m, moment in enumerate(self.moments.micro_moments):
-            agent_micro_m = self.compute_agent_micro_values(
-                moment, delta, probabilities, conditionals, inside_probabilities, eliminated_probabilities,
+            agent_micro_m = moment._compute_agent_values(
+                self, delta, probabilities, conditionals, inside_probabilities, eliminated_probabilities,
                 inside_eliminated_sum
             )
             demeaned_agent_micro[:, [m]] = agent_micro_m - self.agents.weights.T @ agent_micro_m
