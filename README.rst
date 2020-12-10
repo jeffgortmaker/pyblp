@@ -32,7 +32,19 @@ Development of the package has been guided by the work of many researchers and p
 Citation
 --------
 
-If you use PyBLP in your research, we ask that you also cite `Conlon and Gortmaker (2020) <https://jeffgortmaker.com/files/pyblp.pdf>`_, which describes the advances implemented in the package.
+If you use PyBLP in your research, we ask that you also cite `Conlon and Gortmaker (RAND Journal of Economics 2020) <https://jeffgortmaker.com/files/pyblp.pdf>`_, which describes the advances implemented in the package.
+
+@article{PyBLP,
+author = {Conlon, Christopher and Gortmaker, Jeff},
+title = {Best practices for differentiated products demand estimation with PyBLP},
+journal = {The RAND Journal of Economics},
+volume = {n/a},
+number = {n/a},
+pages = {},
+doi = {https://doi.org/10.1111/1756-2171.12352},
+url = {https://onlinelibrary.wiley.com/doi/abs/10.1111/1756-2171.12352},
+eprint = {https://onlinelibrary.wiley.com/doi/pdf/10.1111/1756-2171.12352},
+}
 
 
 Installation
