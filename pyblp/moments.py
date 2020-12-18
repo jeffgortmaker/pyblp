@@ -105,20 +105,20 @@ class DemographicExpectationMoment(Moment):
     r"""Configuration for micro moments that match expectations of demographics for agents who choose certain products.
 
     For example, micro data can sometimes be used to compute the mean of a demographic such as income, :math:`y_{it}`,
-    for agents who choose product :math:`j`. With the value :math:`\mathscr{V}_{mt}` of this mean, a micro moment
-    :math:`m` in market :math:`t` can be defined by :math:`g_{M,mt} = \mathscr{V}_{mt} - v_{mt}` where
+    for agents who choose products in some set :math:`J`. With the value :math:`\mathscr{V}_{mt}` of this mean, a
+    micro moment :math:`m` in market :math:`t` can be defined by :math:`g_{M,mt} = \mathscr{V}_{mt} - v_{mt}` where
 
-    .. math:: v_{mt} = \frac{E[y_{it}s_{ijt}]}{s_{jt}}.
+    .. math:: v_{mt} = \frac{E[y_{it} \sum_{j \in J} s_{ijt}]}{\sum_{j \in J} s_{jt}}.
 
     Integrals of these micro moments are averaged across a set :math:`T_m` of markets, which gives
     :math:`\bar{g}_{M,m}` in :eq:`averaged_micro_moments`.
 
     Parameters
     ----------
-    product_id : `object`
-        ID of the product :math:`j` or ``None`` to denote the outside option :math:`j = 0`. If not ``None``, there must
-        be exactly one of this ID in the ``product_ids`` field of ``product_data`` in :class:`Problem` or
-        :class:`Simulation` for each market over which this micro moment will be averaged.
+    product_ids : `sequence of object`
+        IDs of the products :math:`j \in J`, which may include ``None`` to denote the outside option :math:`j = 0`. If
+        there is no ``None`, at least one of these IDs should show up in the ``product_ids`` field of ``product_data``
+        in :class:`Problem` or :class:`Simulation` for each market over which this micro moment will be averaged.
     demographics_index : `int`
         Column index of the demographic :math:`y_{it}` (which can be any demographic, not just income) in the matrix of
         agent demographics, :math:`d`. This should be between zero and :math:`D - 1`, inclusive.
@@ -138,28 +138,32 @@ class DemographicExpectationMoment(Moment):
 
     """
 
-    product_id: Optional[Any]
+    product_ids: Sequence[Any]
     demographics_index: int
 
     def __init__(
-            self, product_id: Optional[Any], demographics_index: int, values: Any,
+            self, product_ids: Optional[Any], demographics_index: int, values: Any,
             market_ids: Optional[Sequence] = None) -> None:
         """Validate information about the moment to the greatest extent possible without an economy instance."""
+        if not isinstance(product_ids, collections.abc.Sequence) or len(product_ids) == 0:
+            raise ValueError("product_ids must be a sequence with at least one ID.")
+        if len(set(product_ids)) != len(product_ids):
+            raise ValueError("product_ids should not have duplicates.")
         if not isinstance(demographics_index, int) or demographics_index < 0:
             raise ValueError("demographics_index must be a positive int.")
         super().__init__(values, market_ids)
-        self.product_id = product_id
+        self.product_ids = product_ids
         self.demographics_index = demographics_index
 
     def _format_moment(self) -> str:
         """Construct a string expression for the covariance moment."""
-        product = "Outside" if self.product_id is None else f"'{self.product_id}'"
-        return f"E[Demographic Column {self.demographics_index} | {product}]"
+        products = ", ".join("Outside" if i is None else f"'{i}'" for i in self.product_ids)
+        return f"E[Demographic Column {self.demographics_index} | {products}]"
 
     def _validate(self, economy: 'Economy') -> None:
         """Check that matrix indices are valid in the economy."""
         super()._validate(economy)
-        economy._validate_product_id(self.product_id, self.market_ids)
+        economy._validate_product_ids(self.product_ids, self.market_ids)
         if self.demographics_index >= economy.D:
             raise ValueError(f"demographics_index must be between 0 and D = {economy.D}, inclusive.")
 
@@ -168,17 +172,19 @@ class DemographicExpectationMoment(Moment):
             inside_probabilities: Optional[Array], eliminated_probabilities: Dict[int, Array],
             inside_eliminated_sum: Optional[Array]) -> Array:
         """Compute agent-specific micro moment values, which will be aggregated up into means or covariances."""
+        shares_sum = 0
+        probabilities_sum = np.zeros((market.I, 1), options.dtype)
+        for product_id in self.product_ids:
+            if product_id is None:
+                shares_sum += 1 - market.products.shares.sum()
+                probabilities_sum += 1 - probabilities.sum(axis=0, keepdims=True).T
+            elif product_id in market.products.product_ids:
+                j = market.get_product(product_id)
+                shares_sum += market.products.shares[j]
+                probabilities_sum += probabilities[[j]].T
+
         d = market.agents.demographics[:, [self.demographics_index]]
-
-        # match a demographic expectation for agents who choose the outside good
-        if self.product_id is None:
-            outside_probabilities = 1 - probabilities.sum(axis=0, keepdims=True).T
-            outside_share = 1 - market.products.shares.sum()
-            return d * outside_probabilities / outside_share
-
-        # match a demographic expectation for agents who choose a certain inside good
-        j = market.get_product(self.product_id)
-        return d * probabilities[[j]].T / market.products.shares[j]
+        return d * probabilities_sum / shares_sum
 
     def _compute_agent_values_tangent(
             self, market: 'Market', p: int, delta: Array, probabilities: Array, probabilities_tangent: Array,
@@ -186,17 +192,19 @@ class DemographicExpectationMoment(Moment):
             eliminated_tangents: Dict[int, Array], inside_eliminated_sum: Optional[Array],
             inside_eliminated_sum_tangent: Optional[Array]) -> Array:
         """Compute the tangent of agent-specific micro moments with respect to a parameter."""
+        shares_sum = 0
+        probabilities_tangent_sum = np.zeros((market.I, 1), options.dtype)
+        for product_id in self.product_ids:
+            if product_id is None:
+                shares_sum += 1 - market.products.shares.sum()
+                probabilities_tangent_sum += -probabilities_tangent.sum(axis=0, keepdims=True).T
+            elif product_id in market.products.product_ids:
+                j = market.get_product(product_id)
+                shares_sum += market.products.shares[j]
+                probabilities_tangent_sum += probabilities_tangent[[j]].T
+
         d = market.agents.demographics[:, [self.demographics_index]]
-
-        # handle a demographic expectation for agents who choose the outside good
-        if self.product_id is None:
-            outside_probabilities_tangent = -probabilities_tangent.sum(axis=0, keepdims=True).T
-            outside_share = 1 - market.products.shares.sum()
-            return d * outside_probabilities_tangent / outside_share
-
-        # handle a demographic expectation for agents who choose a certain inside good
-        j = market.get_product(self.product_id)
-        return d * probabilities_tangent[[j]].T / market.products.shares[j]
+        return d * probabilities_tangent_sum / shares_sum
 
 
 class DemographicCovarianceMoment(Moment):
@@ -369,8 +377,8 @@ class DiversionProbabilityMoment(Moment):
     def _validate(self, economy: 'Economy') -> None:
         """Check that matrix indices are valid in the economy."""
         super()._validate(economy)
-        economy._validate_product_id(self.product_id1, self.market_ids)
-        economy._validate_product_id(self.product_id2, self.market_ids)
+        economy._validate_product_ids([self.product_id1], self.market_ids)
+        economy._validate_product_ids([self.product_id2], self.market_ids)
 
     def _compute_agent_values(
             self, market: 'Market', delta: Array, probabilities: Array, conditionals: Optional[Array],

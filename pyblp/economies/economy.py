@@ -229,27 +229,35 @@ class Economy(Container, StringRepresentation):
         if name not in names:
             raise NameError(f"'{name}' is not None or one of the underlying variables, {list(sorted(names))}.")
 
-    def _validate_product_id(self, product_id: Optional[Any], market_ids: Optional[Array] = None) -> None:
-        """Validate that a product ID is either None or one that's in the data (or in specific markets if specified).
-        Also verify that the product appears only once in each relevant market.
+    def _validate_product_ids(self, product_ids: Sequence[Any], market_ids: Optional[Array] = None) -> None:
+        """Validate that product IDs either contain None (denoting the outside option) or contain at least one product
+        ID for each market in the data (or in specific markets if specified). Also verify that each product ID appears
+        only once in each relevant market.
         """
-        if product_id is None:
-            return
         if self.unique_product_ids.size == 0:
             raise ValueError(f"Product IDs must have been specified.")
+
         if market_ids is None:
             market_ids = self.unique_market_ids
+
         for t in market_ids:
-            count = (self.products.product_ids[self._product_market_indices[t]] == product_id).sum()
-            if count == 0:
+            counts = []
+            for product_id in product_ids:
+                count = 1
+                if product_id is not None:
+                    count = (self.products.product_ids[self._product_market_indices[t]] == product_id).sum()
+                    if count > 1:
+                        raise ValueError(
+                            f"Product IDs should be unique within markets, but ID '{product_id}' shows up {count} "
+                            f"times in market '{t}'."
+                        )
+
+                counts.append(count)
+
+            if all(c == 0 for c in counts):
                 raise ValueError(
-                    f"product_id '{product_id}' is not one of the product IDs in market '{t}': "
+                    f"None of the product_ids {sorted(list(product_ids))} show up in market '{t}' with IDs: "
                     f"{list(sorted(self.products.product_ids[self._product_market_indices[t]]))}."
-                )
-            if count > 1:
-                raise ValueError(
-                    f"Product IDs should be unique within markets, but ID '{product_id}' shows up {count} times in "
-                    f"market '{t}'."
                 )
 
     def _coerce_optional_firm_ids(self, firm_ids: Optional[Any], market_ids: Optional[Array] = None) -> Array:

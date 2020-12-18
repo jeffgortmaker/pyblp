@@ -325,9 +325,9 @@ def large_blp_simulation() -> SimulationFixture:
         ]
     }
     simulated_micro_moments = [
-        DemographicExpectationMoment(product_id=0, demographics_index=1, values=0),
+        DemographicExpectationMoment(product_ids=[0], demographics_index=1, values=0),
         DemographicExpectationMoment(
-            product_id=None, demographics_index=1, values=0, market_ids=simulation.unique_market_ids[1:4]
+            product_ids=[None, 0], demographics_index=1, values=0, market_ids=simulation.unique_market_ids[1:4]
         ),
         DemographicCovarianceMoment(
             X2_index=0, demographics_index=2, values=0, market_ids=simulation.unique_market_ids[3:5]
@@ -427,7 +427,7 @@ def large_nested_blp_simulation() -> SimulationFixture:
     )
     simulation_results = simulation.replace_endogenous()
     simulated_micro_moments = [DemographicExpectationMoment(
-        product_id=None, demographics_index=1, values=0, market_ids=simulation.unique_market_ids[3:5]
+        product_ids=[None], demographics_index=1, values=0, market_ids=simulation.unique_market_ids[3:5]
     )]
     return simulation, simulation_results, {}, simulated_micro_moments
 
@@ -476,7 +476,7 @@ def simulated_problem(request: Any) -> SimulatedProblemFixture:
         for moment, values in zip(simulated_micro_moments, micro_values.T):
             if isinstance(moment, DemographicExpectationMoment):
                 micro_moments.append(DemographicExpectationMoment(
-                    moment.product_id, moment.demographics_index, values[np.isfinite(values)], moment.market_ids
+                    moment.product_ids, moment.demographics_index, values[np.isfinite(values)], moment.market_ids
                 ))
             elif isinstance(moment, DemographicCovarianceMoment):
                 micro_moments.append(DemographicCovarianceMoment(
