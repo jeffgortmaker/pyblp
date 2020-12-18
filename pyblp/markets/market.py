@@ -121,6 +121,12 @@ class Market(Container):
         """
         return int(np.argmax(self.products.product_ids == product_id))
 
+    def get_agent(self, agent_id: Any) -> Array:
+        """Get the agent index associated with an agent ID. This assumes that the market has already been validated to
+        make sure that the agent ID appears exactly once.
+        """
+        return int(np.argmax(self.agents.agent_ids == agent_id))
+
     def get_membership_matrix(self) -> Array:
         """Build a membership matrix from nesting IDs."""
         tiled_ids = np.tile(self.products.nesting_ids, self.J)

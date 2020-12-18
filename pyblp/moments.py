@@ -110,8 +110,8 @@ class DemographicExpectationMoment(Moment):
 
     .. math:: v_{mt} = \frac{E[y_{it} \sum_{j \in J} s_{ijt}]}{\sum_{j \in J} s_{jt}}.
 
-    Integrals of these micro moments are averaged across a set :math:`T_m` of markets, which gives
-    :math:`\bar{g}_{M,m}` in :eq:`averaged_micro_moments`.
+    These micro moments are averaged across a set :math:`T_m` of markets, which gives :math:`\bar{g}_{M,m}` in
+    :eq:`averaged_micro_moments`.
 
     Parameters
     ----------
@@ -156,7 +156,7 @@ class DemographicExpectationMoment(Moment):
         self.demographics_index = demographics_index
 
     def _format_moment(self) -> str:
-        """Construct a string expression for the covariance moment."""
+        """Construct a string expression for the moment."""
         products = ", ".join("Outside" if i is None else f"'{i}'" for i in self.product_ids)
         return f"E[Demographic Column {self.demographics_index} | {products}]"
 
@@ -207,6 +207,117 @@ class DemographicExpectationMoment(Moment):
         return d * probabilities_tangent_sum / shares_sum
 
 
+class CharacteristicExpectationMoment(Moment):
+    r"""Configuration for micro moments that match expectations of characteristics of products chosen by certain agents.
+
+    For example, micro data can sometimes be used to compute the mean of a product characteristic :math:`x_{jt}` of an
+    agent's choice :math:`j` for agents in some set :math:`I`. With the value :math:`\mathscr{V}_{mt}` of this mean, a
+    micro moment :math:`m` in market :math:`t` can be defined by :math:`g_{M,mt} = \mathscr{V}_{mt} - v_{mt}` where
+
+    .. math:: v_{mt} = E[z_{it} | i \in I]
+
+    where conditional on choosing an inside good, the expected value of :math:`x_{jt}` for agent :math:`i` is
+
+    .. math:: z_{it} = \sum_{j \in J_t} x_{jt}s_{ij(-0)t}
+
+    where :math:`s_{ij(-0)t} = s_{ijt} / (1 - s_{i0t})` is the probability of :math:`i` choosing :math:`j` when the
+    outside option is removed from the choice set.
+
+    These micro moments are averaged across a set :math:`T_m` of markets, which gives :math:`\bar{g}_{M,m}` in
+    :eq:`averaged_micro_moments`.
+
+    Parameters
+    ----------
+    agent_ids : `sequence of object`
+        IDs of the agents :math:`i \in I`. At least one of these IDs should show up in the ``agent_ids`` field of
+        ``agent_data`` in :class:`Problem` or :class:`Simulation` for each market over which this micro moment will be
+        averaged.
+    X2_index : `int`
+        Column index of :math:`x_{jt}` in the matrix of demand-side nonlinear product characteristics, :math:`X_2`. This
+        should be between zero and :math:`K_2 - 1`, inclusive.
+    values : `float`
+        Values :math:`\mathscr{V}_{mt}` of the statistic estimated from micro data. If a scalar is specified, then
+        :math:`\mathscr{V}_{mt} = \mathscr{V}_m` is assumed to be constant across all markets in which the moment is
+        relevant. Otherwise, this should have as many elements as ``market_ids``, or as the total number of markets if
+        ``market_ids`` is ``None``.
+    market_ids : `array-like, optional`
+        Distinct market IDs over which the micro moments will be averaged to get :math:`\bar{g}_{M,m}`. These are also
+        the only markets in which the moments will be computed. By default, the moments are computed for and averaged
+        across all markets.
+
+    Examples
+    --------
+        - :doc:`Tutorial </tutorial>`
+
+    """
+
+    agent_ids: Sequence[Any]
+    X2_index: int
+
+    def __init__(
+            self, agent_ids: Optional[Any], X2_index: int, values: Any,
+            market_ids: Optional[Sequence] = None) -> None:
+        """Validate information about the moment to the greatest extent possible without an economy instance."""
+        if not isinstance(agent_ids, collections.abc.Sequence) or len(agent_ids) == 0:
+            raise ValueError("agent_ids must be a sequence with at least one ID.")
+        if len(set(agent_ids)) != len(agent_ids):
+            raise ValueError("agent_ids should not have duplicates.")
+        if not isinstance(X2_index, int) or X2_index < 0:
+            raise ValueError("X2_index must be a positive int.")
+        super().__init__(values, market_ids, requires_inside=True)
+        self.agent_ids = agent_ids
+        self.X2_index = X2_index
+
+    def _format_moment(self) -> str:
+        """Construct a string expression for the moment."""
+        agents = ", ".join(f"'{i}'" for i in self.agent_ids)
+        return f"E[X2 Column {self.X2_index} | {agents}]"
+
+    def _validate(self, economy: 'Economy') -> None:
+        """Check that matrix indices are valid in the economy."""
+        super()._validate(economy)
+        economy._validate_agent_ids(self.agent_ids, self.market_ids)
+        if self.X2_index >= economy.K2:
+            raise ValueError(f"X2_index must be between 0 and K2 = {economy.K2}, inclusive.")
+
+    def _compute_agent_values(
+            self, market: 'Market', delta: Array, probabilities: Array, conditionals: Optional[Array],
+            inside_probabilities: Optional[Array], eliminated_probabilities: Dict[int, Array],
+            inside_eliminated_sum: Optional[Array]) -> Array:
+        """Compute agent-specific micro moment values, which will be aggregated up into means or covariances."""
+        assert inside_probabilities is not None
+        x = market.products.X2[:, [self.X2_index]]
+
+        weights_sum = 0
+        x_means = np.zeros((market.I, 1), options.dtype)
+        for agent_id in self.agent_ids:
+            if agent_id in market.agents.agent_ids:
+                i = market.get_agent(agent_id)
+                weights_sum += market.agents.weights[i]
+                x_means[i] = inside_probabilities[:, i] @ x
+
+        return x_means / weights_sum
+
+    def _compute_agent_values_tangent(
+            self, market: 'Market', p: int, delta: Array, probabilities: Array, probabilities_tangent: Array,
+            inside_probabilities: Optional[Array], inside_tangent: Optional[Array],
+            eliminated_tangents: Dict[int, Array], inside_eliminated_sum: Optional[Array],
+            inside_eliminated_sum_tangent: Optional[Array]) -> Array:
+        """Compute the tangent of agent-specific micro moments with respect to a parameter."""
+        assert inside_tangent is not None
+        x = market.products.X2[:, [self.X2_index]]
+
+        weights_sum = 0
+        x_mean_tangents = np.zeros((market.I, 1), options.dtype)
+        for agent_id in self.agent_ids:
+            if agent_id in market.agents.agent_ids:
+                i = market.get_agent(agent_id)
+                weights_sum += market.agents.weights[i]
+                x_mean_tangents[i] = inside_tangent[:, i] @ x
+
+        return x_mean_tangents / weights_sum
+
+
 class DemographicCovarianceMoment(Moment):
     r"""Configuration for micro moments that match covariances between product characteristics and demographics.
 
@@ -224,8 +335,8 @@ class DemographicCovarianceMoment(Moment):
     where :math:`s_{ij(-0)t} = s_{ijt} / (1 - s_{i0t})` is the probability of :math:`i` choosing :math:`j` when the
     outside option is removed from the choice set.
 
-    Integrals of these micro moments are averaged across a set :math:`T_m` of markets, which gives
-    :math:`\bar{g}_{M,m}` in :eq:`averaged_micro_moments`.
+    These micro moments are averaged across a set :math:`T_m` of markets, which gives :math:`\bar{g}_{M,m}` in
+    :eq:`averaged_micro_moments`.
 
     Parameters
     ----------
@@ -266,7 +377,7 @@ class DemographicCovarianceMoment(Moment):
         self.demographics_index = demographics_index
 
     def _format_moment(self) -> str:
-        """Construct a string expression for the covariance moment."""
+        """Construct a string expression for the moment."""
         return f"Cov(X2 Column {self.X2_index}, Demographic Column {self.demographics_index})"
 
     def _validate(self, economy: 'Economy') -> None:
@@ -324,8 +435,8 @@ class DiversionProbabilityMoment(Moment):
     which is more reminiscent of the long-run diversion ratios :math:`\bar{\mathscr{D}}_{jk}` computed by
     :meth:`ProblemResults.compute_long_run_diversion_ratios`.
 
-    Integrals of these micro moments are averaged across a set :math:`T_m` of markets, which gives
-    :math:`\bar{g}_{M,m}` in :eq:`averaged_micro_moments`.
+    These micro moments are averaged across a set :math:`T_m` of markets, which gives :math:`\bar{g}_{M,m}` in
+    :eq:`averaged_micro_moments`.
 
     Parameters
     ----------
@@ -369,7 +480,7 @@ class DiversionProbabilityMoment(Moment):
         self.product_id2 = product_id2
 
     def _format_moment(self) -> str:
-        """Construct a string expression for the covariance moment."""
+        """Construct a string expression for the moment."""
         product1 = "Outside" if self.product_id1 is None else f"'{self.product_id1}'"
         product2 = "Outside" if self.product_id2 is None else f"'{self.product_id2}'"
         return f"P({product1} First, {product2} Second)"
@@ -459,8 +570,8 @@ class DiversionCovarianceMoment(Moment):
     choice set and :math:`s_{ik(-0,j)t}` is the probability of choosing :math:`k` when both the outside option and
     :math:`j` are removed from the choice set.
 
-    Integrals of these micro moments are averaged across a set :math:`T_m` of markets, which gives
-    :math:`\bar{g}_{M,m}` in :eq:`averaged_micro_moments`.
+    These micro moments are averaged across a set :math:`T_m` of markets, which gives :math:`\bar{g}_{M,m}` in
+    :eq:`averaged_micro_moments`.
 
     Parameters
     ----------
@@ -500,7 +611,7 @@ class DiversionCovarianceMoment(Moment):
         self.X2_index2 = X2_index2
 
     def _format_moment(self) -> str:
-        """Construct a string expression for the covariance moment."""
+        """Construct a string expression for the moment."""
         return f"Cov(X2 Column {self.X2_index1} First, X2 Column {self.X2_index2} Second)"
 
     def _validate(self, economy: 'Economy') -> None:
@@ -557,11 +668,8 @@ class CustomMoment(Moment):
 
     a simulated integral over agent-specific micro values :math:`v_{imt}` computed according to a custom function.
 
-    .. warning::
-
-       Custom micro moments do not currently work with analytic derivatives, so you must set ``finite_differences=True``
-       in :meth:`Problem.solve` when using them. This may slow down optimization and slightly reduce the numerical
-       accuracy of standard errors.
+    These micro moments are averaged across a set :math:`T_m` of markets, which gives :math:`\bar{g}_{M,m}` in
+    :eq:`averaged_micro_moments`.
 
     Parameters
     ----------

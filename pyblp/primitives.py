@@ -226,6 +226,8 @@ class Agents(object):
     ----------
     market_ids : `ndarray`
         IDs that associate agents with markets.
+    agent_ids : `ndarray`
+        IDs that identify individual agents within markets.
     weights : `ndarray`
         Integration weights, :math:`w`.
     nodes : `ndarray`
@@ -236,6 +238,7 @@ class Agents(object):
     """
 
     market_ids: Array
+    agent_ids: Array
     weights: Array
     nodes: Array
     demographics: Array
@@ -248,6 +251,7 @@ class Agents(object):
 
         # data structures may be empty
         market_ids = None
+        agent_ids = None
         weights = None
         nodes = None
         demographics = None
@@ -274,15 +278,18 @@ class Agents(object):
                     raise ValueError("agent_formulation does not support fixed effect absorption.")
                 demographics, demographics_formulations, _ = agent_formulation._build_matrix(agent_data)
 
-            # load market IDs
+            # load IDs
             if agent_data is not None:
                 market_ids = extract_matrix(agent_data, 'market_ids')
+                agent_ids = extract_matrix(agent_data, 'agent_ids')
                 if market_ids is None:
                     raise KeyError(f"agent_data must have a market_ids field.")
                 if market_ids.shape[1] > 1:
                     raise ValueError(f"The market_ids field of agent_data must be one-dimensional.")
                 if set(np.unique(products.market_ids)) != set(np.unique(market_ids)):
                     raise ValueError(f"The market_ids field of agent_data must have the same IDs as product data.")
+                if agent_ids is not None and agent_ids.shape[1] > 1:
+                    raise ValueError(f"The agent_ids field of agent_data must be one-dimensional.")
 
             # build nodes and weights
             if integration is not None:
@@ -340,6 +347,7 @@ class Agents(object):
 
         return structure_matrices({
             'market_ids': (market_ids, np.object),
+            'agent_ids': (agent_ids, np.object),
             'weights': (weights, options.dtype),
             'nodes': (nodes, options.dtype),
             (tuple(demographics_formulations), 'demographics'): (demographics, options.dtype)

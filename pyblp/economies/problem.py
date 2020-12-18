@@ -1131,8 +1131,13 @@ class Problem(ProblemEconomy):
            ``nodes`` field with three columns can be replaced by three one-dimensional fields: ``nodes0``, ``nodes1``,
            and ``nodes2``.
 
-        Along with ``market_ids``, the names of any additional fields can be typically be used as variables in
-        ``agent_formulation``. The exception is the name ``'demographics'``, which is reserved for use by
+        To use certain types of micro moments, agent IDs must be specified:
+
+            - **agent_ids** (`object, optional`) - IDs that identify individual agents within markets. The IDs
+              referenced by :class:`CharacteristicExpectationMoment` must be unique within the relevant markets.
+
+        Along with ``market_ids`` and ``agnet_ids``, the names of any additional fields can be typically be used as
+        variables in ``agent_formulation``. The exception is the name ``'demographics'``, which is reserved for use by
         :class:`Agents`.
 
     integration : `Integration, optional`
@@ -1239,10 +1244,12 @@ class Problem(ProblemEconomy):
         Unique market IDs in product and agent data.
     unique_firm_ids : `ndarray`
         Unique firm IDs in product data.
-    unique_product_ids : `ndarray`
-        Unique product IDs in product data.
     unique_nesting_ids : `ndarray`
         Unique nesting group IDs in product data.
+    unique_product_ids : `ndarray`
+        Unique product IDs in product data.
+    unique_agent_ids : `ndarray`
+        Unique agent IDs in agent data.
     distributions : `list of str`
         Random coefficient distributions.
     epsilon_scale : `float`

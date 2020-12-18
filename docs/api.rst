@@ -68,6 +68,7 @@ Micro moment configurations can be passed to :meth:`Problem.solve`.
    :template: class_with_signature.rst
 
    DemographicExpectationMoment
+   CharacteristicExpectationMoment
    DemographicCovarianceMoment
    DiversionProbabilityMoment
    DiversionCovarianceMoment

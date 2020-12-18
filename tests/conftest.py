@@ -10,9 +10,9 @@ import pytest
 import scipy.linalg
 
 from pyblp import (
-    Formulation, Integration, Problem, ProblemResults, DemographicExpectationMoment, DemographicCovarianceMoment,
-    DiversionProbabilityMoment, DiversionCovarianceMoment, Simulation, SimulationResults,
-    build_differentiation_instruments, build_id_data, build_matrix, build_ownership, options
+    Formulation, Integration, Problem, ProblemResults, DemographicExpectationMoment, CharacteristicExpectationMoment,
+    DemographicCovarianceMoment, DiversionProbabilityMoment, DiversionCovarianceMoment, Simulation, SimulationResults,
+    build_differentiation_instruments, build_id_data, build_matrix, build_ownership, build_integration, options
 )
 from pyblp.utilities.basics import update_matrices, Array, Data, Options
 
@@ -393,6 +393,10 @@ def large_nested_blp_simulation() -> SimulationFixture:
     np.random.RandomState(0).shuffle(keep)
     id_data = id_data[keep[:int(0.5 * id_data.size)]]
 
+    integration = Integration('product', 4)
+    agent_data = build_integration(integration, 2)
+    unique_market_ids = np.unique(id_data.market_ids)
+
     simulation = Simulation(
         product_formulations=(
             Formulation('1 + x + y + z + q'),
@@ -404,6 +408,12 @@ def large_nested_blp_simulation() -> SimulationFixture:
             'firm_ids': id_data.firm_ids,
             'nesting_ids': np.random.RandomState(2).choice(['f', 'g', 'h'], id_data.size),
             'clustering_ids': np.random.RandomState(2).choice(range(30), id_data.size)
+        },
+        agent_data={
+            'market_ids': np.repeat(unique_market_ids, agent_data.weights.size),
+            'agent_ids': np.tile(np.arange(agent_data.weights.size), unique_market_ids.size),
+            'weights': np.tile(agent_data.weights.flat, unique_market_ids.size),
+            'nodes': np.tile(agent_data.nodes, (unique_market_ids.size, 1)),
         },
         beta=[1, 1, 2, 3, 1],
         sigma=[
@@ -417,7 +427,6 @@ def large_nested_blp_simulation() -> SimulationFixture:
         gamma=[0.1, 0.2, 0.3],
         rho=0.1,
         agent_formulation=Formulation('1 + f + g'),
-        integration=Integration('product', 4),
         xi_variance=0.00001,
         omega_variance=0.00001,
         correlation=0.9,
@@ -426,9 +435,17 @@ def large_nested_blp_simulation() -> SimulationFixture:
         seed=2,
     )
     simulation_results = simulation.replace_endogenous()
-    simulated_micro_moments = [DemographicExpectationMoment(
-        product_ids=[None], demographics_index=1, values=0, market_ids=simulation.unique_market_ids[3:5]
-    )]
+    simulated_micro_moments = [
+        DemographicExpectationMoment(
+            product_ids=[None], demographics_index=1, values=0, market_ids=simulation.unique_market_ids[3:5]
+        ),
+        CharacteristicExpectationMoment(
+            agent_ids=[0, 1], X2_index=0, values=0, market_ids=simulation.unique_market_ids[5:6]
+        ),
+        CharacteristicExpectationMoment(
+            agent_ids=[2], X2_index=0, values=0, market_ids=simulation.unique_market_ids[6:7]
+        ),
+    ]
     return simulation, simulation_results, {}, simulated_micro_moments
 
 
@@ -477,6 +494,10 @@ def simulated_problem(request: Any) -> SimulatedProblemFixture:
             if isinstance(moment, DemographicExpectationMoment):
                 micro_moments.append(DemographicExpectationMoment(
                     moment.product_ids, moment.demographics_index, values[np.isfinite(values)], moment.market_ids
+                ))
+            elif isinstance(moment, CharacteristicExpectationMoment):
+                micro_moments.append(CharacteristicExpectationMoment(
+                    moment.agent_ids, moment.X2_index, values[np.isfinite(values)], moment.market_ids
                 ))
             elif isinstance(moment, DemographicCovarianceMoment):
                 micro_moments.append(DemographicCovarianceMoment(

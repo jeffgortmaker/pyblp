@@ -169,8 +169,13 @@ class Simulation(Economy):
            ``nodes`` field with three columns can be replaced by three one-dimensional fields: ``nodes0``, ``nodes1``,
            and ``nodes2``.
 
-        Along with ``market_ids``, the names of any additional fields can typically be used as variables in
-        ``agent_formulation``. The exception is the name ``'demographics'``, which is reserved for use by
+        To use certain types of micro moments, agent IDs must be specified:
+
+            - **agent_ids** (`object, optional`) - IDs that identify individual agents within markets. The IDs
+              referenced by :class:`CharacteristicExpectationMoment` must be unique within the relevant markets.
+
+        Along with ``market_ids`` and ``agent_ids``, the names of any additional fields can typically be used as
+        variables in ``agent_formulation``. The exception is the name ``'demographics'``, which is reserved for use by
         :class:`Agents`.
 
     integration : `Integration, optional`
@@ -269,10 +274,12 @@ class Simulation(Economy):
         Unique market IDs in product and agent data.
     unique_firm_ids : `ndarray`
         Unique firm IDs in product data.
-    unique_product_ids : `ndarray`
-        Unique product IDs in product data.
     unique_nesting_ids : `ndarray`
         Unique nesting IDs in product data.
+    unique_product_ids : `ndarray`
+        Unique product IDs in product data.
+    unique_agent_ids : `ndarray`
+        Unique agent IDs in agent data.
     beta : `ndarray`
         Demand-side linear parameters, :math:`\beta`.
     sigma : `ndarray`
@@ -437,8 +444,10 @@ class Simulation(Economy):
                 if not isinstance(integration, Integration):
                     raise ValueError("integration must be None or an Integration instance.")
                 agent_market_ids, nodes, weights = integration._build_many(products.X2.shape[1], np.unique(market_ids))
+                agent_ids = None
             elif agent_data is not None:
                 agent_market_ids = extract_matrix(agent_data, 'market_ids')
+                agent_ids = extract_matrix(agent_data, 'agent_ids')
                 nodes = extract_matrix(agent_data, 'nodes')
                 weights = extract_matrix(agent_data, 'weights')
             else:
@@ -447,6 +456,7 @@ class Simulation(Economy):
             # load or simulate agent variables in sorted order so that a seed always gives the same draws
             agent_mapping = {
                 'market_ids': (agent_market_ids, np.object),
+                'agent_ids': (agent_ids, np.object),
                 'nodes': (nodes, options.dtype),
                 'weights': (weights, options.dtype)
             }
