@@ -264,7 +264,7 @@ class Economy(Container, StringRepresentation):
 
     def _validate_agent_ids(self, agent_ids: Sequence[Any], market_ids: Optional[Array] = None) -> None:
         """Validate that agent IDs have at least one agent ID for each market in the data (or in specific markets if
-        specified). Also verify that each agent ID appears only once in each relevant market.
+        specified).
         """
         if self.unique_agent_ids.size == 0:
             raise ValueError("Agent IDs must have been specified.")
@@ -273,17 +273,7 @@ class Economy(Container, StringRepresentation):
             market_ids = self.unique_market_ids
 
         for t in market_ids:
-            counts = []
-            for agent_id in agent_ids:
-                count = (self.agents.agent_ids[self._agent_market_indices[t]] == agent_id).sum()
-                if count > 1:
-                    raise ValueError(
-                        f"Agent IDs should be unique within markets, but ID '{agent_id}' shows up {count} times in "
-                        f"market '{t}'."
-                    )
-
-                counts.append(count)
-
+            counts = [(self.agents.agent_ids[self._agent_market_indices[t]] == i).sum() for i in agent_ids]
             if all(c == 0 for c in counts):
                 raise ValueError(
                     f"None of the agent_ids {sorted(list(agent_ids))} show up in market '{t}' with IDs: "

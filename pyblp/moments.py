@@ -286,17 +286,9 @@ class CharacteristicExpectationMoment(Moment):
             inside_eliminated_sum: Optional[Array]) -> Array:
         """Compute agent-specific micro moment values, which will be aggregated up into means or covariances."""
         assert inside_probabilities is not None
+        I = market.get_agents_index(self.agent_ids)
         x = market.products.X2[:, [self.X2_index]]
-
-        weights_sum = 0
-        x_means = np.zeros((market.I, 1), options.dtype)
-        for agent_id in self.agent_ids:
-            if agent_id in market.agents.agent_ids:
-                i = market.get_agent(agent_id)
-                weights_sum += market.agents.weights[i]
-                x_means[i] = inside_probabilities[:, i] @ x
-
-        return x_means / weights_sum
+        return np.where(I[None], inside_probabilities, 0).T @ x / market.agents.weights[I].sum()
 
     def _compute_agent_values_tangent(
             self, market: 'Market', p: int, delta: Array, probabilities: Array, probabilities_tangent: Array,
@@ -305,17 +297,9 @@ class CharacteristicExpectationMoment(Moment):
             inside_eliminated_sum_tangent: Optional[Array]) -> Array:
         """Compute the tangent of agent-specific micro moments with respect to a parameter."""
         assert inside_tangent is not None
+        I = market.get_agents_index(self.agent_ids)
         x = market.products.X2[:, [self.X2_index]]
-
-        weights_sum = 0
-        x_mean_tangents = np.zeros((market.I, 1), options.dtype)
-        for agent_id in self.agent_ids:
-            if agent_id in market.agents.agent_ids:
-                i = market.get_agent(agent_id)
-                weights_sum += market.agents.weights[i]
-                x_mean_tangents[i] = inside_tangent[:, i] @ x
-
-        return x_mean_tangents / weights_sum
+        return np.where(I[None], inside_tangent, 0).T @ x / market.agents.weights[I].sum()
 
 
 class DemographicCovarianceMoment(Moment):

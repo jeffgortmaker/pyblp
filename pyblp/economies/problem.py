@@ -1133,10 +1133,10 @@ class Problem(ProblemEconomy):
 
         To use certain types of micro moments, agent IDs must be specified:
 
-            - **agent_ids** (`object, optional`) - IDs that identify individual agents within markets. The IDs
-              referenced by :class:`CharacteristicExpectationMoment` must be unique within the relevant markets.
+            - **agent_ids** (`object, optional`) - IDs that identify individual agents within markets. There can be
+              multiple of the same ID within a market.
 
-        Along with ``market_ids`` and ``agnet_ids``, the names of any additional fields can be typically be used as
+        Along with ``market_ids`` and ``agent_ids``, the names of any additional fields can be typically be used as
         variables in ``agent_formulation``. The exception is the name ``'demographics'``, which is reserved for use by
         :class:`Agents`.
 
