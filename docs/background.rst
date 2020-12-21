@@ -126,7 +126,7 @@ Concentrated out linear parameters are recovered with linear IV-GMM:
 
 where
 
-.. math:: X = \begin{bmatrix} X_1^\text{ex} & 0 \\ 0 & X_3 \end{bmatrix}, \quad Z = \begin{bmatrix} Z_D & 0 \\ 0 & Z_S \end{bmatrix}, \quad Y(\theta) = \begin{bmatrix} \delta(\theta) - X_1^\text{en}\hat{\alpha} & 0 \\ 0 & \tilde{c}(\theta) \end{bmatrix}.
+.. math:: X = \begin{bmatrix} X_1^\text{ex} & 0 \\ 0 & X_3 \end{bmatrix}, \quad Z = \begin{bmatrix} Z_D & 0 \\ 0 & Z_S \end{bmatrix}, \quad Y(\theta) = \begin{bmatrix} \delta(\theta) - X_1^\text{en}\hat{\alpha} \\ \tilde{c}(\theta) \end{bmatrix}.
 
 With only a demand side, :math:`\alpha` can be concentrated out, so :math:`X = X_1`, :math:`Z = Z_D`, and :math:`Y = \delta(\theta)` recover the full :math:`\hat{\beta}` in :eq:`iv`.
 
