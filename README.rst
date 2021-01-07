@@ -36,7 +36,7 @@ If you use PyBLP in your research, we ask that you also cite `Conlon and Gortmak
 ::
     @article{PyBLP,
         author = {Conlon, Christopher and Gortmaker, Jeff},
-        title = {Best practices for differentiated products demand estimation with PyBLP},
+        title = {Best practices for differentiated products demand estimation with {PyBLP}},
         journal = {The RAND Journal of Economics},
         volume = {51},
         number = {4},
