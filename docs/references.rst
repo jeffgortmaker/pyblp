@@ -7,7 +7,7 @@ This page contains a full list of references cited in the documentation, includi
 Conlon and Gortmaker (2020)
 ---------------------------
 
-Conlon, Christopher T., and Jeff Gortmaker (2020). `Best practices for differentiated products demand estimation with PyBLP <https://jeffgortmaker.com/files/pyblp.pdf>`_. Working paper.
+Conlon, Christopher, and Jeff Gortmaker (2020). `Best practices for differentiated products demand estimation with PyBLP <https://ideas.repec.org/a/bla/randje/v51y2020i4p1108-1161.html>`_. *RAND Journal of Economics, 51* (4), 1108-1161.
 
 
 Other References
