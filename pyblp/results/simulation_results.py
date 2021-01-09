@@ -248,21 +248,21 @@ class SimulationResults(StringRepresentation):
         return demand_instruments, supply_instruments
 
     def compute_micro_values(self, micro_moments: Sequence[Moment]) -> Array:
-        r"""Compute simulated micro moment values :math:`v_{mt}`.
+        r"""Compute simulated micro moment values :math:`v_m`.
 
         Parameters
         ----------
         micro_moments : `sequence of Moment`
             Configurations for the micro moments. For a list of supported moments, refer to
-            :ref:`api:Micro Moment Classes`. Since only :math:`v_{mt}`'s are computed, the ``values`` given when
-            initializing the moments will be ignored.
+            :ref:`api:Micro Moment Classes`. Since only simulated values :math:`v_m` are computed, the ``value`` given
+            when initializing the moments will be ignored.
 
         Returns
         -------
         `ndarray`
-            Micro moment values, :math:`v_{mt}`. Rows are in the same order as :attr:`Simulation.unique_market_ids`.
-            Columns are in the same order as ``micro_moments``. If a micro moment is not computed in one or more
-            markets, the associated values will be ``numpy.nan``.
+            Micro moment values :math:`v_m`, which are in the same order as ``micro_moments``. If there are multiple
+            markets :math:`t \in T_m` in which a micro moment is relevant, this is an average of market-specific
+            :math:`v_{mt}` values.
 
         Examples
         --------
@@ -313,4 +313,4 @@ class SimulationResults(StringRepresentation):
         output("")
         output(f"Finished after {format_seconds(end_time - start_time)}.")
         output("")
-        return micro_values
+        return np.nanmean(micro_values, axis=0)
