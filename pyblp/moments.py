@@ -54,13 +54,16 @@ class Moment(StringRepresentation):
 
     def __str__(self) -> str:
         """Format information about the micro moment as a string."""
-        return f"{self._format_markets()}: {self._format_moment()}"
+        return f"{self._format_moment()} = {format_number(self.value)} in {self._format_markets(text=True)}"
 
-    def _format_markets(self) -> str:
+    def _format_markets(self, text: bool = False) -> str:
         """Format information about the markets associated with the micro moment as a string."""
         if self.market_ids is None:
-            return "All"
-        return ", ".join(str(t) for t in self.market_ids)
+            return "All Markets" if text else "All"
+
+        joined = ", ".join(str(t) for t in self.market_ids)
+        suffix = "Market" if len(self.market_ids) == 1 else "Markets"
+        return f"{suffix} {joined}" if text else joined
 
     @abc.abstractmethod
     def _format_moment(self) -> str:
@@ -773,10 +776,10 @@ class Moments(object):
         """Format micro moments (and optionally their values) as a string."""
 
         # construct the leftmost part of the table that always shows up
-        header = ["Index", "Markets", "Type"]
+        header = ["Index", "Markets", "Type", "Value"]
         data: List[List[str]] = []
         for m, moment in enumerate(self.micro_moments):
-            data.append([str(m), moment._format_markets(), moment._format_moment()])
+            data.append([str(m), moment._format_markets(), moment._format_moment(), format_number(moment.value)])
 
         # add moment values
         if values is not None:
