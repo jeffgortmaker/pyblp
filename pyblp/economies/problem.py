@@ -227,7 +227,16 @@ class ProblemEconomy(Economy):
         initial_update : `bool, optional`
             Whether to update starting values for the mean utility :math:`\delta`, and the weighting matrix, :math:`W`,
             at the initial parameter values before the first GMM step (this initial update will be called a zeroth
-            step). By default, initial values are not updated because this requires an additional objective evaluation.
+            step).
+
+            .. note::
+
+               When trying multiple parameter starting values to verify that the optimization routine converges to the
+               same optimum, using ``initial_update`` is not recommended because different weighting matrices will be
+               used for these different runs. A better option is to use ``optimization=Optimization('return')`` at the
+               best guess for parameter values and pass :attr:`ProblemResults.updated_W` to ``W`` for each set of
+               different parameter starting values.
+
         optimization : `Optimization, optional`
             :class:`Optimization` configuration for how to solve the optimization problem in each GMM step, which is
             only used if there are unfixed nonlinear parameters over which to optimize. By default,
