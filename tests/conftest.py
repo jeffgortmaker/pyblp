@@ -327,7 +327,8 @@ def large_blp_simulation() -> SimulationFixture:
     simulated_micro_moments = [
         DemographicExpectationMoment(product_ids=[0], demographics_index=1, value=0),
         DemographicExpectationMoment(
-            product_ids=[None, 0], demographics_index=1, value=0, market_ids=simulation.unique_market_ids[1:4]
+            product_ids=[None, 0], demographics_index=1, value=0, market_ids=simulation.unique_market_ids[1:4],
+            market_weights=[0.2, 0.4, 0.4],
         ),
         DemographicCovarianceMoment(
             X2_index=0, demographics_index=2, value=0, market_ids=simulation.unique_market_ids[3:5]
@@ -493,24 +494,24 @@ def simulated_problem(request: Any) -> SimulatedProblemFixture:
         for moment, value in zip(simulated_micro_moments, micro_values.T):
             if isinstance(moment, DemographicExpectationMoment):
                 micro_moments.append(DemographicExpectationMoment(
-                    moment.product_ids, moment.demographics_index, value, moment.market_ids
+                    moment.product_ids, moment.demographics_index, value, moment.market_ids, moment.market_weights
                 ))
             elif isinstance(moment, CharacteristicExpectationMoment):
                 micro_moments.append(CharacteristicExpectationMoment(
-                    moment.agent_ids, moment.X2_index, value, moment.market_ids
+                    moment.agent_ids, moment.X2_index, value, moment.market_ids, moment.market_weights
                 ))
             elif isinstance(moment, DemographicCovarianceMoment):
                 micro_moments.append(DemographicCovarianceMoment(
-                    moment.X2_index, moment.demographics_index, value, moment.market_ids
+                    moment.X2_index, moment.demographics_index, value, moment.market_ids, moment.market_weights
                 ))
             elif isinstance(moment, DiversionProbabilityMoment):
                 micro_moments.append(DiversionProbabilityMoment(
-                    moment.product_id1, moment.product_id2, value, moment.market_ids
+                    moment.product_id1, moment.product_id2, value, moment.market_ids, moment.market_weights
                 ))
             else:
                 assert isinstance(moment, DiversionCovarianceMoment)
                 micro_moments.append(DiversionCovarianceMoment(
-                    moment.X2_index1, moment.X2_index2, value, moment.market_ids
+                    moment.X2_index1, moment.X2_index2, value, moment.market_ids, moment.market_weights
                 ))
 
     # initialize and solve the problem

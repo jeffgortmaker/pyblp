@@ -8,7 +8,7 @@ from typing import Any, Callable, Dict, Hashable, List, Optional, Sequence, TYPE
 import numpy as np
 
 from . import options
-from .utilities.basics import Array, StringRepresentation, format_number, format_table
+from .utilities.basics import Array, StringRepresentation, format_number, format_table, output
 
 
 # only import objects that create import cycles when checking types
@@ -22,13 +22,15 @@ class Moment(StringRepresentation):
 
     value: float
     market_ids: Optional[Array]
+    market_weights: Optional[Array]
     requires_inside: bool
     requires_eliminated: Sequence[Any]
     requires_inside_eliminated: bool
 
     def __init__(
-            self, value: float, market_ids: Optional[Sequence] = None, requires_inside: bool = False,
-            requires_eliminated: Sequence[Any] = (), requires_inside_eliminated: bool = False) -> None:
+            self, value: float, market_ids: Optional[Sequence] = None, market_weights: Optional[Array] = None,
+            requires_inside: bool = False, requires_eliminated: Sequence[Any] = (),
+            requires_inside_eliminated: bool = False) -> None:
         """Validate information about the moment to the greatest extent possible without an economy instance."""
         self.value = value
         if not isinstance(self.value, (int, float)):
@@ -45,6 +47,24 @@ class Moment(StringRepresentation):
             duplicates = unique[counts > 1]
             if duplicates.size > 0:
                 raise ValueError(f"The following market IDs are duplicated in market_ids: {duplicates}.")
+
+        # validate market weights
+        if market_weights is None:
+            self.market_weights = None
+        elif self.market_ids is None:
+            raise ValueError("market_ids must be specified when using market_weights.")
+        else:
+            self.market_weights = np.asarray(market_weights, options.dtype)
+
+            # validate the shape
+            if self.market_ids is not None and self.market_weights.shape != self.market_ids.shape:
+                raise ValueError("market_weights must be the same shape as market_ids.")
+
+            # validate that they sum to 1
+            if np.abs(1 - self.market_weights.sum()) > options.weights_tol:
+                output("")
+                output("Warning: Market weights sum to a value that differs from 1 by more than options.weights_tol.")
+                output("")
 
         # validate requirements
         assert not requires_inside_eliminated or requires_inside
@@ -119,6 +139,8 @@ class DemographicExpectationMoment(Moment):
         Distinct market IDs over which the micro moments will be averaged to get :math:`\bar{g}_{M,m}`. These are also
         the only markets in which the moments will be computed. By default, the moments are computed for and averaged
         across all markets.
+    market_weights : `array-like, optional`
+        Weights for averaging micro moments over specified ``market_ids``. By default, these are :math:`1 / T_m`.
 
     Examples
     --------
@@ -131,7 +153,7 @@ class DemographicExpectationMoment(Moment):
 
     def __init__(
             self, product_ids: Optional[Any], demographics_index: int, value: float,
-            market_ids: Optional[Sequence] = None) -> None:
+            market_ids: Optional[Sequence] = None, market_weights: Optional[Array] = None) -> None:
         """Validate information about the moment to the greatest extent possible without an economy instance."""
         if not isinstance(product_ids, collections.abc.Sequence) or len(product_ids) == 0:
             raise ValueError("product_ids must be a sequence with at least one ID.")
@@ -139,7 +161,7 @@ class DemographicExpectationMoment(Moment):
             raise ValueError("product_ids should not have duplicates.")
         if not isinstance(demographics_index, int) or demographics_index < 0:
             raise ValueError("demographics_index must be a positive int.")
-        super().__init__(value, market_ids)
+        super().__init__(value, market_ids, market_weights)
         self.product_ids = product_ids
         self.demographics_index = demographics_index
 
@@ -229,6 +251,8 @@ class CharacteristicExpectationMoment(Moment):
         Distinct market IDs over which the micro moments will be averaged to get :math:`\bar{g}_{M,m}`. These are also
         the only markets in which the moments will be computed. By default, the moments are computed for and averaged
         across all markets.
+    market_weights : `array-like, optional`
+        Weights for averaging micro moments over specified ``market_ids``. By default, these are :math:`1 / T_m`.
 
     Examples
     --------
@@ -241,7 +265,7 @@ class CharacteristicExpectationMoment(Moment):
 
     def __init__(
             self, agent_ids: Optional[Any], X2_index: int, value: float,
-            market_ids: Optional[Sequence] = None) -> None:
+            market_ids: Optional[Sequence] = None, market_weights: Optional[Array] = None) -> None:
         """Validate information about the moment to the greatest extent possible without an economy instance."""
         if not isinstance(agent_ids, collections.abc.Sequence) or len(agent_ids) == 0:
             raise ValueError("agent_ids must be a sequence with at least one ID.")
@@ -249,7 +273,7 @@ class CharacteristicExpectationMoment(Moment):
             raise ValueError("agent_ids should not have duplicates.")
         if not isinstance(X2_index, int) or X2_index < 0:
             raise ValueError("X2_index must be a positive int.")
-        super().__init__(value, market_ids, requires_inside=True)
+        super().__init__(value, market_ids, market_weights, requires_inside=True)
         self.agent_ids = agent_ids
         self.X2_index = X2_index
 
@@ -321,6 +345,8 @@ class DemographicCovarianceMoment(Moment):
         Distinct market IDs over which the micro moments will be averaged to get :math:`\bar{g}_{M,m}`. These are also
         the only markets in which the moments will be computed. By default, the moments are computed for and averaged
         across all markets.
+    market_weights : `array-like, optional`
+        Weights for averaging micro moments over specified ``market_ids``. By default, these are :math:`1 / T_m`.
 
     Examples
     --------
@@ -332,13 +358,14 @@ class DemographicCovarianceMoment(Moment):
     demographics_index: int
 
     def __init__(
-            self, X2_index: int, demographics_index: int, value: float, market_ids: Optional[Sequence] = None) -> None:
+            self, X2_index: int, demographics_index: int, value: float, market_ids: Optional[Sequence] = None,
+            market_weights: Optional[Array] = None) -> None:
         """Validate information about the moment to the greatest extent possible without an economy instance."""
         if not isinstance(X2_index, int) or X2_index < 0:
             raise ValueError("X2_index must be a positive int.")
         if not isinstance(demographics_index, int) or demographics_index < 0:
             raise ValueError("demographics_index must be a positive int.")
-        super().__init__(value, market_ids, requires_inside=True)
+        super().__init__(value, market_ids, market_weights, requires_inside=True)
         self.X2_index = X2_index
         self.demographics_index = demographics_index
 
@@ -419,6 +446,8 @@ class DiversionProbabilityMoment(Moment):
         Distinct market IDs over which the micro moments will be averaged to get :math:`\bar{g}_{M,m}`. These are also
         the only markets in which the moments will be computed. By default, the moments are computed for and averaged
         across all markets.
+    market_weights : `array-like, optional`
+        Weights for averaging micro moments over specified ``market_ids``. By default, these are :math:`1 / T_m`.
 
     Examples
     --------
@@ -431,12 +460,12 @@ class DiversionProbabilityMoment(Moment):
 
     def __init__(
             self, product_id1: Any, product_id2: Optional[Any], value: float,
-            market_ids: Optional[Sequence] = None) -> None:
+            market_ids: Optional[Sequence] = None, market_weights: Optional[Array] = None) -> None:
         """Validate information about the moment to the greatest extent possible without an economy instance."""
         if product_id1 is None and product_id2 is None:
             raise ValueError("At least one of product_id1 or product_id2 must be not None.")
         super().__init__(
-            value, market_ids, requires_inside=product_id1 is None,
+            value, market_ids, market_weights, requires_inside=product_id1 is None,
             requires_eliminated=[] if product_id1 is None else [product_id1]
         )
         self.product_id1 = product_id1
@@ -550,6 +579,8 @@ class DiversionCovarianceMoment(Moment):
         Distinct market IDs over which the micro moments will be averaged to get :math:`\bar{g}_{M,m}`. These are also
         the only markets in which the moments will be computed. By default, the moments are computed for and averaged
         across all markets.
+    market_weights : `array-like, optional`
+        Weights for averaging micro moments over specified ``market_ids``. By default, these are :math:`1 / T_m`.
 
     Examples
     --------
@@ -560,13 +591,15 @@ class DiversionCovarianceMoment(Moment):
     X2_index1: int
     X2_index2: int
 
-    def __init__(self, X2_index1: int, X2_index2: int, value: Any, market_ids: Optional[Sequence] = None) -> None:
+    def __init__(
+            self, X2_index1: int, X2_index2: int, value: Any, market_ids: Optional[Sequence] = None,
+            market_weights: Optional[Array] = None) -> None:
         """Validate information about the moment to the greatest extent possible without an economy instance."""
         if not isinstance(X2_index1, int) or X2_index1 < 0:
             raise ValueError("X2_index1 must be a positive int.")
         if not isinstance(X2_index2, int) or X2_index2 < 0:
             raise ValueError("X2_index2 must be a positive int.")
-        super().__init__(value, market_ids, requires_inside=True, requires_inside_eliminated=True)
+        super().__init__(value, market_ids, market_weights, requires_inside=True, requires_inside_eliminated=True)
         self.X2_index1 = X2_index1
         self.X2_index2 = X2_index2
 
@@ -696,6 +729,8 @@ class CustomMoment(Moment):
         Distinct market IDs over which the micro moments will be averaged to get :math:`\bar{g}_{M,m}`. These are also
         the only markets in which the moments will be computed. By default, the moments are computed for and averaged
         across all markets.
+    market_weights : `array-like, optional`
+        Weights for averaging micro moments over specified ``market_ids``. By default, these are :math:`1 / T_m`.
     name : `str, optional`
         Name of the custom moment, which will be used when displaying information about micro moments. By default, this
         is ``"Custom"``.
@@ -712,13 +747,14 @@ class CustomMoment(Moment):
 
     def __init__(
             self, value: Any, compute_custom: Callable, compute_custom_derivatives: Optional[Callable] = None,
-            market_ids: Optional[Sequence] = None, name: str = "Custom") -> None:
+            market_ids: Optional[Sequence] = None, market_weights: Optional[Array] = None,
+            name: str = "Custom") -> None:
         """Validate information about the moment to the greatest extent possible without an economy instance."""
         if not callable(compute_custom):
             raise ValueError("compute_custom must be callable.")
         if compute_custom_derivatives is not None and not callable(compute_custom_derivatives):
             raise ValueError("compute_custom_derivatives must be None or callable.")
-        super().__init__(value, market_ids)
+        super().__init__(value, market_ids, market_weights)
         self.name = name
         self.compute_custom = functools.partial(compute_custom)
         if compute_custom_derivatives is None:
@@ -793,10 +829,9 @@ class Moments(object):
 class EconomyMoments(Moments):
     """Information about a sequence of micro moments in an economy."""
 
+    market_values: Dict[Hashable, Array]
     market_indices: Dict[Hashable, Array]
-    market_values: Array
-    market_counts: Array
-    pairwise_market_counts: Array
+    market_weights: Dict[Hashable, Array]
 
     def __init__(self, economy: 'Economy', micro_moments: Sequence[Moment]) -> None:
         """Validate and store information about a sequence of micro moment instances in the context of an economy."""
@@ -815,30 +850,27 @@ class EconomyMoments(Moments):
         # store basic moment information
         super().__init__(micro_moments)
 
-        # identify moment indices that are relevant in each market along with the associated observed micro values
-        self.market_indices: Dict[Hashable, Array] = {}
+        # identify moment values, market indices, and weights that are relevant in each market
         self.market_values: Dict[Hashable, Array] = {}
+        self.market_indices: Dict[Hashable, Array] = {}
+        self.market_weights: Dict[Hashable, Array] = {}
         for t in economy.unique_market_ids:
-            indices = []
             values = []
+            indices = []
+            weights = []
             for m, moment in enumerate(self.micro_moments):
                 market_ids_m = economy.unique_market_ids if moment.market_ids is None else moment.market_ids
                 if t in market_ids_m:
-                    indices.append(m)
                     values.append(moment.value)
+                    indices.append(m)
+                    if moment.market_weights is None:
+                        weights.append(1 / market_ids_m.size)
+                    else:
+                        weights.append(moment.market_weights[np.argmax(market_ids_m == t)])
 
-            self.market_indices[t] = np.array(indices, np.int)
             self.market_values[t] = np.array(values, options.dtype).flatten()
-
-        # count the number of markets associated with moments
-        self.market_counts = np.zeros(self.MM, np.int)
-        self.pairwise_market_counts = np.zeros((self.MM, self.MM), np.int)
-        for m, moment_m in enumerate(self.micro_moments):
-            market_ids_m = set(economy.unique_market_ids if moment_m.market_ids is None else moment_m.market_ids)
-            self.market_counts[m] = len(market_ids_m)
-            for n, moment_n in enumerate(self.micro_moments):
-                market_ids_n = set(economy.unique_market_ids if moment_n.market_ids is None else moment_n.market_ids)
-                self.pairwise_market_counts[m, n] = len(market_ids_m & market_ids_n)
+            self.market_indices[t] = np.array(indices, np.int)
+            self.market_weights[t] = np.array(weights, options.dtype).flatten()
 
 
 class MarketMoments(Moments):

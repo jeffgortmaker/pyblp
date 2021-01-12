@@ -76,9 +76,9 @@ collinear_atol : `float`
     ``pyblp.options.collinear_atol = pyblp.options.collinear_rtol = 0``.
 
 weights_tol : `float`
-    Tolerance for detecting integration weights that do not sum to one in each market, which is by default ``1e-10``. In
-    most setups weights should essentially sum to one, but for example with importance sampling they may be slightly
-    different. Warnings can be disabled by setting this to ``numpy.inf``.
+    Tolerance for detecting integration weights that do not sum to one, which is by default ``1e-10``. In most setups
+    weights should essentially sum to one, but for example with importance sampling they may be slightly different.
+    Warnings can be disabled by setting this to ``numpy.inf``.
 collinear_rtol : `float`
     Relative tolerance for detecting collinear columns, which is by default also ``1e-14``.
 psd_atol : `float`

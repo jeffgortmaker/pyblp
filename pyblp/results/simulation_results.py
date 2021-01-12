@@ -294,12 +294,12 @@ class SimulationResults(StringRepresentation):
             return market_s,
 
         # compute micro moments values market-by-market
-        micro_values = np.full((self.simulation.T, moments.MM), np.nan, options.dtype)
+        market_micro_values = np.full((self.simulation.T, moments.MM), np.nan, options.dtype)
         generator = generate_items(
             self.simulation.unique_market_ids, market_factory, SimulationResultsMarket.safely_compute_micro_values
         )
         for t, (micro_values_t, errors_t) in generator:
-            micro_values[self.simulation._market_indices[t], moments.market_indices[t]] = micro_values_t.flat
+            market_micro_values[self.simulation._market_indices[t], moments.market_indices[t]] = micro_values_t.flat
             errors.extend(errors_t)
 
         # output a warning about any errors
@@ -308,9 +308,18 @@ class SimulationResults(StringRepresentation):
             output(exceptions.MultipleErrors(errors))
             output("")
 
+        # compute averages
+        micro_values = np.zeros(moments.MM, options.dtype)
+        with np.errstate(all='ignore'):
+            for t in self.simulation.unique_market_ids:
+                indices = moments.market_indices[t]
+                weights = moments.market_weights[t]
+                if indices.size > 0:
+                    micro_values[indices] += weights * market_micro_values[self.simulation._market_indices[t], indices]
+
         # output how long it took to compute the micro moments
         end_time = time.time()
         output("")
         output(f"Finished after {format_seconds(end_time - start_time)}.")
         output("")
-        return np.nanmean(micro_values, axis=0)
+        return micro_values

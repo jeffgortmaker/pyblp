@@ -1088,7 +1088,8 @@ def test_custom_moments(simulated_problem: SimulatedProblemFixture) -> None:
                 functools.partial(replicate_demographic_covariance, micro_moment),
                 functools.partial(replicate_demographic_covariance_derivatives, micro_moment),
                 micro_moment.market_ids,
-                name=f"Replicated '{micro_moment}'"
+                micro_moment.market_weights,
+                name=f"Replicated '{micro_moment}'",
             ))
 
     # skip problems without any replicated moments
