@@ -790,35 +790,6 @@ def test_return(simulated_problem: SimulatedProblemFixture) -> None:
 
 
 @pytest.mark.usefixtures('simulated_problem')
-def test_initial_update(simulated_problem: SimulatedProblemFixture) -> None:
-    """Test that estimation under an initial update gives the same results as when it's done manually."""
-    simulation, _, problem, solve_options, _ = simulated_problem
-
-    # obtain initial results at the starting values
-    initial_solve_options = copy.deepcopy(solve_options)
-    initial_solve_options['optimization'] = Optimization('return')
-    initial_results = problem.solve(**initial_solve_options)
-
-    # manually solve the problem with initial weighting matrix and delta values
-    manual_solve_options = copy.deepcopy(solve_options)
-    manual_solve_options.update({
-        'W': initial_results.updated_W,
-        'delta': initial_results.delta
-    })
-    manual_results = problem.solve(**manual_solve_options)
-
-    # automatically do the same
-    automatic_solve_options = copy.deepcopy(solve_options)
-    automatic_solve_options['initial_update'] = True
-    automatic_results = problem.solve(**automatic_solve_options)
-
-    # test that results are essentially identical
-    for key, manual_result in manual_results.__dict__.items():
-        if 'cumulative' not in key and isinstance(manual_result, np.ndarray) and manual_result.dtype != np.object:
-            np.testing.assert_allclose(manual_result, getattr(automatic_results, key), atol=1e-14, rtol=0, err_msg=key)
-
-
-@pytest.mark.usefixtures('simulated_problem')
 @pytest.mark.parametrize('scipy_method', [
     pytest.param('l-bfgs-b', id="L-BFGS-B"),
     pytest.param('trust-constr', id="Trust Region")
