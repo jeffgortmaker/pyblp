@@ -531,13 +531,15 @@ class ProblemResults(Results):
         header = [("GMM", "Step"), ("Objective", "Value")]
         values = [self.step, format_number(self.objective)]
 
-        # add information about first and second order conditions
+        # add information about first order conditions
         if np.isfinite(self.projected_gradient_norm):
             if self._parameters.any_bounds:
                 header.append(("Projected", "Gradient Norm"))
             else:
                 header.append(("Gradient", "Norm"))
             values.append(format_number(self.projected_gradient_norm))
+
+        # add information about second order conditions
         if np.isfinite(self.reduced_hessian_eigenvalues).any():
             hessian_type = "Reduced" if self._parameters.any_bounds else ""
             if self.reduced_hessian_eigenvalues.size == 1:
@@ -561,9 +563,10 @@ class ProblemResults(Results):
             header.append(("Clipped", "Costs"))
             values.append(self.clipped_costs.sum())
 
-        # add information about the weighting matrix
-        header.append(("Weighting Matrix", "Condition Number"))
-        values.append(format_number(compute_condition_number(self.W)))
+        # add information about the weighting matrix if this isn't an initial update
+        if self.step > 0:
+            header.append(("Weighting Matrix", "Condition Number"))
+            values.append(format_number(compute_condition_number(self.W)))
 
         # add information about the covariance matrix
         if np.isfinite(self.parameter_covariances).any() and self.parameter_covariances.size > 1:

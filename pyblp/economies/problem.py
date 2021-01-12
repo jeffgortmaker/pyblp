@@ -46,7 +46,7 @@ class ProblemEconomy(Economy):
             beta: Optional[Any] = None, gamma: Optional[Any] = None, sigma_bounds: Optional[Tuple[Any, Any]] = None,
             pi_bounds: Optional[Tuple[Any, Any]] = None, rho_bounds: Optional[Tuple[Any, Any]] = None,
             beta_bounds: Optional[Tuple[Any, Any]] = None, gamma_bounds: Optional[Tuple[Any, Any]] = None,
-            delta: Optional[Any] = None, method: str = '2s', initial_update: bool = False,
+            delta: Optional[Any] = None, method: str = '2s', initial_update: Optional[bool] = None,
             optimization: Optional[Optimization] = None, scale_objective: bool = True, check_optimality: str = 'both',
             finite_differences: bool = False, error_behavior: str = 'revert', error_punishment: float = 1,
             delta_behavior: str = 'first', iteration: Optional[Iteration] = None, fp_type: str = 'safe_linear',
@@ -225,9 +225,11 @@ class ProblemEconomy(Economy):
             arguments.
 
         initial_update : `bool, optional`
-            Whether to update starting values for the mean utility :math:`\delta`, and the weighting matrix, :math:`W`,
-            at the initial parameter values before the first GMM step (this initial update will be called a zeroth
-            step).
+            Whether to update starting values for the mean utility :math:`\delta` and the weighting matrix :math:`W` at
+            the initial parameter values before the first GMM step. This initial update will be called a zeroth step.
+
+            By default, an initial update will not be used unless ``micro_moments`` are specified without an initial
+            weighting matrix ``W``.
 
             .. note::
 
@@ -373,12 +375,9 @@ class ProblemEconomy(Economy):
 
         W : `array-like, optional`
             Starting values for the weighting matrix, :math:`W`. By default, the 2SLS weighting matrix in :eq:`2sls_W`
-            is used.
-
-            If there are any ``micro_moments``, the initial weighting matrix will by default be block-diagonal with an
-            identity matrix for the micro moment block. This micro moment block should usually be replaced by a matrix
-            that better reflects micro moment covariances and the size of the micro dataset relative to :math:`N`.
-
+            is used, unless there are any ``micro_moments``, in which case an ``initial_update`` will be used to update
+            starting values :math:`W` and the mean utility :math:`\delta` at the initial parameter values before the
+            first GMM step.
         center_moments : `bool, optional`
             Whether to center each column of the demand- and supply-side moments :math:`g` before updating the weighting
             matrix :math:`W` according to :eq:`W`. By default, the moments are centered. This has no effect if
@@ -422,10 +421,21 @@ class ProblemEconomy(Economy):
             list of supported micro moments, refer to :ref:`api:Micro Moment Classes`. By default, no micro moments are
             used, so :math:`M_M = 0`.
 
-            If micro moments are specified, the micro moment block in ``W`` should usually be replaced by a matrix that
-            better reflects micro moment covariances and the size of the micro dataset relative to :math:`N`. If micro
-            moments were computed with substantial sampling error, ``extra_micro_covariances`` can be specified to
-            account for this additional source of error.
+            Unless observed micro moment values were computed with a trivial amount of sampling error,
+            ``extra_micro_covariances`` should typically be specified as well to account for this extra source of error.
+
+            When micro moments are specified, unless an initial weighting matrix ``W`` is specified as well (with a
+            lower right micro moment block that reflects micro moment covariances), an ``initial_update`` will be used
+            to update starting values :math:`W` and the mean utility :math:`\delta` at the initial parameter values
+            before the first GMM step.
+
+            .. note::
+
+               When trying multiple parameter starting values to verify that the optimization routine converges to the
+               same optimum, using ``initial_update`` is not recommended because different weighting matrices will be
+               used for these different runs. A better option is to use ``optimization=Optimization('return')`` at the
+               best guess for parameter values and pass :attr:`ProblemResults.updated_W` to ``W`` for each set of
+               different parameter starting values.
 
         extra_micro_covariances : `array-like, optional`
             Covariance matrix that reflects sampling error in observed micro moment values with elements
@@ -495,6 +505,12 @@ class ProblemEconomy(Economy):
                     raise ValueError(f"extra_micro_moments must be a square {moments.MM} by {moments.MM} matrix.")
                 self._detect_psd(extra_micro_covariances, "extra_micro_moments")
 
+        # choose whether to do an initial update
+        if initial_update is None:
+            initial_update = bool(moments.MM > 0 and W is None)
+        elif not initial_update and moments.MM > 0 and W is None:
+            raise ValueError("initial_update cannot be False with micro_moments and no initial W specified.")
+
         # validate parameters before compressing unfixed parameters into theta and outputting related information
         parameters = Parameters(
             self, sigma, pi, rho, beta, gamma, sigma_bounds, pi_bounds, rho_bounds, beta_bounds, gamma_bounds,
@@ -512,22 +528,25 @@ class ProblemEconomy(Economy):
                 output(parameters.format_upper_bounds("Upper Bounds"))
                 output("")
 
-        # compute or load the weighting matrix
-        if W is None:
+        # load or compute the weighting matrix
+        if W is not None:
+            W = np.c_[np.asarray(W, options.dtype)]
+            M = self.MD + self.MS + moments.MM
+            if W.shape != (M, M):
+                raise ValueError(f"W must be a square {M} by {M} matrix.")
+            self._detect_psd(W, "W")
+        else:
             W, successful = precisely_invert(scipy.linalg.block_diag(
                 self.products.ZD.T @ self.products.ZD / self.N,
                 self.products.ZS.T @ self.products.ZS / self.N,
             ))
             if not successful:
                 raise ValueError("Failed to compute the 2SLS weighting matrix. There may be instrument collinearity.")
+
+            # an initial update will be used when there are micro moments, so this initial block does not matter
             if moments.MM > 0:
-                W = scipy.linalg.block_diag(W, np.eye(moments.MM, dtype=options.dtype))
-        else:
-            W = np.c_[np.asarray(W, options.dtype)]
-            M = self.MD + self.MS + moments.MM
-            if W.shape != (M, M):
-                raise ValueError(f"W must be a square {M} by {M} matrix.")
-            self._detect_psd(W, "W")
+                assert initial_update
+                W = scipy.linalg.block_diag(W, np.zeros((moments.MM, moments.MM), options.dtype))
 
         # compute or load initial delta values
         if delta is None:
@@ -634,7 +653,7 @@ class ProblemEconomy(Economy):
 
             # use progress information computed at the optimal theta to compute results for the step
             if initial_step:
-                output("Updating starting values for delta and the weighting matrix ...")
+                output("Updating starting values for the weighting matrix and delta ...")
             elif compute_hessian and not last_step:
                 output("Computing the Hessian and and updating the weighting matrix ...")
             elif compute_hessian:
@@ -658,12 +677,12 @@ class ProblemEconomy(Economy):
             # store the last results and return results from the final step
             last_results = results
             output("")
-            if not last_step:
-                output(results._format_summary())
-                output("")
-            else:
+            if last_step:
                 output(results)
                 return results
+            if step > 0:
+                output(results._format_summary())
+                output("")
 
             # update vectors and matrices
             delta = results.delta
