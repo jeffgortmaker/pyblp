@@ -513,9 +513,15 @@ class ProblemResults(Results):
         if self.problem.K3 > 0:
             u_list.append(self.omega)
             Z_list.append(self.problem.products.ZS)
+
         S = compute_gmm_moment_covariances(u_list, Z_list, S_type, self.problem.products.clustering_ids, center_moments)
         if self._moments.MM > 0:
-            S = scipy.linalg.block_diag(S, micro_covariances)
+            scaled_covariances = micro_covariances.copy()
+            for (m, moment_m), (n, moment_n) in itertools.product(enumerate(self._moments.micro_moments), repeat=2):
+                scaled_covariances[m, n] *= self.problem.N / np.sqrt(moment_m.observations * moment_n.observations)
+
+            S = scipy.linalg.block_diag(S, scaled_covariances)
+
         return S
 
     def _format_summary(self) -> str:

@@ -397,7 +397,7 @@ class ProblemEconomy(Economy):
 
             This only affects the standard demand- and supply-side block of the updated weighting matrix. If there are
             micro moments, this matrix will be block-diagonal with a micro moment block equal to the inverse of the
-            covariance matrix defined in :eq:`averaged_micro_moment_covariances` plus any ``extra_micro_covariances``.
+            scaled covariance matrix defined in :eq:`scaled_micro_moment_covariances`.
 
         se_type : `str, optional`
             How to compute parameter covariances and standard errors. Usually, ``W_type`` should be the same. The
@@ -414,8 +414,8 @@ class ProblemEconomy(Economy):
 
             This only affects the standard demand- and supply-side block of the matrix of averaged moment covariances.
             If there are micro moments, the :math:`S` matrix defined in the expressions referenced above will be
-            block-diagonal with a micro moment block equal to the covariance matrix defined in
-            :eq:`averaged_micro_moment_covariances` plus any ``extra_micro_covariances``.
+            block-diagonal with a micro moment block equal to the scaled covariance matrix defined in
+            :eq:`scaled_micro_moment_covariances`.
 
         micro_moments : `sequence of Moment, optional`
             Configurations for the :math:`M_M` micro moments that will be added to the standard set of moments. For a
@@ -428,10 +428,10 @@ class ProblemEconomy(Economy):
             account for this additional source of error.
 
         extra_micro_covariances : `array-like, optional`
-            Covariance matrix that is added on to the :math:`M_M \times M_M` matrix of micro moments covariances defined
-            in :eq:`averaged_micro_moment_covariances`, which is used to update the weighting matrix and compute
-            standard errors. By default, this matrix is assumed to be zero. It should be specified if, for example,
-            micro moments were computed with substantial sampling error.
+            Covariance matrix that reflects sampling error in observed micro moment values with elements
+            :math:`\text{Cov}(\mathscr{V}_m, \mathscr{V}_n)` defined in :eq:`averaged_micro_moment_covariances`. This is
+            used to update the weighting matrix and compute standard errors. By default, this matrix is assumed to be
+            zero. It should be specified if micro moments were computed with nontrivial sampling error.
 
         Returns
         -------

@@ -245,16 +245,19 @@ In the spirit of :ref:`references:Imbens and Lancaster (1994)`, :ref:`references
 
 .. math:: \bar{g} = \begin{bmatrix} \bar{g}_D \\ \bar{g}_S \\ \bar{g}_M \end{bmatrix}.
 
-Each micro moment :math:`m` is approximated in a set :math:`T_m \subset T` of markets in which its micro data are relevant and then averaged across these markets:
+Each micro moment :math:`m` is the difference between an observed statistic :math:`\mathscr{V}_m` estimated with micro data and its simulated analogue :math:`v_m` averaged over relevant markets :math:`T_m \subset T`:
 
-.. math:: \bar{g}_{M,m} \approx \frac{1}{T_m} \sum_{t \in T_m} g_{M,mt}.
+.. math:: \bar{g}_{M,m} = \mathscr{V}_m - v_m, \quad v_m = \frac{1}{T_m} \sum_{t \in T_m} v_{mt}.
    :label: averaged_micro_moments
 
-The vector :math:`\bar{g}_M` contains sample analogues of micro moment conditions :math:`E[g_{M,mt}] = 0` where :math:`g_{M,mt}` is typically a function of choice choice probabilities, data in market :math:`t`, and a statistic :math:`\mathcal{V}_{mt}` computed from survey data that the moment aims to match.
+Micro moments are computed for each :math:`\theta` and contribute to the GMM objective :math:`q(\theta)` in :eq:`objective`. Their derivatives with respect to :math:`\theta` are added as rows to :math:`\bar{G}` in :eq:`averaged_moments_jacobian`, and blocks are added to both :math:`W` and :math:`S` in :eq:`2sls_W` and :eq:`W`. The covariance between standard moments and micro moments is assumed to be zero, so these matrices are block-diagonal. The scaled covariance between micro moments :math:`m` and :math:`n` in :math:`S` is
 
-Micro moments are computed for each :math:`\theta` and contribute to the GMM objective :math:`q(\theta)` in :eq:`objective`. Their derivatives with respect to :math:`\theta` are added as rows to :math:`\bar{G}` in :eq:`averaged_moments_jacobian`, and blocks are added to both :math:`W` and :math:`S` in :eq:`2sls_W` and :eq:`W`. The covariance between standard moments and micro moments is assumed to be zero, so these matrices are block-diagonal. The covariance between micro moments :math:`m` and :math:`n` in :math:`S` is set to zero if :math:`T_{mn} = T_m \cap T_n = \emptyset` and otherwise is
+.. math:: S_{M,mn} = \frac{N}{N_m^{1/2} N_n^{1/2}} \text{Cov}(\bar{g}_{M,m}, \bar{g}_{M,n})
+   :label: scaled_micro_moment_covariances
 
-.. math:: \text{Cov}(\bar{g}_{M,m}, \bar{g}_{M,n}) = \frac{1}{T_m \times T_n} \sum_{t \in T_{mn}} \text{Cov}(g_{M,mt}, g_{M,nt}).
+:math:`N` is the total number of products, :math:`N_m` is the number of observations underlying the observed micro moment value :math:`\mathscr{V}_m`. If the shared markets :math:`T_{mn} = T_m \cap T_n = \emptyset`, then :math:`\text{Cov}(\bar{g}_{M,m}, \bar{g}_{M,n}) = 0`. Otherwise, it is
+
+.. math:: \text{Cov}(\bar{g}_{M,m}, \bar{g}_{M,n}) = \text{Cov}(\mathscr{V}_m, \mathscr{V}_n) + \frac{1}{T_m \times T_n} \sum_{t \in T_{mn}} \text{Cov}(v_{mt}, v_{nt}).
    :label: averaged_micro_moment_covariances
 
 

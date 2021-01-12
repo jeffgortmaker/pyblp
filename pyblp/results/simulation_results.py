@@ -254,8 +254,8 @@ class SimulationResults(StringRepresentation):
         ----------
         micro_moments : `sequence of Moment`
             Configurations for the micro moments. For a list of supported moments, refer to
-            :ref:`api:Micro Moment Classes`. Since only simulated values :math:`v_m` are computed, the ``value`` given
-            when initializing the moments will be ignored.
+            :ref:`api:Micro Moment Classes`. Since only simulated values :math:`v_m` are computed, the ``value`` and
+            ``observations`` specified when initializing the moments will be ignored.
 
         Returns
         -------

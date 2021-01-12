@@ -258,7 +258,8 @@ def medium_blp_simulation() -> SimulationFixture:
     )
     simulation_results = simulation.replace_endogenous()
     simulated_micro_moments = [DemographicCovarianceMoment(
-        X2_index=0, demographics_index=0, value=0, market_ids=[simulation.unique_market_ids[2]]
+        X2_index=0, demographics_index=0, value=0, observations=simulation.N,
+        market_ids=[simulation.unique_market_ids[2]]
     )]
     return simulation, simulation_results, {}, simulated_micro_moments
 
@@ -325,25 +326,30 @@ def large_blp_simulation() -> SimulationFixture:
         ]
     }
     simulated_micro_moments = [
-        DemographicExpectationMoment(product_ids=[0], demographics_index=1, value=0),
+        DemographicExpectationMoment(product_ids=[0], demographics_index=1, value=0, observations=simulation.N),
         DemographicExpectationMoment(
-            product_ids=[None, 0], demographics_index=1, value=0, market_ids=simulation.unique_market_ids[1:4],
-            market_weights=[0.2, 0.4, 0.4],
+            product_ids=[None, 0], demographics_index=1, value=0, observations=simulation.N,
+            market_ids=simulation.unique_market_ids[1:4], market_weights=[0.2, 0.4, 0.4],
         ),
         DemographicCovarianceMoment(
-            X2_index=0, demographics_index=2, value=0, market_ids=simulation.unique_market_ids[3:5]
+            X2_index=0, demographics_index=2, value=0, observations=simulation.N,
+            market_ids=simulation.unique_market_ids[3:5]
         ),
         DiversionProbabilityMoment(
-            product_id1=1, product_id2=0, value=0, market_ids=simulation.unique_market_ids[6:10]
+            product_id1=1, product_id2=0, value=0, observations=simulation.N,
+            market_ids=simulation.unique_market_ids[6:10]
         ),
         DiversionProbabilityMoment(
-            product_id1=None, product_id2=1, value=0, market_ids=[simulation.unique_market_ids[8]]
+            product_id1=None, product_id2=1, value=0, observations=simulation.N,
+            market_ids=[simulation.unique_market_ids[8]]
         ),
         DiversionProbabilityMoment(
-            product_id1=1, product_id2=None, value=0, market_ids=[simulation.unique_market_ids[9]]
+            product_id1=1, product_id2=None, value=0, observations=simulation.N,
+            market_ids=[simulation.unique_market_ids[9]]
         ),
         DiversionCovarianceMoment(
-            X2_index1=1, X2_index2=1, value=0, market_ids=[simulation.unique_market_ids[12]]
+            X2_index1=1, X2_index2=1, value=0, observations=simulation.N,
+            market_ids=[simulation.unique_market_ids[12]]
         ),
     ]
     return simulation, simulation_results, simulated_data_override, simulated_micro_moments
@@ -438,13 +444,16 @@ def large_nested_blp_simulation() -> SimulationFixture:
     simulation_results = simulation.replace_endogenous()
     simulated_micro_moments = [
         DemographicExpectationMoment(
-            product_ids=[None], demographics_index=1, value=0, market_ids=simulation.unique_market_ids[3:5]
+            product_ids=[None], demographics_index=1, value=0, observations=simulation.N,
+            market_ids=simulation.unique_market_ids[3:5]
         ),
         CharacteristicExpectationMoment(
-            agent_ids=[0, 1], X2_index=0, value=0, market_ids=simulation.unique_market_ids[5:6]
+            agent_ids=[0, 1], X2_index=0, value=0, observations=2 * simulation.N,
+            market_ids=simulation.unique_market_ids[5:6]
         ),
         CharacteristicExpectationMoment(
-            agent_ids=[2], X2_index=0, value=0, market_ids=simulation.unique_market_ids[6:7]
+            agent_ids=[2], X2_index=0, value=0, observations=3 * simulation.N,
+            market_ids=simulation.unique_market_ids[6:7]
         ),
     ]
     return simulation, simulation_results, {}, simulated_micro_moments
@@ -494,24 +503,29 @@ def simulated_problem(request: Any) -> SimulatedProblemFixture:
         for moment, value in zip(simulated_micro_moments, micro_values.T):
             if isinstance(moment, DemographicExpectationMoment):
                 micro_moments.append(DemographicExpectationMoment(
-                    moment.product_ids, moment.demographics_index, value, moment.market_ids, moment.market_weights
+                    moment.product_ids, moment.demographics_index, value, moment.observations, moment.market_ids,
+                    moment.market_weights
                 ))
             elif isinstance(moment, CharacteristicExpectationMoment):
                 micro_moments.append(CharacteristicExpectationMoment(
-                    moment.agent_ids, moment.X2_index, value, moment.market_ids, moment.market_weights
+                    moment.agent_ids, moment.X2_index, value, moment.observations, moment.market_ids,
+                    moment.market_weights
                 ))
             elif isinstance(moment, DemographicCovarianceMoment):
                 micro_moments.append(DemographicCovarianceMoment(
-                    moment.X2_index, moment.demographics_index, value, moment.market_ids, moment.market_weights
+                    moment.X2_index, moment.demographics_index, value, moment.observations, moment.market_ids,
+                    moment.market_weights
                 ))
             elif isinstance(moment, DiversionProbabilityMoment):
                 micro_moments.append(DiversionProbabilityMoment(
-                    moment.product_id1, moment.product_id2, value, moment.market_ids, moment.market_weights
+                    moment.product_id1, moment.product_id2, value, moment.observations, moment.market_ids,
+                    moment.market_weights
                 ))
             else:
                 assert isinstance(moment, DiversionCovarianceMoment)
                 micro_moments.append(DiversionCovarianceMoment(
-                    moment.X2_index1, moment.X2_index2, value, moment.market_ids, moment.market_weights
+                    moment.X2_index1, moment.X2_index2, value, moment.observations, moment.market_ids,
+                    moment.market_weights
                 ))
 
     # initialize and solve the problem

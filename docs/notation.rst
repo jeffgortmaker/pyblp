@@ -47,6 +47,7 @@ Dimension/Set          Description
 :math:`M_M`            Micro moments
 :math:`T_m`            Markets over which micro moment :math:`m` is averaged
 :math:`T_{mn}`         Markets over which micro moments :math:`m` and :math:`n` are both averaged
+:math:`N_m`            Observations underlying observed micro moment value :math:`m`.
 :math:`M`              All moments
 :math:`E_D`            Absorbed dimensions of demand-side fixed effects
 :math:`E_S`            Absorbed dimensions of supply-side fixed effects

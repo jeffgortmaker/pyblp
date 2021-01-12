@@ -1085,6 +1085,7 @@ def test_custom_moments(simulated_problem: SimulatedProblemFixture) -> None:
         else:
             replicated_micro_moments.append(CustomMoment(
                 micro_moment.value,
+                micro_moment.observations,
                 functools.partial(replicate_demographic_covariance, micro_moment),
                 functools.partial(replicate_demographic_covariance_derivatives, micro_moment),
                 micro_moment.market_ids,
