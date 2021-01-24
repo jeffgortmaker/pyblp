@@ -3,7 +3,6 @@
 import copy
 import functools
 import pickle
-import tempfile
 from typing import Any, Callable, Dict, List, Optional, Tuple
 import warnings
 
@@ -185,16 +184,27 @@ def test_bootstrap_se(simulated_problem: SimulatedProblemFixture) -> None:
 
 @pytest.mark.usefixtures('simulated_problem')
 def test_result_serialization(simulated_problem: SimulatedProblemFixture) -> None:
-    """Test that result objects can be serialized after being converted to dictionaries."""
-    _, simulation_results, _, _, problem_results = simulated_problem
-    instrument_results = problem_results.compute_optimal_instruments()
-    bootstrapped_results = problem_results.bootstrap(draws=1, seed=0)
-    with tempfile.TemporaryFile() as handle:
-        pickle.dump(simulation_results.to_dict(), handle)
-        pickle.dump(problem_results.to_dict(), handle)
-        pickle.dump(instrument_results.to_dict(), handle)
-        pickle.dump(bootstrapped_results.to_dict(), handle)
-        pickle.dump(data_to_dict(simulation_results.product_data), handle)
+    """Test that result objects can be serialized and that their string representations are the same when they are
+    unpickled.
+    """
+    simulation, simulation_results, problem, solve_options, problem_results = simulated_problem
+    originals = [
+        Formulation('x + y', absorb='C(z)', absorb_method='lsmr', absorb_options={'tol': 1e-10}),
+        Integration('halton', size=10, specification_options={'seed': 0, 'scramble': True}),
+        Iteration('lm', method_options={'max_evaluations': 100}, compute_jacobian=True),
+        Optimization('nelder-mead', method_options={'xatol': 1e-5}, compute_gradient=False, universal_display=False),
+        problem,
+        simulation,
+        simulation_results,
+        problem_results,
+        problem_results.compute_optimal_instruments(),
+        problem_results.bootstrap(draws=1, seed=0),
+        data_to_dict(simulation_results.product_data),
+        solve_options['micro_moments'],
+    ]
+    for original in originals:
+        unpickled = pickle.loads(pickle.dumps(original))
+        assert str(original) == str(unpickled), str(original)
 
 
 @pytest.mark.usefixtures('simulated_problem')

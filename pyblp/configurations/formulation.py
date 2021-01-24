@@ -3,7 +3,7 @@
 import functools
 import numbers
 import token
-from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Set, Tuple, Union
+from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Set, Tuple, Type, Union
 
 import numpy as np
 import patsy
@@ -151,6 +151,10 @@ class Formulation(StringRepresentation):
         self._absorb_method = absorb_method
         self._absorb_options = absorb_options
 
+    def __reduce__(self) -> Tuple[Type['Formulation'], Tuple]:
+        """Handle pickling."""
+        return (self.__class__, (self._formula, self._absorb, self._absorb_method, self._absorb_options))
+
     def __str__(self) -> str:
         """Format the terms as a string."""
         names: List[str] = []
@@ -243,26 +247,30 @@ class Formulation(StringRepresentation):
 
         return np.column_stack(ids_columns)
 
-    def _build_absorb(self, ids: Array) -> Callable[[Array], Tuple[Array, List[Error]]]:
+    def _build_absorb(self, ids: Array) -> 'Absorb':
         """Build a function used to absorb fixed effects defined by columns of IDs."""
         import pyhdfe
-
-        # initialize the algorithm for repeated absorption
-        algorithm = pyhdfe.create(
+        return Absorb(pyhdfe.create(
             ids, drop_singletons=False, compute_degrees=False, residualize_method=self._absorb_method,
             options=self._absorb_options
-        )
+        ))
 
-        def absorb(matrix: Array) -> Tuple[Array, List[Error]]:
-            """Handle any absorption errors."""
-            errors: List[Error] = []
-            try:
-                matrix = algorithm.residualize(matrix)
-            except Exception as exception:
-                errors.append(exceptions.AbsorptionError(exception))
-            return matrix, errors
 
-        return absorb
+class Absorb(object):
+    """Wrapper for PyHDFE fixed effect absorption."""
+
+    def __init__(self, algorithm: Any) -> None:
+        """Store the PyHDFE algorithm."""
+        self.algorithm = algorithm
+
+    def __call__(self, matrix: Array) -> Tuple[Array, List[Error]]:
+        """Handle any absorption errors."""
+        errors: List[Error] = []
+        try:
+            matrix = self.algorithm.residualize(matrix)
+        except Exception as exception:
+            errors.append(exceptions.AbsorptionError(exception))
+        return matrix, errors
 
 
 class ColumnFormulation(object):

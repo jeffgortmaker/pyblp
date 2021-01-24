@@ -104,8 +104,6 @@ class ImportanceSamplingResults(StringRepresentation):
             )) -> dict:
         """Convert these results into a dictionary that maps attribute names to values.
 
-        Once converted to a dictionary, these results can be saved to a file with :func:`pickle.dump`.
-
         Parameters
         ----------
         attributes : `sequence of str, optional`

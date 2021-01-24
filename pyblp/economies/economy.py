@@ -2,13 +2,12 @@
 
 import abc
 import collections
-import functools
 from typing import Any, Dict, Hashable, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
 from .. import exceptions, options
-from ..configurations.formulation import Formulation
+from ..configurations.formulation import Formulation, Absorb
 from ..configurations.iteration import Iteration
 from ..primitives import Container
 from ..utilities.algebra import precisely_identify_collinearity, precisely_identify_psd
@@ -48,8 +47,8 @@ class Economy(Container, StringRepresentation):
     _agent_market_indices: Dict[Hashable, Array]
     _max_J: int
     _max_I: int
-    _absorb_demand_ids: Optional[functools.partial]
-    _absorb_supply_ids: Optional[functools.partial]
+    _absorb_demand_ids: Optional[Absorb]
+    _absorb_supply_ids: Optional[Absorb]
 
     @abc.abstractmethod
     def __init__(
@@ -98,10 +97,10 @@ class Economy(Container, StringRepresentation):
         self._absorb_demand_ids = self._absorb_supply_ids = None
         if self.ED > 0:
             assert product_formulations[0] is not None
-            self._absorb_demand_ids = functools.partial(product_formulations[0]._build_absorb(self.products.demand_ids))
+            self._absorb_demand_ids = product_formulations[0]._build_absorb(self.products.demand_ids)
         if self.ES > 0:
             assert product_formulations[2] is not None
-            self._absorb_supply_ids = functools.partial(product_formulations[2]._build_absorb(self.products.supply_ids))
+            self._absorb_supply_ids = product_formulations[2]._build_absorb(self.products.supply_ids)
 
         # validate random coefficient distributions
         if distributions is None:
