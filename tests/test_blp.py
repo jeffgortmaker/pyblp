@@ -342,6 +342,12 @@ def test_fixed_effects(
         distributions=simulation.distributions, epsilon_scale=simulation.epsilon_scale,
         costs_type=simulation.costs_type
     )
+    if solve_options1['micro_moments']:
+        solve_options1['W'] = scipy.linalg.pinv(scipy.linalg.block_diag(
+            problem1.products.ZD.T @ problem1.products.ZD,
+            problem1.products.ZS.T @ problem1.products.ZS,
+            np.eye(len(solve_options1['micro_moments'])),
+        ))
     problem_results1 = problem1.solve(**solve_options1)
 
     # solve the first stage of a problem in which fixed effects are included as indicator variables
@@ -362,6 +368,12 @@ def test_fixed_effects(
         solve_options2['beta'],
         np.full((problem2.K1 - solve_options2['beta'].size, 1), np.nan)
     ]
+    if solve_options2['micro_moments']:
+        solve_options2['W'] = scipy.linalg.pinv(scipy.linalg.block_diag(
+            problem2.products.ZD.T @ problem2.products.ZD,
+            problem2.products.ZS.T @ problem2.products.ZS,
+            np.eye(len(solve_options2['micro_moments'])),
+        ))
     problem_results2 = problem2.solve(**solve_options2)
 
     # solve the first stage of a problem in which some fixed effects are absorbed and some are included as indicators
@@ -389,6 +401,12 @@ def test_fixed_effects(
             solve_options3['beta'],
             np.full((problem3.K1 - solve_options3['beta'].size, 1), np.nan)
         ]
+        if solve_options3['micro_moments']:
+            solve_options3['W'] = scipy.linalg.pinv(scipy.linalg.block_diag(
+                problem3.products.ZD.T @ problem3.products.ZD,
+                problem3.products.ZS.T @ problem3.products.ZS,
+                np.eye(len(solve_options3['micro_moments'])),
+            ))
         problem_results3 = problem3.solve(**solve_options3)
 
     # compute optimal instruments (use only two draws for speed; accuracy is not a concern here)
