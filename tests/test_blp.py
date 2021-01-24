@@ -750,16 +750,19 @@ def test_second_step(simulated_problem: SimulatedProblemFixture) -> None:
     """
     simulation, _, problem, solve_options, _ = simulated_problem
 
-    # use two steps and remove sigma bounds so that it can't get stuck at zero
+    # use two steps and remove sigma bounds so that it can't get stuck at zero (use a small number of optimization
+    #   iterations to speed up the test)
     updated_solve_options = copy.deepcopy(solve_options)
     updated_solve_options.update({
         'method': '2s',
-        'sigma_bounds': (np.full_like(simulation.sigma, -np.inf), np.full_like(simulation.sigma, +np.inf))
+        'optimization': Optimization('l-bfgs-b', {'maxfun': 3}),
+        'sigma_bounds': (np.full_like(simulation.sigma, -np.inf), np.full_like(simulation.sigma, +np.inf)),
     })
 
     # get two-step GMM results
     results12 = problem.solve(**updated_solve_options)
-    assert results12.last_results is not None and results12.last_results.last_results is None
+    assert results12.last_results is not None
+    assert results12.last_results.last_results is None or results12.last_results.last_results.step == 0
     assert results12.step == 2 and results12.last_results.step == 1
 
     # get results from the first step
@@ -775,10 +778,11 @@ def test_second_step(simulated_problem: SimulatedProblemFixture) -> None:
         'rho': results1.rho,
         'beta': np.where(np.isnan(solve_options['beta']), np.nan, results1.beta),
         'delta': results1.delta,
-        'W': results1.updated_W
+        'W': results1.updated_W,
     })
     results2 = problem.solve(**updated_solve_options2)
-    assert results1.last_results is None and results2.last_results is None
+    assert results1.last_results is None or results1.last_results.step == 0
+    assert results2.last_results is None or results2.last_results.step == 0
     assert results1.step == results2.step == 1
 
     # test that results are essentially identical
