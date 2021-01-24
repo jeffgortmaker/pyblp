@@ -826,12 +826,11 @@ def test_return(simulated_problem: SimulatedProblemFixture) -> None:
     pytest.param('l-bfgs-b', id="L-BFGS-B"),
     pytest.param('trust-constr', id="Trust Region")
 ])
-def test_gradient_optionality(
-        simulated_problem: SimulatedProblemFixture, scipy_method: str) -> None:
+def test_gradient_optionality(simulated_problem: SimulatedProblemFixture, scipy_method: str) -> None:
     """Test that the option of not computing the gradient for simulated data does not affect estimates when the gradient
     isn't used. Allow Jacobian-based results to differ slightly more when finite differences are used to compute them.
     """
-    simulation, _, problem, solve_options, _ = simulated_problem
+    simulation, _, problem, solve_options, results = simulated_problem
 
     # this test only requires a few optimization iterations (enough for gradient problems to be clear)
     method_options = {'maxiter': 3}
@@ -845,24 +844,25 @@ def test_gradient_optionality(
         )
         return optimize_results.x, optimize_results.success
 
-    # solve the problem when not using gradients and when not computing them
+    # solve the problem when not using gradients and when not computing them (use the identity weighting matrix to make
+    #   tiny gradients with some initial weighting matrices less problematic when comparing values)
     updated_solve_options1 = copy.deepcopy(solve_options)
     updated_solve_options2 = copy.deepcopy(solve_options)
-    updated_solve_options1['optimization'] = Optimization(custom_method)
-    updated_solve_options2['optimization'] = Optimization(scipy_method, method_options, compute_gradient=False)
-    updated_solve_options2['finite_differences'] = True
+    updated_solve_options1.update({
+        'optimization': Optimization(custom_method),
+    })
+    updated_solve_options2.update({
+        'optimization': Optimization(scipy_method, method_options, compute_gradient=False),
+        'finite_differences': True,
+    })
     results1 = problem.solve(**updated_solve_options1)
     results2 = problem.solve(**updated_solve_options2)
 
-    # test that all arrays close
+    # test that all arrays close except for those created with finite differences after the fact
     for key, result1 in results1.__dict__.items():
         if isinstance(result1, np.ndarray) and result1.dtype != np.object:
-            atol = 1e-14
-            rtol = 0.0
-            if any(s in key for s in ['gradient', '_jacobian', '_se', '_covariances']):
-                atol = 1e-6
-                rtol = 1e-2
-            np.testing.assert_allclose(result1, getattr(results2, key), atol=atol, rtol=rtol, err_msg=key)
+            if not any(s in key for s in ['gradient', '_jacobian', '_se', '_covariances']):
+                np.testing.assert_allclose(result1, getattr(results2, key), atol=1e-14, rtol=0, err_msg=key)
 
 
 @pytest.mark.usefixtures('simulated_problem')
@@ -1162,6 +1162,10 @@ def test_objective_gradient(
 
     # zero out weighting matrix blocks to only test individual contributions of the gradient
     updated_solve_options['W'] = copy.deepcopy(problem_results.W)
+    if micro:
+        MM = len(updated_solve_options['micro_moments'])
+        updated_solve_options['W'][-MM:, -MM:] = np.eye(MM)
+    updated_solve_options['W'] = np.eye(problem_results.W.shape[0])
     if not demand:
         updated_solve_options['W'][:problem.MD, :problem.MD] = 0
     if not supply and problem.K3 > 0:
