@@ -171,11 +171,13 @@ class ProblemResults(Results):
         supply-side structural error term. When there are supply-side fixed effects, this is
         :math:`\Delta\omega(\hat{\theta})` in :eq:`fe`. That is, fixed effects are not included.
     micro : `ndarray`
-        Averaged micro moments, :math:`\bar{g}_M`, in :eq:`averaged_micro_moments`.
+        Micro moments, :math:`\bar{g}_M`, in :eq:`averaged_micro_moments`.
     micro_values : `ndarray`
         Simulated micro moment values, :math:`v_{mt}`. Rows are in the same order as :attr:`Problem.unique_market_ids`.
         Columns are in the same order as :attr:`ProblemResults.micro`. If a micro moment is not computed in one or more
         markets, the associated values will be ``numpy.nan``.
+    moments : `ndarray`
+        Moments, :math:`\bar{g}`, in :eq:`averaged_moments`.
     objective : `float`
         GMM objective value, :math:`q(\hat{\theta})`, defined in :eq:`objective`. If ``scale_objective`` was ``True`` in
         :meth:`Problem.solve` (which is the default), this value was scaled by :math:`N` so that objective values are
@@ -270,6 +272,7 @@ class ProblemResults(Results):
     omega: Array
     micro: Array
     micro_values: Array
+    moments: Array
     objective: Array
     xi_by_theta_jacobian: Array
     omega_by_theta_jacobian: Array
@@ -390,6 +393,9 @@ class ProblemResults(Results):
 
         # ignore computational errors when updating the weighting matrix and computing covariances
         with np.errstate(all='ignore'):
+            # compute moments
+            self.moments = self._compute_mean_g()
+
             # update the weighting matrix
             micro_covariances = progress.micro_covariances.copy()
             if extra_micro_covariances is not None:
@@ -609,9 +615,10 @@ class ProblemResults(Results):
                 'sigma_squared', 'pi', 'rho', 'beta', 'gamma', 'sigma_se', 'sigma_squared_se', 'pi_se', 'rho_se',
                 'beta_se', 'gamma_se', 'sigma_bounds', 'pi_bounds', 'rho_bounds', 'beta_bounds', 'gamma_bounds',
                 'sigma_labels', 'pi_labels', 'rho_labels', 'beta_labels', 'gamma_labels', 'delta', 'tilde_costs',
-                'clipped_shares', 'clipped_costs', 'xi', 'omega', 'micro', 'objective', 'xi_by_theta_jacobian',
-                'omega_by_theta_jacobian', 'micro_by_theta_jacobian', 'gradient', 'projected_gradient',
-                'projected_gradient_norm', 'hessian', 'reduced_hessian', 'reduced_hessian_eigenvalues', 'W', 'updated_W'
+                'clipped_shares', 'clipped_costs', 'xi', 'omega', 'micro', 'micro_values', 'moments', 'objective',
+                'xi_by_theta_jacobian', 'omega_by_theta_jacobian', 'micro_by_theta_jacobian', 'gradient',
+                'projected_gradient', 'projected_gradient_norm', 'hessian', 'reduced_hessian',
+                'reduced_hessian_eigenvalues', 'W', 'updated_W'
             )) -> dict:
         """Convert these results into a dictionary that maps attribute names to values.
 
