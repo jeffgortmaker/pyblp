@@ -9,7 +9,7 @@ from . import options
 from .configurations.formulation import ColumnFormulation
 from .primitives import Container
 from .utilities.algebra import vech
-from .utilities.basics import Array, Bounds, Groups, format_number, format_se, format_table
+from .utilities.basics import Array, Bounds, format_number, format_se, format_table
 
 
 # only import objects that create import cycles when checking types
@@ -82,25 +82,25 @@ class RhoParameter(Parameter):
     """Information about a single parameter in rho."""
 
     @abc.abstractmethod
-    def get_group_associations(self, groups: Groups) -> Array:
+    def get_group_associations(self, market: 'Market') -> Array:
         """Get an indicator for which groups are associated with the parameter."""
 
 
 class AllGroupsRhoParameter(RhoParameter):
     """Information about a rho parameter for all groups."""
 
-    def get_group_associations(self, groups: Groups) -> Array:
+    def get_group_associations(self, market: 'Market') -> Array:
         """Get an indicator for all groups."""
-        return np.ones((groups.group_count, 1), options.dtype)
+        return np.ones((market.groups.group_count, 1), options.dtype)
 
 
 class OneGroupRhoParameter(RhoParameter):
     """Information about a rho parameter for a single group."""
 
-    def get_group_associations(self, groups: Groups) -> Array:
+    def get_group_associations(self, market: 'Market') -> Array:
         """Get an indicator for the group associated with the parameter."""
-        group_associations = np.zeros((groups.group_count, 1), options.dtype)
-        group_associations[self.location] = 1
+        group_associations = np.zeros((market.groups.group_count, 1), options.dtype)
+        group_associations[market.groups.unique == market.unique_nesting_ids[self.location[0]]] = 1
         return group_associations
 
 

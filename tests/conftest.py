@@ -370,7 +370,7 @@ def small_nested_blp_simulation() -> SimulationFixture:
         product_data={
             'market_ids': id_data.market_ids,
             'firm_ids': id_data.firm_ids,
-            'nesting_ids': np.random.RandomState(0).choice(['f', 'g'], id_data.size),
+            'nesting_ids': np.r_[np.repeat('f', 50), np.random.RandomState(0).choice(['f', 'g'], id_data.size - 50)],
             'clustering_ids': np.random.RandomState(0).choice(range(10), id_data.size)
         },
         beta=[-5, 1, 2],

@@ -20,6 +20,7 @@ class Market(Container):
 
     t: Any
     groups: Groups
+    unique_nesting_ids: Array
     epsilon_scale: float
     costs_type: str
     J: int
@@ -70,8 +71,9 @@ class Market(Container):
             agents_update_mapping['nodes'] = (nodes, nodes.dtype)
         self.agents = update_matrices(self.agents, agents_update_mapping)
 
-        # create nesting groups
+        # create nesting groups but keep all nesting IDs for associating parameters with groups
         self.groups = Groups(self.products.nesting_ids)
+        self.unique_nesting_ids = economy.unique_nesting_ids
 
         # store other configuration information
         self.epsilon_scale = economy.epsilon_scale
@@ -720,7 +722,7 @@ class Market(Container):
             marginals_tangent = B - marginals * B.sum(axis=0, keepdims=True)
 
         elif isinstance(parameter, RhoParameter):
-            group_associations = parameter.get_group_associations(self.groups)
+            group_associations = parameter.get_group_associations(self)
             associations = self.groups.expand(group_associations)
 
             # utilities are needed to compute tangents with respect to rho
@@ -829,7 +831,7 @@ class Market(Container):
         if self.H > 0:
             diagonal /= 1 - self.rho
             if isinstance(parameter, RhoParameter):
-                associations = self.groups.expand(parameter.get_group_associations(self.groups))
+                associations = self.groups.expand(parameter.get_group_associations(self))
                 diagonal += associations / (1 - self.rho)**2 * (value_derivatives @ self.agents.weights)
 
         return np.diagflat(diagonal)
@@ -867,7 +869,7 @@ class Market(Container):
                 conditionals @ weighted_value_derivatives_tangent
             )
             if isinstance(parameter, RhoParameter):
-                associations = self.groups.expand(parameter.get_group_associations(self.groups))
+                associations = self.groups.expand(parameter.get_group_associations(self))
                 tangent += associations * membership / (1 - self.rho)**2 * (conditionals @ weighted_value_derivatives)
 
         return tangent
