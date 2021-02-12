@@ -11,7 +11,7 @@ import scipy.linalg
 
 from pyblp import (
     Formulation, Integration, Problem, ProblemResults, DemographicExpectationMoment, CharacteristicExpectationMoment,
-    DemographicCovarianceMoment, DiversionProbabilityMoment, DiversionCovarianceMoment, Simulation, SimulationResults,
+    DemographicInteractionMoment, DiversionProbabilityMoment, DiversionCovarianceMoment, Simulation, SimulationResults,
     build_differentiation_instruments, build_id_data, build_matrix, build_ownership, build_integration, options
 )
 from pyblp.utilities.basics import update_matrices, Array, Data, Options
@@ -257,7 +257,7 @@ def medium_blp_simulation() -> SimulationFixture:
         seed=1,
     )
     simulation_results = simulation.replace_endogenous()
-    simulated_micro_moments = [DemographicCovarianceMoment(
+    simulated_micro_moments = [DemographicInteractionMoment(
         X2_index=0, demographics_index=0, value=0, observations=simulation.N,
         market_ids=[simulation.unique_market_ids[2]]
     )]
@@ -331,7 +331,7 @@ def large_blp_simulation() -> SimulationFixture:
             product_ids=[None, 0], demographics_index=1, value=0, observations=simulation.N,
             market_ids=simulation.unique_market_ids[1:4], market_weights=[0.2, 0.4, 0.4],
         ),
-        DemographicCovarianceMoment(
+        DemographicInteractionMoment(
             X2_index=0, demographics_index=2, value=0, observations=simulation.N,
             market_ids=simulation.unique_market_ids[3:5]
         ),
@@ -511,8 +511,8 @@ def simulated_problem(request: Any) -> SimulatedProblemFixture:
                     moment.agent_ids, moment.X2_index, value, moment.observations, moment.market_ids,
                     moment.market_weights
                 ))
-            elif isinstance(moment, DemographicCovarianceMoment):
-                micro_moments.append(DemographicCovarianceMoment(
+            elif isinstance(moment, DemographicInteractionMoment):
+                micro_moments.append(DemographicInteractionMoment(
                     moment.X2_index, moment.demographics_index, value, moment.observations, moment.market_ids,
                     moment.market_weights
                 ))

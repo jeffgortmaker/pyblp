@@ -321,6 +321,102 @@ class CharacteristicExpectationMoment(Moment):
         return np.where(I[None], inside_tangent, 0).T @ x / market.agents.weights[I].sum()
 
 
+class DemographicInteractionMoment(Moment):
+    r"""Configuration for micro moments that match expectations of interactions between product characteristics and
+    demographics.
+
+    For example, micro data can sometimes be used to compute the mean :math:`\mathscr{V}_m` of :math:`x_{jt} y_{it}`
+    where :math:`x_{jt}` is a product characteristic of an agent's choice :math:`j` and :math:`y_{it}` is a demographic
+    of the agent such as income, amongst those agents who purchase an inside good. Its simulated analogue :math:`v_{mt}`
+    can be defined by
+
+    .. math:: v_{mt} = \sum_{i \in I_t} w_{it} \frac{1 - s_{i0t}}{1 - s_{0t}} z_{it} y_{it}
+
+    where conditional on choosing an inside good, the expected value of :math:`x_{jt}` for agent :math:`i` is
+
+    .. math:: z_{it} = \sum_{j \in J_t} x_{jt} s_{ij(-0)t}
+
+    where :math:`s_{ij(-0)t} = s_{ijt} / (1 - s_{i0t})` is the probability of :math:`i` choosing :math:`j` when the
+    outside option is removed from the choice set.
+
+    These are averaged across a set of markets :math:`T_m` and compared with :math:`\mathscr{V}_m`, which gives
+    :math:`\bar{g}_{M,m}` in :eq:`averaged_micro_moments`.
+
+    Parameters
+    ----------
+    X2_index : `int`
+        Column index of :math:`x_{jt}` in the matrix of demand-side nonlinear product characteristics, :math:`X_2`. This
+        should be between zero and :math:`K_2 - 1`, inclusive.
+    demographics_index : `int`
+        Column index of the demographic :math:`y_{it}` (which can be any demographic, not just income) in the matrix of
+        agent demographics, :math:`d`. This should be between zero and :math:`D - 1`, inclusive.
+    value : `float`
+        Value :math:`\mathscr{V}_m` of the statistic estimated from micro data.
+    observations : `int`
+        Number of micro data observations :math:`N_m` used to estimate :math:`\mathscr{V}_m`, which is used to properly
+        scale micro moment covariances in :eq:`scaled_micro_moment_covariances`.
+    market_ids : `array-like, optional`
+        Distinct market IDs over which the micro moments will be averaged to get :math:`\bar{g}_{M,m}`. These are also
+        the only markets in which the moments will be computed. By default, the moments are computed for and averaged
+        across all markets.
+    market_weights : `array-like, optional`
+        Weights for averaging micro moments over specified ``market_ids``. By default, these are :math:`1 / T_m`.
+
+    Examples
+    --------
+        - :doc:`Tutorial </tutorial>`
+
+    """
+
+    X2_index: int
+    demographics_index: int
+
+    def __init__(
+            self, X2_index: int, demographics_index: int, value: float, observations: int,
+            market_ids: Optional[Sequence] = None, market_weights: Optional[Array] = None) -> None:
+        """Validate information about the moment to the greatest extent possible without an economy instance."""
+        if not isinstance(X2_index, int) or X2_index < 0:
+            raise ValueError("X2_index must be a positive int.")
+        if not isinstance(demographics_index, int) or demographics_index < 0:
+            raise ValueError("demographics_index must be a positive int.")
+        super().__init__(value, observations, market_ids, market_weights)
+        self.X2_index = X2_index
+        self.demographics_index = demographics_index
+
+    def _format_moment(self) -> str:
+        """Construct a string expression for the moment."""
+        return f"E[X2 Column {self.X2_index} x Demographic Column {self.demographics_index}]"
+
+    def _validate(self, economy: 'Economy') -> None:
+        """Check that matrix indices are valid in the economy."""
+        super()._validate(economy)
+        if self.X2_index >= economy.K2:
+            raise ValueError(f"X2_index must be between 0 and K2 = {economy.K2}, inclusive.")
+        if self.demographics_index >= economy.D:
+            raise ValueError(f"demographics_index must be between 0 and D = {economy.D}, inclusive.")
+
+    def _compute_agent_values(
+            self, market: 'Market', delta: Array, probabilities: Array, conditionals: Optional[Array],
+            inside_probabilities: Optional[Array], eliminated_probabilities: Dict[int, Array],
+            inside_eliminated_sum: Optional[Array]) -> Array:
+        """Compute agent-specific micro moment values, which will be aggregated up into means or covariances."""
+        x = market.products.X2[:, [self.X2_index]]
+        d = market.agents.demographics[:, [self.demographics_index]]
+        z = probabilities.T @ x
+        return d * z / market.products.shares.sum()
+
+    def _compute_agent_values_tangent(
+            self, market: 'Market', p: int, delta: Array, probabilities: Array, probabilities_tangent: Array,
+            inside_probabilities: Optional[Array], inside_tangent: Optional[Array],
+            eliminated_tangents: Dict[int, Array], inside_eliminated_sum: Optional[Array],
+            inside_eliminated_sum_tangent: Optional[Array]) -> Array:
+        """Compute the tangent of agent-specific micro moments with respect to a parameter."""
+        x = market.products.X2[:, [self.X2_index]]
+        d = market.agents.demographics[:, [self.demographics_index]]
+        z_tangent = probabilities_tangent.T @ x
+        return d * z_tangent / market.products.shares.sum()
+
+
 class DemographicCovarianceMoment(Moment):
     r"""Configuration for micro moments that match covariances between product characteristics and demographics.
 

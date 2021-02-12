@@ -11,7 +11,7 @@ import pytest
 import scipy.optimize
 
 from pyblp import (
-    Agents, CustomMoment, DemographicCovarianceMoment, Formulation, Integration, Iteration, Optimization, Problem,
+    Agents, CustomMoment, DemographicInteractionMoment, Formulation, Integration, Iteration, Optimization, Problem,
     Products, Simulation, build_ownership, data_to_dict, parallel
 )
 from pyblp.utilities.basics import Array, Options, update_matrices, compute_finite_differences
@@ -1053,44 +1053,36 @@ def test_custom_moments(simulated_problem: SimulatedProblemFixture) -> None:
     """Test that custom moments designed to replicate built-in micro moments yield the same results."""
     _, _, problem, solve_options, _ = simulated_problem
 
-    def replicate_demographic_covariance(
-            moment: DemographicCovarianceMoment, _: Any, __: Array, ___: Array, ____: Array, products: Products,
+    def replicate_demographic_interaction(
+            moment: DemographicInteractionMoment, _: Any, __: Array, ___: Array, ____: Array, products: Products,
             agents: Agents, _____: Array, ______: Array, probabilities: Array) -> Array:
         """Replicate a demographic covariance moment."""
         x = products.X2[:, [moment.X2_index]]
         d = agents.demographics[:, [moment.demographics_index]]
-        inside_probabilities = probabilities / probabilities.sum(axis=0, keepdims=True)
-        z = inside_probabilities.T @ x
-        demeaned_z = z - agents.weights.T @ z
-        demeaned_d = d - agents.weights.T @ d
-        return demeaned_z * demeaned_d
+        z = probabilities.T @ x
+        return d * z / (1 - products.shares.sum())
 
-    def replicate_demographic_covariance_derivatives(
-            moment: DemographicCovarianceMoment, _: Any, __: Array, ___: Array, ____: Array, products: Products,
+    def replicate_demographic_interaction_derivatives(
+            moment: DemographicInteractionMoment, _: Any, __: Array, ___: Array, ____: Array, products: Products,
             agents: Agents, _____: Array, ______: Array, probabilities: Array, _______: Any, derivatives: Array) -> (
             Array):
         """Replicate derivatives for a demographic covariance moment."""
-        denominator = probabilities.sum(axis=0, keepdims=True)
-        denominator_tangent = derivatives.sum(axis=0, keepdims=True)
-        inside_tangent = 1 / denominator * (derivatives - probabilities / denominator * denominator_tangent)
         x = products.X2[:, [moment.X2_index]]
         d = agents.demographics[:, [moment.demographics_index]]
-        z_tangent = inside_tangent.T @ x
-        demeaned_z_tangent = z_tangent - agents.weights.T @ z_tangent
-        demeaned_d = d - agents.weights.T @ d
-        return demeaned_z_tangent * demeaned_d
+        z_tangent = derivatives.T @ x
+        return d * z_tangent / (1 - products.shares.sum())
 
     # replace demographic covariance moments with custom ones that replicate their behavior
     replicated_micro_moments = []
     for micro_moment in solve_options['micro_moments']:
-        if not isinstance(micro_moment, DemographicCovarianceMoment):
+        if not isinstance(micro_moment, DemographicInteractionMoment):
             replicated_micro_moments.append(micro_moment)
         else:
             replicated_micro_moments.append(CustomMoment(
                 micro_moment.value,
                 micro_moment.observations,
-                functools.partial(replicate_demographic_covariance, micro_moment),
-                functools.partial(replicate_demographic_covariance_derivatives, micro_moment),
+                functools.partial(replicate_demographic_interaction, micro_moment),
+                functools.partial(replicate_demographic_interaction_derivatives, micro_moment),
                 micro_moment.market_ids,
                 micro_moment.market_weights,
                 name=f"Replicated '{micro_moment}'",
