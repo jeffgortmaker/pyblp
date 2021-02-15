@@ -125,7 +125,7 @@ class DemographicExpectationMoment(Moment):
     income, :math:`y_{it}`, for agents who choose products in some set :math:`J`. Its simulated analogue :math:`v_{mt}`
     can be defined by
 
-    .. math:: v_{mt} = \frac{E[y_{it} \sum_{j \in J} s_{ijt}]}{\sum_{j \in J} s_{jt}}.
+    .. math:: v_{mt} = \sum_{i \ in I_t} w_{it} \frac{\sum_{j \in J} s_{ijt}}{\sum_{j \in J} s_{jt}} y_{it}.
 
     These are averaged across a set of markets :math:`T_m` and compared with :math:`\mathscr{V}_m`, which gives
     :math:`\bar{g}_{M,m}` in :eq:`averaged_micro_moments`.
@@ -235,9 +235,10 @@ class CharacteristicExpectationMoment(Moment):
     :math:`x_{jt}` of an agent's choice :math:`j` for agents in some set :math:`I`. Its simulated analogue
     :math:`v_{mt}` can be defined by
 
-    .. math:: v_{mt} = E[z_{it} | i \in I]
+    .. math:: v_{mt} = \sum_{i \in I} \frac{w_{it}}{w_{It}} \frac{\sum_{j \in J_t} s_{ijt}}{\sum_{j \in J_t} s_{jt}}
 
-    where conditional on choosing an inside good, the expected value of :math:`x_{jt}` for agent :math:`i` is
+    where the fraction of agents in :math:`I` is :math:`w_{It} = \sum_{i in I} w_{it}` and conditional on choosing an
+    inside good, the expected value of :math:`x_{jt}` for agent :math:`i` is
 
     .. math:: z_{it} = \sum_{j \in J_t} x_{jt}s_{ij(-0)t}
 
@@ -433,15 +434,13 @@ class DiversionProbabilityMoment(Moment):
     product :math:`k` if :math:`j` were removed from the choice set, out of those agents whose first choice is
     :math:`j`. Its simulated analogue :math:`v_{mt}` can be defined by
 
-    .. math:: v_{mt} = \frac{E[s_{ik(-j)t} s_{ijt}]}{s_{jt}}
+    .. math:: v_{mt} = \sum_{i \in I_t} w_{it} \frac{s_{ijt}}{s_{jt}} s_{ik(-j)t}
 
     where :math:`s_{ik(-j)t} = s_{ijt} / (1 - s_{ijt})` is the probability of :math:`i` choosing :math:`k` when
-    :math:`j` is removed from the choice set. Rearranging terms gives the equivalent definition
+    :math:`j` is removed from the choice set. Rearranging terms gives the equivalent definition, as a long-run diversion
+    ratio computed by :meth:`ProblemResults.compute_long_run_diversion_ratios`:
 
-    .. math:: g_{M,mt} = \mathscr{V}_m - \frac{s_{k(-j)t} - s_{kt}}{s_{jt}},
-
-    which is more reminiscent of the long-run diversion ratios :math:`\bar{\mathscr{D}}_{jk}` computed by
-    :meth:`ProblemResults.compute_long_run_diversion_ratios`.
+    .. math:: v_{mt} = \frac{s_{k(-j)t} - s_{kt}}{s_{jt}}.
 
     These are averaged across a set of markets :math:`T_m` and compared with :math:`\mathscr{V}_m`, which gives
     :math:`\bar{g}_{M,m}` in :eq:`averaged_micro_moments`.
