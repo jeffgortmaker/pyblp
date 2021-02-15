@@ -1015,7 +1015,10 @@ class Market(Container):
 
     def compute_micro_values(
             self, delta: Optional[Array] = None) -> (
-            Tuple[Array, Array, Optional[Array], Optional[Array], Dict[int, Array], Optional[Array], Dict[int, Array]]):
+            Tuple[
+                Array, Array, Optional[Array], Optional[Array], Dict[int, Array], Optional[Array], Optional[Array],
+                Dict[int, Array]
+            ]):
         """Compute micro moment values. By default, use the delta with which this market was initialized. Return any
         probabilities that were used so they don't have to be re-computed when computing related outputs.
         """
@@ -1035,35 +1038,47 @@ class Market(Container):
         # pre-compute second choice probabilities
         eliminated_probabilities: Dict[int, Array] = {}
         for moment in self.moments.micro_moments:
-            for product_id in moment.requires_eliminated:
-                j = self.get_product(product_id)
+            if moment.requires_inside_eliminated:
+                products = list(range(self.J))
+            else:
+                products = [self.get_product(i) for i in moment.requires_eliminated]
+
+            for j in products:
                 if j not in eliminated_probabilities:
                     eliminated_probabilities[j] = self.compute_eliminated_probabilities(
                         probabilities, delta, eliminate_product=j
                     )
 
-        # pre-compute second choice probabilities conditional on purchasing an inside good along with the sum of inside
-        #   probability products over all first choices
-        inside_eliminated_sum = None
+        # pre-compute (1) the ratio of the probability each agent's first and second choices are both inside goods to
+        #   the corresponding aggregate share, (2) second-choice probabilities conditional on purchasing an inside good,
+        #   and (3) probabilities of purchasing any inside good first and a specific inside good second
+        inside_to_inside_ratios = None
+        inside_to_eliminated_probabilities = None
         inside_eliminated_probabilities: Dict[int, Array] = {}
         if any(m.requires_inside_eliminated for m in self.moments.micro_moments):
             assert inside_probabilities is not None
-            inside_eliminated_sum = np.zeros((self.J, self.I), options.dtype)
+            inside_to_inside_probabilities = np.zeros((self.I, 1), options.dtype)
+            inside_to_eliminated_probabilities = np.zeros((self.J, self.I), options.dtype)
             for j in range(self.J):
+                j_to_inside_probabilities = eliminated_probabilities[j].sum(axis=0, keepdims=True).T
+                inside_to_inside_probabilities += probabilities[[j]].T * j_to_inside_probabilities
                 inside_eliminated_probabilities[j] = self.compute_eliminated_probabilities(
                     probabilities, delta, eliminate_outside=True, eliminate_product=j
                 )
-                inside_eliminated_sum += inside_probabilities[[j]] * inside_eliminated_probabilities[j]
+                inside_to_eliminated_probabilities += inside_probabilities[[j]] * inside_eliminated_probabilities[j]
+
+            inside_to_inside_share = self.agents.weights.T @ inside_to_inside_probabilities
+            inside_to_inside_ratios = inside_to_inside_probabilities / inside_to_inside_share
 
         # compute the micro moment values
         micro_values = np.zeros((self.moments.MM, 1), options.dtype)
         for m, moment in enumerate(self.moments.micro_moments):
             micro_values[m] = self.agents.weights.T @ moment._compute_agent_values(
-                self, delta, probabilities, conditionals, inside_probabilities, eliminated_probabilities,
-                inside_eliminated_sum
+                self, delta, probabilities, inside_probabilities, eliminated_probabilities, inside_to_inside_ratios,
+                inside_to_eliminated_probabilities
             )
 
         return (
             micro_values, probabilities, conditionals, inside_probabilities, eliminated_probabilities,
-            inside_eliminated_sum, inside_eliminated_probabilities
+            inside_to_inside_ratios, inside_to_eliminated_probabilities, inside_eliminated_probabilities
         )

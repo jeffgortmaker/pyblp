@@ -102,17 +102,19 @@ class Moment(StringRepresentation):
 
     @abc.abstractmethod
     def _compute_agent_values(
-            self, market: 'Market', delta: Array, probabilities: Array, conditionals: Optional[Array],
-            inside_probabilities: Optional[Array], eliminated_probabilities: Dict[int, Array],
-            inside_eliminated_sum: Optional[Array]) -> Array:
+            self, market: 'Market', delta: Array, probabilities: Array, inside_probabilities: Optional[Array],
+            eliminated_probabilities: Dict[int, Array], inside_to_inside_ratios: Optional[Array],
+            inside_to_eliminated_probabilities: Optional[Array]) -> Array:
         """Compute agent-specific micro moment values, which will be aggregated up into means or covariances."""
 
     @abc.abstractmethod
     def _compute_agent_values_tangent(
             self, market: 'Market', p: int, delta: Array, probabilities: Array, probabilities_tangent: Array,
             inside_probabilities: Optional[Array], inside_tangent: Optional[Array],
-            eliminated_tangents: Dict[int, Array], inside_eliminated_sum: Optional[Array],
-            inside_eliminated_sum_tangent: Optional[Array]) -> Array:
+            eliminated_probabilities: Dict[int, Array], eliminated_tangents: Dict[int, Array],
+            inside_to_inside_ratios: Optional[Array], inside_to_inside_tangent: Optional[Array],
+            inside_to_eliminated_probabilities: Optional[Array], inside_to_eliminated_tangent: Optional[Array]) -> (
+            Array):
         """Compute the tangent of agent-specific micro moments with respect to a parameter."""
 
 
@@ -185,9 +187,9 @@ class DemographicExpectationMoment(Moment):
             raise ValueError(f"demographics_index must be between 0 and D = {economy.D}, inclusive.")
 
     def _compute_agent_values(
-            self, market: 'Market', delta: Array, probabilities: Array, conditionals: Optional[Array],
-            inside_probabilities: Optional[Array], eliminated_probabilities: Dict[int, Array],
-            inside_eliminated_sum: Optional[Array]) -> Array:
+            self, market: 'Market', delta: Array, probabilities: Array, inside_probabilities: Optional[Array],
+            eliminated_probabilities: Dict[int, Array], inside_to_inside_ratios: Optional[Array],
+            inside_to_eliminated_probabilities: Optional[Array]) -> Array:
         """Compute agent-specific micro moment values, which will be aggregated up into means or covariances."""
         shares_sum = 0
         probabilities_sum = np.zeros((market.I, 1), options.dtype)
@@ -206,8 +208,10 @@ class DemographicExpectationMoment(Moment):
     def _compute_agent_values_tangent(
             self, market: 'Market', p: int, delta: Array, probabilities: Array, probabilities_tangent: Array,
             inside_probabilities: Optional[Array], inside_tangent: Optional[Array],
-            eliminated_tangents: Dict[int, Array], inside_eliminated_sum: Optional[Array],
-            inside_eliminated_sum_tangent: Optional[Array]) -> Array:
+            eliminated_probabilities: Dict[int, Array], eliminated_tangents: Dict[int, Array],
+            inside_to_inside_ratios: Optional[Array], inside_to_inside_tangent: Optional[Array],
+            inside_to_eliminated_probabilities: Optional[Array], inside_to_eliminated_tangent: Optional[Array]) -> (
+            Array):
         """Compute the tangent of agent-specific micro moments with respect to a parameter."""
         shares_sum = 0
         probabilities_tangent_sum = np.zeros((market.I, 1), options.dtype)
@@ -300,9 +304,9 @@ class CharacteristicExpectationMoment(Moment):
             raise ValueError(f"X2_index must be between 0 and K2 = {economy.K2}, inclusive.")
 
     def _compute_agent_values(
-            self, market: 'Market', delta: Array, probabilities: Array, conditionals: Optional[Array],
-            inside_probabilities: Optional[Array], eliminated_probabilities: Dict[int, Array],
-            inside_eliminated_sum: Optional[Array]) -> Array:
+            self, market: 'Market', delta: Array, probabilities: Array, inside_probabilities: Optional[Array],
+            eliminated_probabilities: Dict[int, Array], inside_to_inside_ratios: Optional[Array],
+            inside_to_eliminated_probabilities: Optional[Array]) -> Array:
         """Compute agent-specific micro moment values, which will be aggregated up into means or covariances."""
         assert inside_probabilities is not None
         I = market.get_agents_index(self.agent_ids)
@@ -312,8 +316,10 @@ class CharacteristicExpectationMoment(Moment):
     def _compute_agent_values_tangent(
             self, market: 'Market', p: int, delta: Array, probabilities: Array, probabilities_tangent: Array,
             inside_probabilities: Optional[Array], inside_tangent: Optional[Array],
-            eliminated_tangents: Dict[int, Array], inside_eliminated_sum: Optional[Array],
-            inside_eliminated_sum_tangent: Optional[Array]) -> Array:
+            eliminated_probabilities: Dict[int, Array], eliminated_tangents: Dict[int, Array],
+            inside_to_inside_ratios: Optional[Array], inside_to_inside_tangent: Optional[Array],
+            inside_to_eliminated_probabilities: Optional[Array], inside_to_eliminated_tangent: Optional[Array]) -> (
+            Array):
         """Compute the tangent of agent-specific micro moments with respect to a parameter."""
         assert inside_tangent is not None
         I = market.get_agents_index(self.agent_ids)
@@ -396,9 +402,9 @@ class DemographicInteractionMoment(Moment):
             raise ValueError(f"demographics_index must be between 0 and D = {economy.D}, inclusive.")
 
     def _compute_agent_values(
-            self, market: 'Market', delta: Array, probabilities: Array, conditionals: Optional[Array],
-            inside_probabilities: Optional[Array], eliminated_probabilities: Dict[int, Array],
-            inside_eliminated_sum: Optional[Array]) -> Array:
+            self, market: 'Market', delta: Array, probabilities: Array, inside_probabilities: Optional[Array],
+            eliminated_probabilities: Dict[int, Array], inside_to_inside_ratios: Optional[Array],
+            inside_to_eliminated_probabilities: Optional[Array]) -> Array:
         """Compute agent-specific micro moment values, which will be aggregated up into means or covariances."""
         x = market.products.X2[:, [self.X2_index]]
         d = market.agents.demographics[:, [self.demographics_index]]
@@ -408,8 +414,10 @@ class DemographicInteractionMoment(Moment):
     def _compute_agent_values_tangent(
             self, market: 'Market', p: int, delta: Array, probabilities: Array, probabilities_tangent: Array,
             inside_probabilities: Optional[Array], inside_tangent: Optional[Array],
-            eliminated_tangents: Dict[int, Array], inside_eliminated_sum: Optional[Array],
-            inside_eliminated_sum_tangent: Optional[Array]) -> Array:
+            eliminated_probabilities: Dict[int, Array], eliminated_tangents: Dict[int, Array],
+            inside_to_inside_ratios: Optional[Array], inside_to_inside_tangent: Optional[Array],
+            inside_to_eliminated_probabilities: Optional[Array], inside_to_eliminated_tangent: Optional[Array]) -> (
+            Array):
         """Compute the tangent of agent-specific micro moments with respect to a parameter."""
         x = market.products.X2[:, [self.X2_index]]
         d = market.agents.demographics[:, [self.demographics_index]]
@@ -491,9 +499,9 @@ class DemographicCovarianceMoment(Moment):
             raise ValueError(f"demographics_index must be between 0 and D = {economy.D}, inclusive.")
 
     def _compute_agent_values(
-            self, market: 'Market', delta: Array, probabilities: Array, conditionals: Optional[Array],
-            inside_probabilities: Optional[Array], eliminated_probabilities: Dict[int, Array],
-            inside_eliminated_sum: Optional[Array]) -> Array:
+            self, market: 'Market', delta: Array, probabilities: Array, inside_probabilities: Optional[Array],
+            eliminated_probabilities: Dict[int, Array], inside_to_inside_ratios: Optional[Array],
+            inside_to_eliminated_probabilities: Optional[Array]) -> Array:
         """Compute agent-specific micro moment values, which will be aggregated up into means or covariances."""
         assert inside_probabilities is not None
         x = market.products.X2[:, [self.X2_index]]
@@ -506,8 +514,10 @@ class DemographicCovarianceMoment(Moment):
     def _compute_agent_values_tangent(
             self, market: 'Market', p: int, delta: Array, probabilities: Array, probabilities_tangent: Array,
             inside_probabilities: Optional[Array], inside_tangent: Optional[Array],
-            eliminated_tangents: Dict[int, Array], inside_eliminated_sum: Optional[Array],
-            inside_eliminated_sum_tangent: Optional[Array]) -> Array:
+            eliminated_probabilities: Dict[int, Array], eliminated_tangents: Dict[int, Array],
+            inside_to_inside_ratios: Optional[Array], inside_to_inside_tangent: Optional[Array],
+            inside_to_eliminated_probabilities: Optional[Array], inside_to_eliminated_tangent: Optional[Array]) -> (
+            Array):
         """Compute the tangent of agent-specific micro moments with respect to a parameter."""
         assert inside_tangent is not None
         x = market.products.X2[:, [self.X2_index]]
@@ -595,9 +605,9 @@ class DiversionProbabilityMoment(Moment):
         economy._validate_product_ids([self.product_id2], self.market_ids)
 
     def _compute_agent_values(
-            self, market: 'Market', delta: Array, probabilities: Array, conditionals: Optional[Array],
-            inside_probabilities: Optional[Array], eliminated_probabilities: Dict[int, Array],
-            inside_eliminated_sum: Optional[Array]) -> Array:
+            self, market: 'Market', delta: Array, probabilities: Array, inside_probabilities: Optional[Array],
+            eliminated_probabilities: Dict[int, Array], inside_to_inside_ratios: Optional[Array],
+            inside_to_eliminated_probabilities: Optional[Array]) -> Array:
         """Compute agent-specific micro moment values, which will be aggregated up into means or covariances."""
 
         # match the second choice probability of a certain inside good for agents who choose the outside good
@@ -625,8 +635,10 @@ class DiversionProbabilityMoment(Moment):
     def _compute_agent_values_tangent(
             self, market: 'Market', p: int, delta: Array, probabilities: Array, probabilities_tangent: Array,
             inside_probabilities: Optional[Array], inside_tangent: Optional[Array],
-            eliminated_tangents: Dict[int, Array], inside_eliminated_sum: Optional[Array],
-            inside_eliminated_sum_tangent: Optional[Array]) -> Array:
+            eliminated_probabilities: Dict[int, Array], eliminated_tangents: Dict[int, Array],
+            inside_to_inside_ratios: Optional[Array], inside_to_inside_tangent: Optional[Array],
+            inside_to_eliminated_probabilities: Optional[Array], inside_to_eliminated_tangent: Optional[Array]) -> (
+            Array):
         """Compute the tangent of agent-specific micro moments with respect to a parameter."""
 
         # handle the second choice probability of a certain inside good for agents who choose the outside good
@@ -646,6 +658,128 @@ class DiversionProbabilityMoment(Moment):
         j = market.get_product(self.product_id1)
         k = market.get_product(self.product_id2)
         return eliminated_tangents[j][[k]].T / market.products.shares[j]
+
+
+class DiversionInteractionMoment(Moment):
+    r"""Configuration for micro moments that match expectations of interactions between product characteristics of first
+    and second choices.
+
+    For example, survey data can sometimes be used to compute the mean :math:`\mathscr{V}_m` of
+    :math:` x_{jt}^{(1)} x_{kt}^{(2)}` where :math:`x_{jt}^{(1)}` is a product characteristic of an agent's first choice
+    :math:`j` and :math:`x_{kt}^{(2)}` is either the same or a different product characteristic of the agent's second
+    choice :math:`k` if :math:`j` were removed from the choice set, amongst those agents whose first and second choices
+    are both inside goods. Its simulated analogue :math:`v_{mt}` can be defined by
+
+    .. math:: v_{mt} = \sum_{i \in I_t} w_{it} \frac{s_{iJJ}}{s_{JJ}} z_{it}^{(1)} z_{it}^{(2)}
+
+    where the probability agent :math:`i` chooses inside goods and the corresponding share are
+
+    .. math::
+
+       s_{iJJ} = \sum_{j, k \in J_t} s_{ijt} s_{ik(-j)t}, \quad
+       s_{JJ} = \sum_{i \in I_t} w_{it} s_{iJJ},
+
+    and where conditional on purchasing inside goods, the expected values of :math:`x_{jt}^{(1)}` and
+    :math:`x_{kt}^{(2)}` for agent :math:`i` are
+
+    .. math::
+
+       z_{it}^{(1)} = \sum_{j \in J_t} x_{jt}^{(1)} s_{ij(-0)t}, \quad
+       z_{it}^{(2)} = \sum_{j, k \in J_t} x_{kt}^{(2)} s_{ij(-0)t} s_{ik(-0,j)t},
+
+    in which :math:`s_{ij(-0)t}` is the probability of choosing :math:`j` when the outside option is removed from the
+    choice set and :math:`s_{ik(-0,j)t}` is the probability of choosing :math:`k` when both the outside option and
+    :math:`j` are removed from the choice set.
+
+    These are averaged across a set of markets :math:`T_m` and compared with :math:`\mathscr{V}_m`, which gives
+    :math:`\bar{g}_{M,m}` in :eq:`averaged_micro_moments`.
+
+    Parameters
+    ----------
+    X2_index1 : `int`
+        Column index of :math:`x_{jt}^{(1)}` in the matrix of demand-side nonlinear product characteristics,
+        :math:`X_2`. This should be between zero and :math:`K_2 - 1`, inclusive.
+    X2_index2 : `int`
+        Column index of :math:`x_{kt}^{(2)}` in the matrix of demand-side nonlinear product characteristics,
+        :math:`X_2`. This should be between zero and :math:`K_2 - 1`, inclusive.
+    value : `float`
+        Value :math:`\mathscr{V}_m` of the statistic estimated from micro data.
+    observations : `int`
+        Number of micro data observations :math:`N_m` used to estimate :math:`\mathscr{V}_m`, which is used to properly
+        scale micro moment covariances in :eq:`scaled_micro_moment_covariances`.
+    market_ids : `array-like, optional`
+        Distinct market IDs over which the micro moments will be averaged to get :math:`\bar{g}_{M,m}`. These are also
+        the only markets in which the moments will be computed. By default, the moments are computed for and averaged
+        across all markets.
+    market_weights : `array-like, optional`
+        Weights for averaging micro moments over specified ``market_ids``. By default, these are :math:`1 / T_m`.
+
+    Examples
+    --------
+        - :doc:`Tutorial </tutorial>`
+
+    """
+
+    X2_index1: int
+    X2_index2: int
+
+    def __init__(
+            self, X2_index1: int, X2_index2: int, value: float, observations: int,
+            market_ids: Optional[Sequence] = None, market_weights: Optional[Array] = None) -> None:
+        """Validate information about the moment to the greatest extent possible without an economy instance."""
+        if not isinstance(X2_index1, int) or X2_index1 < 0:
+            raise ValueError("X2_index1 must be a positive int.")
+        if not isinstance(X2_index2, int) or X2_index2 < 0:
+            raise ValueError("X2_index2 must be a positive int.")
+        super().__init__(
+            value, observations, market_ids, market_weights, requires_inside=True, requires_inside_eliminated=True
+        )
+        self.X2_index1 = X2_index1
+        self.X2_index2 = X2_index2
+
+    def _format_moment(self) -> str:
+        """Construct a string expression for the moment."""
+        return f"E[X2 Column {self.X2_index1} First x X2 Column {self.X2_index2} Second]"
+
+    def _validate(self, economy: 'Economy') -> None:
+        """Check that matrix indices are valid in the economy."""
+        super()._validate(economy)
+        if self.X2_index1 >= economy.K2:
+            raise ValueError(f"X2_index1 must be between 0 and K2 = {economy.K2}, inclusive.")
+        if self.X2_index2 >= economy.K2:
+            raise ValueError(f"X2_index2 must be between 0 and K2 = {economy.K2}, inclusive.")
+
+    def _compute_agent_values(
+            self, market: 'Market', delta: Array, probabilities: Array, inside_probabilities: Optional[Array],
+            eliminated_probabilities: Dict[int, Array], inside_to_inside_ratios: Optional[Array],
+            inside_to_eliminated_probabilities: Optional[Array]) -> Array:
+        """Compute agent-specific micro moment values, which will be aggregated up into means or covariances."""
+        assert inside_probabilities is not None
+        assert inside_to_inside_ratios is not None and inside_to_eliminated_probabilities is not None
+        x1 = market.products.X2[:, [self.X2_index1]]
+        x2 = market.products.X2[:, [self.X2_index2]]
+        z1 = inside_probabilities.T @ x1
+        z2 = inside_to_eliminated_probabilities.T @ x2
+        return inside_to_inside_ratios * z1 * z2
+
+    def _compute_agent_values_tangent(
+            self, market: 'Market', p: int, delta: Array, probabilities: Array, probabilities_tangent: Array,
+            inside_probabilities: Optional[Array], inside_tangent: Optional[Array],
+            eliminated_probabilities: Dict[int, Array], eliminated_tangents: Dict[int, Array],
+            inside_to_inside_ratios: Optional[Array], inside_to_inside_tangent: Optional[Array],
+            inside_to_eliminated_probabilities: Optional[Array], inside_to_eliminated_tangent: Optional[Array]) -> (
+            Array):
+        """Compute the tangent of agent-specific micro moments with respect to a parameter."""
+        assert inside_probabilities is not None and inside_tangent is not None
+        assert inside_to_inside_ratios is not None and inside_to_inside_tangent is not None
+        assert inside_to_eliminated_probabilities is not None and inside_to_eliminated_tangent is not None
+        x1 = market.products.X2[:, [self.X2_index1]]
+        x2 = market.products.X2[:, [self.X2_index2]]
+        z1 = inside_probabilities.T @ x1
+        z1_tangent = inside_tangent.T @ x1
+        z2 = inside_to_eliminated_probabilities.T @ x2
+        z2_tangent = inside_to_eliminated_tangent.T @ x2
+        return inside_to_inside_tangent * z1 * z2 + inside_to_inside_ratios * (z1_tangent * z2 + z1 * z2_tangent)
 
 
 class DiversionCovarianceMoment(Moment):
@@ -731,15 +865,15 @@ class DiversionCovarianceMoment(Moment):
             raise ValueError(f"X2_index2 must be between 0 and K2 = {economy.K2}, inclusive.")
 
     def _compute_agent_values(
-            self, market: 'Market', delta: Array, probabilities: Array, conditionals: Optional[Array],
-            inside_probabilities: Optional[Array], eliminated_probabilities: Dict[int, Array],
-            inside_eliminated_sum: Optional[Array]) -> Array:
+            self, market: 'Market', delta: Array, probabilities: Array, inside_probabilities: Optional[Array],
+            eliminated_probabilities: Dict[int, Array], inside_to_inside_ratios: Optional[Array],
+            inside_to_eliminated_probabilities: Optional[Array]) -> Array:
         """Compute agent-specific micro moment values, which will be aggregated up into means or covariances."""
-        assert inside_probabilities is not None and inside_eliminated_sum is not None
+        assert inside_probabilities is not None and inside_to_eliminated_probabilities is not None
         x1 = market.products.X2[:, [self.X2_index1]]
         x2 = market.products.X2[:, [self.X2_index2]]
         z1 = inside_probabilities.T @ x1
-        z2 = inside_eliminated_sum.T @ x2
+        z2 = inside_to_eliminated_probabilities.T @ x2
         demeaned_z1 = z1 - market.agents.weights.T @ z1
         demeaned_z2 = z2 - market.agents.weights.T @ z2
         return demeaned_z1 * demeaned_z2
@@ -747,17 +881,19 @@ class DiversionCovarianceMoment(Moment):
     def _compute_agent_values_tangent(
             self, market: 'Market', p: int, delta: Array, probabilities: Array, probabilities_tangent: Array,
             inside_probabilities: Optional[Array], inside_tangent: Optional[Array],
-            eliminated_tangents: Dict[int, Array], inside_eliminated_sum: Optional[Array],
-            inside_eliminated_sum_tangent: Optional[Array]) -> Array:
+            eliminated_probabilities: Dict[int, Array], eliminated_tangents: Dict[int, Array],
+            inside_to_inside_ratios: Optional[Array], inside_to_inside_tangent: Optional[Array],
+            inside_to_eliminated_probabilities: Optional[Array], inside_to_eliminated_tangent: Optional[Array]) -> (
+            Array):
         """Compute the tangent of agent-specific micro moments with respect to a parameter."""
         assert inside_probabilities is not None and inside_tangent is not None
-        assert inside_eliminated_sum is not None and inside_eliminated_sum_tangent is not None
+        assert inside_to_eliminated_probabilities is not None and inside_to_eliminated_tangent is not None
         x1 = market.products.X2[:, [self.X2_index1]]
         x2 = market.products.X2[:, [self.X2_index2]]
         z1 = inside_probabilities.T @ x1
         z1_tangent = inside_tangent.T @ x1
-        z2 = inside_eliminated_sum.T @ x2
-        z2_tangent = inside_eliminated_sum_tangent.T @ x2
+        z2 = inside_to_eliminated_probabilities.T @ x2
+        z2_tangent = inside_to_eliminated_tangent.T @ x2
         demeaned_z1 = z1 - market.agents.weights.T @ z1
         demeaned_z1_tangent = z1_tangent - market.agents.weights.T @ z1_tangent
         demeaned_z2 = z2 - market.agents.weights.T @ z2
@@ -883,9 +1019,9 @@ class CustomMoment(Moment):
         return self.name
 
     def _compute_agent_values(
-            self, market: 'Market', delta: Array, probabilities: Array, conditionals: Optional[Array],
-            inside_probabilities: Optional[Array], eliminated_probabilities: Dict[int, Array],
-            inside_eliminated_sum: Optional[Array]) -> Array:
+            self, market: 'Market', delta: Array, probabilities: Array, inside_probabilities: Optional[Array],
+            eliminated_probabilities: Dict[int, Array], inside_to_inside_ratios: Optional[Array],
+            inside_to_eliminated_probabilities: Optional[Array]) -> Array:
         """Compute agent-specific micro moment values, which will be aggregated up into means or covariances."""
         values = self.compute_custom(
             market.t, market.sigma, market.pi, market.rho, market.products, market.agents, delta, market.mu,
@@ -899,8 +1035,10 @@ class CustomMoment(Moment):
     def _compute_agent_values_tangent(
             self, market: 'Market', p: int, delta: Array, probabilities: Array, probabilities_tangent: Array,
             inside_probabilities: Optional[Array], inside_tangent: Optional[Array],
-            eliminated_tangents: Dict[int, Array], inside_eliminated_sum: Optional[Array],
-            inside_eliminated_sum_tangent: Optional[Array]) -> Array:
+            eliminated_probabilities: Dict[int, Array], eliminated_tangents: Dict[int, Array],
+            inside_to_inside_ratios: Optional[Array], inside_to_inside_tangent: Optional[Array],
+            inside_to_eliminated_probabilities: Optional[Array], inside_to_eliminated_tangent: Optional[Array]) -> (
+            Array):
         """Compute the tangent of agent-specific micro moments with respect to a parameter."""
         assert self.compute_custom_derivatives is not None
         derivatives = self.compute_custom_derivatives(

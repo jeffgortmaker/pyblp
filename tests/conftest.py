@@ -11,7 +11,7 @@ import scipy.linalg
 
 from pyblp import (
     Formulation, Integration, Problem, ProblemResults, DemographicExpectationMoment, CharacteristicExpectationMoment,
-    DemographicInteractionMoment, DiversionProbabilityMoment, DiversionCovarianceMoment, Simulation, SimulationResults,
+    DemographicInteractionMoment, DiversionProbabilityMoment, DiversionInteractionMoment, Simulation, SimulationResults,
     build_differentiation_instruments, build_id_data, build_matrix, build_ownership, build_integration, options
 )
 from pyblp.utilities.basics import update_matrices, Array, Data, Options
@@ -347,7 +347,7 @@ def large_blp_simulation() -> SimulationFixture:
             product_id1=1, product_id2=None, value=0, observations=simulation.N,
             market_ids=[simulation.unique_market_ids[9]]
         ),
-        DiversionCovarianceMoment(
+        DiversionInteractionMoment(
             X2_index1=1, X2_index2=1, value=0, observations=simulation.N,
             market_ids=[simulation.unique_market_ids[12]]
         ),
@@ -522,8 +522,8 @@ def simulated_problem(request: Any) -> SimulatedProblemFixture:
                     moment.market_weights
                 ))
             else:
-                assert isinstance(moment, DiversionCovarianceMoment)
-                micro_moments.append(DiversionCovarianceMoment(
+                assert isinstance(moment, DiversionInteractionMoment)
+                micro_moments.append(DiversionInteractionMoment(
                     moment.X2_index1, moment.X2_index2, value, moment.observations, moment.market_ids,
                     moment.market_weights
                 ))

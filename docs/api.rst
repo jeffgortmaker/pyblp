@@ -73,6 +73,7 @@ Micro moment configurations can be passed to :meth:`Problem.solve`.
    DemographicInteractionMoment
    DiversionProbabilityMoment
    DiversionCovarianceMoment
+   DiversionInteractionMoment
    CustomMoment
 
 

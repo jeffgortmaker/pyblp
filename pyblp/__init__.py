@@ -13,7 +13,8 @@ from .economies.problem import ImportanceSamplingProblem, OptimalInstrumentProbl
 from .economies.simulation import Simulation
 from .moments import (
     DemographicExpectationMoment, CharacteristicExpectationMoment, DemographicCovarianceMoment,
-    DemographicInteractionMoment, DiversionProbabilityMoment, DiversionCovarianceMoment, CustomMoment
+    DemographicInteractionMoment, DiversionProbabilityMoment, DiversionCovarianceMoment, DiversionInteractionMoment,
+    CustomMoment
 )
 from .primitives import Agents, Products
 from .results.bootstrapped_results import BootstrappedResults
@@ -29,7 +30,8 @@ __all__ = [
     'build_differentiation_instruments', 'build_id_data', 'build_integration', 'build_matrix', 'build_ownership',
     'data_to_dict', 'ImportanceSamplingProblem', 'OptimalInstrumentProblem', 'Problem', 'Simulation',
     'DemographicExpectationMoment', 'CharacteristicExpectationMoment', 'DemographicCovarianceMoment',
-    'DemographicInteractionMoment', 'DiversionProbabilityMoment', 'DiversionCovarianceMoment', 'CustomMoment', 'Agents',
-    'Products', 'BootstrappedResults', 'ImportanceSamplingResults', 'OptimalInstrumentResults', 'ProblemResults',
-    'SimulationResults', 'parallel', '__version__'
+    'DemographicInteractionMoment', 'DiversionProbabilityMoment', 'DiversionCovarianceMoment',
+    'DiversionInteractionMoment', 'CustomMoment', 'Agents', 'Products', 'BootstrappedResults',
+    'ImportanceSamplingResults', 'OptimalInstrumentResults', 'ProblemResults', 'SimulationResults', 'parallel',
+    '__version__'
 ]

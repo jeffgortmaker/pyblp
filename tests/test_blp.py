@@ -1064,7 +1064,7 @@ def test_custom_moments(simulated_problem: SimulatedProblemFixture) -> None:
 
     def replicate_demographic_interaction_derivatives(
             moment: DemographicInteractionMoment, _: Any, __: Array, ___: Array, ____: Array, products: Products,
-            agents: Agents, _____: Array, ______: Array, probabilities: Array, _______: Any, derivatives: Array) -> (
+            agents: Agents, _____: Array, ______: Array, _______: Array, ________: Any, derivatives: Array) -> (
             Array):
         """Replicate derivatives for a demographic covariance moment."""
         x = products.X2[:, [moment.X2_index]]
