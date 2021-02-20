@@ -125,7 +125,7 @@ class DemographicExpectationMoment(Moment):
     income, :math:`y_{it}`, for agents who choose products in some set :math:`J`. Its simulated analogue :math:`v_{mt}`
     can be defined by
 
-    .. math:: v_{mt} = \sum_{i \ in I_t} w_{it} \frac{\sum_{j \in J} s_{ijt}}{\sum_{j \in J} s_{jt}} y_{it}.
+    .. math:: v_{mt} = \sum_{i \in I_t} w_{it} \frac{\sum_{j \in J} s_{ijt}}{\sum_{j \in J} s_{jt}} y_{it}.
 
     These are averaged across a set of markets :math:`T_m` and compared with :math:`\mathscr{V}_m`, which gives
     :math:`\bar{g}_{M,m}` in :eq:`averaged_micro_moments`.
@@ -134,7 +134,7 @@ class DemographicExpectationMoment(Moment):
     ----------
     product_ids : `sequence of object`
         IDs of the products :math:`j \in J`, which may include ``None`` to denote the outside option :math:`j = 0`. If
-        there is no ``None`, at least one of these IDs should show up in the ``product_ids`` field of ``product_data``
+        there is no ``None``, at least one of these IDs should show up in the ``product_ids`` field of ``product_data``
         in :class:`Problem` or :class:`Simulation` for each market over which this micro moment will be averaged.
     demographics_index : `int`
         Column index of the demographic :math:`y_{it}` (which can be any demographic, not just income) in the matrix of
@@ -237,7 +237,7 @@ class CharacteristicExpectationMoment(Moment):
 
     .. math:: v_{mt} = \sum_{i \in I} \frac{w_{it}}{w_{It}} \frac{\sum_{j \in J_t} s_{ijt}}{\sum_{j \in J_t} s_{jt}}
 
-    where the fraction of agents in :math:`I` is :math:`w_{It} = \sum_{i in I} w_{it}` and conditional on choosing an
+    where the fraction of agents in :math:`I` is :math:`w_{It} = \sum_{i \in I} w_{it}` and conditional on choosing an
     inside good, the expected value of :math:`x_{jt}` for agent :math:`i` is
 
     .. math:: z_{it} = \sum_{j \in J_t} x_{jt}s_{ij(-0)t}
@@ -561,7 +561,7 @@ class DiversionInteractionMoment(Moment):
     and second choices.
 
     For example, survey data can sometimes be used to compute the mean :math:`\mathscr{V}_m` of
-    :math:` x_{jt}^{(1)} x_{kt}^{(2)}` where :math:`x_{jt}^{(1)}` is a product characteristic of an agent's first choice
+    :math:`x_{jt}^{(1)} x_{kt}^{(2)}` where :math:`x_{jt}^{(1)}` is a product characteristic of an agent's first choice
     :math:`j` and :math:`x_{kt}^{(2)}` is either the same or a different product characteristic of the agent's second
     choice :math:`k` if :math:`j` were removed from the choice set, amongst those agents whose first and second choices
     are both inside goods. Its simulated analogue :math:`v_{mt}` can be defined by
