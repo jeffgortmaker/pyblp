@@ -866,30 +866,32 @@ def test_gradient_optionality(simulated_problem: SimulatedProblemFixture, scipy_
 
 
 @pytest.mark.usefixtures('simulated_problem')
-@pytest.mark.parametrize('method', [
-    pytest.param('l-bfgs-b', id="L-BFGS-B"),
-    pytest.param('trust-constr', id="trust-region"),
-    pytest.param('tnc', id="TNC"),
-    pytest.param('slsqp', id="SLSQP"),
-    pytest.param('knitro', id="Knitro"),
-    pytest.param('cg', id="CG"),
-    pytest.param('bfgs', id="BFGS"),
-    pytest.param('newton-cg', id="Newton-CG"),
-    pytest.param('nelder-mead', id="Nelder-Mead"),
-    pytest.param('powell', id="Powell")
+@pytest.mark.parametrize('method_info', [
+    pytest.param(('l-bfgs-b', 'gtol'), id="L-BFGS-B"),
+    pytest.param(('trust-constr', 'gtol'), id="trust-region"),
+    pytest.param(('tnc', 'gtol'), id="TNC"),
+    pytest.param(('slsqp', 'ftol'), id="SLSQP"),
+    pytest.param(('knitro', 'ftol'), id="Knitro"),
+    pytest.param(('cg', 'gtol'), id="CG"),
+    pytest.param(('bfgs', 'gtol'), id="BFGS"),
+    pytest.param(('newton-cg', 'xtol'), id="Newton-CG"),
+    pytest.param(('nelder-mead', 'xatol'), id="Nelder-Mead"),
+    pytest.param(('powell', 'xtol'), id="Powell")
 ])
-def test_bounds(simulated_problem: SimulatedProblemFixture, method: str) -> None:
+def test_bounds(simulated_problem: SimulatedProblemFixture, method_info: Tuple[str, str]) -> None:
     """Test that non-binding bounds on parameters in simulated problems do not affect estimates and that binding bounds
     are respected. Forcing parameters to be far from their optimal values creates instability problems, so this is also
     a test of how well estimation handles unstable problems.
     """
     simulation, _, problem, solve_options, _ = simulated_problem
+    method, tol_option = method_info
 
-    # skip optimization methods that haven't been configured properly
+    # skip optimization methods that haven't been configured properly, using a loose tolerance to speed up the test
     updated_solve_options = copy.deepcopy(solve_options)
     try:
         updated_solve_options['optimization'] = Optimization(
             method,
+            method_options={tol_option: 1e-8 if method == 'trust-constr' else 0.1},
             compute_gradient=method not in {'nelder-mead', 'powell'}
         )
     except OSError as exception:
