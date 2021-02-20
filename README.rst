@@ -34,6 +34,7 @@ Citation
 
 If you use PyBLP in your research, we ask that you also cite `Conlon and Gortmaker (2020) <https://jeffgortmaker.com/files/pyblp.pdf>`_, which describes the advances implemented in the package.
 ::
+
     @article{PyBLP,
         author = {Conlon, Christopher and Gortmaker, Jeff},
         title = {Best practices for differentiated products demand estimation with {PyBLP}},
