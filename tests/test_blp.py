@@ -1060,7 +1060,7 @@ def test_custom_moments(simulated_problem: SimulatedProblemFixture) -> None:
         x = products.X2[:, [moment.X2_index]]
         d = agents.demographics[:, [moment.demographics_index]]
         z = probabilities.T @ x
-        return d * z / (1 - products.shares.sum())
+        return d * z / products.shares.sum()
 
     def replicate_demographic_interaction_derivatives(
             moment: DemographicInteractionMoment, _: Any, __: Array, ___: Array, ____: Array, products: Products,
@@ -1070,7 +1070,7 @@ def test_custom_moments(simulated_problem: SimulatedProblemFixture) -> None:
         x = products.X2[:, [moment.X2_index]]
         d = agents.demographics[:, [moment.demographics_index]]
         z_tangent = derivatives.T @ x
-        return d * z_tangent / (1 - products.shares.sum())
+        return d * z_tangent / products.shares.sum()
 
     # replace demographic covariance moments with custom ones that replicate their behavior
     replicated_micro_moments = []
