@@ -112,7 +112,8 @@ class Market(Container):
 
         # store delta and compute mu
         self.delta = None if delta is None else delta[economy._product_market_indices[t]]
-        self.mu = self.compute_mu()
+        with np.errstate(all='ignore'):
+            self.mu = self.compute_mu()
 
         # store moments relevant to this market
         self.moments = None if moments is None else MarketMoments(moments, t)
