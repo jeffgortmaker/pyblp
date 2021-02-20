@@ -1035,10 +1035,14 @@ def test_extra_demographics(simulated_problem: SimulatedProblemFixture) -> None:
     if simulation.D == 0:
         return pytest.skip("There are no demographics.")
 
-    # reconstruct the problem with unnecessary rows of demographics
+    # also skip those with custom agents
     assert simulation.agent_data is not None
-    product_data = simulation_results.product_data
     agent_data = simulation.agent_data
+    if 'weights' in agent_data.dtype.names:
+        return pytest.skip("There are custom agents.")
+
+    # reconstruct the problem with unnecessary rows of demographics
+    product_data = simulation_results.product_data
     extra_agent_data = {k: np.r_[agent_data[k], agent_data[k]] for k in agent_data.dtype.names}
     new_problem = Problem(
         problem.product_formulations, product_data, problem.agent_formulation, extra_agent_data, simulation.integration
