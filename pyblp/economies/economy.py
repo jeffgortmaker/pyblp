@@ -1,7 +1,7 @@
 """Economy underlying the BLP model."""
 
 import abc
-import collections
+import collections.abc
 from typing import Any, Dict, Hashable, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np

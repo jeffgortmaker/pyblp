@@ -1,7 +1,7 @@
 """Economy-level BLP problem functionality."""
 
 import abc
-import collections
+import collections.abc
 import functools
 import time
 from typing import Any, Dict, Hashable, List, Mapping, Optional, Sequence, Tuple, Union

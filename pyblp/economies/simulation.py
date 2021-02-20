@@ -1,6 +1,6 @@
 """Economy-level simulation of synthetic BLP data."""
 
-import collections
+import collections.abc
 import time
 from typing import Any, Dict, Hashable, List, Mapping, Optional, Sequence, Tuple, Union
 

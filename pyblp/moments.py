@@ -1,7 +1,7 @@
 """Micro moments."""
 
 import abc
-import collections
+import collections.abc
 import functools
 from typing import Any, Callable, Dict, Hashable, List, Optional, Sequence, TYPE_CHECKING
 
