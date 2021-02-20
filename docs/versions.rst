@@ -4,6 +4,15 @@ Version Notes
 These notes will only include major changes.
 
 
+0.12
+----
+
+- Refactored micro moment API
+- Custom micro moments
+- Properly scale micro moment covariances
+- Pickling support
+
+
 0.11
 ----
 
