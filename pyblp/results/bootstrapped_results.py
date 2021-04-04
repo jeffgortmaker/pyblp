@@ -1,8 +1,10 @@
 """Economy-level structuring of bootstrapped BLP problem results."""
 
 import itertools
+from pathlib import Path
+import pickle
 import time
-from typing import Any, Callable, Dict, Hashable, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, Hashable, List, Mapping, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
@@ -263,6 +265,18 @@ class BootstrappedResults(Results):
         output("")
         return combined
 
+    def to_pickle(self, path: Union[str, Path]) -> None:
+        """Save these results as a pickle file.
+
+        Parameters
+        ----------
+        path: `str or Path`
+            File path to which these results will be saved.
+
+        """
+        with open(path, 'wb') as handle:
+            pickle.dump(self, handle)
+
     def to_dict(
             self, attributes: Sequence[str] = (
                 'bootstrapped_sigma', 'bootstrapped_pi', 'bootstrapped_rho', 'bootstrapped_beta', 'bootstrapped_gamma',
@@ -281,10 +295,6 @@ class BootstrappedResults(Results):
         -------
         `dict`
             Mapping from attribute names to values.
-
-        Examples
-        --------
-            - :doc:`Tutorial </tutorial>`
 
         """
         return {k: getattr(self, k) for k in attributes}

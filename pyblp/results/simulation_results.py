@@ -1,5 +1,7 @@
 """Economy-level structuring of BLP simulation results."""
 
+from pathlib import Path
+import pickle
 import time
 from typing import Dict, Hashable, List, Optional, Sequence, Set, Tuple, TYPE_CHECKING, Union
 
@@ -103,6 +105,18 @@ class SimulationResults(StringRepresentation):
             self.contraction_evaluations.sum()
         ]
         return format_table(header, values, title="Simulation Results Summary")
+
+    def to_pickle(self, path: Union[str, Path]) -> None:
+        """Save these results as a pickle file.
+
+        Parameters
+        ----------
+        path: `str or Path`
+            File path to which these results will be saved.
+
+        """
+        with open(path, 'wb') as handle:
+            pickle.dump(self, handle)
 
     def to_dict(
             self, attributes: Sequence[str] = (

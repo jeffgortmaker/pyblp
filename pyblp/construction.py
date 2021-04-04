@@ -1,5 +1,7 @@
 """Data construction."""
 
+from pathlib import Path
+import pickle
 from typing import Any, Callable, Dict, Iterator, List, Mapping, Optional, Union
 
 import numpy as np
@@ -587,3 +589,40 @@ def data_to_dict(data: RecArray, ignore_empty: bool = True) -> Dict[str, Array]:
             mapping[new_key] = data[key][:, index].flatten()
 
     return mapping
+
+
+def save_pickle(x: object, path: Union[str, Path]) -> None:
+    """Save an object as a pickle file.
+
+    This is a simple wrapper around `pickle.dump`.
+
+    Parameters
+    ----------
+    x : `object`
+        Object to be pickled.
+    path : `str or Path`
+        File path to which the object will be saved.
+
+    """
+    with open(path, 'wb') as handle:
+        pickle.dump(x, handle)
+
+
+def read_pickle(path: Union[str, Path]) -> object:
+    """Load a pickled object into memory.
+
+    This is a simple wrapper around `pickle.load`.
+
+    Parameters
+    ----------
+    path : `str or Path`
+        File path of a pickled object.
+
+    Returns
+    -------
+    `object`
+        The unpickled object.
+
+    """
+    with open(path, 'rb') as handle:
+        return pickle.load(handle)

@@ -1,6 +1,8 @@
 """Economy-level structuring of importance sampling results."""
 
-from typing import Sequence, TYPE_CHECKING
+from pathlib import Path
+import pickle
+from typing import Sequence, TYPE_CHECKING, Union
 
 import numpy as np
 
@@ -96,6 +98,18 @@ class ImportanceSamplingResults(StringRepresentation):
             np.min(self.effective_draws_for_skewness).astype(int), np.min(self.weight_sums), np.max(self.weight_sums)
         ]
         return format_table(header, values, title="Importance Sampling Results Summary")
+
+    def to_pickle(self, path: Union[str, Path]) -> None:
+        """Save these results as a pickle file.
+
+        Parameters
+        ----------
+        path: `str or Path`
+            File path to which these results will be saved.
+
+        """
+        with open(path, 'wb') as handle:
+            pickle.dump(self, handle)
 
     def to_dict(
             self, attributes: Sequence[str] = (

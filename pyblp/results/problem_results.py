@@ -1,8 +1,10 @@
 """Economy-level structuring of BLP problem results."""
 
 import itertools
+from pathlib import Path
+import pickle
 import time
-from typing import Any, Callable, Dict, Hashable, List, Optional, Sequence, TYPE_CHECKING, Tuple
+from typing import Any, Callable, Dict, Hashable, List, Optional, Sequence, TYPE_CHECKING, Tuple, Union
 
 import numpy as np
 import scipy.linalg
@@ -604,6 +606,18 @@ class ProblemResults(Results):
             )
 
         return format_table(header, values, title="Cumulative Statistics")
+
+    def to_pickle(self, path: Union[str, Path]) -> None:
+        """Save these results as a pickle file.
+
+        Parameters
+        ----------
+        path: `str or Path`
+            File path to which these results will be saved.
+
+        """
+        with open(path, 'wb') as handle:
+            pickle.dump(self, handle)
 
     def to_dict(
             self, attributes: Sequence[str] = (

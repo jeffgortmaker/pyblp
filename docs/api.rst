@@ -22,10 +22,10 @@ Various components of the package require configurations for how to approximate 
    Optimization
 
 
-Data Construction Functions
+Data Manipulation Functions
 ---------------------------
 
-There are also a number of convenience functions that can be used to construct common components of product and agent data.
+There are also a number of convenience functions that can be used to construct common components of product and agent data, or manipulate other PyBLP objects.
 
 .. autosummary::
    :toctree: _api
@@ -37,6 +37,8 @@ There are also a number of convenience functions that can be used to construct c
    build_ownership
    build_integration
    data_to_dict
+   save_pickle
+   read_pickle
 
 
 Problem Class
@@ -87,11 +89,12 @@ Solved problems return the following results class.
 
    ProblemResults
 
-The results can be converted into a dictionary.
+The results can be pickled or converted into a dictionary.
 
 .. autosummary::
    :toctree: _api
 
+   ProblemResults.to_pickle
    ProblemResults.to_dict
 
 The following methods test the validity of overidentifying and model restrictions.
@@ -160,11 +163,12 @@ Parametric bootstrap computation returns the following class.
 
    BootstrappedResults
 
-This class has all of the same methods as :class:`ProblemResults`, except for :meth:`ProblemResults.bootstrap`, :meth:`ProblemResults.compute_optimal_instruments`, and :meth:`ProblemResults.importance_sampling`. It can also be converted into a dictionary.
+This class has all of the same methods as :class:`ProblemResults`, except for :meth:`ProblemResults.bootstrap`, :meth:`ProblemResults.compute_optimal_instruments`, and :meth:`ProblemResults.importance_sampling`. It can also be pickled or converted into a dictionary.
 
 .. autosummary::
    :toctree: _api
 
+   BootstrappedResults.to_pickle
    BootstrappedResults.to_dict
 
 
@@ -180,11 +184,12 @@ Optimal instrument computation returns the following results class.
 
    OptimalInstrumentResults
 
-The results can be converted into a dictionary.
+The results can be pickled or converted into a dictionary.
 
 .. autosummary::
    :toctree: _api
 
+   OptimalInstrumentResults.to_pickle
    OptimalInstrumentResults.to_dict
 
 They can also be converted into a :class:`Problem` with the following method.
@@ -216,11 +221,12 @@ Importance sampling returns the following results class:
 
    ImportanceSamplingResults
 
-The results can be converted into a dictionary.
+The results can be pickled or converted into a dictionary.
 
 .. autosummary::
    :toctree: _api
 
+   ImportanceSamplingResults.to_pickle
    ImportanceSamplingResults.to_dict
 
 They can also be converted into a :class:`Problem` with the following method.
@@ -278,11 +284,12 @@ Solved simulations return the following results class.
 
    SimulationResults
 
-The results can be converted into a dictionary.
+The results can be pickled or converted into a dictionary.
 
 .. autosummary::
    :toctree: _api
 
+   SimulationResults.to_pickle
    SimulationResults.to_dict
 
 They can also be converted into a :class:`Problem` with the following method.
