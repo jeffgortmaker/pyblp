@@ -8,7 +8,7 @@ from typing import Any, Callable, Dict, Hashable, List, Optional, Sequence, TYPE
 import numpy as np
 
 from . import options
-from .utilities.basics import Array, StringRepresentation, format_number, format_table, output
+from .utilities.basics import Array, StringRepresentation, format_number, format_table, warn
 
 
 # only import objects that create import cycles when checking types
@@ -66,9 +66,7 @@ class Moment(StringRepresentation):
 
             # validate that they sum to 1
             if np.abs(1 - self.market_weights.sum()) > options.weights_tol:
-                output("")
-                output("Warning: Market weights sum to a value that differs from 1 by more than options.weights_tol.")
-                output("")
+                warn("Market weights sum to a value that differs from 1 by more than options.weights_tol.")
 
         # validate requirements
         assert not requires_inside_eliminated or requires_inside

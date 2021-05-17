@@ -12,6 +12,7 @@ from typing import (
     Any, Callable, Container, Dict, Hashable, Iterable, Iterator, List, Mapping, Optional, Set, Sequence, Type, Tuple,
     Union
 )
+import warnings
 
 import numpy as np
 
@@ -153,16 +154,14 @@ def extract_matrix(structured_array_like: Mapping, key: Any) -> Optional[Array]:
             try:
                 part = np.c_[structured_array_like[f'{key}{index}']]
             except Exception:
-                # output a warning if there's a 1 but no 0 (this is a common mistake)
+                # warn if there's a 1 but no 0 (this is a common mistake)
                 if index == 0:
                     try:
                         structured_array_like[f'{key}{index + 1}']
                     except Exception:
                         pass
                     else:
-                        output("")
-                        output(f"Warning: '{key}{index + 1}' was specified but not '{key}{index}'.")
-                        output("")
+                        warn(f"'{key}{index + 1}' was specified but not '{key}{index}'.")
                 break
             index += 1
             if part.size > 0:
@@ -200,6 +199,14 @@ def interact_ids(*columns: Array) -> Array:
     if len(columns) > 1:
         interacted[:] = list(zip(*columns))
     return interacted
+
+
+def warn(message: Any) -> None:
+    """Output a warning."""
+    old_formatwarning = warnings.formatwarning
+    warnings.formatwarning = lambda x, *_, **__: f"{x}\n"
+    warnings.warn(message)
+    warnings.formatwarning = old_formatwarning
 
 
 def output(message: Any) -> None:

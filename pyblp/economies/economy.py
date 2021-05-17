@@ -12,7 +12,7 @@ from ..configurations.iteration import Iteration
 from ..primitives import Container
 from ..utilities.algebra import precisely_identify_collinearity, precisely_identify_psd
 from ..utilities.basics import (
-    Array, Bounds, Error, Groups, RecArray, StringRepresentation, format_table, get_indices, output
+    Array, Bounds, Error, Groups, RecArray, StringRepresentation, format_table, get_indices, output, warn
 )
 
 
@@ -190,20 +190,16 @@ class Economy(Container, StringRepresentation):
             if (self.ED > 0 and name in {'X1', 'ZD'}) or (self.ES > 0 and name in {'X3', 'ZS'}):
                 common_message = f"Absorbed fixed effects may be creating collinearity problems. {common_message}"
             if not successful:
-                output("")
-                output(
-                    f"Warning: Failed to compute the QR decomposition of {name} while checking for collinearity "
-                    f"issues. {common_message}"
+                warn(
+                    f"Failed to compute the QR decomposition of {name} while checking for collinearity issues. "
+                    f"{common_message}"
                 )
-                output("")
             if collinear.any():
                 collinear_labels = ", ".join(l for l, c in zip(labels, collinear) if c)
-                output("")
-                output(
-                    f"Warning: Detected collinearity issues with [{collinear_labels}] and at least one other column in "
-                    f"{name}. {common_message}"
+                warn(
+                    f"Detected collinearity issues with [{collinear_labels}] and at least one other column in {name}. "
+                    f"{common_message}"
                 )
-                output("")
 
     @staticmethod
     def _detect_psd(matrix: Array, name: str) -> None:

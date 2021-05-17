@@ -1,8 +1,8 @@
 """Algebraic routines."""
 
 import itertools
-import warnings
 from typing import Callable, List, Optional, Tuple
+import warnings
 
 import numpy as np
 import scipy.linalg
