@@ -190,16 +190,20 @@ class Economy(Container, StringRepresentation):
             if (self.ED > 0 and name in {'X1', 'ZD'}) or (self.ES > 0 and name in {'X3', 'ZS'}):
                 common_message = f"Absorbed fixed effects may be creating collinearity problems. {common_message}"
             if not successful:
-                raise ValueError(
-                    f"Failed to compute the QR decomposition of {name} while checking for collinearity issues. "
-                    f"{common_message}"
+                output("")
+                output(
+                    f"Warning: Failed to compute the QR decomposition of {name} while checking for collinearity "
+                    f"issues. {common_message}"
                 )
+                output("")
             if collinear.any():
                 collinear_labels = ", ".join(l for l, c in zip(labels, collinear) if c)
-                raise ValueError(
-                    f"Detected collinearity issues with [{collinear_labels}] and at least one other column in {name}. "
-                    f"{common_message}"
+                output("")
+                output(
+                    f"Warning: Detected collinearity issues with [{collinear_labels}] and at least one other column in "
+                    f"{name}. {common_message}"
                 )
+                output("")
 
     @staticmethod
     def _detect_psd(matrix: Array, name: str) -> None:
