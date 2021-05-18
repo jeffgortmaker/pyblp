@@ -226,17 +226,17 @@ class ProblemMarket(Market):
 
         return micro_jacobian, errors
 
-    @staticmethod
     def compute_eliminated_probabilities_by_parameter_tangent(
-            probabilities: Array, probabilities_tangent: Array, eliminated: Array, eliminate_outside: bool = False,
-            eliminate_product: Optional[int] = None) -> Array:
+            self, probabilities: Array, probabilities_tangent: Array, eliminated: Array, 
+            eliminate_outside: bool = False, eliminate_product: Optional[int] = None) -> Array:
         """Compute the tangent with respect to a parameter of probabilities with the outside option, an inside product,
         or both removed from the choice set.
         """
 
         # compute the tangent of the denominator in the expression for eliminated probabilities
         if eliminate_outside and eliminate_product is not None:
-            denominator_tangent = np.delete(probabilities_tangent, eliminate_product, axis=0).sum(axis=0, keepdims=True)
+            eliminate_index = np.arange(self.J) != eliminate_product
+            denominator_tangent = probabilities_tangent.sum(axis=0, where=eliminate_index[:, None], keepdims=True)
         elif eliminate_outside:
             denominator_tangent = probabilities_tangent.sum(axis=0, keepdims=True)
         elif eliminate_product is not None:

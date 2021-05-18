@@ -360,7 +360,8 @@ class Market(Container):
 
         # compute the denominator of the expression
         if eliminate_outside and eliminate_product is not None:
-            denominator = np.delete(probabilities, eliminate_product, axis=0).sum(axis=0, keepdims=True)
+            eliminate_index = np.arange(self.J) != eliminate_product
+            denominator = probabilities.sum(axis=0, where=eliminate_index[:, None], keepdims=True)
         elif eliminate_outside:
             denominator = probabilities.sum(axis=0, keepdims=True)
         elif eliminate_product is not None:
