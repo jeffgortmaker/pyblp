@@ -200,8 +200,8 @@ class ProblemMarket(Market):
                     eliminated_probabilities[j], eliminated_ratios[j], probabilities_tangent, eliminate_product=j
                 )
 
-            # the ratio of the probability each agent's first and second choices are both inside goods to the
-            #   corresponding aggregate share
+            # pre-compute the same but for the ratio of the probability each agent's first and second choices are both
+            #   inside goods to the corresponding aggregate share
             inside_to_inside_tangent = None
             if inside_to_inside_ratios is not None:
                 inside_to_inside_probabilities = np.zeros((self.I, 1), options.dtype)
