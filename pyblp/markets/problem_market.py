@@ -174,6 +174,17 @@ class ProblemMarket(Market):
                     inside_eliminated_ratios[j] = inside_eliminated_probabilities[j] / probabilities
                     inside_eliminated_ratios[j][~np.isfinite(inside_eliminated_ratios[j])] = 0
 
+        # pre-compute the ratio of the probability each agent's first and second choices are both inside goods to the
+        #   corresponding aggregate share
+        inside_to_inside_probabilities = inside_to_inside_share = None
+        if inside_to_inside_ratios is not None:
+            inside_to_inside_probabilities = np.zeros((self.I, 1), options.dtype)
+            for j in range(self.J):
+                j_to_inside_probabilities = eliminated_probabilities[j].sum(axis=0, keepdims=True).T
+                inside_to_inside_probabilities += probabilities[[j]].T * j_to_inside_probabilities
+
+            inside_to_inside_share = self.agents.weights.T @ inside_to_inside_probabilities
+
         # compute the Jacobian
         micro_jacobian = np.zeros((self.moments.MM, self.parameters.P))
         for p, parameter in enumerate(self.parameters.unfixed):
@@ -206,18 +217,16 @@ class ProblemMarket(Market):
             #   inside goods to the corresponding aggregate share
             inside_to_inside_tangent = None
             if inside_to_inside_ratios is not None:
-                inside_to_inside_probabilities = np.zeros((self.I, 1), options.dtype)
+                assert inside_to_inside_probabilities is not None and inside_to_inside_share is not None
                 inside_to_inside_probabilities_tangent = np.zeros((self.I, 1), options.dtype)
                 for j in range(self.J):
                     j_to_inside_probabilities = eliminated_probabilities[j].sum(axis=0, keepdims=True).T
                     j_to_inside_tangent = eliminated_tangents[j].sum(axis=0, keepdims=True).T
-                    inside_to_inside_probabilities += probabilities[[j]].T * j_to_inside_probabilities
                     inside_to_inside_probabilities_tangent += (
                         probabilities_tangent[[j]].T * j_to_inside_probabilities +
                         probabilities[[j]].T * j_to_inside_tangent
                     )
 
-                inside_to_inside_share = self.agents.weights.T @ inside_to_inside_probabilities
                 inside_to_inside_share_tangent = self.agents.weights.T @ inside_to_inside_probabilities_tangent
                 inside_to_inside_tangent = inside_to_inside_ratios * (
                     inside_to_inside_probabilities_tangent / inside_to_inside_probabilities -
