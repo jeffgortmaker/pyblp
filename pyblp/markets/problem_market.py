@@ -189,15 +189,17 @@ class ProblemMarket(Market):
             # pre-compute the same but for probabilities conditional on purchasing an inside good
             inside_tangent = None
             if inside_probabilities is not None:
-                inside_tangent = self.compute_eliminated_probabilities_by_parameter_tangent(
-                    inside_probabilities, inside_ratio, probabilities_tangent, eliminate_outside=True
+                inside_tangent = inside_ratio * (
+                    probabilities_tangent -
+                    inside_probabilities * probabilities_tangent.sum(axis=0, keepdims=True)
                 )
 
             # pre-compute the same but for second choice probabilities
             eliminated_tangents = {}
             for j in eliminated_probabilities:
-                eliminated_tangents[j] = self.compute_eliminated_probabilities_by_parameter_tangent(
-                    eliminated_probabilities[j], eliminated_ratios[j], probabilities_tangent, eliminate_product=j
+                eliminated_tangents[j] = eliminated_ratios[j] * (
+                    probabilities_tangent +
+                    eliminated_probabilities[j] * probabilities_tangent[[j]]
                 )
 
             # pre-compute the same but for the ratio of the probability each agent's first and second choices are both
@@ -228,10 +230,11 @@ class ProblemMarket(Market):
             if inside_eliminated_probabilities:
                 assert inside_probabilities is not None and inside_tangent is not None
                 inside_to_eliminated_tangent = np.zeros((self.J, self.I), options.dtype)
+                probabilities_tangent_sum = probabilities_tangent.sum(axis=0, keepdims=True)
                 for j in range(self.J):
-                    inside_eliminated_tangent = self.compute_eliminated_probabilities_by_parameter_tangent(
-                        inside_eliminated_probabilities[j], inside_eliminated_ratios[j], probabilities_tangent,
-                        eliminate_outside=True, eliminate_product=j
+                    inside_eliminated_tangent = inside_eliminated_ratios[j] * (
+                        probabilities_tangent -
+                        inside_eliminated_probabilities[j] * (probabilities_tangent_sum - probabilities_tangent[j])
                     )
                     inside_to_eliminated_tangent += (
                         inside_tangent[[j]] * inside_eliminated_probabilities[j] +
@@ -247,26 +250,6 @@ class ProblemMarket(Market):
                 )
 
         return micro_jacobian, errors
-
-    def compute_eliminated_probabilities_by_parameter_tangent(
-            self, eliminated: Array, eliminated_by_probabilities: Array, probabilities_tangent: Array,
-            eliminate_outside: bool = False, eliminate_product: Optional[int] = None) -> Array:
-        """Compute the tangent with respect to a parameter of probabilities with the outside option, an inside product,
-        or both removed from the choice set. The ratio of eliminated to standard probabilities is pre-computed.
-        """
-
-        # compute the tangent of the denominator in the expression for eliminated probabilities
-        if eliminate_outside and eliminate_product is not None:
-            eliminate_index = np.arange(self.J) != eliminate_product
-            denominator_tangent = probabilities_tangent.sum(axis=0, where=eliminate_index[:, None], keepdims=True)
-        elif eliminate_outside:
-            denominator_tangent = probabilities_tangent.sum(axis=0, keepdims=True)
-        elif eliminate_product is not None:
-            denominator_tangent = -probabilities_tangent[[eliminate_product]]
-        else:
-            return probabilities_tangent
-
-        return eliminated_by_probabilities * (probabilities_tangent - eliminated * denominator_tangent)
 
     @NumericalErrorHandler(exceptions.MicroMomentCovariancesNumericalError)
     def safely_compute_micro_covariances(
