@@ -176,12 +176,13 @@ class ProblemMarket(Market):
 
         # pre-compute the ratio of the probability each agent's first and second choices are both inside goods to the
         #   corresponding aggregate share
+        product_to_inside_probabilities = {}
         inside_to_inside_probabilities = inside_to_inside_share = None
         if inside_to_inside_ratios is not None:
             inside_to_inside_probabilities = np.zeros((self.I, 1), options.dtype)
             for j in range(self.J):
-                j_to_inside_probabilities = eliminated_probabilities[j].sum(axis=0, keepdims=True).T
-                inside_to_inside_probabilities += probabilities[[j]].T * j_to_inside_probabilities
+                product_to_inside_probabilities[j] = eliminated_probabilities[j].sum(axis=0, keepdims=True).T
+                inside_to_inside_probabilities += probabilities[[j]].T * product_to_inside_probabilities[j]
 
             inside_to_inside_share = self.agents.weights.T @ inside_to_inside_probabilities
 
@@ -220,10 +221,9 @@ class ProblemMarket(Market):
                 assert inside_to_inside_probabilities is not None and inside_to_inside_share is not None
                 inside_to_inside_probabilities_tangent = np.zeros((self.I, 1), options.dtype)
                 for j in range(self.J):
-                    j_to_inside_probabilities = eliminated_probabilities[j].sum(axis=0, keepdims=True).T
                     j_to_inside_tangent = eliminated_tangents[j].sum(axis=0, keepdims=True).T
                     inside_to_inside_probabilities_tangent += (
-                        probabilities_tangent[[j]].T * j_to_inside_probabilities +
+                        probabilities_tangent[[j]].T * product_to_inside_probabilities[j] +
                         probabilities[[j]].T * j_to_inside_tangent
                     )
 
