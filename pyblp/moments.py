@@ -198,7 +198,7 @@ class DemographicExpectationMoment(Moment):
             elif product_id in market.products.product_ids:
                 j = market.get_product(product_id)
                 shares_sum += market.products.shares[j]
-                probabilities_sum += probabilities[[j]].T
+                probabilities_sum += probabilities[j][None].T
 
         d = market.agents.demographics[:, [self.demographics_index]]
         return d * probabilities_sum / shares_sum
@@ -220,7 +220,7 @@ class DemographicExpectationMoment(Moment):
             elif product_id in market.products.product_ids:
                 j = market.get_product(product_id)
                 shares_sum += market.products.shares[j]
-                probabilities_tangent_sum += probabilities_tangent[[j]].T
+                probabilities_tangent_sum += probabilities_tangent[j][None].T
 
         d = market.agents.demographics[:, [self.demographics_index]]
         return d * probabilities_tangent_sum / shares_sum
@@ -509,7 +509,7 @@ class DiversionProbabilityMoment(Moment):
             assert inside_probabilities is not None
             k = market.get_product(self.product_id2)
             outside_share = 1 - market.products.shares.sum()
-            numerator = inside_probabilities[[k]].T - market.products.shares[k]
+            numerator = inside_probabilities[k][None].T - market.products.shares[k]
             return numerator / outside_share
 
         # match the second choice probability of the outside good for agents who choose a certain inside good
@@ -523,7 +523,7 @@ class DiversionProbabilityMoment(Moment):
         # match the second choice probability of a certain inside good for agents who choose a certain inside good
         j = market.get_product(self.product_id1)
         k = market.get_product(self.product_id2)
-        numerator = eliminated_probabilities[j][[k]].T - market.products.shares[k]
+        numerator = eliminated_probabilities[j][k][None].T - market.products.shares[k]
         return numerator / market.products.shares[j]
 
     def _compute_agent_values_tangent(
@@ -540,7 +540,7 @@ class DiversionProbabilityMoment(Moment):
             assert inside_tangent is not None
             k = market.get_product(self.product_id2)
             outside_share = 1 - market.products.shares.sum()
-            return inside_tangent[[k]].T / outside_share
+            return inside_tangent[k][None].T / outside_share
 
         # handle the second choice probability of the outside good for agents who choose a certain inside good
         if self.product_id2 is None:
@@ -551,7 +551,7 @@ class DiversionProbabilityMoment(Moment):
         # handle the second choice probability of a certain inside good for agents who choose a certain inside good
         j = market.get_product(self.product_id1)
         k = market.get_product(self.product_id2)
-        return eliminated_tangents[j][[k]].T / market.products.shares[j]
+        return eliminated_tangents[j][k][None].T / market.products.shares[j]
 
 
 class DiversionInteractionMoment(Moment):

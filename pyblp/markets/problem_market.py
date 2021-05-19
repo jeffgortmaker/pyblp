@@ -182,7 +182,7 @@ class ProblemMarket(Market):
             inside_to_inside_probabilities = np.zeros((self.I, 1), options.dtype)
             for j in range(self.J):
                 product_to_inside_probabilities[j] = eliminated_probabilities[j].sum(axis=0, keepdims=True).T
-                inside_to_inside_probabilities += probabilities[[j]].T * product_to_inside_probabilities[j]
+                inside_to_inside_probabilities += probabilities[j][None].T * product_to_inside_probabilities[j]
 
             inside_to_inside_share = self.agents.weights.T @ inside_to_inside_probabilities
 
@@ -196,7 +196,7 @@ class ProblemMarket(Market):
             probabilities_tangent, _ = self.compute_probabilities_by_parameter_tangent(
                 parameter, probabilities, conditionals, delta
             )
-            probabilities_tangent += (probabilities_tensor * xi_jacobian[:, [p], None]).sum(axis=0)
+            probabilities_tangent += np.einsum('jki,j->ki', probabilities_tensor, xi_jacobian[:, p])
 
             # pre-compute the same but for probabilities conditional on purchasing an inside good
             inside_tangent = None
@@ -211,7 +211,7 @@ class ProblemMarket(Market):
             for j in eliminated_probabilities:
                 eliminated_tangents[j] = eliminated_ratios[j] * (
                     probabilities_tangent +
-                    eliminated_probabilities[j] * probabilities_tangent[[j]]
+                    eliminated_probabilities[j] * probabilities_tangent[j][None]
                 )
 
             # pre-compute the same but for the ratio of the probability each agent's first and second choices are both
@@ -223,8 +223,8 @@ class ProblemMarket(Market):
                 for j in range(self.J):
                     j_to_inside_tangent = eliminated_tangents[j].sum(axis=0, keepdims=True).T
                     inside_to_inside_probabilities_tangent += (
-                        probabilities_tangent[[j]].T * product_to_inside_probabilities[j] +
-                        probabilities[[j]].T * j_to_inside_tangent
+                        probabilities_tangent[j][None].T * product_to_inside_probabilities[j] +
+                        probabilities[j][None].T * j_to_inside_tangent
                     )
 
                 inside_to_inside_share_tangent = self.agents.weights.T @ inside_to_inside_probabilities_tangent
@@ -246,8 +246,8 @@ class ProblemMarket(Market):
                         inside_eliminated_probabilities[j] * (probabilities_tangent_sum - probabilities_tangent[j])
                     )
                     inside_to_eliminated_tangent += (
-                        inside_tangent[[j]] * inside_eliminated_probabilities[j] +
-                        inside_probabilities[[j]] * inside_eliminated_tangent
+                        inside_tangent[j][None] * inside_eliminated_probabilities[j] +
+                        inside_probabilities[j][None] * inside_eliminated_tangent
                     )
 
             # fill the gradient of micro moments with respect to the parameter

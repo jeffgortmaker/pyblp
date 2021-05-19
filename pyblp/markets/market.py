@@ -365,7 +365,7 @@ class Market(Container):
         elif eliminate_outside:
             denominator = probabilities.sum(axis=0, keepdims=True)
         elif eliminate_product is not None:
-            denominator = 1 - probabilities[[eliminate_product]]
+            denominator = 1 - probabilities[eliminate_product][None]
         else:
             return probabilities
 
@@ -1063,11 +1063,11 @@ class Market(Container):
             inside_to_eliminated_probabilities = np.zeros((self.J, self.I), options.dtype)
             for j in range(self.J):
                 j_to_inside_probabilities = eliminated_probabilities[j].sum(axis=0, keepdims=True).T
-                inside_to_inside_probabilities += probabilities[[j]].T * j_to_inside_probabilities
+                inside_to_inside_probabilities += probabilities[j][None].T * j_to_inside_probabilities
                 inside_eliminated_probabilities[j] = self.compute_eliminated_probabilities(
                     probabilities, delta, eliminate_outside=True, eliminate_product=j
                 )
-                inside_to_eliminated_probabilities += inside_probabilities[[j]] * inside_eliminated_probabilities[j]
+                inside_to_eliminated_probabilities += inside_probabilities[j][None] * inside_eliminated_probabilities[j]
 
             inside_to_inside_share = self.agents.weights.T @ inside_to_inside_probabilities
             inside_to_inside_ratios = inside_to_inside_probabilities / inside_to_inside_share
