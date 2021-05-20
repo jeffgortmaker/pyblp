@@ -152,8 +152,13 @@ class Products(object):
             raise ValueError("The firm_ids field of product_data must be one-dimensional.")
         if nesting_ids is not None and nesting_ids.shape[1] > 1:
             raise ValueError("The nesting_ids field of product_data must be one-dimensional.")
-        if product_ids is not None and product_ids.shape[1] > 1:
-            raise ValueError("The product_ids field of product_data must be one-dimensional.")
+        if product_ids is not None:
+            if product_ids.shape[1] > 1:
+                raise ValueError("The product_ids field of product_data must be one-dimensional.")
+            if any(i is None for i in product_ids):
+                raise ValueError(
+                    "The product_ids field of product_data must not contain None, which denotes the outside option."
+                )
         if clustering_ids is not None:
             if clustering_ids.shape[1] > 1:
                 raise ValueError("The clustering_ids field of product_data must be one-dimensional.")
