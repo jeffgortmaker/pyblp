@@ -227,11 +227,15 @@ class ProblemMarket(Market):
                         probabilities[j][None].T * j_to_inside_tangent
                     )
 
+                # replace problematic elements with zeros so that their derivatives will be zeros
                 inside_to_inside_share_tangent = self.agents.weights.T @ inside_to_inside_probabilities_tangent
-                inside_to_inside_tangent = inside_to_inside_ratios * (
-                    inside_to_inside_probabilities_tangent / inside_to_inside_probabilities -
-                    inside_to_inside_share_tangent / inside_to_inside_share
-                )
+                with np.errstate(all='ignore'):
+                    probabilities_ratio = inside_to_inside_probabilities_tangent / inside_to_inside_probabilities
+                    share_ratio = inside_to_inside_share_tangent / inside_to_inside_share
+                    probabilities_ratio[~np.isfinite(probabilities_ratio)] = 0
+                    share_ratio[~np.isfinite(share_ratio)] = 0
+
+                inside_to_inside_tangent = inside_to_inside_ratios * (probabilities_ratio - share_ratio)
 
             # pre-compute the same but for probabilities of purchasing any inside good first and a specific inside good
             #   second
