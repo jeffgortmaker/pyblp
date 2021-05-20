@@ -443,6 +443,7 @@ def large_nested_blp_simulation() -> SimulationFixture:
     )
     simulation_results = simulation.replace_endogenous()
     simulated_micro_moments = [
+        DemographicExpectationMoment(product_ids=True, demographics_index=1, value=0, observations=simulation.N),
         DemographicExpectationMoment(
             product_ids=[None], demographics_index=1, value=0, observations=simulation.N,
             market_ids=simulation.unique_market_ids[3:5]

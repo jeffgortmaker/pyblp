@@ -3,7 +3,7 @@
 import abc
 import collections.abc
 import functools
-from typing import Any, Callable, Dict, Hashable, List, Optional, Sequence, TYPE_CHECKING
+from typing import Any, Callable, Dict, Hashable, List, Optional, Sequence, Union, TYPE_CHECKING
 
 import numpy as np
 
@@ -130,10 +130,11 @@ class DemographicExpectationMoment(Moment):
 
     Parameters
     ----------
-    product_ids : `sequence of object`
+    product_ids : `sequence of object or True`
         IDs of the products :math:`j \in J`, which may include ``None`` to denote the outside option :math:`j = 0`. If
-        there is no ``None``, at least one of these IDs should show up in the ``product_ids`` field of ``product_data``
-        in :class:`Problem` or :class:`Simulation` for each market over which this micro moment will be averaged.
+        ``True`` instead of a sequence of IDs, this denotes all inside goods :math;`j \in J`. Otherwise, if there is no
+        ``None``, at least one of these IDs should show up in the ``product_ids`` field of ``product_data`` in
+        :class:`Problem` or :class:`Simulation` for each market over which this micro moment will be averaged.
     demographics_index : `int`
         Column index of the demographic :math:`y_{it}` (which can be any demographic, not just income) in the matrix of
         agent demographics, :math:`d`. This should be between zero and :math:`D - 1`, inclusive.
@@ -155,16 +156,16 @@ class DemographicExpectationMoment(Moment):
 
     """
 
-    product_ids: Sequence[Any]
+    product_ids: Union[Sequence, bool]
     demographics_index: int
 
     def __init__(
-            self, product_ids: Optional[Any], demographics_index: int, value: float, observations: int,
+            self, product_ids: Union[Sequence, bool], demographics_index: int, value: float, observations: int,
             market_ids: Optional[Sequence] = None, market_weights: Optional[Array] = None) -> None:
         """Validate information about the moment to the greatest extent possible without an economy instance."""
-        if not isinstance(product_ids, collections.abc.Sequence) or len(product_ids) == 0:
-            raise ValueError("product_ids must be a sequence with at least one ID.")
-        if len(set(product_ids)) != len(product_ids):
+        if product_ids is not True and (not isinstance(product_ids, collections.abc.Sequence) or len(product_ids) == 0):
+            raise ValueError("product_ids must be True or a sequence with at least one ID.")
+        if isinstance(product_ids, collections.abc.Sequence) and len(set(product_ids)) != len(product_ids):
             raise ValueError("product_ids should not have duplicates.")
         if not isinstance(demographics_index, int) or demographics_index < 0:
             raise ValueError("demographics_index must be a positive int.")
@@ -174,13 +175,19 @@ class DemographicExpectationMoment(Moment):
 
     def _format_moment(self) -> str:
         """Construct a string expression for the moment."""
-        products = ", ".join("Outside" if i is None else f"'{i}'" for i in self.product_ids)
+        if self.product_ids is True:
+            products = "Inside"
+        else:
+            assert isinstance(self.product_ids, collections.abc.Sequence)
+            products = ", ".join("Outside" if i is None else f"'{i}'" for i in self.product_ids)
+
         return f"E[Demographic Column {self.demographics_index} | {products}]"
 
     def _validate(self, economy: 'Economy') -> None:
         """Check that matrix indices are valid in the economy."""
         super()._validate(economy)
-        economy._validate_product_ids(self.product_ids, self.market_ids)
+        if isinstance(self.product_ids, collections.abc.Sequence):
+            economy._validate_product_ids(self.product_ids, self.market_ids)
         if self.demographics_index >= economy.D:
             raise ValueError(f"demographics_index must be between 0 and D = {economy.D}, inclusive.")
 
@@ -189,16 +196,21 @@ class DemographicExpectationMoment(Moment):
             eliminated_probabilities: Dict[int, Array], inside_to_inside_ratios: Optional[Array],
             inside_to_eliminated_probabilities: Optional[Array]) -> Array:
         """Compute agent-specific micro moment values, which will be aggregated up into means or covariances."""
-        shares_sum = 0
-        probabilities_sum = np.zeros((market.I, 1), options.dtype)
-        for product_id in self.product_ids:
-            if product_id is None:
-                shares_sum += 1 - market.products.shares.sum()
-                probabilities_sum += 1 - probabilities.sum(axis=0, keepdims=True).T
-            elif product_id in market.products.product_ids:
-                j = market.get_product(product_id)
-                shares_sum += market.products.shares[j]
-                probabilities_sum += probabilities[j][None].T
+        if self.product_ids is True:
+            shares_sum = market.products.shares.sum()
+            probabilities_sum = probabilities.sum(axis=0, keepdims=True).T
+        else:
+            assert isinstance(self.product_ids, collections.abc.Sequence)
+            shares_sum = 0
+            probabilities_sum = np.zeros((market.I, 1), options.dtype)
+            for product_id in self.product_ids:
+                if product_id is None:
+                    shares_sum += 1 - market.products.shares.sum()
+                    probabilities_sum += 1 - probabilities.sum(axis=0, keepdims=True).T
+                elif product_id in market.products.product_ids:
+                    j = market.get_product(product_id)
+                    shares_sum += market.products.shares[j]
+                    probabilities_sum += probabilities[j][None].T
 
         d = market.agents.demographics[:, [self.demographics_index]]
         return d * probabilities_sum / shares_sum
@@ -211,16 +223,21 @@ class DemographicExpectationMoment(Moment):
             inside_to_eliminated_probabilities: Optional[Array], inside_to_eliminated_tangent: Optional[Array]) -> (
             Array):
         """Compute the tangent of agent-specific micro moments with respect to a parameter."""
-        shares_sum = 0
-        probabilities_tangent_sum = np.zeros((market.I, 1), options.dtype)
-        for product_id in self.product_ids:
-            if product_id is None:
-                shares_sum += 1 - market.products.shares.sum()
-                probabilities_tangent_sum += -probabilities_tangent.sum(axis=0, keepdims=True).T
-            elif product_id in market.products.product_ids:
-                j = market.get_product(product_id)
-                shares_sum += market.products.shares[j]
-                probabilities_tangent_sum += probabilities_tangent[j][None].T
+        if self.product_ids is True:
+            shares_sum = market.products.shares.sum()
+            probabilities_tangent_sum = probabilities_tangent.sum(axis=0, keepdims=True).T
+        else:
+            assert isinstance(self.product_ids, collections.abc.Sequence)
+            shares_sum = 0
+            probabilities_tangent_sum = np.zeros((market.I, 1), options.dtype)
+            for product_id in self.product_ids:
+                if product_id is None:
+                    shares_sum += 1 - market.products.shares.sum()
+                    probabilities_tangent_sum += -probabilities_tangent.sum(axis=0, keepdims=True).T
+                elif product_id in market.products.product_ids:
+                    j = market.get_product(product_id)
+                    shares_sum += market.products.shares[j]
+                    probabilities_tangent_sum += probabilities_tangent[j][None].T
 
         d = market.agents.demographics[:, [self.demographics_index]]
         return d * probabilities_tangent_sum / shares_sum
