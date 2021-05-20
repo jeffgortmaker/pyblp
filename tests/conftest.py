@@ -450,7 +450,7 @@ def large_nested_blp_simulation() -> SimulationFixture:
         ),
         CharacteristicExpectationMoment(
             agent_ids=[0, 1], X2_index=0, value=0, observations=2 * simulation.N,
-            market_ids=simulation.unique_market_ids[5:6]
+            market_ids=simulation.unique_market_ids[5:6], name="characteristic expectation",
         ),
         CharacteristicExpectationMoment(
             agent_ids=[2], X2_index=0, value=0, observations=3 * simulation.N,

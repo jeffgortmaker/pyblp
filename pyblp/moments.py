@@ -24,13 +24,14 @@ class Moment(StringRepresentation):
     observations: int
     market_ids: Optional[Array]
     market_weights: Optional[Array]
+    name: Optional[str]
     requires_inside: bool
     requires_eliminated: Sequence[Any]
     requires_inside_eliminated: bool
 
     def __init__(
             self, value: float, observations: int, market_ids: Optional[Sequence] = None,
-            market_weights: Optional[Array] = None, requires_inside: bool = False,
+            market_weights: Optional[Array] = None, name: Optional[str] = None, requires_inside: bool = False,
             requires_eliminated: Sequence[Any] = (), requires_inside_eliminated: bool = False) -> None:
         """Validate information about the moment to the greatest extent possible without an economy instance."""
         self.value = value
@@ -68,6 +69,11 @@ class Moment(StringRepresentation):
             if np.abs(1 - self.market_weights.sum()) > options.weights_tol:
                 warn("Market weights sum to a value that differs from 1 by more than options.weights_tol.")
 
+        # validate any name
+        self.name = name
+        if self.name is not None and not isinstance(self.name, str):
+            raise TypeError("name must be None or a string.")
+
         # validate requirements
         assert not requires_inside_eliminated or requires_inside
         self.requires_inside = requires_inside
@@ -87,9 +93,13 @@ class Moment(StringRepresentation):
         suffix = "Market" if len(self.market_ids) == 1 else "Markets"
         return f"{suffix} {joined}" if text else joined
 
-    @abc.abstractmethod
     def _format_moment(self) -> str:
         """Construct a string expression for the micro moment."""
+        return self._default_format_moment() if self.name is None else self.name
+
+    @abc.abstractmethod
+    def _default_format_moment(self) -> str:
+        """Construct a default string expression for the micro moment."""
 
     def _validate(self, economy: 'Economy') -> None:
         """Check that all market IDs associated with this moment are in the economy."""
@@ -149,6 +159,8 @@ class DemographicExpectationMoment(Moment):
         across all markets.
     market_weights : `array-like, optional`
         Weights for averaging micro moments over specified ``market_ids``. By default, these are :math:`1 / T_m`.
+    name : `str, optional`
+        Name of the moment, which will be used when displaying information about micro moments.
 
     Examples
     --------
@@ -161,7 +173,8 @@ class DemographicExpectationMoment(Moment):
 
     def __init__(
             self, product_ids: Union[Sequence, bool], demographics_index: int, value: float, observations: int,
-            market_ids: Optional[Sequence] = None, market_weights: Optional[Array] = None) -> None:
+            market_ids: Optional[Sequence] = None, market_weights: Optional[Array] = None,
+            name: Optional[str] = None) -> None:
         """Validate information about the moment to the greatest extent possible without an economy instance."""
         if product_ids is not True and (not isinstance(product_ids, collections.abc.Sequence) or len(product_ids) == 0):
             raise ValueError("product_ids must be True or a sequence with at least one ID.")
@@ -169,11 +182,11 @@ class DemographicExpectationMoment(Moment):
             raise ValueError("product_ids should not have duplicates.")
         if not isinstance(demographics_index, int) or demographics_index < 0:
             raise ValueError("demographics_index must be a positive int.")
-        super().__init__(value, observations, market_ids, market_weights)
+        super().__init__(value, observations, market_ids, market_weights, name)
         self.product_ids = product_ids
         self.demographics_index = demographics_index
 
-    def _format_moment(self) -> str:
+    def _default_format_moment(self) -> str:
         """Construct a string expression for the moment."""
         if self.product_ids is True:
             products = "Inside"
@@ -283,6 +296,8 @@ class CharacteristicExpectationMoment(Moment):
         across all markets.
     market_weights : `array-like, optional`
         Weights for averaging micro moments over specified ``market_ids``. By default, these are :math:`1 / T_m`.
+    name : `str, optional`
+        Name of the moment, which will be used when displaying information about micro moments.
 
     Examples
     --------
@@ -295,7 +310,8 @@ class CharacteristicExpectationMoment(Moment):
 
     def __init__(
             self, agent_ids: Optional[Any], X2_index: int, value: float, observations: int,
-            market_ids: Optional[Sequence] = None, market_weights: Optional[Array] = None) -> None:
+            market_ids: Optional[Sequence] = None, market_weights: Optional[Array] = None,
+            name: Optional[str] = None) -> None:
         """Validate information about the moment to the greatest extent possible without an economy instance."""
         if not isinstance(agent_ids, collections.abc.Sequence) or len(agent_ids) == 0:
             raise ValueError("agent_ids must be a sequence with at least one ID.")
@@ -303,11 +319,11 @@ class CharacteristicExpectationMoment(Moment):
             raise ValueError("agent_ids should not have duplicates.")
         if not isinstance(X2_index, int) or X2_index < 0:
             raise ValueError("X2_index must be a positive int.")
-        super().__init__(value, observations, market_ids, market_weights, requires_inside=True)
+        super().__init__(value, observations, market_ids, market_weights, name, requires_inside=True)
         self.agent_ids = agent_ids
         self.X2_index = X2_index
 
-    def _format_moment(self) -> str:
+    def _default_format_moment(self) -> str:
         """Construct a string expression for the moment."""
         agents = ", ".join(f"'{i}'" for i in self.agent_ids)
         return f"E[X2 Column {self.X2_index} | {agents}]"
@@ -383,6 +399,8 @@ class DemographicInteractionMoment(Moment):
         across all markets.
     market_weights : `array-like, optional`
         Weights for averaging micro moments over specified ``market_ids``. By default, these are :math:`1 / T_m`.
+    name : `str, optional`
+        Name of the moment, which will be used when displaying information about micro moments.
 
     Examples
     --------
@@ -395,17 +413,18 @@ class DemographicInteractionMoment(Moment):
 
     def __init__(
             self, X2_index: int, demographics_index: int, value: float, observations: int,
-            market_ids: Optional[Sequence] = None, market_weights: Optional[Array] = None) -> None:
+            market_ids: Optional[Sequence] = None, market_weights: Optional[Array] = None,
+            name: Optional[str] = None) -> None:
         """Validate information about the moment to the greatest extent possible without an economy instance."""
         if not isinstance(X2_index, int) or X2_index < 0:
             raise ValueError("X2_index must be a positive int.")
         if not isinstance(demographics_index, int) or demographics_index < 0:
             raise ValueError("demographics_index must be a positive int.")
-        super().__init__(value, observations, market_ids, market_weights)
+        super().__init__(value, observations, market_ids, market_weights, name)
         self.X2_index = X2_index
         self.demographics_index = demographics_index
 
-    def _format_moment(self) -> str:
+    def _default_format_moment(self) -> str:
         """Construct a string expression for the moment."""
         return f"E[X2 Column {self.X2_index} x Demographic Column {self.demographics_index}]"
 
@@ -480,6 +499,8 @@ class DiversionProbabilityMoment(Moment):
         across all markets.
     market_weights : `array-like, optional`
         Weights for averaging micro moments over specified ``market_ids``. By default, these are :math:`1 / T_m`.
+    name : `str, optional`
+        Name of the moment, which will be used when displaying information about micro moments.
 
     Examples
     --------
@@ -492,18 +513,19 @@ class DiversionProbabilityMoment(Moment):
 
     def __init__(
             self, product_id1: Any, product_id2: Optional[Any], value: float, observations: int,
-            market_ids: Optional[Sequence] = None, market_weights: Optional[Array] = None) -> None:
+            market_ids: Optional[Sequence] = None, market_weights: Optional[Array] = None,
+            name: Optional[str] = None) -> None:
         """Validate information about the moment to the greatest extent possible without an economy instance."""
         if product_id1 is None and product_id2 is None:
             raise ValueError("At least one of product_id1 or product_id2 must be not None.")
         super().__init__(
-            value, observations, market_ids, market_weights, requires_inside=product_id1 is None,
+            value, observations, market_ids, market_weights, name, requires_inside=product_id1 is None,
             requires_eliminated=[] if product_id1 is None else [product_id1]
         )
         self.product_id1 = product_id1
         self.product_id2 = product_id2
 
-    def _format_moment(self) -> str:
+    def _default_format_moment(self) -> str:
         """Construct a string expression for the moment."""
         product1 = "Outside" if self.product_id1 is None else f"'{self.product_id1}'"
         product2 = "Outside" if self.product_id2 is None else f"'{self.product_id2}'"
@@ -624,6 +646,8 @@ class DiversionInteractionMoment(Moment):
         across all markets.
     market_weights : `array-like, optional`
         Weights for averaging micro moments over specified ``market_ids``. By default, these are :math:`1 / T_m`.
+    name : `str, optional`
+        Name of the moment, which will be used when displaying information about micro moments.
 
     Examples
     --------
@@ -636,19 +660,20 @@ class DiversionInteractionMoment(Moment):
 
     def __init__(
             self, X2_index1: int, X2_index2: int, value: float, observations: int,
-            market_ids: Optional[Sequence] = None, market_weights: Optional[Array] = None) -> None:
+            market_ids: Optional[Sequence] = None, market_weights: Optional[Array] = None,
+            name: Optional[str] = None) -> None:
         """Validate information about the moment to the greatest extent possible without an economy instance."""
         if not isinstance(X2_index1, int) or X2_index1 < 0:
             raise ValueError("X2_index1 must be a positive int.")
         if not isinstance(X2_index2, int) or X2_index2 < 0:
             raise ValueError("X2_index2 must be a positive int.")
         super().__init__(
-            value, observations, market_ids, market_weights, requires_inside=True, requires_inside_eliminated=True
+            value, observations, market_ids, market_weights, name, requires_inside=True, requires_inside_eliminated=True
         )
         self.X2_index1 = X2_index1
         self.X2_index2 = X2_index2
 
-    def _format_moment(self) -> str:
+    def _default_format_moment(self) -> str:
         """Construct a string expression for the moment."""
         return f"E[X2 Column {self.X2_index1} First x X2 Column {self.X2_index2} Second]"
 
@@ -785,30 +810,28 @@ class CustomMoment(Moment):
 
     """
 
-    name: str
     compute_custom: functools.partial
     compute_custom_derivatives: Optional[functools.partial]
 
     def __init__(
             self, value: float, observations: int, compute_custom: Callable,
             compute_custom_derivatives: Optional[Callable] = None, market_ids: Optional[Sequence] = None,
-            market_weights: Optional[Array] = None, name: str = "Custom") -> None:
+            market_weights: Optional[Array] = None, name: Optional[str] = None) -> None:
         """Validate information about the moment to the greatest extent possible without an economy instance."""
         if not callable(compute_custom):
             raise ValueError("compute_custom must be callable.")
         if compute_custom_derivatives is not None and not callable(compute_custom_derivatives):
             raise ValueError("compute_custom_derivatives must be None or callable.")
-        super().__init__(value, observations, market_ids, market_weights)
-        self.name = name
+        super().__init__(value, observations, market_ids, market_weights, name)
         self.compute_custom = functools.partial(compute_custom)
         if compute_custom_derivatives is None:
             self.compute_custom_derivatives = None
         else:
             self.compute_custom_derivatives = functools.partial(compute_custom_derivatives)
 
-    def _format_moment(self) -> str:
-        """The expression for the moment is just the specified name."""
-        return self.name
+    def _default_format_moment(self) -> str:
+        """The default expression is just that it is a custom moment."""
+        return "Custom"
 
     def _compute_agent_values(
             self, market: 'Market', delta: Array, probabilities: Array, inside_probabilities: Optional[Array],
