@@ -417,12 +417,13 @@ def squarem_iterator(
         # compute the step length
         r = g0
         v = g1 - g0
-        if scheme == 1:
-            alpha = (r.T @ v) / (v.T @ v)
-        elif scheme == 2:
-            alpha = (r.T @ r) / (r.T @ v)
-        else:
-            alpha = -np.sqrt((r.T @ r) / (v.T @ v))
+        with np.errstate(divide='ignore'):
+            if scheme == 1:
+                alpha = (r.T @ v) / (v.T @ v)
+            elif scheme == 2:
+                alpha = (r.T @ r) / (r.T @ v)
+            else:
+                alpha = -np.sqrt((r.T @ r) / (v.T @ v))
 
         # bound the step length and update its bounds
         alpha = -np.maximum(step_min, np.minimum(step_max, -alpha))
