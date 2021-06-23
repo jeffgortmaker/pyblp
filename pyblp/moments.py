@@ -142,7 +142,7 @@ class DemographicExpectationMoment(Moment):
     ----------
     product_ids : `sequence of object or True`
         IDs of the products :math:`j \in J`, which may include ``None`` to denote the outside option :math:`j = 0`. If
-        ``True`` instead of a sequence of IDs, this denotes all inside goods :math;`j \in J`. Otherwise, if there is no
+        ``True`` instead of a sequence of IDs, this denotes all inside goods :math:`j \in J`. Otherwise, if there is no
         ``None``, at least one of these IDs should show up in the ``product_ids`` field of ``product_data`` in
         :class:`Problem` or :class:`Simulation` for each market over which this micro moment will be averaged.
     demographics_index : `int`
