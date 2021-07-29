@@ -328,7 +328,7 @@ where :math:`\Lambda` is a diagonal :math:`J_t \times J_t` matrix approximated b
 
 and :math:`\Gamma` is a dense :math:`J_t \times J_t` matrix approximated by
 
-.. math:: \Gamma_{jk} \approx \sum_{i \in I_t} w_{it} s_{ijt}s_{ikt}\frac{\partial U_{ijt}}{\partial p_{jt}}.
+.. math:: \Gamma_{jk} \approx \sum_{i \in I_t} w_{it} s_{ijt}s_{ikt}\frac{\partial U_{ikt}}{\partial p_{kt}}.
 
 Equilibrium prices are computed by iterating over the :math:`\zeta`-markup equation in :eq:`zeta`,
 
