@@ -86,12 +86,13 @@ class Moment(StringRepresentation):
 
     def _format_markets(self, text: bool = False) -> str:
         """Format information about the markets associated with the micro moment as a string."""
+        if not text:
+            return "All" if self.market_ids is None else str(self.market_ids.size)
         if self.market_ids is None:
-            return "All Markets" if text else "All"
-
-        joined = ", ".join(str(t) for t in self.market_ids)
-        suffix = "Market" if len(self.market_ids) == 1 else "Markets"
-        return f"{suffix} {joined}" if text else joined
+            return "All Markets"
+        if self.market_ids.size == 1:
+            return f"Market '{self.market_ids[0]}'"
+        return f"{self.market_ids.size} Markets"
 
     def _format_moment(self) -> str:
         """Construct a string expression for the micro moment."""
