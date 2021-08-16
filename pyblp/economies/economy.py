@@ -299,14 +299,21 @@ class Economy(Container, StringRepresentation):
         """
         if ownership is None:
             return None
+
         ownership = np.c_[np.asarray(ownership, options.dtype)]
+
         rows = self.N
         columns = self._max_J
         if market_ids is not None:
-            rows = sum(i.size for t, i in self._product_market_indices.items() if t in market_ids)
-            columns = max(i.size for t, i in self._product_market_indices.items() if t in market_ids)
+            rows = columns = 0
+            for t in market_ids:
+                size = self._product_market_indices[t].size
+                rows += size
+                columns = max(columns, size)
+
         if ownership.shape != (rows, columns):
             raise ValueError(f"ownership must be None or a {rows} by {columns} matrix.")
+
         return ownership
 
     @staticmethod
