@@ -14,7 +14,7 @@ from pyblp import (
     DemographicInteractionMoment, DiversionProbabilityMoment, DiversionInteractionMoment, Simulation, SimulationResults,
     build_differentiation_instruments, build_id_data, build_matrix, build_ownership, build_integration, options
 )
-from pyblp.utilities.basics import update_matrices, Array, Data, Options
+from pyblp.utilities.basics import get_indices, update_matrices, Array, Data, Options
 
 
 # define common types
@@ -391,8 +391,9 @@ def small_nested_blp_simulation() -> SimulationFixture:
 def large_nested_blp_simulation() -> SimulationFixture:
     """Solve a simulation with 20 markets, varying numbers of products per market, a linear constant, log-normal
     coefficients on prices, a linear/nonlinear/cost characteristic, another three linear characteristics, another two
-    cost characteristics, demographics interacted with prices and the linear/nonlinear/cost characteristic, three
-    nesting groups with the same nesting parameter, and a log-linear cost specification.
+    cost characteristics, demographics (including a product-specific one) interacted with prices and the
+    linear/nonlinear/cost characteristic, three nesting groups with the same nesting parameter, and a log-linear cost
+    specification.
     """
     id_data = build_id_data(T=20, J=20, F=9)
 
@@ -403,7 +404,9 @@ def large_nested_blp_simulation() -> SimulationFixture:
     integration = Integration('product', 4)
     agent_data = build_integration(integration, 2)
     unique_market_ids = np.unique(id_data.market_ids)
+    max_J = max(i.size for i in get_indices(id_data.market_ids).values())
 
+    state = np.random.RandomState(2)
     simulation = Simulation(
         product_formulations=(
             Formulation('1 + x + y + z + q'),
@@ -413,14 +416,15 @@ def large_nested_blp_simulation() -> SimulationFixture:
         product_data={
             'market_ids': id_data.market_ids,
             'firm_ids': id_data.firm_ids,
-            'nesting_ids': np.random.RandomState(2).choice(['f', 'g', 'h'], id_data.size),
-            'clustering_ids': np.random.RandomState(2).choice(range(30), id_data.size)
+            'nesting_ids': state.choice(['f', 'g', 'h'], id_data.size),
+            'clustering_ids': state.choice(range(30), id_data.size)
         },
         agent_data={
             'market_ids': np.repeat(unique_market_ids, agent_data.weights.size),
             'agent_ids': np.tile(np.arange(agent_data.weights.size), unique_market_ids.size),
             'weights': np.tile(agent_data.weights.flat, unique_market_ids.size),
             'nodes': np.tile(agent_data.nodes, (unique_market_ids.size, 1)),
+            **{f'f{j}': state.uniform(size=unique_market_ids.size * agent_data.weights.size) for j in range(max_J)},
         },
         beta=[1, 1, 2, 3, 1],
         sigma=[
@@ -443,11 +447,6 @@ def large_nested_blp_simulation() -> SimulationFixture:
     )
     simulation_results = simulation.replace_endogenous()
     simulated_micro_moments = [
-        DemographicExpectationMoment(product_ids=True, demographics_index=1, value=0, observations=simulation.N),
-        DemographicExpectationMoment(
-            product_ids=[None], demographics_index=1, value=0, observations=simulation.N,
-            market_ids=simulation.unique_market_ids[3:5]
-        ),
         CharacteristicExpectationMoment(
             agent_ids=[0, 1], X2_index=0, value=0, observations=2 * simulation.N,
             market_ids=simulation.unique_market_ids[5:6], name="characteristic expectation",

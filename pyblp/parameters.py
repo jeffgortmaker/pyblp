@@ -75,6 +75,8 @@ class PiParameter(NonlinearCoefficient):
 
     def get_agent_characteristic(self, market: 'Market') -> Array:
         """Get the agent characteristic associated with the parameter."""
+        if len(market.agents.demographics.shape) == 3:
+            return market.agents.demographics[:, self.location[1]]
         return market.agents.demographics[:, [self.location[1]]]
 
 

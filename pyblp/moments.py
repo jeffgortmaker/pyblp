@@ -204,12 +204,15 @@ class DemographicExpectationMoment(Moment):
             economy._validate_product_ids(self.product_ids, self.market_ids)
         if self.demographics_index >= economy.D:
             raise ValueError(f"demographics_index must be between 0 and D = {economy.D}, inclusive.")
+        if len(economy.agents.demographics.shape) > 2:
+            raise NotImplementedError(f"DemographicExpectationMoment does not support product-specific demographics.")
 
     def _compute_agent_values(
             self, market: 'Market', delta: Array, probabilities: Array, inside_probabilities: Optional[Array],
             eliminated_probabilities: Dict[int, Array], inside_to_inside_ratios: Optional[Array],
             inside_to_eliminated_probabilities: Optional[Array]) -> Array:
         """Compute agent-specific micro moment values, which will be aggregated up into means or covariances."""
+        assert len(market.agents.demographics.shape) == 2
         if self.product_ids is True:
             shares_sum = market.products.shares.sum()
             probabilities_sum = probabilities.sum(axis=0, keepdims=True).T
@@ -237,6 +240,7 @@ class DemographicExpectationMoment(Moment):
             inside_to_eliminated_probabilities: Optional[Array], inside_to_eliminated_tangent: Optional[Array]) -> (
             Array):
         """Compute the tangent of agent-specific micro moments with respect to a parameter."""
+        assert len(market.agents.demographics.shape) == 2
         if self.product_ids is True:
             shares_sum = market.products.shares.sum()
             probabilities_tangent_sum = probabilities_tangent.sum(axis=0, keepdims=True).T
@@ -436,12 +440,15 @@ class DemographicInteractionMoment(Moment):
             raise ValueError(f"X2_index must be between 0 and K2 = {economy.K2}, inclusive.")
         if self.demographics_index >= economy.D:
             raise ValueError(f"demographics_index must be between 0 and D = {economy.D}, inclusive.")
+        if len(economy.agents.demographics.shape) > 2:
+            raise NotImplementedError(f"DemographicInteractionMoment does not support product-specific demographics.")
 
     def _compute_agent_values(
             self, market: 'Market', delta: Array, probabilities: Array, inside_probabilities: Optional[Array],
             eliminated_probabilities: Dict[int, Array], inside_to_inside_ratios: Optional[Array],
             inside_to_eliminated_probabilities: Optional[Array]) -> Array:
         """Compute agent-specific micro moment values, which will be aggregated up into means or covariances."""
+        assert len(market.agents.demographics.shape) == 2
         x = market.products.X2[:, [self.X2_index]]
         d = market.agents.demographics[:, [self.demographics_index]]
         z = probabilities.T @ x
@@ -455,6 +462,7 @@ class DemographicInteractionMoment(Moment):
             inside_to_eliminated_probabilities: Optional[Array], inside_to_eliminated_tangent: Optional[Array]) -> (
             Array):
         """Compute the tangent of agent-specific micro moments with respect to a parameter."""
+        assert len(market.agents.demographics.shape) == 2
         x = market.products.X2[:, [self.X2_index]]
         d = market.agents.demographics[:, [self.demographics_index]]
         z_tangent = probabilities_tangent.T @ x

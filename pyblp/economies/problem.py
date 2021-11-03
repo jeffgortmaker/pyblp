@@ -1131,7 +1131,9 @@ class Problem(ProblemEconomy):
         :math:`d`, which will only be included in the model if this formulation is specified. Since demographics are
         only used if there are demand-side nonlinear product characteristics, this formulation should only be specified
         if :math:`X_2` is formulated in ``product_formulations``. Variable names should correspond to fields in
-        ``agent_data``.
+        ``agent_data``. See the information under ``agent_data`` for how to give fields for product-specific
+        demographics :math:`d_{ijt}`.
+
     agent_data : `structured array-like, optional`
         Each row corresponds to an agent. Markets can have differing numbers of agents. Since simulated agents are only
         used if there are demand-side nonlinear product characteristics, agent data should only be specified if
@@ -1168,6 +1170,15 @@ class Problem(ProblemEconomy):
         Along with ``market_ids`` and ``agent_ids``, the names of any additional fields can be typically be used as
         variables in ``agent_formulation``. The exception is the name ``'demographics'``, which is reserved for use by
         :class:`Agents`.
+
+        In addition to standard demographic variables :math:`d_{it}`, it is also possible to specify product-specific
+        demographics :math:`d_{ijt}`. A typical example is geographic distance of agent :math:`i` from product
+        :math:`j`. If ``agent_formulation`` has, for example, ``'distance'``, instead of including a single
+        ``'distance'`` field in ``agent_data``, one should instead include ``'distance0'``, ``'distance1'``,
+        ``'distance2'`` and so on, where the index corresponds to the order in which products appear within market in
+        ``product_data``. For example, ``'distance5'`` should measure the distance of agents to the fifth product within
+         the market, as ordered in ``product_data``. The last index should be the number of products in the largest
+         market, minus one. For markets with fewer products than this maximum number, latter columns will be ignored.
 
     integration : `Integration, optional`
         :class:`Integration` configuration for how to build nodes and weights for integration over agent choice

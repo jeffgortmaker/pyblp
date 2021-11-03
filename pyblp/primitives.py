@@ -4,11 +4,12 @@ import abc
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple, Union
 
 import numpy as np
+import patsy
 
 from . import options
 from .configurations.formulation import ColumnFormulation, Formulation
 from .configurations.integration import Integration
-from .utilities.basics import Array, Data, Groups, RecArray, extract_matrix, structure_matrices, warn
+from .utilities.basics import Array, Data, Groups, RecArray, extract_matrix, get_indices, structure_matrices, warn
 
 
 class Products(object):
@@ -281,7 +282,32 @@ class Agents(object):
                     raise ValueError(f"Since agent_formulation is specified, agent_data must be specified as well.")
                 if agent_formulation._absorbed_terms:
                     raise ValueError("agent_formulation does not support fixed effect absorption.")
-                demographics, demographics_formulations, _ = agent_formulation._build_matrix(agent_data)
+
+                # either build standard demographics or stack product-specific demographics
+                try:
+                    demographics, demographics_formulations, _ = agent_formulation._build_matrix(agent_data)
+                except patsy.PatsyError as exception:
+                    max_J = max(i.size for i in get_indices(products.market_ids).values())
+                    demographics_list: List[Array] = []
+                    demographics_formulations: Optional[List[ColumnFormulation]] = None
+                    for j in range(max_J):
+                        try:
+                            demographics_j, demographics_formulations, _ = agent_formulation._build_matrix(
+                                agent_data, fallback_index=j
+                            )
+                        except patsy.PatsyError as exception_j:
+                            if j == 0:
+                                raise exception
+                            raise ValueError(
+                                f"Each demographic must either be a single column or have a column for each of the "
+                                f"maximum of {max_J} products. There is at least one missing demographic for product "
+                                f"index {j}."
+                            ) from exception_j
+                        else:
+                            demographics_list.append(demographics_j)
+
+                    demographics = np.dstack(demographics_list)
+                    assert demographics.shape[2] == max_J and demographics_formulations is not None
 
             # load IDs
             if agent_data is not None:

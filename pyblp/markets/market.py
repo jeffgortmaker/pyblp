@@ -62,13 +62,16 @@ class Market(Container):
             products_update_mapping[key] = (None, self.products[key].dtype)
         self.products = update_matrices(self.products, products_update_mapping)
 
-        # drop unneeded agent data fields and fill missing columns of integration nodes (associated with zeros in sigma)
-        #   with zeros
+        # drop unneeded agent data fields, fill missing columns of integration nodes (associated with zeros in sigma)
+        #   with zeros, and drop extra product-specific demographic values for product indices not in this market
         agents_update_mapping = {'market_ids': (None, self.agents.market_ids.dtype)}
         if not parameters.nonzero_sigma_index.all():
             nodes = np.zeros((self.agents.shape[0], economy.K2), self.agents.nodes.dtype)
             nodes[:, parameters.nonzero_sigma_index] = self.agents.nodes[:, :parameters.nonzero_sigma_index.sum()]
             agents_update_mapping['nodes'] = (nodes, nodes.dtype)
+        if len(self.agents.demographics.shape) == 3:
+            demographics = self.agents.demographics[..., :self.products.size]
+            agents_update_mapping['demographics'] = (demographics, demographics.dtype)
         self.agents = update_matrices(self.agents, agents_update_mapping)
 
         # create nesting groups but keep all nesting IDs for associating parameters with groups
@@ -156,11 +159,15 @@ class Market(Container):
 
         coefficients = sigma @ self.agents.nodes.T
         if self.D > 0:
-            coefficients += pi @ self.agents.demographics.T
+            coefficients = coefficients + pi @ self.agents.demographics.T
 
         for k, distribution in enumerate(self.parameters.distributions):
             if distribution == 'lognormal':
-                coefficients[k] = np.exp(coefficients[k])
+                if len(coefficients.shape) == 2:
+                    coefficients[k] = np.exp(coefficients[k])
+                else:
+                    assert len(coefficients.shape) == 3
+                    coefficients[:, k] = np.exp(coefficients[:, k])
 
         return coefficients
 
@@ -168,7 +175,9 @@ class Market(Container):
         """Compute a single random coefficient."""
         coefficient = self.sigma[[k], :] @ self.agents.nodes.T
         if self.D > 0:
-            coefficient += self.pi[[k], :] @ self.agents.demographics.T
+            coefficient = coefficient + self.pi[[k], :] @ self.agents.demographics.T
+            if len(coefficient.shape) == 3:
+                coefficient = coefficient.squeeze(axis=1)
 
         if self.parameters.distributions[k] == 'lognormal':
             coefficient = np.exp(coefficient)
@@ -180,7 +189,12 @@ class Market(Container):
         """Compute mu. By default, use unchanged X2 and parameters."""
         if X2 is None:
             X2 = self.products.X2
-        return X2 @ self.compute_random_coefficients(sigma, pi)
+
+        coefficients = self.compute_random_coefficients(sigma, pi)
+        if len(coefficients.shape) == 2:
+            return X2 @ coefficients
+        assert len(coefficients.shape) == 3
+        return (X2[..., None] * coefficients).sum(axis=1)
 
     def update_delta_with_variable(self, name: str, variable: Array) -> Array:
         """Update delta to reflect a changed variable by adding any parameter-weighted characteristic changes to X1."""
@@ -266,7 +280,13 @@ class Market(Container):
         derivatives = np.tile(self.compute_X1_derivatives(name, variable) @ np.nan_to_num(self.beta), self.I)
 
         if self.K2 > 0:
-            derivatives += self.compute_X2_derivatives(name, variable) @ self.compute_random_coefficients()
+            X2_derivatives = self.compute_X2_derivatives(name, variable)
+            coefficients = self.compute_random_coefficients()
+            if len(coefficients.shape) == 2:
+                derivatives += X2_derivatives @ coefficients
+            else:
+                assert len(coefficients.shape) == 3
+                derivatives += (X2_derivatives[..., None] * coefficients).sum(axis=1)
 
         if self.epsilon_scale != 1:
             derivatives /= self.epsilon_scale
@@ -652,8 +672,8 @@ class Market(Container):
         elif isinstance(parameter, NonlinearCoefficient):
             v = parameter.get_agent_characteristic(self)
             if parameter.get_distribution(self) == 'lognormal':
-                v *= self.compute_single_random_coefficient(parameter.location[0]).T
-            tangent += X2_derivatives[:, [parameter.location[0]]] @ v.T
+                v = v * self.compute_single_random_coefficient(parameter.location[0]).T
+            tangent += X2_derivatives[:, [parameter.location[0]]] * v.T
         else:
             assert isinstance(parameter, (GammaParameter, RhoParameter))
 
@@ -681,7 +701,7 @@ class Market(Container):
                 x = parameter.get_product_characteristic(self)
                 v = parameter.get_agent_characteristic(self)
                 if parameter.get_distribution(self) == 'lognormal':
-                    v *= self.compute_single_random_coefficient(parameter.location[0]).T
+                    v = v * self.compute_single_random_coefficient(parameter.location[0]).T
                 probabilities_tangent = probabilities * v.T * (x - x.T @ probabilities)
             else:
                 assert isinstance(parameter, GammaParameter)
@@ -712,15 +732,16 @@ class Market(Container):
             x = parameter.get_product_characteristic(self)
             v = parameter.get_agent_characteristic(self)
             if parameter.get_distribution(self) == 'lognormal':
-                v *= self.compute_single_random_coefficient(parameter.location[0]).T
+                v = v * self.compute_single_random_coefficient(parameter.location[0]).T
 
             # compute the tangent of conditional probabilities with respect to the parameter
-            A = conditionals * x
+            vx = v.T * x
+            A = conditionals * vx
             A_sums = self.groups.sum(A)
-            conditionals_tangent = conditionals * v.T * (x - self.groups.expand(A_sums)) / (1 - self.rho)
+            conditionals_tangent = conditionals * (vx - self.groups.expand(A_sums)) / (1 - self.rho)
 
             # compute the tangent of marginal probabilities with respect to the parameter
-            B = marginals * A_sums * v.T
+            B = marginals * A_sums
             marginals_tangent = B - marginals * B.sum(axis=0, keepdims=True)
 
         elif isinstance(parameter, RhoParameter):

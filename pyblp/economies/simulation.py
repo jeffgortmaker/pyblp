@@ -178,6 +178,15 @@ class Simulation(Economy):
         variables in ``agent_formulation``. The exception is the name ``'demographics'``, which is reserved for use by
         :class:`Agents`.
 
+        In addition to standard demographic variables :math:`d_{it}`, it is also possible to specify product-specific
+        demographics :math:`d_{ijt}`. A typical example is geographic distance of agent :math:`i` from product
+        :math:`j`. If ``agent_formulation`` has, for example, ``'distance'``, instead of including a single
+        ``'distance'`` field in ``agent_data``, one should instead include ``'distance0'``, ``'distance1'``,
+        ``'distance2'`` and so on, where the index corresponds to the order in which products appear within market in
+        ``product_data``. For example, ``'distance5'`` should measure the distance of agents to the fifth product within
+         the market, as ordered in ``product_data``. The last index should be the number of products in the largest
+         market, minus one. For markets with fewer products than this maximum number, latter columns will be ignored.
+
     integration : `Integration, optional`
         :class:`Integration` configuration for how to build nodes and weights for integration over agent choice
         probabilities, which will replace any ``nodes`` and ``weights`` fields in ``agent_data``. This configuration is
@@ -462,13 +471,16 @@ class Simulation(Economy):
             }
             if agent_formulation is not None:
                 for name in sorted(agent_formulation._names - set(agent_mapping)):
-                    variable = extract_matrix(agent_data, name) if agent_data is not None else None
-                    if variable is None:
-                        variable = state.uniform(size=agent_market_ids.size)
-                    elif variable.shape[1] > 1:
-                        raise ValueError(f"The {name} variable has a field in agent_data with more than one column.")
-                    variable_dtype = options.dtype if np.issubdtype(variable.dtype, np.number) else np.object
-                    agent_mapping[name] = (variable, variable_dtype)
+                    matrix = extract_matrix(agent_data, name) if agent_data is not None else None
+                    if matrix is None:
+                        agent_mapping[name] = (state.uniform(size=agent_market_ids.size), options.dtype)
+                    else:
+                        variable_dtype = options.dtype if np.issubdtype(matrix.dtype, np.number) else np.object
+                        if matrix.shape[1] == 1:
+                            agent_mapping[name] = (matrix, variable_dtype)
+                        else:
+                            for index, variable in enumerate(matrix.T):
+                                agent_mapping[f'{name}{index}'] = (variable, variable_dtype)
 
         # structure agent data
         self.integration = integration

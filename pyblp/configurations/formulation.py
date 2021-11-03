@@ -164,10 +164,13 @@ class Formulation(StringRepresentation):
             names.append(f'Absorb[{absorbed_term.name()}]')
         return ' + '.join(names)
 
-    def _build_matrix(self, data: Mapping) -> Tuple[Array, List['ColumnFormulation'], Data]:
+    def _build_matrix(
+            self, data: Mapping, fallback_index: Optional[int] = None) -> (
+            Tuple[Array, List['ColumnFormulation'], Data]):
         """Convert a mapping from variable names to arrays into the designed matrix, a list of column formulations that
         describe the columns of the matrix, and a mapping from variable names to arrays of data underlying the matrix,
-        which include unchanged continuous variables and indicators constructed from categorical variables.
+        which include unchanged continuous variables and indicators constructed from categorical variables. If there is
+        a fallback index, allow variables to optionally have this index.
         """
 
         # normalize the data
@@ -176,8 +179,18 @@ class Formulation(StringRepresentation):
             try:
                 data_mapping[name] = np.asarray(data[name]).flatten()
             except Exception as exception:
-                origin = patsy.origin.Origin(self._formula, 0, len(self._formula))
-                raise patsy.PatsyError(f"Failed to load data for '{name}'.", origin) from exception
+                fallback = False
+                if fallback_index is not None:
+                    try:
+                        data_mapping[name] = np.asarray(data[f'{name}{fallback_index}']).flatten()
+                    except Exception:
+                        pass
+                    else:
+                        fallback = True
+
+                if not fallback:
+                    origin = patsy.origin.Origin(self._formula, 0, len(self._formula))
+                    raise patsy.PatsyError(f"Failed to load data for '{name}'.", origin) from exception
 
         # always have at least one column to represent the size of the data
         if not data_mapping:
