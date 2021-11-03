@@ -1177,8 +1177,8 @@ class Problem(ProblemEconomy):
         ``'distance'`` field in ``agent_data``, one should instead include ``'distance0'``, ``'distance1'``,
         ``'distance2'`` and so on, where the index corresponds to the order in which products appear within market in
         ``product_data``. For example, ``'distance5'`` should measure the distance of agents to the fifth product within
-         the market, as ordered in ``product_data``. The last index should be the number of products in the largest
-         market, minus one. For markets with fewer products than this maximum number, latter columns will be ignored.
+        the market, as ordered in ``product_data``. The last index should be the number of products in the largest
+        market, minus one. For markets with fewer products than this maximum number, latter columns will be ignored.
 
     integration : `Integration, optional`
         :class:`Integration` configuration for how to build nodes and weights for integration over agent choice
