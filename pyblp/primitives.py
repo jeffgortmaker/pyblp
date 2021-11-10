@@ -288,8 +288,7 @@ class Agents(object):
                     demographics, demographics_formulations, _ = agent_formulation._build_matrix(agent_data)
                 except patsy.PatsyError as exception:
                     max_J = max(i.size for i in get_indices(products.market_ids).values())
-                    demographics_list: List[Array] = []
-                    demographics_formulations: Optional[List[ColumnFormulation]] = None
+                    demographics_by_product: List[Array] = []
                     for j in range(max_J):
                         try:
                             demographics_j, demographics_formulations, _ = agent_formulation._build_matrix(
@@ -304,9 +303,9 @@ class Agents(object):
                                 f"index {j}."
                             ) from exception_j
                         else:
-                            demographics_list.append(demographics_j)
+                            demographics_by_product.append(demographics_j)
 
-                    demographics = np.dstack(demographics_list)
+                    demographics = np.dstack(demographics_by_product)
                     assert demographics.shape[2] == max_J and demographics_formulations is not None
 
             # load IDs

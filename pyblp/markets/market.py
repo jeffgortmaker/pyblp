@@ -64,7 +64,9 @@ class Market(Container):
 
         # drop unneeded agent data fields, fill missing columns of integration nodes (associated with zeros in sigma)
         #   with zeros, and drop extra product-specific demographic values for product indices not in this market
-        agents_update_mapping = {'market_ids': (None, self.agents.market_ids.dtype)}
+        agents_update_mapping: Dict[str, Tuple[Optional[Array], Any]] = {
+            'market_ids': (None, self.agents.market_ids.dtype)
+        }
         if not parameters.nonzero_sigma_index.all():
             nodes = np.zeros((self.agents.shape[0], economy.K2), self.agents.nodes.dtype)
             nodes[:, parameters.nonzero_sigma_index] = self.agents.nodes[:, :parameters.nonzero_sigma_index.sum()]

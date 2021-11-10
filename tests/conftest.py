@@ -2,7 +2,7 @@
 
 import hashlib
 import os
-from typing import Any, Callable, Dict, Hashable, Iterator, List, Tuple
+from typing import cast, Any, Callable, Dict, Hashable, Iterator, List, Tuple
 
 import numpy as np
 import patsy
@@ -37,7 +37,7 @@ def configure() -> Iterator[None]:
     old_dtype = options.dtype
     dtype_string = os.environ.get('DTYPE')
     if dtype_string:
-        options.dtype = np.dtype(dtype_string)
+        options.dtype = cast(Any, np.dtype(dtype_string))
         if np.finfo(options.dtype).dtype == old_dtype:
             pytest.skip(f"The {dtype_string} data type is the same as the default one in this environment.")
 
