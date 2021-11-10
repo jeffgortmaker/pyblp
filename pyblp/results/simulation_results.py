@@ -86,13 +86,13 @@ class SimulationResults(StringRepresentation):
         self.costs = costs
         self.computation_time = end_time - start_time
         self.fp_converged = np.array(
-            [iteration_stats[t].converged for t in simulation.unique_market_ids], dtype=np.bool
+            [iteration_stats[t].converged for t in simulation.unique_market_ids], dtype=np.bool_
         )
         self.fp_iterations = np.array(
-            [iteration_stats[t].iterations for t in simulation.unique_market_ids], dtype=np.int
+            [iteration_stats[t].iterations for t in simulation.unique_market_ids], dtype=np.int64
         )
         self.contraction_evaluations = np.array(
-            [iteration_stats[t].evaluations for t in simulation.unique_market_ids], dtype=np.int
+            [iteration_stats[t].evaluations for t in simulation.unique_market_ids], dtype=np.int64
         )
         self._data_override = data_override
 

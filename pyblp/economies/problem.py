@@ -725,7 +725,7 @@ class ProblemEconomy(Economy):
         if self.K3 == 0:
             tilde_costs = np.full((self.N, 0), np.nan, options.dtype)
             omega_jacobian = np.full((self.N, parameters.P), np.nan, options.dtype)
-            clipped_costs = np.zeros((self.N, 1), np.bool)
+            clipped_costs = np.zeros((self.N, 1), np.bool_)
         else:
             compute_jacobian = compute_gradient and not finite_differences
             tilde_costs, omega_jacobian, clipped_costs, supply_errors = self._compute_supply_contributions(
@@ -883,7 +883,7 @@ class ProblemEconomy(Economy):
         micro_jacobian = np.zeros((moments.MM, parameters.P), options.dtype)
         micro_covariances = np.zeros((moments.MM, moments.MM), options.dtype)
         micro_values = np.full((self.T, moments.MM), np.nan, options.dtype)
-        clipped_shares = np.zeros((self.N, 1), np.bool)
+        clipped_shares = np.zeros((self.N, 1), np.bool_)
         iteration_stats: Dict[Hashable, SolverStats] = {}
 
         # when possible and when a gradient isn't needed, compute delta with a closed-form solution
@@ -977,7 +977,7 @@ class ProblemEconomy(Economy):
         # initialize transformed marginal costs, their Jacobian, and indices of clipped costs so that they can be filled
         tilde_costs = np.zeros((self.N, 1), options.dtype)
         omega_jacobian = np.zeros((self.N, parameters.P), options.dtype)
-        clipped_costs = np.zeros((self.N, 1), np.bool)
+        clipped_costs = np.zeros((self.N, 1), np.bool_)
 
         def market_factory(s: Hashable) -> Tuple[ProblemMarket, Array, Array, Bounds, bool]:
             """Build a market along with arguments used to compute transformed marginal costs and their Jacobian."""

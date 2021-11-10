@@ -42,7 +42,7 @@ class Results(abc.ABC, StringRepresentation):
         if market_id is None:
             return self.problem.unique_market_ids
         if market_id in self.problem.unique_market_ids:
-            return np.array(market_id, np.object)
+            return np.array(market_id, np.object_)
         raise ValueError(f"market_id must be None or one of {list(sorted(self.problem.unique_market_ids))}.")
 
     @abc.abstractmethod

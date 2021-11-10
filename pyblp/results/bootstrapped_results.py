@@ -109,13 +109,16 @@ class BootstrappedResults(Results):
         self.draws = draws
         unique_market_ids = problem_results.problem.unique_market_ids
         self.fp_converged = np.array(
-            [[iteration_stats[(d, t)].converged for d in range(self.draws)] for t in unique_market_ids], dtype=np.bool
+            [[iteration_stats[(d, t)].converged for d in range(self.draws)] for t in unique_market_ids],
+            dtype=np.bool_,
         )
         self.fp_iterations = np.array(
-            [[iteration_stats[(d, t)].iterations for d in range(self.draws)] for t in unique_market_ids], dtype=np.int
+            [[iteration_stats[(d, t)].iterations for d in range(self.draws)] for t in unique_market_ids],
+            dtype=np.int64,
         )
         self.contraction_evaluations = np.array(
-            [[iteration_stats[(d, t)].evaluations for d in range(self.draws)] for t in unique_market_ids], dtype=np.int
+            [[iteration_stats[(d, t)].evaluations for d in range(self.draws)] for t in unique_market_ids],
+            dtype=np.int64,
         )
 
     def __str__(self) -> str:

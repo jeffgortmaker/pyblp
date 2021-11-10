@@ -414,7 +414,7 @@ class Market(Container):
         errors: List[Error] = []
 
         # default assumption is that no shares were clipped at the end of fixed point iteration
-        clipped_shares = np.zeros((self.J, 1), np.bool)
+        clipped_shares = np.zeros((self.J, 1), np.bool_)
 
         # if there is no heterogeneity, use the closed-form solution
         if self.K2 == 0:

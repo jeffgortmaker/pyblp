@@ -113,13 +113,13 @@ class OptimalInstrumentResults(StringRepresentation):
         self.draws = draws
         unique_market_ids = problem_results.problem.unique_market_ids
         self.fp_converged = np.array(
-            [[m[t].converged if m else True for m in iteration_stats] for t in unique_market_ids], dtype=np.bool
+            [[m[t].converged if m else True for m in iteration_stats] for t in unique_market_ids], dtype=np.bool_
         )
         self.fp_iterations = np.array(
-            [[m[t].iterations if m else 0 for m in iteration_stats] for t in unique_market_ids], dtype=np.int
+            [[m[t].iterations if m else 0 for m in iteration_stats] for t in unique_market_ids], dtype=np.int64
         )
         self.contraction_evaluations = np.array(
-            [[m[t].evaluations if m else 0 for m in iteration_stats] for t in unique_market_ids], dtype=np.int
+            [[m[t].evaluations if m else 0 for m in iteration_stats] for t in unique_market_ids], dtype=np.int64
         )
 
         # construct default supply and demand shifter formulations
@@ -319,7 +319,7 @@ class OptimalInstrumentResults(StringRepresentation):
             demand_shifter_formulation = None
 
         # identify which parameters in theta are are exogenous linear characteristics
-        dropped_index = np.zeros(self.problem_results._parameters.P, np.bool)
+        dropped_index = np.zeros(self.problem_results._parameters.P, np.bool_)
         for p, parameter in enumerate(self.problem_results._parameters.unfixed):
             if isinstance(parameter, LinearCoefficient):
                 names = parameter.get_product_formulation(self.problem_results.problem).names

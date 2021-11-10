@@ -198,13 +198,13 @@ class Products(object):
         # structure product fields as a mapping
         product_mapping: Dict[Union[str, tuple], Tuple[Optional[Array], Any]] = {}
         product_mapping.update({
-            'market_ids': (market_ids, np.object),
-            'firm_ids': (firm_ids, np.object),
-            'demand_ids': (demand_ids, np.object),
-            'supply_ids': (supply_ids, np.object),
-            'nesting_ids': (nesting_ids, np.object),
-            'product_ids': (product_ids, np.object),
-            'clustering_ids': (clustering_ids, np.object),
+            'market_ids': (market_ids, np.object_),
+            'firm_ids': (firm_ids, np.object_),
+            'demand_ids': (demand_ids, np.object_),
+            'supply_ids': (supply_ids, np.object_),
+            'nesting_ids': (nesting_ids, np.object_),
+            'product_ids': (product_ids, np.object_),
+            'clustering_ids': (clustering_ids, np.object_),
             'ownership': (ownership, options.dtype),
             'shares': (shares, options.dtype),
             'ZD': (ZD, options.dtype),
@@ -375,8 +375,8 @@ class Agents(object):
             )
 
         return structure_matrices({
-            'market_ids': (market_ids, np.object),
-            'agent_ids': (agent_ids, np.object),
+            'market_ids': (market_ids, np.object_),
+            'agent_ids': (agent_ids, np.object_),
             'weights': (weights, options.dtype),
             'nodes': (nodes, options.dtype),
             (tuple(demographics_formulations), 'demographics'): (demographics, options.dtype)

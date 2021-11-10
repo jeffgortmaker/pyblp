@@ -225,7 +225,7 @@ def test_trivial_changes(simulated_problem: SimulatedProblemFixture, solve_optio
 
     # test that all arrays in the results are essentially identical
     for key, result in results.__dict__.items():
-        if isinstance(result, np.ndarray) and result.dtype != np.object:
+        if isinstance(result, np.ndarray) and result.dtype != np.object_:
             if 'hessian' not in key:
                 np.testing.assert_allclose(result, getattr(updated_results, key), atol=1e-14, rtol=0, err_msg=key)
 
@@ -247,7 +247,7 @@ def test_parallel(simulated_problem: SimulatedProblemFixture) -> None:
 
     # test that all arrays in the results are essentially identical
     for key, result in results.__dict__.items():
-        if isinstance(result, np.ndarray) and result.dtype != np.object:
+        if isinstance(result, np.ndarray) and result.dtype != np.object_:
             np.testing.assert_allclose(result, getattr(parallel_results, key), atol=1e-14, rtol=0, err_msg=key)
 
     # test that marginal costs are essentially equal
@@ -791,7 +791,7 @@ def test_second_step(simulated_problem: SimulatedProblemFixture) -> None:
 
     # test that results are essentially identical
     for key, result12 in results12.__dict__.items():
-        if 'cumulative' not in key and isinstance(result12, np.ndarray) and result12.dtype != np.object:
+        if 'cumulative' not in key and isinstance(result12, np.ndarray) and result12.dtype != np.object_:
             np.testing.assert_allclose(result12, getattr(results2, key), atol=1e-14, rtol=0, err_msg=key)
 
 
@@ -864,7 +864,7 @@ def test_gradient_optionality(simulated_problem: SimulatedProblemFixture, scipy_
 
     # test that all arrays close except for those created with finite differences after the fact
     for key, result1 in results1.__dict__.items():
-        if isinstance(result1, np.ndarray) and result1.dtype != np.object:
+        if isinstance(result1, np.ndarray) and result1.dtype != np.object_:
             if not any(s in key for s in ['gradient', '_jacobian', '_se', '_covariances']):
                 np.testing.assert_allclose(result1, getattr(results2, key), atol=1e-14, rtol=0, err_msg=key)
 
@@ -1024,7 +1024,7 @@ def test_extra_nodes(simulated_problem: SimulatedProblemFixture) -> None:
 
     # test that the agents are essentially identical
     for key in problem.agents.dtype.names:
-        if problem.agents[key].dtype != np.object:
+        if problem.agents[key].dtype != np.object_:
             np.testing.assert_allclose(problem.agents[key], new_problem.agents[key], atol=1e-14, rtol=0, err_msg=key)
 
 
@@ -1054,7 +1054,7 @@ def test_extra_demographics(simulated_problem: SimulatedProblemFixture) -> None:
 
     # test that the agents are essentially identical
     for key in problem.agents.dtype.names:
-        if problem.agents[key].dtype != np.object:
+        if problem.agents[key].dtype != np.object_:
             np.testing.assert_allclose(problem.agents[key], new_problem.agents[key], atol=1e-14, rtol=0, err_msg=key)
 
 
@@ -1114,7 +1114,7 @@ def test_custom_moments(simulated_problem: SimulatedProblemFixture) -> None:
 
     # test that all arrays in the results are essentially identical
     for key, result in results.__dict__.items():
-        if isinstance(result, np.ndarray) and result.dtype != np.object:
+        if isinstance(result, np.ndarray) and result.dtype != np.object_:
             np.testing.assert_allclose(result, getattr(replicated_results, key), atol=1e-14, rtol=0, err_msg=key)
 
 

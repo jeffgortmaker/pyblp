@@ -22,7 +22,7 @@ def precisely_identify_collinearity(x: Array) -> Tuple[Array, bool]:
     """Compute the QR decomposition of a matrix and identify which diagonal elements of the upper diagonal matrix are
     within absolute and relative tolerances.
     """
-    collinear = np.zeros(x.shape[1], np.bool)
+    collinear = np.zeros(x.shape[1], np.bool_)
     successful = True
     if x.size > 0 and min(options.collinear_atol, options.collinear_rtol) > 0:
         try:
@@ -156,14 +156,14 @@ def elimination_matrix(n: int) -> Array:
     """Construct the unique matrix L, which for any n x n symmetric matrix A satisfies L * vec(A) = vech(A). See
     Definition 3.1b in Magnus and Neudecker (1980).
     """
-    L = np.zeros((n * (n + 1) // 2, n**2), np.int)
+    L = np.zeros((n * (n + 1) // 2, n**2), np.int64)
 
     for i in range(n):
         for j in range(i + 1):
-            u = np.zeros((n * (n + 1) // 2, 1), np.int)
+            u = np.zeros((n * (n + 1) // 2, 1), np.int64)
             u[j * n + i - j * (j + 1) // 2] = 1
 
-            E = np.zeros((n, n), np.int)
+            E = np.zeros((n, n), np.int64)
             E[i, j] = 1
 
             L += u @ vec(E)[None, :]
@@ -175,10 +175,10 @@ def commutation_matrix(n: int) -> Array:
     """Construct the unique matrix K, which for any n x n symmetric matrix A satisfies K * vec(A) = vec(A'). See
     Definition 2.1b in Magnus and Neudecker (1980).
     """
-    K = np.zeros((n**2, n**2), np.int)
+    K = np.zeros((n**2, n**2), np.int64)
 
     for i, j in itertools.product(range(n), repeat=2):
-        E = np.zeros((n, n), np.int)
+        E = np.zeros((n, n), np.int64)
         E[i, j] = 1
 
         K += np.kron(E, E.T)

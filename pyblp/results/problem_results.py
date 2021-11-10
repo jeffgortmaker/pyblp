@@ -345,15 +345,15 @@ class ProblemResults(Results):
         self.objective_evaluations = self.cumulative_objective_evaluations = optimization_stats.evaluations
         self.fp_converged = self.cumulative_fp_converged = np.array(
             [[m[t].converged if m else True for m in iteration_stats] for t in self.problem.unique_market_ids],
-            dtype=np.int
+            dtype=np.int64
         )
         self.fp_iterations = self.cumulative_fp_iterations = np.array(
             [[m[t].iterations if m else 0 for m in iteration_stats] for t in self.problem.unique_market_ids],
-            dtype=np.int
+            dtype=np.int64
         )
         self.contraction_evaluations = self.cumulative_contraction_evaluations = np.array(
             [[m[t].evaluations if m else 0 for m in iteration_stats] for t in self.problem.unique_market_ids],
-            dtype=np.int
+            dtype=np.int64
         )
 
         # initialize last results and add to cumulative values

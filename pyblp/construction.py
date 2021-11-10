@@ -56,8 +56,8 @@ def build_id_data(T: int, J: int, F: int) -> RecArray:
     if not isinstance(J, int) or J < F:
         raise ValueError("J must be an int that is at least F.")
     return structure_matrices({
-        'market_ids': (np.repeat(np.arange(T), J).astype(np.int), np.object),
-        'firm_ids': (np.floor(np.tile(np.arange(J), T) * F / J).astype(np.int), np.object)
+        'market_ids': (np.repeat(np.arange(T), J).astype(np.int64), np.object_),
+        'firm_ids': (np.floor(np.tile(np.arange(J), T) * F / J).astype(np.int64), np.object_)
     })
 
 

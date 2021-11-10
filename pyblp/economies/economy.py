@@ -364,7 +364,7 @@ class Economy(Container, StringRepresentation):
     def _compute_true_X1(self, data_override: Optional[Mapping] = None, index: Optional[Array] = None) -> Array:
         """Compute X1 or columns of X1 without any absorbed demand-side fixed effects."""
         if index is None:
-            index = np.ones(self.K1, np.bool)
+            index = np.ones(self.K1, np.bool_)
         if self.ED == 0 and not data_override:
             return self.products.X1[:, index]
 
@@ -380,7 +380,7 @@ class Economy(Container, StringRepresentation):
     def _compute_true_X3(self, data_override: Optional[Mapping] = None, index: Optional[Array] = None) -> Array:
         """Compute X3 or columns of X3 without any absorbed supply-side fixed effects."""
         if index is None:
-            index = np.ones(self.K3, np.bool)
+            index = np.ones(self.K3, np.bool_)
         if self.ES == 0 and not data_override:
             return self.products.X3[:, index]
 

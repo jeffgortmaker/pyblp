@@ -45,7 +45,7 @@ class Moment(StringRepresentation):
         if market_ids is None:
             self.market_ids = None
         else:
-            self.market_ids = np.asarray(market_ids, np.object)
+            self.market_ids = np.asarray(market_ids, np.object_)
 
             # check for duplicates
             unique, counts = np.unique(self.market_ids, return_counts=True)
@@ -953,7 +953,7 @@ class EconomyMoments(Moments):
                         weights.append(moment.market_weights[np.argmax(market_ids_m == t)])
 
             self.market_values[t] = np.array(values, options.dtype).flatten()
-            self.market_indices[t] = np.array(indices, np.int)
+            self.market_indices[t] = np.array(indices, np.int64)
             self.market_weights[t] = np.array(weights, options.dtype).flatten()
 
 

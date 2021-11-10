@@ -146,11 +146,11 @@ def test_ids(
         key12 = f'{key1}{key2}'
         key123 = f'{key1}{key2}{key3}'
         if key12 not in formula_data:
-            values12 = np.empty_like(values1, np.object)
+            values12 = np.empty_like(values1, np.object_)
             values12[:] = list(zip(values1, values2))
             formula_data[key12] = values12
         if key123 not in formula_data:
-            values123 = np.empty_like(values1, np.object)
+            values123 = np.empty_like(values1, np.object_)
             values123[:] = list(zip(values1, values2, values3))
             formula_data[key123] = values123
 

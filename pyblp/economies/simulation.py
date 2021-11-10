@@ -420,11 +420,11 @@ class Simulation(Economy):
 
         # load or simulate product variables in sorted order so that a seed always gives the same draws
         product_mapping = {
-            'market_ids': (market_ids, np.object),
-            'firm_ids': (firm_ids, np.object),
-            'nesting_ids': (nesting_ids, np.object),
-            'product_ids': (product_ids, np.object),
-            'clustering_ids': (clustering_ids, np.object),
+            'market_ids': (market_ids, np.object_),
+            'firm_ids': (firm_ids, np.object_),
+            'nesting_ids': (nesting_ids, np.object_),
+            'product_ids': (product_ids, np.object_),
+            'clustering_ids': (clustering_ids, np.object_),
             'ownership': (ownership, options.dtype),
             'shares': (shares, options.dtype),
             'prices': (prices, options.dtype),
@@ -438,7 +438,7 @@ class Simulation(Economy):
                     variable = state.uniform(size=market_ids.size)
                 elif variable.shape[1] > 1:
                     raise ValueError(f"The {name} variable has a field in product_data with more than one column.")
-                variable_dtype = options.dtype if np.issubdtype(variable.dtype, np.number) else np.object
+                variable_dtype = options.dtype if np.issubdtype(variable.dtype, np.number) else np.object_
                 product_mapping[name] = (variable, variable_dtype)
 
         # structure product data
@@ -464,8 +464,8 @@ class Simulation(Economy):
 
             # load or simulate agent variables in sorted order so that a seed always gives the same draws
             agent_mapping = {
-                'market_ids': (agent_market_ids, np.object),
-                'agent_ids': (agent_ids, np.object),
+                'market_ids': (agent_market_ids, np.object_),
+                'agent_ids': (agent_ids, np.object_),
                 'nodes': (nodes, options.dtype),
                 'weights': (weights, options.dtype)
             }
@@ -475,7 +475,7 @@ class Simulation(Economy):
                     if matrix is None:
                         agent_mapping[name] = (state.uniform(size=agent_market_ids.size), options.dtype)
                     else:
-                        variable_dtype = options.dtype if np.issubdtype(matrix.dtype, np.number) else np.object
+                        variable_dtype = options.dtype if np.issubdtype(matrix.dtype, np.number) else np.object_
                         if matrix.shape[1] == 1:
                             agent_mapping[name] = (matrix, variable_dtype)
                         else:

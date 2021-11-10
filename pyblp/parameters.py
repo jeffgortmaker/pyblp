@@ -207,13 +207,13 @@ class Parameters(object):
         self.nonzero_sigma_index = np.any(self.sigma != 0, axis=0)
 
         # identify the index of alpha in beta
-        self.alpha_index = np.zeros_like(self.beta, np.bool)
+        self.alpha_index = np.zeros_like(self.beta, np.bool_)
         for k, formulation in enumerate(economy._X1_formulations):
             if 'prices' in formulation.names:
                 self.alpha_index[k] = True
 
         # identify the index of analogous parameters in gamma
-        self.endogenous_gamma_index = np.zeros_like(self.gamma, np.bool)
+        self.endogenous_gamma_index = np.zeros_like(self.gamma, np.bool_)
         for k, formulation in enumerate(economy._X3_formulations):
             if 'shares' in formulation.names:
                 self.endogenous_gamma_index[k] = True
@@ -563,5 +563,5 @@ class Parameters(object):
 
         # extract corresponding rows and columns from the theta covariances, taking zeros for fixed elements
         padded_covariances = np.pad(theta_covariances, pad_width=(0, 1), mode='constant', constant_values=0)
-        indices = np.nan_to_num(sigma_vector_indices, nan=self.P).astype(np.int)
+        indices = np.nan_to_num(sigma_vector_indices, nan=self.P).astype(np.int64)
         return padded_covariances[indices, :][:, indices]
