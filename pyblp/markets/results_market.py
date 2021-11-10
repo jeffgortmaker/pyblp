@@ -124,16 +124,18 @@ class ResultsMarket(Market):
 
     @NumericalErrorHandler(exceptions.PostEstimationNumericalError)
     def safely_compute_probabilities(
-            self, prices: Optional[Array], delta: Optional[Array]) -> Tuple[Array, List[Error]]:
+            self, prices: Optional[Array] = None, delta: Optional[Array] = None) -> Tuple[Array, List[Error]]:
         """Estimate a matrix of choice probabilities at specified prices. By default, use unchanged prices and mean
         utilities, handling any numerical errors.
         """
         errors: List[Error] = []
         if prices is None:
-            prices = self.products.prices
-        if delta is None:
-            delta = self.update_delta_with_variable('prices', prices)
-        mu = self.update_mu_with_variable('prices', prices)
+            mu = None
+        else:
+            mu = self.update_mu_with_variable('prices', prices)
+            if delta is None:
+                delta = self.update_delta_with_variable('prices', prices)
+
         probabilities = self.compute_probabilities(delta, mu)[0]
         return probabilities, errors
 
