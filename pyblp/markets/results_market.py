@@ -123,10 +123,18 @@ class ResultsMarket(Market):
         return ratios, errors
 
     @NumericalErrorHandler(exceptions.PostEstimationNumericalError)
-    def safely_compute_probabilities(self) -> Tuple[Array, List[Error]]:
-        """Estimate a matrix of choice probabilities, handling any numerical errors."""
+    def safely_compute_probabilities(
+            self, prices: Optional[Array], delta: Optional[Array]) -> Tuple[Array, List[Error]]:
+        """Estimate a matrix of choice probabilities at specified prices. By default, use unchanged prices and mean
+        utilities, handling any numerical errors.
+        """
         errors: List[Error] = []
-        probabilities = self.compute_probabilities()[0]
+        if prices is None:
+            prices = self.products.prices
+        if delta is None:
+            delta = self.update_delta_with_variable('prices', prices)
+        mu = self.update_mu_with_variable('prices', prices)
+        probabilities = self.compute_probabilities(delta, mu)[0]
         return probabilities, errors
 
     @NumericalErrorHandler(exceptions.PostEstimationNumericalError)
@@ -194,13 +202,8 @@ class ResultsMarket(Market):
         """Estimate shares evaluated at specified prices. By default, use unchanged prices and mean utilities, handling
         any numerical errors.
         """
-        errors: List[Error] = []
-        if prices is None:
-            prices = self.products.prices
-        if delta is None:
-            delta = self.update_delta_with_variable('prices', prices)
-        mu = self.update_mu_with_variable('prices', prices)
-        shares = self.compute_probabilities(delta, mu)[0] @ self.agents.weights
+        probabilities, errors = self.safely_compute_probabilities(prices, delta)
+        shares = probabilities @ self.agents.weights
         return shares, errors
 
     @NumericalErrorHandler(exceptions.PostEstimationNumericalError)

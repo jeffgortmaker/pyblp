@@ -624,11 +624,15 @@ def test_probabilities(simulated_problem: SimulatedProblemFixture) -> None:
     # only do the test for a single market
     t = problem.products.market_ids[0]
     shares = problem.products.shares[problem.products.market_ids.flat == t]
+    prices = problem.products.prices[problem.products.market_ids.flat == t]
+    delta = results.delta[problem.products.market_ids.flat == t]
     weights = problem.agents.weights[problem.agents.market_ids.flat == t]
 
     # compute and compare shares
-    estimated_shares = results.compute_probabilities(market_id=t) @ weights
-    np.testing.assert_allclose(shares, estimated_shares, atol=1e-14, rtol=0, verbose=True)
+    estimated_shares1 = results.compute_probabilities(market_id=t) @ weights
+    estimated_shares2 = results.compute_probabilities(market_id=t, prices=prices, delta=delta) @ weights
+    np.testing.assert_allclose(shares, estimated_shares1, atol=1e-14, rtol=0, verbose=True)
+    np.testing.assert_allclose(shares, estimated_shares2, atol=1e-14, rtol=0, verbose=True)
 
 
 @pytest.mark.usefixtures('simulated_problem')

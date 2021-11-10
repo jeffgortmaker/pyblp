@@ -237,15 +237,48 @@ class Results(abc.ABC, StringRepresentation):
         market_ids = self._select_market_ids(market_id)
         return self._combine_arrays(ResultsMarket.safely_compute_long_run_diversion_ratios, market_ids)
 
-    def compute_probabilities(self, market_id: Optional[Any] = None) -> Array:
+    def compute_probabilities(
+            self, prices: Optional[Any] = None, delta: Optional[Any] = None, agent_data: Optional[Mapping] = None,
+            integration: Optional[Integration] = None, market_id: Optional[Any] = None) -> Array:
         r"""Estimate matrices of choice probabilities.
 
         For each market, the value in row :math:`j` and column `i` is given by :eq:`probabilities` when there are random
         coefficients, and by :eq:`nested_probabilities` when there is additionally a nested structure. For the logit
         and nested logit models, choice probabilities are market shares.
 
+        It may be desirable to compute the probabilities associated with equilibrium prices that have been computed, for
+        example, by :meth:`ProblemResults.compute_prices`.
+
+        .. note::
+
+           To compute equilibrium shares (and prices) associated with a more complicated counterfactual, a
+           :class:`Simulation` for the counterfactual can be initialized with the estimated parameters, structural
+           errors, and marginal costs from these results, and then solved with :meth:`Simulation.replace_endogenous`.
+
+        Alternatively, this method can also be used to evaluate the performance of different numerical integration
+        configurations. One way to do so is to use :meth:`ProblemResults.compute_delta` to compute mean utilities
+        with a very precise integration rule (one that is infeasible to use during estimation), use these same mean
+        utilities and integration rule to precisely compute probabilities, and then compare error between these
+        precisely-computed probabilities and probabilities computed with less precise (but feasible to use during
+        estimation) integration rules, still using the precisely-computed mean utilities.
+
         Parameters
         ----------
+        prices : `array-like, optional`
+            Prices at which to evaluate probabilities, such as equilibrium prices, :math:`p^*`, computed by
+            :meth:`ProblemResults.compute_prices`. By default, unchanged prices are used.
+        delta : `array-like, optional`
+            Mean utilities that will be used to evaluate probabilities, such as those computed more precisely by
+            :meth:`ProblemResults.compute_delta`. By default, the estimated :attr:`ProblemResults.delta` is used,
+            and updated with any specified ``prices``.
+        agent_data : `structured array-like, optional`
+            Agent data that will be used to compute probabilities. By default, ``agent_data`` in :class:`Problem` is
+            used. For more information, refer to :class:`Problem`.
+        integration : `Integration, optional`
+            :class:`Integration` configuration that will be used to compute probabilities, which will replace any
+            ``nodes`` field in ``agent_data``. This configuration is required if ``agent_data`` is specified without a
+            nodes field. By default, ``agent_data`` in :class:`Problem` is used. For more information, refer to
+            :class:`Problem`.
         market_id : `object, optional`
             ID of the market in which to compute choice probabilities. By default, choice probabilities are computed in
             all markets and stacked.
@@ -264,7 +297,12 @@ class Results(abc.ABC, StringRepresentation):
         """
         output("Computing choice probabilities ...")
         market_ids = self._select_market_ids(market_id)
-        return self._combine_arrays(ResultsMarket.safely_compute_probabilities, market_ids)
+        prices = self._coerce_optional_prices(prices, market_ids)
+        delta = self._coerce_optional_delta(delta, market_ids)
+        return self._combine_arrays(
+            ResultsMarket.safely_compute_probabilities, market_ids, market_args=[prices, delta], agent_data=agent_data,
+            integration=integration
+        )
 
     def extract_diagonals(self, matrices: Any) -> Array:
         r"""Extract diagonals from stacked :math:`J_t \times J_t` matrices for each market :math:`t`.
@@ -601,7 +639,7 @@ class Results(abc.ABC, StringRepresentation):
         Returns
         -------
         `ndarray`
-            Estimates of shares evaluated at the specified prices.
+            Estimates of shares.
 
         Examples
         --------
