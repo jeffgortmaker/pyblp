@@ -15,7 +15,10 @@ def compute_condition_number(x: Array) -> float:
     """Compute the condition number of a square matrix."""
     if not np.isfinite(x).all():
         return np.nan
-    return np.linalg.cond(x.astype(np.float64))
+    try:
+        return np.linalg.cond(x.astype(np.float64))
+    except scipy.linalg.LinAlgError:
+        return np.nan
 
 
 def precisely_identify_collinearity(x: Array) -> Tuple[Array, bool]:
