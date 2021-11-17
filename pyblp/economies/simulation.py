@@ -534,7 +534,7 @@ class Simulation(Economy):
 
     def replace_endogenous(
             self, costs: Optional[Any] = None, prices: Optional[Any] = None, iteration: Optional[Iteration] = None,
-            error_behavior: str = 'raise') -> SimulationResults:
+            constant_costs: bool = True, error_behavior: str = 'raise') -> SimulationResults:
         r"""Replace simulated prices and market shares with equilibrium values that are consistent with true parameters.
 
         This method is the standard way of solving the simulation. Prices and market shares are computed in each market
@@ -572,6 +572,11 @@ class Simulation(Economy):
             :class:`Iteration` configuration for how to solve the fixed point problem. By default,
             ``Iteration('simple', {'atol': 1e-12})`` is used. Analytic Jacobians are not supported for solving this
             system.
+        constant_costs : `bool, optional`
+            Whether to assume that marginal costs, :math:`c`, remain constant as equilibrium prices and shares change.
+            By default this is ``True``, which means that firms treat marginal costs as constant (equal to ``costs``)
+            when setting prices. If set to ``False``, marginal costs will be allowed to adjust if ``shares`` was
+            included in the formulation for :math:`X_3`.
         error_behavior : `str, optional`
             How to handle errors when computing prices and shares. For example, the fixed point routine may not converge
             if the effects of nonlinear parameters on price overwhelm the linear parameter on price, which should be
@@ -626,7 +631,7 @@ class Simulation(Economy):
         # compute a baseline delta that will be updated when shares and prices are replaced
         delta = self.products.X1 @ self.beta + self.xi
 
-        def market_factory(s: Hashable) -> Tuple[SimulationMarket, Array, Array, Iteration]:
+        def market_factory(s: Hashable) -> Tuple[SimulationMarket, Array, Array, Iteration, bool]:
             """Build a market along with arguments used to compute prices and shares."""
             assert costs is not None and prices is not None and iteration is not None
             market_s = SimulationMarket(
@@ -634,7 +639,7 @@ class Simulation(Economy):
             )
             costs_s = costs[self._product_market_indices[s]]
             prices_s = prices[self._product_market_indices[s]]
-            return market_s, costs_s, prices_s, iteration
+            return market_s, costs_s, prices_s, iteration, constant_costs
 
         # compute prices and market shares market-by-market, also collecting potentially updated delta and costs
         data_override = {

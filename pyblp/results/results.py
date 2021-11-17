@@ -623,8 +623,8 @@ class Results(abc.ABC, StringRepresentation):
 
     def compute_prices(
             self, firm_ids: Optional[Any] = None, ownership: Optional[Any] = None, costs: Optional[Any] = None,
-            prices: Optional[Any] = None, iteration: Optional[Iteration] = None, market_id: Optional[Any] = None) -> (
-            Array):
+            prices: Optional[Any] = None, iteration: Optional[Iteration] = None, constant_costs: bool = True,
+            market_id: Optional[Any] = None) -> Array:
         r"""Estimate equilibrium prices after firm or cost changes, :math:`p^*`.
 
         .. note::
@@ -647,11 +647,6 @@ class Results(abc.ABC, StringRepresentation):
            \zeta^*(p^*) = \Lambda^{-1}(p^*)[\mathscr{H}^* \odot \Gamma(p^*)]'(p^* - c^*) - \Lambda^{-1}(p^*)s(p^*)
 
         where :math:`\mathscr{H}^*` is the ownership matrix associated with firm changes.
-
-        .. warning::
-
-           This routine assumes that marginal costs, :math:`c`, remain constant. This may not be the case if ``shares``
-           was included in the formulation for :math:`X_3` in :class:`Problem`.
 
         Parameters
         ----------
@@ -676,6 +671,12 @@ class Results(abc.ABC, StringRepresentation):
             :class:`Iteration` configuration for how to solve the fixed point problem in each market. By default,
             ``Iteration('simple', {'atol': 1e-12})`` is used. Analytic Jacobians are not supported for solving this
             system.
+        constant_costs : `bool, optional`
+            Whether to assume that marginal costs, :math:`c`, remain constant as equilibrium prices and shares change.
+            By default this is ``True``, which means that firms treat marginal costs as constant (equal to ``costs``)
+            when setting prices. This assumption is implicit in how :meth:`ProblemResults.compute_costs` computes
+            marginal costs. If set to ``False``, marginal costs will be allowed to adjust if ``shares`` was included in
+            the formulation for :math:`X_3` in :class:`Problem`.
         market_id : `object, optional`
             ID of the market in which to compute equilibrium prices. By default, equilibrium prices are computed in all
             markets and stacked.
@@ -698,7 +699,7 @@ class Results(abc.ABC, StringRepresentation):
         prices = self._coerce_optional_prices(prices, market_ids)
         iteration = self.problem._coerce_optional_prices_iteration(iteration)
         return self._combine_arrays(
-            ResultsMarket.safely_compute_prices, market_ids, fixed_args=[iteration],
+            ResultsMarket.safely_compute_prices, market_ids, fixed_args=[iteration, constant_costs],
             market_args=[firm_ids, ownership, costs, prices]
         )
 

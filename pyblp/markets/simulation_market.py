@@ -14,11 +14,11 @@ class SimulationMarket(Market):
     """A market in a simulation of synthetic BLP data."""
 
     def compute_endogenous(
-            self, costs: Array, prices: Array, iteration: Iteration) -> (
+            self, costs: Array, prices: Array, iteration: Iteration, constant_costs: bool) -> (
             Tuple[Array, Array, Array, Array, SolverStats, List[Error]]):
         """Compute endogenous prices and shares, along with the associated delta and costs."""
         errors: List[Error] = []
-        prices, stats, price_errors = self.safely_compute_equilibrium_prices(costs, iteration, prices)
+        prices, stats, price_errors = self.safely_compute_equilibrium_prices(costs, iteration, constant_costs, prices)
         shares, share_errors = self.safely_compute_shares(prices)
         with np.errstate(all='ignore'):
             delta = self.update_delta_with_variable('prices', prices)
@@ -41,10 +41,11 @@ class SimulationMarket(Market):
 
     @NumericalErrorHandler(exceptions.SyntheticPricesNumericalError)
     def safely_compute_equilibrium_prices(
-            self, costs: Array, iteration: Iteration, prices: Array) -> Tuple[Array, SolverStats, List[Error]]:
+            self, costs: Array, iteration: Iteration, constant_costs: bool, prices: Array) -> (
+            Tuple[Array, SolverStats, List[Error]]):
         """Compute equilibrium prices by iterating over the zeta-markup equation, handling any numerical errors."""
         errors: List[Error] = []
-        prices, stats = self.compute_equilibrium_prices(costs, iteration, prices)
+        prices, stats = self.compute_equilibrium_prices(costs, iteration, constant_costs, prices)
         if not stats.converged:
             errors.append(exceptions.SyntheticPricesConvergenceError())
         return prices, stats, errors

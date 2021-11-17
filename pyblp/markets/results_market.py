@@ -16,7 +16,7 @@ class ResultsMarket(Market):
 
     @NumericalErrorHandler(exceptions.EquilibriumRealizationNumericalError)
     def safely_solve_equilibrium_realization(
-            self, costs: Array, prices: Optional[Array], iteration: Optional[Iteration]) -> (
+            self, costs: Array, prices: Optional[Array], iteration: Optional[Iteration], constant_costs: bool) -> (
             Tuple[Array, Array, Array, SolverStats, List[Error]]):
         """If not already estimated, compute equilibrium prices along with the associated mean utility and shares for a
         realization of marginal costs (for bootstrapping and optimal instruments), along with parameters (for
@@ -29,7 +29,7 @@ class ResultsMarket(Market):
             assert prices is not None
             stats = SolverStats()
         else:
-            prices, stats = self.compute_equilibrium_prices(costs, iteration)
+            prices, stats = self.compute_equilibrium_prices(costs, iteration, constant_costs)
             if not stats.converged:
                 errors.append(exceptions.EquilibriumPricesConvergenceError())
 
@@ -243,8 +243,8 @@ class ResultsMarket(Market):
 
     @NumericalErrorHandler(exceptions.PostEstimationNumericalError)
     def safely_compute_prices(
-            self, iteration: Iteration, firm_ids: Optional[Array], ownership: Optional[Array], costs: Optional[Array],
-            prices: Optional[Array]) -> Tuple[Array, List[Error]]:
+            self, iteration: Iteration, constant_costs: bool, firm_ids: Optional[Array], ownership: Optional[Array],
+            costs: Optional[Array], prices: Optional[Array]) -> Tuple[Array, List[Error]]:
         """Estimate equilibrium prices. By default, use unchanged firm IDs, use unchanged prices as starting values,
         and compute marginal costs, handling any numerical errors.
         """
@@ -253,7 +253,7 @@ class ResultsMarket(Market):
         if costs is None:
             costs, costs_errors = self.safely_compute_costs()
             errors.extend(costs_errors)
-        prices, converged = self.compute_equilibrium_prices(costs, iteration, prices, ownership_matrix)[:2]
+        prices, converged = self.compute_equilibrium_prices(costs, iteration, constant_costs, prices, ownership_matrix)
         if not converged:
             errors.append(exceptions.EquilibriumPricesConvergenceError())
         return prices, errors

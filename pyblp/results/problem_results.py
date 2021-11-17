@@ -829,8 +829,8 @@ class ProblemResults(Results):
         return self.problem.N * float(restrictions.T @ inverted @ restrictions)
 
     def bootstrap(
-            self, draws: int = 1000, seed: Optional[int] = None, iteration: Optional[Iteration] = None) -> (
-            'BootstrappedResults'):
+            self, draws: int = 1000, seed: Optional[int] = None, iteration: Optional[Iteration] = None,
+            constant_costs: bool = True) -> 'BootstrappedResults':
         r"""Use a parametric bootstrap to create an empirical distribution of results.
 
         The constructed :class:`BootstrappedResults` can be used just like :class:`ProblemResults` to compute various
@@ -867,6 +867,12 @@ class ProblemResults(Results):
             :math:`\zeta`-markup equation in :eq:`zeta_contraction`. By default, if a supply side was estimated, this
             is ``Iteration('simple', {'atol': 1e-12})``. Analytic Jacobians are not supported for solving this system.
             This configuration is not used if a supply side was not estimated.
+        constant_costs : `bool, optional`
+            Whether to assume that marginal costs, :math:`c`, remain constant as equilibrium prices and shares change.
+            By default this is ``True``, which means that firms treat marginal costs as constant when setting prices.
+            If set to ``False``, marginal costs will be allowed to adjust if ``shares`` was included in
+            the formulation for :math:`X_3` in :class:`Problem`. This is not relevant if a supply side was not
+            estimated.
 
         Returns
         -------
@@ -934,7 +940,7 @@ class ProblemResults(Results):
         true_X3 = self.problem._compute_true_X3()
 
         def market_factory(
-                pair: Tuple[int, Hashable]) -> Tuple[ResultsMarket, Array, Optional[Array], Optional[Iteration]]:
+                pair: Tuple[int, Hashable]) -> Tuple[ResultsMarket, Array, Optional[Array], Optional[Iteration], bool]:
             """Build a market along with arguments used to compute equilibrium prices and shares along with delta."""
             c, s = pair
             indices_s = self.problem._product_market_indices[s]
@@ -946,7 +952,7 @@ class ProblemResults(Results):
             if self.problem.costs_type == 'log':
                 costs_cs = np.exp(costs_cs)
             prices_s = self.problem.products.prices[indices_s] if iteration is None else None
-            return market_cs, costs_cs, prices_s, iteration
+            return market_cs, costs_cs, prices_s, iteration, constant_costs
 
         # compute bootstrapped prices, shares, and deltas
         bootstrapped_prices = np.zeros((draws, self.problem.N, 1), options.dtype)
@@ -982,7 +988,8 @@ class ProblemResults(Results):
 
     def compute_optimal_instruments(
             self, method: str = 'approximate', draws: int = 1, seed: Optional[int] = None,
-            expected_prices: Optional[Any] = None, iteration: Optional[Iteration] = None) -> 'OptimalInstrumentResults':
+            expected_prices: Optional[Any] = None, iteration: Optional[Iteration] = None,
+            constant_costs: bool = True) -> 'OptimalInstrumentResults':
         r"""Estimate feasible optimal or efficient instruments, :math:`Z_D^\text{opt}` and :math:`Z_S^\text{opt}`.
 
         Optimal instruments have been shown, for example, by :ref:`references:Reynaert and Verboven (2014)` and
@@ -1064,6 +1071,12 @@ class ProblemResults(Results):
             contraction in :eq:`zeta_contraction`. By default, if a supply side was estimated, this is
             ``Iteration('simple', {'atol': 1e-12})``. Analytic Jacobians are not supported for solving this system.
             This configuration is not used if ``expected_prices`` is specified.
+        constant_costs : `bool, optional`
+            Whether to assume that marginal costs, :math:`c`, remain constant as equilibrium prices and shares change.
+            By default this is ``True``, which means that firms treat marginal costs as constant when setting prices.
+            If set to ``False``, marginal costs will be allowed to adjust if ``shares`` was included in
+            the formulation for :math:`X_3` in :class:`Problem`. This is not relevant if a supply side was not
+            estimated.
 
         Returns
         -------
@@ -1141,7 +1154,7 @@ class ProblemResults(Results):
         iteration_stats: List[Dict[Hashable, SolverStats]] = []
         for _ in output_progress(range(draws), draws, start_time):
             prices_i, shares_i, xi_jacobian_i, omega_jacobian_i, iteration_stats_i, errors_i = (
-                self._compute_realizations(expected_prices, iteration, *sample())
+                self._compute_realizations(expected_prices, iteration, constant_costs, *sample())
             )
             computed_expected_prices += prices_i / draws
             expected_shares += shares_i / draws
@@ -1181,8 +1194,8 @@ class ProblemResults(Results):
         return results
 
     def _compute_realizations(
-            self, expected_prices: Optional[Array], iteration: Optional[Iteration], xi: Array, omega: Array) -> (
-            Tuple[Array, Array, Array, Array, Dict[Hashable, SolverStats], List[Error]]):
+            self, expected_prices: Optional[Array], iteration: Optional[Iteration], constant_costs: bool, xi: Array,
+            omega: Array) -> Tuple[Array, Array, Array, Array, Dict[Hashable, SolverStats], List[Error]]:
         """If they have not already been estimated, compute the equilibrium prices, shares, and delta associated with a
         realization of xi and omega market-by-market. Then, compute realizations of Jacobians of xi and omega with
         respect to theta.
@@ -1195,14 +1208,14 @@ class ProblemResults(Results):
         if self.problem.costs_type == 'log':
             costs = np.exp(costs)
 
-        def market_factory(s: Hashable) -> Tuple[ResultsMarket, Array, Optional[Array], Optional[Iteration]]:
+        def market_factory(s: Hashable) -> Tuple[ResultsMarket, Array, Optional[Array], Optional[Iteration], bool]:
             """Build a market along with arguments used to compute equilibrium prices and shares along with delta."""
             market_s = ResultsMarket(
                 self.problem, s, self._parameters, self.sigma, self.pi, self.rho, self.beta, self.gamma, delta
             )
             costs_s = costs[self.problem._product_market_indices[s]]
             prices_s = expected_prices[self.problem._product_market_indices[s]] if expected_prices is not None else None
-            return market_s, costs_s, prices_s, iteration
+            return market_s, costs_s, prices_s, iteration, constant_costs
 
         # compute realizations of prices, shares, and delta market-by-market
         data_override = {
