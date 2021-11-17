@@ -651,9 +651,9 @@ def test_surplus(simulated_problem: SimulatedProblemFixture) -> None:
 
 
 @pytest.mark.usefixtures('simulated_problem')
-def test_shares_by_prices_jacobian(simulated_problem: SimulatedProblemFixture) -> None:
+def test_demand_jacobian(simulated_problem: SimulatedProblemFixture) -> None:
     """Use central finite differences to test that analytic values in the Jacobian of shares with respect to prices are
-    essentially equal.
+    essentially correct. Also test that scaled elasticities are exactly equal to this Jacobian.
     """
     simulation, simulation_results, _, _, results = simulated_problem
     product_data = simulation_results.product_data
@@ -664,9 +664,83 @@ def test_shares_by_prices_jacobian(simulated_problem: SimulatedProblemFixture) -
     prices = product_data.prices[product_data.market_ids.flat == t]
 
     # extract the Jacobian from the analytic expression for elasticities and approximate it with finite differences
-    exact = results.compute_elasticities(market_id=t) * shares / prices.T
+    exact1 = results.compute_demand_jacobians(market_id=t)
+    exact2 = results.compute_elasticities(market_id=t) * shares / prices.T
     approximate = compute_finite_differences(lambda p: results.compute_shares(p, market_id=t), prices)
-    np.testing.assert_allclose(exact, approximate, atol=1e-8, rtol=0)
+    np.testing.assert_allclose(exact1, exact2, atol=1e-15, rtol=0)
+    np.testing.assert_allclose(exact1, approximate, atol=1e-8, rtol=0)
+
+
+@pytest.mark.usefixtures('simulated_problem')
+def test_demand_hessian(simulated_problem: SimulatedProblemFixture) -> None:
+    """Use central finite differences to test that analytic values in the Hessian of shares with respect to prices are
+    essentially correct.
+    """
+    simulation, simulation_results, problem, _, results = simulated_problem
+    product_data = simulation_results.product_data
+
+    # only do the test for a single market
+    t = product_data.market_ids[0]
+    prices = product_data.prices[product_data.market_ids.flat == t]
+    xi = results.xi[product_data.market_ids.flat == t]
+    if simulation.agent_data is None:
+        agent_data = None
+    else:
+        agent_data = simulation.agent_data[simulation.agent_data.market_ids.flat == t]
+
+    def compute_perturbed_jacobian(perturbed_prices: Array) -> Array:
+        """Compute the true Jacobian at perturbed prices."""
+        perturbed_product_data = copy.deepcopy(product_data[product_data.market_ids.flat == t])
+        perturbed_product_data.prices[:] = perturbed_prices
+        perturbed_simulation = Simulation(
+            problem.product_formulations[:2], perturbed_product_data, results.beta, results.sigma, results.pi,
+            rho=results.rho, agent_formulation=simulation.agent_formulation, agent_data=agent_data,
+            xi=xi, distributions=problem.distributions, epsilon_scale=problem.epsilon_scale,
+            costs_type=problem.costs_type,
+        )
+        perturbed_simulation_results = perturbed_simulation.replace_endogenous(
+            costs=perturbed_prices, prices=perturbed_prices, iteration=Iteration('return')
+        )
+        perturbed_problem = perturbed_simulation_results.to_problem()
+        perturbed_results = perturbed_problem.solve(
+            beta=results.beta, sigma=results.sigma, pi=results.pi, rho=results.rho,
+            delta=perturbed_simulation_results.delta, method='1s', check_optimality='gradient',
+            optimization=Optimization('return'), iteration=Iteration('return'), W=np.eye(perturbed_problem.MD),
+        )
+        return perturbed_results.compute_demand_jacobians()
+
+    # compute analytic Hessians and approximate them with finite differences
+    exact = results.compute_demand_hessians(market_id=t)
+    approximate = compute_finite_differences(compute_perturbed_jacobian, prices)
+    np.testing.assert_allclose(exact, approximate, atol=1e-7, rtol=0)
+
+
+@pytest.mark.usefixtures('simulated_problem')
+def test_passthrough(simulated_problem: SimulatedProblemFixture) -> None:
+    """Use central finite differences to test that analytic values in the passthrough matrix of prices with respect to
+    marginal costs are essentially correct.
+    """
+    simulation, simulation_results, problem, _, _ = simulated_problem
+    product_data = simulation_results.product_data
+
+    # obtain results at the true parameter values so there aren't issues with FOCs not matching
+    true_results = problem.solve(
+        beta=simulation.beta, sigma=simulation.sigma, pi=simulation.pi, rho=simulation.rho,
+        gamma=simulation.gamma if problem.K3 > 0 else None, delta=simulation_results.delta, method='1s',
+        check_optimality='gradient', optimization=Optimization('return'), iteration=Iteration('return')
+    )
+
+    # only do the test for a single market
+    t = product_data.market_ids[0]
+    costs = true_results.compute_costs(market_id=t)
+
+    # compute the exact passthrough matrix and approximate it with finite differences
+    exact = true_results.compute_passthrough(market_id=t)
+    approximate = compute_finite_differences(
+        lambda c: true_results.compute_prices(costs=c, market_id=t, iteration=Iteration('simple', {'atol': 1e-16})),
+        costs,
+    )
+    np.testing.assert_allclose(exact, approximate, atol=1e-6, rtol=0)
 
 
 @pytest.mark.usefixtures('simulated_problem')

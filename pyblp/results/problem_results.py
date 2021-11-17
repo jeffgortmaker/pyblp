@@ -1514,7 +1514,7 @@ class ProblemResults(Results):
             self, compute_market_results: Callable, market_ids: Array, fixed_args: Sequence = (),
             market_args: Sequence = (), agent_data: Optional[Mapping] = None,
             integration: Optional[Integration] = None) -> Array:
-        """Compute arrays for one or all markets and stack them into a single matrix. An array for a single market is
+        """Compute arrays for one or all markets and stack them into a single array. An array for a single market is
         computed by passing fixed_args (identical for all markets) and market_args (matrices with as many rows as there
         are products that are restricted to the market) to compute_market_results, a ResultsMarket method that returns
         the output for the market any errors encountered during computation. Agent data and an integration configuration
@@ -1547,12 +1547,12 @@ class ProblemResults(Results):
             return (market_s, *fixed_args, *args_s)
 
         # construct a mapping from market IDs to market-specific arrays
-        matrix_mapping: Dict[Hashable, Array] = {}
+        array_mapping: Dict[Hashable, Array] = {}
         generator = generate_items(market_ids, market_factory, compute_market_results)
         if market_ids.size > 1:
             generator = output_progress(generator, market_ids.size, start_time)
         for t, (array_t, errors_t) in generator:
-            matrix_mapping[t] = np.c_[array_t]
+            array_mapping[t] = np.c_[array_t]
             errors.extend(errors_t)
 
         # output a warning about any errors
@@ -1561,20 +1561,25 @@ class ProblemResults(Results):
             output(exceptions.MultipleErrors(errors))
             output("")
 
-        # determine the number of rows and columns
-        row_count = sum(matrix_mapping[t].shape[0] for t in market_ids)
-        column_count = max(matrix_mapping[t].shape[1] for t in market_ids)
+        # determine the sizes of dimensions
+        dimension_sizes = []
+        for dimension in range(len(array_mapping[market_ids[0]].shape)):
+            if dimension == 0:
+                dimension_sizes.append(sum(array_mapping[t].shape[dimension] for t in market_ids))
+            else:
+                dimension_sizes.append(max(array_mapping[t].shape[dimension] for t in market_ids))
 
         # preserve the original product order or the sorted market order when stacking the arrays
-        combined = np.full((row_count, column_count), np.nan, options.dtype)
-        for t, matrix_t in matrix_mapping.items():
-            if row_count == market_ids.size:
-                combined[market_ids == t, :matrix_t.shape[1]] = matrix_t
-            elif row_count == self.problem.N:
-                combined[self.problem._product_market_indices[t], :matrix_t.shape[1]] = matrix_t
+        combined = np.full(dimension_sizes, np.nan, options.dtype)
+        for t, array_t in array_mapping.items():
+            slices = (slice(0, s) for s in array_t.shape[1:])
+            if dimension_sizes[0] == market_ids.size:
+                combined[(market_ids == t, *slices)] = array_t
+            elif dimension_sizes[0] == self.problem.N:
+                combined[(self.problem._product_market_indices[t], *slices)] = array_t
             else:
                 assert market_ids.size == 1
-                combined = matrix_t
+                combined = array_t
 
         # output how long it took to compute the arrays
         end_time = time.time()

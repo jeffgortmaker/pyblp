@@ -114,6 +114,8 @@ In addition to class attributes, other post-estimation outputs can be estimated 
 
    ProblemResults.compute_aggregate_elasticities
    ProblemResults.compute_elasticities
+   ProblemResults.compute_demand_jacobians
+   ProblemResults.compute_demand_hessians
    ProblemResults.compute_diversion_ratios
    ProblemResults.compute_long_run_diversion_ratios
    ProblemResults.compute_probabilities
@@ -121,6 +123,7 @@ In addition to class attributes, other post-estimation outputs can be estimated 
    ProblemResults.extract_diagonal_means
    ProblemResults.compute_delta
    ProblemResults.compute_costs
+   ProblemResults.compute_passthrough
    ProblemResults.compute_approximate_prices
    ProblemResults.compute_prices
    ProblemResults.compute_shares
@@ -392,6 +395,7 @@ When errors occur, they will either be displayed as warnings or raised as except
    exceptions.FittedValuesInversionError
    exceptions.SharesByXiJacobianInversionError
    exceptions.IntraFirmJacobianInversionError
+   exceptions.PassthroughInversionError
    exceptions.LinearParameterCovariancesInversionError
    exceptions.GMMParameterCovariancesInversionError
    exceptions.GMMMomentCovariancesInversionError

@@ -297,7 +297,11 @@ class SharesByXiJacobianInversionError(InversionReplacementError):
 
 
 class IntraFirmJacobianInversionError(InversionReplacementError):
-    r"""Failed to invert an intra-firm Jacobian of shares with respect to prices when computing :math:`\eta`."""
+    r"""Failed to invert an intra-firm Jacobian of shares with respect to prices."""
+
+
+class PassthroughInversionError(InversionReplacementError):
+    r"""Failed to invert the matrix to recover the passthrough matrix."""
 
 
 class LinearParameterCovariancesInversionError(InversionReplacementError):

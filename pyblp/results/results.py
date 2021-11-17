@@ -152,6 +152,72 @@ class Results(abc.ABC, StringRepresentation):
         market_ids = self._select_market_ids(market_id)
         return self._combine_arrays(ResultsMarket.safely_compute_elasticities, market_ids, fixed_args=[name])
 
+    def compute_demand_jacobians(self, name: str = 'prices', market_id: Optional[Any] = None) -> Array:
+        r"""Estimate matrices of derivatives of demand with respect to a variable, :math:`x`.
+
+        In market :math:`t`, the value in row :math:`j` and column :math:`k` is
+
+        .. math:: \frac{\partial s_{jt}}{\partial x_{kt}}.
+
+        Parameters
+        ----------
+        name : `str, optional`
+            Name of the variable, :math:`x`. By default, :math:`x = p`, prices.
+        market_id : `object, optional`
+            ID of the market in which to compute Jacobians. By default, Jacobians are computed in all markets and
+            stacked.
+
+        Returns
+        -------
+        `ndarray`
+            Estimated :math:`J_t \times J_t` matrices of derivatives of demand. If ``market_id`` was not specified,
+            matrices are estimated in each market :math:`t` and stacked. Columns for a market are in the same order as
+            products for the market. If a market has fewer products than others, extra columns will contain
+            ``numpy.nan``.
+
+        Examples
+        --------
+            - :doc:`Tutorial </tutorial>`
+
+        """
+        output(f"Computing derivatives of demand with respect to {name or 'the mean utility'} ...")
+        self.problem._validate_name(name, none_valid=False)
+        market_ids = self._select_market_ids(market_id)
+        return self._combine_arrays(ResultsMarket.safely_compute_demand_jacobian, market_ids, fixed_args=[name])
+
+    def compute_demand_hessians(self, name: str = 'prices', market_id: Optional[Any] = None) -> Array:
+        r"""Estimate arrays of second derivatives of demand with respect to a variable, :math:`x`.
+
+        In market :math:`t`, the value indexed by :math:`(j, k, \ell)` is
+
+        .. math:: \frac{\partial^2 s_{jt}}{\partial x_{kt} \partial x_{\ell t}}.
+
+        Parameters
+        ----------
+        name : `str, optional`
+            Name of the variable, :math:`x`. By default, :math:`x = p`, prices.
+        market_id : `object, optional`
+            ID of the market in which to compute Hessians. By default, Hessians are computed in all markets and
+            stacked.
+
+        Returns
+        -------
+        `ndarray`
+            Estimated :math:`J_t \times J_t \times J_t` arrays of second derivatives of demand. If ``market_id`` was not
+            specified, arrays are estimated in each market :math:`t` and stacked. Indices for a market are in the same
+            order as products for the market. If a market has fewer products than others, extra indices will contain
+            ``numpy.nan``.
+
+        Examples
+        --------
+            - :doc:`Tutorial </tutorial>`
+
+        """
+        output(f"Computing second derivatives of demand with respect to {name or 'the mean utility'} ...")
+        self.problem._validate_name(name, none_valid=False)
+        market_ids = self._select_market_ids(market_id)
+        return self._combine_arrays(ResultsMarket.safely_compute_demand_hessian, market_ids, fixed_args=[name])
+
     def compute_diversion_ratios(self, name: Optional[str] = 'prices', market_id: Optional[Any] = None) -> Array:
         r"""Estimate matrices of diversion ratios, :math:`\mathscr{D}`, with respect to a variable, :math:`x`.
 
@@ -398,6 +464,47 @@ class Results(abc.ABC, StringRepresentation):
         firm_ids = self.problem._coerce_optional_firm_ids(firm_ids, market_ids)
         ownership = self.problem._coerce_optional_ownership(ownership, market_ids)
         return self._combine_arrays(ResultsMarket.safely_compute_costs, market_ids, market_args=[firm_ids, ownership])
+
+    def compute_passthrough(
+            self, firm_ids: Optional[Any] = None, ownership: Optional[Any] = None,
+            market_id: Optional[Any] = None) -> Array:
+        r"""Estimate matrices of passthrough of marginal costs to equilibrium prices, :math:`\Upsilon`.
+
+        In market :math:`t`, the value in row :math:`j` and column :math:`k` of :math:`\Upsilon` is
+
+        .. math:: \Upsilon_{jk} = \frac{\partial p_j}{\partial c_k}.
+
+        Parameters
+        ----------
+        firm_ids : `array-like, optional`
+            Firm IDs. By default, the ``firm_ids`` field of ``product_data`` in :class:`Problem` will be used.
+        ownership : `array-like, optional`
+            Ownership matrices. By default, standard ownership matrices based on ``firm_ids`` will be used unless the
+            ``ownership`` field of ``product_data`` in :class:`Problem` was specified.
+        market_id : `object, optional`
+            ID of the market in which to compute passthrough. By default, passthrough matrices are computed in all
+            markets and stacked.
+
+        Returns
+        -------
+        `ndarray`
+            Estimated :math:`J_t \times J_t` passthrough matrices, :math:`\Upsilon`. If ``market_id``
+            was not specified, matrices are estimated in each market :math:`t` and stacked. Columns for a market are in
+            the same order as products for the market. If a market has fewer products than others, extra columns will
+            contain ``numpy.nan``.
+
+        Examples
+        --------
+            - :doc:`Tutorial </tutorial>`
+
+        """
+        output("Computing passthrough ...")
+        market_ids = self._select_market_ids(market_id)
+        firm_ids = self.problem._coerce_optional_firm_ids(firm_ids, market_ids)
+        ownership = self.problem._coerce_optional_ownership(ownership, market_ids)
+        return self._combine_arrays(
+            ResultsMarket.safely_compute_passthrough, market_ids, market_args=[firm_ids, ownership]
+        )
 
     def compute_delta(
             self, agent_data: Optional[Mapping] = None, integration: Optional[Integration] = None,

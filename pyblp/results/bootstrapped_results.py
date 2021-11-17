@@ -232,13 +232,13 @@ class BootstrappedResults(Results):
             return (market_cs, *fixed_args, *args_cs)
 
         # construct a mapping from draws and market IDs to market-specific arrays and compute the full matrix size
-        matrix_mapping: Dict[Tuple[int, Hashable], Array] = {}
+        array_mapping: Dict[Tuple[int, Hashable], Array] = {}
         pairs = itertools.product(range(self.draws), market_ids)
         generator = generate_items(pairs, market_factory, compute_market_results)
         if self.draws > 1 or market_ids.size > 1:
             generator = output_progress(generator, self.draws * market_ids.size, start_time)
         for (d, t), (array_dt, errors_dt) in generator:
-            matrix_mapping[(d, t)] = np.c_[array_dt]
+            array_mapping[(d, t)] = np.c_[array_dt]
             errors.extend(errors_dt)
 
         # output a warning about any errors
@@ -247,20 +247,25 @@ class BootstrappedResults(Results):
             output(exceptions.MultipleErrors(errors))
             output("")
 
-        # determine the number of rows and columns
-        row_count = sum(matrix_mapping[(0, t)].shape[0] for t in market_ids)
-        column_count = max(matrix_mapping[(0, t)].shape[1] for t in market_ids)
+        # determine the sizes of dimensions
+        dimension_sizes = []
+        for dimension in range(len(array_mapping[(0, market_ids[0])].shape)):
+            if dimension == 0:
+                dimension_sizes.append(sum(array_mapping[(0, t)].shape[dimension] for t in market_ids))
+            else:
+                dimension_sizes.append(max(array_mapping[(0, t)].shape[dimension] for t in market_ids))
 
         # preserve the original product order or the sorted market order when stacking the arrays
-        combined = np.full((self.draws, row_count, column_count), np.nan, options.dtype)
-        for (d, t), matrix_dt in matrix_mapping.items():
-            if row_count == market_ids.size:
-                combined[d, market_ids == t, :matrix_dt.shape[1]] = matrix_dt
-            elif row_count == self.problem.N:
-                combined[d, self.problem._product_market_indices[t], :matrix_dt.shape[1]] = matrix_dt
+        combined = np.full((self.draws, *dimension_sizes), np.nan, options.dtype)
+        for (d, t), array_dt in array_mapping.items():
+            slices = (slice(0, s) for s in array_dt.shape[1:])
+            if dimension_sizes[0] == market_ids.size:
+                combined[(d, market_ids == t, *slices)] = array_dt
+            elif dimension_sizes[0] == self.problem.N:
+                combined[(d, self.problem._product_market_indices[t], *slices)] = array_dt
             else:
                 assert market_ids.size == 1
-                combined[d] = matrix_dt
+                combined[d] = array_dt
 
         # output how long it took to compute the arrays
         end_time = time.time()

@@ -221,9 +221,9 @@ class Economy(Container, StringRepresentation):
             output(exceptions.MultipleErrors(errors))
             output("")
 
-    def _validate_name(self, name: Optional[str]) -> None:
+    def _validate_name(self, name: Optional[str], none_valid: bool = True) -> None:
         """Validate that a name is either None or corresponds to a variable in X1, X2, or X3."""
-        if name is None:
+        if name is None and none_valid:
             return
         formulations = self._X1_formulations + self._X2_formulations + self._X3_formulations
         names = {n for f in formulations for n in f.names}

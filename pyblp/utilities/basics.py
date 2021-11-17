@@ -331,18 +331,20 @@ def get_indices(ids: Array) -> Dict[Hashable, Array]:
 
 
 def compute_finite_differences(f: Callable[[Array], Array], x: Array, epsilon_scale: float = 1.0) -> Array:
-    """Approximate a matrix of derivatives with finite differences."""
+    """Approximate derivatives with finite differences."""
     epsilon = epsilon_scale * options.finite_differences_epsilon
 
-    columns = []
+    arrays = []
     for index in range(x.size):
         x1 = x.copy()
         x2 = x.copy()
         x1[index] += epsilon / 2
         x2[index] -= epsilon / 2
-        columns.append((f(x1) - f(x2)) / epsilon)
+        arrays.append((f(x1) - f(x2)) / epsilon)
 
-    return np.column_stack(columns)
+    if len(arrays[0].shape) == 1 or (len(arrays[0].shape) == 2 and arrays[0].shape[1] == 1):
+        return np.column_stack(arrays)
+    return np.dstack(arrays)
 
 
 class SolverStats(object):

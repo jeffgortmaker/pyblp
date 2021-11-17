@@ -7,6 +7,7 @@ import numpy as np
 from .market import Market
 from .. import exceptions, options
 from ..configurations.iteration import Iteration
+from ..utilities.algebra import approximately_invert
 from ..utilities.basics import Array, Bounds, Error, SolverStats, NumericalErrorHandler
 
 
@@ -98,6 +99,23 @@ class ResultsMarket(Market):
         return elasticities, errors
 
     @NumericalErrorHandler(exceptions.PostEstimationNumericalError)
+    def safely_compute_demand_jacobian(self, name: str) -> Tuple[Array, List[Error]]:
+        """Estimate a matrix of derivatives of demand with respect to a variable, handling any numerical errors."""
+        errors: List[Error] = []
+        derivatives = self.compute_utility_derivatives(name)
+        jacobian = self.compute_shares_by_variable_jacobian(derivatives)
+        return jacobian, errors
+
+    @NumericalErrorHandler(exceptions.PostEstimationNumericalError)
+    def safely_compute_demand_hessian(self, name: str) -> Tuple[Array, List[Error]]:
+        """Estimate second derivatives of demand with respect to a variable, handling any numerical errors."""
+        errors: List[Error] = []
+        derivatives = self.compute_utility_derivatives(name)
+        second_derivatives = self.compute_utility_derivatives(name, order=2)
+        hessian = self.compute_shares_by_variable_hessian(derivatives, second_derivatives)
+        return hessian, errors
+
+    @NumericalErrorHandler(exceptions.PostEstimationNumericalError)
     def safely_compute_diversion_ratios(self, name: Optional[str]) -> Tuple[Array, List[Error]]:
         """Estimate a matrix of diversion ratios with respect to a variable, handling any numerical errors."""
         errors: List[Error] = []
@@ -163,6 +181,47 @@ class ResultsMarket(Market):
         errors.extend(eta_errors)
         costs = self.products.prices - eta
         return costs, errors
+
+    @NumericalErrorHandler(exceptions.PostEstimationNumericalError)
+    def safely_compute_passthrough(
+            self, firm_ids: Optional[Array], ownership: Optional[Array]) -> Tuple[Array, List[Error]]:
+        """Estimate the passthrough matrix, handling any numerical errors."""
+        errors: List[Error] = []
+
+        # compute derivatives of shares with respect to prices
+        probabilities, conditionals = self.compute_probabilities()
+        utility_derivatives = self.compute_utility_derivatives('prices')
+        utility_second_derivatives = self.compute_utility_derivatives('prices', order=2)
+        jacobian = self.compute_shares_by_variable_jacobian(utility_derivatives, probabilities, conditionals)
+        hessian = self.compute_shares_by_variable_hessian(
+            utility_derivatives, utility_second_derivatives, probabilities, conditionals
+        )
+
+        # compute the capital delta matrix and its derivatives
+        ownership_matrix = self.get_ownership_matrix(firm_ids, ownership)
+        capital_delta = -ownership_matrix * jacobian
+        capital_delta_derivatives = -ownership_matrix[..., None] * hessian
+
+        # compute the inverse of capital delta
+        capital_delta_inverse, replacement = approximately_invert(capital_delta)
+        if replacement:
+            errors.append(exceptions.IntraFirmJacobianInversionError(capital_delta, replacement))
+
+        # compute the inverse of the passthrough matrix
+        passthrough_inverse = np.zeros((self.J, self.J), options.dtype)
+        for j in range(self.J):
+            passthrough_inverse[:, [j]] = (
+                capital_delta_inverse @ capital_delta_derivatives[..., j] @ capital_delta_inverse @ self.products.shares
+            )
+
+        passthrough_inverse += np.eye(self.J) - capital_delta_inverse @ jacobian
+
+        # compute the passthrough matrix
+        passthrough, replacement = approximately_invert(passthrough_inverse)
+        if replacement:
+            errors.append(exceptions.PassthroughInversionError(passthrough_inverse, replacement))
+
+        return passthrough, errors
 
     @NumericalErrorHandler(exceptions.PostEstimationNumericalError)
     def safely_compute_approximate_equilibrium_prices(

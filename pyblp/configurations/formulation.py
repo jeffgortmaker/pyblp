@@ -291,7 +291,7 @@ class ColumnFormulation(object):
 
     names: Set[str]
     expression: sp.Expr
-    derivatives: Dict[str, sp.Expr]
+    derivatives: Dict[Tuple[str, int], sp.Expr]
 
     def __init__(self, formula: str, expression: sp.Expr) -> None:
         """Parse the column name into a patsy term and replace any categorical variables in its SymPy expression with
@@ -308,7 +308,7 @@ class ColumnFormulation(object):
                 self.expression = self.expression.replace(base_symbol, CategoricalTreatment.parse_full_symbol(name))
 
         # cache evaluated derivatives
-        self.derivatives: Dict[str, sp.Expr] = {}
+        self.derivatives: Dict[Tuple[str, int], sp.Expr] = {}
 
     def __str__(self) -> str:
         """Format the expression as a string."""
@@ -330,19 +330,21 @@ class ColumnFormulation(object):
         """Evaluate the SymPy column expression at the values supplied by mappings from variable names to arrays."""
         return evaluate_expression(self.expression, data, data_override)
 
-    def evaluate_derivative(self, name: str, data: Mapping, data_override: Optional[Mapping] = None) -> Array:
+    def evaluate_derivative(
+            self, name: str, data: Mapping, data_override: Optional[Mapping] = None, order: int = 1) -> Array:
         """Differentiate the SymPy column expression with respect to a variable name and evaluate the derivative at
         values supplied by mappings from variable names to arrays.
         """
-        return evaluate_expression(self.differentiate(name), data, data_override)
+        return evaluate_expression(self.differentiate(name, order), data, data_override)
 
-    def differentiate(self, name: str) -> sp.Expr:
+    def differentiate(self, name: str, order: int = 1) -> sp.Expr:
         """Differentiate the SymPy column expression with respect to a variable name. Cache calls for speed."""
-        derivative = self.derivatives.get(name)
-        if derivative is None:
-            derivative = self.expression.diff(sp.Symbol(name))
-            self.derivatives[name] = derivative
-        return derivative
+        if (name, order) not in self.derivatives:
+            self.derivatives[(name, order)] = self.expression
+            for _ in range(order):
+                self.derivatives[(name, order)] = self.derivatives[(name, order)].diff(sp.Symbol(name))
+
+        return self.derivatives[(name, order)]
 
 
 class EvaluationEnvironment(patsy.eval.EvalEnvironment):
