@@ -123,7 +123,7 @@ def large_logit_simulation() -> SimulationFixture:
         costs_type='log',
         seed=2
     )
-    simulation_results = simulation.replace_endogenous()
+    simulation_results = simulation.replace_endogenous(constant_costs=False)
     return simulation, simulation_results, {}, []
 
 
