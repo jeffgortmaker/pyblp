@@ -63,9 +63,8 @@ class Simulation(Economy):
         model will be simulated.
 
         The ``shares`` variable should not be included in the formulations for :math:`X_1` or :math:`X_2`. If ``shares``
-        is included in the formulation for :math:`X_3`, care should be taken when solving for equilibrium prices in,
-        for example, :meth:`Simulation.replace_endogenous`, since this routine assumes that marginal costs remain
-        constant.
+        is included in the formulation for :math:`X_3` and ``product_data`` does not include ``shares``, one will likely
+        want to set ``constant_costs=False`` in :meth:`Simulation.replace_endogenous`.
 
         The ``prices`` variable should not be included in the formulation for :math:`X_3`, but it should be included in
         the formulation for :math:`X_1` or :math:`X_2` (or both). Variables that cannot be loaded from ``product_data``
@@ -576,7 +575,9 @@ class Simulation(Economy):
             Whether to assume that marginal costs, :math:`c`, remain constant as equilibrium prices and shares change.
             By default this is ``True``, which means that firms treat marginal costs as constant (equal to ``costs``)
             when setting prices. If set to ``False``, marginal costs will be allowed to adjust if ``shares`` was
-            included in the formulation for :math:`X_3`.
+            included in the formulation for :math:`X_3`. When simulating fake data, it likely makes more sense to set
+            this to ``False`` since otherwise arbitrary ``shares`` simulated by :class:`Simulation` will be used in
+            marginal costs.
         error_behavior : `str, optional`
             How to handle errors when computing prices and shares. For example, the fixed point routine may not converge
             if the effects of nonlinear parameters on price overwhelm the linear parameter on price, which should be

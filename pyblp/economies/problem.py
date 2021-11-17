@@ -1026,9 +1026,8 @@ class Problem(ProblemEconomy):
         logit) model will be estimated.
 
         Variable names should correspond to fields in ``product_data``. The ``shares`` variable should not be included
-        in the formulations for :math:`X_1` or :math:`X_2`. If ``shares`` is included in the formulation for
-        :math:`X_3`, care should be taken when solving for equilibrium prices in, for example,
-        :meth:`ProblemResults.compute_prices`, since this routine assumes that marginal costs remain constant.
+        in the formulations for :math:`X_1` or :math:`X_2`. The formulation for :math:`X_3` can include shares to allow
+        marginal costs to depend on quantity.
 
         The ``prices`` variable should not be included in the formulation for :math:`X_3`, but it should be included in
         the formulation for :math:`X_1` or :math:`X_2` (or both). The ``absorb`` argument of :class:`Formulation` can be
