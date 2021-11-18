@@ -731,7 +731,7 @@ def test_passthrough(simulated_problem: SimulatedProblemFixture) -> None:
     )
 
     # only do the test for a single market
-    t = product_data.market_ids[0]
+    t = int(product_data.market_ids[0])
     costs = true_results.compute_costs(market_id=t)
 
     # compute the exact passthrough matrix and approximate it with finite differences
