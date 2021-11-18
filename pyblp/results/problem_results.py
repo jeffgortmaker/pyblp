@@ -14,6 +14,7 @@ from .. import exceptions, options
 from ..configurations.integration import Integration
 from ..configurations.iteration import Iteration
 from ..markets.results_market import ResultsMarket
+from ..moments import Moments
 from ..primitives import Agents
 from ..utilities.algebra import (
     approximately_invert, approximately_solve, compute_condition_number, precisely_compute_eigenvalues, vech_to_full
@@ -291,16 +292,17 @@ class ProblemResults(Results):
     _shares_bounds: Bounds
     _costs_bounds: Bounds
     _se_type: str
+    _moments: Moments
     _errors: List[Error]
 
     def __init__(
             self, progress: 'Progress', last_results: Optional['ProblemResults'], step: int, last_step: bool,
             step_start_time: float, optimization_start_time: float, optimization_end_time: float,
             optimization_stats: SolverStats, iteration_stats: Sequence[Dict[Hashable, SolverStats]],
-            scaled_objective: bool, iteration: Iteration, fp_type: str, shares_bounds: Bounds, costs_bounds: Bounds,
+            scaled_objective: bool, shares_bounds: Bounds, costs_bounds: Bounds,
             extra_micro_covariances: Optional[Array], center_moments: bool, W_type: str, se_type: str) -> None:
         """Compute cumulative progress statistics, update weighting matrices, and estimate standard errors."""
-        super().__init__(progress.problem, progress.parameters, progress.moments, iteration, fp_type)
+        super().__init__(progress.problem, progress.parameters)
         self._errors = progress.errors
         self.problem = progress.problem
         self.W = progress.W
@@ -328,6 +330,7 @@ class ProblemResults(Results):
         self._shares_bounds = shares_bounds
         self._costs_bounds = costs_bounds
         self._se_type = se_type
+        self._moments = progress.moments
 
         # if the reduced Hessian was computed, compute its eigenvalues and the ratio of the smallest to largest ones
         self.reduced_hessian_eigenvalues = np.full(self._parameters.P, np.nan, options.dtype)
@@ -478,6 +481,83 @@ class ProblemResults(Results):
 
         # join the sections into a single string
         return "\n\n".join(sections)
+
+    def _combine_arrays(
+            self, compute_market_results: Callable, market_ids: Array, fixed_args: Sequence = (),
+            market_args: Sequence = (), agent_data: Optional[Mapping] = None,
+            integration: Optional[Integration] = None) -> Array:
+        """Compute arrays for one or all markets and stack them into a single array. An array for a single market is
+        computed by passing fixed_args (identical for all markets) and market_args (matrices with as many rows as there
+        are products that are restricted to the market) to compute_market_results, a ResultsMarket method that returns
+        the output for the market any errors encountered during computation. Agent data and an integration configuration
+        can be optionally specified to override agent data.
+        """
+        errors: List[Error] = []
+
+        # keep track of how long it takes to compute the arrays
+        start_time = time.time()
+
+        # structure or construct different agent data
+        if agent_data is None and integration is None:
+            agents = self.problem.agents
+            agents_market_indices = self.problem._agent_market_indices
+        else:
+            agents = Agents(self.problem.products, self.problem.agent_formulation, agent_data, integration)
+            agents_market_indices = get_indices(agents.market_ids)
+
+        def market_factory(s: Hashable) -> tuple:
+            """Build a market along with arguments used to compute arrays."""
+            indices_s = self.problem._product_market_indices[s]
+            market_s = ResultsMarket(
+                self.problem, s, self._parameters, self.sigma, self.pi, self.rho, self.beta, self.gamma, self.delta,
+                agents_override=agents[agents_market_indices[s]]
+            )
+            if market_ids.size == 1:
+                args_s = market_args
+            else:
+                args_s = [None if a is None else a[indices_s] for a in market_args]
+            return (market_s, *fixed_args, *args_s)
+
+        # construct a mapping from market IDs to market-specific arrays
+        array_mapping: Dict[Hashable, Array] = {}
+        generator = generate_items(market_ids, market_factory, compute_market_results)
+        if market_ids.size > 1:
+            generator = output_progress(generator, market_ids.size, start_time)
+        for t, (array_t, errors_t) in generator:
+            array_mapping[t] = np.c_[array_t]
+            errors.extend(errors_t)
+
+        # output a warning about any errors
+        if errors:
+            output("")
+            output(exceptions.MultipleErrors(errors))
+            output("")
+
+        # determine the sizes of dimensions
+        dimension_sizes = []
+        for dimension in range(len(array_mapping[market_ids[0]].shape)):
+            if dimension == 0:
+                dimension_sizes.append(sum(array_mapping[t].shape[dimension] for t in market_ids))
+            else:
+                dimension_sizes.append(max(array_mapping[t].shape[dimension] for t in market_ids))
+
+        # preserve the original product order or the sorted market order when stacking the arrays
+        combined = np.full(dimension_sizes, np.nan, options.dtype)
+        for t, array_t in array_mapping.items():
+            slices = (slice(0, s) for s in array_t.shape[1:])
+            if dimension_sizes[0] == market_ids.size:
+                combined[(market_ids == t, *slices)] = array_t
+            elif dimension_sizes[0] == self.problem.N:
+                combined[(self.problem._product_market_indices[t], *slices)] = array_t
+            else:
+                assert market_ids.size == 1
+                combined = array_t
+
+        # output how long it took to compute the arrays
+        end_time = time.time()
+        output(f"Finished after {format_seconds(end_time - start_time)}.")
+        output("")
+        return combined
 
     def _compute_mean_g(self) -> Array:
         """Compute moments."""
@@ -1473,129 +1553,3 @@ class ProblemResults(Results):
                 weights[market_indices[t]] = weights_t[:, None]
 
         return weights, errors
-
-    def _coerce_matrices(self, matrices: Any, market_ids: Array) -> Array:
-        """Coerce array-like stacked matrices into a stacked matrix and validate it."""
-        matrices = np.c_[np.asarray(matrices, options.dtype)]
-        rows = sum(i.size for t, i in self.problem._product_market_indices.items() if t in market_ids)
-        columns = max(i.size for t, i in self.problem._product_market_indices.items() if t in market_ids)
-        if matrices.shape != (rows, columns):
-            raise ValueError(f"matrices must be {rows} by {columns}.")
-        return matrices
-
-    def _coerce_optional_delta(self, delta: Optional[Any], market_ids: Array) -> Array:
-        """Coerce optional array-like mean utilities into a column vector and validate it."""
-        if delta is None:
-            return None
-        delta = np.c_[np.asarray(delta, options.dtype)]
-        rows = sum(i.size for t, i in self.problem._product_market_indices.items() if t in market_ids)
-        if delta.shape != (rows, 1):
-            raise ValueError(f"delta must be None or a {rows}-vector.")
-        return delta
-
-    def _coerce_optional_costs(self, costs: Optional[Any], market_ids: Array) -> Array:
-        """Coerce optional array-like costs into a column vector and validate it."""
-        if costs is None:
-            return None
-        costs = np.c_[np.asarray(costs, options.dtype)]
-        rows = sum(i.size for t, i in self.problem._product_market_indices.items() if t in market_ids)
-        if costs.shape != (rows, 1):
-            raise ValueError(f"costs must be None or a {rows}-vector.")
-        return costs
-
-    def _coerce_optional_prices(self, prices: Optional[Any], market_ids: Array) -> Array:
-        """Coerce optional array-like prices into a column vector and validate it."""
-        if prices is None:
-            return None
-        prices = np.c_[np.asarray(prices, options.dtype)]
-        rows = sum(i.size for t, i in self.problem._product_market_indices.items() if t in market_ids)
-        if prices.shape != (rows, 1):
-            raise ValueError(f"prices must be None or a {rows}-vector.")
-        return prices
-
-    def _coerce_optional_shares(self, shares: Optional[Any], market_ids: Array) -> Array:
-        """Coerce optional array-like shares into a column vector and validate it."""
-        if shares is None:
-            return None
-        shares = np.c_[np.asarray(shares, options.dtype)]
-        rows = sum(i.size for t, i in self.problem._product_market_indices.items() if t in market_ids)
-        if shares.shape != (rows, 1):
-            raise ValueError(f"shares must be None or a {rows}-vector.")
-        return shares
-
-    def _combine_arrays(
-            self, compute_market_results: Callable, market_ids: Array, fixed_args: Sequence = (),
-            market_args: Sequence = (), agent_data: Optional[Mapping] = None,
-            integration: Optional[Integration] = None) -> Array:
-        """Compute arrays for one or all markets and stack them into a single array. An array for a single market is
-        computed by passing fixed_args (identical for all markets) and market_args (matrices with as many rows as there
-        are products that are restricted to the market) to compute_market_results, a ResultsMarket method that returns
-        the output for the market any errors encountered during computation. Agent data and an integration configuration
-        can be optionally specified to override agent data.
-        """
-        errors: List[Error] = []
-
-        # keep track of how long it takes to compute the arrays
-        start_time = time.time()
-
-        # structure or construct different agent data
-        if agent_data is None and integration is None:
-            agents = self.problem.agents
-            agents_market_indices = self.problem._agent_market_indices
-        else:
-            agents = Agents(self.problem.products, self.problem.agent_formulation, agent_data, integration)
-            agents_market_indices = get_indices(agents.market_ids)
-
-        def market_factory(s: Hashable) -> tuple:
-            """Build a market along with arguments used to compute arrays."""
-            indices_s = self.problem._product_market_indices[s]
-            market_s = ResultsMarket(
-                self.problem, s, self._parameters, self.sigma, self.pi, self.rho, self.beta, self.gamma, self.delta,
-                self._moments, agents_override=agents[agents_market_indices[s]]
-            )
-            if market_ids.size == 1:
-                args_s = market_args
-            else:
-                args_s = [None if a is None else a[indices_s] for a in market_args]
-            return (market_s, *fixed_args, *args_s)
-
-        # construct a mapping from market IDs to market-specific arrays
-        array_mapping: Dict[Hashable, Array] = {}
-        generator = generate_items(market_ids, market_factory, compute_market_results)
-        if market_ids.size > 1:
-            generator = output_progress(generator, market_ids.size, start_time)
-        for t, (array_t, errors_t) in generator:
-            array_mapping[t] = np.c_[array_t]
-            errors.extend(errors_t)
-
-        # output a warning about any errors
-        if errors:
-            output("")
-            output(exceptions.MultipleErrors(errors))
-            output("")
-
-        # determine the sizes of dimensions
-        dimension_sizes = []
-        for dimension in range(len(array_mapping[market_ids[0]].shape)):
-            if dimension == 0:
-                dimension_sizes.append(sum(array_mapping[t].shape[dimension] for t in market_ids))
-            else:
-                dimension_sizes.append(max(array_mapping[t].shape[dimension] for t in market_ids))
-
-        # preserve the original product order or the sorted market order when stacking the arrays
-        combined = np.full(dimension_sizes, np.nan, options.dtype)
-        for t, array_t in array_mapping.items():
-            slices = (slice(0, s) for s in array_t.shape[1:])
-            if dimension_sizes[0] == market_ids.size:
-                combined[(market_ids == t, *slices)] = array_t
-            elif dimension_sizes[0] == self.problem.N:
-                combined[(self.problem._product_market_indices[t], *slices)] = array_t
-            else:
-                assert market_ids.size == 1
-                combined = array_t
-
-        # output how long it took to compute the arrays
-        end_time = time.time()
-        output(f"Finished after {format_seconds(end_time - start_time)}.")
-        output("")
-        return combined

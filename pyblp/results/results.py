@@ -5,65 +5,29 @@ from typing import Any, Callable, Mapping, Optional, Sequence, Tuple, TYPE_CHECK
 
 import numpy as np
 
+from .. import options
 from ..configurations.integration import Integration
 from ..configurations.iteration import Iteration
 from ..markets.results_market import ResultsMarket
-from ..moments import EconomyMoments
 from ..parameters import Parameters
 from ..utilities.basics import Array, StringRepresentation, output
 
 
 # only import objects that create import cycles when checking types
 if TYPE_CHECKING:
-    from ..economies.problem import ProblemEconomy  # noqa
+    from ..economies.economy import Economy  # noqa
 
 
 class Results(abc.ABC, StringRepresentation):
     """Abstract results of a solved BLP problem."""
 
-    problem: 'ProblemEconomy'
+    _economy: 'Economy'
     _parameters: Parameters
-    _moments: EconomyMoments
-    _iteration: Iteration
-    _fp_type: str
 
-    def __init__(
-            self, problem: 'ProblemEconomy', parameters: Parameters, moments: EconomyMoments, iteration: Iteration,
-            fp_type: str) -> None:
+    def __init__(self, economy: 'Economy', parameters: Parameters) -> None:
         """Store the underlying problem and parameter information."""
-        self.problem = problem
+        self._economy = economy
         self._parameters = parameters
-        self._moments = moments
-        self._iteration = iteration
-        self._fp_type = fp_type
-
-    def _select_market_ids(self, market_id: Optional[Any] = None) -> Array:
-        """Select either a single market ID or all unique IDs."""
-        if market_id is None:
-            return self.problem.unique_market_ids
-        if market_id in self.problem.unique_market_ids:
-            return np.atleast_1d(np.array(market_id, np.object_))
-        raise ValueError(f"market_id must be None or one of {list(sorted(self.problem.unique_market_ids))}.")
-
-    @abc.abstractmethod
-    def _coerce_matrices(self, matrices: Any, market_ids: Array) -> Array:
-        """Coerce array-like stacked arrays into a stacked array and validate it."""
-
-    @abc.abstractmethod
-    def _coerce_optional_delta(self, delta: Optional[Any], market_ids: Array) -> Array:
-        """Coerce optional array-like mean utilities into an array and validate it."""
-
-    @abc.abstractmethod
-    def _coerce_optional_costs(self, costs: Optional[Any], market_ids: Array) -> Array:
-        """Coerce optional array-like costs into an array and validate it."""
-
-    @abc.abstractmethod
-    def _coerce_optional_prices(self, prices: Optional[Any], market_ids: Array) -> Array:
-        """Coerce optional array-like prices into an array and validate it."""
-
-    @abc.abstractmethod
-    def _coerce_optional_shares(self, shares: Optional[Any], market_ids: Array) -> Array:
-        """Coerce optional array-like shares into an array and validate it."""
 
     @abc.abstractmethod
     def _combine_arrays(
@@ -75,6 +39,63 @@ class Results(abc.ABC, StringRepresentation):
         that returns the output for the market and any errors encountered during computation. Agent data and an
         integration configuration can be optionally specified to override agent data.
         """
+
+    def _select_market_ids(self, market_id: Optional[Any] = None) -> Array:
+        """Select either a single market ID or all unique IDs."""
+        if market_id is None:
+            return self._economy.unique_market_ids
+        if market_id in self._economy.unique_market_ids:
+            return np.atleast_1d(np.array(market_id, np.object_))
+        raise ValueError(f"market_id must be None or one of {list(sorted(self._economy.unique_market_ids))}.")
+
+    def _coerce_matrices(self, matrices: Any, market_ids: Array) -> Array:
+        """Coerce array-like stacked matrices into a stacked matrix and validate it."""
+        matrices = np.c_[np.asarray(matrices, options.dtype)]
+        rows = sum(i.size for t, i in self._economy._product_market_indices.items() if t in market_ids)
+        columns = max(i.size for t, i in self._economy._product_market_indices.items() if t in market_ids)
+        if matrices.shape != (rows, columns):
+            raise ValueError(f"matrices must be {rows} by {columns}.")
+        return matrices
+
+    def _coerce_optional_delta(self, delta: Optional[Any], market_ids: Array) -> Array:
+        """Coerce optional array-like mean utilities into a column vector and validate it."""
+        if delta is None:
+            return None
+        delta = np.c_[np.asarray(delta, options.dtype)]
+        rows = sum(i.size for t, i in self._economy._product_market_indices.items() if t in market_ids)
+        if delta.shape != (rows, 1):
+            raise ValueError(f"delta must be None or a {rows}-vector.")
+        return delta
+
+    def _coerce_optional_costs(self, costs: Optional[Any], market_ids: Array) -> Array:
+        """Coerce optional array-like costs into a column vector and validate it."""
+        if costs is None:
+            return None
+        costs = np.c_[np.asarray(costs, options.dtype)]
+        rows = sum(i.size for t, i in self._economy._product_market_indices.items() if t in market_ids)
+        if costs.shape != (rows, 1):
+            raise ValueError(f"costs must be None or a {rows}-vector.")
+        return costs
+
+    def _coerce_optional_prices(self, prices: Optional[Any], market_ids: Array) -> Array:
+        """Coerce optional array-like prices into a column vector and validate it."""
+        if prices is None:
+            return None
+        prices = np.c_[np.asarray(prices, options.dtype)]
+        rows = sum(i.size for t, i in self._economy._product_market_indices.items() if t in market_ids)
+        if prices.shape != (rows, 1):
+            raise ValueError(f"prices must be None or a {rows}-vector.")
+        return prices
+
+    def _coerce_optional_shares(self, shares: Optional[Any], market_ids: Array) -> Array:
+        """Coerce optional array-like shares into a column vector and validate it."""
+        if shares is None:
+            return None
+        shares = np.c_[np.asarray(shares, options.dtype)]
+        rows = sum(i.size for t, i in self._economy._product_market_indices.items() if t in market_ids)
+        if shares.shape != (rows, 1):
+            raise ValueError(f"shares must be None or a {rows}-vector.")
+        return shares
 
     def compute_aggregate_elasticities(
             self, factor: float = 0.1, name: Optional[str] = 'prices', market_id: Optional[Any] = None) -> Array:
@@ -112,7 +133,7 @@ class Results(abc.ABC, StringRepresentation):
         output(f"Computing aggregate elasticities with respect to {name or 'the mean utility'} ...")
         if not isinstance(factor, float):
             raise ValueError("factor must be a float.")
-        self.problem._validate_name(name)
+        self._economy._validate_name(name)
         market_ids = self._select_market_ids(market_id)
         return self._combine_arrays(
             ResultsMarket.safely_compute_aggregate_elasticity, market_ids, fixed_args=[factor, name]
@@ -148,7 +169,7 @@ class Results(abc.ABC, StringRepresentation):
 
         """
         output(f"Computing elasticities with respect to {name or 'the mean utility'} ...")
-        self.problem._validate_name(name)
+        self._economy._validate_name(name)
         market_ids = self._select_market_ids(market_id)
         return self._combine_arrays(ResultsMarket.safely_compute_elasticities, market_ids, fixed_args=[name])
 
@@ -181,7 +202,7 @@ class Results(abc.ABC, StringRepresentation):
 
         """
         output(f"Computing derivatives of demand with respect to {name or 'the mean utility'} ...")
-        self.problem._validate_name(name, none_valid=False)
+        self._economy._validate_name(name, none_valid=False)
         market_ids = self._select_market_ids(market_id)
         return self._combine_arrays(ResultsMarket.safely_compute_demand_jacobian, market_ids, fixed_args=[name])
 
@@ -214,7 +235,7 @@ class Results(abc.ABC, StringRepresentation):
 
         """
         output(f"Computing second derivatives of demand with respect to {name or 'the mean utility'} ...")
-        self.problem._validate_name(name, none_valid=False)
+        self._economy._validate_name(name, none_valid=False)
         market_ids = self._select_market_ids(market_id)
         return self._combine_arrays(ResultsMarket.safely_compute_demand_hessian, market_ids, fixed_args=[name])
 
@@ -261,7 +282,7 @@ class Results(abc.ABC, StringRepresentation):
 
         """
         output(f"Computing diversion ratios with respect to {name or 'the mean utility'} ...")
-        self.problem._validate_name(name)
+        self._economy._validate_name(name)
         market_ids = self._select_market_ids(market_id)
         return self._combine_arrays(ResultsMarket.safely_compute_diversion_ratios, market_ids, fixed_args=[name])
 
@@ -461,8 +482,8 @@ class Results(abc.ABC, StringRepresentation):
         """
         output("Computing marginal costs ...")
         market_ids = self._select_market_ids(market_id)
-        firm_ids = self.problem._coerce_optional_firm_ids(firm_ids, market_ids)
-        ownership = self.problem._coerce_optional_ownership(ownership, market_ids)
+        firm_ids = self._economy._coerce_optional_firm_ids(firm_ids, market_ids)
+        ownership = self._economy._coerce_optional_ownership(ownership, market_ids)
         return self._combine_arrays(ResultsMarket.safely_compute_costs, market_ids, market_args=[firm_ids, ownership])
 
     def compute_passthrough(
@@ -500,15 +521,15 @@ class Results(abc.ABC, StringRepresentation):
         """
         output("Computing passthrough ...")
         market_ids = self._select_market_ids(market_id)
-        firm_ids = self.problem._coerce_optional_firm_ids(firm_ids, market_ids)
-        ownership = self.problem._coerce_optional_ownership(ownership, market_ids)
+        firm_ids = self._economy._coerce_optional_firm_ids(firm_ids, market_ids)
+        ownership = self._economy._coerce_optional_ownership(ownership, market_ids)
         return self._combine_arrays(
             ResultsMarket.safely_compute_passthrough, market_ids, market_args=[firm_ids, ownership]
         )
 
     def compute_delta(
             self, agent_data: Optional[Mapping] = None, integration: Optional[Integration] = None,
-            iteration: Optional[Iteration] = None, fp_type: Optional[str] = None,
+            iteration: Optional[Iteration] = None, fp_type: str = 'safe_linear',
             shares_bounds: Optional[Tuple[Any, Any]] = (1e-300, None), market_id: Optional[Any] = None) -> Array:
         r"""Estimate mean utilities, :math:`\delta`.
 
@@ -532,11 +553,11 @@ class Results(abc.ABC, StringRepresentation):
             :class:`Problem`.
         iteration : `Iteration, optional`
             :class:`Iteration` configuration for how to solve the fixed point problem used to compute :math:`\delta` in
-            each market. By default, ``iteration`` in :meth:`Problem.solve` is used. For more information, refer to
+            each market. By default, ``Iteration('squarem', {'atol': 1e-14})`` is used. For more information, refer to
             :meth:`Problem.solve`.
         fp_type : `str, optional`
             Configuration for the type of contraction mapping used to compute :math:`\delta` in each market. By default,
-            ``fp_type`` in :meth:`Problem.solve` is used. For more information, refer to :meth:`Problem.solve`.
+            ``'safe_linear'`` is used. For more information, refer to :meth:`Problem.solve`.
         shares_bounds : `tuple, optional`
             Configuration for :math:`s_{jt}(\delta, \theta)` bounds of the form ``(lb, ub)``, in which both ``lb`` and
             ``ub`` are floats or ``None``. By default, simulated shares are bounded from below by ``1e-300``. This is
@@ -558,11 +579,9 @@ class Results(abc.ABC, StringRepresentation):
         """
         output("Computing delta ...")
         market_ids = self._select_market_ids(market_id)
-        if iteration is None:
-            iteration = self._iteration
-        if fp_type is None:
-            fp_type = self._fp_type
-        shares_bounds = self.problem._coerce_optional_bounds(shares_bounds, 'shares_bounds')
+        iteration = self._economy._coerce_optional_delta_iteration(iteration)
+        self._economy._validate_fp_type(fp_type)
+        shares_bounds = self._economy._coerce_optional_bounds(shares_bounds, 'shares_bounds')
         return self._combine_arrays(
             ResultsMarket.safely_compute_delta, market_ids, fixed_args=[iteration, fp_type, shares_bounds],
             agent_data=agent_data, integration=integration
@@ -613,8 +632,8 @@ class Results(abc.ABC, StringRepresentation):
         """
         output("Solving for approximate equilibrium prices ...")
         market_ids = self._select_market_ids(market_id)
-        firm_ids = self.problem._coerce_optional_firm_ids(firm_ids, market_ids)
-        ownership = self.problem._coerce_optional_ownership(ownership, market_ids)
+        firm_ids = self._economy._coerce_optional_firm_ids(firm_ids, market_ids)
+        ownership = self._economy._coerce_optional_ownership(ownership, market_ids)
         costs = self._coerce_optional_costs(costs, market_ids)
         return self._combine_arrays(
             ResultsMarket.safely_compute_approximate_equilibrium_prices, market_ids,
@@ -693,11 +712,11 @@ class Results(abc.ABC, StringRepresentation):
         """
         output("Solving for equilibrium prices ...")
         market_ids = self._select_market_ids(market_id)
-        firm_ids = self.problem._coerce_optional_firm_ids(firm_ids, market_ids)
-        ownership = self.problem._coerce_optional_ownership(ownership, market_ids)
+        firm_ids = self._economy._coerce_optional_firm_ids(firm_ids, market_ids)
+        ownership = self._economy._coerce_optional_ownership(ownership, market_ids)
         costs = self._coerce_optional_costs(costs, market_ids)
         prices = self._coerce_optional_prices(prices, market_ids)
-        iteration = self.problem._coerce_optional_prices_iteration(iteration)
+        iteration = self._economy._coerce_optional_prices_iteration(iteration)
         return self._combine_arrays(
             ResultsMarket.safely_compute_prices, market_ids, fixed_args=[iteration, constant_costs],
             market_args=[firm_ids, ownership, costs, prices]
@@ -795,7 +814,7 @@ class Results(abc.ABC, StringRepresentation):
         """
         output("Computing HHI ...")
         market_ids = self._select_market_ids(market_id)
-        firm_ids = self.problem._coerce_optional_firm_ids(firm_ids, market_ids)
+        firm_ids = self._economy._coerce_optional_firm_ids(firm_ids, market_ids)
         shares = self._coerce_optional_shares(shares, market_ids)
         return self._combine_arrays(ResultsMarket.safely_compute_hhi, market_ids, market_args=[firm_ids, shares])
 

@@ -701,13 +701,7 @@ def test_demand_hessian(simulated_problem: SimulatedProblemFixture) -> None:
         perturbed_simulation_results = perturbed_simulation.replace_endogenous(
             costs=perturbed_prices, prices=perturbed_prices, iteration=Iteration('return')
         )
-        perturbed_problem = perturbed_simulation_results.to_problem()
-        perturbed_results = perturbed_problem.solve(
-            beta=results.beta, sigma=results.sigma, pi=results.pi, rho=results.rho,
-            delta=perturbed_simulation_results.delta, method='1s', check_optimality='gradient',
-            optimization=Optimization('return'), iteration=Iteration('return'), W=np.eye(perturbed_problem.MD),
-        )
-        return perturbed_results.compute_demand_jacobians()
+        return perturbed_simulation_results.compute_demand_jacobians()
 
     # compute analytic Hessians and approximate them with finite differences
     exact = results.compute_demand_hessians(market_id=t)

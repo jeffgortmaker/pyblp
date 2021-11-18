@@ -3,18 +3,21 @@
 from pathlib import Path
 import pickle
 import time
-from typing import Dict, Hashable, List, Optional, Sequence, Set, Tuple, TYPE_CHECKING, Union
+from typing import Callable, Dict, Hashable, List, Optional, Sequence, Set, Tuple, TYPE_CHECKING, Union
 
 import numpy as np
 
+from .results import Results
 from .. import exceptions, options
 from ..configurations.formulation import Formulation
 from ..configurations.integration import Integration
 from ..construction import build_blp_instruments, build_matrix
+from ..markets.results_market import ResultsMarket
 from ..markets.simulation_results_market import SimulationResultsMarket
 from ..moments import Moment, EconomyMoments
+from ..primitives import Agents
 from ..utilities.basics import (
-    Array, Error, SolverStats, generate_items, Mapping, output, update_matrices, RecArray, StringRepresentation,
+    Array, Error, SolverStats, generate_items, get_indices, Mapping, output, output_progress, update_matrices, RecArray,
     format_seconds, format_table
 )
 
@@ -25,11 +28,16 @@ if TYPE_CHECKING:
     from ..economies.simulation import Simulation  # noqa
 
 
-class SimulationResults(StringRepresentation):
+class SimulationResults(Results):
     r"""Results of a solved simulation of synthetic BLP data.
 
-    The :meth:`SimulationResults.to_problem` method can be used to convert the full set of simulated data (along with
-    some basic default instruments) and configured information into a :class:`Problem`.
+    This class has the same methods as :class:`ProblemResults` that compute post-estimation outputs in one or more
+    markets, but not other methods like :meth:`ProblemResults.compute_optimal_instruments` that do not make sense in a
+    simulated dataset.
+
+    In addition, the :meth:`SimulationResults.to_problem` method can be used to convert the full set of simulated data
+    (along with some basic default instruments) and configured information into a :class:`Problem`. The
+    :meth:`SimulationResults.compute_micro_values` method can be used to compute simulated micro moment values.
 
     Attributes
     ----------
@@ -77,6 +85,7 @@ class SimulationResults(StringRepresentation):
             self, simulation: 'Simulation', data_override: Dict[str, Array], delta: Array, costs: Array,
             start_time: float, end_time: float, iteration_stats: Dict[Hashable, SolverStats]) -> None:
         """Structure simulation results."""
+        super().__init__(simulation, simulation._parameters)
         self.simulation = simulation
         self.product_data = update_matrices(
             simulation.product_data,
@@ -105,6 +114,84 @@ class SimulationResults(StringRepresentation):
             self.contraction_evaluations.sum()
         ]
         return format_table(header, values, title="Simulation Results Summary")
+
+    def _combine_arrays(
+            self, compute_market_results: Callable, market_ids: Array, fixed_args: Sequence = (),
+            market_args: Sequence = (), agent_data: Optional[Mapping] = None,
+            integration: Optional[Integration] = None) -> Array:
+        """Compute arrays for one or all markets and stack them into a single array. An array for a single market is
+        computed by passing fixed_args (identical for all markets) and market_args (matrices with as many rows as there
+        are products that are restricted to the market) to compute_market_results, a ResultsMarket method that returns
+        the output for the market any errors encountered during computation. Agent data and an integration configuration
+        can be optionally specified to override agent data.
+        """
+        errors: List[Error] = []
+
+        # keep track of how long it takes to compute the arrays
+        start_time = time.time()
+
+        # structure or construct different agent data
+        if agent_data is None and integration is None:
+            agents = self.simulation.agents
+            agents_market_indices = self.simulation._agent_market_indices
+        else:
+            agents = Agents(self.simulation.products, self.simulation.agent_formulation, agent_data, integration)
+            agents_market_indices = get_indices(agents.market_ids)
+
+        def market_factory(s: Hashable) -> tuple:
+            """Build a market along with arguments used to compute arrays."""
+            indices_s = self.simulation._product_market_indices[s]
+            market_s = ResultsMarket(
+                self.simulation, s, self._parameters, self.simulation.sigma, self.simulation.pi, self.simulation.rho,
+                self.simulation.beta, self.simulation.gamma, self.delta,
+                agents_override=agents[agents_market_indices[s]]
+            )
+            if market_ids.size == 1:
+                args_s = market_args
+            else:
+                args_s = [None if a is None else a[indices_s] for a in market_args]
+            return (market_s, *fixed_args, *args_s)
+
+        # construct a mapping from market IDs to market-specific arrays
+        array_mapping: Dict[Hashable, Array] = {}
+        generator = generate_items(market_ids, market_factory, compute_market_results)
+        if market_ids.size > 1:
+            generator = output_progress(generator, market_ids.size, start_time)
+        for t, (array_t, errors_t) in generator:
+            array_mapping[t] = np.c_[array_t]
+            errors.extend(errors_t)
+
+        # output a warning about any errors
+        if errors:
+            output("")
+            output(exceptions.MultipleErrors(errors))
+            output("")
+
+        # determine the sizes of dimensions
+        dimension_sizes = []
+        for dimension in range(len(array_mapping[market_ids[0]].shape)):
+            if dimension == 0:
+                dimension_sizes.append(sum(array_mapping[t].shape[dimension] for t in market_ids))
+            else:
+                dimension_sizes.append(max(array_mapping[t].shape[dimension] for t in market_ids))
+
+        # preserve the original product order or the sorted market order when stacking the arrays
+        combined = np.full(dimension_sizes, np.nan, options.dtype)
+        for t, array_t in array_mapping.items():
+            slices = (slice(0, s) for s in array_t.shape[1:])
+            if dimension_sizes[0] == market_ids.size:
+                combined[(market_ids == t, *slices)] = array_t
+            elif dimension_sizes[0] == self.simulation.N:
+                combined[(self.simulation._product_market_indices[t], *slices)] = array_t
+            else:
+                assert market_ids.size == 1
+                combined = array_t
+
+        # output how long it took to compute the arrays
+        end_time = time.time()
+        output(f"Finished after {format_seconds(end_time - start_time)}.")
+        output("")
+        return combined
 
     def to_pickle(self, path: Union[str, Path]) -> None:
         """Save these results as a pickle file.

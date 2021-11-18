@@ -22,8 +22,8 @@ from ..utilities.basics import (
 class BootstrappedResults(Results):
     r"""Bootstrapped results of a solved problem.
 
-    This class has same methods as :class:`ProblemResults` that compute post-estimation outputs in one or more markets,
-    but not other methods like :meth:`ProblemResults.compute_optimal_instruments` that do not make sense in a
+    This class has the same methods as :class:`ProblemResults` that compute post-estimation outputs in one or more
+    markets, but not other methods like :meth:`ProblemResults.compute_optimal_instruments` that do not make sense in a
     bootstrapped dataset. The only other difference is that methods return arrays with an extra first dimension along
     which bootstrapped results are stacked (these stacked results can be used to construct, for example, confidence
     intervals for post-estimation outputs). Similarly, arrays of data (except for firm IDs and ownership matrices)
@@ -92,10 +92,7 @@ class BootstrappedResults(Results):
             bootstrapped_shares: Array, bootstrapped_delta: Array, start_time: float, end_time: float, draws: int,
             iteration_stats: Mapping[Hashable, SolverStats]) -> None:
         """Structure bootstrapped problem results."""
-        super().__init__(
-            problem_results.problem, problem_results._parameters, problem_results._moments, problem_results._iteration,
-            problem_results._fp_type
-        )
+        super().__init__(problem_results.problem, problem_results._parameters)
         self.problem_results = problem_results
         self.bootstrapped_sigma = bootstrapped_sigma
         self.bootstrapped_pi = bootstrapped_pi
@@ -130,55 +127,6 @@ class BootstrappedResults(Results):
             values.extend([self.fp_iterations.sum(), self.contraction_evaluations.sum()])
         return format_table(header, values, title="Bootstrapped Results Summary")
 
-    def _coerce_matrices(self, matrices: Any, market_ids: Array) -> Array:
-        """Coerce array-like stacked matrix tensors into a stacked matrix tensor and validate it."""
-        matrices = np.atleast_3d(np.asarray(matrices, options.dtype))
-        rows = sum(i.size for t, i in self.problem._product_market_indices.items() if t in market_ids)
-        columns = max(i.size for t, i in self.problem._product_market_indices.items() if t in market_ids)
-        if matrices.shape != (self.draws, rows, columns):
-            raise ValueError(f"matrices must be {self.draws} by {rows} by {columns}.")
-        return matrices
-
-    def _coerce_optional_delta(self, delta: Optional[Any], market_ids: Array) -> Array:
-        """Coerce optional array-like mean utilities into a column vector tensor and validate it."""
-        if delta is None:
-            return None
-        delta = np.atleast_3d(np.asarray(delta, options.dtype))
-        rows = sum(i.size for t, i in self.problem._product_market_indices.items() if t in market_ids)
-        if delta.shape != (self.draws, rows, 1):
-            raise ValueError(f"delta must be None or {self.draws} by {rows}.")
-        return delta
-
-    def _coerce_optional_costs(self, costs: Optional[Any], market_ids: Array) -> Array:
-        """Coerce optional array-like costs into a column vector tensor and validate it."""
-        if costs is None:
-            return None
-        costs = np.atleast_3d(np.asarray(costs, options.dtype))
-        rows = sum(i.size for t, i in self.problem._product_market_indices.items() if t in market_ids)
-        if costs.shape != (self.draws, rows, 1):
-            raise ValueError(f"costs must be None or {self.draws} by {rows}.")
-        return costs
-
-    def _coerce_optional_prices(self, prices: Optional[Any], market_ids: Array) -> Array:
-        """Coerce optional array-like prices into a column vector tensor and validate it."""
-        if prices is None:
-            return None
-        prices = np.atleast_3d(np.asarray(prices, options.dtype))
-        rows = sum(i.size for t, i in self.problem._product_market_indices.items() if t in market_ids)
-        if prices.shape != (self.draws, rows, 1):
-            raise ValueError(f"prices must be None or {self.draws} by {rows}.")
-        return prices
-
-    def _coerce_optional_shares(self, shares: Optional[Any], market_ids: Array) -> Array:
-        """Coerce optional array-like shares into a column vector tensor and validate it."""
-        if shares is None:
-            return shares
-        shares = np.atleast_3d(np.asarray(shares, options.dtype))
-        rows = sum(i.size for t, i in self.problem._product_market_indices.items() if t in market_ids)
-        if shares.shape != (self.draws, rows, 1):
-            raise ValueError(f"shares must be None or {self.draws} by {rows}.")
-        return shares
-
     def _combine_arrays(
             self, compute_market_results: Callable, market_ids: Array, fixed_args: Sequence = (),
             market_args: Sequence = (), agent_data: Optional[Mapping] = None,
@@ -196,10 +144,10 @@ class BootstrappedResults(Results):
 
         # structure or construct different agent data
         if agent_data is None and integration is None:
-            agents = self.problem.agents
-            agents_market_indices = self.problem._agent_market_indices
+            agents = self._economy.agents
+            agents_market_indices = self._economy._agent_market_indices
         else:
-            agents = Agents(self.problem.products, self.problem.agent_formulation, agent_data, integration)
+            agents = Agents(self._economy.products, self._economy.agent_formulation, agent_data, integration)
             agents_market_indices = get_indices(agents.market_ids)
 
         def market_factory(pair: Tuple[int, Hashable]) -> tuple:
@@ -210,9 +158,10 @@ class BootstrappedResults(Results):
                 'shares': self.bootstrapped_shares[c]
             }
             market_cs = ResultsMarket(
-                self.problem, s, self._parameters, self.bootstrapped_sigma[c], self.bootstrapped_pi[c],
+                self._economy, s, self._parameters, self.bootstrapped_sigma[c], self.bootstrapped_pi[c],
                 self.bootstrapped_rho[c], self.bootstrapped_beta[c], self.bootstrapped_gamma[c],
-                self.bootstrapped_delta[c], self._moments, data_override_c, agents[agents_market_indices[s]]
+                self.bootstrapped_delta[c], data_override=data_override_c,
+                agents_override=agents[agents_market_indices[s]]
             )
             args_cs: List[Optional[Array]] = []
             for market_arg in market_args:
@@ -222,13 +171,13 @@ class BootstrappedResults(Results):
                     if market_ids.size == 1:
                         args_cs.append(market_arg)
                     else:
-                        args_cs.append(market_arg[self.problem._product_market_indices[s]])
+                        args_cs.append(market_arg[self._economy._product_market_indices[s]])
                 else:
                     assert len(market_arg.shape) == 3
                     if market_ids.size == 1:
                         args_cs.append(market_arg[c])
                     else:
-                        args_cs.append(market_arg[c, self.problem._product_market_indices[s]])
+                        args_cs.append(market_arg[c, self._economy._product_market_indices[s]])
             return (market_cs, *fixed_args, *args_cs)
 
         # construct a mapping from draws and market IDs to market-specific arrays and compute the full matrix size
@@ -261,8 +210,8 @@ class BootstrappedResults(Results):
             slices = (slice(0, s) for s in array_dt.shape[1:])
             if dimension_sizes[0] == market_ids.size:
                 combined[(d, market_ids == t, *slices)] = array_dt
-            elif dimension_sizes[0] == self.problem.N:
-                combined[(d, self.problem._product_market_indices[t], *slices)] = array_dt
+            elif dimension_sizes[0] == self._economy.N:
+                combined[(d, self._economy._product_market_indices[t], *slices)] = array_dt
             else:
                 assert market_ids.size == 1
                 combined[d] = array_dt
@@ -272,6 +221,55 @@ class BootstrappedResults(Results):
         output(f"Finished after {format_seconds(end_time - start_time)}.")
         output("")
         return combined
+
+    def _coerce_matrices(self, matrices: Any, market_ids: Array) -> Array:
+        """Coerce array-like stacked matrix tensors into a stacked matrix tensor and validate it."""
+        matrices = np.atleast_3d(np.asarray(matrices, options.dtype))
+        rows = sum(i.size for t, i in self._economy._product_market_indices.items() if t in market_ids)
+        columns = max(i.size for t, i in self._economy._product_market_indices.items() if t in market_ids)
+        if matrices.shape != (self.draws, rows, columns):
+            raise ValueError(f"matrices must be {self.draws} by {rows} by {columns}.")
+        return matrices
+
+    def _coerce_optional_delta(self, delta: Optional[Any], market_ids: Array) -> Array:
+        """Coerce optional array-like mean utilities into a column vector tensor and validate it."""
+        if delta is None:
+            return None
+        delta = np.atleast_3d(np.asarray(delta, options.dtype))
+        rows = sum(i.size for t, i in self._economy._product_market_indices.items() if t in market_ids)
+        if delta.shape != (self.draws, rows, 1):
+            raise ValueError(f"delta must be None or {self.draws} by {rows}.")
+        return delta
+
+    def _coerce_optional_costs(self, costs: Optional[Any], market_ids: Array) -> Array:
+        """Coerce optional array-like costs into a column vector tensor and validate it."""
+        if costs is None:
+            return None
+        costs = np.atleast_3d(np.asarray(costs, options.dtype))
+        rows = sum(i.size for t, i in self._economy._product_market_indices.items() if t in market_ids)
+        if costs.shape != (self.draws, rows, 1):
+            raise ValueError(f"costs must be None or {self.draws} by {rows}.")
+        return costs
+
+    def _coerce_optional_prices(self, prices: Optional[Any], market_ids: Array) -> Array:
+        """Coerce optional array-like prices into a column vector tensor and validate it."""
+        if prices is None:
+            return None
+        prices = np.atleast_3d(np.asarray(prices, options.dtype))
+        rows = sum(i.size for t, i in self._economy._product_market_indices.items() if t in market_ids)
+        if prices.shape != (self.draws, rows, 1):
+            raise ValueError(f"prices must be None or {self.draws} by {rows}.")
+        return prices
+
+    def _coerce_optional_shares(self, shares: Optional[Any], market_ids: Array) -> Array:
+        """Coerce optional array-like shares into a column vector tensor and validate it."""
+        if shares is None:
+            return shares
+        shares = np.atleast_3d(np.asarray(shares, options.dtype))
+        rows = sum(i.size for t, i in self._economy._product_market_indices.items() if t in market_ids)
+        if shares.shape != (self.draws, rows, 1):
+            raise ValueError(f"shares must be None or {self.draws} by {rows}.")
+        return shares
 
     def to_pickle(self, path: Union[str, Path]) -> None:
         """Save these results as a pickle file.

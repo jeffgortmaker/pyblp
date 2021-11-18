@@ -668,8 +668,8 @@ class ProblemEconomy(Economy):
             optimization_stats.evaluations += 1
             results = ProblemResults(
                 final_progress, last_results, step, last_step, step_start_time, optimization_start_time,
-                optimization_end_time, optimization_stats, iteration_stats, scale_objective, iteration, fp_type,
-                shares_bounds, costs_bounds, extra_micro_covariances, center_moments, W_type, se_type
+                optimization_end_time, optimization_stats, iteration_stats, scale_objective, shares_bounds,
+                costs_bounds, extra_micro_covariances, center_moments, W_type, se_type
             )
             self._handle_errors(results._errors, error_behavior)
             output(f"Computed results after {format_seconds(results.total_time - results.optimization_time)}.")
