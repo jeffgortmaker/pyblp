@@ -166,7 +166,7 @@ Parametric bootstrap computation returns the following class.
 
    BootstrappedResults
 
-This class has all of the same methods as :class:`ProblemResults`, except for :meth:`ProblemResults.bootstrap`, :meth:`ProblemResults.compute_optimal_instruments`, and :meth:`ProblemResults.importance_sampling`. It can also be pickled or converted into a dictionary.
+This class has all of the same methods as :class:`ProblemResults`, except for :meth:`ProblemResults.bootstrap`, :meth:`ProblemResults.compute_optimal_instruments`, :meth:`ProblemResults.importance_sampling`, :meth:`ProblemResults.run_distance_test`, :meth:`ProblemResults.run_hansen_test`, :meth:`ProblemResults.run_lm_test`, and :meth:`ProblemResults.run_wald_test`. It can also be pickled or converted into a dictionary.
 
 .. autosummary::
    :toctree: _api
@@ -287,7 +287,7 @@ Solved simulations return the following results class.
 
    SimulationResults
 
-This class has all of the same methods as :class:`ProblemResults`, except for :meth:`ProblemResults.bootstrap`, :meth:`ProblemResults.compute_optimal_instruments`, and :meth:`ProblemResults.importance_sampling`. It can also be pickled or converted into a dictionary.
+This class has all of the same methods as :class:`ProblemResults`, except for :meth:`ProblemResults.bootstrap`, :meth:`ProblemResults.compute_optimal_instruments`, :meth:`ProblemResults.importance_sampling`, :meth:`ProblemResults.run_distance_test`, :meth:`ProblemResults.run_hansen_test`, :meth:`ProblemResults.run_lm_test`, and :meth:`ProblemResults.run_wald_test`. It can also be pickled or converted into a dictionary.
 
 .. autosummary::
    :toctree: _api
