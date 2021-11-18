@@ -597,12 +597,6 @@ def test_merger(simulated_problem: SimulatedProblemFixture, ownership: bool, sol
     estimated_shares_error = np.linalg.norm(actual.product_data.shares - estimated_shares)
     np.testing.assert_array_less(estimated_shares_error, approximated_shares_error, verbose=True)
 
-    # test that median HHI increases
-    if not ownership:
-        hhi = results.compute_hhi()
-        changed_hhi = results.compute_hhi(merger_ids, estimated_shares)
-        np.testing.assert_array_less(np.median(hhi), np.median(changed_hhi), verbose=True)
-
 
 @pytest.mark.usefixtures('simulated_problem')
 def test_shares(simulated_problem: SimulatedProblemFixture) -> None:

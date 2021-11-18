@@ -424,7 +424,7 @@ def large_nested_blp_simulation() -> SimulationFixture:
             'agent_ids': np.tile(np.arange(agent_data.weights.size), unique_market_ids.size),
             'weights': np.tile(agent_data.weights.flat, unique_market_ids.size),
             'nodes': np.tile(agent_data.nodes, (unique_market_ids.size, 1)),
-            **{f'f{j}': state.uniform(size=unique_market_ids.size * agent_data.weights.size) for j in range(max_J)},
+            **{f'g{j}': state.uniform(size=unique_market_ids.size * agent_data.weights.size) for j in range(max_J)},
         },
         beta=[1, 1, 2, 3, 1],
         sigma=[
@@ -443,7 +443,7 @@ def large_nested_blp_simulation() -> SimulationFixture:
         correlation=0.9,
         distributions=['lognormal', 'normal'],
         costs_type='log',
-        seed=2,
+        seed=0,
     )
     simulation_results = simulation.replace_endogenous()
     simulated_micro_moments = [
