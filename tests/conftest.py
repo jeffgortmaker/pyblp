@@ -376,7 +376,7 @@ def small_nested_blp_simulation() -> SimulationFixture:
         beta=[-5, 1, 2],
         sigma=2,
         gamma=[2, 1, 1],
-        rho=[0.1, 0.2],
+        rho=[0.2, 0.1],
         integration=Integration('product', 3),
         xi_variance=0.001,
         omega_variance=0.001,
