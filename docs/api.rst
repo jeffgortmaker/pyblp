@@ -283,11 +283,11 @@ Solved simulations return the following results class.
 .. autosummary::
    :nosignatures:
    :toctree: _api
-   :template: class_without_signature.rst
+   :template: class_without_methods_or_signature.rst
 
    SimulationResults
 
-The results can be pickled or converted into a dictionary.
+This class has all of the same methods as :class:`ProblemResults`, except for :meth:`ProblemResults.bootstrap`, :meth:`ProblemResults.compute_optimal_instruments`, and :meth:`ProblemResults.importance_sampling`. It can also be pickled or converted into a dictionary.
 
 .. autosummary::
    :toctree: _api
@@ -295,7 +295,7 @@ The results can be pickled or converted into a dictionary.
    SimulationResults.to_pickle
    SimulationResults.to_dict
 
-They can also be converted into a :class:`Problem` with the following method.
+It can also be converted into a :class:`Problem` with the following method.
 
 .. autosummary::
    :toctree: _api
