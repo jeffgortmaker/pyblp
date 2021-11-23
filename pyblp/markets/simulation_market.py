@@ -22,7 +22,8 @@ class SimulationMarket(Market):
         shares, share_errors = self.safely_compute_shares(prices)
         with np.errstate(all='ignore'):
             delta = self.update_delta_with_variable('prices', prices)
-            costs = self.update_costs_with_variable(costs, 'shares', shares)
+            if not constant_costs:
+                costs = self.update_costs_with_variable(costs, 'shares', shares)
         errors.extend(price_errors + share_errors)
         return prices, shares, delta, costs, stats, errors
 
