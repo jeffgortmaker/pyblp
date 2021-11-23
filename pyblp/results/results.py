@@ -239,6 +239,41 @@ class Results(abc.ABC, StringRepresentation):
         market_ids = self._select_market_ids(market_id)
         return self._combine_arrays(ResultsMarket.safely_compute_demand_hessian, market_ids, fixed_args=[name])
 
+    def compute_profit_hessians(self, costs: Optional[Array] = None, market_id: Optional[Any] = None) -> Array:
+        r"""Estimate arrays of second derivatives of profits with respect to a prices.
+
+        In market :math:`t`, the value indexed by :math:`(j, k, \ell)` is
+
+        .. math:: \frac{\partial^2 \pi_{jt}}{\partial p_{kt} \partial p_{\ell t}}.
+
+        Parameters
+        ----------
+        costs : `array-like`
+            Marginal costs, :math:`c`. By default, marginal costs are computed with
+            :meth:`ProblemResults.compute_costs`. Costs under a changed ownership structure can be computed by
+            specifying the ``firm_ids`` or ``ownership`` arguments of :meth:`ProblemResults.compute_costs`.
+        market_id : `object, optional`
+            ID of the market in which to compute Hessians. By default, Hessians are computed in all markets and
+            stacked.
+
+        Returns
+        -------
+        `ndarray`
+            Estimated :math:`J_t \times J_t \times J_t` arrays of second derivatives of profits. If ``market_id`` was
+            not specified, arrays are estimated in each market :math:`t` and stacked. Indices for a market are in the
+            same order as products for the market. If a market has fewer products than others, extra indices will
+            contain ``numpy.nan``.
+
+        Examples
+        --------
+            - :doc:`Tutorial </tutorial>`
+
+        """
+        output(f"Computing second derivatives of profits with respect to prices ...")
+        market_ids = self._select_market_ids(market_id)
+        costs = self._coerce_optional_costs(costs, market_ids)
+        return self._combine_arrays(ResultsMarket.safely_compute_profit_hessian, market_ids, market_args=[costs])
+
     def compute_diversion_ratios(self, name: Optional[str] = 'prices', market_id: Optional[Any] = None) -> Array:
         r"""Estimate matrices of diversion ratios, :math:`\mathscr{D}`, with respect to a variable, :math:`x`.
 

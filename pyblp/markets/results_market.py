@@ -183,6 +183,18 @@ class ResultsMarket(Market):
         return costs, errors
 
     @NumericalErrorHandler(exceptions.PostEstimationNumericalError)
+    def safely_compute_profit_hessian(self, costs: Optional[Array]) -> Tuple[Array, List[Error]]:
+        """Estimate second derivatives of profits with respect to prices. By default, use unchanged firm IDs and compute
+        marginal costs, handling any numerical errors.
+        """
+        errors: List[Error] = []
+        if costs is None:
+            costs, costs_errors = self.safely_compute_costs()
+            errors.extend(costs_errors)
+        hessian = self.compute_profit_hessian(costs)
+        return hessian, errors
+
+    @NumericalErrorHandler(exceptions.PostEstimationNumericalError)
     def safely_compute_passthrough(
             self, firm_ids: Optional[Array], ownership: Optional[Array]) -> Tuple[Array, List[Error]]:
         """Estimate the passthrough matrix, handling any numerical errors."""

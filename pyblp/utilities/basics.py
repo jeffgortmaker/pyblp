@@ -347,6 +347,36 @@ def compute_finite_differences(f: Callable[[Array], Array], x: Array, epsilon_sc
     return np.dstack(arrays)
 
 
+def compute_second_finite_differences(f: Callable[[Array], Array], x: Array, epsilon_scale: float = 1.0) -> Array:
+    """Approximate second derivatives with finite differences."""
+    epsilon = np.sqrt(epsilon_scale * options.finite_differences_epsilon)
+
+    arrays = []
+    for index1 in range(x.size):
+        arrays1 = []
+        for index2 in range(x.size):
+            x1 = x.copy()
+            x2 = x.copy()
+            x3 = x.copy()
+            x4 = x.copy()
+            x1[index1] += epsilon / 2
+            x2[index1] += epsilon / 2
+            x3[index1] -= epsilon / 2
+            x4[index1] -= epsilon / 2
+            x1[index2] += epsilon / 2
+            x2[index2] -= epsilon / 2
+            x3[index2] += epsilon / 2
+            x4[index2] -= epsilon / 2
+            arrays1.append((f(x1) - f(x2) - f(x3) + f(x4)) / epsilon**2)
+
+        if len(arrays1[0].shape) == 1 or (len(arrays1[0].shape) == 2 and arrays1[0].shape[1] == 1):
+            arrays.append(np.column_stack(arrays1))
+        else:
+            arrays.append(np.dstack(arrays1))
+
+    return np.dstack(arrays)
+
+
 class SolverStats(object):
     """Structured statistics returned by a generic numerical solver."""
 

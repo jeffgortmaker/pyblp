@@ -887,6 +887,24 @@ class Market(Container):
 
         return hessian
 
+    def compute_profit_hessian(self, costs: Array) -> Array:
+        """Compute the Hessian of profits with respect to prices."""
+
+        # compute derivatives of shares with respect to prices
+        probabilities, conditionals = self.compute_probabilities()
+        utility_derivatives = self.compute_utility_derivatives('prices')
+        utility_second_derivatives = self.compute_utility_derivatives('prices', order=2)
+        shares_jacobian = self.compute_shares_by_variable_jacobian(utility_derivatives, probabilities, conditionals)
+        shares_hessian = self.compute_shares_by_variable_hessian(
+            utility_derivatives, utility_second_derivatives, probabilities, conditionals
+        )
+
+        # compute derivatives of profits with respect to prices
+        profit = (self.products.prices - costs)[:, :, None] * shares_hessian
+        profit[np.arange(self.J), np.arange(self.J), :] += shares_jacobian
+        profit[np.arange(self.J), :, np.arange(self.J)] += shares_jacobian
+        return profit
+
     def compute_shares_by_xi_jacobian(self, probabilities: Array, conditionals: Optional[Array]) -> Array:
         """Compute the Jacobian (holding beta fixed) of shares with respect to xi (equivalently, to delta)."""
         diagonal_shares = np.diagflat(self.products.shares)

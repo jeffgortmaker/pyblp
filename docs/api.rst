@@ -116,6 +116,7 @@ In addition to class attributes, other post-estimation outputs can be estimated 
    ProblemResults.compute_elasticities
    ProblemResults.compute_demand_jacobians
    ProblemResults.compute_demand_hessians
+   ProblemResults.compute_profit_hessians
    ProblemResults.compute_diversion_ratios
    ProblemResults.compute_long_run_diversion_ratios
    ProblemResults.compute_probabilities

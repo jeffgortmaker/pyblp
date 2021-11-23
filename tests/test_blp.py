@@ -14,7 +14,9 @@ from pyblp import (
     Agents, CustomMoment, DemographicInteractionMoment, Formulation, Integration, Iteration, Optimization, Problem,
     Products, Simulation, build_ownership, data_to_dict, parallel
 )
-from pyblp.utilities.basics import Array, Options, update_matrices, compute_finite_differences
+from pyblp.utilities.basics import (
+    Array, Options, update_matrices, compute_finite_differences, compute_second_finite_differences
+)
 from .conftest import SimulatedProblemFixture
 
 
@@ -699,8 +701,32 @@ def test_demand_hessian(simulated_problem: SimulatedProblemFixture) -> None:
 
     # compute analytic Hessians and approximate them with finite differences
     exact = results.compute_demand_hessians(market_id=t)
-    approximate = compute_finite_differences(compute_perturbed_jacobian, prices)
-    np.testing.assert_allclose(exact, approximate, atol=1e-7, rtol=0)
+    approximate1 = compute_finite_differences(compute_perturbed_jacobian, prices)
+    approximate2 = compute_second_finite_differences(lambda p: results.compute_shares(p, market_id=t), prices)
+    np.testing.assert_allclose(exact, approximate1, atol=1e-7, rtol=0)
+    np.testing.assert_allclose(exact, approximate2, atol=1e-5, rtol=0)
+
+
+@pytest.mark.usefixtures('simulated_problem')
+def test_profit_hessian(simulated_problem: SimulatedProblemFixture) -> None:
+    """Use central finite differences to test that analytic values in the Hessian of profits with respect to prices are
+    essentially correct.
+    """
+    simulation, simulation_results, _, _, results = simulated_problem
+    product_data = simulation_results.product_data
+
+    # only do the test for a single market
+    t = product_data.market_ids[0]
+    prices = product_data.prices[product_data.market_ids.flat == t]
+    costs = results.compute_costs(market_id=t)
+
+    # compute the exact Hessian and approximat it with finite differences
+    exact = results.compute_profit_hessians(costs=costs, market_id=t)
+    approximate = compute_second_finite_differences(
+        lambda p: results.compute_profits(p, results.compute_shares(p, market_id=t), costs, market_id=t),
+        prices,
+    )
+    np.testing.assert_allclose(exact, approximate, atol=1e-6, rtol=0)
 
 
 @pytest.mark.usefixtures('simulated_problem')
