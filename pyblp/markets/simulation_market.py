@@ -1,6 +1,6 @@
 """Market-level simulation of synthetic BLP data."""
 
-from typing import List, Tuple
+from typing import Dict, Hashable, List, Optional, Tuple
 
 import numpy as np
 
@@ -14,18 +14,33 @@ class SimulationMarket(Market):
     """A market in a simulation of synthetic BLP data."""
 
     def compute_endogenous(
-            self, costs: Array, prices: Array, iteration: Iteration, constant_costs: bool) -> (
-            Tuple[Array, Array, Array, Array, SolverStats, List[Error]]):
-        """Compute endogenous prices and shares, along with the associated delta and costs."""
+            self, costs: Array, prices: Array, iteration: Iteration, constant_costs: bool, compute_hessians: bool) -> (
+            Tuple[Array, Array, Array, Array, SolverStats, Optional[Dict[Hashable, Array]], List[Error]]):
+        """Compute endogenous prices and shares, along with the associated delta and costs. Optionally compute firms'
+        profits Hessians.
+        """
         errors: List[Error] = []
         prices, stats, price_errors = self.safely_compute_equilibrium_prices(costs, iteration, constant_costs, prices)
         shares, share_errors = self.safely_compute_shares(prices)
+        errors.extend(price_errors + share_errors)
+
+        # update mean utilities and marginal costs
         with np.errstate(all='ignore'):
             delta = self.update_delta_with_variable('prices', prices)
             if not constant_costs:
                 costs = self.update_costs_with_variable(costs, 'shares', shares)
-        errors.extend(price_errors + share_errors)
-        return prices, shares, delta, costs, stats, errors
+
+        # optionally compute profit Hessians
+        profit_hessians = None
+        if compute_hessians:
+            profit_hessians = {}
+            hessian = self.compute_profit_hessian(costs, prices)
+            ownership = self.get_ownership_matrix()
+            for firm_id in np.unique(self.products.firm_ids.flatten()):
+                firm_index = self.products.firm_ids.flat == firm_id
+                profit_hessians[firm_id] = (ownership[..., None] * hessian).sum(axis=0)[firm_index][:, firm_index]
+
+        return prices, shares, delta, costs, stats, profit_hessians, errors
 
     def compute_exogenous(
             self, initial_delta: Array, iteration: Iteration, fp_type: str, shares_bounds: Bounds) -> (

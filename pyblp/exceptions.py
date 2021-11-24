@@ -281,6 +281,10 @@ class HessianEigenvaluesError(InversionError):
     """Failed to compute eigenvalues for the GMM objective's (reduced) Hessian matrix."""
 
 
+class ProfitHessianEigenvaluesError(InversionError):
+    """Failed to compute eigenvalues for a firm's profit Hessian."""
+
+
 class FittedValuesInversionError(InversionReplacementError):
     """Failed to invert an estimated covariance when computing fitted values.
 

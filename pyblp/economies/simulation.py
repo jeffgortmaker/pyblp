@@ -7,6 +7,7 @@ from typing import Any, Dict, Hashable, List, Mapping, Optional, Sequence, Tuple
 import numpy as np
 
 from .economy import Economy
+from .. import exceptions
 from .. import options
 from ..configurations.formulation import Formulation
 from ..configurations.integration import Integration
@@ -15,6 +16,7 @@ from ..markets.simulation_market import SimulationMarket
 from ..parameters import Parameters
 from ..primitives import Agents, Products
 from ..results.simulation_results import SimulationResults
+from ..utilities.algebra import precisely_compute_eigenvalues
 from ..utilities.basics import (
     Array, Bounds, Error, Groups, SolverStats, RecArray, extract_matrix, format_seconds, generate_items, output,
     output_progress, structure_matrices
@@ -533,7 +535,8 @@ class Simulation(Economy):
 
     def replace_endogenous(
             self, costs: Optional[Any] = None, prices: Optional[Any] = None, iteration: Optional[Iteration] = None,
-            constant_costs: bool = True, error_behavior: str = 'raise') -> SimulationResults:
+            constant_costs: bool = True, compute_hessians: bool = True, error_behavior: str = 'raise') -> (
+            SimulationResults):
         r"""Replace simulated prices and market shares with equilibrium values that are consistent with true parameters.
 
         This method is the standard way of solving the simulation. Prices and market shares are computed in each market
@@ -578,6 +581,9 @@ class Simulation(Economy):
             included in the formulation for :math:`X_3`. When simulating fake data, it likely makes more sense to set
             this to ``False`` since otherwise arbitrary ``shares`` simulated by :class:`Simulation` will be used in
             marginal costs.
+        compute_hessians : `bool, optional`
+            Whether to compute profit Hessians to verify second order conditions. This is by default ``True``. Setting
+            it to ``False`` will slightly speed up computation, but second order conditions will not be checked.
         error_behavior : `str, optional`
             How to handle errors when computing prices and shares. For example, the fixed point routine may not converge
             if the effects of nonlinear parameters on price overwhelm the linear parameter on price, which should be
@@ -632,7 +638,7 @@ class Simulation(Economy):
         # compute a baseline delta that will be updated when shares and prices are replaced
         delta = self.products.X1 @ self.beta + self.xi
 
-        def market_factory(s: Hashable) -> Tuple[SimulationMarket, Array, Array, Iteration, bool]:
+        def market_factory(s: Hashable) -> Tuple[SimulationMarket, Array, Array, Iteration, bool, bool]:
             """Build a market along with arguments used to compute prices and shares."""
             assert costs is not None and prices is not None and iteration is not None
             market_s = SimulationMarket(
@@ -640,7 +646,7 @@ class Simulation(Economy):
             )
             costs_s = costs[self._product_market_indices[s]]
             prices_s = prices[self._product_market_indices[s]]
-            return market_s, costs_s, prices_s, iteration, constant_costs
+            return market_s, costs_s, prices_s, iteration, constant_costs, compute_hessians
 
         # compute prices and market shares market-by-market, also collecting potentially updated delta and costs
         data_override = {
@@ -650,9 +656,11 @@ class Simulation(Economy):
         true_delta = np.zeros_like(delta)
         true_costs = np.zeros_like(costs)
         iteration_stats: Dict[Hashable, SolverStats] = {}
+        profit_hessians: Optional[Dict[Hashable, Dict[Hashable, Array]]] = {} if compute_hessians else None
+        profit_hessian_eigenvalues: Optional[Dict[Hashable, Dict[Hashable, Array]]] = {} if compute_hessians else None
         generator = generate_items(self.unique_market_ids, market_factory, SimulationMarket.compute_endogenous)
         generator = output_progress(generator, self.T, start_time)
-        for t, (prices_t, shares_t, delta_t, costs_t, iteration_stats_t, errors_t) in generator:
+        for t, (prices_t, shares_t, delta_t, costs_t, iteration_stats_t, profit_hessians_t, errors_t) in generator:
             data_override['prices'][self._product_market_indices[t]] = prices_t
             data_override['shares'][self._product_market_indices[t]] = shares_t
             true_delta[self._product_market_indices[t]] = delta_t
@@ -660,10 +668,22 @@ class Simulation(Economy):
             iteration_stats[t] = iteration_stats_t
             errors.extend(errors_t)
 
+            # compute profit Hessian eigenvalues to check second order conditions
+            if compute_hessians:
+                assert profit_hessians_t is not None
+                assert profit_hessians is not None and profit_hessian_eigenvalues is not None
+                profit_hessians[t] = profit_hessians_t
+                profit_hessian_eigenvalues[t] = {}
+                for f, profit_hessian in profit_hessians_t.items():
+                    profit_hessian_eigenvalues[t][f], successful = precisely_compute_eigenvalues(profit_hessian)
+                    if not successful:
+                        errors.append(exceptions.ProfitHessianEigenvaluesError(profit_hessian))
+
         # structure the results
         self._handle_errors(errors, error_behavior)
         results = SimulationResults(
-            self, data_override, true_delta, true_costs, start_time, time.time(), iteration_stats
+            self, data_override, true_delta, true_costs, start_time, time.time(), iteration_stats, profit_hessians,
+            profit_hessian_eigenvalues
         )
         output(f"Replaced prices and shares after {format_seconds(results.computation_time)}.")
         output("")

@@ -393,6 +393,7 @@ When errors occur, they will either be displayed as warnings or raised as except
    exceptions.OmegaByThetaJacobianReversionError
    exceptions.MicroMomentsByThetaJacobianReversionError
    exceptions.HessianEigenvaluesError
+   exceptions.ProfitHessianEigenvaluesError
    exceptions.FittedValuesInversionError
    exceptions.SharesByXiJacobianInversionError
    exceptions.IntraFirmJacobianInversionError

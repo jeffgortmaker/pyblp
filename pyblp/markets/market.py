@@ -887,13 +887,21 @@ class Market(Container):
 
         return hessian
 
-    def compute_profit_hessian(self, costs: Array) -> Array:
-        """Compute the Hessian of profits with respect to prices."""
+    def compute_profit_hessian(self, costs: Array, prices: Optional[Array] = None) -> Array:
+        """Compute the Hessian of profits with respect to prices. By default, use unchanged prices."""
+        if prices is None:
+            prices = self.products.prices
+            probabilities, conditionals = self.compute_probabilities()
+            utility_derivatives = self.compute_utility_derivatives('prices')
+            utility_second_derivatives = self.compute_utility_derivatives('prices', order=2)
+        else:
+            delta = self.update_delta_with_variable('prices', prices)
+            mu = self.update_mu_with_variable('prices', prices)
+            probabilities, conditionals = self.compute_probabilities(delta, mu)
+            utility_derivatives = self.compute_utility_derivatives('prices', prices)
+            utility_second_derivatives = self.compute_utility_derivatives('prices', prices, order=2)
 
         # compute derivatives of shares with respect to prices
-        probabilities, conditionals = self.compute_probabilities()
-        utility_derivatives = self.compute_utility_derivatives('prices')
-        utility_second_derivatives = self.compute_utility_derivatives('prices', order=2)
         shares_jacobian = self.compute_shares_by_variable_jacobian(utility_derivatives, probabilities, conditionals)
         shares_hessian = self.compute_shares_by_variable_hessian(
             utility_derivatives, utility_second_derivatives, probabilities, conditionals

@@ -18,7 +18,7 @@ from ..moments import Moment, EconomyMoments
 from ..primitives import Agents
 from ..utilities.basics import (
     Array, Error, SolverStats, generate_items, get_indices, Mapping, output, output_progress, update_matrices, RecArray,
-    format_seconds, format_table
+    format_number, format_seconds, format_table
 )
 
 
@@ -64,6 +64,28 @@ class SimulationResults(Results):
     contraction_evaluations : `ndarray`
         Number of times the contraction used to compute prices or :math:`\delta` was evaluated in each market. Counts
         are in the same order as :attr:`Simulation.unique_market_ids`.
+    profit_hessians : `dict`
+        Mapping from market IDs :math:`t` to mappings from firm IDs :math:`f` to profit Hessians. This is only computed
+        if these results were created by :meth:`Simulation.replace_endogenous`. The profit Hessian for firm :math:`f` in
+        market :math:`t` is a :math:`J_{ft} \times J_{ft}` matrix with element :math:`(k, \ell) \in J_{ft}^2`
+
+        .. math::
+
+           \frac{\partial^2 \pi_{ft}}{\partial p_{kt} \partial p_{\ell t}}
+           = \sum_{j \in J_{ft}} \frac{\partial^2 \pi_{jt}}{\partial p_{kt} \partial p_{\ell t}}
+
+        where population-normalized profits are
+
+        .. math:: \pi_{jt} = (p_{jt} - c_{jt}) s_{jt}.
+
+        When there is a nontrivial ownership structure, the sum is over all products :math:`j \in J_t` and the terms are
+        weighted by the firm's (possibly partial) ownership of product :math:`j`, given by :math:`\mathcal{H}_{jk}`.
+
+    profit_hessian_eigenvalues : `dict`
+        Mapping from market IDs :math:`t` to mappings from firm IDs :math:`f` to the eigenvalues of profit Hessians.
+        This is only computed if these results were created by :meth:`Simulation.replace_endogenous`. If the fixed point
+        converged and all eigenvalues are negative, the firm's choice of profits is a local maximum.
+
 
     Examples
     --------
@@ -79,11 +101,15 @@ class SimulationResults(Results):
     fp_converged: Array
     fp_iterations: Array
     contraction_evaluations: Array
+    profit_hessians: Optional[Dict[Hashable, Dict[Hashable, Array]]]
+    profit_hessian_eigenvalues: Optional[Dict[Hashable, Dict[Hashable, Array]]]
     _data_override: Dict[str, Array]
 
     def __init__(
             self, simulation: 'Simulation', data_override: Dict[str, Array], delta: Array, costs: Array,
-            start_time: float, end_time: float, iteration_stats: Dict[Hashable, SolverStats]) -> None:
+            start_time: float, end_time: float, iteration_stats: Dict[Hashable, SolverStats],
+            profit_hessians: Optional[Dict[Hashable, Dict[Hashable, Array]]] = None,
+            profit_hessian_eigenvalues: Optional[Dict[Hashable, Dict[Hashable, Array]]] = None) -> None:
         """Structure simulation results."""
         super().__init__(simulation, simulation._parameters)
         self.simulation = simulation
@@ -103,16 +129,37 @@ class SimulationResults(Results):
         self.contraction_evaluations = np.array(
             [iteration_stats[t].evaluations for t in simulation.unique_market_ids], dtype=np.int64
         )
+        self.profit_hessians = profit_hessians
+        self.profit_hessian_eigenvalues = profit_hessian_eigenvalues
         self._data_override = data_override
 
     def __str__(self) -> str:
         """Format simulation results as a string."""
-        header = [("Computation", "Time"), ("Fixed Point", "Iterations"), ("Contraction", "Evaluations")]
+        header = [
+            ("Computation", "Time"),
+            ("Fixed Point", "Failures"),
+            ("Fixed Point", "Iterations"),
+            ("Contraction", "Evaluations"),
+        ]
         values = [
             format_seconds(self.computation_time),
+            (~self.fp_converged).sum(),
             self.fp_iterations.sum(),
-            self.contraction_evaluations.sum()
+            self.contraction_evaluations.sum(),
         ]
+
+        if self.profit_hessian_eigenvalues is not None:
+            min_eigenvalue = +np.inf
+            max_eigenvalue = -np.inf
+            for profit_hessian_eigenvalues_t in self.profit_hessian_eigenvalues.values():
+                for profit_hessian_eigenvalues_ft in profit_hessian_eigenvalues_t.values():
+                    if np.isfinite(profit_hessian_eigenvalues_ft).any():
+                        min_eigenvalue = min(min_eigenvalue, profit_hessian_eigenvalues_ft.min())
+                        max_eigenvalue = max(max_eigenvalue, profit_hessian_eigenvalues_ft.max())
+
+            header.extend([("Profit Hessians", "Min Eigenvalue"), ("Profit Hessians", "Max Eigenvalue")])
+            values.extend([format_number(min_eigenvalue), format_number(max_eigenvalue)])
+
         return format_table(header, values, title="Simulation Results Summary")
 
     def _combine_arrays(
