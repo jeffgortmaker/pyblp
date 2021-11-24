@@ -391,7 +391,7 @@ class Results(abc.ABC, StringRepresentation):
             integration=integration
         )
 
-    def extract_diagonals(self, matrices: Any) -> Array:
+    def extract_diagonals(self, matrices: Any, market_id: Optional[Any] = None) -> Array:
         r"""Extract diagonals from stacked :math:`J_t \times J_t` matrices for each market :math:`t`.
 
         Parameters
@@ -402,11 +402,15 @@ class Results(abc.ABC, StringRepresentation):
             :meth:`ProblemResults.compute_diversion_ratios`; :math:`\bar{\mathscr{D}}`, computed by
             :meth:`ProblemResults.compute_long_run_diversion_ratios`; or :math:`s_{ijt}` computed by
             :meth:`ProblemResults.compute_probabilities`.
+        market_id : `object, optional`
+            ID of the market in which to extract diagonals. By default, diagonals are extracted in all markets and
+            stacked.
 
         Returns
         -------
         `ndarray`
-            Stacked matrix diagonals. If the matrices are estimates of :math:`\varepsilon`, a diagonal is a market's own
+            Stacked matrix diagonals. If ``market_id`` was not specified, diagonals are extracted in each market
+            :math:`t` and stacked. If the matrices are estimates of :math:`\varepsilon`, a diagonal is a market's own
             elasticities of demand; if they are estimates of :math:`\mathscr{D}` or :math:`\bar{\mathscr{D}}`, a
             diagonal is a market's diversion ratios to the outside good.
 
@@ -416,11 +420,11 @@ class Results(abc.ABC, StringRepresentation):
 
         """
         output("Extracting diagonals ...")
-        market_ids = self._select_market_ids()
+        market_ids = self._select_market_ids(market_id)
         matrices = self._coerce_matrices(matrices, market_ids)
         return self._combine_arrays(ResultsMarket.safely_extract_diagonal, market_ids, market_args=[matrices])
 
-    def extract_diagonal_means(self, matrices: Any) -> Array:
+    def extract_diagonal_means(self, matrices: Any, market_id: Optional[Any] = None) -> Array:
         r"""Extract means of diagonals from stacked :math:`J_t \times J_t` matrices for each market :math:`t`.
 
         Parameters
@@ -431,11 +435,15 @@ class Results(abc.ABC, StringRepresentation):
             :meth:`ProblemResults.compute_diversion_ratios`; :math:`\bar{\mathscr{D}}`, computed by
             :meth:`ProblemResults.compute_long_run_diversion_ratios`; or :math:`s_{ijt}` computed by
             :meth:`ProblemResults.compute_probabilities`.
+        market_id : `object, optional`
+            ID of the market in which to extract diagonal means. By default, diagonal means are extracted in all markets
+            and stacked.
 
         Returns
         -------
         `ndarray`
-            Stacked diagonal means. If the matrices are estimates of :math:`\varepsilon`, the mean of a diagonal is a
+            Stacked diagonal means. If ``market_id`` was not specified, diagonal means are extracted in each market
+            :math:`t` and stacked. If the matrices are estimates of :math:`\varepsilon`, the mean of a diagonal is a
             market's mean own elasticity of demand; if they are estimates of :math:`\mathscr{D}` or
             :math:`\bar{\mathscr{D}}`, the mean of a diagonal is a market's mean diversion ratio to the outside good.
             Rows are in the same order as :attr:`Problem.unique_market_ids`.
@@ -446,7 +454,7 @@ class Results(abc.ABC, StringRepresentation):
 
         """
         output("Extracting diagonal means ...")
-        market_ids = self._select_market_ids()
+        market_ids = self._select_market_ids(market_id)
         matrices = self._coerce_matrices(matrices, market_ids)
         return self._combine_arrays(ResultsMarket.safely_extract_diagonal_mean, market_ids, market_args=[matrices])
 

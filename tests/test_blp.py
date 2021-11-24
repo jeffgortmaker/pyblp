@@ -153,6 +153,7 @@ def test_bootstrap(simulated_problem: SimulatedProblemFixture) -> None:
         "consumer surpluses": lambda r: r.compute_consumer_surpluses(),
         "approximate prices": lambda r: r.compute_approximate_prices(merger_ids),
         "own elasticities": lambda r: r.extract_diagonals(r.compute_elasticities()),
+        "own elasticities in t": lambda r: r.extract_diagonals(r.compute_elasticities(market_id=t), market_id=t),
         "aggregate elasticity in t": lambda r: r.compute_aggregate_elasticities(market_id=t),
         "consumer surplus in t": lambda r: r.compute_consumer_surpluses(market_id=t),
         "approximate prices in t": lambda r: r.compute_approximate_prices(merger_ids_t, market_id=t)
