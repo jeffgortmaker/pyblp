@@ -953,8 +953,8 @@ class Results(abc.ABC, StringRepresentation):
         )
 
     def compute_consumer_surpluses(
-            self, prices: Optional[Any] = None, market_id: Optional[Any] = None, keep_all: bool = False,
-            eliminate_product_ids: Optional[Any] = None) -> Array:
+            self, prices: Optional[Any] = None, keep_all: bool = False, eliminate_product_ids: Optional[Any] = None,
+            market_id: Optional[Any] = None) -> Array:
         r"""Estimate population-normalized consumer surpluses, :math:`\text{CS}`.
 
         Assuming away nonlinear income effects, the surplus in market :math:`t` is
@@ -995,9 +995,6 @@ class Results(abc.ABC, StringRepresentation):
         prices : `array-like, optional`
             Prices at which utilities and price derivatives will be evaluated, such as equilibrium prices, :math:`p^*`,
             computed by :meth:`ProblemResults.compute_prices`. By default, unchanged prices are used.
-        market_id : `object, optional`
-            ID of the market in which to compute consumer surplus. By default, consumer surpluses are computed in all
-            markets and stacked.
         keep_all : `bool, optional`
             Whether to keep all individuals' surpluses :math:`\text{CS}_{it}` or just market-level surpluses.
             By default only market-level surpluses are returned, but returning all surpluses will be important for
@@ -1006,6 +1003,9 @@ class Results(abc.ABC, StringRepresentation):
             IDs of the products to eliminate from the choice set. These IDs should show up in the ``product_ids`` field
             of ``product_data`` in :class:`Problem`. Eliminating one or more products and comparing consumer surpluses
             gives a measure of willingness to pay for these products.
+        market_id : `object, optional`
+            ID of the market in which to compute consumer surplus. By default, consumer surpluses are computed in all
+            markets and stacked.
 
         Returns
         -------
