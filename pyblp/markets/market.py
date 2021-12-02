@@ -549,26 +549,26 @@ class Market(Container):
         delta = np.log(exp_delta)
         return delta, clipped_shares, stats, errors
 
-    def compute_capital_lamda(self, probability_utility_derivatives: Array) -> Array:
-        """Compute the diagonal capital lambda matrix used to decompose markups."""
-        diagonal = probability_utility_derivatives @ self.agents.weights
+    def compute_capital_lamda_gamma(
+            self, probability_utility_derivatives: Array, probabilities: Array, conditionals: Optional[Array]) -> (
+            Tuple[Array, Array]):
+        """Compute the diagonal of the capital lambda matrix and the dense capital gamma matrix used to decompose the
+        Jacobian of market shares with respect to a variable.
+        """
 
+        # compute capital lambda
+        capital_lamda_diagonal = probability_utility_derivatives @ self.agents.weights
         if self.H > 0:
-            diagonal /= 1 - self.rho
+            capital_lamda_diagonal /= 1 - self.rho
 
-        return np.diagflat(diagonal)
-
-    def compute_capital_gamma(
-            self, probability_utility_derivatives: Array, probabilities: Array, conditionals: Optional[Array]) -> Array:
-        """Compute the dense capital gamma matrix used to decompose markups."""
+        # compute capital gamma
         weighted_derivatives = self.agents.weights * probability_utility_derivatives.T
         capital_gamma = probabilities @ weighted_derivatives
-
         if self.H > 0:
             membership = self.get_membership_matrix()
             capital_gamma += self.rho / (1 - self.rho) * membership * (conditionals @ weighted_derivatives)
 
-        return capital_gamma
+        return capital_lamda_diagonal.flatten(), capital_gamma
 
     def compute_eta(
             self, ownership_matrix: Optional[Array] = None, delta: Optional[Array] = None) -> Tuple[Array, List[Error]]:
@@ -616,9 +616,10 @@ class Market(Container):
                 costs = self.update_costs_with_variable(costs, 'shares', shares)
 
         probability_utility_derivatives = probabilities * utility_derivatives
-        capital_lamda_diagonal = self.compute_capital_lamda(probability_utility_derivatives).diagonal()
+        capital_lamda_diagonal, capital_gamma = self.compute_capital_lamda_gamma(
+            probability_utility_derivatives, probabilities, conditionals
+        )
         capital_lamda_inverse = np.diag(1 / capital_lamda_diagonal)
-        capital_gamma = self.compute_capital_gamma(probability_utility_derivatives, probabilities, conditionals)
         zeta = (
             capital_lamda_inverse @ (ownership_matrix * capital_gamma).T @ (prices - costs) -
             capital_lamda_inverse @ shares
@@ -818,18 +819,17 @@ class Market(Container):
         if probabilities is None:
             probabilities, conditionals = self.compute_probabilities()
         probability_utility_derivatives = probabilities * utility_derivatives
-        capital_lamda = self.compute_capital_lamda(probability_utility_derivatives)
-        capital_gamma = self.compute_capital_gamma(probability_utility_derivatives, probabilities, conditionals)
-        return capital_lamda - capital_gamma
+        capital_lamda_diagonal, capital_gamma = self.compute_capital_lamda_gamma(
+            probability_utility_derivatives, probabilities, conditionals
+        )
+        return np.diag(capital_lamda_diagonal) - capital_gamma
 
-    def compute_shares_by_variable_hessian(
-            self, utility_derivatives: Array, utility_second_derivatives: Array, probabilities: Optional[Array] = None,
-            conditionals: Optional[Array] = None) -> Array:
-        """Compute the Hessian of market shares with respect to a variable. By default, compute unchanged choice
-        probabilities.
+    def compute_capital_lamda_gamma_by_variable_tensor(
+            self, utility_derivatives: Array, utility_second_derivatives: Array, probabilities: Array,
+            conditionals: Array) -> Tuple[Array, Array]:
+        """Compute the tensor derivative of the diagonal of the capital lambda matrix and the dense capital gamma matrix
+        with respect to a variable.
         """
-        if probabilities is None:
-            probabilities, conditionals = self.compute_probabilities()
 
         # pre-compute components that are common for each product
         probability_utility_derivatives = probabilities * utility_derivatives
@@ -840,8 +840,9 @@ class Market(Container):
             membership = self.get_membership_matrix()
             conditional_utility_derivatives = conditionals * utility_derivatives / (1 - self.rho)
 
-        # compute the Hessian, taking derivatives product-by-product
-        hessian = np.zeros((self.J, self.J, self.J), options.dtype)
+        # take derivatives product-by-product
+        capital_lamda_tensor = np.zeros((self.J, self.J, self.J), options.dtype)
+        capital_gamma_tensor = np.zeros((self.J, self.J, self.J), options.dtype)
         for j in range(self.J):
             # compute the derivatives of probabilities with respect to the product characteristic
             if self.H == 0:
@@ -864,11 +865,11 @@ class Market(Container):
             if self.H > 0:
                 diagonal /= 1 - self.rho
 
-            hessian[..., j] = np.diagflat(diagonal)
+            capital_lamda_tensor[..., j] = np.diagflat(diagonal)
 
             # compute derivatives of capital gamma with respect to the product characteristic
             weighted_second_derivatives = self.agents.weights * probability_utility_second_derivatives.T
-            hessian[..., j] -= (
+            capital_gamma_tensor[..., j] = (
                 probability_derivatives @ weighted_derivatives +
                 probabilities @ weighted_second_derivatives
             )
@@ -880,12 +881,25 @@ class Market(Container):
                 conditional_derivatives = -conditionals * membership[:, [j]] * conditional_utility_derivatives[j]
                 conditional_derivatives[j] += conditional_utility_derivatives[j]
 
-                hessian[..., j] -= self.rho / (1 - self.rho) * membership * (
+                capital_gamma_tensor[..., j] += self.rho / (1 - self.rho) * membership * (
                     conditional_derivatives @ weighted_derivatives +
                     conditionals @ weighted_second_derivatives
                 )
 
-        return hessian
+        return capital_lamda_tensor, capital_gamma_tensor
+
+    def compute_shares_by_variable_hessian(
+            self, utility_derivatives: Array, utility_second_derivatives: Array, probabilities: Optional[Array] = None,
+            conditionals: Optional[Array] = None) -> Array:
+        """Compute the Hessian of market shares with respect to a variable. By default, compute unchanged choice
+        probabilities.
+        """
+        if probabilities is None:
+            probabilities, conditionals = self.compute_probabilities()
+        capital_lamda_tensor, capital_gamma_tensor = self.compute_capital_lamda_gamma_by_variable_tensor(
+            utility_derivatives, utility_second_derivatives, probabilities, conditionals
+        )
+        return capital_lamda_tensor - capital_gamma_tensor
 
     def compute_profit_jacobian(self, costs: Array, prices: Optional[Array] = None) -> Array:
         """Compute the Jacobian of profits with respect to prices. By default, use unchanged prices."""
@@ -960,82 +974,76 @@ class Market(Container):
 
         return jacobian
 
-    def compute_capital_lamda_by_parameter_tangent(
-            self, parameter: Parameter, probability_utility_derivatives: Array,
-            probability_utility_derivatives_tangent: Array) -> Array:
-        """Compute the tangent of the diagonal capital lambda matrix with respect to a parameter."""
-        diagonal = probability_utility_derivatives_tangent @ self.agents.weights
-
-        if self.H > 0:
-            diagonal /= 1 - self.rho
-            if isinstance(parameter, RhoParameter):
-                associations = self.groups.expand(parameter.get_group_associations(self))
-                diagonal += associations / (1 - self.rho)**2 * (probability_utility_derivatives @ self.agents.weights)
-
-        return np.diagflat(diagonal)
-
-    def compute_capital_lamda_by_xi_tensor(self, probability_utility_derivatives_tensor: Array) -> Array:
-        """Compute the tensor derivative of the diagonal capital lambda matrix with respect to xi, indexed by the first
-        axis.
-        """
-        diagonal = probability_utility_derivatives_tensor @ self.agents.weights
-
-        if self.H > 0:
-            diagonal /= 1 - self.rho[None]
-
-        tensor = np.zeros((self.J, self.J, self.J), options.dtype)
-        tensor[:, np.arange(self.J), np.arange(self.J)] = np.c_[np.squeeze(diagonal)]
-        return tensor
-
-    def compute_capital_gamma_by_parameter_tangent(
+    def compute_capital_lamda_gamma_by_parameter_tangent(
             self, parameter: Parameter, probability_utility_derivatives: Array,
             probability_utility_derivatives_tangent: Array, probabilities: Array, probabilities_tangent: Array,
-            conditionals: Optional[Array], conditionals_tangent: Optional[Array]) -> Array:
-        """Compute the tangent of the dense capital gamma matrix with respect to a parameter."""
+            conditionals: Optional[Array], conditionals_tangent: Optional[Array]) -> Tuple[Array, Array]:
+        """Compute the tangent of the diagonal of the capital lambda matrix and the dense capital gamma matrix with
+        respect to a parameter.
+        """
+
+        # compute the capital lambda tangent
+        capital_lamda_diagonal_tangent = probability_utility_derivatives_tangent @ self.agents.weights
+        if self.H > 0:
+            capital_lamda_diagonal_tangent /= 1 - self.rho
+            if isinstance(parameter, RhoParameter):
+                associations = self.groups.expand(parameter.get_group_associations(self))
+                capital_lamda_diagonal_tangent += associations / (1 - self.rho)**2 * (
+                    probability_utility_derivatives @ self.agents.weights
+                )
+
+        # compute the capital gamma tangent
         weighted_derivatives = self.agents.weights * probability_utility_derivatives.T
         weighted_derivatives_tangent = self.agents.weights * probability_utility_derivatives_tangent.T
-        tangent = (
+        capital_gamma_tangent = (
             probabilities_tangent @ weighted_derivatives +
             probabilities @ weighted_derivatives_tangent
         )
-
         if self.H > 0:
             assert conditionals is not None and conditionals_tangent is not None
             membership = self.get_membership_matrix()
-            tangent += membership * self.rho / (1 - self.rho) * (
+            capital_gamma_tangent += membership * self.rho / (1 - self.rho) * (
                 conditionals_tangent @ weighted_derivatives +
                 conditionals @ weighted_derivatives_tangent
             )
             if isinstance(parameter, RhoParameter):
                 associations = self.groups.expand(parameter.get_group_associations(self))
-                tangent += associations * membership / (1 - self.rho)**2 * (conditionals @ weighted_derivatives)
+                capital_gamma_tangent += associations * membership / (1 - self.rho)**2 * (
+                    conditionals @ weighted_derivatives
+                )
 
-        return tangent
+        return capital_lamda_diagonal_tangent.flatten(), capital_gamma_tangent
 
-    def compute_capital_gamma_by_xi_tensor(
+    def compute_capital_lamda_gamma_by_xi_tensor(
             self, probability_utility_derivatives: Array, probability_utility_derivatives_tensor: Array,
             probabilities: Array, probabilities_tensor: Array, conditionals: Optional[Array],
-            conditionals_tensor: Optional[Array]) -> Array:
-        """Compute the tensor derivative of the dense capital gamma matrix with respect to xi, indexed with the first
-        axis.
+            conditionals_tensor: Optional[Array]) -> Tuple[Array, Array]:
+        """Compute the tensor derivative of the diagonal of the capital lambda matrix and the dense capital gamma matrix
+        with respect to xi, indexed by the first axis.
         """
+
+        # compute the capital lambda tensor
+        capital_lamda_diagonal_tensor = probability_utility_derivatives_tensor @ self.agents.weights
+        if self.H > 0:
+            capital_lamda_diagonal_tensor /= 1 - self.rho[None]
+
+        # compute the capital gamma tensor
         weighted_derivatives = self.agents.weights * probability_utility_derivatives.T
         weighted_probabilities = self.agents.weights.T * probabilities
-        tensor = (
+        capital_gamma_tensor = (
             probabilities_tensor @ weighted_derivatives +
             weighted_probabilities @ probability_utility_derivatives_tensor.swapaxes(1, 2)
         )
-
         if self.H > 0:
             assert conditionals is not None and conditionals_tensor is not None
             membership = self.get_membership_matrix()
             weighted_conditionals = self.agents.weights.T * conditionals
-            tensor += membership[None] * self.rho[None] / (1 - self.rho[None]) * (
+            capital_gamma_tensor += membership[None] * self.rho[None] / (1 - self.rho[None]) * (
                 conditionals_tensor @ weighted_derivatives +
                 weighted_conditionals @ probability_utility_derivatives_tensor.swapaxes(1, 2)
             )
 
-        return tensor
+        return capital_lamda_diagonal_tensor, capital_gamma_tensor
 
     def compute_eta_by_theta_jacobian(self, xi_jacobian: Array) -> Tuple[Array, List[Error]]:
         """Compute the Jacobian of the markup term in the BLP-markup equation with respect to theta."""
@@ -1048,9 +1056,10 @@ class Market(Container):
 
         # compute the capital delta matrix, which, when inverted and multiplied by shares, gives eta
         ownership = self.get_ownership_matrix()
-        capital_lamda = self.compute_capital_lamda(probability_utility_derivatives)
-        capital_gamma = self.compute_capital_gamma(probability_utility_derivatives, probabilities, conditionals)
-        capital_delta = -ownership * (capital_lamda - capital_gamma)
+        capital_lamda_diagonal, capital_gamma = self.compute_capital_lamda_gamma(
+            probability_utility_derivatives, probabilities, conditionals
+        )
+        capital_delta = -ownership * (np.diag(capital_lamda_diagonal) - capital_gamma)
 
         # compute the inverse of capital delta and use it to compute eta
         capital_delta_inverse, replacement = approximately_invert(capital_delta)
@@ -1065,11 +1074,12 @@ class Market(Container):
 
         # compute the tensor derivatives (holding beta fixed) of capital delta with respect to xi (equivalently, to
         #   delta)
-        capital_lamda_tensor = self.compute_capital_lamda_by_xi_tensor(probability_utility_derivatives_tensor)
-        capital_gamma_tensor = self.compute_capital_gamma_by_xi_tensor(
+        capital_lamda_diagonal_tensor, capital_gamma_tensor = self.compute_capital_lamda_gamma_by_xi_tensor(
             probability_utility_derivatives, probability_utility_derivatives_tensor, probabilities,
             probabilities_tensor, conditionals, conditionals_tensor
         )
+        capital_lamda_tensor = np.zeros((self.J, self.J, self.J), options.dtype)
+        capital_lamda_tensor[:, np.arange(self.J), np.arange(self.J)] = np.c_[np.squeeze(capital_lamda_diagonal_tensor)]
         capital_delta_tensor = -ownership[None] * (capital_lamda_tensor - capital_gamma_tensor)
 
         # compute the product of the tensor and eta
@@ -1095,14 +1105,13 @@ class Market(Container):
             )
 
             # compute the tangent of capital delta with respect to the parameter
-            capital_lamda_tangent = self.compute_capital_lamda_by_parameter_tangent(
-                parameter, probability_utility_derivatives, probability_utility_derivatives_tangent
+            capital_lamda_diagonal_tangent, capital_gamma_tangent = (
+                self.compute_capital_lamda_gamma_by_parameter_tangent(
+                    parameter, probability_utility_derivatives, probability_utility_derivatives_tangent, probabilities,
+                    probabilities_tangent, conditionals, conditionals_tangent
+                )
             )
-            capital_gamma_tangent = self.compute_capital_gamma_by_parameter_tangent(
-                parameter, probability_utility_derivatives, probability_utility_derivatives_tangent, probabilities,
-                probabilities_tangent, conditionals, conditionals_tangent
-            )
-            capital_delta_tangent = -ownership * (capital_lamda_tangent - capital_gamma_tangent)
+            capital_delta_tangent = -ownership * (np.diag(capital_lamda_diagonal_tangent) - capital_gamma_tangent)
 
             # extract the tangent of xi with respect to the parameter and compute the associated tangent of eta
             eta_jacobian[:, [p]] = -capital_delta_inverse @ (
