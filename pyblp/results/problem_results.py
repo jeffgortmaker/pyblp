@@ -181,6 +181,8 @@ class ProblemResults(Results):
         markets, the associated values will be ``numpy.nan``.
     moments : `ndarray`
         Moments, :math:`\bar{g}`, in :eq:`averaged_moments`.
+    moments_jacobian : `ndarray`
+        Jacobian :math:`\bar{G}` of moments with respect to :math:`\theta`, in :eq:`averaged_moments_jacobian`.
     objective : `float`
         GMM objective value, :math:`q(\hat{\theta})`, defined in :eq:`objective`. If ``scale_objective`` was ``True`` in
         :meth:`Problem.solve` (which is the default), this value was scaled by :math:`N` so that objective values are
@@ -276,6 +278,7 @@ class ProblemResults(Results):
     micro: Array
     micro_values: Array
     moments: Array
+    moments_jacobian: Array
     objective: Array
     xi_by_theta_jacobian: Array
     omega_by_theta_jacobian: Array
@@ -410,6 +413,7 @@ class ProblemResults(Results):
             self._errors.extend(W_errors)
 
             # only compute parameter covariances and standard errors if this is the last step
+            self.moments_jacobian = np.full((self.moments.size, self.parameters.size), np.nan, options.dtype)
             self.parameter_covariances = np.full((self.parameters.size, self.parameters.size), np.nan, options.dtype)
             se = np.full((self.parameters.size, 1), np.nan, options.dtype)
             sigma_squared_vector_se = np.full((self.problem.K2 * (self.problem.K2 + 1) // 2, 1), np.nan, options.dtype)
@@ -426,9 +430,9 @@ class ProblemResults(Results):
                     self._errors.extend(W_for_covariances_errors)
 
                 # compute parameter covariances
-                mean_G = self._compute_mean_G()
+                self.moments_jacobian = self._compute_mean_G()
                 self.parameter_covariances, se_errors = compute_gmm_parameter_covariances(
-                    W_for_covariances, S_for_covariances, mean_G, se_type
+                    W_for_covariances, S_for_covariances, self.moments_jacobian, se_type
                 )
                 self._errors.extend(se_errors)
 
@@ -851,9 +855,7 @@ class ProblemResults(Results):
             - :doc:`Tutorial </tutorial>`
 
         """
-        mean_g = self._compute_mean_g()
-        mean_G = self._compute_mean_G()
-        gradient = mean_G.T @ self.W @ mean_g
+        gradient = self.moments_jacobian.T @ self.W @ self.moments
         return self.problem.N * float(gradient.T @ self.parameter_covariances @ gradient)
 
     def run_wald_test(self, restrictions: Any, restrictions_jacobian: Any) -> float:
