@@ -317,7 +317,7 @@ class SimulationResults(Results):
             self, product_formulations: Optional[Union[Formulation, Sequence[Optional[Formulation]]]] = None,
             product_data: Optional[Mapping] = None, agent_formulation: Optional[Formulation] = None,
             agent_data: Optional[Mapping] = None, integration: Optional[Integration] = None,
-            distributions: Optional[Sequence[str]] = None, epsilon_scale: Optional[float] = None,
+            rc_types: Optional[Sequence[str]] = None, epsilon_scale: Optional[float] = None,
             costs_type: Optional[str] = None, add_exogenous: bool = True) -> 'Problem':
         """Convert the solved simulation into a problem.
 
@@ -350,8 +350,8 @@ class SimulationResults(Results):
             By default, :attr:`Simulation.agent_data`.
         integration : `Integration, optional`
             By default, this is unspecified.
-        distributions : `sequence of str, optional`
-            By default, :attr:`Simulation.distributions`.
+        rc_types : `sequence of str, optional`
+            By default, :attr:`Simulation.rc_types`.
         epsilon_scale : `float, optional`
             By default, :attr:`Simulation.epsilon_scale`.
         costs_type : `str, optional`
@@ -382,16 +382,16 @@ class SimulationResults(Results):
             agent_formulation = self.simulation.agent_formulation
         if agent_data is None:
             agent_data = self.simulation.agent_data
-        if distributions is None:
-            distributions = self.simulation.distributions
+        if rc_types is None:
+            rc_types = self.simulation.rc_types
         if epsilon_scale is None:
             epsilon_scale = self.simulation.epsilon_scale
         if costs_type is None:
             costs_type = self.simulation.costs_type
         from ..economies.problem import Problem  # noqa
         return Problem(
-            product_formulations, product_data, agent_formulation, agent_data, integration, distributions,
-            epsilon_scale, costs_type, add_exogenous
+            product_formulations, product_data, agent_formulation, agent_data, integration, rc_types, epsilon_scale,
+            costs_type, add_exogenous
         )
 
     def _compute_default_instruments(self) -> Tuple[Array, Array]:

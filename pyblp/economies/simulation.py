@@ -214,22 +214,22 @@ class Simulation(Economy):
     correlation : `float, optional`
         Correlation between :math:`\xi` and :math:`\omega`. The default value is ``0.9``. This is ignored if ``xi`` or
         ``omega`` is specified.
-    distributions : `sequence of str, optional`
-        Random coefficient distributions. By default, random coefficients in :eq:`mu` are assumed to be normally
-        distributed. Non-default distributions can be specified with a list of the following supported strings:
+    rc_types : `sequence of str, optional`
+        Random coefficient types:
 
-            - ``'normal'`` (default) - The random coefficient is assumed to be normal.
+            - ``'linear'`` (default) - The random coefficient is as defined in :eq:`mu`.
 
-            - ``'lognormal'`` - The random coefficient is assumed to be lognormal. The coefficient's column in :eq:`mu`
-              is exponentiated before being pre-multiplied by :math:`X_2`.
+            - ``'log'`` - The random coefficient's column in :eq:`mu` is exponentiated before being pre-multiplied by
+              :math:`X_2`.
 
-        The list should have as many strings as there are columns in :math:`X_2`. Each string determines the
-        distribution of the random coefficient on the corresponding product characteristic in :math:`X_2`.
+        The list should have as many strings as there are columns in :math:`X_2`. Each string determines the type of the
+        random coefficient on the corresponding product characteristic in :math:`X_2`.
 
-        A typical example of a lognormal coefficient is one on prices. Implementing this typically involves having a
-        ``I(-prices)`` in the formulation for :math:`X_2`, and instead of including ``prices`` in :math:`X_1`,
-        including a ``1`` in the ``agent_formulation``. Then the corresponding coefficient in :math:`\Pi` will serve as
-        the mean parameter for the lognormal random coefficient on negative prices, :math:`-p_{jt}`.
+        A typical example of when to use ``'log'`` is to have a lognormal coefficient on prices. Implementing this
+        typically involves having an ``I(-prices)`` in the formulation for :math:`X_2`, and instead of including
+        ``prices`` in :math:`X_1`, including a ``1`` in the ``agent_formulation``. Then the corresponding coefficient in
+        :math:`\Pi` will serve as the mean parameter for the lognormal random coefficient on negative
+        prices, :math:`-p_{jt}`.
 
     epsilon_scale : `float, optional`
         Factor by which the Type I Extreme Value idiosyncratic preference term, :math:`\epsilon_{ijt}`, is scaled. By
@@ -304,8 +304,8 @@ class Simulation(Economy):
         Unobserved demand-side product characteristics, :math:`\xi`.
     omega : `ndarray`
         Unobserved supply-side product characteristics, :math:`\omega`.
-    distributions : `list of str`
-        Random coefficient distributions.
+    rc_types : `list of str`
+        Random coefficient types.
     epsilon_scale : `float`
         Factor by which the Type I Extreme Value idiosyncratic preference term, :math:`\epsilon_{ijt}`, is scaled.
     costs_type : `str`
@@ -365,7 +365,7 @@ class Simulation(Economy):
             rho: Optional[Any] = None, agent_formulation: Optional[Formulation] = None,
             agent_data: Optional[Mapping] = None, integration: Optional[Integration] = None, xi: Optional[Any] = None,
             omega: Optional[Any] = None, xi_variance: float = 1, omega_variance: float = 1, correlation: float = 0.9,
-            distributions: Optional[Sequence[str]] = None, epsilon_scale: float = 1.0, costs_type: str = 'linear',
+            rc_types: Optional[Sequence[str]] = None, epsilon_scale: float = 1.0, costs_type: str = 'linear',
             seed: Optional[int] = None) -> None:
         """Load or simulate all data except for synthetic prices and shares."""
 
@@ -489,9 +489,7 @@ class Simulation(Economy):
         agents = Agents(products, agent_formulation, self.agent_data)
 
         # initialize the underlying economy
-        super().__init__(
-            product_formulations, agent_formulation, products, agents, distributions, epsilon_scale, costs_type
-        )
+        super().__init__(product_formulations, agent_formulation, products, agents, rc_types, epsilon_scale, costs_type)
 
         # load or simulate the structural errors
         self.xi = xi

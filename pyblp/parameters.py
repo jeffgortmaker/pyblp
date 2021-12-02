@@ -53,9 +53,9 @@ class NonlinearCoefficient(Coefficient):
         """Get the product characteristic associated with the parameter."""
         return market.products.X2[:, [self.location[0]]]
 
-    def get_distribution(self, market: 'Market') -> str:
-        """Get the random coefficient distribution associated with the parameter."""
-        return market.parameters.distributions[self.location[0]]
+    def get_rc_type(self, market: 'Market') -> str:
+        """Get the random coefficient type associated with the parameter."""
+        return market.parameters.rc_types[self.location[0]]
 
     @abc.abstractmethod
     def get_agent_characteristic(self, market: 'Market') -> Array:
@@ -139,7 +139,7 @@ class Parameters(object):
     rho_labels: List[str]
     beta_labels: List[str]
     gamma_labels: List[str]
-    distributions: List[str]
+    rc_types: List[str]
     sigma: Array
     sigma_squared: Array
     pi: Array
@@ -184,8 +184,8 @@ class Parameters(object):
         self.beta_labels = [str(f) for f in economy._X1_formulations]
         self.gamma_labels = [str(f) for f in economy._X3_formulations]
 
-        # store distributions
-        self.distributions = economy.distributions
+        # store types
+        self.rc_types = economy.rc_types
 
         # validate and store parameters
         self.sigma = self.initialize_matrix("sigma", "X2 was formulated", sigma, [(economy.K2, economy.K2)])
@@ -427,16 +427,16 @@ class Parameters(object):
             sigma_squared_se: Optional[Array] = None) -> str:
         """Format matrices (and optional standard errors) of the same size as sigma and pi as a string."""
 
-        # determine whether a distributions column is necessary
-        distributions_column = any(d != 'normal' for d in self.distributions)
+        # determine whether a types column is necessary
+        rc_types_column = any(d != 'linear' for d in self.rc_types)
 
         # only add sigma squared columns if the covariance matrix has off-diagonal terms
         if self.diagonal_sigma:
             sigma_squared_like = sigma_squared_se = None
 
         # construct the header
-        line_indices: Set[int] = {0} if distributions_column else set()
-        header = (["Distributions:"] if distributions_column else []) + ["Sigma:"] + self.sigma_labels
+        line_indices: Set[int] = {0} if rc_types_column else set()
+        header = (["Types:"] if rc_types_column else []) + ["Sigma:"] + self.sigma_labels
         if sigma_squared_like is not None:
             line_indices.add(len(header) - 1)
             header.extend(["Sigma Squared:"] + self.sigma_labels)
@@ -446,9 +446,9 @@ class Parameters(object):
 
         # construct the data
         data: List[List[str]] = []
-        for row_index, (row_distribution, row_label) in enumerate(zip(self.distributions, self.sigma_labels)):
+        for row_index, (row_rc_type, row_label) in enumerate(zip(self.rc_types, self.sigma_labels)):
             # add a row of values
-            values_row = ([row_distribution.title()] if distributions_column else []) + [row_label]
+            values_row = ([row_rc_type.title()] if rc_types_column else []) + [row_label]
             for column_index in range(row_index + 1):
                 values_row.append(format_number(sigma_like[row_index, column_index]))
             values_row.extend([""] * (sigma_like.shape[1] - row_index - 1))
@@ -472,7 +472,7 @@ class Parameters(object):
             unfixed_pi_indices = {p.location[1] for p in relevant_unfixed if isinstance(p, PiParameter)}
 
             # add a row of standard errors
-            se_row = (2 if distributions_column else 1) * [""]
+            se_row = (2 if rc_types_column else 1) * [""]
             for column_index in range(row_index + 1):
                 se = sigma_se[row_index, column_index]
                 se_row.append(format_se(se) if column_index in unfixed_sigma_indices else "")

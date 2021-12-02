@@ -355,8 +355,7 @@ def test_fixed_effects(
         )
     problem1 = Problem(
         product_formulations1, product_data, problem.agent_formulation, simulation.agent_data,
-        distributions=simulation.distributions, epsilon_scale=simulation.epsilon_scale,
-        costs_type=simulation.costs_type
+        rc_types=simulation.rc_types, epsilon_scale=simulation.epsilon_scale, costs_type=simulation.costs_type
     )
     if solve_options1['micro_moments']:
         solve_options1['W'] = scipy.linalg.pinv(scipy.linalg.block_diag(
@@ -377,8 +376,7 @@ def test_fixed_effects(
         product_formulations2[2] = Formulation(f'{product_formulations[2]._formula} + {supply_id_formula}')
     problem2 = Problem(
         product_formulations2, product_data, problem.agent_formulation, simulation.agent_data,
-        distributions=simulation.distributions, epsilon_scale=simulation.epsilon_scale,
-        costs_type=simulation.costs_type
+        rc_types=simulation.rc_types, epsilon_scale=simulation.epsilon_scale, costs_type=simulation.costs_type
     )
     solve_options2['beta'] = np.r_[
         solve_options2['beta'],
@@ -410,8 +408,7 @@ def test_fixed_effects(
             )
         problem3 = Problem(
             product_formulations3, product_data, problem.agent_formulation, simulation.agent_data,
-            distributions=simulation.distributions, epsilon_scale=simulation.epsilon_scale,
-            costs_type=simulation.costs_type
+            rc_types=simulation.rc_types, epsilon_scale=simulation.epsilon_scale, costs_type=simulation.costs_type
         )
         solve_options3['beta'] = np.r_[
             solve_options3['beta'],
@@ -581,7 +578,7 @@ def test_merger(simulated_problem: SimulatedProblemFixture, ownership: bool, sol
     merger_simulation = Simulation(
         simulation.product_formulations, merger_product_data, simulation.beta, simulation.sigma, simulation.pi,
         simulation.gamma, simulation.rho, simulation.agent_formulation,
-        simulation.agent_data, xi=simulation.xi, omega=simulation.omega, distributions=simulation.distributions,
+        simulation.agent_data, xi=simulation.xi, omega=simulation.omega, rc_types=simulation.rc_types,
         epsilon_scale=simulation.epsilon_scale, costs_type=simulation.costs_type
     )
     actual = merger_simulation.replace_endogenous(**solve_options)
@@ -591,7 +588,7 @@ def test_merger(simulated_problem: SimulatedProblemFixture, ownership: bool, sol
     results_simulation = Simulation(
         simulation.product_formulations[:2], merger_product_data, results.beta, results.sigma, results.pi,
         rho=results.rho, agent_formulation=simulation.agent_formulation, agent_data=simulation.agent_data,
-        xi=results.xi, distributions=simulation.distributions, epsilon_scale=simulation.epsilon_scale
+        xi=results.xi, rc_types=simulation.rc_types, epsilon_scale=simulation.epsilon_scale
     )
     estimated = results_simulation.replace_endogenous(costs, problem.products.prices, **solve_options)
     estimated_prices = results.compute_prices(merger_ids, merger_ownership, costs, **solve_options)
@@ -705,8 +702,7 @@ def test_demand_hessian(simulated_problem: SimulatedProblemFixture) -> None:
         perturbed_simulation = Simulation(
             problem.product_formulations[:2], perturbed_product_data, results.beta, results.sigma, results.pi,
             rho=results.rho, agent_formulation=simulation.agent_formulation, agent_data=agent_data,
-            xi=xi, distributions=problem.distributions, epsilon_scale=problem.epsilon_scale,
-            costs_type=problem.costs_type,
+            xi=xi, rc_types=problem.rc_types, epsilon_scale=problem.epsilon_scale, costs_type=problem.costs_type
         )
         perturbed_simulation_results = perturbed_simulation.replace_endogenous(
             costs=perturbed_prices, prices=perturbed_prices, iteration=Iteration('return')

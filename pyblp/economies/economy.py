@@ -21,7 +21,7 @@ class Economy(Container, StringRepresentation):
 
     product_formulations: Sequence[Optional[Formulation]]
     agent_formulation: Optional[Formulation]
-    distributions: List[str]
+    rc_types: List[str]
     epsilon_scale: float
     costs_type: str
     unique_market_ids: Array
@@ -53,7 +53,7 @@ class Economy(Container, StringRepresentation):
     @abc.abstractmethod
     def __init__(
             self, product_formulations: Sequence[Optional[Formulation]], agent_formulation: Optional[Formulation],
-            products: RecArray, agents: RecArray, distributions: Optional[Sequence[str]], epsilon_scale: float,
+            products: RecArray, agents: RecArray, rc_types: Optional[Sequence[str]], epsilon_scale: float,
             costs_type: str) -> None:
         """Store information about formulations and data. Any fixed effects should be absorbed after initialization."""
 
@@ -102,17 +102,17 @@ class Economy(Container, StringRepresentation):
             assert product_formulations[2] is not None
             self._absorb_supply_ids = product_formulations[2]._build_absorb(self.products.supply_ids)
 
-        # validate random coefficient distributions
-        if distributions is None:
-            self.distributions = ['normal'] * self.K2
+        # validate random coefficient types
+        if rc_types is None:
+            self.rc_types = ['linear'] * self.K2
         else:
-            if not isinstance(distributions, collections.abc.Sequence):
-                raise TypeError("distributions must be None or a sequence.")
-            if len(distributions) != self.K2:
-                raise ValueError(f"distributions must be None or a sequence of length {self.K2}.")
-            if any(d not in {'normal', 'lognormal'} for d in distributions):
-                raise TypeError("distributions must be None or a sequence of 'normal' or 'lognormal' strings.")
-            self.distributions = list(distributions)
+            if not isinstance(rc_types, collections.abc.Sequence):
+                raise TypeError("rc_types must be None or a sequence.")
+            if len(rc_types) != self.K2:
+                raise ValueError(f"rc_types must be None or a sequence of length {self.K2}.")
+            if any(d not in {'linear', 'log'} for d in rc_types):
+                raise TypeError("rc_types must be None or a sequence of 'linear' or 'log' strings.")
+            self.rc_types = list(rc_types)
 
         # validate the scale of epsilon
         if not isinstance(epsilon_scale, (int, float)) or epsilon_scale <= 0:

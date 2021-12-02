@@ -310,7 +310,7 @@ def large_blp_simulation() -> SimulationFixture:
         xi_variance=0.00001,
         omega_variance=0.00001,
         correlation=0.9,
-        distributions=['normal', 'lognormal', 'normal'],
+        rc_types=['linear', 'log', 'linear'],
         costs_type='log',
         seed=2
     )
@@ -441,7 +441,7 @@ def large_nested_blp_simulation() -> SimulationFixture:
         xi_variance=0.00001,
         omega_variance=0.00001,
         correlation=0.9,
-        distributions=['lognormal', 'normal'],
+        rc_types=['log', 'linear'],
         costs_type='log',
         seed=0,
     )

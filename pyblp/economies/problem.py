@@ -34,12 +34,10 @@ class ProblemEconomy(Economy):
     @abc.abstractmethod
     def __init__(
             self, product_formulations: Sequence[Optional[Formulation]], agent_formulation: Optional[Formulation],
-            products: RecArray, agents: RecArray, distributions: Optional[Sequence[str]], epsilon_scale: float,
+            products: RecArray, agents: RecArray, rc_types: Optional[Sequence[str]], epsilon_scale: float,
             costs_type: str) -> None:
         """Initialize the underlying economy with product and agent data."""
-        super().__init__(
-            product_formulations, agent_formulation, products, agents, distributions, epsilon_scale, costs_type
-        )
+        super().__init__(product_formulations, agent_formulation, products, agents, rc_types, epsilon_scale, costs_type)
 
     def solve(
             self, sigma: Optional[Any] = None, pi: Optional[Any] = None, rho: Optional[Any] = None,
@@ -1189,22 +1187,22 @@ class Problem(ProblemEconomy):
         characteristics) will be built. However, if ``sigma`` in :meth:`Problem.solve` is left unspecified or
         specified with columns fixed at zero, fewer columns will be used.
 
-    distributions : `sequence of str, optional`
-        Random coefficient distributions. By default, random coefficients in :eq:`mu` are assumed to be normally
-        distributed. Non-default distributions can be specified with a list of the following supported strings:
+    rc_types : `sequence of str, optional`
+        Random coefficient types:
 
-            - ``'normal'`` (default) - The random coefficient is assumed to be normal.
+            - ``'linear'`` (default) - The random coefficient is as defined in :eq:`mu`.
 
-            - ``'lognormal'`` - The random coefficient is assumed to be lognormal. The coefficient's column in :eq:`mu`
-              is exponentiated before being pre-multiplied by :math:`X_2`.
+            - ``'log'`` - The random coefficient's column in :eq:`mu` is exponentiated before being pre-multiplied by
+              :math:`X_2`.
 
-        The list should have as many strings as there are columns in :math:`X_2`. Each string determines the
-        distribution of the random coefficient on the corresponding product characteristic in :math:`X_2`.
+        The list should have as many strings as there are columns in :math:`X_2`. Each string determines the type of the
+        random coefficient on the corresponding product characteristic in :math:`X_2`.
 
-        A typical example of a lognormal coefficient is one on prices. Implementing this typically involves having a
-        ``I(-prices)`` in the formulation for :math:`X_2`, and instead of including ``prices`` in :math:`X_1`,
-        including a ``1`` in the ``agent_formulation``. Then the corresponding coefficient in :math:`\Pi` will serve as
-        the mean parameter for the lognormal random coefficient on negative prices, :math:`-p_{jt}`.
+        A typical example of when to use ``'log'`` is to have a lognormal coefficient on prices. Implementing this
+        typically involves having an ``I(-prices)`` in the formulation for :math:`X_2`, and instead of including
+        ``prices`` in :math:`X_1`, including a ``1`` in the ``agent_formulation``. Then the corresponding coefficient in
+        :math:`\Pi` will serve as the mean parameter for the lognormal random coefficient on negative
+        prices, :math:`-p_{jt}`.
 
     epsilon_scale : `float, optional`
         Factor by which the Type I Extreme Value idiosyncratic preference term, :math:`\epsilon_{ijt}`, is scaled. By
@@ -1289,8 +1287,8 @@ class Problem(ProblemEconomy):
         Unique product IDs in product data.
     unique_agent_ids : `ndarray`
         Unique agent IDs in agent data.
-    distributions : `list of str`
-        Random coefficient distributions.
+    rc_types : `list of str`
+        Random coefficient types.
     epsilon_scale : `float`
         Factor by which the Type I Extreme Value idiosyncratic preference term, :math:`\epsilon_{ijt}`, is scaled.
     costs_type : `str`
@@ -1333,7 +1331,7 @@ class Problem(ProblemEconomy):
     def __init__(
             self, product_formulations: Union[Formulation, Sequence[Optional[Formulation]]], product_data: Mapping,
             agent_formulation: Optional[Formulation] = None, agent_data: Optional[Mapping] = None,
-            integration: Optional[Integration] = None, distributions: Optional[Sequence[str]] = None,
+            integration: Optional[Integration] = None, rc_types: Optional[Sequence[str]] = None,
             epsilon_scale: float = 1.0, costs_type: str = 'linear', add_exogenous: bool = True) -> None:
         """Initialize the underlying economy with product and agent data before absorbing fixed effects."""
 
@@ -1353,9 +1351,7 @@ class Problem(ProblemEconomy):
         # initialize the underlying economy with structured product and agent data
         products = Products(product_formulations, product_data, add_exogenous=add_exogenous)
         agents = Agents(products, agent_formulation, agent_data, integration)
-        super().__init__(
-            product_formulations, agent_formulation, products, agents, distributions, epsilon_scale, costs_type
-        )
+        super().__init__(product_formulations, agent_formulation, products, agents, rc_types, epsilon_scale, costs_type)
 
         # absorb any demand-side fixed effects
         if self._absorb_demand_ids is not None:
@@ -1418,7 +1414,7 @@ class OptimalInstrumentProblem(ProblemEconomy):
         # initialize the underlying economy with structured product and agent data
         super().__init__(
             problem.product_formulations, problem.agent_formulation, updated_products, problem.agents,
-            distributions=problem.distributions, epsilon_scale=problem.epsilon_scale, costs_type=problem.costs_type
+            rc_types=problem.rc_types, epsilon_scale=problem.epsilon_scale, costs_type=problem.costs_type
         )
 
         # absorb any demand-side fixed effects, which have already been absorbed into X1
@@ -1461,7 +1457,7 @@ class ImportanceSamplingProblem(ProblemEconomy):
         # initialize the underlying economy with structured product and agent data
         super().__init__(
             problem.product_formulations, problem.agent_formulation, problem.products, sampled_agents,
-            distributions=problem.distributions, epsilon_scale=problem.epsilon_scale, costs_type=problem.costs_type
+            rc_types=problem.rc_types, epsilon_scale=problem.epsilon_scale, costs_type=problem.costs_type
         )
 
         # output information about the re-created problem

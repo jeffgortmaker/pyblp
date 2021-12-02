@@ -163,8 +163,8 @@ class Market(Container):
         if self.D > 0:
             coefficients = coefficients + pi @ self.agents.demographics.T
 
-        for k, distribution in enumerate(self.parameters.distributions):
-            if distribution == 'lognormal':
+        for k, rc_type in enumerate(self.parameters.rc_types):
+            if rc_type == 'log':
                 if len(coefficients.shape) == 2:
                     coefficients[k] = np.exp(coefficients[k])
                 else:
@@ -181,7 +181,7 @@ class Market(Container):
             if len(coefficient.shape) == 3:
                 coefficient = coefficient.squeeze(axis=1)
 
-        if self.parameters.distributions[k] == 'lognormal':
+        if self.parameters.rc_types[k] == 'log':
             coefficient = np.exp(coefficient)
 
         return coefficient
@@ -674,7 +674,7 @@ class Market(Container):
             tangent += X1_derivatives[:, [parameter.location[0]]]
         elif isinstance(parameter, NonlinearCoefficient):
             v = parameter.get_agent_characteristic(self)
-            if parameter.get_distribution(self) == 'lognormal':
+            if parameter.get_rc_type(self) == 'log':
                 v = v * self.compute_single_random_coefficient(parameter.location[0]).T
             tangent += X2_derivatives[:, [parameter.location[0]]] * v.T
         else:
@@ -703,7 +703,7 @@ class Market(Container):
             elif isinstance(parameter, NonlinearCoefficient):
                 x = parameter.get_product_characteristic(self)
                 v = parameter.get_agent_characteristic(self)
-                if parameter.get_distribution(self) == 'lognormal':
+                if parameter.get_rc_type(self) == 'log':
                     v = v * self.compute_single_random_coefficient(parameter.location[0]).T
                 probabilities_tangent = probabilities * v.T * (x - x.T @ probabilities)
             else:
@@ -734,7 +734,7 @@ class Market(Container):
         elif isinstance(parameter, NonlinearCoefficient):
             x = parameter.get_product_characteristic(self)
             v = parameter.get_agent_characteristic(self)
-            if parameter.get_distribution(self) == 'lognormal':
+            if parameter.get_rc_type(self) == 'log':
                 v = v * self.compute_single_random_coefficient(parameter.location[0]).T
 
             # compute the tangent of conditional probabilities with respect to the parameter
