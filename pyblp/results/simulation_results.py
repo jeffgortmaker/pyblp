@@ -64,6 +64,27 @@ class SimulationResults(Results):
     contraction_evaluations : `ndarray`
         Number of times the contraction used to compute prices or :math:`\delta` was evaluated in each market. Counts
         are in the same order as :attr:`Simulation.unique_market_ids`.
+    profit_gradients : `dict`
+        Mapping from market IDs :math:`t` to mappings from firm IDs :math:`f` to profit gradients. This is only computed
+        if these results were created by :meth:`Simulation.replace_endogenous`. The profit gradient for firm :math:`f`
+        in market :math:`t` is a :math:`J_{ft}` vector with element :math:`k \in J_{ft}`
+
+        .. math::
+
+           \frac{\partial \pi_{ft}}{\partial p_{kt}}
+           = \sum_{j \in J_{ft}} \frac{\partial \pi_{jt}}{\partial p_{kt}}
+
+        where population-normalized profits are
+
+        .. math:: \pi_{jt} = (p_{jt} - c_{jt}) s_{jt}.
+
+        When there is a nontrivial ownership structure, the sum is over all products :math:`j \in J_t` and the terms are
+        weighted by the firm's (possibly partial) ownership of product :math:`j`, given by :math:`\mathcal{H}_{jk}`.
+
+    profit_gradient_norms : `dict`
+        Mapping from market IDs :math:`t` to mappings from firm IDs :math:`f` to the infinity norm of profit gradients.
+        This is only computed if these results were created by :meth:`Simulation.replace_endogenous`. If a norm is near
+        to zero, the firm's choice of profits is near to a local optimum.
     profit_hessians : `dict`
         Mapping from market IDs :math:`t` to mappings from firm IDs :math:`f` to profit Hessians. This is only computed
         if these results were created by :meth:`Simulation.replace_endogenous`. The profit Hessian for firm :math:`f` in
@@ -101,6 +122,8 @@ class SimulationResults(Results):
     fp_converged: Array
     fp_iterations: Array
     contraction_evaluations: Array
+    profit_gradients: Optional[Dict[Hashable, Dict[Hashable, Array]]]
+    profit_gradient_norms: Optional[Dict[Hashable, Dict[Hashable, Array]]]
     profit_hessians: Optional[Dict[Hashable, Dict[Hashable, Array]]]
     profit_hessian_eigenvalues: Optional[Dict[Hashable, Dict[Hashable, Array]]]
     _data_override: Dict[str, Array]
@@ -108,6 +131,8 @@ class SimulationResults(Results):
     def __init__(
             self, simulation: 'Simulation', data_override: Dict[str, Array], delta: Array, costs: Array,
             start_time: float, end_time: float, iteration_stats: Dict[Hashable, SolverStats],
+            profit_gradients: Optional[Dict[Hashable, Dict[Hashable, Array]]] = None,
+            profit_gradient_norms: Optional[Dict[Hashable, Dict[Hashable, Array]]] = None,
             profit_hessians: Optional[Dict[Hashable, Dict[Hashable, Array]]] = None,
             profit_hessian_eigenvalues: Optional[Dict[Hashable, Dict[Hashable, Array]]] = None) -> None:
         """Structure simulation results."""
@@ -129,6 +154,8 @@ class SimulationResults(Results):
         self.contraction_evaluations = np.array(
             [iteration_stats[t].evaluations for t in simulation.unique_market_ids], dtype=np.int64
         )
+        self.profit_gradients = profit_gradients
+        self.profit_gradient_norms = profit_gradient_norms
         self.profit_hessians = profit_hessians
         self.profit_hessian_eigenvalues = profit_hessian_eigenvalues
         self._data_override = data_override
@@ -147,6 +174,16 @@ class SimulationResults(Results):
             self.fp_iterations.sum(),
             self.contraction_evaluations.sum(),
         ]
+
+        if self.profit_gradient_norms is not None:
+            max_norm = -np.inf
+            for profit_gradient_norms_t in self.profit_gradient_norms.values():
+                for profit_gradient_norm_ft in profit_gradient_norms_t.values():
+                    if np.isfinite(profit_gradient_norm_ft):
+                        max_norm = max(max_norm, profit_gradient_norm_ft)
+
+            header.append(("Profit Gradients", "Max Norm"))
+            values.append(format_number(max_norm))
 
         if self.profit_hessian_eigenvalues is not None:
             min_eigenvalue = +np.inf

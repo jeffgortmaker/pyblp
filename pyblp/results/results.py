@@ -660,7 +660,7 @@ class Results(abc.ABC, StringRepresentation):
            :class:`Simulation` for the counterfactual can be initialized with the estimated parameters, structural
            errors, and marginal costs from these results, and then solved with :meth:`Simulation.replace_endogenous`.
            The returned :class:`SimulationResults` gives more information about the contraction than this method, such
-           as the number of contraction evaluations. It also automatically checks second order conditions.
+           as the number of contraction evaluations. It also automatically reports first and second order conditions.
 
         Prices are computed in each market by iterating over the :math:`\zeta`-markup contraction in
         :eq:`zeta_contraction`:

@@ -887,6 +887,26 @@ class Market(Container):
 
         return hessian
 
+    def compute_profit_jacobian(self, costs: Array, prices: Optional[Array] = None) -> Array:
+        """Compute the Jacobian of profits with respect to prices. By default, use unchanged prices."""
+        if prices is None:
+            prices = self.products.prices
+            probabilities, conditionals = self.compute_probabilities()
+            shares = self.products.shares
+            utility_derivatives = self.compute_utility_derivatives('prices')
+        else:
+            delta = self.update_delta_with_variable('prices', prices)
+            mu = self.update_mu_with_variable('prices', prices)
+            probabilities, conditionals = self.compute_probabilities(delta, mu)
+            shares = probabilities @ self.agents.weights
+            utility_derivatives = self.compute_utility_derivatives('prices', prices)
+
+        # compute derivatives of shares with respect to prices
+        shares_jacobian = self.compute_shares_by_variable_jacobian(utility_derivatives, probabilities, conditionals)
+
+        # compute derivatives of profits with respect to prices
+        return np.diagflat(shares) + (prices - costs) * shares_jacobian
+
     def compute_profit_hessian(self, costs: Array, prices: Optional[Array] = None) -> Array:
         """Compute the Hessian of profits with respect to prices. By default, use unchanged prices."""
         if prices is None:
@@ -908,10 +928,10 @@ class Market(Container):
         )
 
         # compute derivatives of profits with respect to prices
-        profit = (self.products.prices - costs)[:, :, None] * shares_hessian
-        profit[np.arange(self.J), np.arange(self.J), :] += shares_jacobian
-        profit[np.arange(self.J), :, np.arange(self.J)] += shares_jacobian
-        return profit
+        profit_hessian = (prices - costs)[:, :, None] * shares_hessian
+        profit_hessian[np.arange(self.J), np.arange(self.J), :] += shares_jacobian
+        profit_hessian[np.arange(self.J), :, np.arange(self.J)] += shares_jacobian
+        return profit_hessian
 
     def compute_shares_by_xi_jacobian(self, probabilities: Array, conditionals: Optional[Array]) -> Array:
         """Compute the Jacobian (holding beta fixed) of shares with respect to xi (equivalently, to delta)."""

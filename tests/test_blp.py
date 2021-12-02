@@ -186,6 +186,19 @@ def test_bootstrap_se(simulated_problem: SimulatedProblemFixture) -> None:
 
 
 @pytest.mark.usefixtures('simulated_problem')
+def test_profit_gradients(simulated_problem: SimulatedProblemFixture) -> None:
+    """Test that if equilibrium prices were computed, profit gradients are nearly zero."""
+    _, simulation_results, _, _, _ = simulated_problem
+
+    if simulation_results.profit_gradient_norms is None:
+        return pytest.skip("Equilibrium prices were not computed.")
+
+    for t, profit_gradient_norms_t in simulation_results.profit_gradient_norms.items():
+        for f, profit_gradient_norm_ft in profit_gradient_norms_t.items():
+            assert profit_gradient_norm_ft < 1e-12, (t, f)
+
+
+@pytest.mark.usefixtures('simulated_problem')
 def test_result_serialization(simulated_problem: SimulatedProblemFixture) -> None:
     """Test that result objects can be serialized and that their string representations are the same when they are
     unpickled.
