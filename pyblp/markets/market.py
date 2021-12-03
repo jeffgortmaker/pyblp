@@ -592,40 +592,6 @@ class Market(Container):
 
         return eta, errors
 
-    def compute_zeta(
-            self, costs: Array, constant_costs: bool, ownership_matrix: Optional[Array] = None,
-            utility_derivatives: Optional[Array] = None, prices: Optional[Array] = None) -> Tuple[Array, Array, Array]:
-        """Compute the markup term in the zeta-markup equation. By default, get an unchanged ownership matrix, compute
-        derivatives of utilities with respect to prices, and use unchanged prices. Also return and updated marginal
-        costs (if they depend on shares and costs are not assumed to be constant), along with the intermediate diagonal
-        of the capital lambda matrix, which is used for weighting during fixed point iteration.
-        """
-        if ownership_matrix is None:
-            ownership_matrix = self.get_ownership_matrix()
-        if utility_derivatives is None:
-            utility_derivatives = self.compute_utility_derivatives('prices')
-        if prices is None:
-            probabilities, conditionals = self.compute_probabilities()
-            shares = self.products.shares
-        else:
-            delta = self.update_delta_with_variable('prices', prices)
-            mu = self.update_mu_with_variable('prices', prices)
-            probabilities, conditionals = self.compute_probabilities(delta, mu)
-            shares = probabilities @ self.agents.weights
-            if not constant_costs:
-                costs = self.update_costs_with_variable(costs, 'shares', shares)
-
-        probability_utility_derivatives = probabilities * utility_derivatives
-        capital_lamda_diagonal, capital_gamma = self.compute_capital_lamda_gamma(
-            probability_utility_derivatives, probabilities, conditionals
-        )
-        capital_lamda_inverse = np.diag(1 / capital_lamda_diagonal)
-        zeta = (
-            capital_lamda_inverse @ (ownership_matrix * capital_gamma).T @ (prices - costs) -
-            capital_lamda_inverse @ shares
-        )
-        return zeta, costs, capital_lamda_diagonal
-
     def compute_equilibrium_prices(
             self, costs: Array, iteration: Iteration, constant_costs: bool, prices: Optional[Array] = None,
             ownership_matrix: Optional[Array] = None) -> Tuple[Array, SolverStats]:
@@ -647,9 +613,28 @@ class Market(Container):
 
         def contraction(x: Array) -> ContractionResults:
             """Compute the next equilibrium prices."""
-            zeta, updated_costs, capital_lamda_diagonal = self.compute_zeta(
-                costs, constant_costs, ownership_matrix, get_derivatives(x), x
+
+            # update probabilities and shares
+            delta = self.update_delta_with_variable('prices', x)
+            mu = self.update_mu_with_variable('prices', x)
+            probabilities, conditionals = self.compute_probabilities(delta, mu)
+            shares = probabilities @ self.agents.weights
+
+            # optionally update costs
+            updated_costs = costs if constant_costs else self.update_costs_with_variable(costs, 'shares', shares)
+
+            # compute zeta
+            probability_utility_derivatives = probabilities * get_derivatives(x)
+            capital_lamda_diagonal, capital_gamma = self.compute_capital_lamda_gamma(
+                probability_utility_derivatives, probabilities, conditionals
             )
+            capital_lamda_inverse = np.diag(1 / capital_lamda_diagonal)
+            zeta = (
+                capital_lamda_inverse @ (ownership_matrix * capital_gamma).T @ (x - costs) -
+                capital_lamda_inverse @ shares
+            )
+
+            # update prices
             x = updated_costs + zeta
             return x, capital_lamda_diagonal, None
 
