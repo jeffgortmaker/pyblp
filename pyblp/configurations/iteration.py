@@ -114,9 +114,8 @@ class Iteration(StringRepresentation):
               value is ``4.0``.
 
     compute_jacobian : `bool, optional`
-        Whether to compute an analytic Jacobian during iteration, which must be ``False`` if ``method`` does not use
-        analytic Jacobians. By default, analytic Jacobians are not computed, and if a ``method`` is selected that
-        supports analytic Jacobians, they will by default be numerically approximated.
+        Whether to compute an analytic Jacobian during iteration. By default, analytic Jacobians are not computed, and
+        if a ``method`` is selected that supports analytic Jacobians, they will by default be numerically approximated.
 
     Examples
     --------

@@ -332,8 +332,6 @@ class Economy(Container, StringRepresentation):
             iteration = Iteration('simple', {'atol': 1e-12})
         elif not isinstance(iteration, Iteration):
             raise ValueError("iteration must be None or an Iteration.")
-        elif iteration._compute_jacobian:
-            raise ValueError("Analytic Jacobians are not supported for solving this system.")
         return iteration
 
     def _validate_fp_type(self, fp_type: str) -> None:

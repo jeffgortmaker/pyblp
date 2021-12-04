@@ -108,7 +108,7 @@ def large_logit_simulation() -> SimulationFixture:
         product_formulations=(
             Formulation('1 + prices + x + y + z'),
             None,
-            Formulation('0 + log(x) + a + b + shares')
+            Formulation('0 + log(x) + a + b + I(0.5 * shares)')
         ),
         product_data={
             'market_ids': id_data.market_ids,
@@ -116,7 +116,7 @@ def large_logit_simulation() -> SimulationFixture:
             'clustering_ids': np.random.RandomState(2).choice(range(30), id_data.size)
         },
         beta=[1, -6, 1, 2, 3],
-        gamma=[0.1, 0.2, 0.3, -0.1],
+        gamma=[0.1, 0.2, 0.3, -0.2],
         xi_variance=0.00001,
         omega_variance=0.00001,
         correlation=0.1,

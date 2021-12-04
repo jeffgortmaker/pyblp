@@ -696,8 +696,7 @@ class Results(abc.ABC, StringRepresentation):
             computed by :meth:`ProblemResults.compute_approximate_prices`.
         iteration : `Iteration, optional`
             :class:`Iteration` configuration for how to solve the fixed point problem in each market. By default,
-            ``Iteration('simple', {'atol': 1e-12})`` is used. Analytic Jacobians are not supported for solving this
-            system.
+            ``Iteration('simple', {'atol': 1e-12})`` is used.
         constant_costs : `bool, optional`
             Whether to assume that marginal costs, :math:`c`, remain constant as equilibrium prices and shares change.
             By default this is ``True``, which means that firms treat marginal costs as constant (equal to ``costs``)

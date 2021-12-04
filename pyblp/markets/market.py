@@ -277,6 +277,16 @@ class Market(Container):
 
         return derivatives
 
+    def compute_X3_derivatives(self, name: str, variable: Optional[Array] = None, order: int = 1) -> Array:
+        """Compute derivatives of X3 with respect to a variable. By default, use unchanged variable values."""
+        override = None if variable is None else {name: variable}
+        derivatives = np.zeros((self.J, self.K3), options.dtype)
+        for index, formulation in enumerate(self._X3_formulations):
+            if name in formulation.names:
+                derivatives[:, [index]] = formulation.evaluate_derivative(name, self.products, override, order)
+
+        return derivatives
+
     def compute_utility_derivatives(self, name: str, variable: Optional[Array] = None, order: int = 1) -> Array:
         """Compute derivatives of utility with respect to a variable. By default, use unchanged variable values."""
         assert self.beta is not None
@@ -293,6 +303,17 @@ class Market(Container):
 
         if self.epsilon_scale != 1:
             derivatives /= self.epsilon_scale
+
+        return derivatives
+
+    def compute_costs_derivatives(
+            self, costs: Array, name: str, variable: Optional[Array] = None, order: int = 1) -> Array:
+        """Compute derivatives of costs with respect to a variable. By default, use unchanged variable values."""
+        assert self.gamma is not None
+        derivatives = self.compute_X3_derivatives(name, variable, order) @ np.nan_to_num(self.gamma)
+
+        if self.costs_type == 'log':
+            derivatives *= costs
 
         return derivatives
 
@@ -603,13 +624,19 @@ class Market(Container):
         if prices is None:
             prices = self.products.prices
 
+        # costs are always constant if they do not depend on shares
+        constant_costs = constant_costs or not any('shares' in f.names for f in self._X3_formulations)
+
         # derivatives of utilities with respect to prices change during iteration only if they depend on prices
         formulations = self._X1_formulations + self._X2_formulations
-        if any(s.name == 'prices' for f in formulations for s in f.differentiate('prices').free_symbols):
-            get_derivatives = lambda p: self.compute_utility_derivatives('prices', p)
-        else:
+        get_derivatives = lambda p: self.compute_utility_derivatives('prices', p)
+        get_second_derivatives = lambda p: self.compute_utility_derivatives('prices', p, order=2)
+        if not any(s.name == 'prices' for f in formulations for s in f.differentiate('prices').free_symbols):
             derivatives = self.compute_utility_derivatives('prices')
             get_derivatives = lambda _: derivatives
+        if not any(s.name == 'prices' for f in formulations for s in f.differentiate('prices', order=2).free_symbols):
+            second_derivatives = self.compute_utility_derivatives('prices', order=2)
+            get_second_derivatives = lambda _: second_derivatives
 
         def contraction(x: Array) -> ContractionResults:
             """Compute the next equilibrium prices."""
@@ -621,22 +648,61 @@ class Market(Container):
             shares = probabilities @ self.agents.weights
 
             # optionally update costs
-            updated_costs = costs if constant_costs else self.update_costs_with_variable(costs, 'shares', shares)
+            updated_costs = costs
+            if not constant_costs:
+                updated_costs = self.update_costs_with_variable(costs, 'shares', shares)
 
             # compute zeta
-            probability_utility_derivatives = probabilities * get_derivatives(x)
+            utility_derivatives = get_derivatives(x)
+            probability_utility_derivatives = probabilities * utility_derivatives
             capital_lamda_diagonal, capital_gamma = self.compute_capital_lamda_gamma(
                 probability_utility_derivatives, probabilities, conditionals
             )
-            capital_lamda_inverse = np.diag(1 / capital_lamda_diagonal)
-            zeta = (
-                capital_lamda_inverse @ (ownership_matrix * capital_gamma).T @ (x - costs) -
-                capital_lamda_inverse @ shares
-            )
+            capital_lamda_inv = np.diag(1 / capital_lamda_diagonal)
+            capital_gamma_tilde = ownership_matrix * capital_gamma
+            margin = x - updated_costs
+            capital_gamma_tilde_margin = capital_gamma_tilde.T @ margin
+            zeta = capital_lamda_inv @ capital_gamma_tilde_margin - capital_lamda_inv @ shares
+
+            # weight by the diagonal of capital lambda so that termination is based on profit gradients
+            updated_x = updated_costs + zeta
+            weights = np.abs(capital_lamda_diagonal)
 
             # update prices
-            x = updated_costs + zeta
-            return x, capital_lamda_diagonal, None
+            if not iteration._compute_jacobian:
+                return updated_x, weights, None
+
+            # compute Jacobians of shares, costs, margins with respect to prices
+            shares_jacobian = np.diag(capital_lamda_diagonal) - capital_gamma
+            costs_jacobian = 0
+            margin_jacobian = np.eye(self.J)
+            if not constant_costs:
+                costs_derivatives = self.compute_costs_derivatives(updated_costs, 'shares', shares)
+                costs_jacobian = costs_derivatives * shares_jacobian
+                margin_jacobian -= costs_jacobian
+
+            # compute the Jacobian of zeta with respect to prices
+            utility_second_derivatives = get_second_derivatives(x)
+            capital_lamda_tensor, capital_gamma_tensor = self.compute_capital_lamda_gamma_by_variable_tensor(
+                utility_derivatives, utility_second_derivatives, probabilities, conditionals
+            )
+            capital_lamda_inv_tensor = -capital_lamda_inv @ np.moveaxis(capital_lamda_tensor, 2, 0) @ capital_lamda_inv
+            capital_gamma_tilde_tensor = ownership_matrix * np.moveaxis(capital_gamma_tensor, 2, 0)
+            capital_gamma_tilde_margin_tensor = (
+                capital_gamma_tilde_tensor.swapaxes(1, 2) @ margin +
+                capital_gamma_tilde.T @ margin_jacobian.T[..., None]
+            )
+            zeta_jacobian = (
+                capital_lamda_inv_tensor @ capital_gamma_tilde_margin - capital_lamda_inv_tensor @ shares +
+                capital_lamda_inv @ capital_gamma_tilde_margin_tensor - capital_lamda_inv @ shares_jacobian.T[..., None]
+            )
+
+            # compute the Jacobian of updated prices
+            updated_x_jacobian = np.squeeze(zeta_jacobian, axis=2).T
+            if not constant_costs:
+                updated_x_jacobian += costs_jacobian
+
+            return updated_x, weights, updated_x_jacobian
 
         # solve the fixed point problem
         prices, stats = iteration._iterate(prices, contraction)
@@ -813,7 +879,7 @@ class Market(Container):
             self, utility_derivatives: Array, utility_second_derivatives: Array, probabilities: Array,
             conditionals: Array) -> Tuple[Array, Array]:
         """Compute the tensor derivative of the diagonal of the capital lambda matrix and the dense capital gamma matrix
-        with respect to a variable.
+        with respect to a variable, indexed with the last axis.
         """
 
         # pre-compute components that are common for each product

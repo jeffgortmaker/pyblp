@@ -125,6 +125,7 @@ Features
 - Elasticities and diversion ratios
 - Marginal costs and markups
 - Profits and consumer surplus
+- Newton and fixed point methods for computing pricing equilibria
 - Merger simulation
 - Custom counterfactual simulation
 - Synthetic data construction
@@ -151,7 +152,6 @@ Features Slated for Future Versions
 - Mathematical Program with Equilibrium Constraints (MPEC)
 - Generalized Empirical Likelihood (GEL)
 - Discrete types
-- Newton methods for computing equilibrium prices
 
 
 Bugs and Requests

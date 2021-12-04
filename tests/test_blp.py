@@ -538,13 +538,36 @@ def test_costs(simulated_problem: SimulatedProblemFixture) -> None:
 
 
 @pytest.mark.usefixtures('simulated_problem')
+@pytest.mark.parametrize('iteration', [
+    pytest.param(Iteration('simple', {'atol': 1e-12}), id="simple"),
+    pytest.param(Iteration('lm', {'xtol': 1e-12, 'ftol': 0}, compute_jacobian=True), id="LM"),
+])
+def test_prices(simulated_problem: SimulatedProblemFixture, iteration: Iteration) -> None:
+    """Test that equilibrium prices computed with different methods are approximate the same.
+    """
+    simulation, simulation_results, _, _, _ = simulated_problem
+
+    # skip simulations that didn't compute equilibrium prices
+    if simulation_results.profit_gradient_norms is None:
+        return pytest.skip("Equilibrium prices were not computed.")
+
+    new_simulation_results = simulation.replace_endogenous(iteration=iteration, constant_costs=False)
+    np.testing.assert_allclose(
+        simulation_results.product_data.prices,
+        new_simulation_results.product_data.prices,
+        atol=1e-10,
+        rtol=0,
+    )
+
+
+@pytest.mark.usefixtures('simulated_problem')
 @pytest.mark.parametrize('ownership', [
     pytest.param(False, id="firm IDs change"),
     pytest.param(True, id="ownership change")
 ])
 @pytest.mark.parametrize('solve_options', [
     pytest.param({}, id="defaults"),
-    pytest.param({'iteration': Iteration('simple')}, id="configured iteration")
+    pytest.param({'iteration': Iteration('simple')}, id="configured iteration"),
 ])
 def test_merger(simulated_problem: SimulatedProblemFixture, ownership: bool, solve_options: Options) -> None:
     """Test that prices and shares simulated under changed firm IDs are reasonably close to prices and shares computed
