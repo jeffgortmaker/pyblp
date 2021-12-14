@@ -225,10 +225,10 @@ def medium_blp_simulation() -> SimulationFixture:
     characteristics, a demographic interacted with second-degree prices, an alternative ownership structure, and a
     scaled epsilon.
     """
-    id_data = build_id_data(T=4, J=25, F=6)
+    id_data = build_id_data(T=10, J=25, F=6)
     simulation = Simulation(
         product_formulations=(
-            Formulation('1 + x + y'),
+            Formulation('1 + x + prices'),
             Formulation('1 + I(prices**2)'),
             Formulation('1 + a + b')
         ),
@@ -238,20 +238,20 @@ def medium_blp_simulation() -> SimulationFixture:
             'clustering_ids': np.random.RandomState(1).choice(range(20), id_data.size),
             'ownership': build_ownership(id_data, lambda f, g: 1 if f == g else (0.1 if f > 3 and g > 3 else 0))
         },
-        beta=[1, 2, 1],
+        beta=[1, 2, -3],
         sigma=[
             [0.5, 0],
             [0.0, 0],
         ],
         pi=[
-            [+0],
-            [-3]
+            [+0.0],
+            [-0.1]
         ],
         gamma=[1, 1, 2],
         agent_formulation=Formulation('0 + f'),
         integration=Integration('product', 4),
-        xi_variance=0.0001,
-        omega_variance=0.0001,
+        xi_variance=0.00001,
+        omega_variance=0.00001,
         correlation=0.8,
         epsilon_scale=0.7,
         seed=1,

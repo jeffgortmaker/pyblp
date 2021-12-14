@@ -540,7 +540,7 @@ def test_costs(simulated_problem: SimulatedProblemFixture) -> None:
 @pytest.mark.usefixtures('simulated_problem')
 @pytest.mark.parametrize('iteration', [
     pytest.param(Iteration('simple', {'atol': 1e-12}), id="simple"),
-    pytest.param(Iteration('lm', {'xtol': 1e-12, 'ftol': 0}, compute_jacobian=True), id="LM"),
+    pytest.param(Iteration('hybr', {'xtol': 1e-12, 'ftol': 0}, compute_jacobian=True), id="Powell"),
 ])
 def test_prices(simulated_problem: SimulatedProblemFixture, iteration: Iteration) -> None:
     """Test that equilibrium prices computed with different methods are approximate the same.
@@ -781,13 +781,20 @@ def test_passthrough(simulated_problem: SimulatedProblemFixture) -> None:
     t = int(product_data.market_ids[0])
     costs = true_results.compute_costs(market_id=t)
 
+    # use a looser tolerance if prices enter nonlinearly into utility (this is harder to approximate)
+    atol = 1e-6
+    for key in ['X1', 'X2']:
+        for formulation in problem.products.dtype.fields[key][2]:
+            if any(s.name == 'prices' for s in formulation.differentiate('prices').free_symbols):
+                atol = 2e-3
+
     # compute the exact passthrough matrix and approximate it with finite differences
     exact = true_results.compute_passthrough(market_id=t)
     approximate = compute_finite_differences(
         lambda c: true_results.compute_prices(costs=c, market_id=t, iteration=Iteration('simple', {'atol': 1e-16})),
         costs,
     )
-    np.testing.assert_allclose(exact, approximate, atol=1e-6, rtol=0)
+    np.testing.assert_allclose(exact, approximate, atol=atol, rtol=0)
 
 
 @pytest.mark.usefixtures('simulated_problem')
