@@ -34,27 +34,27 @@ class SimulationMarket(Market):
             if not constant_costs:
                 costs = self.update_costs_with_variable(costs, 'shares', shares)
 
-        # optionally compute profit gradients
-        profit_gradients = None
-        if compute_gradients:
-            profit_gradients = {}
-            ownership = self.get_ownership_matrix()
-            jacobian = self.compute_profit_jacobian(costs, prices)
-            firm_profit_gradient = (ownership * jacobian).sum(axis=0)
-            for firm_id in np.unique(self.products.firm_ids.flatten()):
-                firm_index = self.products.firm_ids.flat == firm_id
-                profit_gradients[firm_id] = firm_profit_gradient[firm_index]
+            # optionally compute profit gradients
+            profit_gradients = None
+            if compute_gradients:
+                profit_gradients = {}
+                ownership = self.get_ownership_matrix()
+                jacobian = self.compute_profit_jacobian(costs, prices)
+                firm_profit_gradient = (ownership * jacobian).sum(axis=0)
+                for firm_id in np.unique(self.products.firm_ids.flatten()):
+                    firm_index = self.products.firm_ids.flat == firm_id
+                    profit_gradients[firm_id] = firm_profit_gradient[firm_index]
 
-        # optionally compute profit Hessians
-        profit_hessians = None
-        if compute_hessians:
-            profit_hessians = {}
-            ownership = self.get_ownership_matrix()
-            hessian = self.compute_profit_hessian(costs, prices)
-            firm_profit_hessian = (ownership[..., None] * hessian).sum(axis=0)
-            for firm_id in np.unique(self.products.firm_ids.flatten()):
-                firm_index = self.products.firm_ids.flat == firm_id
-                profit_hessians[firm_id] = firm_profit_hessian[firm_index][:, firm_index]
+            # optionally compute profit Hessians
+            profit_hessians = None
+            if compute_hessians:
+                profit_hessians = {}
+                ownership = self.get_ownership_matrix()
+                hessian = self.compute_profit_hessian(costs, prices)
+                firm_profit_hessian = (ownership[..., None] * hessian).sum(axis=0)
+                for firm_id in np.unique(self.products.firm_ids.flatten()):
+                    firm_index = self.products.firm_ids.flat == firm_id
+                    profit_hessians[firm_id] = firm_profit_hessian[firm_index][:, firm_index]
 
         return prices, shares, delta, costs, stats, profit_gradients, profit_hessians, errors
 
