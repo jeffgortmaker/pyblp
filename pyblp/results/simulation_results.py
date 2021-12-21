@@ -14,7 +14,7 @@ from ..configurations.integration import Integration
 from ..construction import build_blp_instruments, build_matrix
 from ..markets.results_market import ResultsMarket
 from ..markets.simulation_results_market import SimulationResultsMarket
-from ..moments import Moment, EconomyMoments
+from ..micro import MicroMoment, Moments
 from ..primitives import Agents
 from ..utilities.basics import (
     Array, Error, SolverStats, generate_items, get_indices, Mapping, output, output_progress, update_matrices, RecArray,
@@ -37,7 +37,7 @@ class SimulationResults(Results):
 
     In addition, the :meth:`SimulationResults.to_problem` method can be used to convert the full set of simulated data
     (along with some basic default instruments) and configured information into a :class:`Problem`. The
-    :meth:`SimulationResults.compute_micro_values` method can be used to compute simulated micro moment values.
+    :meth:`SimulationResults.replace_micro_moment_values` method can be used to compute simulated micro moment values.
 
     Attributes
     ----------
@@ -430,22 +430,18 @@ class SimulationResults(Results):
             supply_instruments = np.c_[supply_instruments, demand_shifters]
         return demand_instruments, supply_instruments
 
-    def compute_micro_values(self, micro_moments: Sequence[Moment]) -> Array:
+    def replace_micro_moment_values(self, micro_moments: Sequence[MicroMoment]) -> List[MicroMoment]:
         r"""Compute simulated micro moment values :math:`v_m`.
 
         Parameters
         ----------
-        micro_moments : `sequence of Moment`
-            Configurations for the micro moments. For a list of supported moments, refer to
-            :ref:`api:Micro Moment Classes`. Since only simulated values :math:`v_m` are computed, the ``value`` and
-            ``observations`` specified when initializing the moments will be ignored.
+        micro_moments : `sequence of MicroMoment`
+            :class:`MicroMoment` instances. The ``value`` argument will be replaced and is hence ignored.
 
         Returns
         -------
-        `ndarray`
-            Micro moment values :math:`v_m`, which are in the same order as ``micro_moments``. If there are multiple
-            markets :math:`t \in T_m` in which a micro moment is relevant, this is an average of market-specific
-            :math:`v_{mt}` values.
+        `list of MicroMoment`
+            The same :class:`MicroMoment` instances but with their values replaced by simulated values.
 
         Examples
         --------
@@ -455,35 +451,54 @@ class SimulationResults(Results):
         errors: List[Error] = []
 
         # keep track of long it takes to compute micro moment values
-        output("Computing micro moment values ...")
+        output("Replacing micro moment values ...")
         start_time = time.time()
 
-        # validate and structure micro moments before outputting related information
-        moments = EconomyMoments(self.simulation, micro_moments)
+        # validate and structure micro moments
+        moments = Moments(self.simulation, micro_moments)
         if moments.MM == 0:
-            raise ValueError("At least one micro moment should be specified.")
-        output("")
-        output(moments.format("Micro Moments"))
+            return []
 
         # compute the mean utility
         delta = self.simulation._compute_true_X1(self._data_override) @ self.simulation.beta + self.simulation.xi
 
-        def market_factory(s: Hashable) -> Tuple[SimulationResultsMarket]:
+        def market_factory(s: Hashable) -> Tuple[SimulationResultsMarket, Moments]:
             """Build a market along with arguments used to compute micro moment values."""
             market_s = SimulationResultsMarket(
                 self.simulation, s, self.simulation._parameters, self.simulation.sigma, self.simulation.pi,
-                self.simulation.rho, delta=delta, moments=moments, data_override=self._data_override
+                self.simulation.rho, delta=delta, data_override=self._data_override
             )
-            return market_s,
+            return market_s, moments
 
         # compute micro moments values market-by-market
-        market_micro_values = np.full((self.simulation.T, moments.MM), np.nan, options.dtype)
+        micro_numerator_mapping: Dict[Hashable, Array] = {}
+        micro_denominator_mapping: Dict[Hashable, Array] = {}
         generator = generate_items(
-            self.simulation.unique_market_ids, market_factory, SimulationResultsMarket.safely_compute_micro_values
+            self.simulation.unique_market_ids, market_factory,
+            SimulationResultsMarket.safely_compute_micro_contributions
         )
-        for t, (micro_values_t, errors_t) in generator:
-            market_micro_values[self.simulation._market_indices[t], moments.market_indices[t]] = micro_values_t.flat
+        for t, (micro_numerator_t, micro_denominator_t, errors_t) in generator:
+            micro_numerator_mapping[t] = micro_numerator_t
+            micro_denominator_mapping[t] = micro_denominator_t
             errors.extend(errors_t)
+
+        # aggregate micro moments across all markets (this is done after market-by-market computation to preserve
+        #   numerical stability with different market orderings)
+        micro_numerator = np.zeros((moments.MM, 1), options.dtype)
+        micro_denominator = np.zeros((moments.MM, 1), options.dtype)
+        with np.errstate(all='ignore'):
+            for t in self.simulation.unique_market_ids:
+                micro_numerator += micro_numerator_mapping[t]
+                micro_denominator += micro_denominator_mapping[t]
+
+            micro_values = micro_numerator / micro_denominator
+
+        # construct new micro moments
+        updated_micro_moments: List[MicroMoment] = []
+        for micro_moment, value in zip(moments.micro_moments, micro_values.flatten()):
+            updated_micro_moments.append(MicroMoment(
+                micro_moment.name, micro_moment.dataset, value, micro_moment.compute_values
+            ))
 
         # output a warning about any errors
         if errors:
@@ -491,18 +506,8 @@ class SimulationResults(Results):
             output(exceptions.MultipleErrors(errors))
             output("")
 
-        # compute averages
-        micro_values = np.zeros(moments.MM, options.dtype)
-        with np.errstate(all='ignore'):
-            for t in self.simulation.unique_market_ids:
-                indices = moments.market_indices[t]
-                weights = moments.market_weights[t]
-                if indices.size > 0:
-                    micro_values[indices] += weights * market_micro_values[self.simulation._market_indices[t], indices]
-
-        # output how long it took to compute the micro moments
+        # output how long it took to compute the micro values
         end_time = time.time()
-        output("")
         output(f"Finished after {format_seconds(end_time - start_time)}.")
         output("")
-        return micro_values
+        return updated_micro_moments

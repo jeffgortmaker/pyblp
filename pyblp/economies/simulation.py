@@ -104,11 +104,9 @@ class Simulation(Economy):
            ``ownership`` field with three columns can be replaced by three one-dimensional fields: ``ownership0``,
            ``ownership1``, and ``ownership2``.
 
-        To use certain types of micro moments, product IDs must be specified:
+        It may be convenient to define IDs for different products:
 
-            - **product_ids** (`object, optional`) - IDs that identify individual products within markets. The IDs
-              referenced by :class:`DemographicExpectationMoment` or :class:`DiversionProbabilityMoment` must be unique
-              within the relevant markets.
+            - **product_ids** (`object, optional`) - IDs that identify individual products within markets.
 
         To simulate a nested logit or random coefficients nested logit (RCNL) model, nesting groups must be specified:
 
@@ -170,7 +168,7 @@ class Simulation(Economy):
            ``nodes`` field with three columns can be replaced by three one-dimensional fields: ``nodes0``, ``nodes1``,
            and ``nodes2``.
 
-        To use certain types of micro moments, agent IDs must be specified:
+        It may be convenient to define IDs for different agents:
 
             - **agent_ids** (`object, optional`) - IDs that identify individual agents within markets. There can be
               multiple of the same ID within a market.

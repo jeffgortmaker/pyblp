@@ -1,28 +1,29 @@
 """Market-level BLP problem functionality."""
 
-from typing import Dict, List, Tuple
+from typing import List, Tuple
 
 import numpy as np
 
 from .market import Market
 from .. import exceptions, options
 from ..configurations.iteration import Iteration
-from ..parameters import LinearCoefficient
-from ..utilities.basics import Array, Bounds, Error, Optional, SolverStats, NumericalErrorHandler
+from ..micro import Moments
+from ..utilities.basics import Array, Bounds, Error, SolverStats, NumericalErrorHandler
 
 
 class ProblemMarket(Market):
     """A market underlying the BLP problem."""
 
     def solve_demand(
-            self, delta: Array, last_delta: Array, iteration: Iteration, fp_type: str, shares_bounds: Bounds,
-            compute_jacobians: bool, compute_micro_covariances: bool) -> (
-            Tuple[Array, Array, Array, Array, Array, Array, SolverStats, List[Error]]):
+            self, delta: Array, last_delta: Array, moments: Moments, iteration: Iteration, fp_type: str,
+            shares_bounds: Bounds, compute_jacobians: bool, compute_micro_covariances: bool) -> (
+            Tuple[Array, Array, Array, Array, Array, Array, Array, Array, SolverStats, List[Error]]):
         """Compute the mean utility for this market that equates market shares to observed values by solving a fixed
         point problem. Then, if compute_jacobians is True, compute the Jacobian (holding beta fixed) of xi
-        (equivalently, of delta) with respect to theta. Finally, compute any micro moment values, their Jacobian with
-        respect to theta (if compute_jacobians is True), and, if compute_micro_covariances is True, their covariances.
-        Replace null elements in delta with their last values before computing micro moments and Jacobians.
+        (equivalently, of delta) with respect to theta. Finally, compute any contributions to micro moment values, their
+        Jacobian with respect to theta (if compute_jacobians is True), and, if compute_micro_covariances is True, their
+        covariances. Replace null elements in delta with their last values before computing micro moment contributions
+        and Jacobians.
         """
         errors: List[Error] = []
 
@@ -41,35 +42,28 @@ class ProblemMarket(Market):
             xi_jacobian, xi_jacobian_errors = self.safely_compute_xi_by_theta_jacobian(valid_delta)
             errors.extend(xi_jacobian_errors)
 
-        # compute micro moments, their Jacobian, and their covariances
-        assert self.moments is not None
-        micro_values = np.zeros((self.moments.MM, 0), options.dtype)
-        micro_jacobian = np.full((self.moments.MM, self.parameters.P), np.nan, options.dtype)
-        micro_covariances = np.full((self.moments.MM, self.moments.MM), np.nan, options.dtype)
-        if self.moments.MM > 0:
+        # compute contributions to micro moments, their Jacobian, and their covariances
+        if moments.MM == 0:
+            micro_numerator = np.zeros((moments.MM, 0), options.dtype)
+            micro_denominator = np.zeros((moments.MM, 0), options.dtype)
+            micro_numerator_jacobian = np.full((moments.MM, self.parameters.P), np.nan, options.dtype)
+            micro_denominator_jacobian = np.full((moments.MM, self.parameters.P), np.nan, options.dtype)
+            micro_covariances_numerator = np.full((moments.MM, moments.MM), np.nan, options.dtype)
+        else:
             (
-                micro_values, probabilities, conditionals, inside_probabilities, eliminated_probabilities,
-                inside_to_inside_ratios, inside_to_eliminated_probabilities, inside_eliminated_probabilities,
-                micro_errors
+                micro_numerator, micro_denominator, micro_numerator_jacobian, micro_denominator_jacobian,
+                micro_covariances_numerator, micro_errors
             ) = (
-                self.safely_compute_micro_values(valid_delta)
+                self.safely_compute_micro_contributions(
+                    moments, valid_delta, xi_jacobian, compute_jacobians, compute_micro_covariances
+                )
             )
             errors.extend(micro_errors)
-            if compute_jacobians:
-                micro_jacobian, micro_jacobian_errors = self.safely_compute_micro_by_theta_jacobian(
-                    valid_delta, probabilities, conditionals, inside_probabilities, eliminated_probabilities,
-                    inside_to_inside_ratios, inside_to_eliminated_probabilities, inside_eliminated_probabilities,
-                    xi_jacobian
-                )
-                errors.extend(micro_jacobian_errors)
-            if compute_micro_covariances:
-                micro_covariances, micro_covariances_errors = self.safely_compute_micro_covariances(
-                    valid_delta, probabilities, inside_probabilities, eliminated_probabilities, inside_to_inside_ratios,
-                    inside_to_eliminated_probabilities
-                )
-                errors.extend(micro_covariances_errors)
 
-        return delta, micro_values, xi_jacobian, micro_jacobian, micro_covariances, clipped_shares, stats, errors
+        return (
+            delta, xi_jacobian, micro_numerator, micro_denominator, micro_numerator_jacobian,
+            micro_denominator_jacobian, micro_covariances_numerator, clipped_shares, stats, errors
+        )
 
     def solve_supply(
             self, last_tilde_costs: Array, xi_jacobian: Array, costs_bounds: Bounds, compute_jacobian: bool) -> (
@@ -120,171 +114,21 @@ class ProblemMarket(Market):
         return self.compute_xi_by_theta_jacobian(delta)
 
     @NumericalErrorHandler(exceptions.MicroMomentsNumericalError)
-    def safely_compute_micro_values(
-            self, delta: Array) -> (
-            Tuple[
-                Array, Array, Optional[Array], Optional[Array], Dict[int, Array], Optional[Array], Optional[Array],
-                Dict[int, Array], List[Error]
-            ]):
-        """Compute micro moment values, handling any numerical errors."""
+    def safely_compute_micro_contributions(
+            self, moments: Moments, delta: Array, xi_jacobian: Array, compute_jacobians: bool,
+            compute_covariances: bool) -> Tuple[Array, Array, Array, Array, Array, List[Error]]:
+        """Compute micro moment value contributions, handling any numerical errors."""
         errors: List[Error] = []
         (
-            micro_values, probabilities, conditionals, inside_probabilities, eliminated_probabilities,
-            inside_to_inside_ratios, inside_to_eliminated_probabilities, inside_eliminated_probabilities
+            micro_numerator, micro_denominator, micro_numerator_jacobian, micro_denominator_jacobian,
+            micro_covariances_numerator
         ) = (
-            self.compute_micro_values(delta)
+            self.compute_micro_contributions(moments, delta, xi_jacobian, compute_jacobians, compute_covariances)
         )
         return (
-            micro_values, probabilities, conditionals, inside_probabilities, eliminated_probabilities,
-            inside_to_inside_ratios, inside_to_eliminated_probabilities, inside_eliminated_probabilities, errors
+            micro_numerator, micro_denominator, micro_numerator_jacobian, micro_denominator_jacobian,
+            micro_covariances_numerator, errors
         )
-
-    @NumericalErrorHandler(exceptions.MicroMomentsByThetaJacobianNumericalError)
-    def safely_compute_micro_by_theta_jacobian(
-            self, delta: Array, probabilities: Array, conditionals: Optional[Array],
-            inside_probabilities: Optional[Array], eliminated_probabilities: Dict[int, Array],
-            inside_to_inside_ratios: Optional[Array], inside_to_eliminated_probabilities: Optional[Array],
-            inside_eliminated_probabilities: Dict[int, Array], xi_jacobian: Array) -> Tuple[Array, List[Error]]:
-        """Compute the Jacobian of micro moments with respect to theta, handling any numerical errors."""
-        errors: List[Error] = []
-        assert self.moments is not None
-
-        # pre-compute tensor derivatives of probabilities with respect to xi
-        probabilities_tensor, _ = self.compute_probabilities_by_xi_tensor(probabilities, conditionals)
-
-        # pre-compute ratios of eliminated to standard probabilities, replacing problematic elements with zeros so that
-        #   the associated derivatives will be zero
-        with np.errstate(all='ignore'):
-            # do this for probabilities conditional on purchasing an inside good
-            inside_ratio = None
-            if inside_probabilities is not None:
-                inside_ratio = inside_probabilities / probabilities
-                inside_ratio[~np.isfinite(inside_ratio)] = 0
-
-            # do this for second choice probabilities
-            eliminated_ratios = {}
-            for j in eliminated_probabilities:
-                eliminated_ratios[j] = eliminated_probabilities[j] / probabilities
-                eliminated_ratios[j][~np.isfinite(eliminated_ratios[j])] = 0
-
-            # do the same for probabilities of purchasing any inside good first and a specific inside good second
-            inside_eliminated_ratios = {}
-            if inside_eliminated_probabilities:
-                for j in range(self.J):
-                    inside_eliminated_ratios[j] = inside_eliminated_probabilities[j] / probabilities
-                    inside_eliminated_ratios[j][~np.isfinite(inside_eliminated_ratios[j])] = 0
-
-        # pre-compute the ratio of the probability each agent's first and second choices are both inside goods to the
-        #   corresponding aggregate share
-        product_to_inside_probabilities = {}
-        inside_to_inside_probabilities = inside_to_inside_share = None
-        if inside_to_inside_ratios is not None:
-            inside_to_inside_probabilities = np.zeros((self.I, 1), options.dtype)
-            for j in range(self.J):
-                product_to_inside_probabilities[j] = eliminated_probabilities[j].sum(axis=0, keepdims=True).T
-                inside_to_inside_probabilities += probabilities[j][None].T * product_to_inside_probabilities[j]
-
-            inside_to_inside_share = self.agents.weights.T @ inside_to_inside_probabilities
-
-        # compute the Jacobian
-        micro_jacobian = np.zeros((self.moments.MM, self.parameters.P))
-        for p, parameter in enumerate(self.parameters.unfixed):
-            if isinstance(parameter, LinearCoefficient):
-                continue
-
-            # pre-compute tangents of probabilities respect to the parameter
-            probabilities_tangent, _ = self.compute_probabilities_by_parameter_tangent(
-                parameter, probabilities, conditionals, delta
-            )
-            probabilities_tangent += np.einsum('jki,j->ki', probabilities_tensor, xi_jacobian[:, p])
-
-            # pre-compute the same but for probabilities conditional on purchasing an inside good
-            inside_tangent = None
-            if inside_probabilities is not None:
-                inside_tangent = inside_ratio * (
-                    probabilities_tangent -
-                    inside_probabilities * probabilities_tangent.sum(axis=0, keepdims=True)
-                )
-
-            # pre-compute the same but for second choice probabilities
-            eliminated_tangents = {}
-            for j in eliminated_probabilities:
-                eliminated_tangents[j] = eliminated_ratios[j] * (
-                    probabilities_tangent +
-                    eliminated_probabilities[j] * probabilities_tangent[j][None]
-                )
-
-            # pre-compute the same but for the ratio of the probability each agent's first and second choices are both
-            #   inside goods to the corresponding aggregate share
-            inside_to_inside_tangent = None
-            if inside_to_inside_ratios is not None:
-                assert inside_to_inside_probabilities is not None and inside_to_inside_share is not None
-                inside_to_inside_probabilities_tangent = np.zeros((self.I, 1), options.dtype)
-                for j in range(self.J):
-                    j_to_inside_tangent = eliminated_tangents[j].sum(axis=0, keepdims=True).T
-                    inside_to_inside_probabilities_tangent += (
-                        probabilities_tangent[j][None].T * product_to_inside_probabilities[j] +
-                        probabilities[j][None].T * j_to_inside_tangent
-                    )
-
-                # replace problematic elements with zeros so that their derivatives will be zeros
-                inside_to_inside_share_tangent = self.agents.weights.T @ inside_to_inside_probabilities_tangent
-                with np.errstate(all='ignore'):
-                    probabilities_ratio = inside_to_inside_probabilities_tangent / inside_to_inside_probabilities
-                    share_ratio = inside_to_inside_share_tangent / inside_to_inside_share
-                    probabilities_ratio[~np.isfinite(probabilities_ratio)] = 0
-                    share_ratio[~np.isfinite(share_ratio)] = 0
-
-                inside_to_inside_tangent = inside_to_inside_ratios * (probabilities_ratio - share_ratio)
-
-            # pre-compute the same but for probabilities of purchasing any inside good first and a specific inside good
-            #   second
-            inside_to_eliminated_tangent = None
-            if inside_eliminated_probabilities:
-                assert inside_probabilities is not None and inside_tangent is not None
-                inside_to_eliminated_tangent = np.zeros((self.J, self.I), options.dtype)
-                probabilities_tangent_sum = probabilities_tangent.sum(axis=0, keepdims=True)
-                for j in range(self.J):
-                    inside_eliminated_tangent = inside_eliminated_ratios[j] * (
-                        probabilities_tangent -
-                        inside_eliminated_probabilities[j] * (probabilities_tangent_sum - probabilities_tangent[j])
-                    )
-                    inside_to_eliminated_tangent += (
-                        inside_tangent[j][None] * inside_eliminated_probabilities[j] +
-                        inside_probabilities[j][None] * inside_eliminated_tangent
-                    )
-
-            # fill the gradient of micro moments with respect to the parameter
-            for m, moment in enumerate(self.moments.micro_moments):
-                micro_jacobian[m, p] = self.agents.weights.T @ moment._compute_agent_values_tangent(
-                    self, p, delta, probabilities, probabilities_tangent, inside_probabilities, inside_tangent,
-                    eliminated_probabilities, eliminated_tangents, inside_to_inside_ratios, inside_to_inside_tangent,
-                    inside_to_eliminated_probabilities, inside_to_eliminated_tangent
-                )
-
-        return micro_jacobian, errors
-
-    @NumericalErrorHandler(exceptions.MicroMomentCovariancesNumericalError)
-    def safely_compute_micro_covariances(
-            self, delta: Array, probabilities: Array, inside_probabilities: Optional[Array],
-            eliminated_probabilities: Dict[int, Array], inside_to_inside_ratios: Optional[Array],
-            inside_to_eliminated_probabilities: Optional[Array]) -> Tuple[Array, List[Error]]:
-        """Compute micro moment covariances, handling any numerical errors."""
-        errors: List[Error] = []
-        assert self.moments is not None
-
-        # fill a matrix of demeaned micro moments for each agent moment-by-moment
-        demeaned_agent_micro = np.zeros((self.I, self.moments.MM), options.dtype)
-        for m, moment in enumerate(self.moments.micro_moments):
-            agent_micro_m = moment._compute_agent_values(
-                self, delta, probabilities, inside_probabilities, eliminated_probabilities, inside_to_inside_ratios,
-                inside_to_eliminated_probabilities
-            )
-            demeaned_agent_micro[:, [m]] = agent_micro_m - self.agents.weights.T @ agent_micro_m
-
-        # compute the moment covariances, enforcing shape and symmetry
-        micro_covariances = demeaned_agent_micro.T @ (self.agents.weights * demeaned_agent_micro)
-        return np.c_[micro_covariances + micro_covariances.T] / 2, errors
 
     @NumericalErrorHandler(exceptions.CostsNumericalError)
     def safely_compute_tilde_costs(self, costs_bounds: Bounds) -> Tuple[Array, Array, List[Error]]:
@@ -296,7 +140,7 @@ class ProblemMarket(Market):
         errors.extend(eta_errors)
         costs = self.products.prices - eta
 
-        # clip marginal costs that are outside of acceptable bounds
+        # clip marginal costs that are outside acceptable bounds
         clipped_costs = (costs < costs_bounds[0]) | (costs > costs_bounds[1])
         if clipped_costs.any():
             costs = np.clip(costs, *costs_bounds)

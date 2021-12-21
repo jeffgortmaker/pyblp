@@ -8,7 +8,7 @@ import numpy as np
 from .. import exceptions, options
 from ..configurations.iteration import ContractionResults, Iteration
 from ..economies.economy import Economy
-from ..moments import EconomyMoments, MarketMoments
+from ..micro import MicroDataset, Moments
 from ..parameters import BetaParameter, GammaParameter, NonlinearCoefficient, Parameter, Parameters, RhoParameter
 from ..primitives import Container
 from ..utilities.algebra import approximately_invert, approximately_solve
@@ -40,13 +40,11 @@ class Market(Container):
     delta: Optional[Array]
     mu: Array
     parameters: Parameters
-    moments: Optional[MarketMoments]
 
     def __init__(
             self, economy: Economy, t: Any, parameters: Parameters, sigma: Array, pi: Array, rho: Array,
             beta: Optional[Array] = None, gamma: Optional[Array] = None, delta: Optional[Array] = None,
-            moments: Optional[EconomyMoments] = None, data_override: Optional[Dict[str, Array]] = None,
-            agents_override: Optional[RecArray] = None) -> None:
+            data_override: Optional[Dict[str, Array]] = None, agents_override: Optional[RecArray] = None) -> None:
         """Store or compute information about formulations, data, parameters, and utility."""
 
         # structure relevant data
@@ -119,9 +117,6 @@ class Market(Container):
         self.delta = None if delta is None else delta[economy._product_market_indices[t]]
         with np.errstate(all='ignore'):
             self.mu = self.compute_mu()
-
-        # store moments relevant to this market
-        self.moments = None if moments is None else MarketMoments(moments, t)
 
     def get_product(self, product_id: Any) -> int:
         """Get the product index associated with a product ID. This assumes that the market has already been validated
@@ -461,7 +456,7 @@ class Market(Container):
             log_shares = np.log(self.products.shares)
             compute_probabilities = functools.partial(self.compute_probabilities, safe='safe' in fp_type)
 
-            # define the function used to clip shares outside of potentially pre-specified bounds
+            # define the function used to clip shares outside potentially pre-specified bounds
             clip_shares = lambda _: None
             if np.isfinite(shares_bounds).all():
                 def clip_shares(shares: Array) -> None:
@@ -834,9 +829,11 @@ class Market(Container):
         return probabilities_tangent, conditionals_tangent
 
     def compute_probabilities_by_xi_tensor(
-            self, probabilities: Array, conditionals: Optional[Array]) -> Tuple[Array, Optional[Array]]:
+            self, probabilities: Array, conditionals: Optional[Array],
+            compute_conditionals_tensor: bool = True) -> Tuple[Array, Optional[Array]]:
         """Use choice probabilities to compute their tensor derivatives (holding beta fixed) with respect to xi
-        (equivalently, to delta), indexed with the first axis.
+        (equivalently, to delta), indexed with the first axis. By default, also compute the tensor derivatives of
+        conditional probabilities with respect to xi when there is nesting.
         """
         probabilities_tensor = -probabilities[None] * probabilities[None].swapaxes(0, 1)
         probabilities_tensor[np.diag_indices(self.J)] += probabilities
@@ -853,11 +850,13 @@ class Market(Container):
             probabilities_tensor -= membership[..., None] * (
                 conditionals[None] * multiplied_probabilities[None].swapaxes(0, 1)
             )
-            conditionals_tensor = -membership[..., None] * (
-                conditionals[None] * multiplied_conditionals[None].swapaxes(0, 1)
-            )
+
             probabilities_tensor[np.diag_indices(self.J)] += multiplied_probabilities
-            conditionals_tensor[np.diag_indices(self.J)] += multiplied_conditionals
+            if compute_conditionals_tensor:
+                conditionals_tensor = -membership[..., None] * (
+                    conditionals[None] * multiplied_conditionals[None].swapaxes(0, 1)
+                )
+                conditionals_tensor[np.diag_indices(self.J)] += multiplied_conditionals
 
         return probabilities_tensor, conditionals_tensor
 
@@ -1212,72 +1211,266 @@ class Market(Container):
                 omega_jacobian[:, [p]] = -parameter.get_product_characteristic(self)
         return omega_jacobian, errors
 
-    def compute_micro_values(
-            self, delta: Optional[Array] = None) -> (
-            Tuple[
-                Array, Array, Optional[Array], Optional[Array], Dict[int, Array], Optional[Array], Optional[Array],
-                Dict[int, Array]
-            ]):
-        """Compute micro moment values. By default, use the delta with which this market was initialized. Return any
-        probabilities that were used so they don't have to be re-computed when computing related outputs.
+    def compute_micro_contributions(
+            self, moments: Moments, delta: Optional[Array] = None, xi_jacobian: Optional[Array] = None,
+            compute_jacobians: bool = False, compute_covariances: bool = False) -> (
+            Tuple[Array, Array, Array, Array, Array]):
+        """Compute contributions to micro moment values, Jacobians, and covariances. By default, use the mean utilities
+        with which this market was initialized and do not compute Jacobian and covariance contributions.
         """
-        assert self.moments is not None
         if delta is None:
             assert self.delta is not None
             delta = self.delta
 
-        # pre-compute probabilities
-        probabilities, conditionals = self.compute_probabilities(delta)
+        # pre-compute and validate micro dataset weights, multiplying these with probabilities and using these to
+        #   compute micro value denominators
+        weights_mapping: Dict[MicroDataset, Array] = {}
+        denominator_mapping: Dict[MicroDataset, Array] = {}
+        probabilities = outside_probabilities = None
+        eliminated_probabilities = outside_eliminated_probabilities = eliminated_outside_probabilities = None
+        weights_tangent_mapping: Dict[Tuple[MicroDataset, int], Array] = {}
+        denominator_tangent_mapping: Dict[Tuple[MicroDataset, int], Array] = {}
+        probabilities_tangent_mapping: Dict[int, Array] = {}
+        outside_probabilities_tangent_mapping: Dict[int, Array] = {}
+        eliminated_probabilities_tangent_mapping: Dict[int, Array] = {}
+        outside_eliminated_probabilities_tangent_mapping: Dict[int, Array] = {}
+        eliminated_outside_probabilities_tangent_mapping: Dict[int, Array] = {}
+        for moment in moments.micro_moments:
+            dataset = moment.dataset
+            if dataset in weights_mapping or (dataset.market_ids is not None and self.t not in dataset.market_ids):
+                continue
 
-        # pre-compute probabilities conditional on purchasing an inside good
-        inside_probabilities = None
-        if any(m.requires_inside for m in self.moments.micro_moments):
-            inside_probabilities = self.compute_eliminated_probabilities(probabilities, delta, eliminate_outside=True)
-
-        # pre-compute second choice probabilities
-        eliminated_probabilities: Dict[int, Array] = {}
-        for moment in self.moments.micro_moments:
-            if moment.requires_inside_eliminated:
-                products = list(range(self.J))
-            else:
-                products = [self.get_product(i) for i in moment.requires_eliminated]
-
-            for j in products:
-                if j not in eliminated_probabilities:
-                    eliminated_probabilities[j] = self.compute_eliminated_probabilities(
-                        probabilities, delta, eliminate_product=j
-                    )
-
-        # pre-compute (1) the ratio of the probability each agent's first and second choices are both inside goods to
-        #   the corresponding aggregate share, (2) second-choice probabilities conditional on purchasing an inside good,
-        #   and (3) probabilities of purchasing any inside good first and a specific inside good second
-        inside_to_inside_ratios = None
-        inside_to_eliminated_probabilities = None
-        inside_eliminated_probabilities: Dict[int, Array] = {}
-        if any(m.requires_inside_eliminated for m in self.moments.micro_moments):
-            assert inside_probabilities is not None
-            inside_to_inside_probabilities = np.zeros((self.I, 1), options.dtype)
-            inside_to_eliminated_probabilities = np.zeros((self.J, self.I), options.dtype)
-            for j in range(self.J):
-                j_to_inside_probabilities = eliminated_probabilities[j].sum(axis=0, keepdims=True).T
-                inside_to_inside_probabilities += probabilities[j][None].T * j_to_inside_probabilities
-                inside_eliminated_probabilities[j] = self.compute_eliminated_probabilities(
-                    probabilities, delta, eliminate_outside=True, eliminate_product=j
+            # compute and validate weights
+            try:
+                weights = np.asarray(dataset.compute_weights(self.t, self.products, self.agents), options.dtype)
+            except Exception as exception:
+                raise RuntimeError(f"Failed to compute weights for micro dataset '{dataset}'.") from exception
+            shapes = [
+                (self.I, self.J), (self.I, 1 + self.J), (self.I, self.J, self.J), (self.I, 1 + self.J, self.J),
+                (self.I, self.J, 1 + self.J), (self.I, 1 + self.J, 1 + self.J)
+            ]
+            if weights.shape not in shapes:
+                raise ValueError(
+                    f"In market {self.t}, micro dataset '{moment.dataset}' returned an array of shape "
+                    f"{weights.shape}, which is not one of the acceptable shapes, {shapes}."
                 )
-                inside_to_eliminated_probabilities += inside_probabilities[j][None] * inside_eliminated_probabilities[j]
 
-            inside_to_inside_share = self.agents.weights.T @ inside_to_inside_probabilities
-            inside_to_inside_ratios = inside_to_inside_probabilities / inside_to_inside_share
+            # check whether the weights admit a denominator that does not depend on theta
+            constant_denominator = (weights == weights[0]).all()
+            if len(weights.shape) == 3 and weights.shape[2] == 1 + self.J:
+                constant_denominator &= (weights == weights[..., [0]]).all()
 
-        # compute the micro moment values
-        micro_values = np.zeros((self.moments.MM, 1), options.dtype)
-        for m, moment in enumerate(self.moments.micro_moments):
-            micro_values[m] = self.agents.weights.T @ moment._compute_agent_values(
-                self, delta, probabilities, inside_probabilities, eliminated_probabilities, inside_to_inside_ratios,
-                inside_to_eliminated_probabilities
-            )
+            # if so, we can already compute the contribution to the denominator for micro values based on this dataset
+            if constant_denominator:
+                shares = self.products.shares.flatten()
+                if weights.shape[1] == 1 + self.J:
+                    shares = np.r_[1 - shares.sum(), shares]
+                if len(weights.shape) == 2:
+                    denominator_mapping[dataset] = shares @ weights[0]
+                else:
+                    assert len(weights.shape) == 3
+                    denominator_mapping[dataset] = shares @ weights[0, :, 0]
+
+                if compute_jacobians:
+                    for p in range(self.parameters.P):
+                        denominator_tangent_mapping[(dataset, p)] = 0
+
+            # pre-compute probabilities
+            if probabilities is None:
+                probabilities, conditionals = self.compute_probabilities(delta)
+
+                if compute_jacobians:
+                    assert xi_jacobian is not None
+                    probabilities_tensor, _ = self.compute_probabilities_by_xi_tensor(
+                        probabilities, conditionals, compute_conditionals_tensor=False
+                    )
+                    for p, parameter in enumerate(self.parameters.unfixed):
+                        probabilities_tangent, _ = self.compute_probabilities_by_parameter_tangent(
+                            parameter, probabilities, conditionals, delta
+                        )
+                        probabilities_tangent += np.einsum('jki,j->ki', probabilities_tensor, xi_jacobian[:, p])
+                        probabilities_tangent_mapping[p] = probabilities_tangent
+
+            # pre-compute outside probabilities
+            if outside_probabilities is None and weights.shape[1] == 1 + self.J:
+                outside_probabilities = 1 - probabilities.sum(axis=0)
+
+                if compute_jacobians:
+                    for p, probabilities_tangent in probabilities_tangent_mapping.items():
+                        outside_probabilities_tangent_mapping[p] = -probabilities_tangent.sum(axis=0)
+
+            # pre-compute second choice probabilities
+            if len(weights.shape) == 3 and eliminated_probabilities is None:
+                eliminated_probabilities_list = []
+                for j in range(self.J):
+                    eliminated_probabilities_list.append(self.compute_eliminated_probabilities(
+                        probabilities, delta, eliminate_product=j
+                    ))
+
+                eliminated_probabilities = np.stack(eliminated_probabilities_list)
+
+                if compute_jacobians:
+                    with np.errstate(all='ignore'):
+                        eliminated_ratios = eliminated_probabilities / probabilities[None]
+                        eliminated_ratios[~np.isfinite(eliminated_ratios)] = 0
+
+                    for p, probabilities_tangent in probabilities_tangent_mapping.items():
+                        eliminated_probabilities_tangent_mapping[p] = eliminated_ratios * (
+                            probabilities_tangent[None] + eliminated_probabilities * probabilities_tangent[:, None]
+                        )
+
+            # pre-compute probabilities after the outside option has been removed
+            if len(weights.shape) == 3 and outside_eliminated_probabilities is None and weights.shape[1] == 1 + self.J:
+                outside_eliminated_probabilities = self.compute_eliminated_probabilities(
+                    probabilities, delta, eliminate_outside=True
+                )
+
+                if compute_jacobians:
+                    with np.errstate(all='ignore'):
+                        outside_eliminated_ratio = outside_eliminated_probabilities / probabilities
+                        outside_eliminated_ratio[~np.isfinite(outside_eliminated_ratio)] = 0
+
+                    for p, probabilities_tangent in probabilities_tangent_mapping.items():
+                        outside_eliminated_probabilities_tangent_mapping[p] = outside_eliminated_ratio * (
+                            probabilities_tangent -
+                            outside_eliminated_probabilities * probabilities_tangent.sum(axis=0, keepdims=True)
+                        )
+
+            # pre-compute outside second choice probabilities
+            if len(weights.shape) == 3 and eliminated_outside_probabilities is None and weights.shape[2] == 1 + self.J:
+                assert eliminated_probabilities is not None
+                eliminated_outside_probabilities = 1 - eliminated_probabilities.sum(axis=1)
+
+                if compute_jacobians:
+                    for p, eliminated_probabilities_tangent in eliminated_probabilities_tangent_mapping.items():
+                        eliminated_outside_probabilities_tangent_mapping[p] = -(
+                            eliminated_probabilities_tangent.sum(axis=1)
+                        )
+
+            # both weights and their Jacobians will be multiplied by agent integration weights
+            if len(weights.shape) == 2:
+                weights *= self.agents.weights
+            else:
+                assert len(weights.shape) == 3
+                weights *= self.agents.weights[..., None]
+
+            # multiply weights by choice probabilities
+            dataset_weights = weights.copy()
+            if len(weights.shape) == 2:
+                dataset_weights[:, -self.J:] *= probabilities.T
+                if weights.shape[1] == 1 + self.J:
+                    assert outside_probabilities is not None
+                    dataset_weights[:, 0] *= outside_probabilities
+            else:
+                assert len(weights.shape) == 3
+                assert eliminated_probabilities is not None
+                dataset_weights[:, -self.J:] *= probabilities.T[..., None]
+                dataset_weights[:, -self.J:, -self.J:] *= np.moveaxis(eliminated_probabilities, (0, 1, 2), (2, 1, 0))
+                if weights.shape[1] == 1 + self.J:
+                    assert outside_probabilities is not None and outside_eliminated_probabilities is not None
+                    dataset_weights[:, 0] *= outside_probabilities[:, None]
+                    dataset_weights[:, 0, -self.J:] *= outside_eliminated_probabilities.T
+                if weights.shape[2] == 1 + self.J:
+                    assert eliminated_outside_probabilities is not None
+                    dataset_weights[:, -self.J:, 0] *= eliminated_outside_probabilities.T
+
+            weights_mapping[dataset] = dataset_weights
+
+            if compute_jacobians:
+                for p in range(self.parameters.P):
+                    weights_tangent = weights.copy()
+
+                    if len(weights.shape) == 2:
+                        weights_tangent[:, -self.J:] *= probabilities_tangent_mapping[p].T
+                        if weights.shape[1] == 1 + self.J:
+                            weights_tangent[:, 0] *= outside_probabilities_tangent_mapping[p]
+                    else:
+                        assert len(weights.shape) == 3
+                        assert eliminated_probabilities is not None
+                        product1 = np.ones_like(weights_tangent)
+                        product2 = np.ones_like(weights_tangent)
+                        product1[:, -self.J:] = probabilities_tangent_mapping[p].T[..., None]
+                        product2[:, -self.J:] = probabilities.T[..., None]
+                        product1[:, -self.J:, -self.J:] *= np.moveaxis(eliminated_probabilities, (0, 1, 2), (2, 1, 0))
+                        product2[:, -self.J:, -self.J:] *= np.moveaxis(
+                            eliminated_probabilities_tangent_mapping[p], (0, 1, 2), (2, 1, 0)
+                        )
+                        if weights.shape[1] == 1 + self.J:
+                            assert outside_probabilities is not None and outside_eliminated_probabilities is not None
+                            product1[:, 0] = outside_probabilities_tangent_mapping[p][:, None]
+                            product2[:, 0] = outside_probabilities[:, None]
+                            product1[:, 0, -self.J:] *= outside_eliminated_probabilities.T
+                            product2[:, 0, -self.J:] *= outside_eliminated_probabilities_tangent_mapping[p].T
+                        if weights.shape[2] == 1 + self.J:
+                            assert eliminated_outside_probabilities is not None
+                            product1[:, -self.J:, 0] *= eliminated_outside_probabilities.T
+                            product2[:, -self.J:, 0] *= eliminated_outside_probabilities_tangent_mapping[p].T
+
+                        weights_tangent *= product1 + product2
+
+                    weights_tangent_mapping[(dataset, p)] = weights_tangent
+
+            # compute the contribution to the denominator for micro values based on this dataset if not already computed
+            if not constant_denominator:
+                denominator_mapping[dataset] = dataset_weights.sum()
+
+                if compute_jacobians:
+                    for p in range(self.parameters.P):
+                        denominator_tangent_mapping[(dataset, p)] = weights_tangent_mapping[(dataset, p)].sum()
+
+        # compute this market's contribution to micro moment values' and covariances' numerators and denominators
+        micro_numerator = np.zeros((moments.MM, 1), options.dtype)
+        micro_denominator = np.zeros((moments.MM, 1), options.dtype)
+        micro_numerator_jacobian = np.full(
+            (moments.MM, self.parameters.P), 0 if compute_jacobians else np.nan, options.dtype
+        )
+        micro_denominator_jacobian = np.full(
+            (moments.MM, self.parameters.P), 0 if compute_jacobians else np.nan, options.dtype
+        )
+        micro_covariances_numerator = np.full(
+            (moments.MM, moments.MM), 0 if compute_covariances else np.nan, options.dtype
+        )
+        for m, moment in enumerate(moments.micro_moments):
+            dataset = moment.dataset
+            if dataset not in weights_mapping:
+                continue
+
+            # compute and validate moment values
+            weights = weights_mapping[dataset]
+            try:
+                values = np.asarray(moment.compute_values(self.t, self.products, self.agents), options.dtype)
+            except Exception as exception:
+                raise RuntimeError(f"Failed to compute values for micro moment '{moment}'.") from exception
+            if values.shape != weights.shape:
+                raise ValueError(
+                    f"In market {self.t}, micro moment '{moment}' returned an array of shape {values.shape} from "
+                    f"compute_values, which is not {weights.shape}, the shape of the array returned by its "
+                    f"dataset's compute_weights."
+                )
+
+            # compute the contribution to the numerator and denominator
+            weighted_values = weights * values
+            micro_numerator[m] = weighted_values.sum()
+            micro_denominator[m] = denominator_mapping[dataset]
+            if compute_jacobians:
+                for p in range(self.parameters.P):
+                    micro_numerator_jacobian[m, p] = (weights_tangent_mapping[(dataset, p)] * values).sum()
+                    micro_denominator_jacobian[m, p] = denominator_tangent_mapping[(dataset, p)]
+
+            # compute the contribution to the covariance numerator (this is not done for each objective evaluation, so
+            #   re-computing values here is not a computational concern)
+            if compute_covariances:
+                for m2, moment2 in enumerate(moments.micro_moments):
+                    if m2 >= m and moment2.dataset == moment.dataset:
+                        try:
+                            values2 = np.asarray(
+                                moment2.compute_values(self.t, self.products, self.agents), options.dtype
+                            )
+                        except Exception as exception:
+                            raise RuntimeError(f"Failed to compute values for micro moment '{moment2}'.") from exception
+                        micro_covariances_numerator[m, m2] = (weighted_values * values2).sum()
 
         return (
-            micro_values, probabilities, conditionals, inside_probabilities, eliminated_probabilities,
-            inside_to_inside_ratios, inside_to_eliminated_probabilities, inside_eliminated_probabilities
+            micro_numerator, micro_denominator, micro_numerator_jacobian, micro_denominator_jacobian,
+            micro_covariances_numerator
         )

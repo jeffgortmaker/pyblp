@@ -1,7 +1,6 @@
 """Primary tests."""
 
 import copy
-import functools
 import pickle
 from typing import Any, Callable, Dict, List, Optional, Tuple
 import warnings
@@ -11,8 +10,7 @@ import pytest
 import scipy.optimize
 
 from pyblp import (
-    Agents, CustomMoment, DemographicInteractionMoment, Formulation, Integration, Iteration, Optimization, Problem,
-    Products, Simulation, build_ownership, data_to_dict, parallel
+    Formulation, Integration, Iteration, Optimization, Problem, Simulation, build_ownership, data_to_dict, parallel
 )
 from pyblp.utilities.basics import (
     Array, Options, update_matrices, compute_finite_differences, compute_second_finite_differences
@@ -219,7 +217,15 @@ def test_result_serialization(simulated_problem: SimulatedProblemFixture) -> Non
         solve_options['micro_moments'],
     ]
     for original in originals:
-        unpickled = pickle.loads(pickle.dumps(original))
+        try:
+            unpickled = pickle.loads(pickle.dumps(original))
+        except AttributeError as exception:
+            # use dill to pickle lambda functions
+            if "Can't pickle local object" not in str(exception) or "<lambda>" not in str(exception):
+                raise
+            import dill
+            unpickled = dill.loads(dill.dumps(original))
+
         assert str(original) == str(unpickled), str(original)
 
 
@@ -257,9 +263,17 @@ def test_parallel(simulated_problem: SimulatedProblemFixture) -> None:
     costs = results.compute_costs()
 
     # solve the problem and compute costs in parallel
-    with parallel(2):
-        parallel_results = problem.solve(**solve_options)
-        parallel_costs = parallel_results.compute_costs()
+    try:
+        with parallel(2):
+            parallel_results = problem.solve(**solve_options)
+            parallel_costs = parallel_results.compute_costs()
+    except RuntimeError as exception:
+        # use dill via pathos to handle lambda function pickling
+        if "multiprocessing module does not support lambda functions" not in str(exception):
+            raise
+        with parallel(2, use_pathos=True):
+            parallel_results = problem.solve(**solve_options)
+            parallel_costs = parallel_results.compute_costs()
 
     # test that all arrays in the results are essentially identical
     for key, result in results.__dict__.items():
@@ -1184,66 +1198,6 @@ def test_extra_demographics(simulated_problem: SimulatedProblemFixture) -> None:
     for key in problem.agents.dtype.names:
         if problem.agents[key].dtype != np.object_:
             np.testing.assert_allclose(problem.agents[key], new_problem.agents[key], atol=1e-14, rtol=0, err_msg=key)
-
-
-@pytest.mark.usefixtures('simulated_problem')
-def test_custom_moments(simulated_problem: SimulatedProblemFixture) -> None:
-    """Test that custom moments designed to replicate built-in micro moments yield the same results."""
-    _, _, problem, solve_options, _ = simulated_problem
-
-    def replicate_demographic_interaction(
-            moment: DemographicInteractionMoment, _: Any, __: Array, ___: Array, ____: Array, products: Products,
-            agents: Agents, _____: Array, ______: Array, probabilities: Array) -> Array:
-        """Replicate a demographic covariance moment."""
-        x = products.X2[:, [moment.X2_index]]
-        d = agents.demographics[:, [moment.demographics_index]]
-        z = probabilities.T @ x
-        return d * z / products.shares.sum()
-
-    def replicate_demographic_interaction_derivatives(
-            moment: DemographicInteractionMoment, _: Any, __: Array, ___: Array, ____: Array, products: Products,
-            agents: Agents, _____: Array, ______: Array, _______: Array, ________: Any, derivatives: Array) -> (
-            Array):
-        """Replicate derivatives for a demographic covariance moment."""
-        x = products.X2[:, [moment.X2_index]]
-        d = agents.demographics[:, [moment.demographics_index]]
-        z_tangent = derivatives.T @ x
-        return d * z_tangent / products.shares.sum()
-
-    # replace demographic covariance moments with custom ones that replicate their behavior
-    replicated_micro_moments = []
-    for micro_moment in solve_options['micro_moments']:
-        if not isinstance(micro_moment, DemographicInteractionMoment):
-            replicated_micro_moments.append(micro_moment)
-        else:
-            replicated_micro_moments.append(CustomMoment(
-                micro_moment.value,
-                micro_moment.observations,
-                functools.partial(replicate_demographic_interaction, micro_moment),
-                functools.partial(replicate_demographic_interaction_derivatives, micro_moment),
-                micro_moment.market_ids,
-                micro_moment.market_weights,
-                name=f"Replicated '{micro_moment}'",
-            ))
-
-    # skip problems without any replicated moments
-    if not any(isinstance(m, CustomMoment) for m in replicated_micro_moments):
-        return pytest.skip("No micro moments were replicated.")
-
-    # obtain results under the original micro moments
-    updated_solve_options = copy.deepcopy(solve_options)
-    updated_solve_options['optimization'] = Optimization('return')
-    results = problem.solve(**updated_solve_options)
-
-    # obtain results under the replicated micro moments
-    replicated_solve_options = copy.deepcopy(updated_solve_options)
-    replicated_solve_options['micro_moments'] = replicated_micro_moments
-    replicated_results = problem.solve(**replicated_solve_options)
-
-    # test that all arrays in the results are essentially identical
-    for key, result in results.__dict__.items():
-        if isinstance(result, np.ndarray) and result.dtype != np.object_:
-            np.testing.assert_allclose(result, getattr(replicated_results, key), atol=1e-14, rtol=0, err_msg=key)
 
 
 @pytest.mark.usefixtures('simulated_problem')

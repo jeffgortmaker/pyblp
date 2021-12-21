@@ -14,7 +14,7 @@ from .. import exceptions, options
 from ..configurations.integration import Integration
 from ..configurations.iteration import Iteration
 from ..markets.results_market import ResultsMarket
-from ..moments import Moments
+from ..micro import Moments
 from ..primitives import Agents
 from ..utilities.algebra import (
     approximately_invert, approximately_solve, compute_condition_number, precisely_compute_eigenvalues, vech_to_full
@@ -176,9 +176,7 @@ class ProblemResults(Results):
     micro : `ndarray`
         Micro moments, :math:`\bar{g}_M`, in :eq:`averaged_micro_moments`.
     micro_values : `ndarray`
-        Simulated micro moment values, :math:`v_{mt}`. Rows are in the same order as :attr:`Problem.unique_market_ids`.
-        Columns are in the same order as :attr:`ProblemResults.micro`. If a micro moment is not computed in one or more
-        markets, the associated values will be ``numpy.nan``.
+        Estimated micro moment values, :math:`v_m`. Rows are in the same order as :attr:`ProblemResults.micro`.
     moments : `ndarray`
         Moments, :math:`\bar{g}`, in :eq:`averaged_moments`.
     moments_jacobian : `ndarray`
@@ -295,7 +293,7 @@ class ProblemResults(Results):
     _shares_bounds: Bounds
     _costs_bounds: Bounds
     _se_type: str
-    _moments: Moments
+    _formatted_moments: Optional[str]
     _errors: List[Error]
 
     def __init__(
@@ -303,7 +301,7 @@ class ProblemResults(Results):
             step_start_time: float, optimization_start_time: float, optimization_end_time: float,
             optimization_stats: SolverStats, iteration_stats: Sequence[Dict[Hashable, SolverStats]],
             scaled_objective: bool, shares_bounds: Bounds, costs_bounds: Bounds,
-            extra_micro_covariances: Optional[Array], center_moments: bool, W_type: str, se_type: str) -> None:
+            micro_moment_covariances: Optional[Array], center_moments: bool, W_type: str, se_type: str) -> None:
         """Compute cumulative progress statistics, update weighting matrices, and estimate standard errors."""
         super().__init__(progress.problem, progress.parameters)
         self._errors = progress.errors
@@ -333,7 +331,12 @@ class ProblemResults(Results):
         self._shares_bounds = shares_bounds
         self._costs_bounds = costs_bounds
         self._se_type = se_type
-        self._moments = progress.moments
+
+        # format micro moments for displaying information (micro moments themselves often contain lambda functions and
+        #   are hence often not serializable)
+        self._formatted_moments = None
+        if progress.moments.MM > 0:
+            self._formatted_moments = progress.moments.format("Estimated Micro Moments:", self.micro_values)
 
         # if the reduced Hessian was computed, compute its eigenvalues and the ratio of the smallest to largest ones
         self.reduced_hessian_eigenvalues = np.full(self._parameters.P, np.nan, options.dtype)
@@ -405,10 +408,9 @@ class ProblemResults(Results):
             self.moments = self._compute_mean_g()
 
             # update the weighting matrix
-            micro_covariances = progress.micro_covariances.copy()
-            if extra_micro_covariances is not None:
-                micro_covariances += extra_micro_covariances
-            S_for_weights = self._compute_S(micro_covariances, W_type, center_moments)
+            if micro_moment_covariances is None:
+                micro_moment_covariances = progress.micro_covariances
+            S_for_weights = self._compute_S(progress.moments, micro_moment_covariances, W_type, center_moments)
             self.updated_W, W_errors = compute_gmm_weights(S_for_weights)
             self._errors.extend(W_errors)
 
@@ -420,7 +422,7 @@ class ProblemResults(Results):
             if last_step:
                 S_for_covariances = S_for_weights
                 if se_type != W_type or center_moments:
-                    S_for_covariances = self._compute_S(micro_covariances, se_type)
+                    S_for_covariances = self._compute_S(progress.moments, micro_moment_covariances, se_type)
 
                 # if this is the first step, an unadjusted weighting matrix needs to be used when computing unadjusted
                 #   covariances so that they are scaled properly
@@ -430,7 +432,7 @@ class ProblemResults(Results):
                     self._errors.extend(W_for_covariances_errors)
 
                 # compute parameter covariances
-                self.moments_jacobian = self._compute_mean_G()
+                self.moments_jacobian = self._compute_mean_G(progress.moments)
                 self.parameter_covariances, se_errors = compute_gmm_parameter_covariances(
                     W_for_covariances, S_for_covariances, self.moments_jacobian, se_type
                 )
@@ -480,8 +482,8 @@ class ProblemResults(Results):
             self.sigma_squared, self.sigma_se, self.pi_se, self.rho_se, self.beta_se, self.gamma_se,
             self.sigma_squared_se
         ))
-        if self._moments.MM > 0:
-            sections.append(self._moments.format("Micro Moment Values", self.micro))
+        if self._formatted_moments is not None:
+            sections.append(self._formatted_moments)
 
         # join the sections into a single string
         return "\n\n".join(sections)
@@ -573,7 +575,7 @@ class ProblemResults(Results):
         mean_g = np.r_[compute_gmm_moments_mean(u_list, Z_list), self.micro]
         return mean_g
 
-    def _compute_mean_G(self) -> Array:
+    def _compute_mean_G(self, moments: Moments) -> Array:
         """Compute the Jacobian of moments with respect to parameters."""
         Z_list = [self.problem.products.ZD]
         jacobian_list = [np.c_[
@@ -592,13 +594,14 @@ class ProblemResults(Results):
             compute_gmm_moments_jacobian_mean(jacobian_list, Z_list),
             np.c_[
                 self.micro_by_theta_jacobian,
-                np.zeros((self._moments.MM, self._parameters.eliminated_beta_index.sum()), options.dtype),
-                np.zeros((self._moments.MM, self._parameters.eliminated_gamma_index.sum()), options.dtype)
+                np.zeros((moments.MM, self._parameters.eliminated_beta_index.sum()), options.dtype),
+                np.zeros((moments.MM, self._parameters.eliminated_gamma_index.sum()), options.dtype)
             ]
         ]
         return mean_G
 
-    def _compute_S(self, micro_covariances: Array, S_type: str, center_moments: bool = False) -> Array:
+    def _compute_S(
+            self, moments: Moments, micro_covariances: Array, S_type: str, center_moments: bool = False) -> Array:
         """Compute moment covariances."""
         u_list = [self.xi]
         Z_list = [self.problem.products.ZD]
@@ -607,10 +610,12 @@ class ProblemResults(Results):
             Z_list.append(self.problem.products.ZS)
 
         S = compute_gmm_moment_covariances(u_list, Z_list, S_type, self.problem.products.clustering_ids, center_moments)
-        if self._moments.MM > 0:
+        if moments.MM > 0:
             scaled_covariances = micro_covariances.copy()
-            for (m, moment_m), (n, moment_n) in itertools.product(enumerate(self._moments.micro_moments), repeat=2):
-                scaled_covariances[m, n] *= self.problem.N / np.sqrt(moment_m.observations * moment_n.observations)
+            for (m, moment_m), (n, moment_n) in itertools.product(enumerate(moments.micro_moments), repeat=2):
+                scaled_covariances[m, n] *= (
+                    self.problem.N / np.sqrt(moment_m.dataset.observations * moment_n.dataset.observations)
+                )
 
             S = scipy.linalg.block_diag(S, scaled_covariances)
 

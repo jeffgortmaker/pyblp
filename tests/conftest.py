@@ -10,15 +10,14 @@ import pytest
 import scipy.linalg
 
 from pyblp import (
-    Formulation, Integration, Problem, ProblemResults, DemographicExpectationMoment, CharacteristicExpectationMoment,
-    DemographicInteractionMoment, DiversionProbabilityMoment, DiversionInteractionMoment, Simulation, SimulationResults,
+    Formulation, Integration, Problem, ProblemResults, MicroDataset, MicroMoment, Simulation, SimulationResults,
     build_differentiation_instruments, build_id_data, build_matrix, build_ownership, build_integration, options
 )
 from pyblp.utilities.basics import get_indices, update_matrices, Array, Data, Options
 
 
 # define common types
-SimulationFixture = Tuple[Simulation, SimulationResults, Dict[str, Array], List[Any]]
+SimulationFixture = Tuple[Simulation, SimulationResults, Dict[str, Array], List[MicroMoment]]
 SimulatedProblemFixture = Tuple[Simulation, SimulationResults, Problem, Options, ProblemResults]
 
 
@@ -257,10 +256,19 @@ def medium_blp_simulation() -> SimulationFixture:
         seed=1,
     )
     simulation_results = simulation.replace_endogenous()
-    simulated_micro_moments = [DemographicInteractionMoment(
-        X2_index=0, demographics_index=0, value=0, observations=simulation.N,
-        market_ids=[simulation.unique_market_ids[2]]
-    )]
+
+    simulated_micro_moments = simulation_results.replace_micro_moment_values([MicroMoment(
+        name="demographic interaction",
+        dataset=MicroDataset(
+            name="inside",
+            observations=simulation.N,
+            compute_weights=lambda _, p, a: np.ones((a.size, p.size)),
+            market_ids=[simulation.unique_market_ids[2]],
+        ),
+        value=0,
+        compute_values=lambda _, p, a: p.X2[:, [0]].T * a.demographics[:, [0]],
+    )])
+
     return simulation, simulation_results, {}, simulated_micro_moments
 
 
@@ -312,9 +320,10 @@ def large_blp_simulation() -> SimulationFixture:
         correlation=0.9,
         rc_types=['linear', 'log', 'linear'],
         costs_type='log',
-        seed=2
+        seed=2,
     )
     simulation_results = simulation.replace_endogenous()
+
     simulated_data_override = {
         'demand_instruments': np.c_[
             build_differentiation_instruments(Formulation('0 + x + y + z + q'), simulation_results.product_data),
@@ -325,33 +334,85 @@ def large_blp_simulation() -> SimulationFixture:
             build_matrix(Formulation('0 + y + z + q'), simulation_results.product_data)
         ]
     }
-    simulated_micro_moments = [
-        DemographicExpectationMoment(product_ids=[0], demographics_index=1, value=0, observations=simulation.N),
-        DemographicExpectationMoment(
-            product_ids=[None, 0], demographics_index=1, value=0, observations=simulation.N,
-            market_ids=simulation.unique_market_ids[1:4], market_weights=[0.2, 0.4, 0.4],
+
+    inside_diversion_micro_dataset = MicroDataset(
+        name="diversion from 1",
+        observations=simulation.N,
+        compute_weights=lambda _, p, a: np.tile(p.product_ids == 1, (a.size, 1, 1 + p.size)),
+        market_ids=simulation.unique_market_ids[6:10],
+    )
+    outside_diversion_micro_dataset = MicroDataset(
+        name="diversion from outside",
+        observations=simulation.N,
+        compute_weights=lambda _, p, a: np.concatenate(
+            [np.ones((a.size, 1, 1 + p.size)), np.zeros((a.size, p.size, 1 + p.size))], axis=1
         ),
-        DemographicInteractionMoment(
-            X2_index=0, demographics_index=2, value=0, observations=simulation.N,
-            market_ids=simulation.unique_market_ids[3:5]
+        market_ids=[simulation.unique_market_ids[8]],
+    )
+    simulated_micro_moments = simulation_results.replace_micro_moment_values([
+        MicroMoment(
+            name="demographic 1 expectation for 0",
+            dataset=MicroDataset(
+                name="product 0",
+                observations=simulation.N,
+                compute_weights=lambda _, p, a: np.tile(p.product_ids.flat == 0, (a.size, 1)),
+            ),
+            value=0,
+            compute_values=lambda _, p, a: np.tile(a.demographics[:, [1]], (1, p.size)),
         ),
-        DiversionProbabilityMoment(
-            product_id1=1, product_id2=0, value=0, observations=simulation.N,
-            market_ids=simulation.unique_market_ids[6:10]
+        MicroMoment(
+            name="demographic 1 expectation for 0 and outside",
+            dataset=MicroDataset(
+                name="product 0 and outside",
+                observations=simulation.N,
+                compute_weights=lambda _, p, a: np.c_[
+                    np.ones((a.size, 1)), np.tile(p.product_ids.flat == 0, (a.size, 1))
+                ],
+                market_ids=simulation.unique_market_ids[1:4],
+            ),
+            value=0,
+            compute_values=lambda _, p, a: np.tile(a.demographics[:, [1]], (1, 1 + p.size)),
         ),
-        DiversionProbabilityMoment(
-            product_id1=None, product_id2=1, value=0, observations=simulation.N,
-            market_ids=[simulation.unique_market_ids[8]]
+        MicroMoment(
+            name="1 to 0 diversion ratio",
+            dataset=inside_diversion_micro_dataset,
+            value=0,
+            compute_values=lambda _, p, a: np.concatenate(
+                [np.zeros((a.size, p.size, 1)), np.tile(p.product_ids.flat == 0, (a.size, p.size, 1))], axis=2
+            ),
         ),
-        DiversionProbabilityMoment(
-            product_id1=1, product_id2=None, value=0, observations=simulation.N,
-            market_ids=[simulation.unique_market_ids[9]]
+        MicroMoment(
+            name="outside to 1 diversion ratio",
+            dataset=outside_diversion_micro_dataset,
+            value=0,
+            compute_values=lambda _, p, a: np.concatenate(
+                [np.zeros((a.size, 1 + p.size, 1)), np.tile(p.product_ids.flat == 1, (a.size, 1 + p.size, 1))], axis=2
+            ),
         ),
-        DiversionInteractionMoment(
-            X2_index1=1, X2_index2=1, value=0, observations=simulation.N,
-            market_ids=[simulation.unique_market_ids[12]]
+        MicroMoment(
+            name="1 to outside diversion ratio",
+            dataset=inside_diversion_micro_dataset,
+            value=0,
+            compute_values=lambda _, p, a: np.concatenate(
+                [np.ones((a.size, p.size, 1)), np.zeros((a.size, p.size, p.size))], axis=2
+            ),
         ),
-    ]
+        MicroMoment(
+            name="diversion interaction",
+            dataset=MicroDataset(
+                name="inside first and second",
+                observations=simulation.N,
+                compute_weights=lambda _, p, a: np.ones((a.size, p.size, p.size)),
+                market_ids=[simulation.unique_market_ids[12]],
+            ),
+            value=0,
+            compute_values=lambda _, p, a: (
+                np.tile(p.X2[:, [1]], (a.size, 1, p.size)) *
+                np.tile(p.X2[:, [1]].T, (a.size, p.size, 1))
+            ),
+        ),
+    ])
+
     return simulation, simulation_results, simulated_data_override, simulated_micro_moments
 
 
@@ -446,16 +507,32 @@ def large_nested_blp_simulation() -> SimulationFixture:
         seed=0,
     )
     simulation_results = simulation.replace_endogenous()
-    simulated_micro_moments = [
-        CharacteristicExpectationMoment(
-            agent_ids=[0, 1], X2_index=0, value=0, observations=2 * simulation.N,
-            market_ids=simulation.unique_market_ids[5:6], name="characteristic expectation",
+
+    simulated_micro_moments = simulation_results.replace_micro_moment_values([
+        MicroMoment(
+            name="expectation for agents 0, 1",
+            dataset=MicroDataset(
+                name="agents 0, 1",
+                observations=simulation.N,
+                compute_weights=lambda _, p, a: np.tile((a.agent_ids == 0) | (a.agent_ids == 1), (1, p.size)),
+                market_ids=simulation.unique_market_ids[5:6],
+            ),
+            value=0,
+            compute_values=lambda _, p, a: np.tile(p.X2[:, 0], (a.size, 1)),
         ),
-        CharacteristicExpectationMoment(
-            agent_ids=[2], X2_index=0, value=0, observations=3 * simulation.N,
-            market_ids=simulation.unique_market_ids[6:7]
+        MicroMoment(
+            name="expectation for agent 2",
+            dataset=MicroDataset(
+                name="agent 2",
+                observations=simulation.N,
+                compute_weights=lambda _, p, a: np.tile((a.agent_ids == 2), (1, p.size)),
+                market_ids=simulation.unique_market_ids[6:7],
+            ),
+            value=0,
+            compute_values=lambda _, p, a: np.tile(p.X2[:, 0], (a.size, 1)),
         ),
-    ]
+    ])
+
     return simulation, simulation_results, {}, simulated_micro_moments
 
 
@@ -496,38 +573,6 @@ def simulated_problem(request: Any) -> SimulatedProblemFixture:
             {k: (v, v.dtype) for k, v in simulated_data_override.items()}
         )
 
-    # update micro moment values
-    micro_moments: List[Any] = []
-    if simulated_micro_moments:
-        micro_values = simulation_results.compute_micro_values(simulated_micro_moments)
-        for moment, value in zip(simulated_micro_moments, micro_values.T):
-            if isinstance(moment, DemographicExpectationMoment):
-                micro_moments.append(DemographicExpectationMoment(
-                    moment.product_ids, moment.demographics_index, value, moment.observations, moment.market_ids,
-                    moment.market_weights
-                ))
-            elif isinstance(moment, CharacteristicExpectationMoment):
-                micro_moments.append(CharacteristicExpectationMoment(
-                    moment.agent_ids, moment.X2_index, value, moment.observations, moment.market_ids,
-                    moment.market_weights
-                ))
-            elif isinstance(moment, DemographicInteractionMoment):
-                micro_moments.append(DemographicInteractionMoment(
-                    moment.X2_index, moment.demographics_index, value, moment.observations, moment.market_ids,
-                    moment.market_weights
-                ))
-            elif isinstance(moment, DiversionProbabilityMoment):
-                micro_moments.append(DiversionProbabilityMoment(
-                    moment.product_id1, moment.product_id2, value, moment.observations, moment.market_ids,
-                    moment.market_weights
-                ))
-            else:
-                assert isinstance(moment, DiversionInteractionMoment)
-                micro_moments.append(DiversionInteractionMoment(
-                    moment.X2_index1, moment.X2_index2, value, moment.observations, moment.market_ids,
-                    moment.market_weights
-                ))
-
     # initialize and solve the problem
     problem = simulation_results.to_problem(simulation.product_formulations[:2 + int(supply)], product_data)
     solve_options = {
@@ -538,7 +583,7 @@ def simulated_problem(request: Any) -> SimulatedProblemFixture:
         'rho_bounds': (np.zeros_like(simulation.rho), np.minimum(0.9, 1.5 * simulation.rho)),
         'method': '1s',
         'check_optimality': 'gradient',
-        'micro_moments': micro_moments
+        'micro_moments': simulated_micro_moments
     }
     problem_results = problem.solve(**solve_options)
     return simulation, simulation_results, problem, solve_options, problem_results

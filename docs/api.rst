@@ -63,18 +63,14 @@ Once initialized, the following method solves the problem.
 Micro Moment Classes
 --------------------
 
-Micro moment configurations can be passed to :meth:`Problem.solve`.
+Micro dataset configurations are passed to micro moment configurations, which in turn can be passed to :meth:`Problem.solve`.
 
 .. autosummary::
    :toctree: _api
    :template: class_with_signature.rst
 
-   DemographicExpectationMoment
-   CharacteristicExpectationMoment
-   DemographicInteractionMoment
-   DiversionProbabilityMoment
-   DiversionInteractionMoment
-   CustomMoment
+   MicroDataset
+   MicroMoment
 
 
 Problem Results Class
@@ -303,12 +299,12 @@ It can also be converted into a :class:`Problem` with the following method.
 
    SimulationResults.to_problem
 
-Simulation results can also be used to compute micro moment values.
+The following method replaces micro moment values with those that are consistent with the simulation.
 
 .. autosummary::
    :toctree: _api
 
-   SimulationResults.compute_micro_values
+   SimulationResults.replace_micro_moment_values
 
 
 Structured Data Classes

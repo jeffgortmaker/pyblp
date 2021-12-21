@@ -16,7 +16,7 @@ from ..configurations.integration import Integration
 from ..configurations.iteration import Iteration
 from ..configurations.optimization import ObjectiveResults, Optimization
 from ..markets.problem_market import ProblemMarket
-from ..moments import Moment, CustomMoment, EconomyMoments
+from ..micro import MicroMoment, Moments
 from ..parameters import Parameters
 from ..primitives import Agents, Products
 from ..results.problem_results import ProblemResults
@@ -50,7 +50,8 @@ class ProblemEconomy(Economy):
             delta_behavior: str = 'first', iteration: Optional[Iteration] = None, fp_type: str = 'safe_linear',
             shares_bounds: Optional[Tuple[Any, Any]] = (1e-300, None), costs_bounds: Optional[Tuple[Any, Any]] = None,
             W: Optional[Any] = None, center_moments: bool = True, W_type: str = 'robust', se_type: str = 'robust',
-            micro_moments: Sequence[Moment] = (), extra_micro_covariances: Optional[Any] = None) -> ProblemResults:
+            micro_moments: Sequence[MicroMoment] = (), micro_moment_covariances: Optional[Any] = None) -> (
+            ProblemResults):
         r"""Solve the problem.
 
         The problem is solved in one or more GMM steps. During each step, any parameters in :math:`\theta` are optimized
@@ -270,11 +271,10 @@ class ProblemEconomy(Economy):
             Since finite differences comes with numerical approximation error and is typically slower, analytic
             expressions are used by default.
 
-            When using any :class:`CustomMoment` micro moments without specifying ``compute_custom_derivatives``, this
-            must be ``True``. Another situation in which finite differences may be preferable is when there are a
-            sufficiently large number of products and integration nodes in individual markets so as to make computing
-            analytic Jacobians infeasible because of memory requirements. Note that an analytic expression for the
-            Hessian has not been implemented, so when computed it is always approximated with finite differences.
+            One situation in which finite differences may be preferable is when there are a sufficiently large number of
+            products and integration nodes in individual markets to make computing analytic Jacobians infeasible because
+            of memory requirements. Note that an analytic expression for the Hessian has not been implemented, so when
+            computed it is always approximated with finite differences.
 
         error_behavior : `str, optional`
             How to handle any errors. For example, there can sometimes be overflow or underflow when computing
@@ -414,13 +414,9 @@ class ProblemEconomy(Economy):
             block-diagonal with a micro moment block equal to the scaled covariance matrix defined in
             :eq:`scaled_micro_moment_covariances`.
 
-        micro_moments : `sequence of Moment, optional`
-            Configurations for the :math:`M_M` micro moments that will be added to the standard set of moments. For a
-            list of supported micro moments, refer to :ref:`api:Micro Moment Classes`. By default, no micro moments are
-            used, so :math:`M_M = 0`.
-
-            Unless observed micro moment values were computed with a trivial amount of sampling error,
-            ``extra_micro_covariances`` should typically be specified as well to account for this extra source of error.
+        micro_moments : `sequence of MicroMoment, optional`
+            Configurations for the :math:`M_M` :class:`MicroMoment` instances that will be added to the standard set of
+            moments. By default, no micro moments are used, so :math:`M_M = 0`.
 
             When micro moments are specified, unless an initial weighting matrix ``W`` is specified as well (with a
             lower right micro moment block that reflects micro moment covariances), an ``initial_update`` will be used
@@ -435,11 +431,11 @@ class ProblemEconomy(Economy):
                best guess for parameter values and pass :attr:`ProblemResults.updated_W` to ``W`` for each set of
                different parameter starting values.
 
-        extra_micro_covariances : `array-like, optional`
-            Covariance matrix that reflects sampling error in observed micro moment values with elements
-            :math:`\text{Cov}(\mathscr{V}_m, \mathscr{V}_n)` defined in :eq:`averaged_micro_moment_covariances`. This is
-            used to update the weighting matrix and compute standard errors. By default, this matrix is assumed to be
-            zero. It should be specified if micro moments were computed with nontrivial sampling error.
+        micro_moment_covariances : `array-like, optional`
+            Covariance matrix for the :math:`M_M` micro moments. By default, element :math:`(m, m')` is computed
+            according to :eq:`micro_moment_covariances`. This override could be used, for example, if instead of
+            estimating covariances at some estimated :math:`\hat{\theta}`, one wants to use a boostrap procedure to
+            compute their covariances directly from the micro data.
 
         Returns
         -------
@@ -485,23 +481,15 @@ class ProblemEconomy(Economy):
         costs_bounds = self._coerce_optional_bounds(costs_bounds, 'costs_bounds')
 
         # validate and structure micro moments before outputting related information
-        moments = EconomyMoments(self, micro_moments)
+        moments = Moments(self, micro_moments)
         if moments.MM > 0:
             output("")
             output(moments.format("Micro Moments"))
-            if not finite_differences:
-                for moment in moments.micro_moments:
-                    if isinstance(moment, CustomMoment) and moment.compute_custom_derivatives is None:
-                        raise ValueError(
-                            "finite_differences must be True when there are any custom micro moments without specified"
-                            "compute_custom_derivatives."
-                        )
-
-            if extra_micro_covariances is not None:
-                extra_micro_covariances = np.c_[np.asarray(extra_micro_covariances, options.dtype)]
-                if extra_micro_covariances.shape != (moments.MM, moments.MM):
+            if micro_moment_covariances is not None:
+                micro_moment_covariances = np.c_[np.asarray(micro_moment_covariances, options.dtype)]
+                if micro_moment_covariances.shape != (moments.MM, moments.MM):
                     raise ValueError(f"extra_micro_moments must be a square {moments.MM} by {moments.MM} matrix.")
-                self._detect_psd(extra_micro_covariances, "extra_micro_moments")
+                self._detect_psd(micro_moment_covariances, "micro_moment_covariances")
 
         # choose whether to do an initial update
         if initial_update is None:
@@ -647,7 +635,7 @@ class ProblemEconomy(Economy):
             last_step = step == 2 or (method == '1s' and step == 1)
             compute_gradient = parameters.P > 0
             compute_hessian = compute_gradient and check_optimality == 'both' and step > 0
-            compute_micro_covariances = moments.MM > 0
+            compute_micro_covariances = moments.MM > 0 and micro_moment_covariances is None
 
             # use progress information computed at the optimal theta to compute results for the step
             if initial_step:
@@ -667,7 +655,7 @@ class ProblemEconomy(Economy):
             results = ProblemResults(
                 final_progress, last_results, step, last_step, step_start_time, optimization_start_time,
                 optimization_end_time, optimization_stats, iteration_stats, scale_objective, shares_bounds,
-                costs_bounds, extra_micro_covariances, center_moments, W_type, se_type
+                costs_bounds, micro_moment_covariances, center_moments, W_type, se_type
             )
             self._handle_errors(results._errors, error_behavior)
             output(f"Computed results after {format_seconds(results.total_time - results.optimization_time)}.")
@@ -692,7 +680,7 @@ class ProblemEconomy(Economy):
             step_start_time = time.time()
 
     def _compute_progress(
-            self, parameters: Parameters, moments: EconomyMoments, iv: IV, W: Array, scale_objective: bool,
+            self, parameters: Parameters, moments: Moments, iv: IV, W: Array, scale_objective: bool,
             error_behavior: str, error_punishment: float, delta_behavior: str, iteration: Iteration, fp_type: str,
             shares_bounds: Bounds, costs_bounds: Bounds, finite_differences: bool, theta: Array,
             progress: 'InitialProgress', compute_gradient: bool, compute_hessian: bool,
@@ -863,9 +851,9 @@ class ProblemEconomy(Economy):
         )
 
     def _compute_demand_contributions(
-            self, parameters: Parameters, moments: EconomyMoments, iteration: Iteration, fp_type: str,
-            shares_bounds: Bounds, sigma: Array, pi: Array, rho: Array, progress: 'InitialProgress',
-            compute_jacobians: bool, compute_micro_covariances: bool) -> (
+            self, parameters: Parameters, moments: Moments, iteration: Iteration, fp_type: str, shares_bounds: Bounds,
+            sigma: Array, pi: Array, rho: Array, progress: 'InitialProgress', compute_jacobians: bool,
+            compute_micro_covariances: bool) -> (
             Tuple[Array, Array, Array, Array, Array, Array, Array, Dict[Hashable, SolverStats], List[Error]]):
         """Compute delta and the Jacobian (holding beta fixed) of xi (equivalently, of delta) with respect to theta
         market-by-market. If there are any micro moments, compute them (taking the average across relevant markets)
@@ -880,7 +868,7 @@ class ProblemEconomy(Economy):
         xi_jacobian = np.zeros((self.N, parameters.P), options.dtype)
         micro_jacobian = np.zeros((moments.MM, parameters.P), options.dtype)
         micro_covariances = np.zeros((moments.MM, moments.MM), options.dtype)
-        micro_values = np.full((self.T, moments.MM), np.nan, options.dtype)
+        micro_values = np.full((moments.MM, 1), np.nan, options.dtype)
         clipped_shares = np.zeros((self.N, 1), np.bool_)
         iteration_stats: Dict[Hashable, SolverStats] = {}
 
@@ -888,30 +876,37 @@ class ProblemEconomy(Economy):
         if self.K2 == 0 and moments.MM == 0 and (parameters.P == 0 or not compute_jacobians):
             delta = self._compute_logit_delta(rho)
         else:
-            def market_factory(s: Hashable) -> Tuple[ProblemMarket, Array, Array, Iteration, str, Bounds, bool, bool]:
+            def market_factory(
+                    s: Hashable) -> Tuple[ProblemMarket, Array, Array, Moments, Iteration, str, Bounds, bool, bool]:
                 """Build a market along with arguments used to compute delta, micro moment values, and Jacobians."""
-                market_s = ProblemMarket(self, s, parameters, sigma, pi, rho, moments=moments)
+                market_s = ProblemMarket(self, s, parameters, sigma, pi, rho)
                 delta_s = progress.next_delta[self._product_market_indices[s]]
                 last_delta_s = progress.delta[self._product_market_indices[s]]
                 return (
-                    market_s, delta_s, last_delta_s, iteration, fp_type, shares_bounds, compute_jacobians,
+                    market_s, delta_s, last_delta_s, moments, iteration, fp_type, shares_bounds, compute_jacobians,
                     compute_micro_covariances
                 )
 
-            # compute delta, micro moment values, their Jacobians, and micro moment covariances market-by-market
-            micro_jacobian_mapping: Dict[Hashable, Array] = {}
-            micro_covariances_mapping: Dict[Hashable, Array] = {}
+            # compute delta and contributions to micro moment values, Jacobians, and covariances market-by-market
+            micro_numerator_mapping: Dict[Hashable, Array] = {}
+            micro_denominator_mapping: Dict[Hashable, Array] = {}
+            micro_numerator_jacobian_mapping: Dict[Hashable, Array] = {}
+            micro_denominator_jacobian_mapping: Dict[Hashable, Array] = {}
+            micro_covariances_numerator_mapping: Dict[Hashable, Array] = {}
             generator = generate_items(self.unique_market_ids, market_factory, ProblemMarket.solve_demand)
             for t, generated_t in generator:
                 (
-                    delta_t, micro_values_t, xi_jacobian_t, micro_jacobian_t, micro_covariances_t, clipped_shares_t,
-                    iteration_stats_t, errors_t
+                    delta_t, xi_jacobian_t, micro_numerator_t, micro_denominator_t, micro_numerator_jacobian_t,
+                    micro_denominator_jacobian_t, micro_covariances_numerator_t, clipped_shares_t, iteration_stats_t,
+                    errors_t
                 ) = generated_t
                 delta[self._product_market_indices[t]] = delta_t
                 xi_jacobian[self._product_market_indices[t], :parameters.P] = xi_jacobian_t
-                micro_values[self._market_indices[t], moments.market_indices[t]] = micro_values_t.flat
-                micro_jacobian_mapping[t] = micro_jacobian_t
-                micro_covariances_mapping[t] = micro_covariances_t
+                micro_numerator_mapping[t] = micro_numerator_t
+                micro_denominator_mapping[t] = micro_denominator_t
+                micro_numerator_jacobian_mapping[t] = micro_numerator_jacobian_t
+                micro_denominator_jacobian_mapping[t] = micro_denominator_jacobian_t
+                micro_covariances_numerator_mapping[t] = micro_covariances_numerator_t
                 clipped_shares[self._product_market_indices[t]] = clipped_shares_t
                 iteration_stats[t] = iteration_stats_t
                 errors.extend(errors_t)
@@ -919,22 +914,39 @@ class ProblemEconomy(Economy):
             # aggregate micro moments, their Jacobian, and their covariances across all markets (this is done after
             #   market-by-market computation to preserve numerical stability with different market orderings)
             if moments.MM > 0:
+                micro_numerator = micro.copy()
+                micro_denominator = micro.copy()
+                micro_numerator_jacobian = micro_jacobian.copy()
+                micro_denominator_jacobian = micro_jacobian.copy()
+                micro_covariances_numerator = micro_covariances.copy()
                 with np.errstate(all='ignore'):
                     for t in self.unique_market_ids:
-                        indices = moments.market_indices[t]
-                        weights = moments.market_weights[t]
-                        if indices.size > 0:
-                            differences = moments.market_values[t] - micro_values[self._market_indices[t], indices]
-                            micro[indices] += weights[:, None] * differences[:, None]
-                            micro_jacobian[indices, :parameters.P] -= weights[:, None] * micro_jacobian_mapping[t]
-                            if compute_micro_covariances:
-                                pairwise_indices = tuple(np.meshgrid(indices, indices))
-                                pairwise_weights = weights[:, None] * weights[:, None].T
-                                micro_covariances[pairwise_indices] += pairwise_weights * micro_covariances_mapping[t]
+                        micro_numerator += micro_numerator_mapping[t]
+                        micro_denominator += micro_denominator_mapping[t]
+                        if compute_jacobians:
+                            micro_numerator_jacobian += micro_numerator_jacobian_mapping[t]
+                            micro_denominator_jacobian += micro_denominator_jacobian_mapping[t]
+                        if compute_micro_covariances:
+                            micro_covariances_numerator += micro_covariances_numerator_mapping[t]
 
-                    # enforce shape and symmetry of micro covariances
+                    micro_values = micro_numerator / micro_denominator
+                    micro = moments.values - micro_values
+                    if compute_jacobians:
+                        micro_jacobian = (
+                            -(micro_numerator_jacobian - micro_values * micro_denominator_jacobian) / micro_denominator
+                        )
                     if compute_micro_covariances:
-                        micro_covariances = np.c_[micro_covariances + micro_covariances.T] / 2
+                        micro_covariances = micro_covariances_numerator / micro_denominator
+
+                        # subtract away means from second moments
+                        for m1, (moment1, value1) in enumerate(zip(moments.micro_moments, micro_values)):
+                            for m2, (moment2, value2) in enumerate(zip(moments.micro_moments[m1:], micro_values[m1:])):
+                                if moment1.dataset == moment2.dataset:
+                                    micro_covariances[m1, m2] -= value1 * value2
+
+                        # fill the lower triangle
+                        lower_indices = np.tril_indices(moments.MM, -1)
+                        micro_covariances[lower_indices] = micro_covariances.T[lower_indices]
 
         # replace invalid elements in delta and the micro moment values with their last values
         bad_delta_index = ~np.isfinite(delta)
@@ -1107,11 +1119,9 @@ class Problem(ProblemEconomy):
             - **nesting_ids** (`object, optional`) - IDs that associate products with nesting groups. When these IDs are
               specified, ``rho`` must be specified in :meth:`Problem.solve` as well.
 
-        To use certain types of micro moments, product IDs must be specified:
+        It may be convenient to define IDs for different products:
 
-            - **product_ids** (`object, optional`) - IDs that identify individual products within markets. The IDs
-              referenced by :class:`DemographicExpectationMoment` or :class:`DiversionProbabilityMoment` must be unique
-              within the relevant markets.
+            - **product_ids** (`object, optional`) - IDs that identify individual products within markets.
 
         Finally, clustering groups can be specified to account for within-group correlation while updating the weighting
         matrix and estimating standard errors:
@@ -1159,7 +1169,7 @@ class Problem(ProblemEconomy):
            ``nodes`` field with three columns can be replaced by three one-dimensional fields: ``nodes0``, ``nodes1``,
            and ``nodes2``.
 
-        To use certain types of micro moments, agent IDs must be specified:
+        It may be convenient to define IDs for different agents:
 
             - **agent_ids** (`object, optional`) - IDs that identify individual agents within markets. There can be
               multiple of the same ID within a market.
@@ -1471,7 +1481,7 @@ class InitialProgress(object):
 
     problem: ProblemEconomy
     parameters: Parameters
-    moments: EconomyMoments
+    moments: Moments
     W: Array
     theta: Array
     objective: Array
@@ -1486,7 +1496,7 @@ class InitialProgress(object):
     micro_jacobian: Array
 
     def __init__(
-            self, problem: ProblemEconomy, parameters: Parameters, moments: EconomyMoments, W: Array, theta: Array,
+            self, problem: ProblemEconomy, parameters: Parameters, moments: Moments, W: Array, theta: Array,
             objective: Array, gradient: Array, hessian: Array, next_delta: Array, delta: Array, tilde_costs: Array,
             micro: Array, xi_jacobian: Array, omega_jacobian: Array, micro_jacobian: Array) -> None:
         """Store initial progress information, computing the projected gradient and the reduced Hessian."""
@@ -1525,7 +1535,7 @@ class Progress(InitialProgress):
     projected_gradient_norm: Array
 
     def __init__(
-            self, problem: ProblemEconomy, parameters: Parameters, moments: EconomyMoments, W: Array, theta: Array,
+            self, problem: ProblemEconomy, parameters: Parameters, moments: Moments, W: Array, theta: Array,
             objective: Array, gradient: Array, hessian: Array, next_delta: Array, delta: Array, tilde_costs: Array,
             micro: Array, xi_jacobian: Array, omega_jacobian: Array, micro_jacobian: Array, micro_covariances: Array,
             micro_values: Array, iv_delta: Array, iv_tilde_costs: Array, xi: Array, omega: Array, beta: Array,
@@ -1629,11 +1639,6 @@ class Progress(InitialProgress):
         # add information about theta
         header.append(("", "Theta"))
         values.append(", ".join(format_number(x) for x in self.theta))
-
-        # add information about micro moments
-        if self.moments.MM > 0:
-            header.append(("Micro", "Moments"))
-            values.append(", ".join(format_number(x) for x in self.micro))
 
         # format the table
         lines.append(format_table(header, values, include_border=False, include_header=evaluations == 1))

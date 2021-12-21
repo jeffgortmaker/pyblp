@@ -11,10 +11,7 @@ from .construction import (
 )
 from .economies.problem import ImportanceSamplingProblem, OptimalInstrumentProblem, Problem
 from .economies.simulation import Simulation
-from .moments import (
-    DemographicExpectationMoment, CharacteristicExpectationMoment, DemographicInteractionMoment,
-    DiversionProbabilityMoment, DiversionInteractionMoment, CustomMoment
-)
+from .micro import MicroDataset, MicroMoment
 from .primitives import Agents, Products
 from .results.bootstrapped_results import BootstrappedResults
 from .results.importance_sampling_results import ImportanceSamplingResults
@@ -28,8 +25,7 @@ __all__ = [
     'data', 'exceptions', 'options', 'Formulation', 'Integration', 'Iteration', 'Optimization', 'build_blp_instruments',
     'build_differentiation_instruments', 'build_id_data', 'build_integration', 'build_matrix', 'build_ownership',
     'data_to_dict', 'save_pickle', 'read_pickle', 'ImportanceSamplingProblem', 'OptimalInstrumentProblem', 'Problem',
-    'Simulation', 'DemographicExpectationMoment', 'CharacteristicExpectationMoment', 'DemographicInteractionMoment',
-    'DiversionProbabilityMoment', 'DiversionInteractionMoment', 'CustomMoment', 'Agents', 'Products',
-    'BootstrappedResults', 'ImportanceSamplingResults', 'OptimalInstrumentResults', 'ProblemResults',
-    'SimulationResults', 'parallel', '__version__'
+    'Simulation', 'MicroDataset', 'MicroMoment', 'Agents', 'Products', 'BootstrappedResults',
+    'ImportanceSamplingResults', 'OptimalInstrumentResults', 'ProblemResults', 'SimulationResults', 'parallel',
+    '__version__'
 ]

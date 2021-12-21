@@ -241,24 +241,50 @@ Once fixed effects have been absorbed, estimation is as described above with the
 Micro Moments
 -------------
 
-In the spirit of :ref:`references:Imbens and Lancaster (1994)`, :ref:`references:Petrin (2002)`, and :ref:`references:Berry, Levinsohn, and Pakes (2004)`, more detailed micro data on individual agent decisions can be used to supplement the standard demand- and supply-side moments :math:`\bar{g}_D` and :math:`\bar{g}_S` in :eq:`averaged_moments` with an additional :math:`m = 1, 2, \ldots, M_M` averaged micro moments, :math:`\bar{g}_M`, for a total of :math:`M = M_D + M_S + M_M` averaged moments:
+More detailed micro data on individual choices can be used to supplement the standard demand- and supply-side moments :math:`\bar{g}_D` and :math:`\bar{g}_S` in :eq:`averaged_moments` with an additional :math:`m = 1, 2, \ldots, M_M` micro moments, :math:`\bar{g}_M`, for a total of :math:`M = M_D + M_S + M_M` moments:
 
 .. math:: \bar{g} = \begin{bmatrix} \bar{g}_D \\ \bar{g}_S \\ \bar{g}_M \end{bmatrix}.
 
-Each micro moment :math:`m` is the difference between an observed statistic :math:`\mathscr{V}_m` estimated with micro data and its simulated analogue :math:`v_m` averaged over relevant markets :math:`T_m \subset T`:
+Each micro moment :math:`m` is the difference between an observed value :math:`\bar{v}_m` and its simulated analogue :math:`v_m`:
 
-.. math:: \bar{g}_{M,m} = \mathscr{V}_m - v_m, \quad v_m = \frac{1}{T_m} \sum_{t \in T_m} v_{mt}.
-   :label: averaged_micro_moments
+.. math:: \bar{g}_{M,m} = \bar{v}_m - v_m
+    :label: averaged_micro_moments
 
-Micro moments are computed for each :math:`\theta` and contribute to the GMM objective :math:`q(\theta)` in :eq:`objective`. Their derivatives with respect to :math:`\theta` are added as rows to :math:`\bar{G}` in :eq:`averaged_moments_jacobian`, and blocks are added to both :math:`W` and :math:`S` in :eq:`2sls_W` and :eq:`W`. The covariance between standard moments and micro moments is assumed to be zero, so these matrices are block-diagonal. The scaled covariance between micro moments :math:`m` and :math:`n` in :math:`S` is
+The observed value is an average over observations :math:`n \in N_{d_m}` in the micro dataset :math:`d_m`:
 
-.. math:: S_{M,mn} = \frac{N}{N_m^{1/2} N_n^{1/2}} \text{Cov}(\bar{g}_{M,m}, \bar{g}_{M,n})
+.. math:: \bar{v}_m = \frac{1}{N_{d_m}} \sum_{n \in N_{d_m}} v_{mi_nj_nt_n}.
+    :label: observed_micro_value
+
+Its simulated analogue is
+
+.. math:: v_m = \frac{\sum_{t \in T} \sum_{i \in I_t} \sum_{j \in J_t \cup \{0\}} w_{it} s_{ijt} w_{d_mijt} v_{mijt}}{\sum_{t \in T} \sum_{i \in I_t} \sum_{j \in J_t \cup \{0\}} w_{it} s_{ijt} w_{d_mijt}},
+    :label: simulated_micro_value
+
+In which :math:`w_{it} s_{ijt} w_{d_mijt}` is the probability an observation in the micro dataset is for an agent :math:`i` who chooses :math:`j` in market :math:`t`.
+
+A micro dataset :math:`d`, often a survey, is defined by survey weights :math:`w_{dijt}`. For example, :math:`w_{dijt} = 1\{j \neq 0, t \in T_d\}` defines a micro dataset that is a selected sample of inside purchasers in a few markets :math:`T_d \subset T`, giving each market an equal sampling weight. Different micro datasets are independent.
+
+A micro dataset will often admit multiple micro moments. Each micro moment :math:`m` is defined by its dataset :math:`d_m` and micro values :math:`v_{mijt}`. For example, a micro moment :math:`m` with :math:`v_{mijt} = y_{it}x_{jt}` matches the mean of an interaction between some demographic :math:`y_{it}` and some product characteristic :math:`x_{jt}`.
+
+Micro moments are computed for each :math:`\theta` and contribute to the GMM objective :math:`q(\theta)` in :eq:`objective`. Their derivatives with respect to :math:`\theta` are added as rows to :math:`\bar{G}` in :eq:`averaged_moments_jacobian`, and blocks are added to both :math:`W` and :math:`S` in :eq:`2sls_W` and :eq:`W`. The covariance between standard moments and micro moments is zero, so these matrices are block-diagonal. The scaled covariance between micro moments :math:`m` and :math:`m'` in :math:`S` is zero if on different micro datasets :math:`d_m \neq d_{m'}`; otherwise, if on the same dataset :math:`d_m = d_{m'} = d`,
+
+.. math:: S_{M,mm'} = \frac{N}{N_d} \text{Cov}(v_{mi_nj_nt_n}, v_{m'i_nj_nt_n}),
    :label: scaled_micro_moment_covariances
 
-:math:`N` is the total number of products, :math:`N_m` is the number of observations underlying the observed micro moment value :math:`\mathscr{V}_m`. If the shared markets :math:`T_{mn} = T_m \cap T_n = \emptyset`, then :math:`\text{Cov}(\bar{g}_{M,m}, \bar{g}_{M,n}) = 0`. Otherwise, it is
+in which
 
-.. math:: \text{Cov}(\bar{g}_{M,m}, \bar{g}_{M,n}) = \text{Cov}(\mathscr{V}_m, \mathscr{V}_n) + \frac{1}{T_m \times T_n} \sum_{t \in T_{mn}} \text{Cov}(v_{mt}, v_{nt}).
-   :label: averaged_micro_moment_covariances
+.. math:: \text{Cov}(v_{mi_nj_nt_n}, v_{m'i_nj_nt_n}) = \frac{\sum_{t \in T} \sum_{i \in I_t} \sum_{j \in J_t \cup \{0\}} w_{it} s_{ijt} w_{dijt} (v_{mijt} - v_m)(v_{m'ijt} - v_{m'})}{\sum_{t \in T} \sum_{i \in I_t} \sum_{j \in J_t \cup \{0\}} w_{it} s_{ijt} w_{dijt}}.
+    :label: micro_moment_covariances
+
+Micro moments based on second choice data match averages over values :math:`v_{mijkt}` where :math:`k` indexes second choices, and are based on datasets defined by survey weights :math:`w_{dijkt}`. The observed value is
+
+.. math:: \bar{v}_m = \frac{1}{N_{d_m}} \sum_{n \in N_{d_m}} v_{mi_nj_nk_nt_n}.
+
+Its simulated analogue is
+
+.. math:: v_m = \frac{\sum_{t \in T} \sum_{i \in I_t} \sum_{j, k \in J_t \cup \{0\}} w_{it} s_{ijt} s_{ik(-j)t} w_{d_mijkt} v_{mijkt}}{\sum_{t \in T} \sum_{i \in I_t} \sum_{j, k \in J_t \cup \{0\}} w_{it} s_{ijt} s_{ik(-j)t} w_{d_mijkt}},
+
+in which second choice probabilities are :math:`s_{ik(-j)t} = \frac{s_{ikt}}{1 - s_{ijt}}` if :math:`k \neq j` and zero if :math:`k = j`. Covariances are defined analogously.
 
 
 Random Coefficients Nested Logit

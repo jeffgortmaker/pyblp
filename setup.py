@@ -20,7 +20,7 @@ setup(
     python_requires='>=3.6',
     install_requires=read('requirements.txt').splitlines(),
     extras_require={
-        'tests': ['pytest', 'pytest-xdist', 'linearmodels'],
+        'tests': ['pytest', 'pytest-xdist', 'linearmodels', 'dill', 'pathos'],
         'docs': [
             'sphinx==2.0.0', 'pandas', 'ipython', 'matplotlib', 'astunparse', 'sphinx-rtd-theme==0.4.3',
             'nbsphinx==0.5.0', 'jinja2~=2.11', 'docutils==0.17',

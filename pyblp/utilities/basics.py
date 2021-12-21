@@ -26,18 +26,18 @@ Data = Dict[str, Array]
 Options = Dict[str, Any]
 Bounds = Tuple[Array, Array]
 
-# define a pool managed by parallel and used by generate_items
-pool = None
+# define pools managed by parallel and used by generate_items
+pool: Any = None
 
 
 @contextlib.contextmanager
-def parallel(processes: int) -> Iterator[None]:
+def parallel(processes: int, use_pathos: bool = False) -> Iterator[None]:
     r"""Context manager used for parallel processing in a ``with`` statement context.
 
     This manager creates a context in which a pool of Python processes will be used by any method that requires
     market-by-market computation. These methods will distribute their work among the processes. After the context
-    created by the ``with`` statement ends, all worker processes in the pool will be terminated. Outside of this
-    context, such methods will not use multiprocessing.
+    created by the ``with`` statement ends, all worker processes in the pool will be terminated. Outside this context,
+    such methods will not use multiprocessing.
 
     Importantly, multiprocessing will only improve speed if gains from parallelization outweigh overhead from
     serializing and passing data between processes. For example, if computation for a single market is very fast and
@@ -48,6 +48,9 @@ def parallel(processes: int) -> Iterator[None]:
     ---------
     processes : `int`
         Number of Python processes that will be created and used by any method that supports parallel processing.
+    use_pathos : `bool, optional`
+        Whether to use `pathos <https://pathos.readthedocs.io/en/latest/>`_ (which will need to be installed) instead of
+        the default, built-in :mod:`multiprocessing` module.
 
     Examples
     --------
@@ -75,14 +78,50 @@ def parallel(processes: int) -> Iterator[None]:
     output(f"Starting a pool of {processes} processes ...")
     start_time = time.time()
     global pool
-    try:
-        with multiprocessing.pool.Pool(processes) as pool:
+    if use_pathos:
+        try:
+            from pathos.multiprocessing import ProcessPool
+        except ImportError as exception:
+            if "pathos" not in str(exception):
+                raise
+            raise ImportError("pathos must be installed when use_pathos is True.") from exception
+        try:
+            pool = ProcessPool(nodes=processes)
             output(f"Started the process pool after {format_seconds(time.time() - start_time)}.")
             yield
+        finally:
             output(f"Terminating the pool of {processes} processes ...")
             terminate_time = time.time()
-    finally:
-        pool = None
+            try:
+                pool.close()
+            except Exception:
+                pass
+            try:
+                pool.join()
+            except Exception:
+                pass
+            try:
+                pool.clear()
+            except Exception:
+                pass
+            pool = None
+    else:
+        try:
+            with multiprocessing.pool.Pool(processes) as pool:
+                output(f"Started the process pool after {format_seconds(time.time() - start_time)}.")
+                yield
+                output(f"Terminating the pool of {processes} processes ...")
+                terminate_time = time.time()
+        except AttributeError as exception:
+            if "Can't pickle local object" not in str(exception) or "<lambda>" not in str(exception):
+                raise
+            pathos_message = (
+                "The built-in multiprocessing module does not support lambda functions. Consider setting "
+                "the use_pathos of parallel to True."
+            )
+            raise RuntimeError(pathos_message) from exception
+        finally:
+            pool = None
     output(f"Terminated the process pool after {format_seconds(time.time() - terminate_time)}.")
 
 
@@ -93,12 +132,16 @@ def generate_items(keys: Iterable, factory: Callable[[Any], tuple], method: Call
     """
     if pool is None:
         return (generate_items_worker((k, factory(k), method)) for k in keys)
-    return pool.imap_unordered(generate_items_worker, ((k, factory(k), method) for k in keys))
+    try:
+        return pool.imap_unordered(generate_items_worker, ((k, factory(k), method) for k in keys))
+    except AttributeError:
+        # a pathos ProcessPool uses uimap instead of imap_unordered
+        return pool.uimap(generate_items_worker, ((k, factory(k), method) for k in keys))
 
 
 def generate_items_worker(args: Tuple[Any, tuple, Callable]) -> Tuple[Any, Any]:
-    """Call the the specified method of a class instance with any additional arguments. Return the associated key along
-    with the returned object.
+    """Call the specified method of a class instance with any additional arguments. Return the associated key along with
+    the returned object.
     """
     key, (instance, *method_args), method = args
     return key, method(instance, *method_args)

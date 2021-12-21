@@ -105,9 +105,8 @@ Features
 - Bertrand-Nash supply-side moments
 - Multiple equation GMM
 - Demographic interactions
-- Micro moments that match demographic expectations and covariances
-- Second choice micro moments that match probabilities and covariances
-- Custom micro moments
+- Flexible micro moments that can match statistics based on survey data
+- Support for micro moments based on second choice data
 - Fixed effect absorption
 - Nonlinear functions of product characteristics
 - Concentrating out linear parameters
