@@ -1244,7 +1244,8 @@ class Market(Container):
             try:
                 weights = np.asarray(dataset.compute_weights(self.t, self.products, self.agents), options.dtype)
             except Exception as exception:
-                raise RuntimeError(f"Failed to compute weights for micro dataset '{dataset}'.") from exception
+                message = f"Failed to compute weights for micro dataset '{dataset}' because of the above exception."
+                raise RuntimeError(message) from exception
             shapes = [
                 (self.I, self.J), (self.I, 1 + self.J), (self.I, self.J, self.J), (self.I, 1 + self.J, self.J),
                 (self.I, self.J, 1 + self.J), (self.I, 1 + self.J, 1 + self.J)
@@ -1440,7 +1441,8 @@ class Market(Container):
             try:
                 values = np.asarray(moment.compute_values(self.t, self.products, self.agents), options.dtype)
             except Exception as exception:
-                raise RuntimeError(f"Failed to compute values for micro moment '{moment}'.") from exception
+                message = f"Failed to compute values for micro moment '{moment}' because of the above exception."
+                raise RuntimeError(message) from exception
             if values.shape != weights.shape:
                 raise ValueError(
                     f"In market {self.t}, micro moment '{moment}' returned an array of shape {values.shape} from "
@@ -1467,7 +1469,10 @@ class Market(Container):
                                 moment2.compute_values(self.t, self.products, self.agents), options.dtype
                             )
                         except Exception as exception:
-                            raise RuntimeError(f"Failed to compute values for micro moment '{moment2}'.") from exception
+                            message = (
+                                f"Failed to compute values for micro moment '{moment2}' because of the above exception."
+                            )
+                            raise RuntimeError(message) from exception
                         micro_covariances_numerator[m, m2] = (weighted_values * values2).sum()
 
         return (

@@ -297,11 +297,12 @@ class Agents(object):
                         except patsy.PatsyError as exception_j:
                             if j == 0:
                                 raise exception
-                            raise ValueError(
+                            message = (
                                 f"Each demographic must either be a single column or have a column for each of the "
                                 f"maximum of {max_J} products. There is at least one missing demographic for product "
                                 f"index {j}."
-                            ) from exception_j
+                            )
+                            raise ValueError(message) from exception_j
                         else:
                             demographics_by_product.append(demographics_j)
 

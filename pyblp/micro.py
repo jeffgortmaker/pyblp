@@ -205,7 +205,8 @@ class Moments(object):
             try:
                 moment.dataset._validate(economy)
             except Exception as exception:
-                raise ValueError(f"The micro dataset '{moment.dataset}' is invalid.") from exception
+                message = f"The micro dataset '{moment.dataset}' is invalid because of the above exception."
+                raise ValueError(message) from exception
             for moment2 in micro_moments[:m]:
                 if moment == moment2:
                     raise ValueError(f"There is more than one of the micro moment '{moment}'.")

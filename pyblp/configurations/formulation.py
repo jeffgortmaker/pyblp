@@ -190,7 +190,8 @@ class Formulation(StringRepresentation):
 
                 if not fallback:
                     origin = patsy.origin.Origin(self._formula, 0, len(self._formula))
-                    raise patsy.PatsyError(f"Failed to load data for '{name}'.", origin) from exception
+                    message = f"Failed to load data for '{name}' because of the above exception."
+                    raise patsy.PatsyError(message, origin) from exception
 
         # always have at least one column to represent the size of the data
         if not data_mapping:
@@ -244,7 +245,8 @@ class Formulation(StringRepresentation):
             except Exception as exception:
                 assert self._absorb is not None
                 origin = patsy.origin.Origin(self._absorb, 0, len(self._absorb))
-                raise patsy.PatsyError(f"Failed to load data for '{name}'.", origin) from exception
+                message = f"Failed to load data for '{name}' because of the above exception."
+                raise patsy.PatsyError(message, origin) from exception
 
         # build columns of absorbed IDs
         ids_columns: List[Array] = []
@@ -482,7 +484,8 @@ def parse_term_expression(term: patsy.desc.Term) -> sp.Expr:
         try:
             expression *= parse_expression(factor.name())
         except Exception as exception:
-            raise patsy.PatsyError("Failed to parse a term.", factor.origin) from exception
+            message = "Failed to parse a term because of the above exception."
+            raise patsy.PatsyError(message, factor.origin) from exception
 
     return expression
 
@@ -542,7 +545,7 @@ def parse_expression(string: str, mark_categorical: bool = False) -> sp.Expr:
         str(expression)
         validate_categorical(expression)
     except (TypeError, ValueError) as exception:
-        raise ValueError(f"The expression '{string}' is malformed.") from exception
+        raise ValueError(f"The expression '{string}' is malformed because of the above exception.") from exception
 
     # replace patsy functions with the identity function, unless categorical variables are to be explicitly marked
     for name in patsy_function_names:
