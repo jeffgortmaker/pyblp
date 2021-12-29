@@ -44,7 +44,8 @@ class ResultsMarket(Market):
         """Compute the Jacobian (holding beta fixed) of xi (equivalently, of delta) with respect to theta for a
         realization of the market, handling any numerical errors.
         """
-        return self.compute_xi_by_theta_jacobian()
+        jacobian, _, _, _, errors = self.compute_xi_by_theta_jacobian()
+        return jacobian, errors
 
     @NumericalErrorHandler(exceptions.OmegaByThetaJacobianRealizationNumericalError)
     def safely_compute_omega_by_theta_jacobian_realization(

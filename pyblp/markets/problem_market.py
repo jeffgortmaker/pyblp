@@ -1,6 +1,6 @@
 """Market-level BLP problem functionality."""
 
-from typing import List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -36,10 +36,14 @@ class ProblemMarket(Market):
         bad_delta_index = ~np.isfinite(delta)
         valid_delta[bad_delta_index] = last_delta[bad_delta_index]
 
-        # compute the Jacobian
+        # compute the Jacobian (keep derivatives of probabilities with respect to theta if there are micro moments)
+        probabilities = conditionals = None
+        probabilities_tangent_mapping: Dict[int, Array] = {}
         xi_jacobian = np.full((self.J, self.parameters.P), np.nan, options.dtype)
         if compute_jacobians:
-            xi_jacobian, xi_jacobian_errors = self.safely_compute_xi_by_theta_jacobian(valid_delta)
+            xi_jacobian, probabilities, conditionals, probabilities_tangent_mapping, xi_jacobian_errors = (
+                self.safely_compute_xi_by_theta_jacobian(valid_delta, keep_probabilities_tangents=moments.MM > 0)
+            )
             errors.extend(xi_jacobian_errors)
 
         # compute contributions to micro moments, their Jacobian, and their covariances
@@ -55,7 +59,8 @@ class ProblemMarket(Market):
                 micro_covariances_numerator, micro_errors
             ) = (
                 self.safely_compute_micro_contributions(
-                    moments, valid_delta, xi_jacobian, compute_jacobians, compute_micro_covariances
+                    moments, valid_delta, probabilities, conditionals, probabilities_tangent_mapping, xi_jacobian,
+                    compute_jacobians, compute_micro_covariances
                 )
             )
             errors.extend(micro_errors)
@@ -107,15 +112,18 @@ class ProblemMarket(Market):
         return delta, clipped_shares, stats, errors
 
     @NumericalErrorHandler(exceptions.XiByThetaJacobianNumericalError)
-    def safely_compute_xi_by_theta_jacobian(self, delta: Array) -> Tuple[Array, List[Error]]:
+    def safely_compute_xi_by_theta_jacobian(
+            self, delta: Array, keep_probabilities_tangents: bool) -> (
+            Tuple[Array, Array, Optional[Array], Dict[int, Array], List[Error]]):
         """Compute the Jacobian (holding beta fixed) of xi (equivalently, of delta) with respect to theta, handling any
         numerical errors.
         """
-        return self.compute_xi_by_theta_jacobian(delta)
+        return self.compute_xi_by_theta_jacobian(delta, keep_probabilities_tangents)
 
     @NumericalErrorHandler(exceptions.MicroMomentsNumericalError)
     def safely_compute_micro_contributions(
-            self, moments: Moments, delta: Array, xi_jacobian: Array, compute_jacobians: bool,
+            self, moments: Moments, delta: Array, probabilities: Optional[Array], conditionals: Optional[Array],
+            probabilities_tangent_mapping: Dict[int, Array], xi_jacobian: Array, compute_jacobians: bool,
             compute_covariances: bool) -> Tuple[Array, Array, Array, Array, Array, List[Error]]:
         """Compute micro moment value contributions, handling any numerical errors."""
         errors: List[Error] = []
@@ -123,7 +131,10 @@ class ProblemMarket(Market):
             micro_numerator, micro_denominator, micro_numerator_jacobian, micro_denominator_jacobian,
             micro_covariances_numerator
         ) = (
-            self.compute_micro_contributions(moments, delta, xi_jacobian, compute_jacobians, compute_covariances)
+            self.compute_micro_contributions(
+                moments, delta, probabilities, conditionals, probabilities_tangent_mapping, xi_jacobian,
+                compute_jacobians, compute_covariances
+            )
         )
         return (
             micro_numerator, micro_denominator, micro_numerator_jacobian, micro_denominator_jacobian,

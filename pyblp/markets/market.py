@@ -1015,14 +1015,18 @@ class Market(Container):
         return jacobian
 
     def compute_shares_by_theta_jacobian(
-            self, delta: Array, probabilities: Array, conditionals: Optional[Array]) -> Array:
+            self, delta: Array, probabilities: Array, conditionals: Optional[Array],
+            keep_probabilities_tangents: bool = False) -> Tuple[Array, Dict[int, Array]]:
         """Compute the Jacobian of shares with respect to theta."""
         jacobian = np.zeros((self.J, self.parameters.P), options.dtype)
+        probabilities_tangent_mapping: Dict[int, Array] = {}
         for p, parameter in enumerate(self.parameters.unfixed):
             tangent, _ = self.compute_probabilities_by_parameter_tangent(parameter, probabilities, conditionals, delta)
             jacobian[:, [p]] = tangent @ self.agents.weights
+            if keep_probabilities_tangents:
+                probabilities_tangent_mapping[p] = tangent
 
-        return jacobian
+        return jacobian, probabilities_tangent_mapping
 
     def compute_capital_lamda_gamma_by_parameter_tangent(
             self, parameter: Parameter, probability_utility_derivatives: Array,
@@ -1170,9 +1174,12 @@ class Market(Container):
 
         return eta_jacobian, errors
 
-    def compute_xi_by_theta_jacobian(self, delta: Optional[Array] = None) -> Tuple[Array, List[Error]]:
+    def compute_xi_by_theta_jacobian(
+            self, delta: Optional[Array] = None, keep_probabilities_tangents: bool = False) -> (
+            Tuple[Array, Array, Optional[Array], Dict[int, Array], List[Error]]):
         """Use the Implicit Function Theorem to compute the Jacobian (holding beta fixed) of xi (equivalently, of delta)
-        with respect to theta. By default, use unchanged delta values.
+        with respect to theta. By default, use unchanged delta values. Keep probabilities (and optionally, their
+        derivatives with respect to theta) to not re-compute objects for micro moments.
         """
         errors: List[Error] = []
         if delta is None:
@@ -1181,12 +1188,14 @@ class Market(Container):
 
         probabilities, conditionals = self.compute_probabilities(delta)
         shares_by_xi_jacobian = self.compute_shares_by_xi_jacobian(probabilities, conditionals)
-        shares_by_theta_jacobian = self.compute_shares_by_theta_jacobian(delta, probabilities, conditionals)
+        shares_by_theta_jacobian, probabilities_tangent_mapping = self.compute_shares_by_theta_jacobian(
+            delta, probabilities, conditionals, keep_probabilities_tangents
+        )
         xi_by_theta_jacobian, replacement = approximately_solve(shares_by_xi_jacobian, -shares_by_theta_jacobian)
         if replacement:
             errors.append(exceptions.SharesByXiJacobianInversionError(shares_by_xi_jacobian, replacement))
 
-        return xi_by_theta_jacobian, errors
+        return xi_by_theta_jacobian, probabilities, conditionals, probabilities_tangent_mapping, errors
 
     def compute_omega_by_theta_jacobian(self, tilde_costs: Array, xi_jacobian: Array) -> Tuple[Array, List[Error]]:
         """Compute the Jacobian (holding gamma fixed) of omega (equivalently, of transformed marginal costs) with
@@ -1212,9 +1221,10 @@ class Market(Container):
         return omega_jacobian, errors
 
     def compute_micro_contributions(
-            self, moments: Moments, delta: Optional[Array] = None, xi_jacobian: Optional[Array] = None,
-            compute_jacobians: bool = False, compute_covariances: bool = False) -> (
-            Tuple[Array, Array, Array, Array, Array]):
+            self, moments: Moments, delta: Optional[Array] = None, probabilities: Optional[Array] = None,
+            conditionals: Optional[Array] = None, probabilities_tangent_mapping: Optional[Dict[int, Array]] = None,
+            xi_jacobian: Optional[Array] = None, compute_jacobians: bool = False,
+            compute_covariances: bool = False) -> Tuple[Array, Array, Array, Array, Array]:
         """Compute contributions to micro moment values, Jacobians, and covariances. By default, use the mean utilities
         with which this market was initialized and do not compute Jacobian and covariance contributions.
         """
@@ -1222,15 +1232,31 @@ class Market(Container):
             assert self.delta is not None
             delta = self.delta
 
+        # pre-compute probabilities if not already computed
+        if probabilities is None:
+            probabilities, conditionals = self.compute_probabilities(delta)
+
+        # probabilities tangents will already have been computed, but they need to be adjusted for the
+        #   contribution of xi's dependence on theta
+        if compute_jacobians:
+            assert xi_jacobian is not None
+            probabilities_tensor, _ = self.compute_probabilities_by_xi_tensor(
+                probabilities, conditionals, compute_conditionals_tensor=False
+            )
+            assert probabilities_tangent_mapping is not None
+            for p, parameter in enumerate(self.parameters.unfixed):
+                probabilities_tangent_mapping[p] += np.einsum(
+                    'jki,j->ki', probabilities_tensor, xi_jacobian[:, p]
+                )
+
         # pre-compute and validate micro dataset weights, multiplying these with probabilities and using these to
         #   compute micro value denominators
         weights_mapping: Dict[MicroDataset, Array] = {}
         denominator_mapping: Dict[MicroDataset, Array] = {}
-        probabilities = outside_probabilities = None
+        outside_probabilities = None
         eliminated_probabilities = outside_eliminated_probabilities = eliminated_outside_probabilities = None
         weights_tangent_mapping: Dict[Tuple[MicroDataset, int], Array] = {}
         denominator_tangent_mapping: Dict[Tuple[MicroDataset, int], Array] = {}
-        probabilities_tangent_mapping: Dict[int, Array] = {}
         outside_probabilities_tangent_mapping: Dict[int, Array] = {}
         eliminated_probabilities_tangent_mapping: Dict[int, Array] = {}
         outside_eliminated_probabilities_tangent_mapping: Dict[int, Array] = {}
@@ -1276,27 +1302,12 @@ class Market(Container):
                     for p in range(self.parameters.P):
                         denominator_tangent_mapping[(dataset, p)] = 0
 
-            # pre-compute probabilities
-            if probabilities is None:
-                probabilities, conditionals = self.compute_probabilities(delta)
-
-                if compute_jacobians:
-                    assert xi_jacobian is not None
-                    probabilities_tensor, _ = self.compute_probabilities_by_xi_tensor(
-                        probabilities, conditionals, compute_conditionals_tensor=False
-                    )
-                    for p, parameter in enumerate(self.parameters.unfixed):
-                        probabilities_tangent, _ = self.compute_probabilities_by_parameter_tangent(
-                            parameter, probabilities, conditionals, delta
-                        )
-                        probabilities_tangent += np.einsum('jki,j->ki', probabilities_tensor, xi_jacobian[:, p])
-                        probabilities_tangent_mapping[p] = probabilities_tangent
-
             # pre-compute outside probabilities
             if outside_probabilities is None and weights.shape[1] == 1 + self.J:
                 outside_probabilities = 1 - probabilities.sum(axis=0)
 
                 if compute_jacobians:
+                    assert probabilities_tangent_mapping is not None
                     for p, probabilities_tangent in probabilities_tangent_mapping.items():
                         outside_probabilities_tangent_mapping[p] = -probabilities_tangent.sum(axis=0)
 
@@ -1315,6 +1326,7 @@ class Market(Container):
                         eliminated_ratios = eliminated_probabilities / probabilities[None]
                         eliminated_ratios[~np.isfinite(eliminated_ratios)] = 0
 
+                    assert probabilities_tangent_mapping is not None
                     for p, probabilities_tangent in probabilities_tangent_mapping.items():
                         eliminated_probabilities_tangent_mapping[p] = eliminated_ratios * (
                             probabilities_tangent[None] + eliminated_probabilities * probabilities_tangent[:, None]
@@ -1331,6 +1343,7 @@ class Market(Container):
                         outside_eliminated_ratio = outside_eliminated_probabilities / probabilities
                         outside_eliminated_ratio[~np.isfinite(outside_eliminated_ratio)] = 0
 
+                    assert probabilities_tangent_mapping is not None
                     for p, probabilities_tangent in probabilities_tangent_mapping.items():
                         outside_eliminated_probabilities_tangent_mapping[p] = outside_eliminated_ratio * (
                             probabilities_tangent -
@@ -1378,6 +1391,8 @@ class Market(Container):
             weights_mapping[dataset] = dataset_weights
 
             if compute_jacobians:
+                assert probabilities_tangent_mapping is not None
+
                 for p in range(self.parameters.P):
                     weights_tangent = weights.copy()
 
