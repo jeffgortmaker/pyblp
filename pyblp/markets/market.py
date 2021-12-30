@@ -845,7 +845,7 @@ class Market(Container):
         conditional probabilities with respect to xi when there is nesting.
         """
         probabilities_tensor = -probabilities[None] * probabilities[None].swapaxes(0, 1)
-        probabilities_tensor[np.diag_indices(self.J)] += probabilities
+        np.einsum('jji->ji', probabilities_tensor)[...] += probabilities
         conditionals_tensor = None
 
         if self.epsilon_scale != 1:
@@ -855,17 +855,16 @@ class Market(Container):
             assert conditionals is not None
             membership = self.get_membership_matrix()
             multiplied_probabilities = self.rho / (1 - self.rho) * probabilities
-            multiplied_conditionals = 1 / (1 - self.rho) * conditionals
             probabilities_tensor -= membership[..., None] * (
                 conditionals[None] * multiplied_probabilities[None].swapaxes(0, 1)
             )
-
-            probabilities_tensor[np.diag_indices(self.J)] += multiplied_probabilities
+            np.einsum('jji->ji', probabilities_tensor)[...] += multiplied_probabilities
             if compute_conditionals_tensor:
+                multiplied_conditionals = 1 / (1 - self.rho) * conditionals
                 conditionals_tensor = -membership[..., None] * (
                     conditionals[None] * multiplied_conditionals[None].swapaxes(0, 1)
                 )
-                conditionals_tensor[np.diag_indices(self.J)] += multiplied_conditionals
+                np.einsum('jji->ji', conditionals_tensor)[...] += multiplied_conditionals
 
         return probabilities_tensor, conditionals_tensor
 
@@ -1142,7 +1141,7 @@ class Market(Container):
             probabilities_tensor, conditionals, conditionals_tensor
         )
         capital_lamda_tensor = np.zeros((self.J, self.J, self.J), options.dtype)
-        capital_lamda_tensor[:, np.arange(self.J), np.arange(self.J)] = np.c_[np.squeeze(capital_lamda_diagonal_tensor)]
+        np.einsum('jkk->jk', capital_lamda_tensor)[...] = np.squeeze(capital_lamda_diagonal_tensor, axis=2)
         capital_delta_tensor = -ownership[None] * (capital_lamda_tensor - capital_gamma_tensor)
 
         # compute the product of the tensor and eta
