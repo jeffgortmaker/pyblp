@@ -19,6 +19,8 @@ class Market(Container):
     """A market underlying the BLP model."""
 
     t: Any
+    membership_matrix: Optional[Array]
+    ownership_matrix: Optional[Array]
     groups: Groups
     unique_nesting_ids: Array
     epsilon_scale: float
@@ -54,9 +56,17 @@ class Market(Container):
             economy.agents[economy._agent_market_indices[t]] if agents_override is None else agents_override
         )
 
+        # membership matrices are computed on-demand
+        self.membership_matrix = None
+
+        # store ownership if specified (otherwise it's also computed on-demand)
+        self.ownership_matrix = None
+        if self.products.ownership.shape[1] > 0:
+            self.ownership_matrix = self.products.ownership[:, :self.products.shape[0]]
+
         # drop unneeded product data fields to save memory
         products_update_mapping = {}
-        for key in ['market_ids', 'demand_ids', 'supply_ids', 'clustering_ids', 'X1', 'X3', 'ZD', 'ZS']:
+        for key in ['market_ids', 'demand_ids', 'supply_ids', 'clustering_ids', 'X1', 'X3', 'ZD', 'ZS', 'ownership']:
             products_update_mapping[key] = (None, self.products[key].dtype)
         self.products = update_matrices(self.products, products_update_mapping)
 
@@ -130,22 +140,21 @@ class Market(Container):
 
     def get_membership_matrix(self) -> Array:
         """Build a membership matrix from nesting IDs."""
-        tiled_ids = np.tile(self.products.nesting_ids, self.J)
-        return np.where(tiled_ids == tiled_ids.T, 1, 0)
+        if self.membership_matrix is None:
+            self.membership_matrix = (self.products.nesting_ids == self.products.nesting_ids.T).astype(options.dtype)
+        return self.membership_matrix
 
     def get_ownership_matrix(self, firm_ids: Optional[Array] = None, ownership: Optional[Array] = None) -> Array:
         """Get a pre-computed ownership matrix or build one. By default, use unchanged firm IDs."""
         if ownership is not None:
             return ownership[:, :self.J]
         if firm_ids is not None:
-            tiled_ids = np.tile(firm_ids, self.J)
-            return np.where(tiled_ids == tiled_ids.T, 1, 0)
-        if self.products.ownership.shape[1] > 0:
-            return self.products.ownership[:, :self.J]
-        if self.products.firm_ids.size == 0:
-            raise ValueError("Either firm IDs or an ownership matrix must have been specified.")
-        tiled_ids = np.tile(self.products.firm_ids, self.J)
-        return np.where(tiled_ids == tiled_ids.T, 1, 0)
+            return (firm_ids == firm_ids.T).astype(options.dtype)
+        if self.ownership_matrix is None:
+            if self.products.firm_ids.size == 0:
+                raise ValueError("Either firm IDs or an ownership matrix must have been specified.")
+            self.ownership_matrix = (self.products.firm_ids == self.products.firm_ids.T).astype(options.dtype)
+        return self.ownership_matrix
 
     def compute_random_coefficients(self, sigma: Optional[Array] = None, pi: Optional[Array] = None) -> Array:
         """Compute all random coefficients. By default, use unchanged parameter values."""
