@@ -253,6 +253,32 @@ def test_trivial_changes(simulated_problem: SimulatedProblemFixture, solve_optio
 
 
 @pytest.mark.usefixtures('simulated_problem')
+def test_ownership_sparsity(simulated_problem: SimulatedProblemFixture) -> None:
+    """Check that exploiting ownership sparsity doesn't change the output."""
+    simulation, _, problem, solve_options, results = simulated_problem
+
+    # update solve options to just return at the initial parameter values (don't need to solve fully for this test)
+    updated_solve_options = copy.deepcopy(solve_options)
+    updated_solve_options['optimization'] = Optimization('return')
+
+    # get results exploiting and not exploiting sparsity
+    updated_results = []
+    for cutoff in [0, 1]:
+        import pyblp.options
+        old_cutoff = pyblp.options.ownership_sparsity_cutoff
+        try:
+            pyblp.options.ownership_sparsity_cutoff = cutoff
+            updated_results.append(problem.solve(**updated_solve_options))
+        finally:
+            pyblp.options.ownership_sparsity_cutoff = old_cutoff
+
+    # test that all arrays in the results are essentially identical
+    for key, result in updated_results[0].__dict__.items():
+        if isinstance(result, np.ndarray) and result.dtype != np.object_:
+            np.testing.assert_allclose(result, getattr(updated_results[1], key), atol=1e-12, rtol=1e-6, err_msg=key)
+
+
+@pytest.mark.usefixtures('simulated_problem')
 def test_parallel(simulated_problem: SimulatedProblemFixture) -> None:
     """Test that solving problems and computing results in parallel gives rise to the same results as when using serial
     processing.

@@ -21,6 +21,9 @@ class Market(Container):
     t: Any
     membership_matrix: Optional[Array]
     ownership_matrix: Optional[Array]
+    sparse_ownership: Optional[bool]
+    nonzero_ownership: Optional[Tuple]
+    nonstandard_ownership: Optional[bool]
     groups: Groups
     unique_nesting_ids: Array
     epsilon_scale: float
@@ -63,6 +66,9 @@ class Market(Container):
         self.ownership_matrix = None
         if self.products.ownership.shape[1] > 0:
             self.ownership_matrix = self.products.ownership[:, :self.products.shape[0]]
+
+        # ownership sparsity information is also computed on-demand
+        self.sparse_ownership = self.nonzero_ownership = self.nonstandard_ownership = None
 
         # drop unneeded product data fields to save memory
         products_update_mapping = {}
@@ -155,6 +161,30 @@ class Market(Container):
                 raise ValueError("Either firm IDs or an ownership matrix must have been specified.")
             self.ownership_matrix = (self.products.firm_ids == self.products.firm_ids.T).astype(options.dtype)
         return self.ownership_matrix
+
+    def get_ownership_sparsity(
+            self, ownership: Optional[Array] = None) -> Tuple[bool, Optional[Tuple], Optional[bool]]:
+        """Get nonzero elements of an ownership matrix, whether it is sufficiently sparse, and whether it is nonstandard
+        in that it has elements that are neither 0 nor 1.
+        """
+        if options.ownership_sparsity_cutoff <= 0:
+            return False, None, None
+
+        if ownership is None:
+            if self.sparse_ownership is None:
+                ownership = self.get_ownership_matrix()
+                self.nonzero_ownership = np.nonzero(ownership)
+                self.sparse_ownership = self.nonzero_ownership[0].size / self.J**2 < options.ownership_sparsity_cutoff
+                if self.sparse_ownership:
+                    self.nonstandard_ownership = (ownership[self.nonzero_ownership] != 1).any()
+            return self.sparse_ownership, self.nonzero_ownership, self.nonstandard_ownership
+
+        nonzero_ownership = np.nonzero(ownership)
+        sparse_ownership = nonzero_ownership[0].size / self.J**2 < options.ownership_sparsity_cutoff
+        if not sparse_ownership:
+            return sparse_ownership, nonzero_ownership, None
+        nonstandard_ownership = (ownership[nonzero_ownership] != 1).any()
+        return sparse_ownership, nonzero_ownership, nonstandard_ownership
 
     def compute_random_coefficients(self, sigma: Optional[Array] = None, pi: Optional[Array] = None) -> Array:
         """Compute all random coefficients. By default, use unchanged parameter values."""
@@ -575,10 +605,10 @@ class Market(Container):
         return delta, clipped_shares, stats, errors
 
     def compute_capital_lamda_gamma(
-            self, probability_utility_derivatives: Array, probabilities: Array, conditionals: Optional[Array]) -> (
-            Tuple[Array, Array]):
+            self, probability_utility_derivatives: Array, probabilities: Array, conditionals: Optional[Array],
+            ownership: Optional[Array] = None, within_firm: bool = False) -> Tuple[Array, Array]:
         """Compute the diagonal of the capital lambda matrix and the dense capital gamma matrix used to decompose the
-        Jacobian of market shares with respect to a variable.
+        Jacobian of market shares with respect to a variable. By default, do not multiply capital gamma by ownership.
         """
 
         # compute capital lambda
@@ -586,31 +616,60 @@ class Market(Container):
         if self.H > 0:
             capital_lamda_diagonal /= 1 - self.rho
 
-        # compute capital gamma
+        # optionally exploit the sparsity structure of ownership
+        if within_firm:
+            sparse, nonzero, nonstandard = self.get_ownership_sparsity(ownership)
+            if sparse:
+                assert nonzero is not None and nonstandard is not None
+                capital_gamma = np.zeros((self.J, self.J), options.dtype)
+                nonzero_probabilities = probabilities[nonzero[0]]
+                nonzero_derivatives = (self.agents.weights.T * probability_utility_derivatives)[nonzero[1]]
+                capital_gamma[nonzero] = np.einsum('ni,ni->n', nonzero_probabilities, nonzero_derivatives)
+                if self.H > 0:
+                    assert conditionals is not None
+                    nonzero_conditionals = conditionals[nonzero[0]]
+                    weighted_membership = self.rho / (1 - self.rho) * self.get_membership_matrix()
+                    capital_gamma[nonzero] += (
+                        weighted_membership[nonzero] * np.einsum('ni,ni->n', nonzero_conditionals, nonzero_derivatives)
+                    )
+                if nonstandard:
+                    if ownership is None:
+                        ownership = self.get_ownership_matrix()
+                    capital_gamma[nonzero] *= ownership[nonzero]
+
+                return capital_lamda_diagonal.flatten(), capital_gamma
+
+        # compute capital gamma without exploiting any sparsity structure
         weighted_derivatives = self.agents.weights * probability_utility_derivatives.T
         capital_gamma = probabilities @ weighted_derivatives
         if self.H > 0:
-            membership = self.get_membership_matrix()
-            capital_gamma += self.rho / (1 - self.rho) * membership * (conditionals @ weighted_derivatives)
+            assert conditionals is not None
+            weighted_membership = self.rho / (1 - self.rho) * self.get_membership_matrix()
+            capital_gamma += weighted_membership * (conditionals @ weighted_derivatives)
+        if within_firm:
+            if ownership is None:
+                ownership = self.get_ownership_matrix()
+            capital_gamma *= ownership
 
         return capital_lamda_diagonal.flatten(), capital_gamma
 
     def compute_eta(
-            self, ownership_matrix: Optional[Array] = None, delta: Optional[Array] = None) -> Tuple[Array, List[Error]]:
+            self, ownership: Optional[Array] = None, delta: Optional[Array] = None) -> Tuple[Array, List[Error]]:
         """Compute the markup term in the BLP-markup equation. By default, get an unchanged ownership matrix and use
         the delta with which this market was initialized.
         """
         errors: List[Error] = []
-        if ownership_matrix is None:
-            ownership_matrix = self.get_ownership_matrix()
         if delta is None:
             assert self.delta is not None
             delta = self.delta
 
         utility_derivatives = self.compute_utility_derivatives('prices')
         probabilities, conditionals = self.compute_probabilities(delta)
-        jacobian = self.compute_shares_by_variable_jacobian(utility_derivatives, probabilities, conditionals)
-        capital_delta = -ownership_matrix * jacobian
+        probability_utility_derivatives = probabilities * utility_derivatives
+        capital_lamda_diagonal, capital_gamma_tilde = self.compute_capital_lamda_gamma(
+            probability_utility_derivatives, probabilities, conditionals, ownership, within_firm=True
+        )
+        capital_delta = capital_gamma_tilde - np.diag(capital_lamda_diagonal)
         eta, replacement = approximately_solve(capital_delta, self.products.shares)
         if replacement:
             errors.append(exceptions.IntraFirmJacobianInversionError(capital_delta, replacement))
@@ -1039,7 +1098,8 @@ class Market(Container):
     def compute_capital_lamda_gamma_by_parameter_tangent(
             self, parameter: Parameter, probability_utility_derivatives: Array,
             probability_utility_derivatives_tangent: Array, probabilities: Array, probabilities_tangent: Array,
-            conditionals: Optional[Array], conditionals_tangent: Optional[Array]) -> Tuple[Array, Array]:
+            conditionals: Optional[Array], conditionals_tangent: Optional[Array], ownership: Optional[Array] = None,
+            within_firm: bool = False) -> Tuple[Array, Array]:
         """Compute the tangent of the diagonal of the capital lambda matrix and the dense capital gamma matrix with
         respect to a parameter.
         """
@@ -1053,6 +1113,45 @@ class Market(Container):
                 capital_lamda_diagonal_tangent += associations / (1 - self.rho)**2 * (
                     probability_utility_derivatives @ self.agents.weights
                 )
+
+        # optionally exploit the sparsity structure of ownership
+        if within_firm:
+            sparse, nonzero, nonstandard = self.get_ownership_sparsity(ownership)
+            if sparse:
+                assert nonzero is not None and nonstandard is not None
+                nonzero_probabilities_tangent = probabilities_tangent[nonzero[0]]
+                nonzero_derivatives = (self.agents.weights.T * probability_utility_derivatives)[nonzero[1]]
+                nonzero_probabilities = probabilities[nonzero[0]]
+                nonzero_derivatives_tangent = (
+                    self.agents.weights.T * probability_utility_derivatives_tangent[nonzero[1]]
+                )
+                capital_gamma_tangent = np.zeros((self.J, self.J), options.dtype)
+                capital_gamma_tangent[nonzero] = (
+                    np.einsum('ni,ni->n', nonzero_probabilities_tangent, nonzero_derivatives) +
+                    np.einsum('ni,ni->n', nonzero_probabilities, nonzero_derivatives_tangent)
+                )
+                if self.H > 0:
+                    assert conditionals is not None and conditionals_tangent is not None
+                    membership = self.get_membership_matrix()
+                    weighted_membership = membership * self.rho / (1 - self.rho)
+                    nonzero_conditionals_tangent = conditionals_tangent[nonzero[0]]
+                    nonzero_conditionals = conditionals[nonzero[0]]
+                    capital_gamma_tangent[nonzero] += weighted_membership[nonzero] * (
+                        np.einsum('ni,ni->n', nonzero_conditionals_tangent, nonzero_derivatives) +
+                        np.einsum('ni,ni->n', nonzero_conditionals, nonzero_derivatives_tangent)
+                    )
+                    if isinstance(parameter, RhoParameter):
+                        associations = self.groups.expand(parameter.get_group_associations(self))
+                        weighted_associations_membership = associations * membership / (1 - self.rho)**2
+                        capital_gamma_tangent[nonzero] += weighted_associations_membership[nonzero] * (
+                            np.einsum('ni,ni->n', nonzero_conditionals, nonzero_derivatives)
+                        )
+                if nonstandard:
+                    if ownership is None:
+                        ownership = self.get_ownership_matrix()
+                    capital_gamma_tangent[nonzero] *= ownership[nonzero]
+
+                return capital_lamda_diagonal_tangent.flatten(), capital_gamma_tangent
 
         # compute the capital gamma tangent
         weighted_derivatives = self.agents.weights * probability_utility_derivatives.T
@@ -1073,21 +1172,56 @@ class Market(Container):
                 capital_gamma_tangent += associations * membership / (1 - self.rho)**2 * (
                     conditionals @ weighted_derivatives
                 )
+        if within_firm:
+            if ownership is None:
+                ownership = self.get_ownership_matrix()
+            capital_gamma_tangent *= ownership
 
         return capital_lamda_diagonal_tangent.flatten(), capital_gamma_tangent
 
     def compute_capital_lamda_gamma_by_xi_tensor(
             self, probability_utility_derivatives: Array, probability_utility_derivatives_tensor: Array,
             probabilities: Array, probabilities_tensor: Array, conditionals: Optional[Array],
-            conditionals_tensor: Optional[Array]) -> Tuple[Array, Array]:
+            conditionals_tensor: Optional[Array], ownership: Optional[Array] = None, within_firm: bool = False) -> (
+            Tuple[Array, Array]):
         """Compute the tensor derivative of the diagonal of the capital lambda matrix and the dense capital gamma matrix
-        with respect to xi, indexed by the first axis.
+        with respect to xi, indexed by the first axis. By default, do not multiply capital gamma by ownership.
         """
 
         # compute the capital lambda tensor
         capital_lamda_diagonal_tensor = probability_utility_derivatives_tensor @ self.agents.weights
         if self.H > 0:
             capital_lamda_diagonal_tensor /= 1 - self.rho[None]
+
+        # optionally exploit the sparsity structure of ownership
+        if within_firm:
+            sparse, nonzero, nonstandard = self.get_ownership_sparsity(ownership)
+            if sparse:
+                assert nonzero is not None and nonstandard is not None
+                nonzero_probabilities_tensor = probabilities_tensor[:, nonzero[0]]
+                nonzero_derivatives = (self.agents.weights.T * probability_utility_derivatives)[nonzero[1]]
+                nonzero_probabilities = (self.agents.weights.T * probabilities)[nonzero[0]]
+                nonzero_derivatives_tensor = probability_utility_derivatives_tensor[:, nonzero[1]]
+                capital_gamma_tensor = np.zeros((self.J, self.J, self.J), options.dtype)
+                capital_gamma_tensor[:, nonzero[0], nonzero[1]] = (
+                    np.einsum('jni,ni->jn', nonzero_probabilities_tensor, nonzero_derivatives) +
+                    np.einsum('ni,jni->jn', nonzero_probabilities, nonzero_derivatives_tensor)
+                )
+                if self.H > 0:
+                    assert conditionals is not None and conditionals_tensor is not None
+                    weighted_membership = self.get_membership_matrix() * self.rho / (1 - self.rho)
+                    nonzero_conditionals_tensor = conditionals_tensor[:, nonzero[0]]
+                    nonzero_conditionals = (self.agents.weights.T * conditionals)[nonzero[0]]
+                    capital_gamma_tensor[:, nonzero[0], nonzero[1]] += weighted_membership[nonzero][None] * (
+                        np.einsum('jni,ni->jn', nonzero_conditionals_tensor, nonzero_derivatives) +
+                        np.einsum('ni,jni->jn', nonzero_conditionals, nonzero_derivatives_tensor)
+                    )
+                if nonstandard:
+                    if ownership is None:
+                        ownership = self.get_ownership_matrix()
+                    capital_gamma_tensor[:, nonzero[0], nonzero[1]] *= ownership[nonzero]
+
+                return capital_lamda_diagonal_tensor, capital_gamma_tensor
 
         # compute the capital gamma tensor
         weighted_derivatives = self.agents.weights * probability_utility_derivatives.T
@@ -1098,12 +1232,16 @@ class Market(Container):
         )
         if self.H > 0:
             assert conditionals is not None and conditionals_tensor is not None
-            membership = self.get_membership_matrix()
+            weighted_membership = self.get_membership_matrix() * self.rho / (1 - self.rho)
             weighted_conditionals = self.agents.weights.T * conditionals
-            capital_gamma_tensor += membership[None] * self.rho[None] / (1 - self.rho[None]) * (
+            capital_gamma_tensor += weighted_membership[None] * (
                 conditionals_tensor @ weighted_derivatives +
                 weighted_conditionals @ probability_utility_derivatives_tensor.swapaxes(1, 2)
             )
+        if within_firm:
+            if ownership is None:
+                ownership = self.get_ownership_matrix()
+            capital_gamma_tensor *= ownership
 
         return capital_lamda_diagonal_tensor, capital_gamma_tensor
 
@@ -1117,11 +1255,10 @@ class Market(Container):
         probability_utility_derivatives = probabilities * utility_derivatives
 
         # compute the capital delta matrix, which, when inverted and multiplied by shares, gives eta
-        ownership = self.get_ownership_matrix()
-        capital_lamda_diagonal, capital_gamma = self.compute_capital_lamda_gamma(
-            probability_utility_derivatives, probabilities, conditionals
+        capital_lamda_diagonal, capital_gamma_tilde = self.compute_capital_lamda_gamma(
+            probability_utility_derivatives, probabilities, conditionals, within_firm=True
         )
-        capital_delta = -ownership * (np.diag(capital_lamda_diagonal) - capital_gamma)
+        capital_delta = capital_gamma_tilde - np.diag(capital_lamda_diagonal)
 
         # compute the inverse of capital delta and use it to compute eta
         capital_delta_inverse, replacement = approximately_invert(capital_delta)
@@ -1136,13 +1273,13 @@ class Market(Container):
 
         # compute the tensor derivatives (holding beta fixed) of capital delta with respect to xi (equivalently, to
         #   delta)
-        capital_lamda_diagonal_tensor, capital_gamma_tensor = self.compute_capital_lamda_gamma_by_xi_tensor(
+        capital_lamda_diagonal_tensor, capital_gamma_tilde_tensor = self.compute_capital_lamda_gamma_by_xi_tensor(
             probability_utility_derivatives, probability_utility_derivatives_tensor, probabilities,
-            probabilities_tensor, conditionals, conditionals_tensor
+            probabilities_tensor, conditionals, conditionals_tensor, within_firm=True
         )
         capital_lamda_tensor = np.zeros((self.J, self.J, self.J), options.dtype)
         np.einsum('jkk->jk', capital_lamda_tensor)[...] = np.squeeze(capital_lamda_diagonal_tensor, axis=2)
-        capital_delta_tensor = -ownership[None] * (capital_lamda_tensor - capital_gamma_tensor)
+        capital_delta_tensor = capital_gamma_tilde_tensor - capital_lamda_tensor
 
         # compute the product of the tensor and eta
         capital_delta_tensor_times_eta = np.c_[np.squeeze(capital_delta_tensor @ eta)]
@@ -1167,13 +1304,13 @@ class Market(Container):
             )
 
             # compute the tangent of capital delta with respect to the parameter
-            capital_lamda_diagonal_tangent, capital_gamma_tangent = (
+            capital_lamda_diagonal_tangent, capital_gamma_tilde_tangent = (
                 self.compute_capital_lamda_gamma_by_parameter_tangent(
                     parameter, probability_utility_derivatives, probability_utility_derivatives_tangent, probabilities,
-                    probabilities_tangent, conditionals, conditionals_tangent
+                    probabilities_tangent, conditionals, conditionals_tangent, within_firm=True
                 )
             )
-            capital_delta_tangent = -ownership * (np.diag(capital_lamda_diagonal_tangent) - capital_gamma_tangent)
+            capital_delta_tangent = capital_gamma_tilde_tangent - np.diag(capital_lamda_diagonal_tangent)
 
             # extract the tangent of xi with respect to the parameter and compute the associated tangent of eta
             eta_jacobian[:, [p]] = -capital_delta_inverse @ (
