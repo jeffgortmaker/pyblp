@@ -1255,10 +1255,10 @@ class Market(Container):
         probability_utility_derivatives = probabilities * utility_derivatives
 
         # compute the capital delta matrix, which, when inverted and multiplied by shares, gives eta
-        capital_lamda_diagonal, capital_gamma_tilde = self.compute_capital_lamda_gamma(
+        capital_lamda_diagonal, capital_delta = self.compute_capital_lamda_gamma(
             probability_utility_derivatives, probabilities, conditionals, within_firm=True
         )
-        capital_delta = capital_gamma_tilde - np.diag(capital_lamda_diagonal)
+        np.einsum('jj->j', capital_delta)[...] -= capital_lamda_diagonal
 
         # compute the inverse of capital delta and use it to compute eta
         capital_delta_inverse, replacement = approximately_invert(capital_delta)
@@ -1273,13 +1273,11 @@ class Market(Container):
 
         # compute the tensor derivatives (holding beta fixed) of capital delta with respect to xi (equivalently, to
         #   delta)
-        capital_lamda_diagonal_tensor, capital_gamma_tilde_tensor = self.compute_capital_lamda_gamma_by_xi_tensor(
+        capital_lamda_diagonal_tensor, capital_delta_tensor = self.compute_capital_lamda_gamma_by_xi_tensor(
             probability_utility_derivatives, probability_utility_derivatives_tensor, probabilities,
             probabilities_tensor, conditionals, conditionals_tensor, within_firm=True
         )
-        capital_lamda_tensor = np.zeros((self.J, self.J, self.J), options.dtype)
-        np.einsum('jkk->jk', capital_lamda_tensor)[...] = np.squeeze(capital_lamda_diagonal_tensor, axis=2)
-        capital_delta_tensor = capital_gamma_tilde_tensor - capital_lamda_tensor
+        np.einsum('jkk->jk', capital_delta_tensor)[...] -= np.squeeze(capital_lamda_diagonal_tensor, axis=2)
 
         # compute the product of the tensor and eta
         capital_delta_tensor_times_eta = np.c_[np.squeeze(capital_delta_tensor @ eta)]
@@ -1304,13 +1302,13 @@ class Market(Container):
             )
 
             # compute the tangent of capital delta with respect to the parameter
-            capital_lamda_diagonal_tangent, capital_gamma_tilde_tangent = (
+            capital_lamda_diagonal_tangent, capital_delta_tangent = (
                 self.compute_capital_lamda_gamma_by_parameter_tangent(
                     parameter, probability_utility_derivatives, probability_utility_derivatives_tangent, probabilities,
                     probabilities_tangent, conditionals, conditionals_tangent, within_firm=True
                 )
             )
-            capital_delta_tangent = capital_gamma_tilde_tangent - np.diag(capital_lamda_diagonal_tangent)
+            np.einsum('jj->j', capital_delta_tangent)[...] -= capital_lamda_diagonal_tangent
 
             # extract the tangent of xi with respect to the parameter and compute the associated tangent of eta
             eta_jacobian[:, [p]] = -capital_delta_inverse @ (
