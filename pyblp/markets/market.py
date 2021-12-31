@@ -1279,15 +1279,14 @@ class Market(Container):
         )
         np.einsum('jkk->jk', capital_delta_tensor)[...] -= np.squeeze(capital_lamda_diagonal_tensor, axis=2)
 
-        # compute the product of the tensor and eta
-        capital_delta_tensor_times_eta = np.c_[np.squeeze(capital_delta_tensor @ eta)]
+        # contribute the contribution of xi to the jacobian
+        eta_jacobian = -capital_delta_inverse @ np.squeeze(capital_delta_tensor @ eta, axis=2).T @ xi_jacobian
 
         # compute derivatives of X1 and X2 with respect to prices
         X1_derivatives = self.compute_X1_derivatives('prices')
         X2_derivatives = self.compute_X2_derivatives('prices')
 
-        # fill the Jacobian of eta with respect to theta parameter-by-parameter
-        eta_jacobian = np.zeros((self.J, self.parameters.P), options.dtype)
+        # add each parameter's additional contraction
         for p, parameter in enumerate(self.parameters.unfixed):
             # compute the tangent with respect to the parameter of derivatives of aggregate inclusive values
             probabilities_tangent, conditionals_tangent = self.compute_probabilities_by_parameter_tangent(
@@ -1310,10 +1309,8 @@ class Market(Container):
             )
             np.einsum('jj->j', capital_delta_tangent)[...] -= capital_lamda_diagonal_tangent
 
-            # extract the tangent of xi with respect to the parameter and compute the associated tangent of eta
-            eta_jacobian[:, [p]] = -capital_delta_inverse @ (
-                capital_delta_tangent @ eta + capital_delta_tensor_times_eta.T @ xi_jacobian[:, [p]]
-            )
+            # subtract this parameter's contribution
+            eta_jacobian[:, [p]] -= capital_delta_inverse @ capital_delta_tangent @ eta
 
         return eta_jacobian, errors
 
