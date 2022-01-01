@@ -655,9 +655,11 @@ class Market(Container):
 
     def compute_eta(
             self, ownership: Optional[Array] = None, probabilities: Optional[Array] = None,
-            conditionals: Optional[Array] = None) -> Tuple[Array, List[Error]]:
-        """Compute the markup term in the BLP-markup equation. By default, get an unchanged ownership matrix and use
-        unchanged probabilities.
+            conditionals: Optional[Array] = None, keep_capital_delta_inverse: bool = False) -> (
+            Tuple[Array, Optional[Array], List[Error]]):
+        """Compute the markup term in the BLP-markup equation. By default, get an unchanged ownership matrix, use
+        unchanged probabilities, and do not return the inverse of the capital delta matrix (used for computing the
+        Jacobian of eta with respect to theta).
         """
         errors: List[Error] = []
         if probabilities is None:
@@ -669,11 +671,20 @@ class Market(Container):
             probability_utility_derivatives, probabilities, conditionals, ownership, within_firm=True
         )
         capital_delta = capital_gamma_tilde - np.diag(capital_lamda_diagonal)
-        eta, replacement = approximately_solve(capital_delta, self.products.shares)
-        if replacement:
-            errors.append(exceptions.IntraFirmJacobianInversionError(capital_delta, replacement))
 
-        return eta, errors
+        # use solve if not keeping the inverse of capital delta
+        if not keep_capital_delta_inverse:
+            capital_delta_inverse = None
+            eta, replacement = approximately_solve(capital_delta, self.products.shares)
+            if replacement:
+                errors.append(exceptions.IntraFirmJacobianInversionError(capital_delta, replacement))
+        else:
+            capital_delta_inverse, replacement = approximately_invert(capital_delta)
+            if replacement:
+                errors.append(exceptions.IntraFirmJacobianInversionError(capital_delta, replacement))
+            eta = capital_delta_inverse @ self.products.shares
+
+        return eta, capital_delta_inverse, errors
 
     def compute_equilibrium_prices(
             self, costs: Array, iteration: Iteration, constant_costs: bool, prices: Optional[Array] = None,
@@ -1172,26 +1183,14 @@ class Market(Container):
         return capital_lamda_diagonal_tangent.flatten(), capital_gamma_tangent
 
     def compute_eta_by_theta_jacobian(
-            self, probabilities: Array, conditionals: Optional[Array], probabilities_tangent_mapping: Dict[int, Array],
-            conditionals_tangent_mapping: Dict[int, Optional[Array]]) -> Tuple[Array, List[Error]]:
+            self, eta: Array, capital_delta_inverse: Array, probabilities: Array, conditionals: Optional[Array],
+            probabilities_tangent_mapping: Dict[int, Array],
+            conditionals_tangent_mapping: Dict[int, Optional[Array]]) -> Array:
         """Compute the Jacobian of the markup term in the BLP-markup equation with respect to theta."""
-        errors: List[Error] = []
 
         # compute derivatives of aggregate inclusive values with respect to prices
         utility_derivatives = self.compute_utility_derivatives('prices')
         probability_utility_derivatives = probabilities * utility_derivatives
-
-        # compute the capital delta matrix, which, when inverted and multiplied by shares, gives eta
-        capital_lamda_diagonal, capital_delta = self.compute_capital_lamda_gamma(
-            probability_utility_derivatives, probabilities, conditionals, within_firm=True
-        )
-        np.einsum('jj->j', capital_delta)[...] -= capital_lamda_diagonal
-
-        # compute the inverse of capital delta and use it to compute eta
-        capital_delta_inverse, replacement = approximately_invert(capital_delta)
-        if replacement:
-            errors.append(exceptions.IntraFirmJacobianInversionError(capital_delta, replacement))
-        eta = capital_delta_inverse @ self.products.shares
 
         # compute derivatives of X1 and X2 with respect to prices
         X1_derivatives = self.compute_X1_derivatives('prices')
@@ -1221,7 +1220,7 @@ class Market(Container):
             # subtract this parameter's contribution
             eta_jacobian[:, [p]] = -(capital_delta_inverse @ capital_delta_tangent @ eta)
 
-        return eta_jacobian, errors
+        return eta_jacobian
 
     def compute_xi_by_theta_jacobian(
             self, probabilities: Array, conditionals: Optional[Array],
@@ -1238,19 +1237,18 @@ class Market(Container):
         return xi_by_theta_jacobian, errors
 
     def compute_omega_by_theta_jacobian(
-            self, tilde_costs: Array, probabilities: Array, conditionals: Optional[Array],
-            probabilities_tangent_mapping: Dict[int, Array],
-            conditionals_tangent_mapping: Dict[int, Optional[Array]]) -> Tuple[Array, List[Error]]:
+            self, tilde_costs: Array, eta: Array, capital_delta_inverse: Array, probabilities: Array,
+            conditionals: Optional[Array], probabilities_tangent_mapping: Dict[int, Array],
+            conditionals_tangent_mapping: Dict[int, Optional[Array]]) -> Array:
         """Compute the Jacobian (holding gamma fixed) of omega (equivalently, of transformed marginal costs) with
         respect to theta.
         """
-        errors: List[Error] = []
 
         # compute the Jacobian of the markup term in the BLP-markup equation with respect to theta
-        eta_jacobian, eta_jacobian_errors = self.compute_eta_by_theta_jacobian(
-            probabilities, conditionals, probabilities_tangent_mapping, conditionals_tangent_mapping,
+        eta_jacobian = self.compute_eta_by_theta_jacobian(
+            eta, capital_delta_inverse, probabilities, conditionals, probabilities_tangent_mapping,
+            conditionals_tangent_mapping,
         )
-        errors.extend(eta_jacobian_errors)
 
         # transform the Jacobian according to the marginal cost specification
         if self.costs_type == 'linear':
@@ -1264,7 +1262,7 @@ class Market(Container):
             if isinstance(parameter, GammaParameter):
                 omega_jacobian[:, [p]] = -parameter.get_product_characteristic(self)
 
-        return omega_jacobian, errors
+        return omega_jacobian
 
     def compute_micro_contributions(
             self, moments: Moments, delta: Optional[Array] = None, probabilities: Optional[Array] = None,

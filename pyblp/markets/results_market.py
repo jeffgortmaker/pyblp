@@ -78,10 +78,14 @@ class ResultsMarket(Market):
                     conditionals_tangent_mapping[p] += np.einsum('jki,j->ki', conditionals_tensor, xi_jacobian[:, p])
 
             # compute the supply-side Jacobian
-            omega_jacobian, omega_jacobian_errors = self.compute_omega_by_theta_jacobian(
-                tilde_costs, probabilities, conditionals, probabilities_tangent_mapping, conditionals_tangent_mapping,
+            eta, capital_delta_inverse, eta_errors = self.compute_eta(
+                probabilities=probabilities, conditionals=conditionals, keep_capital_delta_inverse=True
             )
-            errors.extend(omega_jacobian_errors)
+            errors.extend(eta_errors)
+            omega_jacobian = self.compute_omega_by_theta_jacobian(
+                tilde_costs, eta, capital_delta_inverse, probabilities, conditionals, probabilities_tangent_mapping,
+                conditionals_tangent_mapping,
+            )
 
         return xi_jacobian, omega_jacobian, errors
 
@@ -208,7 +212,7 @@ class ResultsMarket(Market):
         """Estimate marginal costs, handling any numerical errors."""
         errors: List[Error] = []
         ownership_matrix = self.get_ownership_matrix(firm_ids, ownership)
-        eta, eta_errors = self.compute_eta(ownership_matrix)
+        eta, _, eta_errors = self.compute_eta(ownership_matrix)
         errors.extend(eta_errors)
         costs = self.products.prices - eta
         return costs, errors
@@ -280,7 +284,7 @@ class ResultsMarket(Market):
         if costs is None:
             costs, costs_errors = self.safely_compute_costs()
             errors.extend(costs_errors)
-        eta, eta_errors = self.compute_eta(ownership_matrix)
+        eta, _, eta_errors = self.compute_eta(ownership_matrix)
         errors.extend(eta_errors)
         prices = costs + eta
         return prices, errors

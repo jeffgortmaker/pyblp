@@ -108,7 +108,7 @@ class SimulationMarket(Market):
 
         # compute marginal costs
         probabilities, conditionals = self.compute_probabilities(delta)
-        eta, eta_errors = self.compute_eta(probabilities=probabilities, conditionals=conditionals)
+        eta, _, eta_errors = self.compute_eta(probabilities=probabilities, conditionals=conditionals)
         errors.extend(eta_errors)
         costs = self.products.prices - eta
 
