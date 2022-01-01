@@ -1171,76 +1171,9 @@ class Market(Container):
 
         return capital_lamda_diagonal_tangent.flatten(), capital_gamma_tangent
 
-    def compute_capital_lamda_gamma_by_xi_tensor(
-            self, probability_utility_derivatives: Array, probability_utility_derivatives_tensor: Array,
-            probabilities: Array, probabilities_tensor: Array, conditionals: Optional[Array],
-            conditionals_tensor: Optional[Array], ownership: Optional[Array] = None, within_firm: bool = False) -> (
-            Tuple[Array, Array]):
-        """Compute the tensor derivative of the diagonal of the capital lambda matrix and the dense capital gamma matrix
-        with respect to xi, indexed by the first axis. By default, do not multiply capital gamma by ownership.
-        """
-
-        # compute the capital lambda tensor
-        capital_lamda_diagonal_tensor = probability_utility_derivatives_tensor @ self.agents.weights
-        if self.H > 0:
-            capital_lamda_diagonal_tensor /= 1 - self.rho[None]
-
-        # optionally exploit the sparsity structure of ownership
-        if within_firm:
-            sparse, nonzero, nonstandard = self.get_ownership_sparsity(ownership)
-            if sparse:
-                assert nonzero is not None and nonstandard is not None
-                nonzero_probabilities_tensor = probabilities_tensor[:, nonzero[0]]
-                nonzero_derivatives = (self.agents.weights.T * probability_utility_derivatives)[nonzero[1]]
-                nonzero_probabilities = (self.agents.weights.T * probabilities)[nonzero[0]]
-                nonzero_derivatives_tensor = probability_utility_derivatives_tensor[:, nonzero[1]]
-                capital_gamma_tensor = np.zeros((self.J, self.J, self.J), options.dtype)
-                capital_gamma_tensor[:, nonzero[0], nonzero[1]] = (
-                    np.einsum('jni,ni->jn', nonzero_probabilities_tensor, nonzero_derivatives) +
-                    np.einsum('ni,jni->jn', nonzero_probabilities, nonzero_derivatives_tensor)
-                )
-                if self.H > 0:
-                    assert conditionals is not None and conditionals_tensor is not None
-                    weighted_membership = self.get_membership_matrix() * self.rho / (1 - self.rho)
-                    nonzero_conditionals_tensor = conditionals_tensor[:, nonzero[0]]
-                    nonzero_conditionals = (self.agents.weights.T * conditionals)[nonzero[0]]
-                    capital_gamma_tensor[:, nonzero[0], nonzero[1]] += weighted_membership[nonzero][None] * (
-                        np.einsum('jni,ni->jn', nonzero_conditionals_tensor, nonzero_derivatives) +
-                        np.einsum('ni,jni->jn', nonzero_conditionals, nonzero_derivatives_tensor)
-                    )
-                if nonstandard:
-                    if ownership is None:
-                        ownership = self.get_ownership_matrix()
-                    capital_gamma_tensor[:, nonzero[0], nonzero[1]] *= ownership[nonzero]
-
-                return capital_lamda_diagonal_tensor, capital_gamma_tensor
-
-        # compute the capital gamma tensor
-        weighted_derivatives = self.agents.weights * probability_utility_derivatives.T
-        weighted_probabilities = self.agents.weights.T * probabilities
-        capital_gamma_tensor = (
-            probabilities_tensor @ weighted_derivatives +
-            weighted_probabilities @ probability_utility_derivatives_tensor.swapaxes(1, 2)
-        )
-        if self.H > 0:
-            assert conditionals is not None and conditionals_tensor is not None
-            weighted_membership = self.get_membership_matrix() * self.rho / (1 - self.rho)
-            weighted_conditionals = self.agents.weights.T * conditionals
-            capital_gamma_tensor += weighted_membership[None] * (
-                conditionals_tensor @ weighted_derivatives +
-                weighted_conditionals @ probability_utility_derivatives_tensor.swapaxes(1, 2)
-            )
-        if within_firm:
-            if ownership is None:
-                ownership = self.get_ownership_matrix()
-            capital_gamma_tensor *= ownership
-
-        return capital_lamda_diagonal_tensor, capital_gamma_tensor
-
     def compute_eta_by_theta_jacobian(
             self, probabilities: Array, conditionals: Optional[Array], probabilities_tangent_mapping: Dict[int, Array],
-            conditionals_tangent_mapping: Dict[int, Optional[Array]], probabilities_tensor: Array,
-            conditionals_tensor: Optional[Array], xi_jacobian: Array) -> Tuple[Array, List[Error]]:
+            conditionals_tangent_mapping: Dict[int, Optional[Array]]) -> Tuple[Array, List[Error]]:
         """Compute the Jacobian of the markup term in the BLP-markup equation with respect to theta."""
         errors: List[Error] = []
 
@@ -1260,23 +1193,12 @@ class Market(Container):
             errors.append(exceptions.IntraFirmJacobianInversionError(capital_delta, replacement))
         eta = capital_delta_inverse @ self.products.shares
 
-        # compute the tensor derivatives (holding beta fixed) of capital delta with respect to xi (equivalently, to
-        #   delta)
-        probability_utility_derivatives_tensor = probabilities_tensor * utility_derivatives
-        capital_lamda_diagonal_tensor, capital_delta_tensor = self.compute_capital_lamda_gamma_by_xi_tensor(
-            probability_utility_derivatives, probability_utility_derivatives_tensor, probabilities,
-            probabilities_tensor, conditionals, conditionals_tensor, within_firm=True
-        )
-        np.einsum('jkk->jk', capital_delta_tensor)[...] -= np.squeeze(capital_lamda_diagonal_tensor, axis=2)
-
-        # contribute the contribution of xi to the jacobian
-        eta_jacobian = -capital_delta_inverse @ np.squeeze(capital_delta_tensor @ eta, axis=2).T @ xi_jacobian
-
         # compute derivatives of X1 and X2 with respect to prices
         X1_derivatives = self.compute_X1_derivatives('prices')
         X2_derivatives = self.compute_X2_derivatives('prices')
 
         # add each parameter's additional contraction
+        eta_jacobian = np.zeros((self.J, self.parameters.P), options.dtype)
         for p, parameter in enumerate(self.parameters.unfixed):
             # compute the tangent with respect to the parameter of derivatives of aggregate inclusive values
             utility_derivatives_tangent = self.compute_utility_derivatives_by_parameter_tangent(
@@ -1297,7 +1219,7 @@ class Market(Container):
             np.einsum('jj->j', capital_delta_tangent)[...] -= capital_lamda_diagonal_tangent
 
             # subtract this parameter's contribution
-            eta_jacobian[:, [p]] -= capital_delta_inverse @ capital_delta_tangent @ eta
+            eta_jacobian[:, [p]] = -(capital_delta_inverse @ capital_delta_tangent @ eta)
 
         return eta_jacobian, errors
 
@@ -1317,9 +1239,8 @@ class Market(Container):
 
     def compute_omega_by_theta_jacobian(
             self, tilde_costs: Array, probabilities: Array, conditionals: Optional[Array],
-            probabilities_tangent_mapping: Dict[int, Array], conditionals_tangent_mapping: Dict[int, Optional[Array]],
-            probabilities_tensor: Array, conditionals_tensor: Optional[Array], xi_jacobian: Array) -> (
-            Tuple[Array, List[Error]]):
+            probabilities_tangent_mapping: Dict[int, Array],
+            conditionals_tangent_mapping: Dict[int, Optional[Array]]) -> Tuple[Array, List[Error]]:
         """Compute the Jacobian (holding gamma fixed) of omega (equivalently, of transformed marginal costs) with
         respect to theta.
         """
@@ -1328,7 +1249,6 @@ class Market(Container):
         # compute the Jacobian of the markup term in the BLP-markup equation with respect to theta
         eta_jacobian, eta_jacobian_errors = self.compute_eta_by_theta_jacobian(
             probabilities, conditionals, probabilities_tangent_mapping, conditionals_tangent_mapping,
-            probabilities_tensor, conditionals_tensor, xi_jacobian
         )
         errors.extend(eta_jacobian_errors)
 
@@ -1348,10 +1268,8 @@ class Market(Container):
 
     def compute_micro_contributions(
             self, moments: Moments, delta: Optional[Array] = None, probabilities: Optional[Array] = None,
-            probabilities_tangent_mapping: Optional[Dict[int, Array]] = None,
-            probabilities_tensor: Optional[Array] = None, xi_jacobian: Optional[Array] = None,
-            compute_jacobians: bool = False, compute_covariances: bool = False) -> (
-            Tuple[Array, Array, Array, Array, Array]):
+            probabilities_tangent_mapping: Optional[Dict[int, Array]] = None, compute_jacobians: bool = False,
+            compute_covariances: bool = False) -> Tuple[Array, Array, Array, Array, Array]:
         """Compute contributions to micro moment values, Jacobians, and covariances. By default, use the mean utilities
         with which this market was initialized and do not compute Jacobian and covariance contributions.
         """
@@ -1362,17 +1280,6 @@ class Market(Container):
         # pre-compute probabilities if not already computed
         if probabilities is None:
             probabilities, _ = self.compute_probabilities(delta)
-
-        # probabilities tangents need to be adjusted for the contribution of xi's dependence on theta
-        total_probabilities_tangent_mapping: Dict[int, Array] = {}
-        if compute_jacobians:
-            assert probabilities_tangent_mapping is not None
-            assert probabilities_tensor is not None
-            assert xi_jacobian is not None
-            for p, tangent in probabilities_tangent_mapping.items():
-                total_probabilities_tangent_mapping[p] = tangent + np.einsum(
-                    'jki,j->ki', probabilities_tensor, xi_jacobian[:, p]
-                )
 
         # pre-compute and validate micro dataset weights, multiplying these with probabilities and using these to
         #   compute micro value denominators
@@ -1432,7 +1339,8 @@ class Market(Container):
                 outside_probabilities = 1 - probabilities.sum(axis=0)
 
                 if compute_jacobians:
-                    for p, probabilities_tangent in total_probabilities_tangent_mapping.items():
+                    assert probabilities_tangent_mapping is not None
+                    for p, probabilities_tangent in probabilities_tangent_mapping.items():
                         outside_probabilities_tangent_mapping[p] = -probabilities_tangent.sum(axis=0)
 
             # pre-compute second choice probabilities
@@ -1450,7 +1358,8 @@ class Market(Container):
                         eliminated_ratios = eliminated_probabilities / probabilities[None]
                         eliminated_ratios[~np.isfinite(eliminated_ratios)] = 0
 
-                    for p, probabilities_tangent in total_probabilities_tangent_mapping.items():
+                    assert probabilities_tangent_mapping is not None
+                    for p, probabilities_tangent in probabilities_tangent_mapping.items():
                         eliminated_probabilities_tangent_mapping[p] = eliminated_ratios * (
                             probabilities_tangent[None] + eliminated_probabilities * probabilities_tangent[:, None]
                         )
@@ -1466,7 +1375,8 @@ class Market(Container):
                         outside_eliminated_ratio = outside_eliminated_probabilities / probabilities
                         outside_eliminated_ratio[~np.isfinite(outside_eliminated_ratio)] = 0
 
-                    for p, probabilities_tangent in total_probabilities_tangent_mapping.items():
+                    assert probabilities_tangent_mapping is not None
+                    for p, probabilities_tangent in probabilities_tangent_mapping.items():
                         outside_eliminated_probabilities_tangent_mapping[p] = outside_eliminated_ratio * (
                             probabilities_tangent -
                             outside_eliminated_probabilities * probabilities_tangent.sum(axis=0, keepdims=True)
@@ -1513,11 +1423,13 @@ class Market(Container):
             weights_mapping[dataset] = dataset_weights
 
             if compute_jacobians:
+                assert probabilities_tangent_mapping is not None
+
                 for p in range(self.parameters.P):
                     weights_tangent = weights.copy()
 
                     if len(weights.shape) == 2:
-                        weights_tangent[:, -self.J:] *= total_probabilities_tangent_mapping[p].T
+                        weights_tangent[:, -self.J:] *= probabilities_tangent_mapping[p].T
                         if weights.shape[1] == 1 + self.J:
                             weights_tangent[:, 0] *= outside_probabilities_tangent_mapping[p]
                     else:
@@ -1525,7 +1437,7 @@ class Market(Container):
                         assert eliminated_probabilities is not None
                         product1 = np.ones_like(weights_tangent)
                         product2 = np.ones_like(weights_tangent)
-                        product1[:, -self.J:] = total_probabilities_tangent_mapping[p].T[..., None]
+                        product1[:, -self.J:] = probabilities_tangent_mapping[p].T[..., None]
                         product2[:, -self.J:] = probabilities.T[..., None]
                         product1[:, -self.J:, -self.J:] *= np.moveaxis(eliminated_probabilities, (0, 1, 2), (2, 1, 0))
                         product2[:, -self.J:, -self.J:] *= np.moveaxis(

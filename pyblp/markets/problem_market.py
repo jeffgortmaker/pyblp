@@ -68,13 +68,16 @@ class ProblemMarket(Market):
             )
             errors.extend(xi_jacobian_errors)
 
-        # if needed, pre-compute derivatives of probabilities with respect to xi
-        probabilities_tensor = conditionals_tensor = None
+        # if needed, adjust for the contribution of xi's dependence on theta
         if compute_jacobians and (moments.MM > 0 or self.K3 > 0):
             assert probabilities is not None
             probabilities_tensor, conditionals_tensor = self.compute_probabilities_by_xi_tensor(
                 probabilities, conditionals, compute_conditionals_tensor=self.K3 > 0
             )
+            for p in range(self.parameters.P):
+                probabilities_tangent_mapping[p] += np.einsum('jki,j->ki', probabilities_tensor, xi_jacobian[:, p])
+                if conditionals_tensor is not None:
+                    conditionals_tangent_mapping[p] += np.einsum('jki,j->ki', conditionals_tensor, xi_jacobian[:, p])
 
         # compute contributions to micro moments, their Jacobian, and their covariances
         if moments.MM == 0:
@@ -90,8 +93,8 @@ class ProblemMarket(Market):
                 micro_covariances_numerator, micro_errors
             ) = (
                 self.safely_compute_micro_contributions(
-                    moments, valid_delta, probabilities, probabilities_tangent_mapping, probabilities_tensor,
-                    xi_jacobian, compute_jacobians, compute_micro_covariances
+                    moments, valid_delta, probabilities, probabilities_tangent_mapping, compute_jacobians,
+                    compute_micro_covariances
                 )
             )
             errors.extend(micro_errors)
@@ -118,10 +121,9 @@ class ProblemMarket(Market):
             # compute the Jacobian, which is zero for clipped marginal costs
             omega_jacobian = np.full((self.J, self.parameters.P), np.nan, options.dtype)
             if compute_jacobians:
-                assert probabilities_tensor is not None
                 omega_jacobian, omega_jacobian_errors = self.safely_compute_omega_by_theta_jacobian(
                     valid_tilde_costs, probabilities, conditionals, probabilities_tangent_mapping,
-                    conditionals_tangent_mapping, probabilities_tensor, conditionals_tensor, xi_jacobian
+                    conditionals_tangent_mapping
                 )
                 errors.extend(omega_jacobian_errors)
                 omega_jacobian[clipped_costs.flat] = 0
@@ -156,8 +158,7 @@ class ProblemMarket(Market):
     @NumericalErrorHandler(exceptions.MicroMomentsNumericalError)
     def safely_compute_micro_contributions(
             self, moments: Moments, delta: Array, probabilities: Optional[Array],
-            probabilities_tangent_mapping: Dict[int, Array], probabilities_tensor: Optional[Array], xi_jacobian: Array,
-            compute_jacobians: bool, compute_covariances: bool) -> (
+            probabilities_tangent_mapping: Dict[int, Array], compute_jacobians: bool, compute_covariances: bool) -> (
             Tuple[Array, Array, Array, Array, Array, List[Error]]):
         """Compute micro moment value contributions, handling any numerical errors."""
         errors: List[Error] = []
@@ -166,8 +167,7 @@ class ProblemMarket(Market):
             micro_covariances_numerator
         ) = (
             self.compute_micro_contributions(
-                moments, delta, probabilities, probabilities_tangent_mapping, probabilities_tensor, xi_jacobian,
-                compute_jacobians, compute_covariances
+                moments, delta, probabilities, probabilities_tangent_mapping, compute_jacobians, compute_covariances
             )
         )
         return (
@@ -207,13 +207,11 @@ class ProblemMarket(Market):
     @NumericalErrorHandler(exceptions.OmegaByThetaJacobianNumericalError)
     def safely_compute_omega_by_theta_jacobian(
             self, tilde_costs: Array, probabilities: Array, conditionals: Optional[Array],
-            probabilities_tangent_mapping: Dict[int, Array], conditionals_tangent_mapping: Dict[int, Optional[Array]],
-            probabilities_tensor: Array, conditionals_tensor: Optional[Array], xi_jacobian: Array) -> (
-            Tuple[Array, List[Error]]):
+            probabilities_tangent_mapping: Dict[int, Array],
+            conditionals_tangent_mapping: Dict[int, Optional[Array]]) -> Tuple[Array, List[Error]]:
         """Compute the Jacobian (holding gamma fixed) of omega (equivalently, of transformed marginal costs) with
         respect to theta, handling any numerical errors.
         """
         return self.compute_omega_by_theta_jacobian(
-            tilde_costs, probabilities, conditionals, probabilities_tangent_mapping, conditionals_tangent_mapping,
-            probabilities_tensor, conditionals_tensor, xi_jacobian
+            tilde_costs, probabilities, conditionals, probabilities_tangent_mapping, conditionals_tangent_mapping
         )

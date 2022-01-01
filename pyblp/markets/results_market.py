@@ -68,12 +68,18 @@ class ResultsMarket(Market):
         if self.K3 == 0:
             omega_jacobian = np.full((self.J, self.parameters.P), np.nan, options.dtype)
         else:
+            # adjust for the contribution of xi's dependence on theta
             probabilities_tensor, conditionals_tensor = self.compute_probabilities_by_xi_tensor(
                 probabilities, conditionals
             )
+            for p in range(self.parameters.P):
+                probabilities_tangent_mapping[p] += np.einsum('jki,j->ki', probabilities_tensor, xi_jacobian[:, p])
+                if conditionals_tensor is not None:
+                    conditionals_tangent_mapping[p] += np.einsum('jki,j->ki', conditionals_tensor, xi_jacobian[:, p])
+
+            # compute the supply-side Jacobian
             omega_jacobian, omega_jacobian_errors = self.compute_omega_by_theta_jacobian(
                 tilde_costs, probabilities, conditionals, probabilities_tangent_mapping, conditionals_tangent_mapping,
-                probabilities_tensor, conditionals_tensor, xi_jacobian
             )
             errors.extend(omega_jacobian_errors)
 
