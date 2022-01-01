@@ -10,6 +10,7 @@ import pytest
 import scipy.optimize
 
 import pyblp.exceptions
+import pyblp.options
 from pyblp import (
     Formulation, Integration, Iteration, Optimization, Problem, Simulation, build_ownership, data_to_dict, parallel
 )
@@ -265,7 +266,6 @@ def test_ownership_sparsity(simulated_problem: SimulatedProblemFixture) -> None:
     # get results exploiting and not exploiting sparsity
     updated_results = []
     for cutoff in [0, 1]:
-        import pyblp.options
         old_cutoff = pyblp.options.ownership_sparsity_cutoff
         try:
             pyblp.options.ownership_sparsity_cutoff = cutoff
