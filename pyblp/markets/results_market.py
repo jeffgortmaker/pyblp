@@ -73,9 +73,13 @@ class ResultsMarket(Market):
                 probabilities, conditionals
             )
             for p in range(self.parameters.P):
-                probabilities_tangent_mapping[p] += np.einsum('jki,j->ki', probabilities_tensor, xi_jacobian[:, p])
+                probabilities_tangent_mapping[p] += np.squeeze(
+                    np.moveaxis(probabilities_tensor, 0, 2) @ xi_jacobian[:, [p]], axis=2
+                )
                 if conditionals_tensor is not None:
-                    conditionals_tangent_mapping[p] += np.einsum('jki,j->ki', conditionals_tensor, xi_jacobian[:, p])
+                    conditionals_tangent_mapping[p] += np.squeeze(
+                        np.moveaxis(conditionals_tensor, 0, 2) @ xi_jacobian[:, [p]], axis=2
+                    )
 
             # compute the supply-side Jacobian
             eta, capital_delta_inverse, eta_errors = self.compute_eta(
