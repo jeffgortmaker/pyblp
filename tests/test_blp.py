@@ -273,10 +273,17 @@ def test_ownership_sparsity(simulated_problem: SimulatedProblemFixture) -> None:
         finally:
             pyblp.options.ownership_sparsity_cutoff = old_cutoff
 
+    # we should have the same results when there isn't supply
+    atol = 1e-14
+    rtol = 0
+    if problem.K3 > 0:
+        atol = 1e-12
+        rtol = 1e-5
+
     # test that all arrays in the results are essentially identical
     for key, result in updated_results[0].__dict__.items():
         if isinstance(result, np.ndarray) and result.dtype != np.object_:
-            np.testing.assert_allclose(result, getattr(updated_results[1], key), atol=1e-12, rtol=1e-6, err_msg=key)
+            np.testing.assert_allclose(result, getattr(updated_results[1], key), atol=atol, rtol=rtol, err_msg=key)
 
 
 @pytest.mark.usefixtures('simulated_problem')
@@ -1009,12 +1016,17 @@ def test_return(simulated_problem: SimulatedProblemFixture) -> None:
 ])
 def test_gradient_optionality(simulated_problem: SimulatedProblemFixture, scipy_method: str) -> None:
     """Test that the option of not computing the gradient for simulated data does not affect estimates when the gradient
-    isn't used. Allow Jacobian-based results to differ slightly more when finite differences are used to compute them.
+    isn't used.
     """
     simulation, _, problem, solve_options, results = simulated_problem
 
+    # this test doesn't work when there's a supply side because we use an inverse instead of solving a linear system
+    #   directly to save on computation when computing gradients
+    if problem.K3 > 0:
+        return pytest.skip("Results are expected to change when there's a supply side.")
+
     # this test only requires a few optimization iterations (enough for gradient problems to be clear)
-    method_options = {'maxiter': 3}
+    method_options = {'maxiter': 2}
 
     def custom_method(
             initial: Array, bounds: List[Tuple[float, float]], objective_function: Callable, _: Any) -> (
