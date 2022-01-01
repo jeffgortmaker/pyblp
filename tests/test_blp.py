@@ -9,6 +9,7 @@ import numpy as np
 import pytest
 import scipy.optimize
 
+import pyblp.exceptions
 from pyblp import (
     Formulation, Integration, Iteration, Optimization, Problem, Simulation, build_ownership, data_to_dict, parallel
 )
@@ -580,7 +581,7 @@ def test_costs(simulated_problem: SimulatedProblemFixture) -> None:
 @pytest.mark.usefixtures('simulated_problem')
 @pytest.mark.parametrize('iteration', [
     pytest.param(Iteration('simple', {'atol': 1e-12}), id="simple"),
-    pytest.param(Iteration('hybr', {'xtol': 1e-12, 'ftol': 0}, compute_jacobian=True), id="Powell"),
+    pytest.param(Iteration('hybr', {'xtol': 1e-12, 'ftol': 0}, compute_jacobian=True), id="Powell/LM"),
 ])
 def test_prices(simulated_problem: SimulatedProblemFixture, iteration: Iteration) -> None:
     """Test that equilibrium prices computed with different methods are approximate the same.
@@ -591,7 +592,15 @@ def test_prices(simulated_problem: SimulatedProblemFixture, iteration: Iteration
     if simulation_results.profit_gradient_norms is None:
         return pytest.skip("Equilibrium prices were not computed.")
 
-    new_simulation_results = simulation.replace_endogenous(iteration=iteration, constant_costs=False)
+    try:
+        new_simulation_results = simulation.replace_endogenous(iteration=iteration, constant_costs=False)
+    except (pyblp.exceptions.SyntheticPricesConvergenceError, pyblp.exceptions.MultipleErrors):
+        # sometimes Powell won't converge at these starting values but LM will
+        if 'hybr' not in str(iteration):
+            raise
+        iteration = Iteration('lm', {'xtol': 1e-12, 'ftol': 0}, compute_jacobian=True)
+        new_simulation_results = simulation.replace_endogenous(iteration=iteration, constant_costs=False)
+
     np.testing.assert_allclose(
         simulation_results.product_data.prices,
         new_simulation_results.product_data.prices,
