@@ -694,30 +694,144 @@ class ProblemEconomy(Economy):
         # expand theta
         sigma, pi, rho, beta, gamma = parameters.expand(theta)
 
-        # compute demand-side contributions
-        compute_jacobians = compute_gradient and not finite_differences
-        (
-            delta, micro, xi_jacobian, micro_jacobian, micro_covariances, micro_values, clipped_shares, iteration_stats,
-            demand_errors
-        ) = (
-            self._compute_demand_contributions(
-                parameters, moments, iteration, fp_type, shares_bounds, sigma, pi, rho, progress, compute_jacobians,
-                compute_micro_covariances
-            )
-        )
-        errors.extend(demand_errors)
+        # initialize delta, micro moments, their Jacobians, micro moment covariances, micro moment values, indices of
+        #   clipped shares, and fixed point statistics so that they can be filled
+        delta = np.zeros((self.N, 1), options.dtype)
+        micro = np.zeros((moments.MM, 1), options.dtype)
+        xi_jacobian = np.zeros((self.N, parameters.P), options.dtype)
+        micro_jacobian = np.zeros((moments.MM, parameters.P), options.dtype)
+        micro_covariances = np.zeros((moments.MM, moments.MM), options.dtype)
+        micro_values = np.full((moments.MM, 1), np.nan, options.dtype)
+        clipped_shares = np.zeros((self.N, 1), np.bool_)
+        iteration_stats: Dict[Hashable, SolverStats] = {}
 
-        # compute supply-side contributions
+        # initialize transformed marginal costs, their Jacobian, and indices of clipped costs so that they can be filled
         if self.K3 == 0:
             tilde_costs = np.full((self.N, 0), np.nan, options.dtype)
             omega_jacobian = np.full((self.N, parameters.P), np.nan, options.dtype)
             clipped_costs = np.zeros((self.N, 1), np.bool_)
         else:
-            compute_jacobian = compute_gradient and not finite_differences
-            tilde_costs, omega_jacobian, clipped_costs, supply_errors = self._compute_supply_contributions(
-                parameters, costs_bounds, sigma, pi, rho, beta, delta, xi_jacobian, progress, compute_jacobian
-            )
-            errors.extend(supply_errors)
+            tilde_costs = np.zeros((self.N, 1), options.dtype)
+            omega_jacobian = np.zeros((self.N, parameters.P), options.dtype)
+            clipped_costs = np.zeros((self.N, 1), np.bool_)
+
+        # only do market-by-market computation when necessary
+        compute_jacobians = compute_gradient and not finite_differences
+        if self.K2 == self.K3 == moments.MM == 0 and (parameters.P == 0 or not compute_jacobians):
+            delta = self._compute_logit_delta(rho)
+        else:
+            def market_factory(
+                    s: Hashable) -> (
+                    Tuple[ProblemMarket, Array, Array, Array, Moments, Iteration, str, Bounds, Bounds, bool, bool]):
+                """Build a market along with arguments used to compute delta, micro moment contributions, transformed
+                marginal costs, and Jacobians.
+                """
+                market_s = ProblemMarket(self, s, parameters, sigma, pi, rho, beta)
+                delta_s = progress.next_delta[self._product_market_indices[s]]
+                last_delta_s = progress.delta[self._product_market_indices[s]]
+                last_tilde_costs_s = progress.tilde_costs[self._product_market_indices[s]]
+                return (
+                    market_s, delta_s, last_delta_s, last_tilde_costs_s, moments, iteration, fp_type, shares_bounds,
+                    costs_bounds, compute_jacobians, compute_micro_covariances
+                )
+
+            # compute delta, contributions to micro moment values, transformed marginal costs, Jacobians, and
+            #   covariances market-by-market
+            micro_numerator_mapping: Dict[Hashable, Array] = {}
+            micro_denominator_mapping: Dict[Hashable, Array] = {}
+            micro_numerator_jacobian_mapping: Dict[Hashable, Array] = {}
+            micro_denominator_jacobian_mapping: Dict[Hashable, Array] = {}
+            micro_covariances_numerator_mapping: Dict[Hashable, Array] = {}
+            generator = generate_items(self.unique_market_ids, market_factory, ProblemMarket.solve)
+            for t, generated_t in generator:
+                (
+                    delta_t, xi_jacobian_t, micro_numerator_t, micro_denominator_t, micro_numerator_jacobian_t,
+                    micro_denominator_jacobian_t, micro_covariances_numerator_t, clipped_shares_t, iteration_stats_t,
+                    tilde_costs_t, omega_jacobian_t, clipped_costs_t, errors_t
+                ) = generated_t
+
+                delta[self._product_market_indices[t]] = delta_t
+                xi_jacobian[self._product_market_indices[t], :parameters.P] = xi_jacobian_t
+                micro_numerator_mapping[t] = micro_numerator_t
+                micro_denominator_mapping[t] = micro_denominator_t
+                micro_numerator_jacobian_mapping[t] = micro_numerator_jacobian_t
+                micro_denominator_jacobian_mapping[t] = micro_denominator_jacobian_t
+                micro_covariances_numerator_mapping[t] = micro_covariances_numerator_t
+                clipped_shares[self._product_market_indices[t]] = clipped_shares_t
+                iteration_stats[t] = iteration_stats_t
+
+                if self.K3 > 0:
+                    tilde_costs[self._product_market_indices[t]] = tilde_costs_t
+                    omega_jacobian[self._product_market_indices[t], :parameters.P] = omega_jacobian_t
+                    clipped_costs[self._product_market_indices[t]] = clipped_costs_t
+
+                errors.extend(errors_t)
+
+            # aggregate micro moments, their Jacobian, and their covariances across all markets (this is done after
+            #   market-by-market computation to preserve numerical stability with different market orderings)
+            if moments.MM > 0:
+                micro_numerator = micro.copy()
+                micro_denominator = micro.copy()
+                micro_numerator_jacobian = micro_jacobian.copy()
+                micro_denominator_jacobian = micro_jacobian.copy()
+                micro_covariances_numerator = micro_covariances.copy()
+                with np.errstate(all='ignore'):
+                    for t in self.unique_market_ids:
+                        micro_numerator += micro_numerator_mapping[t]
+                        micro_denominator += micro_denominator_mapping[t]
+                        if compute_jacobians:
+                            micro_numerator_jacobian += micro_numerator_jacobian_mapping[t]
+                            micro_denominator_jacobian += micro_denominator_jacobian_mapping[t]
+                        if compute_micro_covariances:
+                            micro_covariances_numerator += micro_covariances_numerator_mapping[t]
+
+                    micro_values = micro_numerator / micro_denominator
+                    micro = moments.values - micro_values
+                    if compute_jacobians:
+                        micro_jacobian = (
+                            -(micro_numerator_jacobian - micro_values * micro_denominator_jacobian) / micro_denominator
+                        )
+                    if compute_micro_covariances:
+                        micro_covariances = micro_covariances_numerator / micro_denominator
+
+                        # subtract away means from second moments
+                        for m1, (moment1, value1) in enumerate(zip(moments.micro_moments, micro_values)):
+                            for m2, (moment2, value2) in enumerate(zip(moments.micro_moments[m1:], micro_values[m1:])):
+                                if moment1.dataset == moment2.dataset:
+                                    micro_covariances[m1, m2] -= value1 * value2
+
+                        # fill the lower triangle
+                        lower_indices = np.tril_indices(moments.MM, -1)
+                        micro_covariances[lower_indices] = micro_covariances.T[lower_indices]
+
+        # replace invalid elements in delta, micro moments, and transformed marginal costs with their last values
+        bad_delta_index = ~np.isfinite(delta)
+        bad_micro_index = ~np.isfinite(micro)
+        bad_tilde_costs_index = ~np.isfinite(tilde_costs)
+        if np.any(bad_delta_index):
+            delta[bad_delta_index] = progress.delta[bad_delta_index]
+            errors.append(exceptions.DeltaReversionError(bad_delta_index))
+        if np.any(bad_micro_index):
+            micro[bad_micro_index] = progress.micro[bad_micro_index]
+            errors.append(exceptions.MicroMomentsReversionError(bad_micro_index))
+        if np.any(bad_tilde_costs_index):
+            tilde_costs[bad_tilde_costs_index] = progress.tilde_costs[bad_tilde_costs_index]
+            errors.append(exceptions.CostsReversionError(bad_tilde_costs_index))
+
+        # replace invalid elements in the Jacobians with their last values
+        if compute_jacobians:
+            bad_xi_jacobian_index = ~np.isfinite(xi_jacobian)
+            bad_micro_jacobian_index = ~np.isfinite(micro_jacobian)
+            bad_omega_jacobian_index = ~np.isfinite(omega_jacobian)
+            if np.any(bad_xi_jacobian_index):
+                xi_jacobian[bad_xi_jacobian_index] = progress.xi_jacobian[bad_xi_jacobian_index]
+                errors.append(exceptions.XiByThetaJacobianReversionError(bad_xi_jacobian_index))
+            if np.any(bad_micro_jacobian_index):
+                micro_jacobian[bad_micro_jacobian_index] = progress.micro_jacobian[bad_micro_jacobian_index]
+                errors.append(exceptions.MicroMomentsByThetaJacobianReversionError(bad_micro_jacobian_index))
+            if np.any(bad_omega_jacobian_index):
+                omega_jacobian[bad_omega_jacobian_index] = progress.omega_jacobian[bad_omega_jacobian_index]
+                errors.append(exceptions.OmegaByThetaJacobianReversionError(bad_omega_jacobian_index))
 
         # optionally compute Jacobians with central finite differences
         if compute_gradient and finite_differences and parameters.P > 0:
@@ -849,175 +963,6 @@ class ProblemEconomy(Economy):
             xi_jacobian, omega_jacobian, micro_jacobian, micro_covariances, micro_values, iv_delta, iv_tilde_costs, xi,
             omega, beta, gamma, iteration_stats, clipped_shares, clipped_costs, errors
         )
-
-    def _compute_demand_contributions(
-            self, parameters: Parameters, moments: Moments, iteration: Iteration, fp_type: str, shares_bounds: Bounds,
-            sigma: Array, pi: Array, rho: Array, progress: 'InitialProgress', compute_jacobians: bool,
-            compute_micro_covariances: bool) -> (
-            Tuple[Array, Array, Array, Array, Array, Array, Array, Dict[Hashable, SolverStats], List[Error]]):
-        """Compute delta and the Jacobian (holding beta fixed) of xi (equivalently, of delta) with respect to theta
-        market-by-market. If there are any micro moments, compute them (taking the average across relevant markets)
-        along with their Jacobian and covariances. Revert any problematic elements to their last values.
-        """
-        errors: List[Error] = []
-
-        # initialize delta, micro moments, their Jacobians, micro moment covariances, micro moment values, indices of
-        #   clipped shares, and fixed point statistics so that they can be filled
-        delta = np.zeros((self.N, 1), options.dtype)
-        micro = np.zeros((moments.MM, 1), options.dtype)
-        xi_jacobian = np.zeros((self.N, parameters.P), options.dtype)
-        micro_jacobian = np.zeros((moments.MM, parameters.P), options.dtype)
-        micro_covariances = np.zeros((moments.MM, moments.MM), options.dtype)
-        micro_values = np.full((moments.MM, 1), np.nan, options.dtype)
-        clipped_shares = np.zeros((self.N, 1), np.bool_)
-        iteration_stats: Dict[Hashable, SolverStats] = {}
-
-        # when possible and when a gradient isn't needed, compute delta with a closed-form solution
-        if self.K2 == 0 and moments.MM == 0 and (parameters.P == 0 or not compute_jacobians):
-            delta = self._compute_logit_delta(rho)
-        else:
-            def market_factory(
-                    s: Hashable) -> Tuple[ProblemMarket, Array, Array, Moments, Iteration, str, Bounds, bool, bool]:
-                """Build a market along with arguments used to compute delta, micro moment values, and Jacobians."""
-                market_s = ProblemMarket(self, s, parameters, sigma, pi, rho)
-                delta_s = progress.next_delta[self._product_market_indices[s]]
-                last_delta_s = progress.delta[self._product_market_indices[s]]
-                return (
-                    market_s, delta_s, last_delta_s, moments, iteration, fp_type, shares_bounds, compute_jacobians,
-                    compute_micro_covariances
-                )
-
-            # compute delta and contributions to micro moment values, Jacobians, and covariances market-by-market
-            micro_numerator_mapping: Dict[Hashable, Array] = {}
-            micro_denominator_mapping: Dict[Hashable, Array] = {}
-            micro_numerator_jacobian_mapping: Dict[Hashable, Array] = {}
-            micro_denominator_jacobian_mapping: Dict[Hashable, Array] = {}
-            micro_covariances_numerator_mapping: Dict[Hashable, Array] = {}
-            generator = generate_items(self.unique_market_ids, market_factory, ProblemMarket.solve_demand)
-            for t, generated_t in generator:
-                (
-                    delta_t, xi_jacobian_t, micro_numerator_t, micro_denominator_t, micro_numerator_jacobian_t,
-                    micro_denominator_jacobian_t, micro_covariances_numerator_t, clipped_shares_t, iteration_stats_t,
-                    errors_t
-                ) = generated_t
-                delta[self._product_market_indices[t]] = delta_t
-                xi_jacobian[self._product_market_indices[t], :parameters.P] = xi_jacobian_t
-                micro_numerator_mapping[t] = micro_numerator_t
-                micro_denominator_mapping[t] = micro_denominator_t
-                micro_numerator_jacobian_mapping[t] = micro_numerator_jacobian_t
-                micro_denominator_jacobian_mapping[t] = micro_denominator_jacobian_t
-                micro_covariances_numerator_mapping[t] = micro_covariances_numerator_t
-                clipped_shares[self._product_market_indices[t]] = clipped_shares_t
-                iteration_stats[t] = iteration_stats_t
-                errors.extend(errors_t)
-
-            # aggregate micro moments, their Jacobian, and their covariances across all markets (this is done after
-            #   market-by-market computation to preserve numerical stability with different market orderings)
-            if moments.MM > 0:
-                micro_numerator = micro.copy()
-                micro_denominator = micro.copy()
-                micro_numerator_jacobian = micro_jacobian.copy()
-                micro_denominator_jacobian = micro_jacobian.copy()
-                micro_covariances_numerator = micro_covariances.copy()
-                with np.errstate(all='ignore'):
-                    for t in self.unique_market_ids:
-                        micro_numerator += micro_numerator_mapping[t]
-                        micro_denominator += micro_denominator_mapping[t]
-                        if compute_jacobians:
-                            micro_numerator_jacobian += micro_numerator_jacobian_mapping[t]
-                            micro_denominator_jacobian += micro_denominator_jacobian_mapping[t]
-                        if compute_micro_covariances:
-                            micro_covariances_numerator += micro_covariances_numerator_mapping[t]
-
-                    micro_values = micro_numerator / micro_denominator
-                    micro = moments.values - micro_values
-                    if compute_jacobians:
-                        micro_jacobian = (
-                            -(micro_numerator_jacobian - micro_values * micro_denominator_jacobian) / micro_denominator
-                        )
-                    if compute_micro_covariances:
-                        micro_covariances = micro_covariances_numerator / micro_denominator
-
-                        # subtract away means from second moments
-                        for m1, (moment1, value1) in enumerate(zip(moments.micro_moments, micro_values)):
-                            for m2, (moment2, value2) in enumerate(zip(moments.micro_moments[m1:], micro_values[m1:])):
-                                if moment1.dataset == moment2.dataset:
-                                    micro_covariances[m1, m2] -= value1 * value2
-
-                        # fill the lower triangle
-                        lower_indices = np.tril_indices(moments.MM, -1)
-                        micro_covariances[lower_indices] = micro_covariances.T[lower_indices]
-
-        # replace invalid elements in delta and the micro moment values with their last values
-        bad_delta_index = ~np.isfinite(delta)
-        bad_micro_index = ~np.isfinite(micro)
-        if np.any(bad_delta_index):
-            delta[bad_delta_index] = progress.delta[bad_delta_index]
-            errors.append(exceptions.DeltaReversionError(bad_delta_index))
-        if np.any(bad_micro_index):
-            micro[bad_micro_index] = progress.micro[bad_micro_index]
-            errors.append(exceptions.MicroMomentsReversionError(bad_micro_index))
-
-        # replace invalid elements in the Jacobians with their last values
-        if compute_jacobians:
-            bad_xi_jacobian_index = ~np.isfinite(xi_jacobian)
-            bad_micro_jacobian_index = ~np.isfinite(micro_jacobian)
-            if np.any(bad_xi_jacobian_index):
-                xi_jacobian[bad_xi_jacobian_index] = progress.xi_jacobian[bad_xi_jacobian_index]
-                errors.append(exceptions.XiByThetaJacobianReversionError(bad_xi_jacobian_index))
-            if np.any(bad_micro_jacobian_index):
-                micro_jacobian[bad_micro_jacobian_index] = progress.micro_jacobian[bad_micro_jacobian_index]
-                errors.append(exceptions.MicroMomentsByThetaJacobianReversionError(bad_micro_jacobian_index))
-
-        return (
-            delta, micro, xi_jacobian, micro_jacobian, micro_covariances, micro_values, clipped_shares, iteration_stats,
-            errors
-        )
-
-    def _compute_supply_contributions(
-            self, parameters: Parameters, costs_bounds: Bounds, sigma: Array, pi: Array, rho: Array, beta: Array,
-            delta: Array, xi_jacobian: Array, progress: 'InitialProgress', compute_jacobian: bool) -> (
-            Tuple[Array, Array, Array, List[Error]]):
-        """Compute transformed marginal costs and the Jacobian (holding gamma fixed) of omega (equivalently, of
-        transformed marginal costs) with respect to theta market-by-market. Revert any problematic elements to their
-        last values.
-        """
-        errors: List[Error] = []
-
-        # initialize transformed marginal costs, their Jacobian, and indices of clipped costs so that they can be filled
-        tilde_costs = np.zeros((self.N, 1), options.dtype)
-        omega_jacobian = np.zeros((self.N, parameters.P), options.dtype)
-        clipped_costs = np.zeros((self.N, 1), np.bool_)
-
-        def market_factory(s: Hashable) -> Tuple[ProblemMarket, Array, Array, Bounds, bool]:
-            """Build a market along with arguments used to compute transformed marginal costs and their Jacobian."""
-            market_s = ProblemMarket(self, s, parameters, sigma, pi, rho, beta, delta=delta)
-            last_tilde_costs_s = progress.tilde_costs[self._product_market_indices[s]]
-            xi_jacobian_s = xi_jacobian[self._product_market_indices[s]]
-            return market_s, last_tilde_costs_s, xi_jacobian_s, costs_bounds, compute_jacobian
-
-        # compute transformed marginal costs and their Jacobian market-by-market
-        generator = generate_items(self.unique_market_ids, market_factory, ProblemMarket.solve_supply)
-        for t, (tilde_costs_t, omega_jacobian_t, clipped_costs_t, errors_t) in generator:
-            tilde_costs[self._product_market_indices[t]] = tilde_costs_t
-            omega_jacobian[self._product_market_indices[t], :parameters.P] = omega_jacobian_t
-            clipped_costs[self._product_market_indices[t]] = clipped_costs_t
-            errors.extend(errors_t)
-
-        # replace invalid transformed marginal costs with their last values
-        bad_tilde_costs_index = ~np.isfinite(tilde_costs)
-        if np.any(bad_tilde_costs_index):
-            tilde_costs[bad_tilde_costs_index] = progress.tilde_costs[bad_tilde_costs_index]
-            errors.append(exceptions.CostsReversionError(bad_tilde_costs_index))
-
-        # replace invalid elements in their Jacobian with their last values
-        if compute_jacobian:
-            bad_omega_jacobian_index = ~np.isfinite(omega_jacobian)
-            if np.any(bad_omega_jacobian_index):
-                omega_jacobian[bad_omega_jacobian_index] = progress.omega_jacobian[bad_omega_jacobian_index]
-                errors.append(exceptions.OmegaByThetaJacobianReversionError(bad_omega_jacobian_index))
-
-        return tilde_costs, omega_jacobian, clipped_costs, errors
 
 
 class Problem(ProblemEconomy):

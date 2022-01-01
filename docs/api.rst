@@ -359,6 +359,7 @@ When errors occur, they will either be displayed as warnings or raised as except
    exceptions.NonpositiveSyntheticCostsError
    exceptions.InvalidParameterCovariancesError
    exceptions.InvalidMomentCovariancesError
+   exceptions.GenericNumericalError
    exceptions.DeltaNumericalError
    exceptions.CostsNumericalError
    exceptions.MicroMomentsNumericalError
@@ -372,6 +373,7 @@ When errors occur, they will either be displayed as warnings or raised as except
    exceptions.SyntheticCostsNumericalError
    exceptions.SyntheticMicroMomentsNumericalError
    exceptions.EquilibriumRealizationNumericalError
+   exceptions.JacobianRealizationNumericalError
    exceptions.PostEstimationNumericalError
    exceptions.AbsorptionError
    exceptions.ClippedSharesError

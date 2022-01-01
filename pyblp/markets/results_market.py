@@ -1,6 +1,6 @@
 """Market-level structuring of BLP results."""
 
-from typing import Any, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -39,21 +39,45 @@ class ResultsMarket(Market):
         shares = self.compute_probabilities(delta, mu)[0] @ self.agents.weights
         return prices, shares, delta, stats, errors
 
-    @NumericalErrorHandler(exceptions.XiByThetaJacobianRealizationNumericalError)
-    def safely_compute_xi_by_theta_jacobian_realization(self) -> Tuple[Array, List[Error]]:
+    @NumericalErrorHandler(exceptions.JacobianRealizationNumericalError)
+    def safely_compute_jacobian_realizations(self, tilde_costs: Array) -> Tuple[Array, Array, List[Error]]:
         """Compute the Jacobian (holding beta fixed) of xi (equivalently, of delta) with respect to theta for a
-        realization of the market, handling any numerical errors.
+        realization of the market, handling any numerical errors. If there is a supply side, do the same for omega.
         """
-        jacobian, _, _, _, errors = self.compute_xi_by_theta_jacobian()
-        return jacobian, errors
+        errors: List[Error] = []
 
-    @NumericalErrorHandler(exceptions.OmegaByThetaJacobianRealizationNumericalError)
-    def safely_compute_omega_by_theta_jacobian_realization(
-            self, tilde_costs: Array, xi_jacobian: Array) -> Tuple[Array, List[Error]]:
-        """Compute the Jacobian (holding gamma fixed) of omega (equivalently, of transformed marginal costs) with
-        respect to theta for a realization of the market, handling any numerical errors.
-        """
-        return self.compute_omega_by_theta_jacobian(tilde_costs, xi_jacobian)
+        # if needed, pre-compute probabilities and their derivatives with respect to parameters
+        probabilities, conditionals = self.compute_probabilities()
+        probabilities_tangent_mapping: Dict[int, Array] = {}
+        conditionals_tangent_mapping: Dict[int, Array] = {}
+        for p, parameter in enumerate(self.parameters.unfixed):
+            probabilities_tangent, conditionals_tangent = self.compute_probabilities_by_parameter_tangent(
+                parameter, probabilities, conditionals
+            )
+            probabilities_tangent_mapping[p] = probabilities_tangent
+            if self.K3 > 0:
+                conditionals_tangent_mapping[p] = conditionals_tangent
+
+        # compute the demand-side Jacobian
+        xi_jacobian, xi_jacobian_errors = self.compute_xi_by_theta_jacobian(
+            probabilities, conditionals, probabilities_tangent_mapping
+        )
+        errors.extend(xi_jacobian_errors)
+
+        # compute the supply-side Jacobian if there is a supply side
+        if self.K3 == 0:
+            omega_jacobian = np.full((self.J, self.parameters.P), np.nan, options.dtype)
+        else:
+            probabilities_tensor, conditionals_tensor = self.compute_probabilities_by_xi_tensor(
+                probabilities, conditionals
+            )
+            omega_jacobian, omega_jacobian_errors = self.compute_omega_by_theta_jacobian(
+                tilde_costs, probabilities, conditionals, probabilities_tangent_mapping, conditionals_tangent_mapping,
+                probabilities_tensor, conditionals_tensor, xi_jacobian
+            )
+            errors.extend(omega_jacobian_errors)
+
+        return xi_jacobian, omega_jacobian, errors
 
     @NumericalErrorHandler(exceptions.DeltaNumericalError)
     def safely_compute_delta(

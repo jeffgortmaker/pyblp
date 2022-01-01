@@ -1295,7 +1295,8 @@ class ProblemResults(Results):
         if self.problem.costs_type == 'log':
             costs = np.exp(costs)
 
-        def market_factory(s: Hashable) -> Tuple[ResultsMarket, Array, Optional[Array], Optional[Iteration], bool]:
+        def equilibrium_market_factory(
+                s: Hashable) -> Tuple[ResultsMarket, Array, Optional[Array], Optional[Iteration], bool]:
             """Build a market along with arguments used to compute equilibrium prices and shares along with delta."""
             market_s = ResultsMarket(
                 self.problem, s, self._parameters, self.sigma, self.pi, self.rho, self.beta, self.gamma, delta
@@ -1311,7 +1312,8 @@ class ProblemResults(Results):
         }
         iteration_stats: Dict[Hashable, SolverStats] = {}
         generator = generate_items(
-            self.problem.unique_market_ids, market_factory, ResultsMarket.safely_solve_equilibrium_realization
+            self.problem.unique_market_ids, equilibrium_market_factory,
+            ResultsMarket.safely_solve_equilibrium_realization
         )
         for t, (prices_t, shares_t, delta_t, iteration_stats_t, errors_t) in generator:
             data_override['prices'][self.problem._product_market_indices[t]] = prices_t
@@ -1320,94 +1322,45 @@ class ProblemResults(Results):
             iteration_stats[t] = iteration_stats_t
             errors.extend(errors_t)
 
-        # compute the Jacobian of xi with respect to theta
-        xi_jacobian, demand_errors = self._compute_demand_realization(data_override, delta)
-        errors.extend(demand_errors)
-
-        # compute the Jacobian of omega with respect to theta
+        # only compute Jacobians if necessary
+        xi_jacobian = np.full((self.problem.N, self._parameters.P), np.nan, options.dtype)
         omega_jacobian = np.full((self.problem.N, self._parameters.P), np.nan, options.dtype)
-        if self.problem.K3 > 0:
-            omega_jacobian, supply_errors = self._compute_supply_realization(
-                data_override, delta, tilde_costs, xi_jacobian
+        if self._parameters.P > 0:
+            def jacobian_market_factory(s: Hashable) -> Tuple[ResultsMarket, Array]:
+                """Build a market with the data realization along with arguments used to compute the Jacobians."""
+                market_s = ResultsMarket(
+                    self.problem, s, self._parameters, self.sigma, self.pi, self.rho, self.beta, delta=delta,
+                    data_override=data_override
+                )
+                tilde_costs_s = tilde_costs[self.problem._product_market_indices[s]]
+                return market_s, tilde_costs_s
+
+            # compute the Jacobians market-by-market
+            generator = generate_items(
+                self.problem.unique_market_ids, jacobian_market_factory,
+                ResultsMarket.safely_compute_jacobian_realizations
             )
-            errors.extend(supply_errors)
+            for t, (xi_jacobian_t, omega_jacobian_t, errors_t) in generator:
+                xi_jacobian[self.problem._product_market_indices[t]] = xi_jacobian_t
+
+                if self.problem.K3 > 0:
+                    omega_jacobian[self.problem._product_market_indices[t]] = omega_jacobian_t
+
+                errors.extend(errors_t)
+
+            # replace invalid elements
+            bad_xi_jacobian_index = ~np.isfinite(xi_jacobian)
+            if np.any(bad_xi_jacobian_index):
+                xi_jacobian[bad_xi_jacobian_index] = self.xi_by_theta_jacobian[bad_xi_jacobian_index]
+                errors.append(exceptions.XiByThetaJacobianReversionError(bad_xi_jacobian_index))
+
+            if self.problem.K3 > 0:
+                bad_omega_jacobian_index = ~np.isfinite(omega_jacobian)
+                if np.any(bad_omega_jacobian_index):
+                    omega_jacobian[bad_omega_jacobian_index] = self.omega_by_theta_jacobian[bad_omega_jacobian_index]
+                    errors.append(exceptions.OmegaByThetaJacobianReversionError(bad_omega_jacobian_index))
 
         return data_override['prices'], data_override['shares'], xi_jacobian, omega_jacobian, iteration_stats, errors
-
-    def _compute_demand_realization(self, data_override: Dict[str, Array], delta: Array) -> Tuple[Array, List[Error]]:
-        """Compute a realization of the Jacobian of xi with respect to theta market-by-market. If necessary, revert
-        problematic elements to their estimated values.
-        """
-        errors: List[Error] = []
-
-        # check if the Jacobian does not need to be computed
-        xi_jacobian = np.full((self.problem.N, self._parameters.P), np.nan, options.dtype)
-        if self._parameters.P == 0:
-            return xi_jacobian, errors
-
-        def market_factory(s: Hashable) -> Tuple[ResultsMarket]:
-            """Build a market with the data realization along with arguments used to compute the Jacobian."""
-            market_s = ResultsMarket(
-                self.problem, s, self._parameters, self.sigma, self.pi, self.rho, self.beta, delta=delta,
-                data_override=data_override
-            )
-            return market_s,
-
-        # compute the Jacobian market-by-market
-        generator = generate_items(
-            self.problem.unique_market_ids, market_factory,
-            ResultsMarket.safely_compute_xi_by_theta_jacobian_realization
-        )
-        for t, (xi_jacobian_t, errors_t) in generator:
-            xi_jacobian[self.problem._product_market_indices[t]] = xi_jacobian_t
-            errors.extend(errors_t)
-
-        # replace invalid elements
-        bad_jacobian_index = ~np.isfinite(xi_jacobian)
-        if np.any(bad_jacobian_index):
-            xi_jacobian[bad_jacobian_index] = self.xi_by_theta_jacobian[bad_jacobian_index]
-            errors.append(exceptions.XiByThetaJacobianReversionError(bad_jacobian_index))
-
-        return xi_jacobian, errors
-
-    def _compute_supply_realization(
-            self, data_override: Dict[str, Array], delta: Array, tilde_costs: Array, xi_jacobian: Array) -> (
-            Tuple[Array, List[Error]]):
-        """Compute a realization of the Jacobian of omega with respect to theta market-by-market. If necessary, revert
-        problematic elements to their estimated values.
-        """
-        errors: List[Error] = []
-
-        def market_factory(s: Hashable) -> Tuple[ResultsMarket, Array, Array]:
-            """Build a market with the data realization along with arguments used to compute the Jacobians."""
-            market_s = ResultsMarket(
-                self.problem, s, self._parameters, self.sigma, self.pi, self.rho, self.beta, delta=delta,
-                data_override=data_override
-            )
-            tilde_costs_s = tilde_costs[self.problem._product_market_indices[s]]
-            xi_jacobian_s = xi_jacobian[self.problem._product_market_indices[s]]
-            return market_s, tilde_costs_s, xi_jacobian_s
-
-        # compute the Jacobian market-by-market
-        omega_jacobian = np.full((self.problem.N, self._parameters.P), np.nan, options.dtype)
-        generator = generate_items(
-            self.problem.unique_market_ids, market_factory,
-            ResultsMarket.safely_compute_omega_by_theta_jacobian_realization
-        )
-        for t, (omega_jacobian_t, errors_t) in generator:
-            omega_jacobian[self.problem._product_market_indices[t]] = omega_jacobian_t
-            errors.extend(errors_t)
-
-        # the Jacobian should be zero for any clipped marginal costs
-        omega_jacobian[self.clipped_costs.flat] = 0
-
-        # replace invalid elements
-        bad_jacobian_index = ~np.isfinite(omega_jacobian)
-        if np.any(bad_jacobian_index):
-            omega_jacobian[bad_jacobian_index] = self.omega_by_theta_jacobian[bad_jacobian_index]
-            errors.append(exceptions.OmegaByThetaJacobianReversionError(bad_jacobian_index))
-
-        return omega_jacobian, errors
 
     def importance_sampling(
             self, draws: int, ar_constant: float = 1.0, seed: Optional[int] = None,

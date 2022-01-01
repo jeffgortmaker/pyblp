@@ -54,6 +54,10 @@ class InvalidMomentCovariancesError(Error):
     """Failed to compute a weighting matrix because of invalid estimated covariances of GMM moments."""
 
 
+class GenericNumericalError(NumericalError):
+    """Encountered a numerical error."""
+
+
 class DeltaNumericalError(NumericalError):
     r"""Encountered a numerical error when computing :math:`\delta`.
 
@@ -161,16 +165,10 @@ class EquilibriumRealizationNumericalError(NumericalError):
     """Encountered a numerical error when solving for a realization of equilibrium prices and shares."""
 
 
-class XiByThetaJacobianRealizationNumericalError(NumericalError):
+class JacobianRealizationNumericalError(NumericalError):
     r"""Encountered a numerical error when computing a realization of the Jacobian (holding :math:`\beta` fixed) of
-    :math:`\xi` (equivalently, of :math:`\delta`) with respect to :math:`\theta`.
-
-    """
-
-
-class OmegaByThetaJacobianRealizationNumericalError(NumericalError):
-    r"""Encountered a numerical error when computing a realization of the Jacobian (holding :math:`\gamma` fixed) of
-    :math:`\omega` (equivalently, of transformed marginal costs) with respect to :math:`\theta`.
+    :math:`\xi` (equivalently, of :math:`\delta`) or :math:`\omega` (equivalently, of transformed marginal costs)
+    with respect to :math:`\theta`.
 
     """
 
