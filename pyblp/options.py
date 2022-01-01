@@ -64,12 +64,6 @@ pseudo_inverses : `bool`
     To always attempt to compute classic inverses first, set ``pyblp.options.pseudo_inverses = False``. If a classic
     inverse cannot be computed, an error will be displayed, and a pseudo-inverse may be computed instead.
 
-ownership_sparsity_cutoff : `float`
-    Within a market :math:`t`, when the fraction of nonzero elements in the ownership matrix is less than this number,
-    the sparsity structure of the matrix will be used to try to speed up computation. Above a small value like the
-    default, ``0.01``, the overhead from exploiting sparsity outweighs the theoretical gains from speed. To disable
-    exploiting sparsity, set ``pyblp.options.ownership_sparsity_cutoff = 0``.
-
 collinear_atol : `float`
     Absolute tolerance for detecting collinear columns in each matrix of product characteristics and instruments:
     :math:`X_1`, :math:`X_2`, :math:`X_3`, :math:`Z_D`, and :math:`Z_S`.
@@ -114,7 +108,6 @@ flush_output = False
 dtype = _np.float64
 finite_differences_epsilon = _np.sqrt(_np.finfo(dtype).eps)
 pseudo_inverses = True
-ownership_sparsity_cutoff = 0.01
 weights_tol = 1e-10
 collinear_atol = collinear_rtol = 1e-14
 psd_atol = psd_rtol = 1e-8

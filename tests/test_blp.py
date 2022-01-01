@@ -10,7 +10,6 @@ import pytest
 import scipy.optimize
 
 import pyblp.exceptions
-import pyblp.options
 from pyblp import (
     Formulation, Integration, Iteration, Optimization, Problem, Simulation, build_ownership, data_to_dict, parallel
 )
@@ -252,38 +251,6 @@ def test_trivial_changes(simulated_problem: SimulatedProblemFixture, solve_optio
         if isinstance(result, np.ndarray) and result.dtype != np.object_:
             if 'hessian' not in key:
                 np.testing.assert_allclose(result, getattr(updated_results, key), atol=1e-14, rtol=0, err_msg=key)
-
-
-@pytest.mark.usefixtures('simulated_problem')
-def test_ownership_sparsity(simulated_problem: SimulatedProblemFixture) -> None:
-    """Check that exploiting ownership sparsity doesn't change the output."""
-    simulation, _, problem, solve_options, results = simulated_problem
-
-    # update solve options to just return at the initial parameter values (don't need to solve fully for this test)
-    updated_solve_options = copy.deepcopy(solve_options)
-    updated_solve_options['optimization'] = Optimization('return')
-
-    # get results exploiting and not exploiting sparsity
-    updated_results = []
-    for cutoff in [0, 1]:
-        old_cutoff = pyblp.options.ownership_sparsity_cutoff
-        try:
-            pyblp.options.ownership_sparsity_cutoff = cutoff
-            updated_results.append(problem.solve(**updated_solve_options))
-        finally:
-            pyblp.options.ownership_sparsity_cutoff = old_cutoff
-
-    # we should have the same results when there isn't supply
-    atol = 1e-14
-    rtol = 0
-    if problem.K3 > 0:
-        atol = 1e-12
-        rtol = 1e-5
-
-    # test that all arrays in the results are essentially identical
-    for key, result in updated_results[0].__dict__.items():
-        if isinstance(result, np.ndarray) and result.dtype != np.object_:
-            np.testing.assert_allclose(result, getattr(updated_results[1], key), atol=atol, rtol=rtol, err_msg=key)
 
 
 @pytest.mark.usefixtures('simulated_problem')
