@@ -1,6 +1,6 @@
 """Market-level structuring of BLP results."""
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 import numpy as np
 
@@ -46,17 +46,13 @@ class ResultsMarket(Market):
         """
         errors: List[Error] = []
 
-        # if needed, pre-compute probabilities and their derivatives with respect to parameters
+        # pre-compute probabilities and their derivatives with respect to parameters
         probabilities, conditionals = self.compute_probabilities()
-        probabilities_tangent_mapping: Dict[int, Array] = {}
-        conditionals_tangent_mapping: Dict[int, Array] = {}
-        for p, parameter in enumerate(self.parameters.unfixed):
-            probabilities_tangent, conditionals_tangent = self.compute_probabilities_by_parameter_tangent(
-                parameter, probabilities, conditionals
+        probabilities_tangent_mapping, conditionals_tangent_mapping = (
+            self.compute_probabilities_by_parameter_tangent_mapping(
+                probabilities, conditionals, keep_conditionals=self.K3 > 0
             )
-            probabilities_tangent_mapping[p] = probabilities_tangent
-            if self.K3 > 0:
-                conditionals_tangent_mapping[p] = conditionals_tangent
+        )
 
         # compute the demand-side Jacobian
         xi_jacobian, xi_jacobian_errors = self.compute_xi_by_theta_jacobian(
@@ -69,17 +65,9 @@ class ResultsMarket(Market):
             omega_jacobian = np.full((self.J, self.parameters.P), np.nan, options.dtype)
         else:
             # adjust for the contribution of xi's dependence on theta
-            probabilities_tensor, conditionals_tensor = self.compute_probabilities_by_xi_tensor(
-                probabilities, conditionals
+            self.update_probabilities_by_parameter_tangent_mapping(
+                probabilities_tangent_mapping, conditionals_tangent_mapping, probabilities, conditionals, xi_jacobian
             )
-            for p in range(self.parameters.P):
-                probabilities_tangent_mapping[p] += np.squeeze(
-                    np.moveaxis(probabilities_tensor, 0, 2) @ xi_jacobian[:, [p]], axis=2
-                )
-                if conditionals_tensor is not None:
-                    conditionals_tangent_mapping[p] += np.squeeze(
-                        np.moveaxis(conditionals_tensor, 0, 2) @ xi_jacobian[:, [p]], axis=2
-                    )
 
             # compute the supply-side Jacobian
             eta, capital_delta_inverse, eta_errors = self.compute_eta(

@@ -756,15 +756,69 @@ class Market(Container):
 
         return tangent
 
+    def compute_probabilities_by_parameter_tangent_mapping(
+            self, probabilities: Array, conditionals: Optional[Array], delta: Optional[Array] = None,
+            keep_conditionals: bool = True) -> (
+            Tuple[Dict[int, Array], Dict[int, Optional[Array]]]):
+        """Computing a mapping from parameter index to tangent of probabilities with respect to a parameter. By default,
+        use unchanged delta. By default, also compute conditionals derivatives if computed.
+        """
+        probabilities_mapping: Dict[int, Array] = {}
+        conditionals_mapping: Dict[int, Array] = {}
+        for p, parameter in enumerate(self.parameters.unfixed):
+            probabilities_mapping[p], conditionals_mapping[p] = self.compute_probabilities_by_parameter_tangent(
+                parameter, probabilities, conditionals, delta
+            )
+            if not keep_conditionals:
+                conditionals_mapping[p] = None
+
+        return probabilities_mapping, conditionals_mapping
+
+    def update_probabilities_by_parameter_tangent_mapping(
+            self, probabilities_tangent_mapping: Dict[int, Array],
+            conditionals_tangent_mapping: Dict[int, Optional[Array]], probabilities: Array,
+            conditionals: Optional[Array], xi_jacobian: Array) -> None:
+        """Update tangents of probabilities with respect to parameters to account for the contribution of xi."""
+        probabilities_tensor = conditionals_tensor = None
+        for p, parameter in enumerate(self.parameters.unfixed):
+            probabilities_tangent = probabilities_tangent_mapping[p]
+            conditionals_tangent = conditionals_tangent_mapping[p]
+
+            # total derivatives are zero for beta parameters
+            if isinstance(parameter, BetaParameter):
+                probabilities_tangent[:] = 0
+                if conditionals_tangent is not None:
+                    conditionals_tangent[:] = 0
+                continue
+
+            # derivatives remain zero for gamma parameters
+            if isinstance(parameter, GammaParameter):
+                continue
+
+            # otherwise, need to compute the derivatives of probabilities with respect to xi
+            if probabilities_tensor is None:
+                probabilities_tensor, conditionals_tensor = self.compute_probabilities_by_xi_tensor(
+                    probabilities, conditionals,
+                    compute_conditionals_tensor=any(t is not None for t in conditionals_tangent_mapping.values())
+                )
+
+            # add the contribution of xi
+            probabilities_tangent += np.squeeze(
+                np.moveaxis(probabilities_tensor, 0, 2) @ xi_jacobian[:, [p]], axis=2
+            )
+            if conditionals_tangent is not None:
+                assert conditionals_tensor is not None
+                conditionals_tangent += np.squeeze(
+                    np.moveaxis(conditionals_tensor, 0, 2) @ xi_jacobian[:, [p]], axis=2
+                )
+
     def compute_probabilities_by_parameter_tangent(
             self, parameter: Parameter, probabilities: Array, conditionals: Optional[Array],
-            delta: Optional[Array] = None, mu: Optional[Array] = None) -> Tuple[Array, Optional[Array]]:
-        """Compute the tangent of probabilities with respect to a parameter. By default, use unchanged delta and mu."""
+            delta: Optional[Array] = None) -> Tuple[Array, Optional[Array]]:
+        """Compute the tangent of probabilities with respect to a parameter. By default, use unchanged delta."""
         if delta is None:
             assert self.delta is not None
             delta = self.delta
-        if mu is None:
-            mu = self.mu
 
         # without nesting, compute only the tangent of probabilities with respect to the parameter
         if self.H == 0:
@@ -823,7 +877,7 @@ class Market(Container):
             associations = self.groups.expand(group_associations)
 
             # utilities are needed to compute tangents with respect to rho
-            utilities = (delta + mu) / (1 - self.rho)
+            utilities = (delta + self.mu) / (1 - self.rho)
 
             # compute the tangent of conditional probabilities with respect to the parameter
             A = conditionals * utilities / (1 - self.rho)

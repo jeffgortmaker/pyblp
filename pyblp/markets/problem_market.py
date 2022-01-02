@@ -46,18 +46,17 @@ class ProblemMarket(Market):
         if compute_jacobians or moments.MM > 0 or self.K3 > 0:
             probabilities, conditionals = self.compute_probabilities(valid_delta)
 
-        # if needed, pre-compute derivatives of probabilities with respect to parameters
+        # if needed, pre-compute derivatives of probabilities with respect to parameters (conditionals tangents are only
+        #   needed for supply-side Jacobian computation)
         probabilities_tangent_mapping: Dict[int, Array] = {}
         conditionals_tangent_mapping: Dict[int, Array] = {}
         if compute_jacobians:
             assert probabilities is not None
-            for p, parameter in enumerate(self.parameters.unfixed):
-                probabilities_tangent, conditionals_tangent = self.compute_probabilities_by_parameter_tangent(
-                    parameter, probabilities, conditionals, valid_delta
+            probabilities_tangent_mapping, conditionals_tangent_mapping = (
+                self.compute_probabilities_by_parameter_tangent_mapping(
+                    probabilities, conditionals, valid_delta, keep_conditionals=self.K3 > 0
                 )
-                probabilities_tangent_mapping[p] = probabilities_tangent
-                if self.K3 > 0:
-                    conditionals_tangent_mapping[p] = conditionals_tangent
+            )
 
         # compute the Jacobian of xi (equivalently, of delta) with respect to theta
         xi_jacobian = np.full((self.J, self.parameters.P), np.nan, options.dtype)
@@ -71,17 +70,9 @@ class ProblemMarket(Market):
         # if needed, adjust for the contribution of xi's dependence on theta
         if compute_jacobians and (moments.MM > 0 or self.K3 > 0):
             assert probabilities is not None
-            probabilities_tensor, conditionals_tensor = self.compute_probabilities_by_xi_tensor(
-                probabilities, conditionals, compute_conditionals_tensor=self.K3 > 0
+            self.update_probabilities_by_parameter_tangent_mapping(
+                probabilities_tangent_mapping, conditionals_tangent_mapping, probabilities, conditionals, xi_jacobian
             )
-            for p in range(self.parameters.P):
-                probabilities_tangent_mapping[p] += np.squeeze(
-                    np.moveaxis(probabilities_tensor, 0, 2) @ xi_jacobian[:, [p]], axis=2
-                )
-                if conditionals_tensor is not None:
-                    conditionals_tangent_mapping[p] += np.squeeze(
-                        np.moveaxis(conditionals_tensor, 0, 2) @ xi_jacobian[:, [p]], axis=2
-                    )
 
         # compute contributions to micro moments, their Jacobian, and their covariances
         if moments.MM == 0:
