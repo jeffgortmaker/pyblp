@@ -1467,15 +1467,20 @@ class Market(Container):
             if compute_covariances:
                 for m2, moment2 in enumerate(moments.micro_moments):
                     if m2 >= m and moment2.dataset == moment.dataset:
-                        try:
-                            values2 = np.asarray(
-                                moment2.compute_values(self.t, self.products, self.agents), options.dtype
-                            )
-                        except Exception as exception:
-                            message = (
-                                f"Failed to compute values for micro moment '{moment2}' because of the above exception."
-                            )
-                            raise RuntimeError(message) from exception
+                        if m2 == m:
+                            values2 = values
+                        else:
+                            try:
+                                values2 = np.asarray(
+                                    moment2.compute_values(self.t, self.products, self.agents), options.dtype
+                                )
+                            except Exception as exception:
+                                message = (
+                                    f"Failed to compute values for micro moment '{moment2}' because of the above "
+                                    f"exception."
+                                )
+                                raise RuntimeError(message) from exception
+
                         micro_covariances_numerator[m, m2] = (weighted_values * values2).sum()
 
         return (
