@@ -806,32 +806,36 @@ class ProblemEconomy(Economy):
 
         # replace invalid elements in delta, micro moments, and transformed marginal costs with their last values
         bad_delta_index = ~np.isfinite(delta)
-        bad_micro_index = ~np.isfinite(micro)
-        bad_tilde_costs_index = ~np.isfinite(tilde_costs)
         if np.any(bad_delta_index):
             delta[bad_delta_index] = progress.delta[bad_delta_index]
             errors.append(exceptions.DeltaReversionError(bad_delta_index))
-        if np.any(bad_micro_index):
-            micro[bad_micro_index] = progress.micro[bad_micro_index]
-            errors.append(exceptions.MicroMomentsReversionError(bad_micro_index))
-        if np.any(bad_tilde_costs_index):
-            tilde_costs[bad_tilde_costs_index] = progress.tilde_costs[bad_tilde_costs_index]
-            errors.append(exceptions.CostsReversionError(bad_tilde_costs_index))
+        if moments.MM > 0:
+            bad_micro_index = ~np.isfinite(micro)
+            if np.any(bad_micro_index):
+                micro[bad_micro_index] = progress.micro[bad_micro_index]
+                errors.append(exceptions.MicroMomentsReversionError(bad_micro_index))
+        if self.K3 > 0:
+            bad_tilde_costs_index = ~np.isfinite(tilde_costs)
+            if np.any(bad_tilde_costs_index):
+                tilde_costs[bad_tilde_costs_index] = progress.tilde_costs[bad_tilde_costs_index]
+                errors.append(exceptions.CostsReversionError(bad_tilde_costs_index))
 
         # replace invalid elements in the Jacobians with their last values
         if compute_jacobians:
             bad_xi_jacobian_index = ~np.isfinite(xi_jacobian)
-            bad_micro_jacobian_index = ~np.isfinite(micro_jacobian)
-            bad_omega_jacobian_index = ~np.isfinite(omega_jacobian)
             if np.any(bad_xi_jacobian_index):
                 xi_jacobian[bad_xi_jacobian_index] = progress.xi_jacobian[bad_xi_jacobian_index]
                 errors.append(exceptions.XiByThetaJacobianReversionError(bad_xi_jacobian_index))
-            if np.any(bad_micro_jacobian_index):
-                micro_jacobian[bad_micro_jacobian_index] = progress.micro_jacobian[bad_micro_jacobian_index]
-                errors.append(exceptions.MicroMomentsByThetaJacobianReversionError(bad_micro_jacobian_index))
-            if np.any(bad_omega_jacobian_index):
-                omega_jacobian[bad_omega_jacobian_index] = progress.omega_jacobian[bad_omega_jacobian_index]
-                errors.append(exceptions.OmegaByThetaJacobianReversionError(bad_omega_jacobian_index))
+            if moments.MM > 0:
+                bad_micro_jacobian_index = ~np.isfinite(micro_jacobian)
+                if np.any(bad_micro_jacobian_index):
+                    micro_jacobian[bad_micro_jacobian_index] = progress.micro_jacobian[bad_micro_jacobian_index]
+                    errors.append(exceptions.MicroMomentsByThetaJacobianReversionError(bad_micro_jacobian_index))
+            if self.K3 > 0:
+                bad_omega_jacobian_index = ~np.isfinite(omega_jacobian)
+                if np.any(bad_omega_jacobian_index):
+                    omega_jacobian[bad_omega_jacobian_index] = progress.omega_jacobian[bad_omega_jacobian_index]
+                    errors.append(exceptions.OmegaByThetaJacobianReversionError(bad_omega_jacobian_index))
 
         # optionally compute Jacobians with central finite differences
         if compute_gradient and finite_differences and parameters.P > 0:
