@@ -796,9 +796,9 @@ class ProblemEconomy(Economy):
 
                         # subtract away means from second moments
                         for m1, (moment1, value1) in enumerate(zip(moments.micro_moments, micro_values)):
-                            for m2, (moment2, value2) in enumerate(zip(moments.micro_moments[m1:], micro_values[m1:])):
-                                if moment1.dataset == moment2.dataset:
-                                    micro_covariances[m1, m2] -= value1 * value2
+                            for m2, (moment2, value2) in enumerate(zip(moments.micro_moments, micro_values)):
+                                if m2 <= m1 and  moment1.dataset == moment2.dataset:
+                                    micro_covariances[m2, m1] -= value1 * value2
 
                         # fill the lower triangle
                         lower_indices = np.tril_indices(moments.MM, -1)

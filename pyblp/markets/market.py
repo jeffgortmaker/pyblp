@@ -1367,7 +1367,7 @@ class Market(Container):
                 assert len(weights.shape) == 3
                 assert eliminated_probabilities is not None
                 dataset_weights[:, -self.J:] *= probabilities.T[..., None]
-                dataset_weights[:, -self.J:, -self.J:] *= np.moveaxis(eliminated_probabilities, (0, 1, 2), (2, 1, 0))
+                dataset_weights[:, -self.J:, -self.J:] *= np.moveaxis(eliminated_probabilities, (0, 1, 2), (1, 2, 0))
                 if weights.shape[1] == 1 + self.J:
                     assert outside_probabilities is not None and outside_eliminated_probabilities is not None
                     dataset_weights[:, 0] *= outside_probabilities[:, None]
@@ -1395,9 +1395,9 @@ class Market(Container):
                         product2 = np.ones_like(weights_tangent)
                         product1[:, -self.J:] = probabilities_tangent_mapping[p].T[..., None]
                         product2[:, -self.J:] = probabilities.T[..., None]
-                        product1[:, -self.J:, -self.J:] *= np.moveaxis(eliminated_probabilities, (0, 1, 2), (2, 1, 0))
+                        product1[:, -self.J:, -self.J:] *= np.moveaxis(eliminated_probabilities, (0, 1, 2), (1, 2, 0))
                         product2[:, -self.J:, -self.J:] *= np.moveaxis(
-                            eliminated_probabilities_tangent_mapping[p], (0, 1, 2), (2, 1, 0)
+                            eliminated_probabilities_tangent_mapping[p], (0, 1, 2), (1, 2, 0)
                         )
                         if weights.shape[1] == 1 + self.J:
                             assert outside_probabilities is not None and outside_eliminated_probabilities is not None
@@ -1423,6 +1423,7 @@ class Market(Container):
                         denominator_tangent_mapping[(dataset, p)] = weights_tangent_mapping[(dataset, p)].sum()
 
         # compute this market's contribution to micro moment values' and covariances' numerators and denominators
+        values_mapping: Dict[int, Array] = {}
         micro_numerator = np.zeros((moments.MM, 1), options.dtype)
         micro_denominator = np.zeros((moments.MM, 1), options.dtype)
         micro_numerator_jacobian = np.full(
@@ -1462,26 +1463,12 @@ class Market(Container):
                     micro_numerator_jacobian[m, p] = (weights_tangent_mapping[(dataset, p)] * values).sum()
                     micro_denominator_jacobian[m, p] = denominator_tangent_mapping[(dataset, p)]
 
-            # compute the contribution to the covariance numerator (this is not done for each objective evaluation, so
-            #   re-computing values here is not a computational concern)
+            # compute the contribution to the covariance numerator (cache values so they don't need to be re-computed)
             if compute_covariances:
+                values_mapping[m] = values
                 for m2, moment2 in enumerate(moments.micro_moments):
-                    if m2 >= m and moment2.dataset == moment.dataset:
-                        if m2 == m:
-                            values2 = values
-                        else:
-                            try:
-                                values2 = np.asarray(
-                                    moment2.compute_values(self.t, self.products, self.agents), options.dtype
-                                )
-                            except Exception as exception:
-                                message = (
-                                    f"Failed to compute values for micro moment '{moment2}' because of the above "
-                                    f"exception."
-                                )
-                                raise RuntimeError(message) from exception
-
-                        micro_covariances_numerator[m, m2] = (weighted_values * values2).sum()
+                    if m2 <= m and moment2.dataset == moment.dataset:
+                        micro_covariances_numerator[m2, m] = (weighted_values * values_mapping[m2]).sum()
 
         return (
             micro_numerator, micro_denominator, micro_numerator_jacobian, micro_denominator_jacobian,
