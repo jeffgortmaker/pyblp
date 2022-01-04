@@ -652,6 +652,7 @@ class ProblemEconomy(Economy):
             final_progress = compute_step_progress(
                 theta, progress, compute_gradient, compute_hessian, compute_micro_covariances
             )
+            iteration_stats.append(final_progress.iteration_stats)
             optimization_stats.evaluations += 1
             results = ProblemResults(
                 final_progress, last_results, step, last_step, step_start_time, optimization_start_time,
