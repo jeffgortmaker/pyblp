@@ -6,6 +6,7 @@ import time
 from typing import Callable, Dict, Hashable, List, Optional, Sequence, Set, Tuple, TYPE_CHECKING, Union
 
 import numpy as np
+import scipy.sparse
 
 from .results import Results
 from .. import exceptions, options
@@ -478,19 +479,21 @@ class SimulationResults(Results):
             SimulationResultsMarket.safely_compute_micro_contributions
         )
         for t, (micro_numerator_t, micro_denominator_t, errors_t) in generator:
-            micro_numerator_mapping[t] = micro_numerator_t
-            micro_denominator_mapping[t] = micro_denominator_t
+            micro_numerator_mapping[t] = scipy.sparse.csr_matrix(micro_numerator_t)
+            micro_denominator_mapping[t] = scipy.sparse.csr_matrix(micro_denominator_t)
             errors.extend(errors_t)
 
         # aggregate micro moments across all markets (this is done after market-by-market computation to preserve
         #   numerical stability with different market orderings)
-        micro_numerator = np.zeros((moments.MM, 1), options.dtype)
-        micro_denominator = np.zeros((moments.MM, 1), options.dtype)
         with np.errstate(all='ignore'):
+            micro_numerator = scipy.sparse.csr_matrix((moments.MM, 1), dtype=options.dtype)
+            micro_denominator = scipy.sparse.csr_matrix((moments.MM, 1), dtype=options.dtype)
             for t in self.simulation.unique_market_ids:
                 micro_numerator += micro_numerator_mapping[t]
                 micro_denominator += micro_denominator_mapping[t]
 
+            micro_numerator = micro_numerator.toarray()
+            micro_denominator = micro_denominator.toarray()
             micro_values = micro_numerator / micro_denominator
 
         # construct new micro moments

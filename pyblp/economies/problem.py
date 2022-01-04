@@ -8,6 +8,7 @@ from typing import Any, Dict, Hashable, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 import scipy.linalg
+import scipy.sparse
 
 from .economy import Economy
 from .. import exceptions, options
@@ -752,52 +753,65 @@ class ProblemEconomy(Economy):
 
                 delta[self._product_market_indices[t]] = delta_t
                 xi_jacobian[self._product_market_indices[t], :parameters.P] = xi_jacobian_t
-                micro_numerator_mapping[t] = micro_numerator_t
-                micro_denominator_mapping[t] = micro_denominator_t
-                micro_numerator_jacobian_mapping[t] = micro_numerator_jacobian_t
-                micro_denominator_jacobian_mapping[t] = micro_denominator_jacobian_t
-                micro_covariances_numerator_mapping[t] = micro_covariances_numerator_t
                 clipped_shares[self._product_market_indices[t]] = clipped_shares_t
                 iteration_stats[t] = iteration_stats_t
-
+                micro_numerator_mapping[t] = scipy.sparse.csr_matrix(micro_numerator_t)
+                micro_denominator_mapping[t] = scipy.sparse.csr_matrix(micro_denominator_t)
+                if compute_jacobians:
+                    micro_numerator_jacobian_mapping[t] = scipy.sparse.csr_matrix(micro_numerator_jacobian_t)
+                    micro_denominator_jacobian_mapping[t] = scipy.sparse.csr_matrix(micro_denominator_jacobian_t)
+                if compute_micro_covariances:
+                    micro_covariances_numerator_mapping[t] = scipy.sparse.csr_matrix(micro_covariances_numerator_t)
                 if self.K3 > 0:
                     tilde_costs[self._product_market_indices[t]] = tilde_costs_t
-                    omega_jacobian[self._product_market_indices[t], :parameters.P] = omega_jacobian_t
                     clipped_costs[self._product_market_indices[t]] = clipped_costs_t
+                    if compute_jacobians:
+                        omega_jacobian[self._product_market_indices[t], :parameters.P] = omega_jacobian_t
 
                 errors.extend(errors_t)
 
             # aggregate micro moments, their Jacobian, and their covariances across all markets (this is done after
             #   market-by-market computation to preserve numerical stability with different market orderings)
             if moments.MM > 0:
-                micro_numerator = micro.copy()
-                micro_denominator = micro.copy()
-                micro_numerator_jacobian = micro_jacobian.copy()
-                micro_denominator_jacobian = micro_jacobian.copy()
-                micro_covariances_numerator = micro_covariances.copy()
                 with np.errstate(all='ignore'):
+                    micro_numerator = scipy.sparse.csr_matrix(micro.shape, dtype=options.dtype)
+                    micro_denominator = scipy.sparse.csr_matrix(micro.shape, dtype=options.dtype)
                     for t in self.unique_market_ids:
                         micro_numerator += micro_numerator_mapping[t]
                         micro_denominator += micro_denominator_mapping[t]
-                        if compute_jacobians:
-                            micro_numerator_jacobian += micro_numerator_jacobian_mapping[t]
-                            micro_denominator_jacobian += micro_denominator_jacobian_mapping[t]
-                        if compute_micro_covariances:
-                            micro_covariances_numerator += micro_covariances_numerator_mapping[t]
 
+                    micro_numerator = micro_numerator.toarray()
+                    micro_denominator = micro_denominator.toarray()
                     micro_values = micro_numerator / micro_denominator
                     micro = moments.values - micro_values
+
                     if compute_jacobians:
+                        micro_numerator_jacobian = scipy.sparse.csr_matrix(micro_jacobian.shape, dtype=options.dtype)
+                        micro_denominator_jacobian = scipy.sparse.csr_matrix(micro_jacobian.shape, dtype=options.dtype)
+                        for t in self.unique_market_ids:
+                            micro_numerator_jacobian += micro_numerator_jacobian_mapping[t]
+                            micro_denominator_jacobian += micro_denominator_jacobian_mapping[t]
+
+                        micro_numerator_jacobian = micro_numerator_jacobian.toarray()
+                        micro_denominator_jacobian = micro_denominator_jacobian.toarray()
                         micro_jacobian = (
                             -(micro_numerator_jacobian - micro_values * micro_denominator_jacobian) / micro_denominator
                         )
+
                     if compute_micro_covariances:
+                        micro_covariances_numerator = scipy.sparse.csr_matrix(
+                            micro_covariances.shape, dtype=options.dtype
+                        )
+                        for t in self.unique_market_ids:
+                            micro_covariances_numerator += micro_covariances_numerator_mapping[t]
+
+                        micro_covariances_numerator = micro_covariances_numerator.toarray()
                         micro_covariances = micro_covariances_numerator / micro_denominator
 
                         # subtract away means from second moments
                         for m1, (moment1, value1) in enumerate(zip(moments.micro_moments, micro_values)):
                             for m2, (moment2, value2) in enumerate(zip(moments.micro_moments, micro_values)):
-                                if m2 <= m1 and  moment1.dataset == moment2.dataset:
+                                if m2 <= m1 and moment1.dataset == moment2.dataset:
                                     micro_covariances[m2, m1] -= value1 * value2
 
                         # fill the lower triangle
