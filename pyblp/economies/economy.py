@@ -176,7 +176,7 @@ class Economy(Container, StringRepresentation):
             'X2': [str(f) for f in self._X2_formulations],
             'X3': [str(f) for f in self._X3_formulations],
             'ZD': [str(f) for f in self._X1_formulations if 'prices' not in f.names] if added_exogenous else [],
-            'ZS': [str(f) for f in self._X3_formulations] if added_exogenous else [],
+            'ZS': [str(f) for f in self._X3_formulations if 'shares' not in f.names] if added_exogenous else [],
         }
         matrix_labels.update({
             'ZD': [f'demand_instruments{i}' for i in range(self.MD - len(matrix_labels['ZD']))] + matrix_labels['ZD'],
