@@ -163,7 +163,7 @@ class Economy(Container, StringRepresentation):
 
         return format_table(header, *data, title="Formulations")
 
-    def _detect_collinearity(self) -> None:
+    def _detect_collinearity(self, added_exogenous: bool) -> None:
         """Detect any collinearity issues in product data matrices."""
 
         # skip collinearity checking when it is disabled via zero tolerances
@@ -175,8 +175,8 @@ class Economy(Container, StringRepresentation):
             'X1': [str(f) for f in self._X1_formulations],
             'X2': [str(f) for f in self._X2_formulations],
             'X3': [str(f) for f in self._X3_formulations],
-            'ZD': [str(f) for f in self._X1_formulations if 'prices' not in f.names],
-            'ZS': [str(f) for f in self._X3_formulations]
+            'ZD': [str(f) for f in self._X1_formulations if 'prices' not in f.names] if added_exogenous else [],
+            'ZS': [str(f) for f in self._X3_formulations] if added_exogenous else [],
         }
         matrix_labels.update({
             'ZD': [f'demand_instruments{i}' for i in range(self.MD - len(matrix_labels['ZD']))] + matrix_labels['ZD'],

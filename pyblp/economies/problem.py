@@ -1346,7 +1346,7 @@ class Problem(ProblemEconomy):
                 self._handle_errors(ZS_errors)
 
         # detect any problems with the product data
-        self._detect_collinearity()
+        self._detect_collinearity(add_exogenous)
 
         # output information about the initialized problem
         output(f"Initialized the problem after {format_seconds(time.time() - start_time)}.")
@@ -1406,7 +1406,7 @@ class OptimalInstrumentProblem(ProblemEconomy):
                 raise exceptions.MultipleErrors(ZS_errors)
 
         # detect any collinearity issues with the updated instruments
-        self._detect_collinearity()
+        self._detect_collinearity(added_exogenous=True)
 
         # output information about the re-created problem
         output(f"Re-created the problem after {format_seconds(time.time() - start_time)}.")
