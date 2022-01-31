@@ -177,6 +177,9 @@ class ProblemResults(Results):
         Micro moments, :math:`\bar{g}_M`, in :eq:`averaged_micro_moments`.
     micro_values : `ndarray`
         Estimated micro moment values, :math:`v_m`. Rows are in the same order as :attr:`ProblemResults.micro`.
+    micro_covariances : `ndarray`
+        Estimated micro moment covariances with element :math:`(m, m')` computed according to
+        :eq:`micro_moment_covariances`, unless overridden by ``micro_moment_covariances`` in :meth:`Problem.solve`.
     moments : `ndarray`
         Moments, :math:`\bar{g}`, in :eq:`averaged_moments`.
     moments_jacobian : `ndarray`
@@ -275,6 +278,7 @@ class ProblemResults(Results):
     omega: Array
     micro: Array
     micro_values: Array
+    micro_covariances: Array
     moments: Array
     moments_jacobian: Array
     objective: Array
@@ -331,6 +335,11 @@ class ProblemResults(Results):
         self._shares_bounds = shares_bounds
         self._costs_bounds = costs_bounds
         self._se_type = se_type
+
+        # either use the manually-specified micro moment covariances or estimated ones
+        self.micro_covariances = micro_moment_covariances
+        if micro_moment_covariances is None:
+            self.micro_covariances = progress.micro_covariances
 
         # format micro moments for displaying information (micro moments themselves often contain lambda functions and
         #   are hence often not serializable)
@@ -408,9 +417,7 @@ class ProblemResults(Results):
             self.moments = self._compute_mean_g()
 
             # update the weighting matrix
-            if micro_moment_covariances is None:
-                micro_moment_covariances = progress.micro_covariances
-            S_for_weights = self._compute_S(progress.moments, micro_moment_covariances, W_type, center_moments)
+            S_for_weights = self._compute_S(progress.moments, W_type, center_moments)
             self.updated_W, W_errors = compute_gmm_weights(S_for_weights)
             self._errors.extend(W_errors)
 
@@ -422,7 +429,7 @@ class ProblemResults(Results):
             if last_step:
                 S_for_covariances = S_for_weights
                 if se_type != W_type or center_moments:
-                    S_for_covariances = self._compute_S(progress.moments, micro_moment_covariances, se_type)
+                    S_for_covariances = self._compute_S(progress.moments, se_type)
 
                 # if this is the first step, an unadjusted weighting matrix needs to be used when computing unadjusted
                 #   covariances so that they are scaled properly
@@ -600,8 +607,7 @@ class ProblemResults(Results):
         ]
         return mean_G
 
-    def _compute_S(
-            self, moments: Moments, micro_covariances: Array, S_type: str, center_moments: bool = False) -> Array:
+    def _compute_S(self, moments: Moments, S_type: str, center_moments: bool = False) -> Array:
         """Compute moment covariances."""
         u_list = [self.xi]
         Z_list = [self.problem.products.ZD]
@@ -611,7 +617,7 @@ class ProblemResults(Results):
 
         S = compute_gmm_moment_covariances(u_list, Z_list, S_type, self.problem.products.clustering_ids, center_moments)
         if moments.MM > 0:
-            scaled_covariances = micro_covariances.copy()
+            scaled_covariances = self.micro_covariances.copy()
             for (m, moment_m), (n, moment_n) in itertools.product(enumerate(moments.micro_moments), repeat=2):
                 scaled_covariances[m, n] *= (
                     self.problem.N / np.sqrt(moment_m.dataset.observations * moment_n.dataset.observations)
@@ -718,9 +724,9 @@ class ProblemResults(Results):
                 'sigma_squared', 'pi', 'rho', 'beta', 'gamma', 'sigma_se', 'sigma_squared_se', 'pi_se', 'rho_se',
                 'beta_se', 'gamma_se', 'sigma_bounds', 'pi_bounds', 'rho_bounds', 'beta_bounds', 'gamma_bounds',
                 'sigma_labels', 'pi_labels', 'rho_labels', 'beta_labels', 'gamma_labels', 'delta', 'tilde_costs',
-                'clipped_shares', 'clipped_costs', 'xi', 'omega', 'micro', 'micro_values', 'moments', 'objective',
-                'xi_by_theta_jacobian', 'omega_by_theta_jacobian', 'micro_by_theta_jacobian', 'gradient',
-                'projected_gradient', 'projected_gradient_norm', 'hessian', 'reduced_hessian',
+                'clipped_shares', 'clipped_costs', 'xi', 'omega', 'micro', 'micro_values', 'micro_covariances',
+                'moments', 'objective', 'xi_by_theta_jacobian', 'omega_by_theta_jacobian', 'micro_by_theta_jacobian',
+                'gradient', 'projected_gradient', 'projected_gradient_norm', 'hessian', 'reduced_hessian',
                 'reduced_hessian_eigenvalues', 'W', 'updated_W'
             )) -> dict:
         """Convert these results into a dictionary that maps attribute names to values.
