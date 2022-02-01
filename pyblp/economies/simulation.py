@@ -503,7 +503,7 @@ class Simulation(Economy):
         if self.xi is None and self.omega is None and self.K3 > 0:
             covariance = correlation * np.sqrt(xi_variance * omega_variance)
             covariances = np.array([[xi_variance, covariance], [covariance, omega_variance]], options.dtype)
-            self._detect_psd(covariances, "the covariance matrix from xi_variance, omega_variance, and correlation")
+            self._require_psd(covariances, "the covariance matrix from xi_variance, omega_variance, and correlation")
             xi_and_omega = state.multivariate_normal([0, 0], covariances, self.N, check_valid='ignore')
             self.xi = xi_and_omega[:, [0]].astype(options.dtype)
             self.omega = xi_and_omega[:, [1]].astype(options.dtype)

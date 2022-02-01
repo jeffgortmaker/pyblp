@@ -490,7 +490,8 @@ class ProblemEconomy(Economy):
                 micro_moment_covariances = np.c_[np.asarray(micro_moment_covariances, options.dtype)]
                 if micro_moment_covariances.shape != (moments.MM, moments.MM):
                     raise ValueError(f"extra_micro_moments must be a square {moments.MM} by {moments.MM} matrix.")
-                self._detect_psd(micro_moment_covariances, "micro_moment_covariances")
+                self._require_psd(micro_moment_covariances, "micro_moment_covariances")
+                self._detect_singularity(micro_moment_covariances, "micro_moment_covariances")
 
         # choose whether to do an initial update
         if initial_update is None:
@@ -521,12 +522,15 @@ class ProblemEconomy(Economy):
             M = self.MD + self.MS + moments.MM
             if W.shape != (M, M):
                 raise ValueError(f"W must be a square {M} by {M} matrix.")
-            self._detect_psd(W, "W")
+            self._require_psd(W, "W")
+            self._detect_singularity(W, "W")
         else:
-            W, successful = precisely_invert(scipy.linalg.block_diag(
+            S = scipy.linalg.block_diag(
                 self.products.ZD.T @ self.products.ZD / self.N,
                 self.products.ZS.T @ self.products.ZS / self.N,
-            ))
+            )
+            self._detect_singularity(S, "the 2SLS weighting matrix")
+            W, successful = precisely_invert(S)
             if not successful:
                 raise ValueError("Failed to compute the 2SLS weighting matrix. There may be instrument collinearity.")
 

@@ -10,9 +10,9 @@ from .. import exceptions, options
 from ..configurations.formulation import Formulation, Absorb
 from ..configurations.iteration import Iteration
 from ..primitives import Container
-from ..utilities.algebra import precisely_identify_collinearity, precisely_identify_psd
+from ..utilities.algebra import precisely_identify_collinearity, precisely_identify_singularity, precisely_identify_psd
 from ..utilities.basics import (
-    Array, Bounds, Error, Groups, RecArray, StringRepresentation, format_table, get_indices, output, warn
+    Array, Bounds, Error, Groups, RecArray, StringRepresentation, format_number, format_table, get_indices, output, warn
 )
 
 
@@ -202,8 +202,22 @@ class Economy(Container, StringRepresentation):
                 )
 
     @staticmethod
-    def _detect_psd(matrix: Array, name: str) -> None:
-        """Detect whether a matrix is PSD."""
+    def _detect_singularity(matrix: Array, name: str) -> None:
+        """Detect any singularity issues in a matrix."""
+        singular, successful, condition = precisely_identify_singularity(matrix)
+        common_message = "To disable singularity checks, set options.singular_tol = numpy.inf."
+        if not successful:
+            warn(f"Failed to compute the condition number of {name} while checking for singularity. {common_message}")
+        if singular:
+            prefix = "nearly " if condition < np.inf else ""
+            warn(
+                f"Detected that {name} is {prefix}singular with condition number {format_number(condition).strip()}. "
+                f"{common_message}"
+            )
+
+    @staticmethod
+    def _require_psd(matrix: Array, name: str) -> None:
+        """Require that a matrix is PSD."""
         psd, successful = precisely_identify_psd(matrix)
         common_message = "To disable PSD checks, set options.psd_atol = options.psd_rtol = numpy.inf."
         if not successful:

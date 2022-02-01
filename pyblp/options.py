@@ -64,6 +64,14 @@ pseudo_inverses : `bool`
     To always attempt to compute classic inverses first, set ``pyblp.options.pseudo_inverses = False``. If a classic
     inverse cannot be computed, an error will be displayed, and a pseudo-inverse may be computed instead.
 
+weights_tol : `float`
+    Tolerance for detecting integration weights that do not sum to one, which is by default ``1e-10``. In most setups
+    weights should essentially sum to one, but for example with importance sampling they may be slightly different.
+    Warnings can be disabled by setting this to ``numpy.inf``.
+singular_tol : `float`
+    Tolerance for detecting singular matrices, which is by default ``1 / numpy.finfo(options.dtype).eps``. If a matrix
+    has a condition number larger than this tolerance, a warning will be displayed. To disable singularity checks, set
+    ``pyblp.options.singular_tol = numpy.inf``.
 collinear_atol : `float`
     Absolute tolerance for detecting collinear columns in each matrix of product characteristics and instruments:
     :math:`X_1`, :math:`X_2`, :math:`X_3`, :math:`Z_D`, and :math:`Z_S`.
@@ -75,10 +83,6 @@ collinear_atol : `float`
     The default absolute tolerance is ``1e-14``. To disable collinearity checks, set
     ``pyblp.options.collinear_atol = pyblp.options.collinear_rtol = 0``.
 
-weights_tol : `float`
-    Tolerance for detecting integration weights that do not sum to one, which is by default ``1e-10``. In most setups
-    weights should essentially sum to one, but for example with importance sampling they may be slightly different.
-    Warnings can be disabled by setting this to ``numpy.inf``.
 collinear_rtol : `float`
     Relative tolerance for detecting collinear columns, which is by default also ``1e-14``.
 psd_atol : `float`
@@ -109,5 +113,6 @@ dtype = _np.float64
 finite_differences_epsilon = _np.sqrt(_np.finfo(dtype).eps)
 pseudo_inverses = True
 weights_tol = 1e-10
+singular_tol = 1 / _np.finfo(dtype).eps
 collinear_atol = collinear_rtol = 1e-14
 psd_atol = psd_rtol = 1e-8

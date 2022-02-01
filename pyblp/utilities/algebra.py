@@ -21,6 +21,19 @@ def compute_condition_number(x: Array) -> float:
         return np.nan
 
 
+def precisely_identify_singularity(x: Array) -> Tuple[Array, bool, Array]:
+    """Compute the condition number of a matrix to identify whether it is nearly singular."""
+    singular = False
+    successful = True
+    condition = np.nan
+    if options.singular_tol < np.inf:
+        condition = compute_condition_number(x)
+        successful = not np.isnan(condition)
+        singular = successful and condition > options.singular_tol
+
+    return singular, successful, condition
+
+
 def precisely_identify_collinearity(x: Array) -> Tuple[Array, bool]:
     """Compute the QR decomposition of a matrix and identify which diagonal elements of the upper diagonal matrix are
     within absolute and relative tolerances.

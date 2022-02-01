@@ -418,6 +418,7 @@ class ProblemResults(Results):
 
             # update the weighting matrix
             S_for_weights = self._compute_S(progress.moments, W_type, center_moments)
+            self.problem._detect_singularity(S_for_weights, "the estimated covariance matrix of GMM moments")
             self.updated_W, W_errors = compute_gmm_weights(S_for_weights)
             self._errors.extend(W_errors)
 
@@ -430,6 +431,10 @@ class ProblemResults(Results):
                 S_for_covariances = S_for_weights
                 if se_type != W_type or center_moments:
                     S_for_covariances = self._compute_S(progress.moments, se_type)
+                    self.problem._detect_singularity(
+                        S_for_covariances,
+                        "the estimated covariance matrix of GMM moments used for computing standard errors",
+                    )
 
                 # if this is the first step, an unadjusted weighting matrix needs to be used when computing unadjusted
                 #   covariances so that they are scaled properly
