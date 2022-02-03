@@ -7,7 +7,7 @@ import numpy as np
 from .market import Market
 from .. import exceptions, options
 from ..configurations.iteration import Iteration
-from ..micro import Moments
+from ..micro import MicroDataset, Moments
 from ..utilities.basics import Array, Bounds, Error, SolverStats, NumericalErrorHandler
 
 
@@ -18,9 +18,10 @@ class ProblemMarket(Market):
     def solve(
             self, delta: Array, last_delta: Array, last_tilde_costs: Array, moments: Moments, iteration: Iteration,
             fp_type: str, shares_bounds: Bounds, costs_bounds: Bounds, compute_jacobians: bool,
-            compute_micro_covariances: bool) -> (
+            compute_micro_covariances: bool, keep_micro_mappings: bool) -> (
             Tuple[
-                Array, Array, Array, Array, Array, Array, Array, Array, SolverStats, Array, Array, Array, List[Error]
+                Array, Array, Array, Array, Array, Array, Array, Dict[MicroDataset, Array], Dict[int, Array], Array,
+                SolverStats, Array, Array, Array, List[Error]
             ]):
         """Compute the mean utility for this market that equates market shares to observed values by solving a fixed
         point problem. Then, if compute_jacobians is True, compute the Jacobian (holding beta fixed) of xi
@@ -81,15 +82,17 @@ class ProblemMarket(Market):
             micro_numerator_jacobian = np.full((moments.MM, self.parameters.P), np.nan, options.dtype)
             micro_denominator_jacobian = np.full((moments.MM, self.parameters.P), np.nan, options.dtype)
             micro_covariances_numerator = np.full((moments.MM, moments.MM), np.nan, options.dtype)
+            weights_mapping = {}
+            values_mapping = {}
         else:
             assert probabilities is not None
             (
                 micro_numerator, micro_denominator, micro_numerator_jacobian, micro_denominator_jacobian,
-                micro_covariances_numerator, micro_errors
+                micro_covariances_numerator, weights_mapping, values_mapping, micro_errors
             ) = (
                 self.safely_compute_micro_contributions(
                     moments, valid_delta, probabilities, probabilities_tangent_mapping, compute_jacobians,
-                    compute_micro_covariances
+                    compute_micro_covariances, keep_micro_mappings
                 )
             )
             errors.extend(micro_errors)
@@ -128,8 +131,8 @@ class ProblemMarket(Market):
 
         return (
             delta, xi_jacobian, micro_numerator, micro_denominator, micro_numerator_jacobian,
-            micro_denominator_jacobian, micro_covariances_numerator, clipped_shares, stats, tilde_costs, omega_jacobian,
-            clipped_costs, errors
+            micro_denominator_jacobian, micro_covariances_numerator, weights_mapping, values_mapping, clipped_shares,
+            stats, tilde_costs, omega_jacobian, clipped_costs, errors
         )
 
     @NumericalErrorHandler(exceptions.DeltaNumericalError)
@@ -156,21 +159,23 @@ class ProblemMarket(Market):
     @NumericalErrorHandler(exceptions.MicroMomentsNumericalError)
     def safely_compute_micro_contributions(
             self, moments: Moments, delta: Array, probabilities: Optional[Array],
-            probabilities_tangent_mapping: Dict[int, Array], compute_jacobians: bool, compute_covariances: bool) -> (
-            Tuple[Array, Array, Array, Array, Array, List[Error]]):
+            probabilities_tangent_mapping: Dict[int, Array], compute_jacobians: bool, compute_covariances: bool,
+            keep_mappings: bool) -> (
+            Tuple[Array, Array, Array, Array, Array, Dict[MicroDataset, Array], Dict[int, Array], List[Error]]):
         """Compute micro moment value contributions, handling any numerical errors."""
         errors: List[Error] = []
         (
             micro_numerator, micro_denominator, micro_numerator_jacobian, micro_denominator_jacobian,
-            micro_covariances_numerator
+            micro_covariances_numerator, weights_mapping, values_mapping
         ) = (
             self.compute_micro_contributions(
-                moments, delta, probabilities, probabilities_tangent_mapping, compute_jacobians, compute_covariances
+                moments, delta, probabilities, probabilities_tangent_mapping, compute_jacobians, compute_covariances,
+                keep_mappings
             )
         )
         return (
             micro_numerator, micro_denominator, micro_numerator_jacobian, micro_denominator_jacobian,
-            micro_covariances_numerator, errors
+            micro_covariances_numerator, weights_mapping, values_mapping, errors
         )
 
     @NumericalErrorHandler(exceptions.CostsNumericalError)

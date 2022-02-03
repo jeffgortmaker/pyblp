@@ -17,14 +17,14 @@ from ..configurations.integration import Integration
 from ..configurations.iteration import Iteration
 from ..configurations.optimization import ObjectiveResults, Optimization
 from ..markets.problem_market import ProblemMarket
-from ..micro import MicroMoment, Moments
+from ..micro import MicroDataset, MicroMoment, Moments
 from ..parameters import Parameters
 from ..primitives import Agents, Products
 from ..results.problem_results import ProblemResults
-from ..utilities.algebra import precisely_invert
+from ..utilities.algebra import precisely_invert, precisely_identify_collinearity
 from ..utilities.basics import (
     Array, Bounds, Error, RecArray, SolverStats, format_number, format_seconds, format_table, generate_items, output,
-    update_matrices, compute_finite_differences
+    update_matrices, compute_finite_differences, warn
 )
 from ..utilities.statistics import IV, compute_gmm_moments_mean, compute_gmm_moments_jacobian_mean
 
@@ -493,6 +493,9 @@ class ProblemEconomy(Economy):
                 self._require_psd(micro_moment_covariances, "micro_moment_covariances")
                 self._detect_singularity(micro_moment_covariances, "micro_moment_covariances")
 
+        # determine whether to check micro moment collinearity
+        detect_micro_collinearity = moments.MM > 0 and (options.collinear_atol > 0 or options.collinear_rtol > 0)
+
         # choose whether to do an initial update
         if initial_update is None:
             initial_update = bool(moments.MM > 0 and W is None)
@@ -605,11 +608,11 @@ class ProblemEconomy(Economy):
             # define the objective function
             def wrapper(new_theta: Array, iterations: int, evaluations: int) -> ObjectiveResults:
                 """Compute and output progress associated with a single objective evaluation."""
-                nonlocal iteration_stats, smallest_objective, progress
+                nonlocal iteration_stats, smallest_objective, progress, detect_micro_collinearity
                 assert optimization is not None and shares_bounds is not None and costs_bounds is not None
                 progress = compute_step_progress(
                     new_theta, progress, optimization._compute_gradient, compute_hessian=False,
-                    compute_micro_covariances=False
+                    compute_micro_covariances=False, detect_micro_collinearity=detect_micro_collinearity
                 )
                 iteration_stats.append(progress.iteration_stats)
                 formatted_progress = progress.format(
@@ -618,6 +621,7 @@ class ProblemEconomy(Economy):
                 if formatted_progress:
                     output(formatted_progress)
                 smallest_objective = min(smallest_objective, progress.objective)
+                detect_micro_collinearity = False
                 return progress.objective, progress.gradient if optimization._compute_gradient else None
 
             # optimize theta if there are parameters to optimize and this isn't the initial update step
@@ -654,10 +658,11 @@ class ProblemEconomy(Economy):
             else:
                 output("Estimating standard errors ...")
             final_progress = compute_step_progress(
-                theta, progress, compute_gradient, compute_hessian, compute_micro_covariances
+                theta, progress, compute_gradient, compute_hessian, compute_micro_covariances, detect_micro_collinearity
             )
             iteration_stats.append(final_progress.iteration_stats)
             optimization_stats.evaluations += 1
+            detect_micro_collinearity = False
             results = ProblemResults(
                 final_progress, last_results, step, last_step, step_start_time, optimization_start_time,
                 optimization_end_time, optimization_stats, iteration_stats, scale_objective, shares_bounds,
@@ -690,7 +695,7 @@ class ProblemEconomy(Economy):
             error_behavior: str, error_punishment: float, delta_behavior: str, iteration: Iteration, fp_type: str,
             shares_bounds: Bounds, costs_bounds: Bounds, finite_differences: bool, theta: Array,
             progress: 'InitialProgress', compute_gradient: bool, compute_hessian: bool,
-            compute_micro_covariances: bool) -> 'Progress':
+            compute_micro_covariances: bool, detect_micro_collinearity: bool) -> 'Progress':
         """Compute demand- and supply-side contributions before recovering the linear parameters and structural error
         terms. Then, form the GMM objective value and its gradient. Finally, handle any errors that were encountered
         before structuring relevant progress information.
@@ -728,7 +733,9 @@ class ProblemEconomy(Economy):
         else:
             def market_factory(
                     s: Hashable) -> (
-                    Tuple[ProblemMarket, Array, Array, Array, Moments, Iteration, str, Bounds, Bounds, bool, bool]):
+                    Tuple[
+                        ProblemMarket, Array, Array, Array, Moments, Iteration, str, Bounds, Bounds, bool, bool, bool
+                    ]):
                 """Build a market along with arguments used to compute delta, micro moment contributions, transformed
                 marginal costs, and Jacobians.
                 """
@@ -738,8 +745,15 @@ class ProblemEconomy(Economy):
                 last_tilde_costs_s = progress.tilde_costs[self._product_market_indices[s]]
                 return (
                     market_s, delta_s, last_delta_s, last_tilde_costs_s, moments, iteration, fp_type, shares_bounds,
-                    costs_bounds, compute_jacobians, compute_micro_covariances
+                    costs_bounds, compute_jacobians, compute_micro_covariances, detect_micro_collinearity
                 )
+
+            # if necessary, identify micro datasets in which there could possibly be collinearity issues
+            micro_collinearity_candidates: Dict[MicroDataset, List[int]] = {}
+            if detect_micro_collinearity:
+                for m, moment in enumerate(moments.micro_moments):
+                    micro_collinearity_candidates.setdefault(moment.dataset, []).append(m)
+                micro_collinearity_candidates = {d: v for d, v in micro_collinearity_candidates.items() if len(v) > 1}
 
             # compute delta, contributions to micro moment values, transformed marginal costs, Jacobians, and
             #   covariances market-by-market
@@ -748,12 +762,13 @@ class ProblemEconomy(Economy):
             micro_numerator_jacobian_mapping: Dict[Hashable, Array] = {}
             micro_denominator_jacobian_mapping: Dict[Hashable, Array] = {}
             micro_covariances_numerator_mapping: Dict[Hashable, Array] = {}
+            micro_collinearity_candidate_values: Dict[Hashable, Dict[MicroDataset, Array]] = {}
             generator = generate_items(self.unique_market_ids, market_factory, ProblemMarket.solve)
             for t, generated_t in generator:
                 (
                     delta_t, xi_jacobian_t, micro_numerator_t, micro_denominator_t, micro_numerator_jacobian_t,
-                    micro_denominator_jacobian_t, micro_covariances_numerator_t, clipped_shares_t, iteration_stats_t,
-                    tilde_costs_t, omega_jacobian_t, clipped_costs_t, errors_t
+                    micro_denominator_jacobian_t, micro_covariances_numerator_t, weights_mapping_t, values_mapping_t,
+                    clipped_shares_t, iteration_stats_t, tilde_costs_t, omega_jacobian_t, clipped_costs_t, errors_t
                 ) = generated_t
 
                 delta[self._product_market_indices[t]] = delta_t
@@ -767,6 +782,14 @@ class ProblemEconomy(Economy):
                     micro_denominator_jacobian_mapping[t] = scipy.sparse.csr_matrix(micro_denominator_jacobian_t)
                 if compute_micro_covariances:
                     micro_covariances_numerator_mapping[t] = scipy.sparse.csr_matrix(micro_covariances_numerator_t)
+                if detect_micro_collinearity:
+                    micro_collinearity_candidate_values[t] = {}
+                    for dataset, moment_indices in micro_collinearity_candidates.items():
+                        if dataset in weights_mapping_t:
+                            nonzero = np.nonzero(weights_mapping_t[dataset])
+                            micro_collinearity_candidate_values[t][dataset] = np.column_stack(
+                                [values_mapping_t[m][nonzero].flatten() for m in moment_indices]
+                            )
                 if self.K3 > 0:
                     tilde_costs[self._product_market_indices[t]] = tilde_costs_t
                     clipped_costs[self._product_market_indices[t]] = clipped_costs_t
@@ -822,6 +845,30 @@ class ProblemEconomy(Economy):
                         # fill the lower triangle
                         lower_indices = np.tril_indices(moments.MM, -1)
                         micro_covariances[lower_indices] = micro_covariances.T[lower_indices]
+                        self._detect_singularity(micro_covariances, "the estimated covariance matrix of micro moments")
+
+                    if detect_micro_collinearity:
+                        for dataset, moment_indices in micro_collinearity_candidates.items():
+                            market_ids = self.unique_market_ids if dataset.market_ids is None else dataset.market_ids
+                            values = np.row_stack([micro_collinearity_candidate_values[t][dataset] for t in market_ids])
+                            collinear, successful = precisely_identify_collinearity(values)
+                            common_message = (
+                                "To disable collinearity checks, set "
+                                "options.collinear_atol = options.collinear_rtol = 0."
+                            )
+                            if not successful:
+                                warn(
+                                    f"Failed to compute the QR decomposition for micro dataset '{dataset.name}' while "
+                                    f"checking for collinearity issues. {common_message}"
+                                )
+                            if collinear.any():
+                                labels = [moments.micro_moments[m].name for m in moment_indices]
+                                collinear_labels = ", ".join(f"'{l}'" for l, c in zip(labels, collinear) if c)
+                                warn(
+                                    f"Detected collinearity issues with the values of micro moments "
+                                    f"[{collinear_labels}] and at least one other micro moment in micro dataset "
+                                    f"'{dataset.name}'. {common_message}"
+                                )
 
         # replace invalid elements in delta, micro moments, and transformed marginal costs with their last values
         bad_delta_index = ~np.isfinite(delta)
@@ -863,7 +910,8 @@ class ProblemEconomy(Economy):
                 perturbed_progress = self._compute_progress(
                     parameters, moments, iv, W, scale_objective, error_behavior, error_punishment, delta_behavior,
                     iteration, fp_type, shares_bounds, costs_bounds, finite_differences=False, theta=perturbed_theta,
-                    progress=progress, compute_gradient=False, compute_hessian=False, compute_micro_covariances=False
+                    progress=progress, compute_gradient=False, compute_hessian=False, compute_micro_covariances=False,
+                    detect_micro_collinearity=False
                 )
                 perturbed_stack = perturbed_progress.iv_delta
                 if moments.MM > 0:
@@ -972,7 +1020,8 @@ class ProblemEconomy(Economy):
                 perturbed_progress = self._compute_progress(
                     parameters, moments, iv, W, scale_objective, error_behavior, error_punishment, delta_behavior,
                     iteration, fp_type, shares_bounds, costs_bounds, finite_differences, perturbed_theta, progress,
-                    compute_gradient=True, compute_hessian=False, compute_micro_covariances=False
+                    compute_gradient=True, compute_hessian=False, compute_micro_covariances=False,
+                    detect_micro_collinearity=False
                 )
                 return perturbed_progress.gradient
 

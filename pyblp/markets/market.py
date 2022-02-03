@@ -1225,7 +1225,8 @@ class Market(Container):
     def compute_micro_contributions(
             self, moments: Moments, delta: Optional[Array] = None, probabilities: Optional[Array] = None,
             probabilities_tangent_mapping: Optional[Dict[int, Array]] = None, compute_jacobians: bool = False,
-            compute_covariances: bool = False) -> Tuple[Array, Array, Array, Array, Array]:
+            compute_covariances: bool = False, keep_mappings: bool = False) -> (
+            Tuple[Array, Array, Array, Array, Array, Dict[MicroDataset, Array], Dict[int, Array]]):
         """Compute contributions to micro moment values, Jacobians, and covariances. By default, use the mean utilities
         with which this market was initialized and do not compute Jacobian and covariance contributions.
         """
@@ -1454,6 +1455,10 @@ class Market(Container):
                     f"dataset's compute_weights."
                 )
 
+            # cache values if necessary
+            if compute_covariances or keep_mappings:
+                values_mapping[m] = values
+
             # compute the contribution to the numerator and denominator
             weighted_values = weights * values
             micro_numerator[m] = weighted_values.sum()
@@ -1463,14 +1468,13 @@ class Market(Container):
                     micro_numerator_jacobian[m, p] = (weights_tangent_mapping[(dataset, p)] * values).sum()
                     micro_denominator_jacobian[m, p] = denominator_tangent_mapping[(dataset, p)]
 
-            # compute the contribution to the covariance numerator (cache values so they don't need to be re-computed)
+            # compute the contribution to the covariance numerator
             if compute_covariances:
-                values_mapping[m] = values
                 for m2, moment2 in enumerate(moments.micro_moments):
                     if m2 <= m and moment2.dataset == moment.dataset:
                         micro_covariances_numerator[m2, m] = (weighted_values * values_mapping[m2]).sum()
 
         return (
             micro_numerator, micro_denominator, micro_numerator_jacobian, micro_denominator_jacobian,
-            micro_covariances_numerator
+            micro_covariances_numerator, weights_mapping, values_mapping
         )
