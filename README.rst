@@ -82,7 +82,7 @@ Other Languages
 
 Once installed, PyBLP can be incorporated into projects written in many other languages with the help of various tools that enable interoperability with Python.
 
-For example, the `reticulate <https://github.com/rstudio/reticulate>`_ package makes interacting with PyBLP in R straightforward (when supported, Python objects can be converted to their R counterparts with the `py_to_r` function)::
+For example, the `reticulate <https://github.com/rstudio/reticulate>`_ package makes interacting with PyBLP in R straightforward (when supported, Python objects can be converted to their R counterparts with the ``py_to_r`` function)::
 
     library(reticulate)
     pyblp <- import("pyblp", convert=FALSE)
