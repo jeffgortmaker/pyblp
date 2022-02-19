@@ -26,8 +26,7 @@ class Iteration(StringRepresentation):
 
             - ``'squarem'`` - SQUAREM acceleration method of :ref:`references:Varadhan and Roland (2008)` and considered
               in the context of the BLP problem in :ref:`references:Reynaerts, Varadhan, and Nash (2012)`. This
-              implementation uses a first-order squared non-monotone extrapolation scheme. If there are any errors
-              during the acceleration step, it uses the last values for the next iteration of the algorithm.
+              implementation uses a first-order squared non-monotone extrapolation scheme.
 
             - ``'broyden1'`` - Use the :func:`scipy.optimize.root` Broyden's first Jacobian approximation method, known
               as Broyden's good method.
