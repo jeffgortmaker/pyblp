@@ -299,11 +299,12 @@ It can also be converted into a :class:`Problem` with the following method.
 
    SimulationResults.to_problem
 
-The following method replaces micro moment values with those that are consistent with the simulation.
+The following methods can either simulate micro data or replace micro moment values with those that are consistent with the simulation.
 
 .. autosummary::
    :toctree: _api
 
+   SimulationResults.simulate_micro_data
    SimulationResults.replace_micro_moment_values
 
 
@@ -371,6 +372,7 @@ When errors occur, they will either be displayed as warnings or raised as except
    exceptions.SyntheticSharesNumericalError
    exceptions.SyntheticDeltaNumericalError
    exceptions.SyntheticCostsNumericalError
+   exceptions.SyntheticMicroDataNumericalError
    exceptions.SyntheticMicroMomentsNumericalError
    exceptions.EquilibriumRealizationNumericalError
    exceptions.JacobianRealizationNumericalError

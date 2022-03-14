@@ -98,6 +98,8 @@ class MicroDataset(StringRepresentation):
         if market_ids is None:
             self.market_ids = None
         else:
+            if isinstance(market_ids, set):
+                market_ids = list(market_ids)
             market_ids = np.asarray(market_ids, np.object_)
             unique, counts = np.unique(market_ids, return_counts=True)
             duplicates = unique[counts > 1]
@@ -148,7 +150,7 @@ class MicroMoment(StringRepresentation):
         The observed value :math:`\bar{v}_m` in :eq:`observed_micro_value`.
     compute_values : `callable`
         Function for computing micro values :math:`v_{mijt}` (or :math:`v_{mijkt}` if the dataset :math:`d_m` contains
-        micro data) in a market of the following form::
+        second choice data) in a market of the following form::
 
             compute_values(t, products, agents) --> values
 

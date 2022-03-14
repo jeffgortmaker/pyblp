@@ -8,7 +8,7 @@ import numpy as np
 from .. import exceptions, options
 from ..configurations.iteration import ContractionResults, Iteration
 from ..economies.economy import Economy
-from ..micro import MicroDataset, Moments
+from ..micro import MicroDataset, MicroMoment, Moments
 from ..parameters import BetaParameter, GammaParameter, NonlinearCoefficient, Parameter, Parameters, RhoParameter
 from ..primitives import Container
 from ..utilities.algebra import approximately_invert, approximately_solve
@@ -1222,21 +1222,59 @@ class Market(Container):
 
         return omega_jacobian
 
-    def compute_micro_contributions(
-            self, moments: Moments, delta: Optional[Array] = None, probabilities: Optional[Array] = None,
-            probabilities_tangent_mapping: Optional[Dict[int, Array]] = None, compute_jacobians: bool = False,
-            compute_covariances: bool = False, keep_mappings: bool = False) -> (
-            Tuple[Array, Array, Array, Array, Array, Dict[MicroDataset, Array], Dict[int, Array]]):
-        """Compute contributions to micro moment values, Jacobians, and covariances. By default, use the mean utilities
-        with which this market was initialized and do not compute Jacobian and covariance contributions.
-        """
+    def compute_micro_weights(self, dataset: MicroDataset) -> Array:
+        """Compute and validate micro dataset weights."""
+        try:
+            weights = np.asarray(dataset.compute_weights(self.t, self.products, self.agents), options.dtype)
+        except Exception as exception:
+            message = f"Failed to compute weights for micro dataset '{dataset}' because of the above exception."
+            raise RuntimeError(message) from exception
+
+        shapes = [
+            (self.I, self.J), (self.I, 1 + self.J), (self.I, self.J, self.J), (self.I, 1 + self.J, self.J),
+            (self.I, self.J, 1 + self.J), (self.I, 1 + self.J, 1 + self.J)
+        ]
+        if weights.shape not in shapes:
+            raise ValueError(
+                f"In market {self.t}, micro dataset '{dataset}' returned an array of shape {weights.shape}, which is "
+                f"not one of the acceptable shapes, {shapes}."
+            )
+
+        if np.any(weights < 0):
+            raise ValueError(
+                f"In market {self.t}, micro dataset '{dataset}' returned an array with at least one negative value."
+            )
+
+        return weights
+
+    def compute_micro_values(self, moment: MicroMoment, weights: Array) -> Array:
+        """Compute and validate micro moment values."""
+        try:
+            values = np.asarray(moment.compute_values(self.t, self.products, self.agents), options.dtype)
+        except Exception as exception:
+            message = f"Failed to compute values for micro moment '{moment}' because of the above exception."
+            raise RuntimeError(message) from exception
+
+        if values.shape != weights.shape:
+            raise ValueError(
+                f"In market {self.t}, micro moment '{moment}' returned an array of shape {values.shape} from "
+                f"compute_values, which is not {weights.shape}, the shape of the array returned by its "
+                f"dataset's compute_weights."
+            )
+
+        return values
+
+    def compute_micro_dataset_contributions(
+            self, datasets: List[MicroDataset], delta: Optional[Array] = None, probabilities: Optional[Array] = None,
+            probabilities_tangent_mapping: Optional[Dict[int, Array]] = None, compute_jacobians: bool = False) -> (
+            Tuple[
+                Dict[MicroDataset, Array], Dict[MicroDataset, Array], Dict[Tuple[MicroDataset, int], Array],
+                Dict[Tuple[MicroDataset, int], Array]
+            ]):
+        """Compute contributions of micro datasets to micro moments."""
         if delta is None:
             assert self.delta is not None
             delta = self.delta
-
-        # pre-compute probabilities if not already computed
-        if probabilities is None:
-            probabilities, _ = self.compute_probabilities(delta)
 
         # pre-compute and validate micro dataset weights, multiplying these with probabilities and using these to
         #   compute micro value denominators
@@ -1250,46 +1288,16 @@ class Market(Container):
         eliminated_probabilities_tangent_mapping: Dict[int, Array] = {}
         outside_eliminated_probabilities_tangent_mapping: Dict[int, Array] = {}
         eliminated_outside_probabilities_tangent_mapping: Dict[int, Array] = {}
-        for moment in moments.micro_moments:
-            dataset = moment.dataset
+        for dataset in datasets:
             if dataset in weights_mapping or (dataset.market_ids is not None and self.t not in dataset.market_ids):
                 continue
 
             # compute and validate weights
-            try:
-                weights = np.asarray(dataset.compute_weights(self.t, self.products, self.agents), options.dtype)
-            except Exception as exception:
-                message = f"Failed to compute weights for micro dataset '{dataset}' because of the above exception."
-                raise RuntimeError(message) from exception
-            shapes = [
-                (self.I, self.J), (self.I, 1 + self.J), (self.I, self.J, self.J), (self.I, 1 + self.J, self.J),
-                (self.I, self.J, 1 + self.J), (self.I, 1 + self.J, 1 + self.J)
-            ]
-            if weights.shape not in shapes:
-                raise ValueError(
-                    f"In market {self.t}, micro dataset '{moment.dataset}' returned an array of shape "
-                    f"{weights.shape}, which is not one of the acceptable shapes, {shapes}."
-                )
+            weights = self.compute_micro_weights(dataset)
 
-            # check whether the weights admit a denominator that does not depend on theta
-            constant_denominator = (weights == weights[0]).all()
-            if len(weights.shape) == 3 and weights.shape[2] == 1 + self.J:
-                constant_denominator &= (weights == weights[..., [0]]).all()
-
-            # if so, we can already compute the contribution to the denominator for micro values based on this dataset
-            if constant_denominator:
-                shares = self.products.shares.flatten()
-                if weights.shape[1] == 1 + self.J:
-                    shares = np.r_[1 - shares.sum(), shares]
-                if len(weights.shape) == 2:
-                    denominator_mapping[dataset] = shares @ weights[0]
-                else:
-                    assert len(weights.shape) == 3
-                    denominator_mapping[dataset] = shares @ weights[0, :, 0]
-
-                if compute_jacobians:
-                    for p in range(self.parameters.P):
-                        denominator_tangent_mapping[(dataset, p)] = 0
+            # pre-compute probabilities
+            if probabilities is None:
+                probabilities, _ = self.compute_probabilities(delta)
 
             # pre-compute outside probabilities
             if outside_probabilities is None and weights.shape[1] == 1 + self.J:
@@ -1415,13 +1423,38 @@ class Market(Container):
 
                     weights_tangent_mapping[(dataset, p)] = weights_tangent
 
-            # compute the contribution to the denominator for micro values based on this dataset if not already computed
-            if not constant_denominator:
-                denominator_mapping[dataset] = dataset_weights.sum()
+            # compute the contribution to the denominator for micro values based on this dataset
+            denominator_mapping[dataset] = dataset_weights.sum()
 
-                if compute_jacobians:
-                    for p in range(self.parameters.P):
+            if compute_jacobians:
+                constant_denominator = (weights == weights[0]).all()
+                if len(weights.shape) == 3:
+                    constant_denominator &= (weights.shape[2] == 1 + self.J) & (weights == weights[..., [0]]).all()
+
+                for p in range(self.parameters.P):
+                    if constant_denominator:
+                        denominator_tangent_mapping[(dataset, p)] = 0
+                    else:
                         denominator_tangent_mapping[(dataset, p)] = weights_tangent_mapping[(dataset, p)].sum()
+
+        return weights_mapping, denominator_mapping, weights_tangent_mapping, denominator_tangent_mapping
+
+    def compute_micro_contributions(
+            self, moments: Moments, delta: Optional[Array] = None, probabilities: Optional[Array] = None,
+            probabilities_tangent_mapping: Optional[Dict[int, Array]] = None, compute_jacobians: bool = False,
+            compute_covariances: bool = False, keep_mappings: bool = False) -> (
+            Tuple[Array, Array, Array, Array, Array, Dict[MicroDataset, Array], Dict[int, Array]]):
+        """Compute contributions to micro moment values, Jacobians, and covariances. By default, use the mean utilities
+        with which this market was initialized and do not compute Jacobian and covariance contributions.
+        """
+
+        # compute dataset contributions
+        datasets = [m.dataset for m in moments.micro_moments]
+        weights_mapping, denominator_mapping, weights_tangent_mapping, denominator_tangent_mapping = (
+            self.compute_micro_dataset_contributions(
+                datasets, delta, probabilities, probabilities_tangent_mapping, compute_jacobians
+            )
+        )
 
         # compute this market's contribution to micro moment values' and covariances' numerators and denominators
         values_mapping: Dict[int, Array] = {}
@@ -1443,17 +1476,7 @@ class Market(Container):
 
             # compute and validate moment values
             weights = weights_mapping[dataset]
-            try:
-                values = np.asarray(moment.compute_values(self.t, self.products, self.agents), options.dtype)
-            except Exception as exception:
-                message = f"Failed to compute values for micro moment '{moment}' because of the above exception."
-                raise RuntimeError(message) from exception
-            if values.shape != weights.shape:
-                raise ValueError(
-                    f"In market {self.t}, micro moment '{moment}' returned an array of shape {values.shape} from "
-                    f"compute_values, which is not {weights.shape}, the shape of the array returned by its "
-                    f"dataset's compute_weights."
-                )
+            values = self.compute_micro_values(moment, weights)
 
             # cache values if necessary
             if compute_covariances or keep_mappings:

@@ -11,7 +11,8 @@ import scipy.optimize
 
 import pyblp.exceptions
 from pyblp import (
-    Formulation, Integration, Iteration, Optimization, Problem, Simulation, build_ownership, data_to_dict, parallel
+    Formulation, Integration, Iteration, MicroDataset, Optimization, Problem, Simulation, build_ownership, data_to_dict,
+    parallel
 )
 from pyblp.utilities.basics import (
     Array, Options, update_matrices, compute_finite_differences, compute_second_finite_differences
@@ -1212,6 +1213,52 @@ def test_extra_demographics(simulated_problem: SimulatedProblemFixture) -> None:
     for key in problem.agents.dtype.names:
         if problem.agents[key].dtype != np.object_:
             np.testing.assert_allclose(problem.agents[key], new_problem.agents[key], atol=1e-14, rtol=0, err_msg=key)
+
+
+@pytest.mark.usefixtures('simulated_problem')
+def test_micro_values(simulated_problem: SimulatedProblemFixture) -> None:
+    """Test that true micro values are close to those computed from simulated micro data."""
+    simulation, simulation_results, problem, solve_options, problem_results = simulated_problem
+
+    # skip simulations without micro moments
+    if not solve_options['micro_moments']:
+        return pytest.skip("There are no micro moments.")
+
+    # test each micro value separately
+    for moment in solve_options['micro_moments']:
+        # simulate micro data
+        dataset = MicroDataset(
+            name=moment.dataset.name,
+            observations=1_000_000,
+            compute_weights=moment.dataset.compute_weights,
+            market_ids=moment.dataset.market_ids,
+        )
+        micro_data = simulation_results.simulate_micro_data(dataset, seed=0)
+
+        # collect market IDs
+        if dataset.market_ids is None:
+            market_ids = problem.unique_market_ids
+        else:
+            market_ids = np.asarray(list(dataset.market_ids))
+
+        # collect values market-by-market
+        values_list = []
+        for t in market_ids:
+            products = problem.products[problem.products.market_ids.flat == t]
+
+            agents = problem.agents[problem.agents.market_ids.flat == t]
+            values = moment.compute_values(t, products, agents)
+
+            data = micro_data[micro_data.market_ids.flat == t]
+            indices = [data.agent_indices.flatten(), data.choice_indices.flatten()]
+            if len(values.shape) == 3:
+                indices.append(data.second_choice_indices.flatten())
+
+            values_list.append(values[tuple(indices)])
+
+        # compare the mean computed from the micro data with the actual value
+        value = np.concatenate(values_list).mean()
+        np.testing.assert_allclose(moment.value, value, atol=0, rtol=0.01, err_msg=moment)
 
 
 @pytest.mark.usefixtures('simulated_problem')

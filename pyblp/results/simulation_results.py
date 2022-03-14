@@ -1,5 +1,6 @@
 """Economy-level structuring of BLP simulation results."""
 
+import collections
 from pathlib import Path
 import pickle
 import time
@@ -15,11 +16,11 @@ from ..configurations.integration import Integration
 from ..construction import build_blp_instruments, build_matrix
 from ..markets.results_market import ResultsMarket
 from ..markets.simulation_results_market import SimulationResultsMarket
-from ..micro import MicroMoment, Moments
+from ..micro import MicroDataset, MicroMoment, Moments
 from ..primitives import Agents
 from ..utilities.basics import (
-    Array, Error, SolverStats, generate_items, get_indices, Mapping, output, output_progress, update_matrices, RecArray,
-    format_number, format_seconds, format_table
+    Array, Error, SolverStats, generate_items, get_indices, Mapping, output, output_progress, structure_matrices,
+    update_matrices, RecArray, format_number, format_seconds, format_table
 )
 
 
@@ -38,7 +39,9 @@ class SimulationResults(Results):
 
     In addition, the :meth:`SimulationResults.to_problem` method can be used to convert the full set of simulated data
     (along with some basic default instruments) and configured information into a :class:`Problem`. The
-    :meth:`SimulationResults.replace_micro_moment_values` method can be used to compute simulated micro moment values.
+    :meth:`SimulationResults.simulate_micro_data` method can be used to simulate data underlying a micro dataset and
+    the :meth:`SimulationResults.replace_micro_moment_values` method can be used to compute simulated micro moment
+    values.
 
     Attributes
     ----------
@@ -228,8 +231,8 @@ class SimulationResults(Results):
             indices_s = self.simulation._product_market_indices[s]
             market_s = ResultsMarket(
                 self.simulation, s, self._parameters, self.simulation.sigma, self.simulation.pi, self.simulation.rho,
-                self.simulation.beta, self.simulation.gamma, self.delta,
-                agents_override=agents[agents_market_indices[s]]
+                self.simulation.beta, self.simulation.gamma, self.delta, self._data_override,
+                agents[agents_market_indices[s]]
             )
             if market_ids.size == 1:
                 args_s = market_args
@@ -431,6 +434,130 @@ class SimulationResults(Results):
             supply_instruments = np.c_[supply_instruments, demand_shifters]
         return demand_instruments, supply_instruments
 
+    def simulate_micro_data(self, dataset: MicroDataset, seed: Optional[int] = None) -> RecArray:
+        r"""Simulate micro data underlying a dataset configuration.
+
+        Observations are simulated according to agent weights :math:`w_{it}`, choice probabilities :math:`s_{ijt}` (and
+        second choice probabilities if the dataset contains second choice data), and survey weights :math:`w_{dijt}`.
+
+        Parameters
+        ----------
+        dataset : MicroDataset
+            The :class:`MicroDataset` for which micro data will be simulated.
+        seed : `int, optional`
+            Passed to :class:`numpy.random.RandomState` to seed the random number generator before data are simulated.
+            By default, a seed is not passed to the random number generator.
+
+        Returns
+        -------
+        `recarray`
+            Simulated micro data with as many rows as ``observations`` in the ``dataset``. Fields:
+
+            - **market_ids** : (`object`) - Market IDs chosen from ``market_ids`` in the ``dataset``.
+
+            - **agent_indices** : (`int`) - Within-market indices of simulated agents that take on values from :math:`0`
+              to :math:`I_t - 1`. The ordering is the same as agents within ``agent_data`` passed to
+              :class:`Simulation`.
+
+            - **choice_indices** : (`int`) - Within-market indices of simulated choices. If ``compute_weights`` in the
+              ``dataset`` returns an array with :math:`J_t` elements in its second axis, then choice indices take on
+              values from :math:`0` to :math:`J_t - 1` where :math:`0` corresponds to the first inside good. If it
+              returns an array with :math:`1 + J_t` elements in its second axis, then choice indices take on values from
+              :math:`0` to :math:`J_t` where :math:`0` corresponds to the outside good. The ordering of inside goods
+              is the same as products within ``product_data`` passed to :class:`Simulation`.
+
+            - **second_choice_indices** : (`int`) - Within-market indices of simulated second choices, if the dataset
+              contains second choice data. If ``compute_weights`` in the ``dataset`` returns an array with :math:`J_t`
+              elements in its third axis, then second choice indices take on values from :math:`0` to :math:`J_t - 1`
+              where :math:`0` corresponds to the first inside good. If it returns an array with :math:`1 + J_t` elements
+              in its third axis, then second choice indices take on values from :math:`0` to :math:`J_t` where :math:`0`
+              corresponds to the outside good. The ordering of inside goods is the same as products within
+              ``product_data`` passed to :class:`Simulation`.
+
+        Examples
+        --------
+            - :doc:`Tutorial </tutorial>`
+
+        """
+        errors: List[Error] = []
+
+        # keep track of long it takes to simulate micro data
+        output("Simulating micro data ...")
+        start_time = time.time()
+
+        # validate the micro dataset
+        if not isinstance(dataset, MicroDataset):
+            raise TypeError("dataset must be a MicroDataset.")
+        dataset._validate(self.simulation)
+
+        # collect the relevant market ids
+        if dataset.market_ids is None:
+            market_ids = self.simulation.unique_market_ids
+        else:
+            market_ids = np.asarray(list(dataset.market_ids))
+
+        def market_factory(s: Hashable) -> tuple:
+            """Build a market along with arguments used to compute weights needed for simulation."""
+            market_s = ResultsMarket(
+                self.simulation, s, self._parameters, self.simulation.sigma, self.simulation.pi, self.simulation.rho,
+                self.simulation.beta, self.simulation.gamma, self.delta, self._data_override
+            )
+            return market_s, dataset
+
+        # construct mappings from market IDs to probabilities needed for simulation
+        weights_mapping: Dict[Hashable, Array] = {}
+        generator = generate_items(market_ids, market_factory, SimulationResultsMarket.safely_compute_micro_weights)
+        if market_ids.size > 1:
+            generator = output_progress(generator, market_ids.size, start_time)
+        for t, (weights_t, errors_t) in generator:
+            weights_mapping[t] = weights_t
+            errors.extend(errors_t)
+
+        # output a warning about any errors
+        if errors:
+            output("")
+            output(exceptions.MultipleErrors(errors))
+            output("")
+
+        # flatten the weights and construct corresponding arrays of micro data from which to simulate data
+        weights_list = []
+        market_ids_list = []
+        agent_indices_list = []
+        choice_indices_list = []
+        second_choice_indices_list = []
+        for t in market_ids:
+            indices = np.nonzero(weights_mapping[t])
+            weights_list.append(weights_mapping[t][indices])
+            market_ids_list.append(np.full(indices[0].size, t))
+            agent_indices_list.append(indices[0])
+            choice_indices_list.append(indices[1])
+            if len(indices) == 3:
+                second_choice_indices_list.append(indices[2])
+
+        weights_data = np.concatenate(weights_list)
+        market_ids_data = np.concatenate(market_ids_list)
+        agent_indices_data = np.concatenate(agent_indices_list)
+        choice_indices_data = np.concatenate(choice_indices_list)
+        second_choice_indices_data = np.concatenate(second_choice_indices_list) if second_choice_indices_list else None
+
+        # simulate the micro data
+        state = np.random.RandomState(seed)
+        choices = state.choice(weights_data.size, p=weights_data / weights_data.sum(), size=dataset.observations)
+        micro_data_mapping = collections.OrderedDict([
+            ('market_ids', (market_ids_data[choices], np.object_)),
+            ('agent_indices', (agent_indices_data[choices], np.int64)),
+            ('choice_indices', (choice_indices_data[choices], np.int64)),
+        ])
+        if second_choice_indices_data is not None:
+            micro_data_mapping['second_choice_indices'] = (second_choice_indices_data[choices], np.int64)
+        micro_data = structure_matrices(micro_data_mapping)
+
+        # output how long it took to simulate the micro data
+        end_time = time.time()
+        output(f"Finished after {format_seconds(end_time - start_time)}.")
+        output("")
+        return micro_data
+
     def replace_micro_moment_values(self, micro_moments: Sequence[MicroMoment]) -> List[MicroMoment]:
         r"""Compute simulated micro moment values :math:`v_m`.
 
@@ -460,14 +587,11 @@ class SimulationResults(Results):
         if moments.MM == 0:
             return []
 
-        # compute the mean utility
-        delta = self.simulation._compute_true_X1(self._data_override) @ self.simulation.beta + self.simulation.xi
-
         def market_factory(s: Hashable) -> Tuple[SimulationResultsMarket, Moments]:
             """Build a market along with arguments used to compute micro moment values."""
             market_s = SimulationResultsMarket(
-                self.simulation, s, self.simulation._parameters, self.simulation.sigma, self.simulation.pi,
-                self.simulation.rho, delta=delta, data_override=self._data_override
+                self.simulation, s, self._parameters, self.simulation.sigma, self.simulation.pi, self.simulation.rho,
+                self.simulation.beta, self.simulation.gamma, self.delta, self._data_override
             )
             return market_s, moments
 

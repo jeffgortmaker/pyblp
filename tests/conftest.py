@@ -345,7 +345,7 @@ def large_blp_simulation() -> SimulationFixture:
         name="diversion from outside",
         observations=simulation.N,
         compute_weights=lambda _, p, a: np.concatenate(
-            [np.ones((a.size, 1, 1 + p.size)), np.zeros((a.size, p.size, 1 + p.size))], axis=1
+            [np.ones((a.size, 1, p.size)), np.zeros((a.size, p.size, p.size))], axis=1
         ),
         market_ids=[simulation.unique_market_ids[8]],
     )
@@ -382,12 +382,10 @@ def large_blp_simulation() -> SimulationFixture:
             ),
         ),
         MicroMoment(
-            name="outside to 1 diversion ratio",
+            name="outside to 0 diversion ratio",
             dataset=outside_diversion_micro_dataset,
             value=0,
-            compute_values=lambda _, p, a: np.concatenate(
-                [np.zeros((a.size, 1 + p.size, 1)), np.tile(p.product_ids.flat == 1, (a.size, 1 + p.size, 1))], axis=2
-            ),
+            compute_values=lambda _, p, a: np.tile(p.product_ids.flat == 0, (a.size, 1 + p.size, 1)),
         ),
         MicroMoment(
             name="1 to outside diversion ratio",
@@ -403,12 +401,12 @@ def large_blp_simulation() -> SimulationFixture:
                 name="inside first and second",
                 observations=simulation.N,
                 compute_weights=lambda _, p, a: np.ones((a.size, p.size, p.size)),
-                market_ids=[simulation.unique_market_ids[12]],
+                market_ids=[simulation.unique_market_ids[0]],
             ),
             value=0,
             compute_values=lambda _, p, a: (
-                np.tile(p.X2[:, [1]], (a.size, 1, p.size)) *
-                np.tile(p.X2[:, [1]].T, (a.size, p.size, 1))
+                np.tile(p.X2[:, [2]], (a.size, 1, p.size)) *
+                np.tile(p.X2[:, [2]], (a.size, 1, p.size)).swapaxes(1, 2)
             ),
         ),
     ])

@@ -157,6 +157,10 @@ class SyntheticCostsNumericalError(NumericalError):
     """
 
 
+class SyntheticMicroDataNumericalError(NumericalError):
+    """Encountered a numerical error when computing synthetic micro data."""
+
+
 class SyntheticMicroMomentsNumericalError(NumericalError):
     """Encountered a numerical error when computing synthetic micro moments."""
 
