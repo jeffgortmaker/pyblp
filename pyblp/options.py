@@ -80,11 +80,11 @@ collinear_atol : `float`
     element in :math:`R` has a magnitude less than ``collinear_atol + collinear_rtol * sd`` where ``sd`` is the column's
     standard deviation.
 
-    The default absolute tolerance is ``1e-14``. To disable collinearity checks, set
+    The default absolute tolerance is ``1e-10``. To disable collinearity checks, set
     ``pyblp.options.collinear_atol = pyblp.options.collinear_rtol = 0``.
 
 collinear_rtol : `float`
-    Relative tolerance for detecting collinear columns, which is by default also ``1e-14``.
+    Relative tolerance for detecting collinear columns, which is by default also ``1e-10``.
 psd_atol : `float`
     Absolute tolerance for detecting non-positive semidefinite matrices. For example, this check is applied to any
     custom weighting matrix, :math:`W`.
