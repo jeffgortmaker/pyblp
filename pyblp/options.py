@@ -114,5 +114,5 @@ finite_differences_epsilon = _np.sqrt(_np.finfo(dtype).eps)
 pseudo_inverses = True
 weights_tol = 1e-10
 singular_tol = 1 / _np.finfo(dtype).eps
-collinear_atol = collinear_rtol = 1e-14
+collinear_atol = collinear_rtol = 1e-10
 psd_atol = psd_rtol = 1e-8
