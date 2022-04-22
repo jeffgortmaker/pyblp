@@ -1360,13 +1360,13 @@ class Market(Container):
 
             # both weights and their Jacobians will be multiplied by agent integration weights
             if len(weights.shape) == 2:
-                weights *= self.agents.weights
+                agent_weights = weights * self.agents.weights
             else:
                 assert len(weights.shape) == 3
-                weights *= self.agents.weights[..., None]
+                agent_weights = weights * self.agents.weights[..., None]
 
             # multiply weights by choice probabilities
-            dataset_weights = weights.copy()
+            dataset_weights = agent_weights.copy()
             if len(weights.shape) == 2:
                 dataset_weights[:, -self.J:] *= probabilities.T
                 if weights.shape[1] == 1 + self.J:
@@ -1391,7 +1391,7 @@ class Market(Container):
                 assert probabilities_tangent_mapping is not None
 
                 for p in range(self.parameters.P):
-                    weights_tangent = weights.copy()
+                    weights_tangent = agent_weights.copy()
 
                     if len(weights.shape) == 2:
                         weights_tangent[:, -self.J:] *= probabilities_tangent_mapping[p].T
