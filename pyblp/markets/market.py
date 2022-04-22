@@ -1385,6 +1385,9 @@ class Market(Container):
                     assert eliminated_outside_probabilities is not None
                     dataset_weights[:, -self.J:, 0] *= eliminated_outside_probabilities.T
 
+            # truncate numerical errors from below by zero
+            dataset_weights[dataset_weights < 0] = 0
+
             weights_mapping[dataset] = dataset_weights
 
             if compute_jacobians:
