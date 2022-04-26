@@ -504,14 +504,30 @@ class SimulationResults(Results):
             )
             return market_s, dataset
 
-        # construct mappings from market IDs to probabilities needed for simulation
+        # determine the datatypes to use to conserve on memory
+        agent_dtype = choice_dtype = np.uint64
+        for dtype in [np.uint32, np.uint8]:
+            if self.simulation._max_I <= np.iinfo(dtype).max:
+                agent_dtype = dtype
+            if self.simulation._max_J <= np.iinfo(dtype).max:
+                choice_dtype = dtype
+
+        # construct mappings from market IDs to probabilities, IDs, and indices needed for simulation
         weights_mapping: Dict[Hashable, Array] = {}
+        agent_indices_mapping: Dict[Hashable, Array] = {}
+        choice_indices_mapping: Dict[Hashable, Array] = {}
+        second_choice_indices_mapping: Dict[Hashable, Array] = {}
         generator = generate_items(market_ids, market_factory, SimulationResultsMarket.safely_compute_micro_weights)
         if market_ids.size > 1:
             generator = output_progress(generator, market_ids.size, start_time)
         for t, (weights_t, errors_t) in generator:
-            weights_mapping[t] = weights_t
             errors.extend(errors_t)
+            indices_t = np.nonzero(weights_t)
+            weights_mapping[t] = weights_t[indices_t]
+            agent_indices_mapping[t] = indices_t[0].astype(agent_dtype)
+            choice_indices_mapping[t] = indices_t[1].astype(choice_dtype)
+            if len(indices_t) == 3:
+                second_choice_indices_mapping[t] = indices_t[2].astype(choice_dtype)
 
         # output a warning about any errors
         if errors:
@@ -519,37 +535,27 @@ class SimulationResults(Results):
             output(exceptions.MultipleErrors(errors))
             output("")
 
-        # flatten the weights and construct corresponding arrays of micro data from which to simulate data
-        weights_list = []
-        market_ids_list = []
-        agent_indices_list = []
-        choice_indices_list = []
-        second_choice_indices_list = []
-        for t in market_ids:
-            indices = np.nonzero(weights_mapping[t])
-            weights_list.append(weights_mapping[t][indices])
-            market_ids_list.append(np.full(indices[0].size, t))
-            agent_indices_list.append(indices[0])
-            choice_indices_list.append(indices[1])
-            if len(indices) == 3:
-                second_choice_indices_list.append(indices[2])
-
-        weights_data = np.concatenate(weights_list)
-        market_ids_data = np.concatenate(market_ids_list)
-        agent_indices_data = np.concatenate(agent_indices_list)
-        choice_indices_data = np.concatenate(choice_indices_list)
-        second_choice_indices_data = np.concatenate(second_choice_indices_list) if second_choice_indices_list else None
-
-        # simulate the micro data
+        # simulate choices
         state = np.random.RandomState(seed)
+        weights_data = np.concatenate([weights_mapping[t] for t in market_ids])
         choices = state.choice(weights_data.size, p=weights_data / weights_data.sum(), size=dataset.observations)
+
+        # construct the micro data
         micro_data_mapping = collections.OrderedDict([
-            ('market_ids', (market_ids_data[choices], np.object_)),
-            ('agent_indices', (agent_indices_data[choices], np.int64)),
-            ('choice_indices', (choice_indices_data[choices], np.int64)),
+            ('market_ids', (
+                np.concatenate([np.full(agent_indices_mapping[t].size, t) for t in market_ids])[choices], np.object_
+            )),
+            ('agent_indices', (
+                np.concatenate([agent_indices_mapping[t] for t in market_ids])[choices], agent_dtype
+            )),
+            ('choice_indices', (
+                np.concatenate([choice_indices_mapping[t] for t in market_ids])[choices], choice_dtype
+            )),
         ])
-        if second_choice_indices_data is not None:
-            micro_data_mapping['second_choice_indices'] = (second_choice_indices_data[choices], np.int64)
+        if second_choice_indices_mapping:
+            micro_data_mapping['second_choice_indices'] = (
+                np.concatenate([second_choice_indices_mapping[t] for t in market_ids])[choices], choice_dtype
+            )
         micro_data = structure_matrices(micro_data_mapping)
 
         # output how long it took to simulate the micro data
