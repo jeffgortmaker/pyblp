@@ -196,24 +196,22 @@ For unadjusted weighting matrices,
 .. math:: S = \frac{1}{N} \begin{bmatrix} \sigma_\xi^2 Z_D'Z_D & \sigma_{\xi\omega} Z_D'Z_S \\ \sigma_{\xi\omega} Z_S'Z_D & \sigma_\omega^2 Z_S'Z_S \end{bmatrix}
    :label: unadjusted_S
 
-where
-
-.. math:: \text{Var}(\xi, \omega) = \begin{bmatrix} \sigma_\xi^2 & \sigma_{\xi\omega} \\ \sigma_{\xi\omega} & \sigma_\omega^2 \end{bmatrix}.
+where :math:`\sigma_\xi^2`, :math:`\sigma_\omega^2`, and :math:`\sigma_{\xi\omega}` are estimates of the variances and covariance between the structural errors.
 
 
 Standard Errors
 ~~~~~~~~~~~~~~~
 
-An estimate of the asymptotic covariance matrix is
+An estimate of the asymptotic covariance matrix of :math:`\sqrt{N}(\hat{\theta} - \theta_0)` is
 
-.. math:: \hat{\text{Var}}(\sqrt{N}(\hat{\theta} - \theta)) = (\bar{G}'W\bar{G})^{-1}\bar{G}'WSW\bar{G}(\bar{G}'W\bar{G})^{-1}.
+.. math:: (\bar{G}'W\bar{G})^{-1}\bar{G}'WSW\bar{G}(\bar{G}'W\bar{G})^{-1}.
    :label: covariances
 
 Standard errors are the square root of the diagonal of this matrix divided by :math:`N`.
 
 If the weighting matrix was chosen such that :math:`W = S^{-1}`, this simplifies to
 
-.. math:: \hat{\text{Var}}(\sqrt{N}(\hat{\theta} - \theta)) = (\bar{G}'W\bar{G})^{-1}.
+.. math:: (\bar{G}'W\bar{G})^{-1}.
    :label: unadjusted_covariances
 
 Standard errors extracted from this simpler expression are called unadjusted.
