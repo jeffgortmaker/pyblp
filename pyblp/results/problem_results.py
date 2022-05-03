@@ -99,10 +99,9 @@ class ProblemResults(Results):
         Stacked parameters in the following order: :math:`\hat{\theta}`, concentrated out elements of
         :math:`\hat{\beta}`, and concentrated out elements of :math:`\hat{\gamma}`.
     parameter_covariances : `ndarray`
-        Estimated covariance matrix for :math:`\sqrt{N}(\hat{\theta} - \theta)`, in which :math:`\theta` are the stacked
-        parameters. Standard errors are extracted from the diagonal of this matrix. Note that the estimated covariance
-        matrix of :math:`\hat{\theta}` is the same as this, but divided by :math:`N`. Parameter covariances are not
-        estimated during the first step of two-step GMM.
+        Estimated asymptotic covariance matrix for :math:`\sqrt{N}(\hat{\theta} - \theta_0)`, in which :math:`\theta`
+        are the stacked parameters. Standard errors are the square root of the diagonal of this matrix divided by
+        :math:`N`. Parameter covariances are not estimated during the first step of two-step GMM.
     theta : `ndarray`
         Estimated unfixed parameters, :math:`\hat{\theta}`, in the following order: :math:`\hat{\Sigma}`,
         :math:`\hat{\Pi}`, :math:`\hat{\rho}`, non-concentrated out elements from :math:`\hat{\beta}`, and
@@ -178,8 +177,10 @@ class ProblemResults(Results):
     micro_values : `ndarray`
         Estimated micro moment values, :math:`v_m`. Rows are in the same order as :attr:`ProblemResults.micro`.
     micro_covariances : `ndarray`
-        Estimated micro moment covariances with element :math:`(m, m')` computed according to
-        :eq:`micro_moment_covariances`, unless overridden by ``micro_moment_covariances`` in :meth:`Problem.solve`.
+        Estimated asymptotic micro moment covariance matrix with element :math:`(m, m')` computed according to
+        :eq:`micro_moment_covariances`. If overridden by ``micro_sample_covariances`` in :meth:`Problem.solve`,
+        elements of ``micro_sample_covariances`` are multiplied by dataset observation counts to convert sample
+        covariances into asymptotic covariances.
     moments : `ndarray`
         Moments, :math:`\bar{g}`, in :eq:`averaged_moments`.
     moments_jacobian : `ndarray`

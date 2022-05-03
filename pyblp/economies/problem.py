@@ -3,6 +3,7 @@
 import abc
 import collections.abc
 import functools
+import itertools
 import time
 from typing import Any, Dict, Hashable, List, Mapping, Optional, Sequence, Tuple, Union
 
@@ -51,7 +52,7 @@ class ProblemEconomy(Economy):
             delta_behavior: str = 'first', iteration: Optional[Iteration] = None, fp_type: str = 'safe_linear',
             shares_bounds: Optional[Tuple[Any, Any]] = (1e-300, None), costs_bounds: Optional[Tuple[Any, Any]] = None,
             W: Optional[Any] = None, center_moments: bool = True, W_type: str = 'robust', se_type: str = 'robust',
-            micro_moments: Sequence[MicroMoment] = (), micro_moment_covariances: Optional[Any] = None) -> (
+            micro_moments: Sequence[MicroMoment] = (), micro_sample_covariances: Optional[Any] = None) -> (
             ProblemResults):
         r"""Solve the problem.
 
@@ -432,11 +433,13 @@ class ProblemEconomy(Economy):
                best guess for parameter values and pass :attr:`ProblemResults.updated_W` to ``W`` for each set of
                different parameter starting values.
 
-        micro_moment_covariances : `array-like, optional`
-            Covariance matrix for the :math:`M_M` micro moments. By default, element :math:`(m, m')` is computed
-            according to :eq:`micro_moment_covariances`. This override could be used, for example, if instead of
-            estimating covariances at some estimated :math:`\hat{\theta}`, one wants to use a boostrap procedure to
-            compute their covariances directly from the micro data.
+        micro_sample_covariances : `array-like, optional`
+            Sample covariance matrix for the :math:`M_M` micro moments. By default, element :math:`(m, m')` of their
+            asymptotic covariance matrix is computed according to :eq:`micro_moment_covariances`. This override could be
+            used, for example, if instead of estimating covariances at some estimated :math:`\hat{\theta}`, one wants to
+            use a boostrap procedure to compute their covariances directly from the micro data. Any sample covariances
+            specified here will be multiplied by dataset observation counts to replace the asymptotic covariances
+            defined in :eq:`micro_moment_covariances`.
 
         Returns
         -------
@@ -483,15 +486,23 @@ class ProblemEconomy(Economy):
 
         # validate and structure micro moments before outputting related information
         moments = Moments(self, micro_moments)
+        micro_moment_covariances = None
         if moments.MM > 0:
             output("")
             output(moments.format("Micro Moments"))
-            if micro_moment_covariances is not None:
-                micro_moment_covariances = np.c_[np.asarray(micro_moment_covariances, options.dtype)]
-                if micro_moment_covariances.shape != (moments.MM, moments.MM):
-                    raise ValueError(f"extra_micro_moments must be a square {moments.MM} by {moments.MM} matrix.")
-                self._require_psd(micro_moment_covariances, "micro_moment_covariances")
-                self._detect_singularity(micro_moment_covariances, "micro_moment_covariances")
+            if micro_sample_covariances is not None:
+                micro_sample_covariances = np.c_[np.asarray(micro_sample_covariances, options.dtype)]
+                if micro_sample_covariances.shape != (moments.MM, moments.MM):
+                    raise ValueError(f"micro_sample_covariances must be a square {moments.MM} by {moments.MM} matrix.")
+                self._require_psd(micro_sample_covariances, "micro_sample_covariances")
+                self._detect_singularity(micro_sample_covariances, "micro_sample_covariances")
+
+                # convert sample covariances to estimates of asymptotic covariances
+                micro_moment_covariances = micro_sample_covariances.copy()
+                for (m, moment_m), (n, moment_n) in itertools.product(enumerate(moments.micro_moments), repeat=2):
+                    micro_moment_covariances[m, n] *= np.sqrt(
+                        moment_m.dataset.observations * moment_n.dataset.observations
+                    )
 
         # determine whether to check micro moment collinearity
         detect_micro_collinearity = moments.MM > 0 and (options.collinear_atol > 0 or options.collinear_rtol > 0)
