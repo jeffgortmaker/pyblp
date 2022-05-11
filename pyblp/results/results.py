@@ -953,14 +953,14 @@ class Results(abc.ABC, StringRepresentation):
 
     def compute_consumer_surpluses(
             self, prices: Optional[Any] = None, keep_all: bool = False, eliminate_product_ids: Optional[Any] = None,
-            market_id: Optional[Any] = None) -> Array:
+            include_logit_error: bool = True, market_id: Optional[Any] = None) -> Array:
         r"""Estimate population-normalized consumer surpluses, :math:`\text{CS}`.
 
         Assuming away nonlinear income effects, the surplus in market :math:`t` is
 
         .. math:: \text{CS} = \sum_{i \in I_t} w_{it}\text{CS}_{it},
 
-        in which the consumer surplus for individual :math:`i` is
+        in which the consumer surplus for individual :math:`i` is, up to an unknown constant,
 
         .. math::
 
@@ -977,6 +977,12 @@ class Results(abc.ABC, StringRepresentation):
            \left(-\frac{\partial V_{i1t}}{\partial p_{1t}}\right)
 
         where :math:`V_{ijt}` is defined in :eq:`utilities` and :math:`V_{iht}` is defined in :eq:`inclusive_value`.
+
+        These expressions include the contribution of the logit errors :math:`\epsilon_{ijt}` to consumer surplus:
+
+        .. math::
+
+           \log(1 + J_t) \Big/ \left(-\frac{\partial V_{i1t}}{\partial p_{1t}}\right).
 
         .. warning::
 
@@ -1002,6 +1008,10 @@ class Results(abc.ABC, StringRepresentation):
             IDs of the products to eliminate from the choice set. These IDs should show up in the ``product_ids`` field
             of ``product_data`` in :class:`Problem`. Eliminating one or more products and comparing consumer surpluses
             gives a measure of willingness to pay for these products.
+        include_logit_error : `bool, optional`
+            Whether to include the above contribution of the logit errors :math:`\epsilon_{ijt}`. By default, their
+            contribution is included. If ``False``, it is subtracted. When comparing changes in consumer surplus, this
+            will only matter if the number of alternatives changes.
         market_id : `object, optional`
             ID of the market in which to compute consumer surplus. By default, consumer surpluses are computed in all
             markets and stacked.
@@ -1024,6 +1034,6 @@ class Results(abc.ABC, StringRepresentation):
         market_ids = self._select_market_ids(market_id)
         prices = self._coerce_optional_prices(prices, market_ids)
         return self._combine_arrays(
-            ResultsMarket.safely_compute_consumer_surplus, market_ids, fixed_args=[keep_all, eliminate_product_ids],
-            market_args=[prices]
+            ResultsMarket.safely_compute_consumer_surplus, market_ids,
+            fixed_args=[keep_all, eliminate_product_ids, include_logit_error], market_args=[prices]
         )

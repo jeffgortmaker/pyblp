@@ -352,8 +352,8 @@ class ResultsMarket(Market):
 
     @NumericalErrorHandler(exceptions.PostEstimationNumericalError)
     def safely_compute_consumer_surplus(
-            self, keep_all: bool, eliminate_product_ids: Optional[Any], prices: Optional[Array]) -> (
-            Tuple[Array, List[Error]]):
+            self, keep_all: bool, eliminate_product_ids: Optional[Any], include_logit_error: bool,
+            prices: Optional[Array]) -> Tuple[Array, List[Error]]:
         """Estimate population-normalized consumer surplus or keep all individual-level surpluses. By default, use
         unchanged prices, handling any numerical errors.
         """
@@ -399,6 +399,8 @@ class ResultsMarket(Market):
         # compute individual-level consumer surpluses
         numerator = np.log(np.exp(log_scale) + (scale_weights * exp_utilities).sum(axis=0, keepdims=True)) - log_scale
         surpluses = numerator / derivatives
+        if not include_logit_error:
+            surpluses -= np.log(1 + self.J) / derivatives
         if keep_all:
             return surpluses, errors
 
