@@ -697,18 +697,11 @@ def test_surplus(simulated_problem: SimulatedProblemFixture) -> None:
     # compute surpluses for a single market
     t = problem.products.market_ids[0]
     surpluses = results.compute_consumer_surpluses(market_id=t, keep_all=True)
-    observed_surpluses = results.compute_consumer_surpluses(market_id=t, include_logit_error=False, keep_all=True)
     surplus = results.compute_consumer_surpluses(market_id=t)
-    observed_surplus = results.compute_consumer_surpluses(market_id=t, include_logit_error=False)
-
-    # test that removing the contribution of the logit error reduces surplus
-    np.testing.assert_array_less(observed_surpluses, surpluses)
-    np.testing.assert_array_less(observed_surplus, surplus)
 
     # test that we get the same result when manually integrating over surpluses
     weights = problem.agents.weights[problem.agents.market_ids.flat == t]
     np.testing.assert_allclose(surpluses @ weights, surplus, atol=1e-14, rtol=0, verbose=True)
-    np.testing.assert_allclose(observed_surpluses @ weights, observed_surplus, atol=1e-14, rtol=0, verbose=True)
 
 
 @pytest.mark.usefixtures('simulated_problem')
