@@ -437,9 +437,13 @@ class ProblemEconomy(Economy):
             Sample covariance matrix for the :math:`M_M` micro moments. By default, element :math:`(m, m')` of their
             asymptotic covariance matrix is computed according to :eq:`micro_moment_covariances`. This override could be
             used, for example, if instead of estimating covariances at some estimated :math:`\hat{\theta}`, one wants to
-            use a boostrap procedure to compute their covariances directly from the micro data. Any sample covariances
-            specified here will be multiplied by dataset observation counts to replace the asymptotic covariances
-            defined in :eq:`micro_moment_covariances`.
+            use a boostrap procedure to compute their covariances directly from the micro data.
+
+            Any sample covariances specified here will be multiplied by :class:`MicroDataset` ``observations`` to
+            replace the asymptotic covariances defined in :eq:`micro_moment_covariances`. Since asymptotic covariances
+            are ultimately divided by these same ``observations``, the number of ``observations`` will not matter for
+            the purposes of standard error and weighting matrix estimation when ``micro_sample_covariances`` is
+            specified.
 
         Returns
         -------
