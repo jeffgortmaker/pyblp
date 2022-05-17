@@ -509,7 +509,11 @@ class ProblemEconomy(Economy):
                     )
 
         # determine whether to check micro moment collinearity
-        detect_micro_collinearity = moments.MM > 0 and (options.collinear_atol > 0 or options.collinear_rtol > 0)
+        detect_micro_collinearity = (
+            moments.MM > 0 and
+            options.detect_micro_collinearity and
+            (options.collinear_atol > 0 or options.collinear_rtol > 0)
+        )
 
         # choose whether to do an initial update
         if initial_update is None:

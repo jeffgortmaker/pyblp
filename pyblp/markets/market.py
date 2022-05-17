@@ -1482,7 +1482,7 @@ class Market(Container):
             values = self.compute_micro_values(moment, weights)
 
             # cache values if necessary
-            if compute_covariances or keep_mappings:
+            if keep_mappings:
                 values_mapping[m] = values
 
             # compute the contribution to the numerator and denominator
@@ -1498,7 +1498,10 @@ class Market(Container):
             if compute_covariances:
                 for m2, moment2 in enumerate(moments.micro_moments):
                     if m2 <= m and moment2.dataset == moment.dataset:
-                        micro_covariances_numerator[m2, m] = (weighted_values * values_mapping[m2]).sum()
+                        values2 = values_mapping.get(m2)
+                        if values2 is None:
+                            values2 = self.compute_micro_values(moment2, weights)
+                        micro_covariances_numerator[m2, m] = (weighted_values * values2).sum()
 
         return (
             micro_numerator, micro_denominator, micro_numerator_jacobian, micro_denominator_jacobian,
