@@ -842,12 +842,13 @@ class Simulation(Economy):
 
         # compute delta and marginal costs market-by-market
         true_delta = np.zeros_like(self.xi)
-        true_tilde_costs = np.zeros_like(self.omega)
+        true_tilde_costs = None if self.omega is None else np.zeros_like(self.omega)
         iteration_stats: Dict[Hashable, SolverStats] = {}
         generator = generate_items(self.unique_market_ids, market_factory, SimulationMarket.compute_exogenous)
         for t, (delta_t, tilde_costs_t, iteration_stats_t, errors_t) in output_progress(generator, self.T, start_time):
             true_delta[self._product_market_indices[t]] = delta_t
-            true_tilde_costs[self._product_market_indices[t]] = tilde_costs_t
+            if true_tilde_costs is not None:
+                true_tilde_costs[self._product_market_indices[t]] = tilde_costs_t
             iteration_stats[t] = iteration_stats_t
             errors.extend(errors_t)
 
@@ -859,6 +860,7 @@ class Simulation(Economy):
                 (true_delta - self.xi - self.products.X1 @ self.beta) / self.beta[X1_index]
             )
             if X3_name is not None:
+                assert true_tilde_costs is not None
                 data_override[X3_name] = (
                     self.products.X3[:, [X3_index]] +
                     (true_tilde_costs - self.omega - self.products.X3 @ self.gamma) / self.gamma[X3_index]
@@ -866,7 +868,7 @@ class Simulation(Economy):
 
         # compute non-transformed marginal costs
         true_costs = true_tilde_costs
-        if self.costs_type == 'log':
+        if self.costs_type == 'log' and true_costs is not None:
             true_costs = np.exp(true_costs)
 
         # structure the results

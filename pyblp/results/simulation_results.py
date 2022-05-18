@@ -121,7 +121,7 @@ class SimulationResults(Results):
     simulation: 'Simulation'
     product_data: RecArray
     delta: Array
-    costs: Array
+    costs: Optional[Array]
     computation_time: float
     fp_converged: Array
     fp_iterations: Array
@@ -133,7 +133,7 @@ class SimulationResults(Results):
     _data_override: Dict[str, Array]
 
     def __init__(
-            self, simulation: 'Simulation', data_override: Dict[str, Array], delta: Array, costs: Array,
+            self, simulation: 'Simulation', data_override: Dict[str, Array], delta: Array, costs: Optional[Array],
             start_time: float, end_time: float, iteration_stats: Dict[Hashable, SolverStats],
             profit_gradients: Optional[Dict[Hashable, Dict[Hashable, Array]]] = None,
             profit_gradient_norms: Optional[Dict[Hashable, Dict[Hashable, Array]]] = None,
