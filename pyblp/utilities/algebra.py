@@ -13,6 +13,8 @@ from .. import options
 
 def compute_condition_number(x: Array) -> float:
     """Compute the condition number of a square matrix."""
+    if x.size == 0:
+        return 0
     if not np.isfinite(x).all():
         return np.nan
     try:
