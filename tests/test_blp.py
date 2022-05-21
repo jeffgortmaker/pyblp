@@ -30,7 +30,7 @@ from .conftest import SimulatedProblemFixture
     pytest.param({'fp_type': 'safe_nonlinear'}, id="nonlinear fixed point"),
     pytest.param({'fp_type': 'nonlinear'}, id="non-safe nonlinear fixed point"),
     pytest.param(
-        {'iteration': Iteration('hybr', {'xtol': 1e-12}, compute_jacobian=True)},
+        {'iteration': Iteration('hybr', {'xtol': 1e-12}, compute_jacobian=True, universal_display=True)},
         id="linear Newton fixed point"
     ),
     pytest.param(
@@ -207,7 +207,7 @@ def test_result_serialization(simulated_problem: SimulatedProblemFixture) -> Non
     originals = [
         Formulation('x + y', absorb='C(z)', absorb_method='lsmr', absorb_options={'tol': 1e-10}),
         Integration('halton', size=10, specification_options={'seed': 0, 'scramble': True}),
-        Iteration('lm', method_options={'max_evaluations': 100}, compute_jacobian=True),
+        Iteration('lm', method_options={'max_evaluations': 100}, compute_jacobian=True, universal_display=True),
         Optimization('nelder-mead', method_options={'xatol': 1e-5}, compute_gradient=False, universal_display=False),
         problem,
         simulation,
@@ -555,7 +555,7 @@ def test_costs(simulated_problem: SimulatedProblemFixture) -> None:
 
 @pytest.mark.usefixtures('simulated_problem')
 @pytest.mark.parametrize('iteration', [
-    pytest.param(Iteration('simple', {'atol': 1e-12}), id="simple"),
+    pytest.param(Iteration('simple', {'atol': 1e-12}, universal_display=True), id="simple"),
     pytest.param(Iteration('hybr', {'xtol': 1e-12, 'ftol': 0}, compute_jacobian=True), id="Powell/LM"),
 ])
 def test_prices(simulated_problem: SimulatedProblemFixture, iteration: Iteration) -> None:

@@ -11,7 +11,8 @@ from ..utilities.basics import Array, Options, SolverStats, StringRepresentation
 
 # define contraction function types
 ContractionResults = Tuple[Array, Optional[Array], Optional[Array]]
-ContractionFunction = Callable[[Array], ContractionResults]
+ContractionFunction = Callable[[Array, int, int], ContractionResults]
+ContractionWrapper = Callable[[Array], ContractionResults]
 
 
 class Iteration(StringRepresentation):
@@ -115,6 +116,10 @@ class Iteration(StringRepresentation):
     compute_jacobian : `bool, optional`
         Whether to compute an analytic Jacobian during iteration. By default, analytic Jacobians are not computed, and
         if a ``method`` is selected that supports analytic Jacobians, they will by default be numerically approximated.
+    universal_display : `bool, optional`
+        Whether to format iteration progress such that the display looks the same for all routines. By default, the
+        universal display is not used and no iteration progress is displayed. Setting this to ``True`` can be helpful
+        for debugging iteration issues. For example, iteration may get stuck above the configured termination tolerance.
 
     Examples
     --------
@@ -136,9 +141,10 @@ class Iteration(StringRepresentation):
     _description: str
     _method_options: Options
     _compute_jacobian: bool
+    _universal_display: bool
 
     def __init__(self, method: Union[str, Callable], method_options: Optional[Options] = None,
-                 compute_jacobian: bool = False) -> None:
+                 compute_jacobian: bool = False, universal_display: bool = False) -> None:
         """Validate the method and configure default options."""
         simple_methods = {
             'simple': (functools.partial(simple_iterator), "no acceleration"),
@@ -173,6 +179,7 @@ class Iteration(StringRepresentation):
 
         # initialize class attributes
         self._compute_jacobian = compute_jacobian
+        self._universal_display = universal_display
 
         # options are by default empty
         if method_options is None:
@@ -263,7 +270,7 @@ class Iteration(StringRepresentation):
             if not isinstance(raw_values, np.ndarray):
                 raw_values = np.asarray(raw_values)
             values = raw_values.reshape(initial.shape).astype(initial.dtype, copy=False)
-            values, weights, jacobian = contraction(values)
+            values, weights, jacobian = contraction(values, iterations, evaluations)
             return (
                 values.astype(raw_values.dtype, copy=False).reshape(raw_values.shape),
                 None if weights is None else weights.astype(raw_values.dtype, copy=False).reshape(raw_values.shape),
@@ -294,7 +301,7 @@ def return_iterator(initial: Array, *_: Any, **__: Any) -> Tuple[Array, bool]:
 
 
 def scipy_iterator(
-        initial: Array, contraction: ContractionFunction, iteration_callback: Callable[[], None], method: str,
+        initial: Array, contraction: ContractionWrapper, iteration_callback: Callable[[], None], method: str,
         compute_jacobian: bool, **scipy_options: Any) -> Tuple[Array, bool]:
     """Apply a SciPy root finding method."""
 
@@ -350,7 +357,7 @@ def scipy_iterator(
 
 
 def simple_iterator(
-        initial: Array, contraction: ContractionFunction, iteration_callback: Callable[[], None], max_evaluations: int,
+        initial: Array, contraction: ContractionWrapper, iteration_callback: Callable[[], None], max_evaluations: int,
         atol: float, rtol: float, norm: Callable[[Array], float]) -> Tuple[Array, bool]:
     """Apply simple fixed point iteration with no acceleration."""
     x = initial
@@ -378,7 +385,7 @@ def simple_iterator(
 
 
 def squarem_iterator(
-        initial: Array, contraction: ContractionFunction, iteration_callback: Callable[[], None], max_evaluations: int,
+        initial: Array, contraction: ContractionWrapper, iteration_callback: Callable[[], None], max_evaluations: int,
         atol: float, rtol: float, norm: Callable[[Array], float], scheme: int, step_min: float, step_max: float,
         step_factor: float) -> Tuple[Array, bool]:
     """Apply the SQUAREM acceleration method for fixed point iteration."""

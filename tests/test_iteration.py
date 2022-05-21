@@ -28,16 +28,23 @@ from pyblp.utilities.basics import Array, Options
     pytest.param(True, id="analytic Jacobian"),
     pytest.param(False, id="no analytic Jacobian")
 ])
+@pytest.mark.parametrize('universal_display', [
+    pytest.param(True, id="universal display"),
+    pytest.param(False, id="no universal display")
+])
 @pytest.mark.parametrize('use_weights', [
     pytest.param(True, id="weights"),
     pytest.param(False, id="no weights")
 ])
-def test_scipy(method: str, method_options: Options, compute_jacobian: bool, use_weights: bool) -> None:
+def test_scipy(
+        method: str, method_options: Options, compute_jacobian: bool, universal_display: bool,
+        use_weights: bool) -> None:
     """Test that the solution to the example fixed point problem from scipy.optimize.fixed_point is reasonably close to
     the exact solution. Also verify that the configuration can be formatted.
     """
-    def contraction(x: Array) -> ContractionResults:
+    def contraction(x: Array, iterations: int, evaluations: int) -> ContractionResults:
         """Evaluate the contraction."""
+        assert evaluations >= iterations >= 0
         c1 = np.array([10, 12])
         c2 = np.array([3, 5])
         x0, x = x, np.sqrt(c1 / (x + c2))
@@ -50,7 +57,7 @@ def test_scipy(method: str, method_options: Options, compute_jacobian: bool, use
         return pytest.skip("This method does not accept an analytic Jacobian.")
 
     # initialize the configuration and test that it can be formatted
-    iteration = Iteration(method, method_options, compute_jacobian)
+    iteration = Iteration(method, method_options, compute_jacobian, universal_display)
     assert str(iteration)
 
     # define the exact solution
@@ -70,8 +77,9 @@ def test_hasselblad(scheme: int) -> None:
     iteration. This same problem is used in an original SQUAREM unit test and is the first one discussed in Varadhan and
     Roland (2008).
     """
-    def contraction(x: Array) -> ContractionResults:
+    def contraction(x: Array, iterations: int, evaluations: int) -> ContractionResults:
         """Evaluate the contraction."""
+        assert evaluations >= iterations >= 0
         y = np.array([162, 267, 271, 185, 111, 61, 27, 8, 3, 1])
         i = np.arange(y.size)
         z = np.divide(
@@ -89,7 +97,7 @@ def test_hasselblad(scheme: int) -> None:
     method_options = {
         'atol': 1e-8,
         'max_evaluations': 100,
-        'scheme': scheme
+        'scheme': scheme,
     }
     initial_values = np.array([0.2, 2.5, 1.5])
     exact_values = np.array([0.6401146029910, 2.6634043566619, 1.2560951012662])
