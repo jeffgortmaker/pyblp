@@ -25,6 +25,7 @@ from pyblp.utilities.basics import Array, Options
     pytest.param('slsqp', {}, id="SLSQP"),
     pytest.param('l-bfgs-b', {}, id="L-BFGS-B"),
     pytest.param('trust-constr', {}, id="trust-region"),
+    pytest.param('trust-constr', {'keep_feasible': True}, id="trust-region feasible"),
     pytest.param('tnc', {}, id="TNC"),
     pytest.param('nelder-mead', {}, id="Nelder-Mead"),
     pytest.param('powell', {}, id="Powell"),

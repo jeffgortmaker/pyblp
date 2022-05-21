@@ -84,8 +84,9 @@ class Optimization(StringRepresentation):
         Options for the optimization routine.
 
         For any non-custom ``method`` other than ``'knitro'`` and ``'return'``, these options will be passed to
-        ``options`` in :func:`scipy.optimize.minimize`. Refer to the SciPy documentation for information about which
-        options are available for each optimization routine.
+        ``options`` in :func:`scipy.optimize.minimize`, with the exception of ``'keep_feasible'``, which is by default
+        ``True`` and is passed to any ``scipy.optimize.Bounds``. Refer to the SciPy documentation for information about
+        which options are available for each optimization routine.
 
         If ``method`` is ``'knitro'``, these options should be
         `Knitro user options <https://www.artelys.com/docs/knitro//3_referenceManual/userOptions.html>`_. The
@@ -323,6 +324,14 @@ def scipy_optimizer(
 
     # by default use the BFGS approximation for the Hessian
     hess = scipy_options.get('hess', scipy.optimize.BFGS() if method == 'trust-constr' else None)
+
+    # extract and configure any bound feasibility
+    if 'keep_feasible' in scipy_options:
+        if bounds is not None:
+            lb, ub = zip(*bounds)
+            bounds = scipy.optimize.Bounds(lb, ub, scipy_options['keep_feasible'])
+        scipy_options = scipy_options.copy()
+        del scipy_options['keep_feasible']
 
     # call the SciPy function
     callback = lambda *_: iteration_callback()
