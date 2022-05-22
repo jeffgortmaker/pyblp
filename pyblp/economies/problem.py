@@ -1676,6 +1676,11 @@ class Progress(InitialProgress):
         header.append(("", "Theta"))
         values.append(", ".join(format_number(x) for x in self.theta))
 
+        # add a space and an extra header every 50 evaluations
+        include_header = (evaluations - 1) % 50 == 0
+        if include_header and evaluations > 1:
+            lines.append("")
+
         # format the table
-        lines.append(format_table(header, values, include_border=False, include_header=evaluations == 1))
+        lines.append(format_table(header, values, include_border=False, include_header=include_header))
         return "\n".join(lines)
