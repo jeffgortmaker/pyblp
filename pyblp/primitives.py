@@ -42,16 +42,20 @@ class Products(object):
         Product prices, :math:`p`.
     ZD : `ndarray`
         Full set of demand-side instruments, :math:`Z_D`, which typically consists of excluded demand-side instruments
-        and :math:`X_1^\text{ex}`.
+        and :math:`X_1^\text{ex}`. If there are any demand-side fixed effects, these instruments will be residualized
+        with respect to these fixed effects.
     ZS : `ndarray`
         Full set of supply-side instruments, :math:`Z_S`, which typically consists of excluded supply-side instruments
-        and :math:`X_3^\text{ex}`.
+        and :math:`X_3^\text{ex}`. If there are any supply-side fixed effects, these instruments will be residualized
+        with respect to these fixed effects.
     X1 : `ndarray`
-        Demand-side linear product characteristics, :math:`X_1`.
+        Demand-side linear product characteristics, :math:`X_1`. If there are any demand-side fixed effects, these
+        characteristics will be residualized with respect to these fixed effects.
     X2 : `ndarray`
         Demand-side nonlinear product characteristics, :math:`X_2`.
     X3 : `ndarray`
-        Supply-side product characteristics, :math:`X_3`.
+        Supply-side product characteristics, :math:`X_3`. If there are any supply-side fixed effects, these
+        characteristics will be residualized with respect to these fixed effects.
 
     """
 
