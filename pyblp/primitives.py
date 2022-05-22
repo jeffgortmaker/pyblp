@@ -37,7 +37,7 @@ class Products(object):
         Stacked :math:`J_t \times J_t` ownership or product holding matrices, :math:`\mathscr{H}`, for each market
         :math:`t`.
     shares : `ndarray`
-        Marketshares, :math:`s`.
+        Market shares, :math:`s`.
     prices : `ndarray`
         Product prices, :math:`p`.
     ZD : `ndarray`

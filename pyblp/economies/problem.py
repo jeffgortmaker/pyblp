@@ -1104,7 +1104,7 @@ class Problem(ProblemEconomy):
 
             - **market_ids** : (`object`) - IDs that associate products with markets.
 
-            - **shares** : (`numeric`) - Marketshares, :math:`s`, which should be between zero and one, exclusive.
+            - **shares** : (`numeric`) - Market shares, :math:`s`, which should be between zero and one, exclusive.
               Outside shares should also be between zero and one. Shares in each market should sum to less than one.
 
             - **prices** : (`numeric`) - Product prices, :math:`p`.
