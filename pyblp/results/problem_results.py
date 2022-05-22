@@ -362,7 +362,7 @@ class ProblemResults(Results):
         #   are hence often not serializable)
         self._formatted_moments = None
         if progress.moments.MM > 0:
-            self._formatted_moments = progress.moments.format("Estimated Micro Moments:", self.micro_values)
+            self._formatted_moments = progress.moments.format("Estimated Micro Moments", self.micro_values)
 
         # if the reduced Hessian was computed, compute its eigenvalues and the ratio of the smallest to largest ones
         self.reduced_hessian_eigenvalues = np.full(self._parameters.P, np.nan, options.dtype)
