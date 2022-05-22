@@ -172,6 +172,12 @@ class ProblemResults(Results):
         Estimated unobserved supply-side product characteristics, :math:`\omega(\hat{\theta})`, or equivalently, the
         supply-side structural error term. When there are supply-side fixed effects, this is
         :math:`\Delta\omega(\hat{\theta})` in :eq:`fe`. That is, fixed effects are not included.
+    xi_fe : `ndarray`
+        Estimated demand-side fixed effects :math:`\xi_{k_1} + \cdots \xi_{k_{E_D}}` in :eq:`fe`, which are only
+        computed when there are demand-side fixed effects.
+    omega_fe : `ndarray`
+        Estimated supply-side fixed effects :math:`\omega_{k_1} + \cdots \omega_{k_{E_D}}` in :eq:`fe`, which are only
+        computed when there are supply-side fixed effects.
     micro : `ndarray`
         Micro moments, :math:`\bar{g}_M`, in :eq:`averaged_micro_moments`.
     micro_values : `ndarray`
@@ -277,6 +283,8 @@ class ProblemResults(Results):
     clipped_costs: Array
     xi: Array
     omega: Array
+    xi_fe: Array
+    omega_fe: Array
     micro: Array
     micro_values: Array
     micro_covariances: Array
@@ -336,6 +344,14 @@ class ProblemResults(Results):
         self._shares_bounds = shares_bounds
         self._costs_bounds = costs_bounds
         self._se_type = se_type
+
+        # if there are any fixed effects, compute their contributions to xi and omega
+        self.xi_fe = np.zeros_like(self.xi)
+        self.omega_fe = np.zeros_like(self.omega)
+        if self.problem.ED > 0:
+            self.xi_fe = self.delta - self.problem._compute_true_X1() @ self.beta - self.xi
+        if self.problem.ES > 0:
+            self.omega_fe = self.tilde_costs - self.problem._compute_true_X3() @ self.gamma - self.omega
 
         # either use the manually-specified micro moment covariances or estimated ones
         self.micro_covariances = micro_moment_covariances
@@ -726,10 +742,10 @@ class ProblemResults(Results):
                 'sigma_squared', 'pi', 'rho', 'beta', 'gamma', 'sigma_se', 'sigma_squared_se', 'pi_se', 'rho_se',
                 'beta_se', 'gamma_se', 'sigma_bounds', 'pi_bounds', 'rho_bounds', 'beta_bounds', 'gamma_bounds',
                 'sigma_labels', 'pi_labels', 'rho_labels', 'beta_labels', 'gamma_labels', 'delta', 'tilde_costs',
-                'clipped_shares', 'clipped_costs', 'xi', 'omega', 'micro', 'micro_values', 'micro_covariances',
-                'moments', 'objective', 'xi_by_theta_jacobian', 'omega_by_theta_jacobian', 'micro_by_theta_jacobian',
-                'gradient', 'projected_gradient', 'projected_gradient_norm', 'hessian', 'reduced_hessian',
-                'reduced_hessian_eigenvalues', 'W', 'updated_W'
+                'clipped_shares', 'clipped_costs', 'xi', 'omega', 'xi_fe', 'omega_fe', 'micro', 'micro_values',
+                'micro_covariances', 'moments', 'objective', 'xi_by_theta_jacobian', 'omega_by_theta_jacobian',
+                'micro_by_theta_jacobian', 'gradient', 'projected_gradient', 'projected_gradient_norm', 'hessian',
+                'reduced_hessian', 'reduced_hessian_eigenvalues', 'W', 'updated_W'
             )) -> dict:
         """Convert these results into a dictionary that maps attribute names to values.
 

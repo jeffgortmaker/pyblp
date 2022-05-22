@@ -470,6 +470,18 @@ def test_fixed_effects(
     atol = 1e-8
     rtol = 1e-5
 
+    # test that fixed effect estimates are essentially identical
+    if ED == 0:
+        assert (problem_results1.xi_fe == 0).all()
+    else:
+        xi_fe2 = problem2.products.X1[:, problem1.K1:] @ problem_results2.beta[problem1.K1:]
+        np.testing.assert_allclose(problem_results1.xi_fe, xi_fe2, atol=atol, rtol=rtol)
+    if ES == 0:
+        assert (problem_results1.omega_fe == 0).all()
+    else:
+        omega_fe2 = problem2.products.X3[:, problem1.K3:] @ problem_results2.gamma[problem1.K3:]
+        np.testing.assert_allclose(problem_results1.omega_fe, omega_fe2, atol=atol, rtol=rtol)
+
     # test that all problem results expected to be identical are essentially identical, except for standard errors under
     #   micro moments, which are expected to be slightly different
     problem_results_keys = [
