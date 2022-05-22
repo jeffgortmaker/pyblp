@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 
 class MicroDataset(StringRepresentation):
-    r"""Configuring for a micro dataset :math:`d` on which micro moments are computed.
+    r"""Configuration for a micro dataset :math:`d` on which micro moments are computed.
 
     A micro dataset :math:`d`, often a survey, is defined by survey weights :math:`w_{dijt}`, which are used in
     :eq:`averaged_micro_moments`. For example, :math:`w_{dijt} = 1\{j \neq 0, t \in T_d\}` defines a micro dataset that
@@ -130,7 +130,7 @@ class MicroDataset(StringRepresentation):
 
 
 class MicroMoment(StringRepresentation):
-    r"""Configuring for a micro moment :math:`m`.
+    r"""Configuration for a micro moment :math:`m`.
 
     Each micro moment :math:`m` is defined by its dataset :math:`d_m` and micro values :math:`v_{mijt}`, which are used
     in :eq:`averaged_micro_moments`. For example, a micro moment :math:`m` with :math:`v_{mijt} = y_{it}x_{jt}` matches
