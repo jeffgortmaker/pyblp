@@ -164,7 +164,7 @@ def structure_matrices(mapping: Mapping) -> RecArray:
         matrices.append(matrix)
 
     # build the record array
-    structured = np.recarray(size, dtypes)
+    structured: RecArray = np.recarray(size, dtypes)
     for dtype, matrix in zip(dtypes, matrices):
         structured[dtype[0] if isinstance(dtype[0], str) else dtype[0][1]] = matrix
     return structured
@@ -467,7 +467,7 @@ class Groups(object):
         self.unique = sorted_ids[self.reduce_indices]
 
         # encode the groups
-        sorted_codes = np.cumsum(changes) - 1
+        sorted_codes: Array = np.cumsum(changes) - 1
         self.codes = sorted_codes[self.sort_indices.argsort()]
 
         # compute counts

@@ -194,7 +194,7 @@ def small_blp_simulation() -> SimulationFixture:
     characteristics, and uniform unobserved product characteristics.
     """
     id_data = build_id_data(T=3, J=18, F=3)
-    uniform = 0.001 * np.random.RandomState(0).uniform(size=(id_data.size, 3))
+    uniform: Array = 0.001 * np.random.RandomState(0).uniform(size=(id_data.size, 3))
     simulation = Simulation(
         product_formulations=(
             Formulation('0 + prices + x'),
