@@ -5,7 +5,7 @@ import collections.abc
 import functools
 import itertools
 import time
-from typing import Any, Dict, Hashable, List, Mapping, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Dict, Hashable, List, Mapping, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import scipy.linalg
@@ -52,7 +52,8 @@ class ProblemEconomy(Economy):
             delta_behavior: str = 'first', iteration: Optional[Iteration] = None, fp_type: str = 'safe_linear',
             shares_bounds: Optional[Tuple[Any, Any]] = (1e-300, None), costs_bounds: Optional[Tuple[Any, Any]] = None,
             W: Optional[Any] = None, center_moments: bool = True, W_type: str = 'robust', se_type: str = 'robust',
-            micro_moments: Sequence[MicroMoment] = (), micro_sample_covariances: Optional[Any] = None) -> (
+            micro_moments: Sequence[MicroMoment] = (), micro_sample_covariances: Optional[Any] = None,
+            resample_agent_data: Optional[Callable[[int], Optional[Mapping]]] = None) -> (
             ProblemResults):
         r"""Solve the problem.
 
@@ -445,6 +446,19 @@ class ProblemEconomy(Economy):
             the purposes of standard error and weighting matrix estimation when ``micro_sample_covariances`` is
             specified.
 
+        resample_agent_data : `callable, optional`
+            If specified, simulation error in moment covariances will be accounted for by resampling
+            :math:`r = 1, \dots, R` sets of agents by iteratively calling this function, which should be of the
+            following form::
+
+                resample_agent_data(index) --> agent_data or None
+
+            where ``index`` increments from ``0`` to ``1`` and so on and ``agent_data`` is the corresponding resampled
+            agent data, which should be a resampled version of the ``agent_data`` passed to :class:`Problem`. Each
+            ``index`` should correspond to a different set of randomly drawn agent data, with different integration
+            nodes and demographics. If ``index`` is larger than :math:`R - 1`, this function should return ``None``,
+            at which point agents will stop being resampled.
+
         Returns
         -------
         `ProblemResults`
@@ -514,6 +528,10 @@ class ProblemEconomy(Economy):
             options.detect_micro_collinearity and
             (options.collinear_atol > 0 or options.collinear_rtol > 0)
         )
+
+        # validate any agent data resampler
+        if resample_agent_data is not None and not callable(resample_agent_data):
+            raise TypeError("resample_agent_data must be None or a function.")
 
         # choose whether to do an initial update
         if initial_update is None:
@@ -613,7 +631,7 @@ class ProblemEconomy(Economy):
             # wrap computation of progress information with step-specific information
             compute_step_progress = functools.partial(
                 self._compute_progress, parameters, moments, iv, W, scale_objective, error_behavior, error_punishment,
-                delta_behavior, iteration, fp_type, shares_bounds, costs_bounds, finite_differences
+                delta_behavior, iteration, fp_type, shares_bounds, costs_bounds, finite_differences, resample_agent_data
             )
 
             # initialize optimization progress
@@ -631,7 +649,8 @@ class ProblemEconomy(Economy):
                 assert optimization is not None and shares_bounds is not None and costs_bounds is not None
                 progress = compute_step_progress(
                     new_theta, progress, optimization._compute_gradient, compute_hessian=False,
-                    compute_micro_covariances=False, detect_micro_collinearity=detect_micro_collinearity
+                    compute_micro_covariances=False, detect_micro_collinearity=detect_micro_collinearity,
+                    compute_simulation_covariances=False,
                 )
                 iteration_stats.append(progress.iteration_stats)
                 formatted_progress = progress.format(
@@ -664,6 +683,7 @@ class ProblemEconomy(Economy):
             compute_gradient = parameters.P > 0
             compute_hessian = compute_gradient and check_optimality == 'both' and step > 0
             compute_micro_covariances = moments.MM > 0 and micro_moment_covariances is None
+            compute_simulation_covariances = resample_agent_data is not None
 
             # use progress information computed at the optimal theta to compute results for the step
             if initial_step:
@@ -677,7 +697,8 @@ class ProblemEconomy(Economy):
             else:
                 output("Estimating standard errors ...")
             final_progress = compute_step_progress(
-                theta, progress, compute_gradient, compute_hessian, compute_micro_covariances, detect_micro_collinearity
+                theta, progress, compute_gradient, compute_hessian, compute_micro_covariances,
+                detect_micro_collinearity, compute_simulation_covariances
             )
             iteration_stats.append(final_progress.iteration_stats)
             optimization_stats.evaluations += 1
@@ -712,9 +733,11 @@ class ProblemEconomy(Economy):
     def _compute_progress(
             self, parameters: Parameters, moments: Moments, iv: IV, W: Array, scale_objective: bool,
             error_behavior: str, error_punishment: float, delta_behavior: str, iteration: Iteration, fp_type: str,
-            shares_bounds: Bounds, costs_bounds: Bounds, finite_differences: bool, theta: Array,
+            shares_bounds: Bounds, costs_bounds: Bounds, finite_differences: bool,
+            resample_agent_data: Optional[Callable[[int], Optional[Mapping]]], theta: Array,
             progress: 'InitialProgress', compute_gradient: bool, compute_hessian: bool,
-            compute_micro_covariances: bool, detect_micro_collinearity: bool) -> 'Progress':
+            compute_micro_covariances: bool, detect_micro_collinearity: bool,
+            compute_simulation_covariances: bool, agents_override: Optional[RecArray] = None) -> 'Progress':
         """Compute demand- and supply-side contributions before recovering the linear parameters and structural error
         terms. Then, form the GMM objective value and its gradient. Finally, handle any errors that were encountered
         before structuring relevant progress information.
@@ -758,7 +781,8 @@ class ProblemEconomy(Economy):
                 """Build a market along with arguments used to compute delta, micro moment contributions, transformed
                 marginal costs, and Jacobians.
                 """
-                market_s = ProblemMarket(self, s, parameters, sigma, pi, rho, beta)
+                agents_override_s = None if agents_override is None else agents_override[self._agent_market_indices[s]]
+                market_s = ProblemMarket(self, s, parameters, sigma, pi, rho, beta, agents_override=agents_override_s)
                 delta_s = progress.next_delta[self._product_market_indices[s]]
                 last_delta_s = progress.delta[self._product_market_indices[s]]
                 last_tilde_costs_s = progress.tilde_costs[self._product_market_indices[s]]
@@ -928,9 +952,10 @@ class ProblemEconomy(Economy):
                 """Evaluate a stack of xi, micro moments, and omega at a perturbed parameter vector."""
                 perturbed_progress = self._compute_progress(
                     parameters, moments, iv, W, scale_objective, error_behavior, error_punishment, delta_behavior,
-                    iteration, fp_type, shares_bounds, costs_bounds, finite_differences=False, theta=perturbed_theta,
-                    progress=progress, compute_gradient=False, compute_hessian=False, compute_micro_covariances=False,
-                    detect_micro_collinearity=False
+                    iteration, fp_type, shares_bounds, costs_bounds, finite_differences=False, resample_agent_data=None,
+                    theta=perturbed_theta, progress=progress, compute_gradient=False, compute_hessian=False,
+                    compute_micro_covariances=False, detect_micro_collinearity=False,
+                    compute_simulation_covariances=False,
                 )
                 perturbed_stack = perturbed_progress.iv_delta
                 if moments.MM > 0:
@@ -1038,9 +1063,10 @@ class ProblemEconomy(Economy):
                 """Evaluate the gradient at a perturbed parameter vector."""
                 perturbed_progress = self._compute_progress(
                     parameters, moments, iv, W, scale_objective, error_behavior, error_punishment, delta_behavior,
-                    iteration, fp_type, shares_bounds, costs_bounds, finite_differences, perturbed_theta, progress,
-                    compute_gradient=True, compute_hessian=False, compute_micro_covariances=False,
-                    detect_micro_collinearity=False
+                    iteration, fp_type, shares_bounds, costs_bounds, finite_differences, resample_agent_data,
+                    perturbed_theta, progress, compute_gradient=True, compute_hessian=False,
+                    compute_micro_covariances=False, detect_micro_collinearity=False,
+                    compute_simulation_covariances=False,
                 )
                 return perturbed_progress.gradient
 
@@ -1048,11 +1074,46 @@ class ProblemEconomy(Economy):
             hessian = compute_finite_differences(compute_perturbed_gradient, theta)
             hessian = np.c_[hessian + hessian.T] / 2
 
+        # optionally resample agents to compute simulation covariances
+        simulation_covariances = np.zeros((mean_g.size, mean_g.size), options.dtype)
+        if compute_simulation_covariances:
+            assert callable(resample_agent_data)
+            mean_g_samples: List[Array] = []
+            while True:
+                try:
+                    resampled_agent_data = resample_agent_data(len(mean_g_samples))
+                except Exception as exception:
+                    raise RuntimeError("Failed to resample agents because of the above exception.") from exception
+                if resampled_agent_data is None:
+                    break
+                try:
+                    resampled_agents = Agents(self.products, self.agent_formulation, resampled_agent_data)
+                except Exception as exception:
+                    raise RuntimeError("Failed to use resampled agents because of the above exception.") from exception
+
+                resampled_progress = self._compute_progress(
+                    parameters, moments, iv, W, scale_objective, error_behavior, error_punishment, delta_behavior,
+                    iteration, fp_type, shares_bounds, costs_bounds, finite_differences, resample_agent_data, theta,
+                    progress, compute_gradient=False, compute_hessian=False, compute_micro_covariances=False,
+                    detect_micro_collinearity=False, compute_simulation_covariances=False,
+                    agents_override=resampled_agents,
+                )
+                mean_g_samples.append(resampled_progress.mean_g.flatten())
+
+            if len(mean_g_samples) < 2:
+                raise ValueError(
+                    "There must be at least 2 resampled sets of agent data to estimate the contribution of simulation "
+                    "error to moment covariances."
+                )
+
+            simulation_covariances = np.cov(mean_g_samples, rowvar=False)
+
         # structure progress
         return Progress(
             self, parameters, moments, W, theta, objective, gradient, hessian, next_delta, delta, tilde_costs, micro,
-            xi_jacobian, omega_jacobian, micro_jacobian, micro_covariances, micro_values, iv_delta, iv_tilde_costs, xi,
-            omega, beta, gamma, iteration_stats, clipped_shares, clipped_costs, errors
+            xi_jacobian, omega_jacobian, micro_jacobian, micro_covariances, micro_values, mean_g,
+            simulation_covariances, iv_delta, iv_tilde_costs, xi, omega, beta, gamma, iteration_stats, clipped_shares,
+            clipped_costs, errors
         )
 
 
@@ -1558,6 +1619,7 @@ class Progress(InitialProgress):
 
     micro_covariances: Array
     micro_values: Array
+    mean_g: Array
     xi: Array
     omega: Array
     beta: Array
@@ -1574,9 +1636,9 @@ class Progress(InitialProgress):
             self, problem: ProblemEconomy, parameters: Parameters, moments: Moments, W: Array, theta: Array,
             objective: Array, gradient: Array, hessian: Array, next_delta: Array, delta: Array, tilde_costs: Array,
             micro: Array, xi_jacobian: Array, omega_jacobian: Array, micro_jacobian: Array, micro_covariances: Array,
-            micro_values: Array, iv_delta: Array, iv_tilde_costs: Array, xi: Array, omega: Array, beta: Array,
-            gamma: Array, iteration_stats: Dict[Hashable, SolverStats], clipped_shares: Array, clipped_costs: Array,
-            errors: List[Error]) -> None:
+            micro_values: Array, mean_g: Array, simulation_covariances: Array, iv_delta: Array, iv_tilde_costs: Array,
+            xi: Array, omega: Array, beta: Array, gamma: Array, iteration_stats: Dict[Hashable, SolverStats],
+            clipped_shares: Array, clipped_costs: Array, errors: List[Error]) -> None:
         """Store progress information, compute the projected gradient and its norm, and compute the reduced Hessian."""
         super().__init__(
             problem, parameters, moments, W, theta, objective, gradient, hessian, next_delta, delta, tilde_costs, micro,
@@ -1584,6 +1646,8 @@ class Progress(InitialProgress):
         )
         self.micro_covariances = micro_covariances
         self.micro_values = micro_values
+        self.mean_g = mean_g
+        self.simulation_covariances = simulation_covariances
         self.iv_delta = iv_delta
         self.iv_tilde_costs = iv_tilde_costs
         self.xi = xi

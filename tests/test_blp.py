@@ -15,7 +15,7 @@ from pyblp import (
     parallel
 )
 from pyblp.utilities.basics import (
-    Array, Options, update_matrices, compute_finite_differences, compute_second_finite_differences
+    Array, Options, RecArray, update_matrices, compute_finite_differences, compute_second_finite_differences
 )
 from .conftest import SimulatedProblemFixture
 
@@ -183,6 +183,42 @@ def test_bootstrap_se(simulated_problem: SimulatedProblemFixture) -> None:
         analytic_se = np.nan_to_num(getattr(problem_results, f'{key}_se'))
         bootstrapped_se = getattr(bootstrapped_results, f'bootstrapped_{key}').std(axis=0)
         np.testing.assert_allclose(analytic_se, bootstrapped_se, atol=0.001, rtol=0.5, err_msg=key)
+
+
+@pytest.mark.usefixtures('simulated_problem')
+def test_agent_resampling(simulated_problem: SimulatedProblemFixture) -> None:
+    """Test that estimating simulation error by resampling agents seems to work."""
+    simulation, _, problem, solve_options, _ = simulated_problem
+
+    # skip configurations when they won't matter
+    if simulation.K2 == 0:
+        return pytest.skip("Agent resampling does nothing when there is no heterogeneity.")
+
+    # resample agent data but trivially to get all zeros
+    updated_solve_options = copy.deepcopy(solve_options)
+    updated_solve_options.update({
+        'optimization': Optimization('return'),
+        'resample_agent_data': lambda i: None if i > 3 else simulation.agent_data,
+    })
+    problem_results2 = problem.solve(**updated_solve_options)
+    assert (problem_results2.simulation_covariances == 0).all()
+
+    def resample_agent_data(index: int) -> Optional[RecArray]:
+        """Non-trivially resample agent data."""
+        if index > 3:
+            return None
+
+        assert simulation.agent_data is not None
+        resampled_agent_data = simulation.agent_data.copy()
+        resampled_weights = simulation.agent_data.weights.copy()
+        np.random.default_rng(index).shuffle(resampled_weights)
+        resampled_agent_data.weights[:] = resampled_weights
+        return resampled_agent_data
+
+    # resample agent data non-trivially
+    updated_solve_options['resample_agent_data'] = resample_agent_data
+    problem_results3 = problem.solve(**updated_solve_options)
+    assert not (problem_results3.simulation_covariances == 0).all()
 
 
 @pytest.mark.usefixtures('simulated_problem')

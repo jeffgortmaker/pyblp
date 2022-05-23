@@ -24,8 +24,8 @@ from ..utilities.basics import (
     get_indices, output, output_progress, update_matrices
 )
 from ..utilities.statistics import (
-    compute_gmm_moment_covariances, compute_gmm_moments_mean, compute_gmm_parameter_covariances,
-    compute_gmm_moments_jacobian_mean, compute_gmm_weights, compute_sigma_squared_vector_covariances
+    compute_gmm_moment_covariances, compute_gmm_parameter_covariances, compute_gmm_moments_jacobian_mean,
+    compute_gmm_weights, compute_sigma_squared_vector_covariances
 )
 
 
@@ -191,6 +191,9 @@ class ProblemResults(Results):
         Moments, :math:`\bar{g}`, in :eq:`averaged_moments`.
     moments_jacobian : `ndarray`
         Jacobian :math:`\bar{G}` of moments with respect to :math:`\theta`, in :eq:`averaged_moments_jacobian`.
+    simulation_covariances : `ndarray`
+        Adjustment in :eq:`simulation_S` to moment covariances to account for simulation error. This will be all zeros
+        unless ``resample_agent_data`` was specified in :meth:`Problem.solve`.
     objective : `float`
         GMM objective value, :math:`q(\hat{\theta})`, defined in :eq:`objective`. If ``scale_objective`` was ``True`` in
         :meth:`Problem.solve` (which is the default), this value was scaled by :math:`N` so that objective values are
@@ -290,6 +293,7 @@ class ProblemResults(Results):
     micro_covariances: Array
     moments: Array
     moments_jacobian: Array
+    simulation_covariances: Array
     objective: Array
     xi_by_theta_jacobian: Array
     omega_by_theta_jacobian: Array
@@ -325,6 +329,8 @@ class ProblemResults(Results):
         self.tilde_costs = progress.tilde_costs
         self.micro = progress.micro
         self.micro_values = progress.micro_values
+        self.moments = progress.mean_g
+        self.simulation_covariances = progress.simulation_covariances
         self.xi_by_theta_jacobian = progress.xi_jacobian
         self.omega_by_theta_jacobian = progress.omega_jacobian
         self.micro_by_theta_jacobian = progress.micro_jacobian
@@ -430,9 +436,6 @@ class ProblemResults(Results):
 
         # ignore computational errors when updating the weighting matrix and computing covariances
         with np.errstate(all='ignore'):
-            # compute moments
-            self.moments = self._compute_mean_g()
-
             # update the weighting matrix
             S_for_weights = self._compute_S(progress.moments, W_type, center_moments)
             self.updated_W, W_errors = compute_gmm_weights(S_for_weights)
@@ -589,16 +592,6 @@ class ProblemResults(Results):
         output("")
         return combined
 
-    def _compute_mean_g(self) -> Array:
-        """Compute moments."""
-        u_list = [self.xi]
-        Z_list = [self.problem.products.ZD]
-        if self.problem.K3 > 0:
-            u_list.append(self.omega)
-            Z_list.append(self.problem.products.ZS)
-        mean_g = np.r_[compute_gmm_moments_mean(u_list, Z_list), self.micro]
-        return mean_g
-
     def _compute_mean_G(self, moments: Moments) -> Array:
         """Compute the Jacobian of moments with respect to parameters."""
         Z_list = [self.problem.products.ZD]
@@ -643,6 +636,7 @@ class ProblemResults(Results):
 
             S = scipy.linalg.block_diag(S, scaled_covariances)
 
+        S += self.simulation_covariances
         return S
 
     def _format_summary(self) -> str:
@@ -743,9 +737,10 @@ class ProblemResults(Results):
                 'beta_se', 'gamma_se', 'sigma_bounds', 'pi_bounds', 'rho_bounds', 'beta_bounds', 'gamma_bounds',
                 'sigma_labels', 'pi_labels', 'rho_labels', 'beta_labels', 'gamma_labels', 'delta', 'tilde_costs',
                 'clipped_shares', 'clipped_costs', 'xi', 'omega', 'xi_fe', 'omega_fe', 'micro', 'micro_values',
-                'micro_covariances', 'moments', 'objective', 'xi_by_theta_jacobian', 'omega_by_theta_jacobian',
-                'micro_by_theta_jacobian', 'gradient', 'projected_gradient', 'projected_gradient_norm', 'hessian',
-                'reduced_hessian', 'reduced_hessian_eigenvalues', 'W', 'updated_W'
+                'micro_covariances', 'moments', 'moments_jacobian', 'simulation_covariances', 'objective',
+                'xi_by_theta_jacobian', 'omega_by_theta_jacobian', 'micro_by_theta_jacobian', 'gradient',
+                'projected_gradient', 'projected_gradient_norm', 'hessian', 'reduced_hessian',
+                'reduced_hessian_eigenvalues', 'W', 'updated_W'
             )) -> dict:
         """Convert these results into a dictionary that maps attribute names to values.
 
