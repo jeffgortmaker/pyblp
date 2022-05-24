@@ -378,9 +378,8 @@ class ResultsMarket(Market):
 
         # eliminate any products from the choice set
         if eliminate_product_ids is not None:
-            for product_id in eliminate_product_ids:
-                if product_id in self.products.product_ids:
-                    j = self.get_product(product_id)
+            for j, product_id in enumerate(self.products.product_ids):
+                if product_id in eliminate_product_ids:
                     exp_utilities[j] = 0
 
         # handle nesting

@@ -1218,7 +1218,7 @@ class Problem(ProblemEconomy):
 
         It may be convenient to define IDs for different products:
 
-            - **product_ids** (`object, optional`) - IDs that identify individual products within markets.
+            - **product_ids** (`object, optional`) - IDs that identify products within markets.
 
         Finally, clustering groups can be specified to account for within-group correlation while updating the weighting
         matrix and estimating standard errors:
@@ -1268,8 +1268,8 @@ class Problem(ProblemEconomy):
 
         It may be convenient to define IDs for different agents:
 
-            - **agent_ids** (`object, optional`) - IDs that identify individual agents within markets. There can be
-              multiple of the same ID within a market.
+            - **agent_ids** (`object, optional`) - IDs that identify agents within markets. There can be multiple of the
+              same ID within a market.
 
         Along with ``market_ids`` and ``agent_ids``, the names of any additional fields can be typically be used as
         variables in ``agent_formulation``. The exception is the name ``'demographics'``, which is reserved for use by

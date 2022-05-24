@@ -30,7 +30,7 @@ class Products(object):
     nesting_ids : `ndarray`
         IDs that associate products with nesting groups.
     product_ids : `ndarray`
-        IDs that identify individual products within markets.
+        IDs that identify products within markets.
     clustering_ids : `ndarray`
         IDs used to compute clustered standard errors.
     ownership : `ndarray`
@@ -157,13 +157,8 @@ class Products(object):
             raise ValueError("The firm_ids field of product_data must be one-dimensional.")
         if nesting_ids is not None and nesting_ids.shape[1] > 1:
             raise ValueError("The nesting_ids field of product_data must be one-dimensional.")
-        if product_ids is not None:
-            if product_ids.shape[1] > 1:
-                raise ValueError("The product_ids field of product_data must be one-dimensional.")
-            if any(i is None for i in product_ids):
-                raise ValueError(
-                    "The product_ids field of product_data must not contain None, which denotes the outside option."
-                )
+        if product_ids is not None and product_ids.shape[1] > 1:
+            raise ValueError("The product_ids field of product_data must be one-dimensional.")
         if clustering_ids is not None:
             if clustering_ids.shape[1] > 1:
                 raise ValueError("The clustering_ids field of product_data must be one-dimensional.")
@@ -237,7 +232,7 @@ class Agents(object):
     market_ids : `ndarray`
         IDs that associate agents with markets.
     agent_ids : `ndarray`
-        IDs that identify individual agents within markets.
+        IDs that identify agents within markets.
     weights : `ndarray`
         Integration weights, :math:`w`.
     nodes : `ndarray`

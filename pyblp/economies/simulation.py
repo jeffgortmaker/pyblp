@@ -106,7 +106,7 @@ class Simulation(Economy):
 
         It may be convenient to define IDs for different products:
 
-            - **product_ids** (`object, optional`) - IDs that identify individual products within markets.
+            - **product_ids** (`object, optional`) - IDs that identify products within markets.
 
         To simulate a nested logit or random coefficients nested logit (RCNL) model, nesting groups must be specified:
 
@@ -170,8 +170,8 @@ class Simulation(Economy):
 
         It may be convenient to define IDs for different agents:
 
-            - **agent_ids** (`object, optional`) - IDs that identify individual agents within markets. There can be
-              multiple of the same ID within a market.
+            - **agent_ids** (`object, optional`) - IDs that identify agents within markets. There can be multiple of the
+              same ID within a market.
 
         Along with ``market_ids`` and ``agent_ids``, the names of any additional fields can typically be used as
         variables in ``agent_formulation``. The exception is the name ``'demographics'``, which is reserved for use by

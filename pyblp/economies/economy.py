@@ -244,55 +244,6 @@ class Economy(Container, StringRepresentation):
         if name not in names:
             raise NameError(f"'{name}' is not None or one of the underlying variables, {list(sorted(names))}.")
 
-    def _validate_product_ids(self, product_ids: Sequence[Any], market_ids: Optional[Array] = None) -> None:
-        """Validate that product IDs either contain None (denoting the outside option) or contain at least one product
-        ID for each market in the data (or in specific markets if specified). Also verify that each product ID appears
-        only once in each relevant market.
-        """
-        if self.unique_product_ids.size == 0 and any(i is not None for i in product_ids):
-            raise ValueError("Product IDs must have been specified.")
-
-        if market_ids is None:
-            market_ids = self.unique_market_ids
-
-        for t in market_ids:
-            counts = []
-            for product_id in product_ids:
-                count = 1
-                if product_id is not None:
-                    count = (self.products.product_ids[self._product_market_indices[t]] == product_id).sum()
-                    if count > 1:
-                        raise ValueError(
-                            f"Product IDs should be unique within markets, but ID '{product_id}' shows up {count} "
-                            f"times in market '{t}'."
-                        )
-
-                counts.append(count)
-
-            if all(c == 0 for c in counts):
-                raise ValueError(
-                    f"None of the product_ids {sorted(list(product_ids))} show up in market '{t}' with IDs: "
-                    f"{list(sorted(self.products.product_ids[self._product_market_indices[t]]))}."
-                )
-
-    def _validate_agent_ids(self, agent_ids: Sequence[Any], market_ids: Optional[Array] = None) -> None:
-        """Validate that agent IDs have at least one agent ID for each market in the data (or in specific markets if
-        specified).
-        """
-        if self.unique_agent_ids.size == 0:
-            raise ValueError("Agent IDs must have been specified.")
-
-        if market_ids is None:
-            market_ids = self.unique_market_ids
-
-        for t in market_ids:
-            counts = [(self.agents.agent_ids[self._agent_market_indices[t]] == i).sum() for i in agent_ids]
-            if all(c == 0 for c in counts):
-                raise ValueError(
-                    f"None of the agent_ids {sorted(list(agent_ids))} show up in market '{t}' with IDs: "
-                    f"{list(sorted(self.agents.agent_ids[self._agent_market_indices[t]]))}."
-                )
-
     def _coerce_optional_firm_ids(self, firm_ids: Optional[Any], market_ids: Optional[Array] = None) -> Array:
         """Coerce optional array-like firm IDs into a column vector and validate it. By default, assume that firm IDs
         are for all markets.

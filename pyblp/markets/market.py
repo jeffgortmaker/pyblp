@@ -1,7 +1,7 @@
 """Market underlying the BLP model."""
 
 import functools
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -129,16 +129,6 @@ class Market(Container):
         self.delta = None if delta is None else delta[economy._product_market_indices[t]]
         with np.errstate(all='ignore'):
             self.mu = self.compute_mu()
-
-    def get_product(self, product_id: Any) -> int:
-        """Get the product index associated with a product ID. This assumes that the market has already been validated
-        to make sure that the product ID appears exactly once.
-        """
-        return int(np.argmax(self.products.product_ids == product_id))
-
-    def get_agents_index(self, agent_ids: Sequence[Any]) -> Array:
-        """Get an index of agents associated with agent IDs."""
-        return np.array([i in agent_ids for i in self.agents.agent_ids])
 
     def get_membership_matrix(self) -> Array:
         """Build a membership matrix from nesting IDs."""
