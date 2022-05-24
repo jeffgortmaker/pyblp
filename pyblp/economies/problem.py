@@ -24,8 +24,8 @@ from ..primitives import Agents, Products
 from ..results.problem_results import ProblemResults
 from ..utilities.algebra import precisely_invert, precisely_identify_collinearity
 from ..utilities.basics import (
-    Array, Bounds, Error, RecArray, SolverStats, format_number, format_seconds, format_table, generate_items, output,
-    update_matrices, compute_finite_differences, warn
+    Array, Bounds, Error, RecArray, SolverStats, format_number, format_seconds, format_table, generate_items,
+    get_indices, output, update_matrices, compute_finite_differences, warn
 )
 from ..utilities.statistics import IV, compute_gmm_moments_mean, compute_gmm_moments_jacobian_mean
 
@@ -773,6 +773,11 @@ class ProblemEconomy(Economy):
         if self.K2 == self.K3 == moments.MM == 0 and (parameters.P == 0 or not compute_jacobians):
             delta = self._compute_logit_delta(rho)
         else:
+            # get market indices for any overridden agents
+            agent_market_indices_override = None
+            if agents_override is not None:
+                agent_market_indices_override = get_indices(agents_override.market_ids)
+
             def market_factory(
                     s: Hashable) -> (
                     Tuple[
@@ -781,7 +786,11 @@ class ProblemEconomy(Economy):
                 """Build a market along with arguments used to compute delta, micro moment contributions, transformed
                 marginal costs, and Jacobians.
                 """
-                agents_override_s = None if agents_override is None else agents_override[self._agent_market_indices[s]]
+                agents_override_s = None
+                if agents_override is not None:
+                    assert agent_market_indices_override is not None
+                    agents_override_s = agents_override[agent_market_indices_override[s]]
+
                 market_s = ProblemMarket(self, s, parameters, sigma, pi, rho, beta, agents_override=agents_override_s)
                 delta_s = progress.next_delta[self._product_market_indices[s]]
                 last_delta_s = progress.delta[self._product_market_indices[s]]
