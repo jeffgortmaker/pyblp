@@ -200,8 +200,8 @@ def test_agent_resampling(simulated_problem: SimulatedProblemFixture) -> None:
         'optimization': Optimization('return'),
         'resample_agent_data': lambda i: None if i > 3 else simulation.agent_data,
     })
-    problem_results2 = problem.solve(**updated_solve_options)
-    assert (problem_results2.simulation_covariances == 0).all()
+    problem_results1 = problem.solve(**updated_solve_options)
+    assert (problem_results1.simulation_covariances == 0).all()
 
     def resample_agent_data(index: int) -> Optional[RecArray]:
         """Non-trivially resample agent data."""
@@ -217,8 +217,35 @@ def test_agent_resampling(simulated_problem: SimulatedProblemFixture) -> None:
 
     # resample agent data non-trivially
     updated_solve_options['resample_agent_data'] = resample_agent_data
-    problem_results3 = problem.solve(**updated_solve_options)
-    assert not (problem_results3.simulation_covariances == 0).all()
+    problem_results2 = problem.solve(**updated_solve_options)
+    assert not (problem_results2.simulation_covariances == 0).all()
+
+
+@pytest.mark.usefixtures('simulated_problem')
+def test_micro_chunking(simulated_problem: SimulatedProblemFixture) -> None:
+    """Test that micro chunking doesn't change anything."""
+    _, _, problem, solve_options, _ = simulated_problem
+
+    # skip configurations without micro moments
+    if 'micro_moments' not in solve_options:
+        return pytest.skip("Micro chunking has no effect when there are no micro moments.")
+
+    # get some baseline results
+    updated_solve_options = copy.deepcopy(solve_options)
+    updated_solve_options['optimization'] = Optimization('return')
+    problem_results1 = problem.solve(**updated_solve_options)
+
+    # get some results with chunking
+    assert pyblp.options.micro_computation_chunks == 1
+    for chunks in [2, 3]:
+        pyblp.options.micro_computation_chunks = chunks
+        problem_results2 = problem.solve(**updated_solve_options)
+        pyblp.options.micro_computation_chunks = 1
+
+        # verify that all results are identical
+        for key, result in problem_results1.__dict__.items():
+            if isinstance(result, np.ndarray) and result.dtype != np.object_:
+                np.testing.assert_allclose(result, getattr(problem_results2, key), atol=1e-12, rtol=1e-12, err_msg=key)
 
 
 @pytest.mark.usefixtures('simulated_problem')

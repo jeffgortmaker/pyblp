@@ -37,32 +37,40 @@ class MicroDataset(StringRepresentation):
 
             compute_weights(t, products, agents) --> weights
 
-        where ``t`` is the market in which to compute weights, ``products`` is the market's :class:`Products`, and
-        ``agents`` is the market's :class:`Agents`. The returned ``weights`` should be an array of one of the following
-        shapes:
+        where ``t`` is the market in which to compute weights, ``products`` is the market's :class:`Products` (with
+        :math:`J_t` rows), and ``agents`` is the market's :class:`Agents` (with :math:`I_t` rows), unless
+        ``pyblp.options.micro_computation_chunks`` is larger than its default of ``1``, in which case ``agents`` is a
+        chunk of the market's :class:`Agents`. Denoting the number of rows in ``agents`` by :math:`I`, the returned
+        ``weights`` should be an array of one of the following shapes:
 
-            - :math:`I_t \times J_t`: Conditions on inside purchases by assuming :math:`w_{di0t} = 0`. Rows correspond
-              to agents :math:`i \in I_t` in the same order as ``agent_data`` in :class:`Problem` or :class:`Simulation`
-              and columns correspond to inside products :math:`j \in J_t` in the same order as ``product_data`` in
+            - :math:`I \times J_t`: Conditions on inside purchases by assuming :math:`w_{di0t} = 0`. Rows correspond to
+              agents :math:`i \in I` in the same order as ``agent_data`` in :class:`Problem` or :class:`Simulation` and
+              columns correspond to inside products :math:`j \in J_t` in the same order as ``product_data`` in
               :class:`Problem` or :class:`Simulation`.
 
-            - :math:`I_t \times (1 + J_t)`: The first column indexes the outside option, which can have nonzero survey
+            - :math:`I \times (1 + J_t)`: The first column indexes the outside option, which can have nonzero survey
               weights :math:`w_{di0t}`.
 
         If the micro dataset contains second choice data, ``weights`` can have a third axis corresponding to second
         choices :math:`k` in :math:`w_{dijkt}`:
 
-            - :math:`I_t \times J_t \times J_t`: Conditions on inside purchases by assuming
+            - :math:`I \times J_t \times J_t`: Conditions on inside purchases by assuming
               :math:`w_{di0kt} = w_{dij0t} = 0`.
 
-            - :math:`I_t \times (1 + J_t) \times J_t`: The first column indexes the outside option, but the second
+            - :math:`I \times (1 + J_t) \times J_t`: The first column indexes the outside option, but the second
               choice is assumed to be an inside option, :math:`w_{dij0t} = 0`.
 
-            - :math:`I_t \times J_t \times (1 + J_t)`: The first index in the third axis indexes the outside option, but
+            - :math:`I \times J_t \times (1 + J_t)`: The first index in the third axis indexes the outside option, but
               the first choice is assumed to be an inside option, :math:`w_{di0k} = 0`.
 
-            - :math:`I_t \times (1 + J_t) \times (1 + J_t)`: The first column and the first index in the third axis
+            - :math:`I \times (1 + J_t) \times (1 + J_t)`: The first column and the first index in the third axis
               index the outside option as the first and second choice.
+
+        .. warning::
+
+            Second choice moments can use a lot of memory, especially when :math:`J_t` is large. If this becomes an
+            issue, consider setting ``pyblp.options.micro_computation_chunks`` to a value higher than its default of
+            ``1``, such as the highest :math:`J_t`. This will cut down on memory usage without much affecting speed.
 
     market_ids : `array-like, optional`
         Distinct market IDs with nonzero survey weights :math:`w_{dijt}`. For other markets, :math:`w_{dijt} = 0`, and
@@ -154,8 +162,10 @@ class MicroMoment(StringRepresentation):
 
             compute_values(t, products, agents) --> values
 
-        where ``t`` is the market in which to compute weights, ``products`` is the market's :class:`Products`, and
-        ``agents`` is the market's :class:`Agents`. The returned ``values`` should be an array of the same shape as the
+        where ``t`` is the market in which to compute values, ``products`` is the market's :class:`Products` (with
+        :math:`J_t` rows), and ``agents`` is the market's :class:`Agents` (with :math:`I_t` rows), unless
+        ``pyblp.options.micro_computation_chunks`` is larger than its default of ``1``, in which case ``agents`` is a
+        chunk of the market's :class:`Agents`. The returned ``values`` should be an array of the same shape as the
         ``weights`` returned by ``compute_weights`` of ``dataset``.
 
     Examples

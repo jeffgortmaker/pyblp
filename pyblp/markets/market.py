@@ -391,8 +391,8 @@ class Market(Container):
         return probabilities, conditionals
 
     def compute_eliminated_probabilities(
-            self, probabilities: Array, delta: Optional[Array] = None, eliminate_outside: bool = False,
-            eliminate_product: Optional[int] = None) -> Array:
+            self, probabilities: Array, delta: Optional[Array] = None, mu: Optional[Array] = None,
+            eliminate_outside: bool = False, eliminate_product: Optional[int] = None) -> Array:
         """Convert choice probabilities into probabilities with the outside option, an inside product, or both removed
         from the choice set. If there are any errors, revert to the full derivation of these eliminated probabilities,
         using the delta with which this market was initialized.
@@ -420,7 +420,7 @@ class Market(Container):
         # if there were any errors, compute the eliminated probabilities directly
         if not np.isfinite(eliminated).all():
             eliminated, _ = self.compute_probabilities(
-                delta, eliminate_outside=eliminate_outside, eliminate_product=eliminate_product
+                delta, mu, eliminate_outside=eliminate_outside, eliminate_product=eliminate_product
             )
 
         return eliminated
@@ -1328,18 +1328,21 @@ class Market(Container):
 
         return omega_jacobian
 
-    def compute_micro_weights(self, dataset: MicroDataset) -> Array:
+    def compute_micro_weights(self, dataset: MicroDataset, agent_indices: Optional[Array] = None) -> Array:
         """Compute and validate micro dataset weights."""
+        agents = self.agents
+        if agent_indices is not None:
+            agents = agents[agent_indices]
+
         try:
-            weights = np.asarray(dataset.compute_weights(self.t, self.products, self.agents), options.dtype)
+            weights = np.asarray(dataset.compute_weights(self.t, self.products, agents), options.dtype)
         except Exception as exception:
             message = f"Failed to compute weights for micro dataset '{dataset}' because of the above exception."
             raise RuntimeError(message) from exception
 
-        shapes = [
-            (self.I, self.J), (self.I, 1 + self.J), (self.I, self.J, self.J), (self.I, 1 + self.J, self.J),
-            (self.I, self.J, 1 + self.J), (self.I, 1 + self.J, 1 + self.J)
-        ]
+        I = agents.size
+        J = self.J
+        shapes = [(I, J), (I, 1 + J), (I, J, J), (I, 1 + J, J), (I, J, 1 + J), (I, 1 + J, 1 + J)]
         if weights.shape not in shapes:
             raise ValueError(
                 f"In market {self.t}, micro dataset '{dataset}' returned an array of shape {weights.shape}, which is "
@@ -1353,10 +1356,14 @@ class Market(Container):
 
         return weights
 
-    def compute_micro_values(self, moment: MicroMoment, weights: Array) -> Array:
+    def compute_micro_values(self, moment: MicroMoment, weights: Array, agent_indices: Optional[Array] = None) -> Array:
         """Compute and validate micro moment values."""
+        agents = self.agents
+        if agent_indices is not None:
+            agents = agents[agent_indices]
+
         try:
-            values = np.asarray(moment.compute_values(self.t, self.products, self.agents), options.dtype)
+            values = np.asarray(moment.compute_values(self.t, self.products, agents), options.dtype)
         except Exception as exception:
             message = f"Failed to compute values for micro moment '{moment}' because of the above exception."
             raise RuntimeError(message) from exception
@@ -1372,7 +1379,8 @@ class Market(Container):
 
     def compute_micro_dataset_contributions(
             self, datasets: List[MicroDataset], delta: Optional[Array] = None, probabilities: Optional[Array] = None,
-            probabilities_tangent_mapping: Optional[Dict[int, Array]] = None, compute_jacobians: bool = False) -> (
+            probabilities_tangent_mapping: Optional[Dict[int, Array]] = None, compute_jacobians: bool = False,
+            agent_indices: Optional[Array] = None) -> (
             Tuple[
                 Dict[MicroDataset, Array], Dict[MicroDataset, Array], Dict[Tuple[MicroDataset, int], Array],
                 Dict[Tuple[MicroDataset, int], Array]
@@ -1381,6 +1389,10 @@ class Market(Container):
         if delta is None:
             assert self.delta is not None
             delta = self.delta
+
+        mu = None
+        if agent_indices is not None:
+            mu = self.mu[:, agent_indices]
 
         # pre-compute and validate micro dataset weights, multiplying these with probabilities and using these to
         #   compute micro value denominators
@@ -1399,11 +1411,11 @@ class Market(Container):
                 continue
 
             # compute and validate weights
-            weights = self.compute_micro_weights(dataset)
+            weights = self.compute_micro_weights(dataset, agent_indices)
 
             # pre-compute probabilities
             if probabilities is None:
-                probabilities, _ = self.compute_probabilities(delta)
+                probabilities, _ = self.compute_probabilities(delta, mu)
 
             # pre-compute outside probabilities
             if outside_probabilities is None and weights.shape[1] == 1 + self.J:
@@ -1419,7 +1431,7 @@ class Market(Container):
                 eliminated_probabilities_list = []
                 for j in range(self.J):
                     eliminated_probabilities_list.append(self.compute_eliminated_probabilities(
-                        probabilities, delta, eliminate_product=j
+                        probabilities, delta, mu, eliminate_product=j
                     ))
 
                 eliminated_probabilities = np.stack(eliminated_probabilities_list)
@@ -1438,7 +1450,7 @@ class Market(Container):
             # pre-compute probabilities after the outside option has been removed
             if len(weights.shape) == 3 and outside_eliminated_probabilities is None and weights.shape[1] == 1 + self.J:
                 outside_eliminated_probabilities = self.compute_eliminated_probabilities(
-                    probabilities, delta, eliminate_outside=True
+                    probabilities, delta, mu, eliminate_outside=True
                 )
 
                 if compute_jacobians:
@@ -1465,11 +1477,12 @@ class Market(Container):
                         )
 
             # both weights and their Jacobians will be multiplied by agent integration weights
+            agent_weights = self.agents.weights if agent_indices is None else self.agents.weights[agent_indices]
             if len(weights.shape) == 2:
-                agent_weights = weights * self.agents.weights
+                agent_weights = weights * agent_weights
             else:
                 assert len(weights.shape) == 3
-                agent_weights = weights * self.agents.weights[..., None]
+                agent_weights = weights * agent_weights[..., None]
 
             # multiply weights by choice probabilities
             dataset_weights = agent_weights.copy()
@@ -1556,16 +1569,7 @@ class Market(Container):
         """Compute contributions to micro moment values, Jacobians, and covariances. By default, use the mean utilities
         with which this market was initialized and do not compute Jacobian and covariance contributions.
         """
-
-        # compute dataset contributions
-        datasets = [m.dataset for m in moments.micro_moments]
-        weights_mapping, denominator_mapping, weights_tangent_mapping, denominator_tangent_mapping = (
-            self.compute_micro_dataset_contributions(
-                datasets, delta, probabilities, probabilities_tangent_mapping, compute_jacobians
-            )
-        )
-
-        # compute this market's contribution to micro moment values' and covariances' numerators and denominators
+        weights_mapping: Dict[MicroDataset, Array] = {}
         values_mapping: Dict[int, Array] = {}
         micro_numerator = np.zeros((moments.MM, 1), options.dtype)
         micro_denominator = np.zeros((moments.MM, 1), options.dtype)
@@ -1578,36 +1582,81 @@ class Market(Container):
         micro_covariances_numerator = np.full(
             (moments.MM, moments.MM), 0 if compute_covariances else np.nan, options.dtype
         )
-        for m, moment in enumerate(moments.micro_moments):
-            dataset = moment.dataset
-            if dataset not in weights_mapping:
-                continue
 
-            # compute and validate moment values
-            weights = weights_mapping[dataset]
-            values = self.compute_micro_values(moment, weights)
+        # optionally split up computation by groups of agents to reduce memory usage
+        agent_indices_chunks = [None]
+        probabilities_chunk = probabilities
+        probabilities_tangent_mapping_chunk = probabilities_tangent_mapping
+        if options.micro_computation_chunks > 1:
+            agent_indices_chunks = np.array_split(np.arange(self.I), options.micro_computation_chunks)
+        for agent_indices in agent_indices_chunks:
+            if agent_indices is not None:
+                if probabilities is not None:
+                    probabilities_chunk = probabilities[:, agent_indices]
+                if probabilities_tangent_mapping is not None:
+                    probabilities_tangent_mapping_chunk = {}
+                    for p, probabilities_tangent in probabilities_tangent_mapping.items():
+                        probabilities_tangent_mapping_chunk[p] = probabilities_tangent[:, agent_indices]
 
-            # cache values if necessary
+            # compute dataset contributions
+            datasets = [m.dataset for m in moments.micro_moments]
+            (
+                weights_mapping_chunk, denominator_mapping_chunk, weights_tangent_mapping_chunk,
+                denominator_tangent_mapping_chunk
+            ) = (
+                self.compute_micro_dataset_contributions(
+                    datasets, delta, probabilities_chunk, probabilities_tangent_mapping_chunk, compute_jacobians,
+                    agent_indices
+                )
+            )
+
+            # cache weights if necessary
             if keep_mappings:
-                values_mapping[m] = values
+                for dataset, weights_chunk in weights_mapping_chunk.items():
+                    if dataset not in weights_mapping:
+                        weights_mapping[dataset] = weights_chunk
+                    else:
+                        weights_mapping[dataset] = np.row_stack([weights_mapping[dataset], weights_chunk])
 
-            # compute the contribution to the numerator and denominator
-            weighted_values = weights * values
-            micro_numerator[m] = weighted_values.sum()
-            micro_denominator[m] = denominator_mapping[dataset]
-            if compute_jacobians:
-                for p in range(self.parameters.P):
-                    micro_numerator_jacobian[m, p] = (weights_tangent_mapping[(dataset, p)] * values).sum()
-                    micro_denominator_jacobian[m, p] = denominator_tangent_mapping[(dataset, p)]
+            # compute this market's contribution to micro moment values' and covariances' numerators and denominators
+            values_mapping_chunk: Dict[int, Array] = {}
+            for m, moment in enumerate(moments.micro_moments):
+                dataset = moment.dataset
+                if dataset not in weights_mapping_chunk:
+                    continue
 
-            # compute the contribution to the covariance numerator
-            if compute_covariances:
-                for m2, moment2 in enumerate(moments.micro_moments):
-                    if m2 <= m and moment2.dataset == moment.dataset:
-                        values2 = values_mapping.get(m2)
-                        if values2 is None:
-                            values2 = self.compute_micro_values(moment2, weights)
-                        micro_covariances_numerator[m2, m] = (weighted_values * values2).sum()
+                # compute and validate moment values
+                weights_chunk = weights_mapping_chunk[dataset]
+                values_chunk = self.compute_micro_values(moment, weights_chunk, agent_indices)
+
+                # cache values if necessary
+                if keep_mappings:
+                    values_mapping_chunk[m] = values_chunk
+                    if m not in values_mapping:
+                        values_mapping[m] = values_chunk
+                    else:
+                        values_mapping[m] = np.row_stack([values_mapping[m], values_chunk])
+
+                # compute the contribution to the numerator and denominator
+                weighted_values_chunk = weights_chunk * values_chunk
+                micro_numerator[m] += np.sum(weighted_values_chunk)
+                micro_denominator[m] += denominator_mapping_chunk[dataset]
+                if compute_jacobians:
+                    for p in range(self.parameters.P):
+                        micro_numerator_jacobian[m, p] += np.sum(
+                            weights_tangent_mapping_chunk[(dataset, p)] * values_chunk
+                        )
+                        micro_denominator_jacobian[m, p] += denominator_tangent_mapping_chunk[(dataset, p)]
+
+                # compute the contribution to the covariance numerator
+                if compute_covariances:
+                    for m2, moment2 in enumerate(moments.micro_moments):
+                        if m2 <= m and moment2.dataset == moment.dataset:
+                            values2_chunk = values_mapping_chunk.get(m2)
+                            if values2_chunk is None:
+                                values2_chunk = self.compute_micro_values(moment2, weights_chunk, agent_indices)
+
+                            micro_covariances_numerator[m2, m] += np.sum(weighted_values_chunk * values2_chunk)
 
         return (
             micro_numerator, micro_denominator, micro_numerator_jacobian, micro_denominator_jacobian,
