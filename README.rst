@@ -105,12 +105,13 @@ Features
 - Bertrand-Nash supply-side moments
 - Multiple equation GMM
 - Demographic interactions
+- Product-specific demographics
 - Flexible micro moments that can match statistics based on survey data
 - Support for micro moments based on second choice data
 - Fixed effect absorption
 - Nonlinear functions of product characteristics
 - Concentrating out linear parameters
-- Normal and lognormal random coefficients
+- Flexible random coefficient distributions
 - Parameter bounds and constraints
 - Random coefficients nested logit (RCNL)
 - Approximation to the pure characteristics model
@@ -119,10 +120,12 @@ Features
 - Classic BLP instruments
 - Differentiation instruments
 - Optimal instruments
+- Adjustments for simulation error
 - Tests of overidentifying and model restrictions
 - Parametric boostrapping post-estimation outputs
 - Elasticities and diversion ratios
 - Marginal costs and markups
+- Passthrough calculations
 - Profits and consumer surplus
 - Newton and fixed point methods for computing pricing equilibria
 - Merger simulation
