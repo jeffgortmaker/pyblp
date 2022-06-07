@@ -109,6 +109,12 @@ Grigolon and Verboven (2014)
 Grigolon, Laura, and Frank Verboven (2014). `Nested logit or random coefficients logit? A comparison of alternative discrete choice models of product differentiation <https://ideas.repec.org/a/tpr/restat/v96y2014i5p916-935.html>`_. *Review of Economics and Statistics, 96* (5), 916-935.
 
 
+Hausman, Leonard, and Zona (1994)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Hausman, Jerry, Gregory Leonard, and J. Douglas Zona (1994). `Competitive analysis with differentiated products <https://ideas.repec.org/a/adr/anecst/y1994i34p143-157.html>`_. *Annals of Economics and Statistics, 34*, 143-157.
+
+
 Hansen (1982)
 ~~~~~~~~~~~~~
 
@@ -215,3 +221,9 @@ Varadhan and Roland (2008)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Varadhan, Ravi, and Christophe Roland (2008). `Simple and globally convergent methods for accelerating the convergence of any EM algorithm <https://ideas.repec.org/a/bla/scjsta/v35y2008i2p335-353.html>`_. *Scandinavian Journal of Statistics, 35* (2), 335-353.
+
+
+Werden (1997)
+~~~~~~~~~~~~~
+
+Werden, Gregory J. (1997). `Simulating the effects of differentiated products mergers: A practitioners' guide <https://ideas.repec.org/p/ags/rpssiw/25942.html>`_. Economic Analysis Group, Proceedings of NE-165 Conference, Washington, D.C., June 20–21, 1996, 1997.

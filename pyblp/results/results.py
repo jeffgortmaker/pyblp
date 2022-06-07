@@ -601,8 +601,9 @@ class Results(abc.ABC, StringRepresentation):
         r"""Approximate equilibrium prices after firm or cost changes, :math:`p^*`, under the assumption that shares and
         their price derivatives are unaffected by such changes.
 
-        This approximation is discussed in, for example, :ref:`references:Nevo (1997)`. Prices in each market are
-        computed according to the :math:`\eta`-markup equation in :eq:`eta`:
+        This approximation is in the spirit of :ref:`references:Hausman, Leonard, and Zona (1994)` and
+        :ref:`references:Werden (1997)`. Prices in each market are computed according to the :math:`\eta`-markup
+        equation in :eq:`eta`:
 
         .. math:: p^* = c^* + \eta^*,
 
