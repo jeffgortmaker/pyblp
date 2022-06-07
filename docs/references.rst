@@ -184,7 +184,7 @@ Newey, Whitney K., and Kenneth D. West (1987). `Hypothesis testing with efficien
 Owen (2013)
 ~~~~~~~~~~~
 
-Owen, Art B. (2013). `Monte Carlo theory, methods and examples <https://statweb.stanford.edu/~owen/mc/>`_.
+Owen, Art B. (2013). `Monte Carlo theory, methods and examples <https://artowen.su.domains/mc/>`_.
 
 
 Owen (2017)
@@ -209,12 +209,6 @@ Reynaerts, Varadhan, and Nash (2012)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Reynaerts, Jo, Ravi Varadhan, and John C. Nash (2012). `Enhancing the convergence properties of the BLP (1995) contraction mapping <https://ideas.repec.org/p/ete/vivwps/35.html>`_. VIVES discussion paper 35.
-
-
-Skrainka (2012)
-~~~~~~~~~~~~~~~
-
-Skrainka, Benjamin S. (2012). `A large scale study of the small sample performance of random coefficient models of demand <https://papers.ssrn.com/sol3/papers.cfm?abstract_id=1942627>`_.
 
 
 Varadhan and Roland (2008)

@@ -32,8 +32,7 @@ dtype : `dtype`
 
     One instance in which extended precision can be helpful in the BLP problem is when there are a large number of near
     zero choice probabilities with small integration weights, which, under standard precision are called zeros when in
-    aggregate they are nonzero. For example, :ref:`references:Skrainka (2012)` finds that using long doubles is
-    sufficient to solve many utility floating point problems.
+    aggregate they are nonzero.
 
     The precision of ``numpy.longdouble`` depends on the platform on which NumPy is installed. If the platform in use
     does not support extended precision, using ``numpy.longdouble`` may lead to unreliable results. For example, on

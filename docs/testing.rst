@@ -1,7 +1,7 @@
 Testing
 =======
 
-Testing is done with the `tox <https://tox.readthedocs.io/en/latest/>`_ automation tool, which runs a `pytest <https://docs.pytest.org/en/latest/>`_-backed test suite in the ``tests/`` directory. This `FAQ <https://tox.readthedocs.io/en/latest/developers.html>`_ contains some useful information about how to use tox on Windows.
+Testing is done with the `tox <https://tox.wiki/en/latest/>`_ automation tool, which runs a `pytest <https://docs.pytest.org/en/latest/>`_-backed test suite in the ``tests/`` directory. This `FAQ <https://tox.wiki/en/latest/developers.html>`_ contains some useful information about how to use tox on Windows.
 
 
 Testing Requirements
@@ -20,7 +20,7 @@ If software is not installed, its associated tests will be skipped. Additionally
 Running Tests
 -------------
 
-Defined in ``tox.ini`` are environments that test the package under different python versions, check types, enforce style guidelines, verify the integrity of the documentation, and release the package. First, `tox <https://tox.readthedocs.io/en/latest/>`_ should be installed on top of an Anaconda installation. The following command can be run in the top-level ``pyblp`` directory to run all testing environments::
+Defined in ``tox.ini`` are environments that test the package under different python versions, check types, enforce style guidelines, verify the integrity of the documentation, and release the package. First, `tox <https://tox.wiki/en/latest/>`_ should be installed on top of an Anaconda installation. The following command can be run in the top-level ``pyblp`` directory to run all testing environments::
 
     tox
 
