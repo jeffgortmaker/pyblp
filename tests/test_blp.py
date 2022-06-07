@@ -223,7 +223,7 @@ def test_agent_resampling(simulated_problem: SimulatedProblemFixture) -> None:
 
 @pytest.mark.usefixtures('simulated_problem')
 def test_micro_chunking(simulated_problem: SimulatedProblemFixture) -> None:
-    """Test that micro chunking doesn't change anything."""
+    """Test that micro chunking doesn't substantially change anything."""
     _, _, problem, solve_options, _ = simulated_problem
 
     # skip configurations without micro moments
@@ -242,10 +242,10 @@ def test_micro_chunking(simulated_problem: SimulatedProblemFixture) -> None:
         problem_results2 = problem.solve(**updated_solve_options)
         pyblp.options.micro_computation_chunks = 1
 
-        # verify that all results are identical
+        # verify that all results are very close
         for key, result in problem_results1.__dict__.items():
             if isinstance(result, np.ndarray) and result.dtype != np.object_:
-                np.testing.assert_allclose(result, getattr(problem_results2, key), atol=1e-12, rtol=1e-12, err_msg=key)
+                np.testing.assert_allclose(result, getattr(problem_results2, key), atol=1e-12, rtol=1e-6, err_msg=key)
 
 
 @pytest.mark.usefixtures('simulated_problem')
@@ -1404,7 +1404,7 @@ def test_objective_gradient(
     def test_finite_differences(theta: Array, _: Any, objective_function: Callable, __: Any) -> Tuple[Array, bool]:
         """Test central finite differences around starting parameter values."""
         approximated = compute_finite_differences(lambda x: objective_function(x)[0], theta, epsilon_scale=10.0)
-        np.testing.assert_allclose(approximated.flatten(), exact.flatten(), atol=1e-8, rtol=1e-3)
+        np.testing.assert_allclose(approximated.flatten(), exact.flatten(), atol=1e-8, rtol=1e-2)
         return theta, True
 
     # test the gradient

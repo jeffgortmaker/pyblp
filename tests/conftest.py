@@ -239,7 +239,7 @@ def medium_blp_simulation() -> SimulationFixture:
         },
         beta=[1, 2, -3],
         sigma=[
-            [0.5, 0],
+            [0.3, 0],
             [0.0, 0],
         ],
         pi=[
