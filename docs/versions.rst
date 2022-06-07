@@ -4,6 +4,21 @@ Version Notes
 These notes will only include major changes.
 
 
+0.13
+----
+
+- Overhauled micro moment API
+- Product-specific demographics
+- Passthrough calculations
+- Added problem results methods to simulation results
+- Profit Hessian computation
+- Checks of pricing second order conditions
+- Newton-based methods for computing equilibrium prices
+- Large speedups for supply-side and micro moment derivatives
+- Universal display for fixed point iteration progress
+- Support adjusting for simulation error in moment covariances
+
+
 0.12
 ----
 
