@@ -3,8 +3,8 @@ r"""Locations of example data that are included in the package for convenience.
 Attributes
 ----------
 NEVO_PRODUCTS_LOCATION : `str`
-    Location of a CSV file containing the fake cereal product data from :ref:`references:Nevo (2000)`. The file includes
-    the same pre-computed excluded instruments used in the original paper.
+    Location of a CSV file containing the fake cereal product data from :ref:`references:Nevo (2000a)`. The file
+    includes the same pre-computed excluded instruments used in the original paper.
 NEVO_AGENTS_LOCATION : `str`
     Location of a CSV file containing the fake cereal agent data. Included in the file are Monte Carlo weights and
     draws along with demographics from the original paper.

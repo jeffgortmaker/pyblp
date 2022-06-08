@@ -163,16 +163,16 @@ Morrow and Skerlos (2011)
 Morrow, W. Ross, and Steven J. Skerlos (2011). `Fixed-point approaches to computing Bertrand-Nash equilibrium prices under mixed-logit demand <https://ideas.repec.org/a/inm/oropre/v59y2011i2p328-345.html>`_. *Operations Research, 59* (2), 328-345.
 
 
-Nevo (1997)
-~~~~~~~~~~~
-
-Nevo, Aviv (1997). `Mergers with differentiated products: The case of the ready-to-eat cereal industry <https://ideas.repec.org/p/cdl/compol/qt1d53t6ts.html>`_. Competition Policy Center, Working Paper Series qt1d53t6ts, Competition Policy Center, Institute for Business and Economic Research, UC Berkeley.
-
-
-Nevo (2000)
-~~~~~~~~~~~
+Nevo (2000a)
+~~~~~~~~~~~~
 
 Nevo, Aviv (2000). `A practitioner's guide to estimation of random‐coefficients logit models of demand <https://ideas.repec.org/a/bla/jemstr/v9y2000i4p513-548.html>`_. *Journal of Economics & Management Strategy, 9* (4), 513-548.
+
+
+Nevo (2000b)
+~~~~~~~~~~~~
+
+Nevo, Aviv (2000). `Mergers with differentiated products: The case of the ready-to-eat cereal industry <https://ideas.repec.org/a/rje/randje/v31y2000iautumnp395-421.html>`_. *RAND Journal of Economics, 31* (3), 395-421.
 
 
 Newey and West (1987)
