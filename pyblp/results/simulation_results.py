@@ -4,7 +4,7 @@ import collections
 from pathlib import Path
 import pickle
 import time
-from typing import Callable, Dict, Hashable, List, Optional, Sequence, Set, Tuple, TYPE_CHECKING, Union
+from typing import Any, Callable, Dict, Hashable, List, Optional, Sequence, Set, Tuple, TYPE_CHECKING, Union
 
 import numpy as np
 import scipy.sparse
@@ -453,6 +453,9 @@ class SimulationResults(Results):
         `recarray`
             Simulated micro data with as many rows as ``observations`` in the ``dataset``. Fields:
 
+            - **micro_ids** : (`object`) - IDs corresponding to ``observations`` passed to the ``dataset``, from ``0``
+              to ``observations - 1``.
+
             - **market_ids** : (`object`) - Market IDs chosen from ``market_ids`` in the ``dataset``.
 
             - **agent_indices** : (`int`) - Within-market indices of simulated agents that take on values from :math:`0`
@@ -473,6 +476,9 @@ class SimulationResults(Results):
               in its third axis, then second choice indices take on values from :math:`0` to :math:`J_t` where :math:`0`
               corresponds to the outside good. The ordering of inside goods is the same as products within
               ``product_data`` passed to :class:`Simulation`.
+
+            Other fields, such as ``nodes`` and any demographics, are extracted from the ``agent_data`` of
+            :class:`Simulation` according to the ``market_ids`` and ``agent_indices`` fields.
 
         Examples
         --------
@@ -541,21 +547,40 @@ class SimulationResults(Results):
         choices = state.choice(weights_data.size, p=weights_data / weights_data.sum(), size=dataset.observations)
 
         # construct the micro data
-        micro_data_mapping = collections.OrderedDict([
-            ('market_ids', (
-                np.concatenate([np.full(agent_indices_mapping[t].size, t) for t in market_ids])[choices], np.object_
-            )),
-            ('agent_indices', (
-                np.concatenate([agent_indices_mapping[t] for t in market_ids])[choices], agent_dtype
-            )),
-            ('choice_indices', (
-                np.concatenate([choice_indices_mapping[t] for t in market_ids])[choices], choice_dtype
-            )),
-        ])
+        micro_data_mapping: Dict[str, Tuple[Array, Any]] = collections.OrderedDict()
+        micro_data_mapping['micro_ids'] = (np.arange(dataset.observations), np.object_)
+        micro_data_mapping['market_ids'] = (
+            np.concatenate([np.full(agent_indices_mapping[t].size, t) for t in market_ids])[choices],
+            np.object_
+        )
+
+        # add nodes and demographics from agent data
+        if self.simulation.agent_data is not None:
+            for key in self.simulation.agent_data.dtype.names:
+                if key not in {'market_ids', 'weights'}:
+                    values = self.simulation.agent_data[key]
+                    values_mapping = {t: values[self.simulation._agent_market_indices[t]] for t in market_ids}
+                    values_mapping = {t: v[agent_indices_mapping[t]] for t, v in values_mapping.items()}
+                    micro_data_mapping[key] = (
+                        np.concatenate([values_mapping[t] for t in market_ids])[choices],
+                        self.simulation.agent_data[key].dtype
+                    )
+
+        # add agent and choice indices
+        micro_data_mapping['agent_indices'] = (
+            np.concatenate([agent_indices_mapping[t] for t in market_ids])[choices],
+            agent_dtype
+        )
+        micro_data_mapping['choice_indices'] = (
+            np.concatenate([choice_indices_mapping[t] for t in market_ids])[choices],
+            choice_dtype
+        )
         if second_choice_indices_mapping:
             micro_data_mapping['second_choice_indices'] = (
-                np.concatenate([second_choice_indices_mapping[t] for t in market_ids])[choices], choice_dtype
+                np.concatenate([second_choice_indices_mapping[t] for t in market_ids])[choices],
+                choice_dtype
             )
+
         micro_data = structure_matrices(micro_data_mapping)
 
         # output how long it took to simulate the micro data
