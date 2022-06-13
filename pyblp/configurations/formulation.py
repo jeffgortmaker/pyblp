@@ -153,7 +153,7 @@ class Formulation(StringRepresentation):
 
     def __reduce__(self) -> Tuple[Type['Formulation'], Tuple]:
         """Handle pickling."""
-        return (self.__class__, (self._formula, self._absorb, self._absorb_method, self._absorb_options))
+        return self.__class__, (self._formula, self._absorb, self._absorb_method, self._absorb_options)
 
     def __str__(self) -> str:
         """Format the terms as a string."""
