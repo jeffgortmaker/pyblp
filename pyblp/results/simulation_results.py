@@ -434,6 +434,87 @@ class SimulationResults(Results):
             supply_instruments = np.c_[supply_instruments, demand_shifters]
         return demand_instruments, supply_instruments
 
+    def replace_micro_moment_values(self, micro_moments: Sequence[MicroMoment]) -> List[MicroMoment]:
+        r"""Compute simulated micro moment values :math:`v_m`.
+
+        Parameters
+        ----------
+        micro_moments : `sequence of MicroMoment`
+            :class:`MicroMoment` instances. The ``value`` argument will be replaced and is hence ignored.
+
+        Returns
+        -------
+        `list of MicroMoment`
+            The same :class:`MicroMoment` instances but with their values replaced by simulated values.
+
+        Examples
+        --------
+            - :doc:`Tutorial </tutorial>`
+
+        """
+        errors: List[Error] = []
+
+        # keep track of long it takes to compute micro moment values
+        output("Replacing micro moment values ...")
+        start_time = time.time()
+
+        # validate and structure micro moments
+        moments = Moments(self.simulation, micro_moments)
+        if moments.MM == 0:
+            return []
+
+        def market_factory(s: Hashable) -> Tuple[SimulationResultsMarket, Moments]:
+            """Build a market along with arguments used to compute micro moment values."""
+            market_s = SimulationResultsMarket(
+                self.simulation, s, self._parameters, self.simulation.sigma, self.simulation.pi, self.simulation.rho,
+                self.simulation.beta, self.simulation.gamma, self.delta, self._data_override
+            )
+            return market_s, moments
+
+        # compute micro moments values market-by-market
+        micro_numerator_mapping: Dict[Hashable, Array] = {}
+        micro_denominator_mapping: Dict[Hashable, Array] = {}
+        generator = generate_items(
+            self.simulation.unique_market_ids, market_factory,
+            SimulationResultsMarket.safely_compute_micro_contributions
+        )
+        for t, (micro_numerator_t, micro_denominator_t, errors_t) in generator:
+            micro_numerator_mapping[t] = scipy.sparse.csr_matrix(micro_numerator_t)
+            micro_denominator_mapping[t] = scipy.sparse.csr_matrix(micro_denominator_t)
+            errors.extend(errors_t)
+
+        # aggregate micro moments across all markets (this is done after market-by-market computation to preserve
+        #   numerical stability with different market orderings)
+        with np.errstate(all='ignore'):
+            micro_numerator = scipy.sparse.csr_matrix((moments.MM, 1), dtype=options.dtype)
+            micro_denominator = scipy.sparse.csr_matrix((moments.MM, 1), dtype=options.dtype)
+            for t in self.simulation.unique_market_ids:
+                micro_numerator += micro_numerator_mapping[t]
+                micro_denominator += micro_denominator_mapping[t]
+
+            micro_numerator = micro_numerator.toarray()
+            micro_denominator = micro_denominator.toarray()
+            micro_values = micro_numerator / micro_denominator
+
+        # construct new micro moments
+        updated_micro_moments: List[MicroMoment] = []
+        for micro_moment, value in zip(moments.micro_moments, micro_values.flatten()):
+            updated_micro_moments.append(MicroMoment(
+                micro_moment.name, micro_moment.dataset, value, micro_moment.compute_values
+            ))
+
+        # output a warning about any errors
+        if errors:
+            output("")
+            output(exceptions.MultipleErrors(errors))
+            output("")
+
+        # output how long it took to compute the micro values
+        end_time = time.time()
+        output(f"Finished after {format_seconds(end_time - start_time)}.")
+        output("")
+        return updated_micro_moments
+
     def simulate_micro_data(
             self, dataset: MicroDataset, integration: Optional[Integration] = None,
             seed: Optional[int] = None) -> RecArray:
@@ -616,84 +697,3 @@ class SimulationResults(Results):
         output(f"Finished after {format_seconds(end_time - start_time)}.")
         output("")
         return micro_data
-
-    def replace_micro_moment_values(self, micro_moments: Sequence[MicroMoment]) -> List[MicroMoment]:
-        r"""Compute simulated micro moment values :math:`v_m`.
-
-        Parameters
-        ----------
-        micro_moments : `sequence of MicroMoment`
-            :class:`MicroMoment` instances. The ``value`` argument will be replaced and is hence ignored.
-
-        Returns
-        -------
-        `list of MicroMoment`
-            The same :class:`MicroMoment` instances but with their values replaced by simulated values.
-
-        Examples
-        --------
-            - :doc:`Tutorial </tutorial>`
-
-        """
-        errors: List[Error] = []
-
-        # keep track of long it takes to compute micro moment values
-        output("Replacing micro moment values ...")
-        start_time = time.time()
-
-        # validate and structure micro moments
-        moments = Moments(self.simulation, micro_moments)
-        if moments.MM == 0:
-            return []
-
-        def market_factory(s: Hashable) -> Tuple[SimulationResultsMarket, Moments]:
-            """Build a market along with arguments used to compute micro moment values."""
-            market_s = SimulationResultsMarket(
-                self.simulation, s, self._parameters, self.simulation.sigma, self.simulation.pi, self.simulation.rho,
-                self.simulation.beta, self.simulation.gamma, self.delta, self._data_override
-            )
-            return market_s, moments
-
-        # compute micro moments values market-by-market
-        micro_numerator_mapping: Dict[Hashable, Array] = {}
-        micro_denominator_mapping: Dict[Hashable, Array] = {}
-        generator = generate_items(
-            self.simulation.unique_market_ids, market_factory,
-            SimulationResultsMarket.safely_compute_micro_contributions
-        )
-        for t, (micro_numerator_t, micro_denominator_t, errors_t) in generator:
-            micro_numerator_mapping[t] = scipy.sparse.csr_matrix(micro_numerator_t)
-            micro_denominator_mapping[t] = scipy.sparse.csr_matrix(micro_denominator_t)
-            errors.extend(errors_t)
-
-        # aggregate micro moments across all markets (this is done after market-by-market computation to preserve
-        #   numerical stability with different market orderings)
-        with np.errstate(all='ignore'):
-            micro_numerator = scipy.sparse.csr_matrix((moments.MM, 1), dtype=options.dtype)
-            micro_denominator = scipy.sparse.csr_matrix((moments.MM, 1), dtype=options.dtype)
-            for t in self.simulation.unique_market_ids:
-                micro_numerator += micro_numerator_mapping[t]
-                micro_denominator += micro_denominator_mapping[t]
-
-            micro_numerator = micro_numerator.toarray()
-            micro_denominator = micro_denominator.toarray()
-            micro_values = micro_numerator / micro_denominator
-
-        # construct new micro moments
-        updated_micro_moments: List[MicroMoment] = []
-        for micro_moment, value in zip(moments.micro_moments, micro_values.flatten()):
-            updated_micro_moments.append(MicroMoment(
-                micro_moment.name, micro_moment.dataset, value, micro_moment.compute_values
-            ))
-
-        # output a warning about any errors
-        if errors:
-            output("")
-            output(exceptions.MultipleErrors(errors))
-            output("")
-
-        # output how long it took to compute the micro values
-        end_time = time.time()
-        output(f"Finished after {format_seconds(end_time - start_time)}.")
-        output("")
-        return updated_micro_moments

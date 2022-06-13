@@ -299,13 +299,13 @@ It can also be converted into a :class:`Problem` with the following method.
 
    SimulationResults.to_problem
 
-The following methods can either simulate micro data or replace micro moment values with those that are consistent with the simulation.
+The following methods can either replace micro moment values or simulate micro data that are consistent with the simulation.
 
 .. autosummary::
    :toctree: _api
 
-   SimulationResults.simulate_micro_data
    SimulationResults.replace_micro_moment_values
+   SimulationResults.simulate_micro_data
 
 
 Structured Data Classes
