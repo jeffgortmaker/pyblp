@@ -434,16 +434,29 @@ class SimulationResults(Results):
             supply_instruments = np.c_[supply_instruments, demand_shifters]
         return demand_instruments, supply_instruments
 
-    def simulate_micro_data(self, dataset: MicroDataset, seed: Optional[int] = None) -> RecArray:
+    def simulate_micro_data(
+            self, dataset: MicroDataset, integration: Optional[Integration] = None,
+            seed: Optional[int] = None) -> RecArray:
         r"""Simulate micro data underlying a dataset configuration.
 
         Observations are simulated according to agent weights :math:`w_{it}`, choice probabilities :math:`s_{ijt}` (and
         second choice probabilities if the dataset contains second choice data), and survey weights :math:`w_{dijt}`.
 
+        If ``integration`` is specified, each observation will be duplicated by as many rows as there are nodes created
+        by the integration configuration, with nodes and weights replaced by those constructed by the configuration.
+        These replicated rows correspond to an integral over unobserved heteroegenity for each observation in the micro
+        dataset.
+
         Parameters
         ----------
-        dataset : MicroDataset
+        dataset : `MicroDataset`
             The :class:`MicroDataset` for which micro data will be simulated.
+        integration : `Integration, optional`
+            :class:`Integration` configuration for how to build nodes and weights for integration over unobserved
+            heterogeneity for each micro observation. By default, there is a single node for each observation with
+            integration weight equal to ``1``. Intuitively, this means that nodes are treated as observated
+            heterogeneity, just as demographics. To treat nodes as unobserved heterogeneity, this configuration should
+            be specified.
         seed : `int, optional`
             Passed to :class:`numpy.random.RandomState` to seed the random number generator before data are simulated.
             By default, a seed is not passed to the random number generator.
@@ -457,6 +470,9 @@ class SimulationResults(Results):
               to ``observations - 1``.
 
             - **market_ids** : (`object`) - Market IDs chosen from ``market_ids`` in the ``dataset``.
+
+            - **weights** : (`numeric`) - Weights for integration over unobserved heterogeneity for each micro ID. These
+              are different from the ``weights`` field in normal ``agent_data``.
 
             - **agent_indices** : (`int`) - Within-market indices of simulated agents that take on values from :math:`0`
               to :math:`I_t - 1`. The ordering is the same as agents within ``agent_data`` passed to
@@ -495,6 +511,10 @@ class SimulationResults(Results):
         if not isinstance(dataset, MicroDataset):
             raise TypeError("dataset must be a MicroDataset.")
         dataset._validate(self.simulation)
+
+        # validate any integration configuration
+        if integration is not None and not isinstance(integration, Integration):
+            raise ValueError(f"integration must be None or an Integration instance.")
 
         # collect the relevant market ids
         if dataset.market_ids is None:
@@ -550,36 +570,44 @@ class SimulationResults(Results):
         micro_data_mapping: Dict[str, Tuple[Array, Any]] = collections.OrderedDict()
         micro_data_mapping['micro_ids'] = (np.arange(dataset.observations), np.object_)
         micro_data_mapping['market_ids'] = (
-            np.concatenate([np.full(agent_indices_mapping[t].size, t) for t in market_ids])[choices],
-            np.object_
+            np.concatenate([np.full(agent_indices_mapping[t].size, t) for t in market_ids])[choices], np.object_
         )
+        micro_data_mapping['weights'] = (np.ones(dataset.observations), options.dtype)
 
         # add nodes and demographics from agent data
-        if self.simulation.agent_data is not None:
-            for key in self.simulation.agent_data.dtype.names:
-                if key not in {'market_ids', 'weights'}:
-                    values = self.simulation.agent_data[key]
-                    values_mapping = {t: values[self.simulation._agent_market_indices[t]] for t in market_ids}
+        agent_data = self.simulation.agent_data
+        if agent_data is not None:
+            for key in agent_data.dtype.names:
+                if key not in micro_data_mapping and agent_data[key].size > 0:
+                    values_mapping = {t: agent_data[key][self.simulation._agent_market_indices[t]] for t in market_ids}
                     values_mapping = {t: v[agent_indices_mapping[t]] for t, v in values_mapping.items()}
                     micro_data_mapping[key] = (
-                        np.concatenate([values_mapping[t] for t in market_ids])[choices],
-                        self.simulation.agent_data[key].dtype
+                        np.concatenate([values_mapping[t] for t in market_ids])[choices], agent_data[key].dtype
                     )
 
         # add agent and choice indices
         micro_data_mapping['agent_indices'] = (
-            np.concatenate([agent_indices_mapping[t] for t in market_ids])[choices],
-            agent_dtype
+            np.concatenate([agent_indices_mapping[t] for t in market_ids])[choices], agent_dtype
         )
         micro_data_mapping['choice_indices'] = (
-            np.concatenate([choice_indices_mapping[t] for t in market_ids])[choices],
-            choice_dtype
+            np.concatenate([choice_indices_mapping[t] for t in market_ids])[choices], choice_dtype
         )
         if second_choice_indices_mapping:
             micro_data_mapping['second_choice_indices'] = (
-                np.concatenate([second_choice_indices_mapping[t] for t in market_ids])[choices],
-                choice_dtype
+                np.concatenate([second_choice_indices_mapping[t] for t in market_ids])[choices], choice_dtype
             )
+
+        # optionally duplicate each row, replacing unobserved heterogeneity
+        if integration is not None and self.simulation.K2 > 0:
+            micro_ids, nodes, weights = integration._build_many(self.simulation.K2, np.arange(dataset.observations))
+            repeats = np.bincount(micro_ids)
+
+            micro_data_mapping['micro_ids'] = (micro_ids, np.object_)
+            micro_data_mapping['nodes'] = (nodes, nodes.dtype)
+            micro_data_mapping['weights'] = (weights, weights.dtype)
+            for key, (values, dtype) in micro_data_mapping.items():
+                if key not in {'micro_ids', 'nodes', 'weights'}:
+                    micro_data_mapping[key] = (np.repeat(values, repeats, axis=0), dtype)
 
         micro_data = structure_matrices(micro_data_mapping)
 
