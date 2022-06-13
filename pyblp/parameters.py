@@ -109,6 +109,10 @@ class OneGroupRhoParameter(RhoParameter):
 class LinearCoefficient(Coefficient):
     """Information about a single linear parameter in beta or gamma."""
 
+    def get_product_formulation(self, container: Container) -> ColumnFormulation:
+        """Get the product formulation associated with the parameter."""
+        return container._X2_formulations[self.location[0]]
+
     def get_product_characteristic(self, market: 'Market') -> Array:
         """Get the product characteristic associated with the parameter."""
         x = self.get_product_formulation(market).evaluate(market.products)
