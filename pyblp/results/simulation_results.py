@@ -85,7 +85,7 @@ class SimulationResults(Results):
         .. math:: \pi_{jt} = (p_{jt} - c_{jt}) s_{jt}.
 
         When there is a nontrivial ownership structure, the sum is over all products :math:`j \in J_t` and the terms are
-        weighted by the firm's (possibly partial) ownership of product :math:`j`, given by :math:`\mathcal{H}_{jk}`.
+        weighted by the firm's (possibly partial) ownership of product :math:`j`, given by :math:`\mathscr{H}_{jk}`.
 
     profit_gradient_norms : `dict`
         Mapping from market IDs :math:`t` to mappings from firm IDs :math:`f` to the infinity norm of profit gradients.
@@ -106,7 +106,7 @@ class SimulationResults(Results):
         .. math:: \pi_{jt} = (p_{jt} - c_{jt}) s_{jt}.
 
         When there is a nontrivial ownership structure, the sum is over all products :math:`j \in J_t` and the terms are
-        weighted by the firm's (possibly partial) ownership of product :math:`j`, given by :math:`\mathcal{H}_{jk}`.
+        weighted by the firm's (possibly partial) ownership of product :math:`j`, given by :math:`\mathscr{H}_{jk}`.
 
     profit_hessian_eigenvalues : `dict`
         Mapping from market IDs :math:`t` to mappings from firm IDs :math:`f` to the eigenvalues of profit Hessians.
@@ -742,13 +742,13 @@ class SimulationResults(Results):
         .. math::
            :label: score
 
-           \mathcal{S}_n = \frac{\partial\log\mathcal{P}_n}{\partial\theta'},
+           \mathscr{S}_n = \frac{\partial\log\mathscr{P}_n}{\partial\theta'},
 
         in which :math:`\theta` are nonlinear parameters and the conditional probability of observation :math:`n` is
 
         .. math::
 
-           \mathcal{P}_n = \frac{
+           \mathscr{P}_n = \frac{
                \sum_{i \in I_n} w_{it_n} s_{ij_nt_n} w_{dij_nt_n}
            }{
                \sum_{t \in T} \sum_{i \in I_t} \sum_{j \in J_t \cup \{0\}} w_{it} s_{ijt} w_{dijt}
@@ -802,7 +802,7 @@ class SimulationResults(Results):
         Returns
         -------
         `ndarray`
-            Scores :math:`\mathcal{S}_n`. Rows correspond to elements of nonlinear parameters in :math:`\theta` in the
+            Scores :math:`\mathscr{S}_n`. Rows correspond to elements of nonlinear parameters in :math:`\theta` in the
             following order (the same as for :attr:`ProblemResults.theta`): :math:`\hat{\Sigma}`, :math:`\hat{\Pi}`,
             :math:`\hat{\rho}`. Columns are in the same order as the sorted unique value sof ``micro_ids`` in
             ``micro_data``.
@@ -813,7 +813,7 @@ class SimulationResults(Results):
             correspond to ``second_choice_indices``. For both of these extra dimensions, if a market has fewer products
             indexed by the ``dataset`` than others, extra indices will contain ``numpy.nan``.
 
-            Ill-defined scores :math:`\mathcal{S}_n` with :math:`\mathcal{P}_n = 0` will be also be ``numpy.nan``. If
+            Ill-defined scores :math:`\mathscr{S}_n` with :math:`\mathscr{P}_n = 0` will be also be ``numpy.nan``. If
             the ``micro_data`` were generated according to the weights specified by the ``dataset``, there should be no
             such ill-defined scores. On the other hand, if the ``micro_data`` were built by
             :attr:`SimulationResults.build_micro_data` without reference to a `dataset, there may be ill-defined scores
