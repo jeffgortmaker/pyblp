@@ -165,6 +165,10 @@ class SyntheticMicroMomentsNumericalError(NumericalError):
     """Encountered a numerical error when computing synthetic micro moments."""
 
 
+class MicroScoresNumericalError(NumericalError):
+    """Encountered a numerical error when computing micro scores."""
+
+
 class EquilibriumRealizationNumericalError(NumericalError):
     """Encountered a numerical error when solving for a realization of equilibrium prices and shares."""
 

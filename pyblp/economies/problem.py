@@ -503,7 +503,7 @@ class ProblemEconomy(Economy):
         costs_bounds = self._coerce_optional_bounds(costs_bounds, 'costs_bounds')
 
         # validate and structure micro moments before outputting related information
-        moments = Moments(self, micro_moments)
+        moments = Moments(micro_moments, self)
         micro_moment_covariances = None
         if moments.MM > 0:
             output("")

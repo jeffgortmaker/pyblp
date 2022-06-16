@@ -178,7 +178,7 @@ class BootstrappedResults(Results):
                         args_cs.append(market_arg[c])
                     else:
                         args_cs.append(market_arg[c, self._economy._product_market_indices[s]])
-            return market_cs, *fixed_args, *args_cs
+            return (market_cs, *fixed_args, *args_cs)
 
         # construct a mapping from draws and market IDs to market-specific arrays and compute the full matrix size
         array_mapping: Dict[Tuple[int, Hashable], Array] = {}

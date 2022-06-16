@@ -174,11 +174,12 @@ class Parameters(object):
             beta: Optional[Any] = None, gamma: Optional[Any] = None, sigma_bounds: Optional[Tuple[Any, Any]] = None,
             pi_bounds: Optional[Tuple[Any, Any]] = None, rho_bounds: Optional[Tuple[Any, Any]] = None,
             beta_bounds: Optional[Tuple[Any, Any]] = None, gamma_bounds: Optional[Tuple[Any, Any]] = None,
-            bounded: bool = False, allow_linear_nans: bool = False) -> None:
+            bounded: bool = False, allow_linear_nans: bool = False, check_alpha: bool = True) -> None:
         """Coerce parameters into usable formats before storing information about fixed (equal bounds) and unfixed
         (unequal bounds) elements of sigma, pi, rho, beta, and gamma. Also store information about eliminated
         (concentrated out) parameters in beta and gamma. If allow_linear_nans is True, allow null linear parameters in
-        order to denote those parameters that will be concentrated out.
+        order to denote those parameters that will be concentrated out. If check_alpha is True, check that alpha isn't
+        concentrated out when a supply side is included.
         """
 
         # store labels
@@ -236,7 +237,7 @@ class Parameters(object):
             )
 
         # alpha cannot be concentrated out if there's a supply side
-        if economy.K3 > 0:
+        if check_alpha and economy.K3 > 0:
             for formulation, eliminated in zip(economy._X1_formulations, self.eliminated_beta_index.flatten()):
                 if 'prices' in formulation.names and eliminated:
                     raise ValueError(

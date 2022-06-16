@@ -48,14 +48,15 @@ class Market(Container):
     def __init__(
             self, economy: Economy, t: Any, parameters: Parameters, sigma: Array, pi: Array, rho: Array,
             beta: Optional[Array] = None, gamma: Optional[Array] = None, delta: Optional[Array] = None,
-            data_override: Optional[Dict[str, Array]] = None, agents_override: Optional[RecArray] = None) -> None:
+            data_override: Optional[Dict[str, Array]] = None, products_override: Optional[RecArray] = None,
+            agents_override: Optional[RecArray] = None) -> None:
         """Store or compute information about formulations, data, parameters, and utility."""
 
         # structure relevant data
         self.t = t
         super().__init__(
-            economy.products[economy._product_market_indices[t]],
-            economy.agents[economy._agent_market_indices[t]] if agents_override is None else agents_override
+            economy.products[economy._product_market_indices[t]] if products_override is None else products_override,
+            economy.agents[economy._agent_market_indices[t]] if agents_override is None else agents_override,
         )
 
         # membership matrices are computed on-demand

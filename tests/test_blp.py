@@ -11,8 +11,8 @@ import scipy.optimize
 
 import pyblp.exceptions
 from pyblp import (
-    Formulation, Integration, Iteration, MicroDataset, Optimization, Problem, Simulation, build_ownership, data_to_dict,
-    parallel
+    Formulation, Integration, Iteration, MicroDataset, MicroMoment, Optimization, Problem, Simulation, build_ownership,
+    data_to_dict, parallel
 )
 from pyblp.utilities.basics import (
     Array, Options, RecArray, update_matrices, compute_finite_differences, compute_second_finite_differences
@@ -1308,7 +1308,7 @@ def test_micro_values(simulated_problem: SimulatedProblemFixture) -> None:
             compute_weights=moment.dataset.compute_weights,
             market_ids=moment.dataset.market_ids,
         )
-        micro_data = simulation_results.simulate_micro_data(dataset, seed=0)
+        micro_data = simulation_results.build_micro_data(dataset, seed=0)
 
         # collect market IDs
         if dataset.market_ids is None:
@@ -1334,6 +1334,76 @@ def test_micro_values(simulated_problem: SimulatedProblemFixture) -> None:
         # compare the mean computed from the micro data with the actual value
         value = np.concatenate(values_list).mean()
         np.testing.assert_allclose(moment.value, value, atol=0, rtol=0.01, err_msg=moment)
+
+
+@pytest.mark.usefixtures('simulated_problem')
+def test_micro_scores(simulated_problem: SimulatedProblemFixture) -> None:
+    """Test that true micro scores without any unobserved heterogeneity are zero, and that micro scores with unobserved
+    heterogeneity based on micro data aren't too far from the truth.
+    """
+    simulation, simulation_results, problem, solve_options, _ = simulated_problem
+
+    # skip simulations without micro moments
+    if not solve_options['micro_moments']:
+        return pytest.skip("There are no micro moments.")
+
+    # skip simulations with supply because testing their demand-only version is sufficient
+    if problem.K3 > 0:
+        return pytest.skip("There is a supply side.")
+
+    # test each dataset separately
+    agent_market_ids = simulation.agents.market_ids.flat
+    datasets = {m.dataset for m in solve_options['micro_moments']}
+    for dataset in datasets:
+        # test that true micro score expectations without any unobserved heterogeneity are zero
+        true_observed_data = simulation_results.build_micro_data()
+        true_observed_scores = simulation_results.compute_micro_scores(dataset, true_observed_data)
+        true_observed_moments = []
+        for p, true_observed_scores_p in enumerate(true_observed_scores):
+            true_observed_moments.append(MicroMoment(
+                name=f'{dataset.name}, parameter {p}',
+                value=0,
+                dataset=dataset,
+                compute_values=lambda t, p, a, v=true_observed_scores_p: np.nan_to_num(
+                    v[agent_market_ids == t][[slice(0, s) for s in dataset.compute_weights(t, p, a).shape]]
+                ),
+            ))
+
+        true_observed_moments = simulation_results.replace_micro_moment_values(true_observed_moments)
+        true_observed_means = np.array([m.value for m in true_observed_moments])
+        np.testing.assert_allclose(true_observed_means, 0, atol=1e-14, rtol=0, err_msg=str(dataset))
+
+        # test that micro scores with unobserved heterogeneity based micro data approach the truth as the number of
+        #   observations increases
+        true_data = simulation_results.build_micro_data(integration=simulation.integration)
+        true_scores = simulation_results.compute_micro_scores(dataset, true_data)
+        true_moments = []
+        for p, true_scores_p in enumerate(true_scores):
+            true_moments.append(MicroMoment(
+                name=f'{dataset.name}, parameter {p}',
+                value=0,
+                dataset=dataset,
+                compute_values=lambda t, p, a, v=true_scores_p: np.nan_to_num(
+                    v[agent_market_ids == t][[slice(0, s) for s in dataset.compute_weights(t, p, a).shape]]
+                ),
+            ))
+
+        true_moments = simulation_results.replace_micro_moment_values(true_moments)
+        true_means = np.array([m.value for m in true_moments])
+
+        means = []
+        for observations in [3, 2_000]:
+            dataset = MicroDataset(
+                name=dataset.name,
+                observations=observations,
+                compute_weights=dataset.compute_weights,
+                market_ids=dataset.market_ids,
+            )
+            data = simulation_results.build_micro_data(dataset, integration=simulation.integration, seed=0)
+            scores = simulation_results.compute_micro_scores(dataset, data)
+            means.append(scores.mean(axis=1))
+
+        np.testing.assert_array_less(np.abs(means[1] - true_means), np.abs(means[0] - true_means), err_msg=str(dataset))
 
 
 @pytest.mark.usefixtures('simulated_problem')

@@ -207,28 +207,29 @@ class Moments(object):
     values: Array
     MM: int
 
-    def __init__(self, economy: 'Economy', micro_moments: Sequence[MicroMoment]) -> None:
+    def __init__(self, micro_moments: Sequence[MicroMoment], economy: Optional['Economy'] = None) -> None:
         """Validate and store information about a sequence of micro moment instances."""
-        if not isinstance(micro_moments, collections.abc.Sequence):
-            raise TypeError("micro_moments must be a sequence of micro moment instances.")
-        for m, moment in enumerate(micro_moments):
-            if not isinstance(moment, MicroMoment):
-                raise TypeError("micro_moments must consist only of micro moment instances.")
-            try:
-                moment.dataset._validate(economy)
-            except Exception as exception:
-                message = f"The micro dataset '{moment.dataset}' is invalid because of the above exception."
-                raise ValueError(message) from exception
-            for moment2 in micro_moments[:m]:
-                if moment == moment2:
-                    raise ValueError(f"There is more than one of the micro moment '{moment}'.")
-                if moment.name == moment2.name:
-                    raise ValueError(f"Micro moment '{moment}' has the same name as '{moment2}'.")
-                if moment.dataset != moment2.dataset and moment.dataset.name == moment2.dataset.name:
-                    raise ValueError(
-                        f"The dataset of '{moment}' is not the same instance as that of '{moment2}', but the two "
-                        f"datasets have the same name."
-                    )
+        if economy is not None:
+            if not isinstance(micro_moments, collections.abc.Sequence):
+                raise TypeError("micro_moments must be a sequence of micro moment instances.")
+            for m, moment in enumerate(micro_moments):
+                if not isinstance(moment, MicroMoment):
+                    raise TypeError("micro_moments must consist only of micro moment instances.")
+                try:
+                    moment.dataset._validate(economy)
+                except Exception as exception:
+                    message = f"The micro dataset '{moment.dataset}' is invalid because of the above exception."
+                    raise ValueError(message) from exception
+                for moment2 in micro_moments[:m]:
+                    if moment == moment2:
+                        raise ValueError(f"There is more than one of the micro moment '{moment}'.")
+                    if moment.name == moment2.name:
+                        raise ValueError(f"Micro moment '{moment}' has the same name as '{moment2}'.")
+                    if moment.dataset != moment2.dataset and moment.dataset.name == moment2.dataset.name:
+                        raise ValueError(
+                            f"The dataset of '{moment}' is not the same instance as that of '{moment2}', but the two "
+                            f"datasets have the same name."
+                        )
 
         self.micro_moments = micro_moments
         self.values = np.c_[[m.value for m in micro_moments]]

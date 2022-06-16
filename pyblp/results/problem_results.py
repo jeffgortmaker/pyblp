@@ -549,7 +549,7 @@ class ProblemResults(Results):
                 args_s = market_args
             else:
                 args_s = [None if a is None else a[indices_s] for a in market_args]
-            return market_s, *fixed_args, *args_s
+            return (market_s, *fixed_args, *args_s)
 
         # construct a mapping from market IDs to market-specific arrays
         array_mapping: Dict[Hashable, Array] = {}

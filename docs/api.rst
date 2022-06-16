@@ -305,7 +305,14 @@ The following methods can either replace micro moment values or simulate micro d
    :toctree: _api
 
    SimulationResults.replace_micro_moment_values
-   SimulationResults.simulate_micro_data
+   SimulationResults.build_micro_data
+
+Finally, the following method can compute scores for micro data.
+
+.. autosummary::
+   :toctree: _api
+
+   SimulationResults.compute_micro_scores
 
 
 Structured Data Classes
@@ -374,6 +381,7 @@ When errors occur, they will either be displayed as warnings or raised as except
    exceptions.SyntheticCostsNumericalError
    exceptions.SyntheticMicroDataNumericalError
    exceptions.SyntheticMicroMomentsNumericalError
+   exceptions.MicroScoresNumericalError
    exceptions.EquilibriumRealizationNumericalError
    exceptions.JacobianRealizationNumericalError
    exceptions.PostEstimationNumericalError
