@@ -1369,8 +1369,7 @@ def test_micro_scores(simulated_problem: SimulatedProblemFixture) -> None:
                 ),
             ))
 
-        true_observed_moments = simulation_results.replace_micro_moment_values(true_observed_moments)
-        true_observed_means = np.array([m.value for m in true_observed_moments])
+        true_observed_means = simulation_results.compute_micro_values(true_observed_moments)
         np.testing.assert_allclose(true_observed_means, 0, atol=1e-14, rtol=0, err_msg=str(dataset))
 
         # test that micro scores with unobserved heterogeneity based micro data approach the truth as the number of
@@ -1388,8 +1387,7 @@ def test_micro_scores(simulated_problem: SimulatedProblemFixture) -> None:
                 ),
             ))
 
-        true_moments = simulation_results.replace_micro_moment_values(true_moments)
-        true_means = np.array([m.value for m in true_moments])
+        true_means = simulation_results.compute_micro_values(true_moments)
 
         means = []
         for observations in [3, 2_000]:

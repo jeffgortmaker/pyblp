@@ -257,7 +257,7 @@ def medium_blp_simulation() -> SimulationFixture:
     )
     simulation_results = simulation.replace_endogenous()
 
-    simulated_micro_moments = simulation_results.replace_micro_moment_values([MicroMoment(
+    simulated_micro_moments = replace_micro_moment_values(simulation_results, [MicroMoment(
         name="demographic interaction",
         dataset=MicroDataset(
             name="inside",
@@ -349,7 +349,7 @@ def large_blp_simulation() -> SimulationFixture:
         ),
         market_ids=[simulation.unique_market_ids[8]],
     )
-    simulated_micro_moments = simulation_results.replace_micro_moment_values([
+    simulated_micro_moments = replace_micro_moment_values(simulation_results, [
         MicroMoment(
             name="demographic 1 expectation for 0",
             dataset=MicroDataset(
@@ -506,7 +506,7 @@ def large_nested_blp_simulation() -> SimulationFixture:
     )
     simulation_results = simulation.replace_endogenous()
 
-    simulated_micro_moments = simulation_results.replace_micro_moment_values([
+    simulated_micro_moments = replace_micro_moment_values(simulation_results, [
         MicroMoment(
             name="expectation for agents 0, 1",
             dataset=MicroDataset(
@@ -592,3 +592,15 @@ def formula_data(request: Any) -> Data:
     """Simulate patsy demo data with two-level categorical variables and varying numbers of observations."""
     raw_data = patsy.user_util.demo_data('a', 'b', 'c', 'x', 'y', 'z', nlevels=2, min_rows=request.param)
     return {k: np.array(v) if isinstance(v[0], str) else np.abs(v) for k, v in raw_data.items()}
+
+
+def replace_micro_moment_values(
+        simulation_results: SimulationResults, micro_moments: List[MicroMoment]) -> List[MicroMoment]:
+    """Replace micro moment values with those that are consistent with simulation results."""
+    updated_micro_moments: List[MicroMoment] = []
+    for micro_moment, value in zip(micro_moments, simulation_results.compute_micro_values(micro_moments)):
+        updated_micro_moments.append(MicroMoment(
+            micro_moment.name, micro_moment.dataset, value, micro_moment.compute_values
+        ))
+
+    return updated_micro_moments

@@ -41,9 +41,9 @@ class SimulationResults(Results):
     In addition, the :meth:`SimulationResults.to_problem` method can be used to convert the full set of simulated data
     (along with some basic default instruments) and configured information into a :class:`Problem`.
 
-    The :meth:`SimulationResults.replace_micro_moment_values` method can be used to compute simulated micro moment
-    values, :meth:`SimulationResults.build_micro_data` can be used to simulate data underlying a micro dataset, and
-    :meth:`SimulationResults.compute_micro_scores` can be used to compute scores for micro data.
+    The :meth:`SimulationResults.compute_micro_values` computes simulated micro moment values,
+    :meth:`SimulationResults.compute_micro_scores` computes scores for micro data, and
+    :meth:`SimulationResults.build_micro_data` can be used to simulate such data.
 
     Attributes
     ----------
@@ -436,18 +436,18 @@ class SimulationResults(Results):
             supply_instruments = np.c_[supply_instruments, demand_shifters]
         return demand_instruments, supply_instruments
 
-    def replace_micro_moment_values(self, micro_moments: Sequence[MicroMoment]) -> List[MicroMoment]:
+    def compute_micro_values(self, micro_moments: Sequence[MicroMoment]) -> Array:
         r"""Compute simulated micro moment values :math:`v_m`.
 
         Parameters
         ----------
         micro_moments : `sequence of MicroMoment`
-            :class:`MicroMoment` instances. The ``value`` argument will be replaced and is hence ignored.
+            :class:`MicroMoment` instances. The ``value`` argument is ignored.
 
         Returns
         -------
-        `list of MicroMoment`
-            The same :class:`MicroMoment` instances but with their values replaced by simulated values.
+        `ndarray`
+            Micro moment values :math:`v_m` in the same order as ``micro_moments``.
 
         Examples
         --------
@@ -498,13 +498,6 @@ class SimulationResults(Results):
             micro_denominator = micro_denominator.toarray()
             micro_values = micro_numerator / micro_denominator
 
-        # construct new micro moments
-        updated_micro_moments: List[MicroMoment] = []
-        for micro_moment, value in zip(moments.micro_moments, micro_values.flatten()):
-            updated_micro_moments.append(MicroMoment(
-                micro_moment.name, micro_moment.dataset, value, micro_moment.compute_values
-            ))
-
         # output a warning about any errors
         if errors:
             output("")
@@ -515,224 +508,7 @@ class SimulationResults(Results):
         end_time = time.time()
         output(f"Finished after {format_seconds(end_time - start_time)}.")
         output("")
-        return updated_micro_moments
-
-    def build_micro_data(
-            self, dataset: Optional[MicroDataset] = None, integration: Optional[Integration] = None,
-            seed: Optional[int] = None) -> RecArray:
-        r"""Construct micro data for score computation.
-
-        By default, this method builds micro data with each observation corresponding to an agent in
-        :attr:`Simulation.agent_data`. These data can be passed to :meth:`SimulationResults.compute_micro_scores` to
-        compute scores for each agent and choice.
-
-        If a ``dataset`` is specified, micro observations underlying the dataset are simulated according to survey
-        weights :math:`w_{dijt}`, agent weights :math:`w_{it}`, choice probabilities :math:`s_{ijt}`, and if the
-        dataset contains second choice data, second choice probabilities as well. These data can also be passed to
-        :meth:`SimulationResults.compute_micro_scores` to compute scores for each observation.
-
-        If ``integration`` is specified, each observation will be duplicated by as many rows as there are nodes created
-        by the integration configuration, with nodes and weights replaced by those constructed by the configuration.
-        These replicated rows correspond to an integral over unobserved heterogeneity for each observation.
-
-        Parameters
-        ----------
-        dataset : `MicroDataset, optional`
-            The :class:`MicroDataset` for which micro data will be simulated. By default, micro data are built without
-            reference to a micro dataset, but rather with each observation corresponding to an agent in
-            :attr:`Simulation.agent_data`. If specified, micro observations will be simulated that underlie the dataset.
-        integration : `Integration, optional`
-            :class:`Integration` configuration for how to build nodes and weights for integration over unobserved
-            heterogeneity for each observation. By default, there is a single node for each observation with
-            integration weight equal to ``1``. Intuitively, this means that nodes are treated as observed
-            heterogeneity, just as demographics. To treat nodes as unobserved heterogeneity, either specify this
-            configuration, or manually duplicate each row of the returned micro data with different integration nodes.
-        seed : `int, optional`
-            Passed to :class:`numpy.random.RandomState` to seed the random number generator before data are simulated.
-            By default, a seed is not passed to the random number generator. A seed is only used if the ``dataset`` is
-            specified.
-
-        Returns
-        -------
-        `recarray`
-            Micro data with as many rows as :attr:`Simulation.agent_data` if ``dataset`` is not specified, and otherwise
-            with as many rows as the dataset's ``observations``. Fields:
-
-            - **micro_ids** : (`object`) - IDs corresponding to observations :math:`n`. If ``dataset`` is not specified,
-              the IDs correspond to indices of :attr:`Simulation.agent_data`, from zero to one minus the number of rows.
-              Otherwise, they go from zero to one minus the number of ``observations`` in the dataset.
-
-            - **market_ids** : (`object`) - Market IDs :math:`t_n` for each observation :math:`n`.
-
-            - **weights** : (`numeric`) - Weights for integration over unobserved heterogeneity for each observation.
-              If ``integration`` is not specified, these will all be equal to ``1``. Otherwise, they will be constructed
-              by the :class:`Integration` configuration.
-
-            - **agent_indices** : (`int`) - Within-market indices of agents :math:`i_n` that take on values from
-              :math:`0` to :math:`I_t - 1`. The ordering is the same as agents within :attr:`Simulation.agent_data`.
-
-            If a ``dataset`` is specified, choices will also be simulated:
-
-            - **choice_indices** : (`int`) - Within-market indices of simulated choices :math:`j_n`. If
-              ``compute_weights`` in the ``dataset`` returns an array with :math:`J_t` elements in its second axis, then
-              choice indices take on values from :math:`0` to :math:`J_t - 1` where :math:`0` corresponds to the first
-              inside good. If it returns an array with :math:`1 + J_t` elements in its second axis, then choice indices
-              take on values from :math:`0` to :math:`J_t` where :math:`0` corresponds to the outside good. The ordering
-              of inside goods is the same as products within ``product_data`` passed to :class:`Simulation`.
-
-            - **second_choice_indices** : (`int`) - Within-market indices of simulated second choices :math:`k_n`, if
-              the dataset contains second choice data. If ``compute_weights`` in the ``dataset`` returns an array with
-              :math:`J_t` elements in its third axis, then second choice indices take on values from :math:`0` to
-              :math:`J_t - 1` where :math:`0` corresponds to the first inside good. If it returns an array with
-              :math:`1 + J_t` elements in its third axis, then second choice indices take on values from :math:`0` to
-              :math:`J_t` where :math:`0` corresponds to the outside good. The ordering of inside goods is the same as
-              products within ``product_data`` passed to :class:`Simulation`.
-
-            Other fields, such as ``nodes`` and any demographics, are extracted from :attr:`Simulation.agent_data`
-            according to the ``market_ids`` and ``agent_indices`` fields.
-
-        Examples
-        --------
-            - :doc:`Tutorial </tutorial>`
-
-        """
-        errors: List[Error] = []
-
-        # keep track of long it takes to build micro data
-        output("Building micro data ...")
-        start_time = time.time()
-
-        # validate any integration configuration
-        if integration is not None and not isinstance(integration, Integration):
-            raise ValueError(f"integration must be None or an Integration instance.")
-
-        # determine the datatypes to use to conserve on memory
-        agent_dtype = choice_dtype = np.uint64
-        for dtype in [np.uint32, np.uint8]:
-            if self.simulation._max_I <= np.iinfo(dtype).max:
-                agent_dtype = dtype
-            if self.simulation._max_J <= np.iinfo(dtype).max:
-                choice_dtype = dtype
-
-        # if there isn't a micro dataset, simply build micro data from agents
-        agent_data = self.simulation.agent_data
-        agent_market_indices = self.simulation._agent_market_indices
-        micro_data_mapping: Dict[str, Tuple[Array, Any]] = collections.OrderedDict()
-        if dataset is None:
-            # verify that there are agent data
-            if agent_data is None:
-                raise RuntimeError("The simulation does not have any agent data from which to build micro data.")
-
-            # construct the micro data
-            micro_data_mapping['micro_ids'] = (np.arange(agent_data.size), np.object_)
-            micro_data_mapping['market_ids'] = (agent_data.market_ids, np.object_)
-            micro_data_mapping['weights'] = (np.ones(agent_data.size), options.dtype)
-
-            # add nodes and demographics from agent data
-            for key in agent_data.dtype.names:
-                if key in micro_data_mapping or agent_data[key].size == 0:
-                    continue
-                micro_data_mapping[key] = (agent_data[key], agent_data[key].dtype)
-
-            # add agent indices
-            micro_data_mapping['agent_indices'] = (np.zeros(agent_data.size), agent_dtype)
-            for indices in agent_market_indices.values():
-                micro_data_mapping['agent_indices'][0][indices] = np.arange(indices.size)
-        else:
-            # validate the micro dataset
-            if not isinstance(dataset, MicroDataset):
-                raise TypeError("dataset must be a MicroDataset.")
-            dataset._validate(self.simulation)
-
-            # collect the relevant market ids
-            if dataset.market_ids is None:
-                market_ids = self.simulation.unique_market_ids
-            else:
-                market_ids = np.asarray(list(dataset.market_ids))
-
-            def market_factory(s: Hashable) -> Tuple[SimulationResultsMarket, MicroDataset]:
-                """Build a market along with arguments used to compute weights needed for simulation."""
-                assert dataset is not None
-                market_s = SimulationResultsMarket(
-                    self.simulation, s, self._parameters, self.simulation.sigma, self.simulation.pi,
-                    self.simulation.rho, self.simulation.beta, self.simulation.gamma, self.delta, self._data_override
-                )
-                return market_s, dataset
-
-            # construct mappings from market IDs to probabilities, IDs, and indices needed for simulation
-            weights_mapping: Dict[Hashable, Array] = {}
-            agent_indices_mapping: Dict[Hashable, Array] = {}
-            choice_indices_mapping: Dict[Hashable, Array] = {}
-            second_choice_indices_mapping: Dict[Hashable, Array] = {}
-            generator = generate_items(market_ids, market_factory, SimulationResultsMarket.safely_compute_micro_weights)
-            if market_ids.size > 1:
-                generator = output_progress(generator, market_ids.size, start_time)
-            for t, (weights_t, errors_t) in generator:
-                errors.extend(errors_t)
-                indices_t = np.nonzero(weights_t)
-                weights_mapping[t] = weights_t[indices_t]
-                agent_indices_mapping[t] = indices_t[0].astype(agent_dtype)
-                choice_indices_mapping[t] = indices_t[1].astype(choice_dtype)
-                if len(indices_t) == 3:
-                    second_choice_indices_mapping[t] = indices_t[2].astype(choice_dtype)
-
-            # output a warning about any errors
-            if errors:
-                output("")
-                output(exceptions.MultipleErrors(errors))
-                output("")
-
-            # simulate choices
-            state = np.random.RandomState(seed)
-            weights_data = np.concatenate([weights_mapping[t] for t in market_ids])
-            choices = state.choice(weights_data.size, p=weights_data / weights_data.sum(), size=dataset.observations)
-
-            # construct the micro data
-            micro_data_mapping['micro_ids'] = (np.arange(dataset.observations), np.object_)
-            micro_data_mapping['market_ids'] = (
-                np.concatenate([np.full(agent_indices_mapping[t].size, t) for t in market_ids])[choices], np.object_
-            )
-            micro_data_mapping['weights'] = (np.ones(dataset.observations), options.dtype)
-
-            # add nodes and demographics from agent data
-            if agent_data is not None:
-                for key in agent_data.dtype.names:
-                    if key in micro_data_mapping or agent_data[key].size == 0:
-                        continue
-                    values = {t: agent_data[key][agent_market_indices[t]][agent_indices_mapping[t]] for t in market_ids}
-                    micro_data_mapping[key] = (
-                        np.concatenate([values[t] for t in market_ids])[choices], agent_data[key].dtype
-                    )
-
-            # add agent and choice indices
-            micro_data_mapping['agent_indices'] = (
-                np.concatenate([agent_indices_mapping[t] for t in market_ids])[choices], agent_dtype
-            )
-            micro_data_mapping['choice_indices'] = (
-                np.concatenate([choice_indices_mapping[t] for t in market_ids])[choices], choice_dtype
-            )
-            if second_choice_indices_mapping:
-                micro_data_mapping['second_choice_indices'] = (
-                    np.concatenate([second_choice_indices_mapping[t] for t in market_ids])[choices], choice_dtype
-                )
-
-        # optionally duplicate each row, replacing unobserved heterogeneity
-        if integration is not None and self.simulation.K2 > 0:
-            micro_ids, nodes, weights = integration._build_many(self.simulation.K2, micro_data_mapping['micro_ids'][0])
-            repeats = np.bincount(micro_ids)
-            micro_data_mapping['micro_ids'] = (micro_ids, np.object_)
-            micro_data_mapping['nodes'] = (nodes, nodes.dtype)
-            micro_data_mapping['weights'] = (weights, weights.dtype)
-            for key, (values, dtype) in micro_data_mapping.items():
-                if key not in {'micro_ids', 'nodes', 'weights'}:
-                    micro_data_mapping[key] = (np.repeat(values, repeats, axis=0), dtype)
-
-        # build the micro data and output how long this took
-        micro_data = structure_matrices(micro_data_mapping)
-        end_time = time.time()
-        output(f"Finished after {format_seconds(end_time - start_time)}.")
-        output("")
-        return micro_data
+        return micro_values.flatten()
 
     def compute_micro_scores(self, dataset: MicroDataset, micro_data: Mapping) -> Array:
         r"""Compute scores for each observation in micro data.
@@ -976,3 +752,220 @@ class SimulationResults(Results):
         output(f"Finished after {format_seconds(end_time - start_time)}.")
         output("")
         return scores
+
+    def build_micro_data(
+            self, dataset: Optional[MicroDataset] = None, integration: Optional[Integration] = None,
+            seed: Optional[int] = None) -> RecArray:
+        r"""Construct micro data for score computation.
+
+        By default, this method builds micro data with each observation corresponding to an agent in
+        :attr:`Simulation.agent_data`. These data can be passed to :meth:`SimulationResults.compute_micro_scores` to
+        compute scores for each agent and choice.
+
+        If a ``dataset`` is specified, micro observations underlying the dataset are simulated according to survey
+        weights :math:`w_{dijt}`, agent weights :math:`w_{it}`, choice probabilities :math:`s_{ijt}`, and if the
+        dataset contains second choice data, second choice probabilities as well. These data can also be passed to
+        :meth:`SimulationResults.compute_micro_scores` to compute scores for each observation.
+
+        If ``integration`` is specified, each observation will be duplicated by as many rows as there are nodes created
+        by the integration configuration, with nodes and weights replaced by those constructed by the configuration.
+        These replicated rows correspond to an integral over unobserved heterogeneity for each observation.
+
+        Parameters
+        ----------
+        dataset : `MicroDataset, optional`
+            The :class:`MicroDataset` for which micro data will be simulated. By default, micro data are built without
+            reference to a micro dataset, but rather with each observation corresponding to an agent in
+            :attr:`Simulation.agent_data`. If specified, micro observations will be simulated that underlie the dataset.
+        integration : `Integration, optional`
+            :class:`Integration` configuration for how to build nodes and weights for integration over unobserved
+            heterogeneity for each observation. By default, there is a single node for each observation with
+            integration weight equal to ``1``. Intuitively, this means that nodes are treated as observed
+            heterogeneity, just as demographics. To treat nodes as unobserved heterogeneity, either specify this
+            configuration, or manually duplicate each row of the returned micro data with different integration nodes.
+        seed : `int, optional`
+            Passed to :class:`numpy.random.RandomState` to seed the random number generator before data are simulated.
+            By default, a seed is not passed to the random number generator. A seed is only used if the ``dataset`` is
+            specified.
+
+        Returns
+        -------
+        `recarray`
+            Micro data with as many rows as :attr:`Simulation.agent_data` if ``dataset`` is not specified, and otherwise
+            with as many rows as the dataset's ``observations``. Fields:
+
+            - **micro_ids** : (`object`) - IDs corresponding to observations :math:`n`. If ``dataset`` is not specified,
+              the IDs correspond to indices of :attr:`Simulation.agent_data`, from zero to one minus the number of rows.
+              Otherwise, they go from zero to one minus the number of ``observations`` in the dataset.
+
+            - **market_ids** : (`object`) - Market IDs :math:`t_n` for each observation :math:`n`.
+
+            - **weights** : (`numeric`) - Weights for integration over unobserved heterogeneity for each observation.
+              If ``integration`` is not specified, these will all be equal to ``1``. Otherwise, they will be constructed
+              by the :class:`Integration` configuration.
+
+            - **agent_indices** : (`int`) - Within-market indices of agents :math:`i_n` that take on values from
+              :math:`0` to :math:`I_t - 1`. The ordering is the same as agents within :attr:`Simulation.agent_data`.
+
+            If a ``dataset`` is specified, choices will also be simulated:
+
+            - **choice_indices** : (`int`) - Within-market indices of simulated choices :math:`j_n`. If
+              ``compute_weights`` in the ``dataset`` returns an array with :math:`J_t` elements in its second axis, then
+              choice indices take on values from :math:`0` to :math:`J_t - 1` where :math:`0` corresponds to the first
+              inside good. If it returns an array with :math:`1 + J_t` elements in its second axis, then choice indices
+              take on values from :math:`0` to :math:`J_t` where :math:`0` corresponds to the outside good. The ordering
+              of inside goods is the same as products within ``product_data`` passed to :class:`Simulation`.
+
+            - **second_choice_indices** : (`int`) - Within-market indices of simulated second choices :math:`k_n`, if
+              the dataset contains second choice data. If ``compute_weights`` in the ``dataset`` returns an array with
+              :math:`J_t` elements in its third axis, then second choice indices take on values from :math:`0` to
+              :math:`J_t - 1` where :math:`0` corresponds to the first inside good. If it returns an array with
+              :math:`1 + J_t` elements in its third axis, then second choice indices take on values from :math:`0` to
+              :math:`J_t` where :math:`0` corresponds to the outside good. The ordering of inside goods is the same as
+              products within ``product_data`` passed to :class:`Simulation`.
+
+            Other fields, such as ``nodes`` and any demographics, are extracted from :attr:`Simulation.agent_data`
+            according to the ``market_ids`` and ``agent_indices`` fields.
+
+        Examples
+        --------
+            - :doc:`Tutorial </tutorial>`
+
+        """
+        errors: List[Error] = []
+
+        # keep track of long it takes to build micro data
+        output("Building micro data ...")
+        start_time = time.time()
+
+        # validate any integration configuration
+        if integration is not None and not isinstance(integration, Integration):
+            raise ValueError(f"integration must be None or an Integration instance.")
+
+        # determine the datatypes to use to conserve on memory
+        agent_dtype = choice_dtype = np.uint64
+        for dtype in [np.uint32, np.uint8]:
+            if self.simulation._max_I <= np.iinfo(dtype).max:
+                agent_dtype = dtype
+            if self.simulation._max_J <= np.iinfo(dtype).max:
+                choice_dtype = dtype
+
+        # if there isn't a micro dataset, simply build micro data from agents
+        agent_data = self.simulation.agent_data
+        agent_market_indices = self.simulation._agent_market_indices
+        micro_data_mapping: Dict[str, Tuple[Array, Any]] = collections.OrderedDict()
+        if dataset is None:
+            # verify that there are agent data
+            if agent_data is None:
+                raise RuntimeError("The simulation does not have any agent data from which to build micro data.")
+
+            # construct the micro data
+            micro_data_mapping['micro_ids'] = (np.arange(agent_data.size), np.object_)
+            micro_data_mapping['market_ids'] = (agent_data.market_ids, np.object_)
+            micro_data_mapping['weights'] = (np.ones(agent_data.size), options.dtype)
+
+            # add nodes and demographics from agent data
+            for key in agent_data.dtype.names:
+                if key in micro_data_mapping or agent_data[key].size == 0:
+                    continue
+                micro_data_mapping[key] = (agent_data[key], agent_data[key].dtype)
+
+            # add agent indices
+            micro_data_mapping['agent_indices'] = (np.zeros(agent_data.size), agent_dtype)
+            for indices in agent_market_indices.values():
+                micro_data_mapping['agent_indices'][0][indices] = np.arange(indices.size)
+        else:
+            # validate the micro dataset
+            if not isinstance(dataset, MicroDataset):
+                raise TypeError("dataset must be a MicroDataset.")
+            dataset._validate(self.simulation)
+
+            # collect the relevant market ids
+            if dataset.market_ids is None:
+                market_ids = self.simulation.unique_market_ids
+            else:
+                market_ids = np.asarray(list(dataset.market_ids))
+
+            def market_factory(s: Hashable) -> Tuple[SimulationResultsMarket, MicroDataset]:
+                """Build a market along with arguments used to compute weights needed for simulation."""
+                assert dataset is not None
+                market_s = SimulationResultsMarket(
+                    self.simulation, s, self._parameters, self.simulation.sigma, self.simulation.pi,
+                    self.simulation.rho, self.simulation.beta, self.simulation.gamma, self.delta, self._data_override
+                )
+                return market_s, dataset
+
+            # construct mappings from market IDs to probabilities, IDs, and indices needed for simulation
+            weights_mapping: Dict[Hashable, Array] = {}
+            agent_indices_mapping: Dict[Hashable, Array] = {}
+            choice_indices_mapping: Dict[Hashable, Array] = {}
+            second_choice_indices_mapping: Dict[Hashable, Array] = {}
+            generator = generate_items(market_ids, market_factory, SimulationResultsMarket.safely_compute_micro_weights)
+            if market_ids.size > 1:
+                generator = output_progress(generator, market_ids.size, start_time)
+            for t, (weights_t, errors_t) in generator:
+                errors.extend(errors_t)
+                indices_t = np.nonzero(weights_t)
+                weights_mapping[t] = weights_t[indices_t]
+                agent_indices_mapping[t] = indices_t[0].astype(agent_dtype)
+                choice_indices_mapping[t] = indices_t[1].astype(choice_dtype)
+                if len(indices_t) == 3:
+                    second_choice_indices_mapping[t] = indices_t[2].astype(choice_dtype)
+
+            # output a warning about any errors
+            if errors:
+                output("")
+                output(exceptions.MultipleErrors(errors))
+                output("")
+
+            # simulate choices
+            state = np.random.RandomState(seed)
+            weights_data = np.concatenate([weights_mapping[t] for t in market_ids])
+            choices = state.choice(weights_data.size, p=weights_data / weights_data.sum(), size=dataset.observations)
+
+            # construct the micro data
+            micro_data_mapping['micro_ids'] = (np.arange(dataset.observations), np.object_)
+            micro_data_mapping['market_ids'] = (
+                np.concatenate([np.full(agent_indices_mapping[t].size, t) for t in market_ids])[choices], np.object_
+            )
+            micro_data_mapping['weights'] = (np.ones(dataset.observations), options.dtype)
+
+            # add nodes and demographics from agent data
+            if agent_data is not None:
+                for key in agent_data.dtype.names:
+                    if key in micro_data_mapping or agent_data[key].size == 0:
+                        continue
+                    values = {t: agent_data[key][agent_market_indices[t]][agent_indices_mapping[t]] for t in market_ids}
+                    micro_data_mapping[key] = (
+                        np.concatenate([values[t] for t in market_ids])[choices], agent_data[key].dtype
+                    )
+
+            # add agent and choice indices
+            micro_data_mapping['agent_indices'] = (
+                np.concatenate([agent_indices_mapping[t] for t in market_ids])[choices], agent_dtype
+            )
+            micro_data_mapping['choice_indices'] = (
+                np.concatenate([choice_indices_mapping[t] for t in market_ids])[choices], choice_dtype
+            )
+            if second_choice_indices_mapping:
+                micro_data_mapping['second_choice_indices'] = (
+                    np.concatenate([second_choice_indices_mapping[t] for t in market_ids])[choices], choice_dtype
+                )
+
+        # optionally duplicate each row, replacing unobserved heterogeneity
+        if integration is not None and self.simulation.K2 > 0:
+            micro_ids, nodes, weights = integration._build_many(self.simulation.K2, micro_data_mapping['micro_ids'][0])
+            repeats = np.bincount(micro_ids)
+            micro_data_mapping['micro_ids'] = (micro_ids, np.object_)
+            micro_data_mapping['nodes'] = (nodes, nodes.dtype)
+            micro_data_mapping['weights'] = (weights, weights.dtype)
+            for key, (values, dtype) in micro_data_mapping.items():
+                if key not in {'micro_ids', 'nodes', 'weights'}:
+                    micro_data_mapping[key] = (np.repeat(values, repeats, axis=0), dtype)
+
+        # build the micro data and output how long this took
+        micro_data = structure_matrices(micro_data_mapping)
+        end_time = time.time()
+        output(f"Finished after {format_seconds(end_time - start_time)}.")
+        output("")
+        return micro_data
