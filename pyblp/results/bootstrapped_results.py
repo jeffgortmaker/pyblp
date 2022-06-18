@@ -8,26 +8,47 @@ from typing import Any, Callable, Dict, Hashable, List, Mapping, Optional, Seque
 
 import numpy as np
 
+from .economy_results import SimpleEconomyResults
 from .problem_results import ProblemResults
-from .results import Results
 from .. import exceptions, options
 from ..configurations.integration import Integration
-from ..markets.results_market import ResultsMarket
+from ..markets.economy_results_market import EconomyResultsMarket
 from ..primitives import Agents
 from ..utilities.basics import (
     Array, Error, SolverStats, format_seconds, format_table, generate_items, get_indices, output, output_progress
 )
 
 
-class BootstrappedResults(Results):
+class BootstrappedResults(SimpleEconomyResults):
     r"""Bootstrapped results of a solved problem.
 
-    This class has the same methods as :class:`ProblemResults` that compute post-estimation outputs in one or more
-    markets, but not other methods like :meth:`ProblemResults.compute_optimal_instruments` that do not make sense in a
-    bootstrapped dataset. The only other difference is that methods return arrays with an extra first dimension along
-    which bootstrapped results are stacked (these stacked results can be used to construct, for example, confidence
-    intervals for post-estimation outputs). Similarly, arrays of data (except for firm IDs and ownership matrices)
-    passed as arguments to methods should have an extra first dimension of size :attr:`BootstrappedResults.draws`.
+    This class has slightly modified versions of the following :class:`ProblemResults` methods:
+
+        - :meth:`ProblemResults.compute_aggregate_elasticities`
+        - :meth:`ProblemResults.compute_elasticities`
+        - :meth:`ProblemResults.compute_demand_jacobians`
+        - :meth:`ProblemResults.compute_demand_hessians`
+        - :meth:`ProblemResults.compute_profit_hessians`
+        - :meth:`ProblemResults.compute_diversion_ratios`
+        - :meth:`ProblemResults.compute_long_run_diversion_ratios`
+        - :meth:`ProblemResults.compute_probabilities`
+        - :meth:`ProblemResults.extract_diagonals`
+        - :meth:`ProblemResults.extract_diagonal_means`
+        - :meth:`ProblemResults.compute_delta`
+        - :meth:`ProblemResults.compute_costs`
+        - :meth:`ProblemResults.compute_passthrough`
+        - :meth:`ProblemResults.compute_approximate_prices`
+        - :meth:`ProblemResults.compute_prices`
+        - :meth:`ProblemResults.compute_shares`
+        - :meth:`ProblemResults.compute_hhi`
+        - :meth:`ProblemResults.compute_markups`
+        - :meth:`ProblemResults.compute_profits`
+        - :meth:`ProblemResults.compute_consumer_surpluses`
+
+    The difference is that each method returns an array with an extra first dimension along which bootstrapped results
+    are stacked These stacked results can be used to construct, for example, confidence intervals for
+    post-estimation outputs. Similarly, arrays of data (except for firm IDs and ownership matrices) passed as arguments
+    to methods should have an extra first dimension of size :attr:`BootstrappedResults.draws`.
 
     Attributes
     ----------
@@ -157,7 +178,7 @@ class BootstrappedResults(Results):
                 'prices': self.bootstrapped_prices[c],
                 'shares': self.bootstrapped_shares[c]
             }
-            market_cs = ResultsMarket(
+            market_cs = EconomyResultsMarket(
                 self._economy, s, self._parameters, self.bootstrapped_sigma[c], self.bootstrapped_pi[c],
                 self.bootstrapped_rho[c], self.bootstrapped_beta[c], self.bootstrapped_gamma[c],
                 self.bootstrapped_delta[c], data_override=data_override_c,

@@ -1,16 +1,24 @@
 """Economy-level structuring of abstract BLP problem results."""
 
 import abc
-from typing import Any, Callable, Mapping, Optional, Sequence, Tuple, TYPE_CHECKING
+import collections
+import time
+from typing import Any, Callable, Dict, Hashable, List, Mapping, Optional, Sequence, Tuple, TYPE_CHECKING
 
 import numpy as np
+import scipy.sparse
 
-from .. import options
+from .. import exceptions, options
 from ..configurations.integration import Integration
 from ..configurations.iteration import Iteration
-from ..markets.results_market import ResultsMarket
+from ..markets.economy_results_market import EconomyResultsMarket
+from ..micro import MicroDataset, MicroMoment, Moments
 from ..parameters import Parameters
-from ..utilities.basics import Array, StringRepresentation, output
+from ..primitives import Agents, MicroAgents, build_demographics
+from ..utilities.basics import (
+    Array, Error, RecArray, StringRepresentation, format_seconds, generate_items, get_indices, output, output_progress,
+    structure_matrices
+)
 
 
 # only import objects that create import cycles when checking types
@@ -18,14 +26,14 @@ if TYPE_CHECKING:
     from ..economies.economy import Economy  # noqa
 
 
-class Results(abc.ABC, StringRepresentation):
-    """Abstract results of a solved BLP problem."""
+class SimpleEconomyResults(abc.ABC, StringRepresentation):
+    """Abstract results for an economy underlying the BLP model, supporting simple methods that return arrays."""
 
     _economy: 'Economy'
     _parameters: Parameters
 
     def __init__(self, economy: 'Economy', parameters: Parameters) -> None:
-        """Store the underlying problem and parameter information."""
+        """Store the underlying economy and parameter information."""
         self._economy = economy
         self._parameters = parameters
 
@@ -35,7 +43,7 @@ class Results(abc.ABC, StringRepresentation):
             market_args: Sequence = (), agent_data: Optional[Mapping] = None,
             integration: Optional[Integration] = None) -> Array:
         """Combine arrays from one or all markets, which are computed by passing fixed_args (identical for all markets)
-        and market_args (arrays that need to be restricted to markets) to compute_market_results, a ResultsMarket method
+        and market_args (arrays that need to be restricted to markets) to compute_market_results, a market method
         that returns the output for the market and any errors encountered during computation. Agent data and an
         integration configuration can be optionally specified to override agent data.
         """
@@ -136,7 +144,7 @@ class Results(abc.ABC, StringRepresentation):
         self._economy._validate_name(name)
         market_ids = self._select_market_ids(market_id)
         return self._combine_arrays(
-            ResultsMarket.safely_compute_aggregate_elasticity, market_ids, fixed_args=[factor, name]
+            EconomyResultsMarket.safely_compute_aggregate_elasticity, market_ids, fixed_args=[factor, name]
         )
 
     def compute_elasticities(self, name: Optional[str] = 'prices', market_id: Optional[Any] = None) -> Array:
@@ -171,7 +179,7 @@ class Results(abc.ABC, StringRepresentation):
         output(f"Computing elasticities with respect to {name or 'the mean utility'} ...")
         self._economy._validate_name(name)
         market_ids = self._select_market_ids(market_id)
-        return self._combine_arrays(ResultsMarket.safely_compute_elasticities, market_ids, fixed_args=[name])
+        return self._combine_arrays(EconomyResultsMarket.safely_compute_elasticities, market_ids, fixed_args=[name])
 
     def compute_demand_jacobians(self, name: str = 'prices', market_id: Optional[Any] = None) -> Array:
         r"""Estimate matrices of derivatives of demand with respect to a variable, :math:`x`.
@@ -204,7 +212,7 @@ class Results(abc.ABC, StringRepresentation):
         output(f"Computing derivatives of demand with respect to {name or 'the mean utility'} ...")
         self._economy._validate_name(name, none_valid=False)
         market_ids = self._select_market_ids(market_id)
-        return self._combine_arrays(ResultsMarket.safely_compute_demand_jacobian, market_ids, fixed_args=[name])
+        return self._combine_arrays(EconomyResultsMarket.safely_compute_demand_jacobian, market_ids, fixed_args=[name])
 
     def compute_demand_hessians(self, name: str = 'prices', market_id: Optional[Any] = None) -> Array:
         r"""Estimate arrays of second derivatives of demand with respect to a variable, :math:`x`.
@@ -237,7 +245,7 @@ class Results(abc.ABC, StringRepresentation):
         output(f"Computing second derivatives of demand with respect to {name or 'the mean utility'} ...")
         self._economy._validate_name(name, none_valid=False)
         market_ids = self._select_market_ids(market_id)
-        return self._combine_arrays(ResultsMarket.safely_compute_demand_hessian, market_ids, fixed_args=[name])
+        return self._combine_arrays(EconomyResultsMarket.safely_compute_demand_hessian, market_ids, fixed_args=[name])
 
     def compute_diversion_ratios(self, name: Optional[str] = 'prices', market_id: Optional[Any] = None) -> Array:
         r"""Estimate matrices of diversion ratios, :math:`\mathscr{D}`, with respect to a variable, :math:`x`.
@@ -284,7 +292,7 @@ class Results(abc.ABC, StringRepresentation):
         output(f"Computing diversion ratios with respect to {name or 'the mean utility'} ...")
         self._economy._validate_name(name)
         market_ids = self._select_market_ids(market_id)
-        return self._combine_arrays(ResultsMarket.safely_compute_diversion_ratios, market_ids, fixed_args=[name])
+        return self._combine_arrays(EconomyResultsMarket.safely_compute_diversion_ratios, market_ids, fixed_args=[name])
 
     def compute_long_run_diversion_ratios(self, market_id: Optional[Any] = None) -> Array:
         r"""Estimate matrices of long-run diversion ratios, :math:`\bar{\mathscr{D}}`.
@@ -322,7 +330,7 @@ class Results(abc.ABC, StringRepresentation):
         """
         output("Computing long run mean diversion ratios ...")
         market_ids = self._select_market_ids(market_id)
-        return self._combine_arrays(ResultsMarket.safely_compute_long_run_diversion_ratios, market_ids)
+        return self._combine_arrays(EconomyResultsMarket.safely_compute_long_run_diversion_ratios, market_ids)
 
     def compute_probabilities(
             self, prices: Optional[Any] = None, delta: Optional[Any] = None, agent_data: Optional[Mapping] = None,
@@ -387,8 +395,8 @@ class Results(abc.ABC, StringRepresentation):
         prices = self._coerce_optional_prices(prices, market_ids)
         delta = self._coerce_optional_delta(delta, market_ids)
         return self._combine_arrays(
-            ResultsMarket.safely_compute_probabilities, market_ids, market_args=[prices, delta], agent_data=agent_data,
-            integration=integration
+            EconomyResultsMarket.safely_compute_probabilities, market_ids, market_args=[prices, delta],
+            agent_data=agent_data, integration=integration
         )
 
     def extract_diagonals(self, matrices: Any, market_id: Optional[Any] = None) -> Array:
@@ -422,7 +430,7 @@ class Results(abc.ABC, StringRepresentation):
         output("Extracting diagonals ...")
         market_ids = self._select_market_ids(market_id)
         matrices = self._coerce_matrices(matrices, market_ids)
-        return self._combine_arrays(ResultsMarket.safely_extract_diagonal, market_ids, market_args=[matrices])
+        return self._combine_arrays(EconomyResultsMarket.safely_extract_diagonal, market_ids, market_args=[matrices])
 
     def extract_diagonal_means(self, matrices: Any, market_id: Optional[Any] = None) -> Array:
         r"""Extract means of diagonals from stacked :math:`J_t \times J_t` matrices for each market :math:`t`.
@@ -456,7 +464,9 @@ class Results(abc.ABC, StringRepresentation):
         output("Extracting diagonal means ...")
         market_ids = self._select_market_ids(market_id)
         matrices = self._coerce_matrices(matrices, market_ids)
-        return self._combine_arrays(ResultsMarket.safely_extract_diagonal_mean, market_ids, market_args=[matrices])
+        return self._combine_arrays(
+            EconomyResultsMarket.safely_extract_diagonal_mean, market_ids, market_args=[matrices]
+        )
 
     def compute_costs(
             self, firm_ids: Optional[Any] = None, ownership: Optional[Any] = None,
@@ -492,7 +502,9 @@ class Results(abc.ABC, StringRepresentation):
         market_ids = self._select_market_ids(market_id)
         firm_ids = self._economy._coerce_optional_firm_ids(firm_ids, market_ids)
         ownership = self._economy._coerce_optional_ownership(ownership, market_ids)
-        return self._combine_arrays(ResultsMarket.safely_compute_costs, market_ids, market_args=[firm_ids, ownership])
+        return self._combine_arrays(
+            EconomyResultsMarket.safely_compute_costs, market_ids, market_args=[firm_ids, ownership]
+        )
 
     def compute_passthrough(
             self, firm_ids: Optional[Any] = None, ownership: Optional[Any] = None,
@@ -532,7 +544,7 @@ class Results(abc.ABC, StringRepresentation):
         firm_ids = self._economy._coerce_optional_firm_ids(firm_ids, market_ids)
         ownership = self._economy._coerce_optional_ownership(ownership, market_ids)
         return self._combine_arrays(
-            ResultsMarket.safely_compute_passthrough, market_ids, market_args=[firm_ids, ownership]
+            EconomyResultsMarket.safely_compute_passthrough, market_ids, market_args=[firm_ids, ownership]
         )
 
     def compute_delta(
@@ -591,7 +603,7 @@ class Results(abc.ABC, StringRepresentation):
         self._economy._validate_fp_type(fp_type)
         shares_bounds = self._economy._coerce_optional_bounds(shares_bounds, 'shares_bounds')
         return self._combine_arrays(
-            ResultsMarket.safely_compute_delta, market_ids, fixed_args=[iteration, fp_type, shares_bounds],
+            EconomyResultsMarket.safely_compute_delta, market_ids, fixed_args=[iteration, fp_type, shares_bounds],
             agent_data=agent_data, integration=integration
         )
 
@@ -645,7 +657,7 @@ class Results(abc.ABC, StringRepresentation):
         ownership = self._economy._coerce_optional_ownership(ownership, market_ids)
         costs = self._coerce_optional_costs(costs, market_ids)
         return self._combine_arrays(
-            ResultsMarket.safely_compute_approximate_equilibrium_prices, market_ids,
+            EconomyResultsMarket.safely_compute_approximate_equilibrium_prices, market_ids,
             market_args=[firm_ids, ownership, costs]
         )
 
@@ -726,7 +738,7 @@ class Results(abc.ABC, StringRepresentation):
         prices = self._coerce_optional_prices(prices, market_ids)
         iteration = self._economy._coerce_optional_prices_iteration(iteration)
         return self._combine_arrays(
-            ResultsMarket.safely_compute_prices, market_ids, fixed_args=[iteration, constant_costs],
+            EconomyResultsMarket.safely_compute_prices, market_ids, fixed_args=[iteration, constant_costs],
             market_args=[firm_ids, ownership, costs, prices]
         )
 
@@ -786,7 +798,7 @@ class Results(abc.ABC, StringRepresentation):
         prices = self._coerce_optional_prices(prices, market_ids)
         delta = self._coerce_optional_delta(delta, market_ids)
         return self._combine_arrays(
-            ResultsMarket.safely_compute_shares, market_ids, market_args=[prices, delta], agent_data=agent_data,
+            EconomyResultsMarket.safely_compute_shares, market_ids, market_args=[prices, delta], agent_data=agent_data,
             integration=integration
         )
 
@@ -824,7 +836,7 @@ class Results(abc.ABC, StringRepresentation):
         market_ids = self._select_market_ids(market_id)
         firm_ids = self._economy._coerce_optional_firm_ids(firm_ids, market_ids)
         shares = self._coerce_optional_shares(shares, market_ids)
-        return self._combine_arrays(ResultsMarket.safely_compute_hhi, market_ids, market_args=[firm_ids, shares])
+        return self._combine_arrays(EconomyResultsMarket.safely_compute_hhi, market_ids, market_args=[firm_ids, shares])
 
     def compute_markups(
             self, prices: Optional[Any] = None, costs: Optional[Any] = None, market_id: Optional[Any] = None) -> Array:
@@ -860,7 +872,9 @@ class Results(abc.ABC, StringRepresentation):
         market_ids = self._select_market_ids(market_id)
         prices = self._coerce_optional_prices(prices, market_ids)
         costs = self._coerce_optional_costs(costs, market_ids)
-        return self._combine_arrays(ResultsMarket.safely_compute_markups, market_ids, market_args=[prices, costs])
+        return self._combine_arrays(
+            EconomyResultsMarket.safely_compute_markups, market_ids, market_args=[prices, costs]
+        )
 
     def compute_profits(
             self, prices: Optional[Any] = None, shares: Optional[Any] = None, costs: Optional[Any] = None,
@@ -902,7 +916,7 @@ class Results(abc.ABC, StringRepresentation):
         shares = self._coerce_optional_shares(shares, market_ids)
         costs = self._coerce_optional_costs(costs, market_ids)
         return self._combine_arrays(
-            ResultsMarket.safely_compute_profits, market_ids, market_args=[prices, shares, costs]
+            EconomyResultsMarket.safely_compute_profits, market_ids, market_args=[prices, shares, costs]
         )
 
     def compute_profit_hessians(
@@ -949,7 +963,7 @@ class Results(abc.ABC, StringRepresentation):
         prices = self._coerce_optional_prices(prices, market_ids)
         costs = self._coerce_optional_costs(costs, market_ids)
         return self._combine_arrays(
-            ResultsMarket.safely_compute_profit_hessian, market_ids, market_args=[prices, costs]
+            EconomyResultsMarket.safely_compute_profit_hessian, market_ids, market_args=[prices, costs]
         )
 
     def compute_consumer_surpluses(
@@ -1025,6 +1039,653 @@ class Results(abc.ABC, StringRepresentation):
         market_ids = self._select_market_ids(market_id)
         prices = self._coerce_optional_prices(prices, market_ids)
         return self._combine_arrays(
-            ResultsMarket.safely_compute_consumer_surplus, market_ids, fixed_args=[keep_all, eliminate_product_ids],
-            market_args=[prices]
+            EconomyResultsMarket.safely_compute_consumer_surplus, market_ids,
+            fixed_args=[keep_all, eliminate_product_ids], market_args=[prices]
         )
+
+
+class EconomyResults(SimpleEconomyResults):
+    """Abstract results for an economy underlying the BLP model, supporting more complicated methods."""
+
+    _sigma: Array
+    _pi: Array
+    _rho: Array
+    _beta: Array
+    _gamma: Array
+    _delta: Array
+    _data_override: Optional[Dict[str, Array]]
+
+    def __init__(
+            self, economy: 'Economy', parameters: Parameters, sigma: Array, pi: Array, rho: Array, beta: Array,
+            gamma: Array, delta: Array, data_override: Optional[Dict[str, Array]] = None) -> None:
+        """Store the underlying economy and parameter information."""
+        super().__init__(economy, parameters)
+        self._sigma = sigma
+        self._pi = pi
+        self._rho = rho
+        self._beta = beta
+        self._gamma = gamma
+        self._delta = delta
+        self._data_override = data_override
+
+    def _combine_arrays(
+            self, compute_market_results: Callable, market_ids: Array, fixed_args: Sequence = (),
+            market_args: Sequence = (), agent_data: Optional[Mapping] = None,
+            integration: Optional[Integration] = None) -> Array:
+        """Compute arrays for one or all markets and stack them into a single array. An array for a single market is
+        computed by passing fixed_args (identical for all markets) and market_args (matrices with as many rows as there
+        are products that are restricted to the market) to compute_market_results, a ResultsMarket method that returns
+        the output for the market any errors encountered during computation. Agent data and an integration configuration
+        can be optionally specified to override agent data.
+        """
+        errors: List[Error] = []
+
+        # keep track of how long it takes to compute the arrays
+        start_time = time.time()
+
+        # structure or construct different agent data
+        if agent_data is None and integration is None:
+            agents = self._economy.agents
+            agents_market_indices = self._economy._agent_market_indices
+        else:
+            agents = Agents(self._economy.products, self._economy.agent_formulation, agent_data, integration)
+            agents_market_indices = get_indices(agents.market_ids)
+
+        def market_factory(s: Hashable) -> tuple:
+            """Build a market along with arguments used to compute arrays."""
+            indices_s = self._economy._product_market_indices[s]
+            market_s = EconomyResultsMarket(
+                self._economy, s, self._parameters, self._sigma, self._pi, self._rho, self._beta, self._gamma,
+                self._delta, self._data_override, agents_override=agents[agents_market_indices[s]]
+            )
+            if market_ids.size == 1:
+                args_s = market_args
+            else:
+                args_s = [None if a is None else a[indices_s] for a in market_args]
+            return (market_s, *fixed_args, *args_s)
+
+        # construct a mapping from market IDs to market-specific arrays
+        array_mapping: Dict[Hashable, Array] = {}
+        generator = generate_items(market_ids, market_factory, compute_market_results)
+        if market_ids.size > 1:
+            generator = output_progress(generator, market_ids.size, start_time)
+        for t, (array_t, errors_t) in generator:
+            array_mapping[t] = np.c_[array_t]
+            errors.extend(errors_t)
+
+        # output a warning about any errors
+        if errors:
+            output("")
+            output(exceptions.MultipleErrors(errors))
+            output("")
+
+        # determine the sizes of dimensions
+        dimension_sizes = []
+        for dimension in range(len(array_mapping[market_ids[0]].shape)):
+            if dimension == 0:
+                dimension_sizes.append(sum(array_mapping[t].shape[dimension] for t in market_ids))
+            else:
+                dimension_sizes.append(max(array_mapping[t].shape[dimension] for t in market_ids))
+
+        # preserve the original product order or the sorted market order when stacking the arrays
+        combined = np.full(dimension_sizes, np.nan, options.dtype)
+        for t, array_t in array_mapping.items():
+            slices = (slice(0, s) for s in array_t.shape[1:])
+            if dimension_sizes[0] == market_ids.size:
+                combined[(market_ids == t, *slices)] = array_t
+            elif dimension_sizes[0] == self._economy.N:
+                combined[(self._economy._product_market_indices[t], *slices)] = array_t
+            else:
+                assert market_ids.size == 1
+                combined = array_t
+
+        # output how long it took to compute the arrays
+        end_time = time.time()
+        output(f"Finished after {format_seconds(end_time - start_time)}.")
+        output("")
+        return combined
+
+    def compute_micro_values(self, micro_moments: Sequence[MicroMoment]) -> Array:
+        r"""Estimate micro moment values, :math:`v_m`.
+
+        Parameters
+        ----------
+        micro_moments : `sequence of MicroMoment`
+            :class:`MicroMoment` instances. The ``value`` argument is ignored.
+
+        Returns
+        -------
+        `ndarray`
+            Micro moment values :math:`v_m`.
+
+        Examples
+        --------
+            - :doc:`Tutorial </tutorial>`
+
+        """
+        errors: List[Error] = []
+
+        # keep track of long it takes to compute micro moment values
+        output("Computing micro moment values ...")
+        start_time = time.time()
+
+        # validate and structure micro moments
+        moments = Moments(micro_moments, self._economy)
+        if moments.MM == 0:
+            return np.array([], options.dtype)
+
+        def market_factory(s: Hashable) -> Tuple[EconomyResultsMarket, Moments]:
+            """Build a market along with arguments used to compute micro moment values."""
+            market_s = EconomyResultsMarket(
+                self._economy, s, self._parameters, self._sigma, self._pi, self._rho, self._beta, self._gamma,
+                self._delta, self._data_override
+            )
+            return market_s, moments
+
+        # compute micro moments values market-by-market
+        micro_numerator_mapping: Dict[Hashable, Array] = {}
+        micro_denominator_mapping: Dict[Hashable, Array] = {}
+        generator = generate_items(
+            self._economy.unique_market_ids, market_factory, EconomyResultsMarket.safely_compute_micro_contributions
+        )
+        for t, (micro_numerator_t, micro_denominator_t, errors_t) in generator:
+            micro_numerator_mapping[t] = scipy.sparse.csr_matrix(micro_numerator_t)
+            micro_denominator_mapping[t] = scipy.sparse.csr_matrix(micro_denominator_t)
+            errors.extend(errors_t)
+
+        # aggregate micro moments across all markets (this is done after market-by-market computation to preserve
+        #   numerical stability with different market orderings)
+        with np.errstate(all='ignore'):
+            micro_numerator = scipy.sparse.csr_matrix((moments.MM, 1), dtype=options.dtype)
+            micro_denominator = scipy.sparse.csr_matrix((moments.MM, 1), dtype=options.dtype)
+            for t in self._economy.unique_market_ids:
+                micro_numerator += micro_numerator_mapping[t]
+                micro_denominator += micro_denominator_mapping[t]
+
+            micro_numerator = micro_numerator.toarray()
+            micro_denominator = micro_denominator.toarray()
+            micro_values = micro_numerator / micro_denominator
+
+        # output a warning about any errors
+        if errors:
+            output("")
+            output(exceptions.MultipleErrors(errors))
+            output("")
+
+        # output how long it took to compute the micro values
+        end_time = time.time()
+        output(f"Finished after {format_seconds(end_time - start_time)}.")
+        output("")
+        return micro_values.flatten()
+
+    def compute_micro_scores(
+            self, dataset: MicroDataset, micro_data: Mapping, integration: Optional[Integration] = None) -> List[Array]:
+        r"""Compute scores for observations :math:`n \in N_d` from a micro dataset :math:`d`.
+
+        The score for observation :math:`n \in N_d` is
+
+        .. math::
+           :label: score
+
+           \mathscr{S}_n = \frac{\partial\log\mathscr{P}_n}{\partial\theta'},
+
+        in which the conditional probability of observation :math:`n` is
+
+        .. math::
+
+           \mathscr{P}_n = \frac{
+               \sum_{i \in I_n} w_{it_n} s_{ij_nt_n} w_{dij_nt_n}
+           }{
+               \sum_{t \in T} \sum_{i \in I_t} \sum_{j \in J_t \cup \{0\}} w_{it} s_{ijt} w_{dijt}
+           }
+
+        where :math:`i \in I_n` integrates over unobserved heterogeneity for observation :math:`n`.
+
+        Parameters
+        ----------
+        dataset : `MicroDataset`
+            The :class:`MicroDataset` for which scores will be computed. The ``compute_weights`` function is called
+            separately for each observation :math:`n`.
+        micro_data : `structured array-like`
+            Each row corresponds either to an observation :math:`n` or if there are multiple rows per observation, to
+            an :math:`i \in I_n` that integrates over unobserved heterogeneity. In addition to the names of any
+            demographics used in the ``agent_formulation``, the following fields are required:
+
+                - **market_ids** : (`object`) - Market IDs :math:`t_n` for each observation :math:`n`.
+
+                - **choice_indices** : (`int`) - Within-market indices of choices :math:`j_n`. If ``compute_weights``
+                  passed to the ``dataset`` returns an array with :math:`J_t` elements in its second axis, then choice
+                  indices take on values from :math:`0` to :math:`J_t - 1` where :math:`0` corresponds to the first
+                  inside good. If it returns an array with :math:`1 + J_t` elements in its second axis, then choice
+                  indices take on values from :math:`0` to :math:`J_t` where :math:`0` corresponds to the outside good.
+
+            If the ``dataset`` is configured to support second choice data, second choices are also required:
+
+                - **second_choice_indices** : (`int, optional`) - Within-market indices of second choices :math:`k_n`.
+                  If ``compute_weights`` passed to the ``dataset`` returns an array with :math:`J_t` elements in its
+                  third axis, then second choice indices take on values from :math:`0` to :math:`J_t - 1` where
+                  :math:`0` corresponds to the first inside good. If it returns an array with :math:`1 + J_t` elements
+                  in its third axis, then second choice indices take on values from :math:`0` to :math:`J_t` where
+                  :math:`0` corresponds to the outside good.
+
+            The following fields are required if ``integration`` is not specified:
+
+                - **micro_ids** : (`object, optional`) - IDs corresponding to observations :math:`n`, which should be
+                  pre-sorted, from smallest to largest.
+
+                - **weights** : (`numeric, optional`) - Integration weights, :math:`w_{it_n}`, for integration over
+                  unobserved heterogeneity :math:`i \in I_n`.
+
+                - **nodes** : (`numeric, optional`) - Unobserved agent characteristics called integration nodes,
+                  :math:`\nu`. If there are more than :math:`K_2` columns (the number of demand-side nonlinear product
+                  characteristics), only the first :math:`K_2` will be retained. If any columns of ``sigma`` are fixed
+                  at zero, only the first few columns of these nodes will be used.
+
+            If these fields are specified, each row corresponds to an :math:`i \in I_n`, and there should generally be
+            multiple rows per observation :math:`n`.
+
+            The convenience function :func:`build_integration` can be useful when constructing custom nodes and weights.
+
+            .. note::
+
+               If ``nodes`` has multiple columns, it can be specified as a matrix or broken up into multiple
+               one-dimensional fields with column index suffixes that start at zero. For example, if there are three
+               columns of nodes, a ``nodes`` field with three columns can be replaced by three one-dimensional fields:
+               ``nodes0``, ``nodes1``, and ``nodes2``.
+
+        integration : `Integration, optional`
+            :class:`Integration` configuration for how to build ``nodes`` and ``weights`` fields in ``micro_data`` for
+            each observation :math:`n`. If this configuration is specified, any ``micro_ids``, ``weights``, and
+            ``nodes`` in ``micro_data`` will be ignored.
+
+            If specified, each row of ``micro_data`` is treated as corresponding to a unique observation :math:`n`,
+            and will be duplicated by as many rows of nodes as are created by the :class:`Integration` configuration.
+            Specifically, :math:`K_2` columns of nodes (the number of demand-side nonlinear product characteristics)
+            will be built for each observation :math:`n`.
+
+        Returns
+        -------
+        `list`
+            Scores :math:`\mathscr{S}_n`. The list is in the same order as :attr:`ProblemResults.theta`. Each element
+            of the list is an array of scores for the corresponding parameter. The array is in the same order as
+            observations appear in the ``micro_data``.
+
+            Taking the mean of a parameter's scores delivers the observed ``value`` for an optimal
+            :class:`MicroMoment` that matches the score for that parameter.
+
+            If any scores are ``numpy.nan``, this means that the probability of that observation is
+            :math:`\mathscr{P}_n = 0`, suggesting that the observation was not generated by the sampling process
+            defined by the ``dataset``.
+
+        """
+
+        # keep track of long it takes to compute scores
+        output("Computing micro scores ...")
+        start_time = time.time()
+
+        # build agents and verify that they have choices
+        demographics, demographics_formulations = build_demographics(
+            self._economy.products, micro_data, self._economy.agent_formulation
+        )
+        micro_agents = MicroAgents(
+            self._economy.products, micro_data, demographics, demographics_formulations, integration
+        )
+        if micro_agents.choice_indices.size == 0:
+            raise KeyError("micro_data must have choice_indices.")
+
+        # compute the contributions
+        numerator_mapping, numerator_jacobian_mapping, denominator_mapping, denominator_jacobian_mapping, errors = (
+            self._compute_scores(dataset, micro_agents)
+        )
+
+        # compute the denominator contributions
+        unique_market_ids = np.unique(micro_agents.market_ids)
+        denominator = np.stack([denominator_mapping[t] for t in unique_market_ids]).sum()
+        denominator_jacobian = np.stack([denominator_jacobian_mapping[t] for t in unique_market_ids]).sum(axis=0)
+
+        # stack the numerator contributions
+        unique_micro_ids = np.unique(micro_agents.micro_ids)
+        numerator = np.stack([numerator_mapping[n] for n in unique_micro_ids])
+        numerator_jacobian = np.stack([numerator_jacobian_mapping[n] for n in unique_micro_ids])
+
+        # construct the scores
+        scores = []
+        for p in range(self._parameters.P):
+            with np.errstate(all='ignore'):
+                scores.append(numerator_jacobian[..., p] / numerator - denominator_jacobian[..., p] / denominator)
+
+        # output how long it took to compute scores
+        end_time = time.time()
+        output(f"Finished after {format_seconds(end_time - start_time)}.")
+        output("")
+        return scores
+
+    def compute_agent_scores(
+            self, dataset: MicroDataset, micro_data: Optional[Mapping] = None,
+            integration: Optional[Integration] = None) -> Array:
+        r"""Compute scores for all agent-choices, treated as observations :math:`n \in N_d` from a micro dataset
+        :math:`d`.
+
+        This method is the same as :meth:`ProblemResults.compute_micro_scores`, except it computes scores for all
+        possible choices of all :attr:`Problem.agents`. Each agent-choice is treated as a separate observation
+        :math:`n`. Instead of returning an array, this method returns a mapping from market IDs to scores, to facilitate
+        use by ``compute_values`` of an optimal :class:`MicroMoment`.
+
+        Parameters
+        ----------
+        dataset : `MicroDataset`
+            The :class:`MicroDataset` for which scores will be computed. The ``compute_weights`` function is called
+            separately for each observation :math:`n`.
+        micro_data : `structured array-like, optional`
+            By default, each row in :attr:`Problem.agents` and each possible choice is treated as an observation
+            :math:`n`. In this case, ``integration`` should generally be specified to define integration
+            :math:`i \in I_n` over unobserved heterogeneity.
+
+            If ``micro_data`` is specified, it should be of the form required by
+            :meth:`ProblemResults.compute_micro_scores`, except without ``choice_indices`` or ``second_choice_indices``,
+            since scores will be computed for all choices.
+
+        integration : `Integration, optional`
+            :class:`Integration` configuration of the form required by :meth:`ProblemResults.compute_micro_scores`.
+
+        Returns
+        -------
+        `list`
+            Scores :math:`\mathscr{S}_n`. The list is in the same order as :attr:`ProblemResults.theta`. Each element
+            of the list is a mapping from market IDs supported by the ``dataset`` to an array of scores for the
+            corresponding parameter and market. The array's dimensions correspond to the dimensions of the weights
+            returned by ``compute_weights`` passed to ``dataset``.
+
+            Taking the mean of a parameter's scores delivers the observed ``value`` for an optimal
+            :class:`MicroMoment` that matches the score for that parameter.
+
+            To build an optimal :class:`MicroMoment` that matches the score for a parameter, ``compute_values`` should
+            select the array corresponding to that parameter and the requested market ``t``. Any ``numpy.nan` values in
+            this array correspond to agent-choices that are assigned a probability of :math:`\mathscr{P}_n = 0` by the
+            sampling process defined by ``dataset``, so should be replaced by some arbitrary number (e.g., by passing
+            the array of scores through ``numpy.nan_to_num``).
+
+        """
+
+        # keep track of long it takes to compute scores
+        output("Computing micro scores ...")
+        start_time = time.time()
+
+        # build micro data
+        if micro_data is not None:
+            demographics, demographics_formulations = build_demographics(
+                self._economy.products, micro_data, self._economy.agent_formulation
+            )
+            micro_agents = MicroAgents(
+                self._economy.products, micro_data, demographics, demographics_formulations, integration
+            )
+        else:
+            if dataset.market_ids is None:
+                agents = self._economy.agents
+            else:
+                agent_indices = np.concatenate([self._economy._agent_market_indices[t] for t in dataset.market_ids])
+                agents = self._economy.agents[agent_indices]
+
+            demographics = agents.demographics
+            demographics_formulations = agents.dtype.fields['demographics'][2]
+            micro_data = {
+                'micro_ids': np.arange(agents.size),
+                'market_ids': agents.market_ids,
+                'agent_ids': agents.agent_ids,
+                'nodes': agents.nodes,
+                'weights': np.ones(agents.size),
+            }
+            micro_agents = MicroAgents(
+                self._economy.products, micro_data, demographics, demographics_formulations, integration
+            )
+
+        # compute the contributions
+        numerator_mapping, numerator_jacobian_mapping, denominator_mapping, denominator_jacobian_mapping, errors = (
+            self._compute_scores(dataset, micro_agents)
+        )
+
+        # compute the denominator contributions
+        unique_market_ids = np.unique(micro_agents.market_ids)
+        denominator = np.stack([denominator_mapping[t] for t in unique_market_ids]).sum()
+        denominator_jacobian = np.stack([denominator_jacobian_mapping[t] for t in unique_market_ids]).sum(axis=0)
+
+        # construct the scores
+        scores: List[Dict[Hashable, Array]] = []
+        for t, indices in get_indices(micro_agents.market_ids).items():
+            market_micro_ids = np.unique(micro_agents.micro_ids[indices])
+            numerator = np.stack([numerator_mapping[n] for n in market_micro_ids])
+            numerator_jacobian = np.stack([numerator_jacobian_mapping[n] for n in market_micro_ids])
+            for p in range(self._parameters.P):
+                if p == len(scores):
+                    scores.append({})
+                with np.errstate(all='ignore'):
+                    scores[p][t] = numerator_jacobian[..., p] / numerator - denominator_jacobian[..., p] / denominator
+
+        # output how long it took to compute scores
+        end_time = time.time()
+        output(f"Finished after {format_seconds(end_time - start_time)}.")
+        output("")
+        return scores
+
+    def _compute_scores(
+            self, dataset: MicroDataset, micro_agents: RecArray) -> (
+            Tuple[
+                Dict[Hashable, Array], Dict[Hashable, Array], Dict[Hashable, Array], Dict[Hashable, Array], List[Error]
+            ]):
+        """Compute scores for observations from a micro dataset."""
+        errors: List[Error] = []
+
+        # validate the micro dataset
+        if not isinstance(dataset, MicroDataset):
+            raise TypeError("dataset must be a MicroDataset.")
+        dataset._validate(self._economy)
+
+        # collect information about micro and market IDs
+        unique_micro_ids = np.unique(micro_agents.micro_ids)
+        unique_market_ids = np.unique(micro_agents.market_ids)
+        micro_indices = get_indices(micro_agents.micro_ids)
+
+        # verify that the micro data only has market IDs supported by the dataset
+        if dataset.market_ids is not None and set(unique_market_ids) - dataset.market_ids:
+            raise ValueError("The market_ids field of micro_data must not have IDs not supported by the dataset.")
+
+        def denominator_market_factory(s: Hashable) -> Tuple[EconomyResultsMarket, MicroDataset]:
+            """Build a market along with arguments used to compute denominator contributions."""
+            market_s = EconomyResultsMarket(
+                self._economy, s, self._parameters, self._sigma, self._pi, self._rho, self._beta, self._gamma,
+                self._delta, self._data_override
+            )
+            return market_s, dataset
+
+        # construct mappings from market IDs to xi Jacobians and denominator contributions
+        output("Computing contributions from the denominator of observation probabilities ...")
+        xi_jacobian_mapping: Dict[Hashable, Array] = {}
+        denominator_mapping: Dict[Hashable, Array] = {}
+        denominator_jacobian_mapping: Dict[Hashable, Array] = {}
+        generator = generate_items(
+            unique_market_ids, denominator_market_factory,
+            EconomyResultsMarket.safely_compute_score_denominator_contributions
+        )
+        for t, (xi_jacobian_t, denominator_t, denominator_jacobian_t, errors_t) in generator:
+            xi_jacobian_mapping[t] = xi_jacobian_t
+            denominator_mapping[t] = denominator_t
+            denominator_jacobian_mapping[t] = denominator_jacobian_t
+            errors.extend(errors_t)
+
+        def numerator_market_factory(i: Hashable) -> tuple:
+            """Build a market for a micro observation along with arguments used to numerator contributions."""
+            t_i = micro_agents.market_ids[micro_indices[i]].take(0)
+            j_i = k_i = None
+            if micro_agents.choice_indices.size > 0:
+                j_i = micro_agents.choice_indices[micro_indices[i]].take(0)
+            if micro_agents.second_choice_indices.size > 0:
+                k_i = micro_agents.second_choice_indices[micro_indices[i]].take(0)
+
+            products_i = self._economy.products[self._economy._product_market_indices[t_i]]
+            micro_agents_i = micro_agents[micro_indices[i]]
+            market_i = EconomyResultsMarket(
+                self._economy, t_i, self._parameters, self._sigma, self._pi, self._rho, self._beta, self._gamma,
+                self._delta, self._data_override, products_i, micro_agents_i,
+            )
+            return market_i, dataset, j_i, k_i, xi_jacobian_mapping[t_i]
+
+        # construct mappings from observations to numerator contributions
+        output("Computing contributions from the numerator of observation probabilities ...")
+        numerator_mapping: Dict[Hashable, Array] = {}
+        numerator_jacobian_mapping: Dict[Hashable, Array] = {}
+        generator = generate_items(
+            unique_micro_ids, numerator_market_factory,
+            EconomyResultsMarket.safely_compute_score_numerator_contributions
+        )
+        if unique_micro_ids.size > 1:
+            generator = output_progress(generator, unique_micro_ids.size, time.time())
+        for n, (numerator_n, numerator_jacobian_n, errors_n) in generator:
+            numerator_mapping[n] = numerator_n
+            numerator_jacobian_mapping[n] = numerator_jacobian_n
+            errors.extend(errors_n)
+
+        # output a warning about any errors
+        if errors:
+            output("")
+            output(exceptions.MultipleErrors(errors))
+            output("")
+
+        return numerator_mapping, numerator_jacobian_mapping, denominator_mapping, denominator_jacobian_mapping, errors
+
+    def simulate_micro_data(self, dataset: MicroDataset, seed: Optional[int] = None) -> RecArray:
+        r"""Simulate observations :math:`n \in N_d` from a micro dataset :math:`d`.
+
+        Each micro observation :math:`n` underlying the dataset :math:`d` is simulated according to agent weights
+        :math:`w_{it}`, choice probabilities :math:`s_{ijt}`, and survey weights :math:`w_{dijt}`.
+
+        Parameters
+        ----------
+        dataset : `MicroDataset`
+            The :class:`MicroDataset` for which micro data will be simulated.
+        seed : `int, optional`
+            Passed to :class:`numpy.random.RandomState` to seed the random number generator before data are simulated.
+            By default, a seed is not passed to the random number generator.
+
+        Returns
+        -------
+        `recarray`
+            Micro data with as many rows as ``observations`` passed to the ``dataset``. Fields:
+
+            - **micro_ids** : (`object`) - IDs corresponding to observations :math:`n`.
+
+            - **market_ids** : (`object`) - Market IDs :math:`t_n` for each observation :math:`n`.
+
+            - **agent_indices** : (`int`) - Within-market indices of agents :math:`i_n` that take on values from
+              :math:`0` to :math:`I_t - 1`.
+
+            - **choice_indices** : (`int`) - Within-market indices of simulated choices :math:`j_n`. If
+              ``compute_weights`` passed to the ``dataset`` returns an array with :math:`J_t` elements in its second
+              axis, then choice indices take on values from :math:`0` to :math:`J_t - 1` where :math:`0` corresponds to
+              the first inside good. If it returns an array with :math:`1 + J_t` elements in its second axis, then
+              choice indices take on values from :math:`0` to :math:`J_t` where :math:`0` corresponds to the outside
+              good.
+
+            If the ``dataset`` is configured to support second choice data, second choices will also be simulated:
+
+            - **second_choice_indices** : (`int`) - Within-market indices of simulated second choices :math:`k_n`. If
+              ``compute_weights`` passed to the ``dataset`` returns an array with :math:`J_t` elements in its third
+              axis, then second choice indices take on values from :math:`0` to :math:`J_t - 1` where :math:`0`
+              corresponds to the first inside good. If it returns an array with :math:`1 + J_t` elements in its third
+              axis, then second choice indices take on values from :math:`0` to :math:`J_t` where :math:`0` corresponds
+              to the outside good.
+
+            Integration nodes and demographics can be merged in on the ``market_ids`` and ``agent_indices`` fields.
+            Product characteristics can be merged in on the ``market_ids`` and ``choice_indices`` fields. Product
+            characteristics of any second choices can be merged in on the ``market_ids`` and ``second_choice_indices``
+            fields.
+
+        Examples
+        --------
+            - :doc:`Tutorial </tutorial>`
+
+        """
+        errors: List[Error] = []
+
+        # keep track of long it takes to simulate micro data
+        output("Simulating micro data ...")
+        start_time = time.time()
+
+        # validate the micro dataset
+        if not isinstance(dataset, MicroDataset):
+            raise TypeError("dataset must be a MicroDataset.")
+        dataset._validate(self._economy)
+
+        # determine the datatypes to use to conserve on memory
+        agent_dtype = choice_dtype = np.uint64
+        for dtype in [np.uint32, np.uint8]:
+            if self._economy._max_I <= np.iinfo(dtype).max:
+                agent_dtype = dtype
+            if self._economy._max_J <= np.iinfo(dtype).max:
+                choice_dtype = dtype
+
+        # collect the relevant market ids
+        if dataset.market_ids is None:
+            market_ids = self._economy.unique_market_ids
+        else:
+            market_ids = np.asarray(list(dataset.market_ids))
+
+        def market_factory(s: Hashable) -> Tuple[EconomyResultsMarket, MicroDataset]:
+            """Build a market along with arguments used to compute weights needed for simulation."""
+            assert dataset is not None
+            market_s = EconomyResultsMarket(
+                self._economy, s, self._parameters, self._sigma, self._pi, self._rho, self._beta, self._gamma,
+                self._delta, self._data_override
+            )
+            return market_s, dataset
+
+        # construct mappings from market IDs to probabilities, IDs, and indices needed for simulation
+        weights_mapping: Dict[Hashable, Array] = {}
+        agent_indices_mapping: Dict[Hashable, Array] = {}
+        choice_indices_mapping: Dict[Hashable, Array] = {}
+        second_choice_indices_mapping: Dict[Hashable, Array] = {}
+        generator = generate_items(market_ids, market_factory, EconomyResultsMarket.safely_compute_micro_weights)
+        if market_ids.size > 1:
+            generator = output_progress(generator, market_ids.size, start_time)
+        for t, (weights_t, errors_t) in generator:
+            errors.extend(errors_t)
+            indices_t = np.nonzero(weights_t)
+            weights_mapping[t] = weights_t[indices_t]
+            agent_indices_mapping[t] = indices_t[0].astype(agent_dtype)
+            choice_indices_mapping[t] = indices_t[1].astype(choice_dtype)
+            if len(indices_t) == 3:
+                second_choice_indices_mapping[t] = indices_t[2].astype(choice_dtype)
+
+        # output a warning about any errors
+        if errors:
+            output("")
+            output(exceptions.MultipleErrors(errors))
+            output("")
+
+        # simulate choices
+        state = np.random.RandomState(seed)
+        weights_data = np.concatenate([weights_mapping[t] for t in market_ids])
+        choices = state.choice(weights_data.size, p=weights_data / weights_data.sum(), size=dataset.observations)
+
+        # construct the micro data
+        micro_data_mapping: Dict[str, Tuple[Array, Any]] = collections.OrderedDict()
+        micro_data_mapping['micro_ids'] = (np.arange(dataset.observations), np.object_)
+        micro_data_mapping['market_ids'] = (
+            np.concatenate([np.full(agent_indices_mapping[t].size, t) for t in market_ids])[choices], np.object_
+        )
+        micro_data_mapping['agent_indices'] = (
+            np.concatenate([agent_indices_mapping[t] for t in market_ids])[choices], agent_dtype
+        )
+        micro_data_mapping['choice_indices'] = (
+            np.concatenate([choice_indices_mapping[t] for t in market_ids])[choices], choice_dtype
+        )
+        if second_choice_indices_mapping:
+            micro_data_mapping['second_choice_indices'] = (
+                np.concatenate([second_choice_indices_mapping[t] for t in market_ids])[choices], choice_dtype
+            )
+        micro_data = structure_matrices(micro_data_mapping)
+
+        # output how long this took
+        end_time = time.time()
+        output(f"Finished after {format_seconds(end_time - start_time)}.")
+        output("")
+        return micro_data

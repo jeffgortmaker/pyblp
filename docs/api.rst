@@ -103,7 +103,7 @@ The following methods test the validity of overidentifying and model restriction
    ProblemResults.run_lm_test
    ProblemResults.run_wald_test
 
-In addition to class attributes, other post-estimation outputs can be estimated market-by-market with the following methods, which each return an array.
+In addition to class attributes, other post-estimation outputs can be estimated market-by-market with the following methods, each of which return an array.
 
 .. autosummary::
    :toctree: _api
@@ -129,7 +129,7 @@ In addition to class attributes, other post-estimation outputs can be estimated 
    ProblemResults.compute_profits
    ProblemResults.compute_consumer_surpluses
 
-A parametric bootstrap can be used, for example, to compute standard errors for the above post-estimation outputs. The following method returns a results class with all of the above methods, which returns a distribution of post-estimation outputs corresponding to different bootstrapped samples.
+A parametric bootstrap can be used, for example, to compute standard errors forpost-estimation outputs. The following method returns a results class with the same methods in the list directly above, which returns a distribution of post-estimation outputs corresponding to different bootstrapped samples.
 
 .. autosummary::
    :toctree: _api
@@ -150,6 +150,16 @@ Importance sampling can be used to create new integration nodes and weights. Its
 
    ProblemResults.importance_sampling
 
+The following methods can compute micro moment values, compute scores from micro data, or simulate such data.
+
+.. autosummary::
+   :toctree: _api
+
+   ProblemResults.compute_micro_values
+   ProblemResults.compute_micro_scores
+   ProblemResults.compute_agent_scores
+   ProblemResults.simulate_micro_data
+
 
 Bootstrapped Problem Results Class
 ----------------------------------
@@ -163,7 +173,7 @@ Parametric bootstrap computation returns the following class.
 
    BootstrappedResults
 
-This class has all of the same methods as :class:`ProblemResults`, except for :meth:`ProblemResults.bootstrap`, :meth:`ProblemResults.compute_optimal_instruments`, :meth:`ProblemResults.importance_sampling`, :meth:`ProblemResults.run_distance_test`, :meth:`ProblemResults.run_hansen_test`, :meth:`ProblemResults.run_lm_test`, and :meth:`ProblemResults.run_wald_test`. It can also be pickled or converted into a dictionary.
+This class has many of the same methods as :meth:`ProblemResults`. It can also be pickled or converted into a dictionary.
 
 .. autosummary::
    :toctree: _api
@@ -284,7 +294,7 @@ Solved simulations return the following results class.
 
    SimulationResults
 
-This class has all of the same methods as :class:`ProblemResults`, except for :meth:`ProblemResults.bootstrap`, :meth:`ProblemResults.compute_optimal_instruments`, :meth:`ProblemResults.importance_sampling`, :meth:`ProblemResults.run_distance_test`, :meth:`ProblemResults.run_hansen_test`, :meth:`ProblemResults.run_lm_test`, and :meth:`ProblemResults.run_wald_test`. It can also be pickled or converted into a dictionary.
+This class has many of the same methods as :class:`ProblemResults`. It can also be pickled or converted into a dictionary.
 
 .. autosummary::
    :toctree: _api
@@ -298,15 +308,6 @@ It can also be converted into a :class:`Problem` with the following method.
    :toctree: _api
 
    SimulationResults.to_problem
-
-The following methods can compute micro moment values, compute scores from micro data, or simulate such data.
-
-.. autosummary::
-   :toctree: _api
-
-   SimulationResults.compute_micro_values
-   SimulationResults.compute_micro_scores
-   SimulationResults.build_micro_data
 
 
 Structured Data Classes

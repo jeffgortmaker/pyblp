@@ -108,6 +108,7 @@ Features
 - Product-specific demographics
 - Flexible micro moments that can match statistics based on survey data
 - Support for micro moments based on second choice data
+- Support for optimal micro moments that match micro data scores
 - Fixed effect absorption
 - Nonlinear functions of product characteristics
 - Concentrating out linear parameters

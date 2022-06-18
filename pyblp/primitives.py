@@ -282,32 +282,8 @@ class Agents(object):
                     raise ValueError("Since agent_formulation is specified, agent_data must be specified as well.")
                 if agent_formulation._absorbed_terms:
                     raise ValueError("agent_formulation does not support fixed effect absorption.")
-
-                # either build standard demographics or stack product-specific demographics
-                try:
-                    demographics, demographics_formulations, _ = agent_formulation._build_matrix(agent_data)
-                except patsy.PatsyError as exception:
-                    max_J = max(i.size for i in get_indices(products.market_ids).values())
-                    demographics_by_product: List[Array] = []
-                    for j in range(max_J):
-                        try:
-                            demographics_j, demographics_formulations, _ = agent_formulation._build_matrix(
-                                agent_data, fallback_index=j
-                            )
-                        except patsy.PatsyError as exception_j:
-                            if j == 0:
-                                raise exception
-                            message = (
-                                f"Each demographic must either be a single column or have a column for each of the "
-                                f"maximum of {max_J} products. There is at least one missing demographic for product "
-                                f"index {j}."
-                            )
-                            raise ValueError(message) from exception_j
-                        else:
-                            demographics_by_product.append(demographics_j)
-
-                    demographics = np.dstack(demographics_by_product)
-                    assert demographics.shape[2] == max_J and demographics_formulations is not None
+                demographics, demographics_formulations = build_demographics(products, agent_data, agent_formulation)
+                assert demographics is not None
 
             # load IDs
             if agent_data is not None:
@@ -381,6 +357,156 @@ class Agents(object):
             'nodes': (nodes, options.dtype),
             (tuple(demographics_formulations), 'demographics'): (demographics, options.dtype)
         })
+
+
+class MicroAgents(object):
+    """Micro agent data structured as a record array."""
+
+    micro_ids: Array
+    market_ids: Array
+    agent_ids: Array
+    weights: Array
+    nodes: Array
+    demographics: Array
+    choice_indices: Array
+    second_choice_indices: Array
+
+    def __new__(
+            cls, products: RecArray, micro_data: Mapping, demographics: Optional[Array] = None,
+            demographics_formulations: Sequence[ColumnFormulation] = (),
+            integration: Optional[Integration] = None) -> RecArray:
+        """Structure agent data."""
+        K2 = products.X2.shape[1]
+        if K2 == 0:
+            raise ValueError("X2 is not formulated.")
+
+        # load IDs and indices
+        market_ids = extract_matrix(micro_data, 'market_ids')
+        agent_ids = extract_matrix(micro_data, 'agent_ids')
+        choice_indices = extract_matrix(micro_data, 'choice_indices')
+        second_choice_indices = extract_matrix(micro_data, 'second_choice_indices')
+        if market_ids is None:
+            raise KeyError("micro_data must have a market_ids field.")
+        if market_ids.shape[1] > 1:
+            raise ValueError("The market_ids field of micro_data must be one-dimensional.")
+        if set(np.unique(market_ids)) - set(np.unique(products.market_ids)):
+            raise ValueError("The market_ids field of micro_data must not have IDs that are not in product data.")
+        if agent_ids is not None and agent_ids.shape[1] > 1:
+            raise ValueError("The agent_ids field of micro_data must be one-dimensional.")
+        if choice_indices is not None and choice_indices.shape[1] > 1:
+            raise ValueError("The choice_indices field of micro_data must be one-dimensional.")
+        if second_choice_indices is not None and second_choice_indices.shape[1] > 1:
+            raise ValueError("The second_choice_indices field of micro_data must be one-dimensional.")
+
+        # either load micro IDs, nodes, and weights, or build them
+        if integration is None:
+            micro_ids = extract_matrix(micro_data, 'micro_ids')
+            nodes = extract_matrix(micro_data, 'nodes')
+            weights = extract_matrix(micro_data, 'weights')
+            if micro_ids is None:
+                raise KeyError("Since integration is None, micro_data must have micro_ids.")
+            if micro_ids.shape[1] > 1:
+                raise ValueError("The micro_ids field of micro_data must be one-dimensional.")
+            if micro_ids is not None and not (micro_ids == np.sort(micro_ids)).all():
+                raise ValueError("The micro_ids field of micro_data should be sorted, from smallest to largest.")
+            if nodes is None:
+                raise KeyError("Since integration is None, micro_data must have nodes.")
+            if weights is None:
+                raise KeyError("Since integration is None, micro_data must have weights.")
+            if weights.shape[1] != 1:
+                raise ValueError("The weights field of micro_data must be one-dimensional.")
+
+            # delete columns of nodes if there are too many
+            if nodes.shape[1] > K2:
+                nodes = nodes[:, :K2]
+
+            # verify that market IDs and choices are the same within observation
+            for n, indices in get_indices(micro_ids).items():
+                unique_market_ids = np.unique(market_ids[indices])
+                if unique_market_ids.size > 1:
+                    raise ValueError(f"Micro ID '{n}' has more than one market ID: {list(unique_market_ids)}.")
+
+                if choice_indices is not None:
+                    unique_choices = np.unique(choice_indices[indices])
+                    if unique_choices.size > 1:
+                        raise ValueError(f"Micro ID '{n}' has more than one choice index: {list(unique_choices)}.")
+
+                if second_choice_indices is not None:
+                    unique_second_choices = np.unique(second_choice_indices[indices])
+                    if unique_second_choices.size > 1:
+                        raise ValueError(
+                            f"Micro ID '{n}' has more than one second choice index {list(unique_second_choices)}."
+                        )
+        else:
+            if not isinstance(integration, Integration):
+                raise ValueError("integration must be None or an Integration instance.")
+
+            # duplicate observations by as many rows as there are built nodes
+            micro_ids, nodes, weights = integration._build_many(K2, np.arange(market_ids.size))
+            repeats = np.bincount(micro_ids)
+            duplicate = lambda x: np.repeat(x, repeats, axis=0) if x is not None else None
+            demographics = duplicate(demographics)
+            market_ids = duplicate(market_ids)
+            agent_ids = duplicate(agent_ids)
+            choice_indices = duplicate(choice_indices)
+            second_choice_indices = duplicate(second_choice_indices)
+
+        # output a warning if weights do not sum to one for each observation
+        micro_groups = Groups(micro_ids)
+        bad_weights_index = np.abs(1 - micro_groups.sum(weights)) > options.weights_tol
+        if np.any(bad_weights_index):
+            bad_micro = "all observations" if np.all(bad_weights_index) else micro_groups.unique[bad_weights_index.flat]
+            warn(
+                f"Integration weights for the following observations sum to a value that differs from 1 by more than "
+                f"options.weights_tol: {bad_micro}. Sometimes this is fine, for example when weights were built with "
+                f"importance sampling. Otherwise, it is a sign that there is a data problem."
+            )
+
+        return structure_matrices({
+            'micro_ids': (micro_ids, np.object_),
+            'market_ids': (market_ids, np.object_),
+            'agent_ids': (agent_ids, np.object_),
+            'weights': (weights, options.dtype),
+            'nodes': (nodes, options.dtype),
+            (tuple(demographics_formulations), 'demographics'): (demographics, options.dtype),
+            'choice_indices': (choice_indices, np.int64),
+            'second_choice_indices': (second_choice_indices, np.int64),
+        })
+
+
+def build_demographics(
+        products: RecArray, data: Mapping, agent_formulation: Optional[Formulation]) -> (
+        Tuple[Optional[Array], List[ColumnFormulation]]):
+    """Either build standard demographics or stack product-specific demographics."""
+    if agent_formulation is None:
+        return None, []
+
+    demographics_formulations: List[ColumnFormulation] = []
+    try:
+        demographics, demographics_formulations, _ = agent_formulation._build_matrix(data)
+    except patsy.PatsyError as exception:
+        max_J = max(i.size for i in get_indices(products.market_ids).values())
+        demographics_by_product: List[Array] = []
+        for j in range(max_J):
+            try:
+                demographics_j, demographics_formulations, _ = agent_formulation._build_matrix(
+                    data, fallback_index=j
+                )
+            except patsy.PatsyError as exception_j:
+                if j == 0:
+                    raise exception
+                message = (
+                    f"Each demographic must either be a single column or have a column for each of the maximum of "
+                    f"{max_J} products. There is at least one missing demographic for product index {j}."
+                )
+                raise ValueError(message) from exception_j
+            else:
+                demographics_by_product.append(demographics_j)
+
+        demographics = np.dstack(demographics_by_product)
+        assert demographics.shape[2] == max_J and demographics_formulations is not None
+
+    return demographics, demographics_formulations
 
 
 class Container(abc.ABC):

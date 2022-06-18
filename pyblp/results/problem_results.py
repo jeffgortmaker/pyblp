@@ -4,16 +4,16 @@ import itertools
 from pathlib import Path
 import pickle
 import time
-from typing import Any, Callable, Dict, Hashable, List, Optional, Sequence, TYPE_CHECKING, Tuple, Union
+from typing import Any, Dict, Hashable, List, Optional, Sequence, TYPE_CHECKING, Tuple, Union
 
 import numpy as np
 import scipy.linalg
 
-from .results import Results
+from .economy_results import EconomyResults
 from .. import exceptions, options
 from ..configurations.integration import Integration
 from ..configurations.iteration import Iteration
-from ..markets.results_market import ResultsMarket
+from ..markets.economy_results_market import EconomyResultsMarket
 from ..micro import Moments
 from ..primitives import Agents
 from ..utilities.algebra import (
@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     from ..economies.problem import Progress  # noqa
 
 
-class ProblemResults(Results):
+class ProblemResults(EconomyResults):
     r"""Results of a solved BLP problem.
 
     Many results are class attributes. Other post-estimation outputs be computed by calling class methods.
@@ -320,7 +320,7 @@ class ProblemResults(Results):
             scaled_objective: bool, shares_bounds: Bounds, costs_bounds: Bounds,
             micro_moment_covariances: Optional[Array], center_moments: bool, W_type: str, se_type: str) -> None:
         """Compute cumulative progress statistics, update weighting matrices, and estimate standard errors."""
-        super().__init__(progress.problem, progress.parameters)
+        self.sigma, self.pi, self.rho, _, _ = progress.parameters.expand(progress.theta)
         self._errors = progress.errors
         self.problem = progress.problem
         self.W = progress.W
@@ -350,6 +350,9 @@ class ProblemResults(Results):
         self._shares_bounds = shares_bounds
         self._costs_bounds = costs_bounds
         self._se_type = se_type
+        super().__init__(
+            self.problem, progress.parameters, self.sigma, self.pi, self.rho, self.beta, self.gamma, self.delta
+        )
 
         # if there are any fixed effects, compute their contributions to xi and omega
         self.xi_fe = np.zeros_like(self.xi)
@@ -416,7 +419,6 @@ class ProblemResults(Results):
             ]
 
         # store estimated parameters and information about them (beta and gamma have already been stored above)
-        self.sigma, self.pi, self.rho, _, _ = self._parameters.expand(self.theta)
         self.sigma_squared = self.sigma @ self.sigma.T
         self.parameters = np.c_[np.r_[
             self.theta,
@@ -514,83 +516,6 @@ class ProblemResults(Results):
 
         # join the sections into a single string
         return "\n\n".join(sections)
-
-    def _combine_arrays(
-            self, compute_market_results: Callable, market_ids: Array, fixed_args: Sequence = (),
-            market_args: Sequence = (), agent_data: Optional[Mapping] = None,
-            integration: Optional[Integration] = None) -> Array:
-        """Compute arrays for one or all markets and stack them into a single array. An array for a single market is
-        computed by passing fixed_args (identical for all markets) and market_args (matrices with as many rows as there
-        are products that are restricted to the market) to compute_market_results, a ResultsMarket method that returns
-        the output for the market any errors encountered during computation. Agent data and an integration configuration
-        can be optionally specified to override agent data.
-        """
-        errors: List[Error] = []
-
-        # keep track of how long it takes to compute the arrays
-        start_time = time.time()
-
-        # structure or construct different agent data
-        if agent_data is None and integration is None:
-            agents = self.problem.agents
-            agents_market_indices = self.problem._agent_market_indices
-        else:
-            agents = Agents(self.problem.products, self.problem.agent_formulation, agent_data, integration)
-            agents_market_indices = get_indices(agents.market_ids)
-
-        def market_factory(s: Hashable) -> tuple:
-            """Build a market along with arguments used to compute arrays."""
-            indices_s = self.problem._product_market_indices[s]
-            market_s = ResultsMarket(
-                self.problem, s, self._parameters, self.sigma, self.pi, self.rho, self.beta, self.gamma, self.delta,
-                agents_override=agents[agents_market_indices[s]]
-            )
-            if market_ids.size == 1:
-                args_s = market_args
-            else:
-                args_s = [None if a is None else a[indices_s] for a in market_args]
-            return (market_s, *fixed_args, *args_s)
-
-        # construct a mapping from market IDs to market-specific arrays
-        array_mapping: Dict[Hashable, Array] = {}
-        generator = generate_items(market_ids, market_factory, compute_market_results)
-        if market_ids.size > 1:
-            generator = output_progress(generator, market_ids.size, start_time)
-        for t, (array_t, errors_t) in generator:
-            array_mapping[t] = np.c_[array_t]
-            errors.extend(errors_t)
-
-        # output a warning about any errors
-        if errors:
-            output("")
-            output(exceptions.MultipleErrors(errors))
-            output("")
-
-        # determine the sizes of dimensions
-        dimension_sizes = []
-        for dimension in range(len(array_mapping[market_ids[0]].shape)):
-            if dimension == 0:
-                dimension_sizes.append(sum(array_mapping[t].shape[dimension] for t in market_ids))
-            else:
-                dimension_sizes.append(max(array_mapping[t].shape[dimension] for t in market_ids))
-
-        # preserve the original product order or the sorted market order when stacking the arrays
-        combined = np.full(dimension_sizes, np.nan, options.dtype)
-        for t, array_t in array_mapping.items():
-            slices = (slice(0, s) for s in array_t.shape[1:])
-            if dimension_sizes[0] == market_ids.size:
-                combined[(market_ids == t, *slices)] = array_t
-            elif dimension_sizes[0] == self.problem.N:
-                combined[(self.problem._product_market_indices[t], *slices)] = array_t
-            else:
-                assert market_ids.size == 1
-                combined = array_t
-
-        # output how long it took to compute the arrays
-        end_time = time.time()
-        output(f"Finished after {format_seconds(end_time - start_time)}.")
-        output("")
-        return combined
 
     def _compute_mean_G(self, moments: Moments) -> Array:
         """Compute the Jacobian of moments with respect to parameters."""
@@ -1046,11 +971,12 @@ class ProblemResults(Results):
         true_X3 = self.problem._compute_true_X3()
 
         def market_factory(
-                pair: Tuple[int, Hashable]) -> Tuple[ResultsMarket, Array, Optional[Array], Optional[Iteration], bool]:
+                pair: Tuple[int, Hashable]) -> (
+                Tuple[EconomyResultsMarket, Array, Optional[Array], Optional[Iteration], bool]):
             """Build a market along with arguments used to compute equilibrium prices and shares along with delta."""
             c, s = pair
             indices_s = self.problem._product_market_indices[s]
-            market_cs = ResultsMarket(
+            market_cs = EconomyResultsMarket(
                 self.problem, s, self._parameters, bootstrapped_sigma[c], bootstrapped_pi[c], bootstrapped_rho[c],
                 bootstrapped_beta[c], bootstrapped_gamma[c], self.delta + true_X1 @ (bootstrapped_beta[c] - self.beta)
             )
@@ -1066,7 +992,7 @@ class ProblemResults(Results):
         bootstrapped_delta = np.zeros((draws, self.problem.N, 1), options.dtype)
         iteration_stats: Dict[Hashable, SolverStats] = {}
         pairs = itertools.product(range(draws), self.problem.unique_market_ids)
-        generator = generate_items(pairs, market_factory, ResultsMarket.safely_solve_equilibrium_realization)
+        generator = generate_items(pairs, market_factory, EconomyResultsMarket.safely_solve_equilibrium_realization)
         for (d, t), (prices_dt, shares_dt, delta_dt, iteration_stats_dt, errors_dt) in generator:
             bootstrapped_prices[d, self.problem._product_market_indices[t]] = prices_dt
             bootstrapped_shares[d, self.problem._product_market_indices[t]] = shares_dt
@@ -1315,9 +1241,9 @@ class ProblemResults(Results):
             costs = np.exp(costs)
 
         def equilibrium_market_factory(
-                s: Hashable) -> Tuple[ResultsMarket, Array, Optional[Array], Optional[Iteration], bool]:
+                s: Hashable) -> Tuple[EconomyResultsMarket, Array, Optional[Array], Optional[Iteration], bool]:
             """Build a market along with arguments used to compute equilibrium prices and shares along with delta."""
-            market_s = ResultsMarket(
+            market_s = EconomyResultsMarket(
                 self.problem, s, self._parameters, self.sigma, self.pi, self.rho, self.beta, self.gamma, delta
             )
             costs_s = costs[self.problem._product_market_indices[s]]
@@ -1332,7 +1258,7 @@ class ProblemResults(Results):
         iteration_stats: Dict[Hashable, SolverStats] = {}
         generator = generate_items(
             self.problem.unique_market_ids, equilibrium_market_factory,
-            ResultsMarket.safely_solve_equilibrium_realization
+            EconomyResultsMarket.safely_solve_equilibrium_realization
         )
         for t, (prices_t, shares_t, delta_t, iteration_stats_t, errors_t) in generator:
             data_override['prices'][self.problem._product_market_indices[t]] = prices_t
@@ -1345,9 +1271,9 @@ class ProblemResults(Results):
         xi_jacobian = np.full((self.problem.N, self._parameters.P), np.nan, options.dtype)
         omega_jacobian = np.full((self.problem.N, self._parameters.P), np.nan, options.dtype)
         if self._parameters.P > 0:
-            def jacobian_market_factory(s: Hashable) -> Tuple[ResultsMarket, Array]:
+            def jacobian_market_factory(s: Hashable) -> Tuple[EconomyResultsMarket, Array]:
                 """Build a market with the data realization along with arguments used to compute the Jacobians."""
-                market_s = ResultsMarket(
+                market_s = EconomyResultsMarket(
                     self.problem, s, self._parameters, self.sigma, self.pi, self.rho, self.beta, delta=delta,
                     data_override=data_override
                 )
@@ -1357,7 +1283,7 @@ class ProblemResults(Results):
             # compute the Jacobians market-by-market
             generator = generate_items(
                 self.problem.unique_market_ids, jacobian_market_factory,
-                ResultsMarket.safely_compute_jacobian_realizations
+                EconomyResultsMarket.safely_compute_jacobian_realizations
             )
             for t, (xi_jacobian_t, omega_jacobian_t, errors_t) in generator:
                 xi_jacobian[self.problem._product_market_indices[t]] = xi_jacobian_t
@@ -1498,9 +1424,9 @@ class ProblemResults(Results):
         errors: List[Error] = []
         market_indices = get_indices(agents.market_ids)
 
-        def market_factory(s: Hashable) -> Tuple[ResultsMarket]:
+        def market_factory(s: Hashable) -> Tuple[EconomyResultsMarket]:
             """Build a market use to compute probabilities."""
-            market_s = ResultsMarket(
+            market_s = EconomyResultsMarket(
                 self.problem, s, self._parameters, self.sigma, self.pi, self.rho, delta=delta,
                 agents_override=agents[market_indices[s]]
             )
@@ -1510,7 +1436,7 @@ class ProblemResults(Results):
         state = np.random.RandomState(seed)
         weights = np.zeros_like(agents.weights)
         generator = generate_items(
-            self.problem.unique_market_ids, market_factory, ResultsMarket.safely_compute_probabilities
+            self.problem.unique_market_ids, market_factory, EconomyResultsMarket.safely_compute_probabilities
         )
         for t, (probabilities_t, errors_t) in generator:
             errors.extend(errors_t)
