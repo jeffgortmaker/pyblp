@@ -117,6 +117,12 @@ micro_computation_chunks : `int`
     any estimation results, for example by splitting up computation into 10 chunks, use
     ``pyblp.options. micro_computation_chunks = 10``.
 
+drop_product_fields : `bool`
+    Whether to conserve memory by dropping product data fields that are not needed for market-level computation when
+    initializing a market. By default, these fields are not dropped. Setting
+    ``pyblp.options.drop_product_fields = True`` may reduce memory usage, especially if there are many instruments,
+    at the cost of extra time needed to drop these fields.
+
 """
 
 import numpy as _np
@@ -136,3 +142,4 @@ collinear_atol = collinear_rtol = 1e-10
 psd_atol = psd_rtol = 1e-8
 detect_micro_collinearity = False
 micro_computation_chunks = 1
+drop_product_fields = False

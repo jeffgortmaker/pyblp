@@ -68,16 +68,15 @@ class Market(Container):
             self.ownership_matrix = self.products.ownership[:, :self.products.shape[0]]
 
         # drop unneeded product data fields to save memory
-        products_update_mapping = {}
-        for key in ['market_ids', 'demand_ids', 'supply_ids', 'clustering_ids', 'X1', 'X3', 'ZD', 'ZS', 'ownership']:
-            products_update_mapping[key] = (None, self.products[key].dtype)
-        self.products = update_matrices(self.products, products_update_mapping)
+        if options.drop_product_fields:
+            products_update_mapping = {}
+            for key in ['demand_ids', 'supply_ids', 'clustering_ids', 'X1', 'X3', 'ZD', 'ZS', 'ownership']:
+                products_update_mapping[key] = (None, self.products[key].dtype)
+            self.products = update_matrices(self.products, products_update_mapping)
 
-        # drop unneeded agent data fields, fill missing columns of integration nodes (associated with zeros in sigma)
-        #   with zeros, and drop extra product-specific demographic values for product indices not in this market
-        agents_update_mapping: Dict[str, Tuple[Optional[Array], Any]] = {
-            'market_ids': (None, self.agents.market_ids.dtype)
-        }
+        # fill missing columns of integration nodes (associated with zeros in sigma) with zeros and drop extra
+        #   product-specific demographic values for product indices not in this market
+        agents_update_mapping: Dict[str, Tuple[Optional[Array], Any]] = {}
         if not parameters.nonzero_sigma_index.all():
             nodes = np.zeros((self.agents.shape[0], economy.K2), self.agents.nodes.dtype)
             nodes[:, parameters.nonzero_sigma_index] = self.agents.nodes[:, :parameters.nonzero_sigma_index.sum()]
@@ -85,7 +84,8 @@ class Market(Container):
         if len(self.agents.demographics.shape) == 3:
             demographics = self.agents.demographics[..., :self.products.size]
             agents_update_mapping['demographics'] = (demographics, demographics.dtype)
-        self.agents = update_matrices(self.agents, agents_update_mapping)
+        if agents_update_mapping:
+            self.agents = update_matrices(self.agents, agents_update_mapping)
 
         # create nesting groups but keep all nesting IDs for associating parameters with groups
         self.groups = Groups(self.products.nesting_ids)
