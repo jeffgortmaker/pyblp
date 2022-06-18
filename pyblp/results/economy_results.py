@@ -1408,7 +1408,7 @@ class EconomyResults(SimpleEconomyResults):
         """
 
         # keep track of long it takes to compute scores
-        output("Computing micro scores ...")
+        output("Computing agent scores ...")
         start_time = time.time()
 
         # build micro data
@@ -1498,7 +1498,6 @@ class EconomyResults(SimpleEconomyResults):
             return market_s, dataset
 
         # construct mappings from market IDs to xi Jacobians and denominator contributions
-        output("Computing contributions from the denominator of observation probabilities ...")
         xi_jacobian_mapping: Dict[Hashable, Array] = {}
         denominator_mapping: Dict[Hashable, Array] = {}
         denominator_jacobian_mapping: Dict[Hashable, Array] = {}
@@ -1530,7 +1529,6 @@ class EconomyResults(SimpleEconomyResults):
             return market_i, dataset, j_i, k_i, xi_jacobian_mapping[t_i]
 
         # construct mappings from observations to numerator contributions
-        output("Computing contributions from the numerator of observation probabilities ...")
         numerator_mapping: Dict[Hashable, Array] = {}
         numerator_jacobian_mapping: Dict[Hashable, Array] = {}
         generator = generate_items(
