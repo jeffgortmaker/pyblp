@@ -1300,8 +1300,9 @@ class EconomyResults(SimpleEconomyResults):
 
             If specified, each row of ``micro_data`` is treated as corresponding to a unique observation :math:`n`,
             and will be duplicated by as many rows of nodes as are created by the :class:`Integration` configuration.
-            Specifically, :math:`K_2` columns of nodes (the number of demand-side nonlinear product characteristics)
-            will be built for each observation :math:`n`.
+            Specifically, up to :math:`K_2` columns of nodes (the number of demand-side nonlinear product
+            characteristics) will be built for each observation :math:`n`. If there are zeros on the diagonal of
+            :math:`\Sigma`, nodes will not be built for those characteristics, to cut down on memory usage.
 
         Returns
         -------
@@ -1328,7 +1329,7 @@ class EconomyResults(SimpleEconomyResults):
             self._economy.products, micro_data, self._economy.agent_formulation
         )
         micro_agents = MicroAgents(
-            self._economy.products, micro_data, demographics, demographics_formulations, integration
+            self._economy.products, self._parameters, micro_data, demographics, demographics_formulations, integration
         )
         if micro_agents.choice_indices.size == 0:
             raise KeyError("micro_data must have choice_indices.")
@@ -1417,7 +1418,8 @@ class EconomyResults(SimpleEconomyResults):
                 self._economy.products, micro_data, self._economy.agent_formulation
             )
             micro_agents = MicroAgents(
-                self._economy.products, micro_data, demographics, demographics_formulations, integration
+                self._economy.products, self._parameters, micro_data, demographics, demographics_formulations,
+                integration
             )
         else:
             if dataset.market_ids is None:
@@ -1436,7 +1438,8 @@ class EconomyResults(SimpleEconomyResults):
                 'weights': np.ones(agents.size),
             }
             micro_agents = MicroAgents(
-                self._economy.products, micro_data, demographics, demographics_formulations, integration
+                self._economy.products, self._parameters, micro_data, demographics, demographics_formulations,
+                integration
             )
 
         # compute the contributions
@@ -1486,7 +1489,10 @@ class EconomyResults(SimpleEconomyResults):
         micro_indices = get_indices(micro_agents.micro_ids)
 
         # verify that the micro data only has market IDs supported by the dataset
-        if dataset.market_ids is not None and set(unique_market_ids) - dataset.market_ids:
+        dataset_market_ids = dataset.market_ids
+        if dataset_market_ids is None:
+            dataset_market_ids = set(self._economy.unique_market_ids)
+        if set(unique_market_ids) - dataset_market_ids:
             raise ValueError("The market_ids field of micro_data must not have IDs not supported by the dataset.")
 
         def denominator_market_factory(s: Hashable) -> Tuple[EconomyResultsMarket, MicroDataset]:

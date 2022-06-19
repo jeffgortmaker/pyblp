@@ -9,6 +9,7 @@ import patsy
 from . import options
 from .configurations.formulation import ColumnFormulation, Formulation
 from .configurations.integration import Integration
+from .parameters import Parameters
 from .utilities.basics import Array, Data, Groups, RecArray, extract_matrix, get_indices, structure_matrices, warn
 
 
@@ -372,7 +373,7 @@ class MicroAgents(object):
     second_choice_indices: Array
 
     def __new__(
-            cls, products: RecArray, micro_data: Mapping, demographics: Optional[Array] = None,
+            cls, products: RecArray, parameters: Parameters, micro_data: Mapping, demographics: Optional[Array] = None,
             demographics_formulations: Sequence[ColumnFormulation] = (),
             integration: Optional[Integration] = None) -> RecArray:
         """Structure agent data."""
@@ -442,7 +443,9 @@ class MicroAgents(object):
                 raise ValueError("integration must be None or an Integration instance.")
 
             # duplicate observations by as many rows as there are built nodes
-            micro_ids, nodes, weights = integration._build_many(K2, np.arange(market_ids.size))
+            micro_ids, nodes, weights = integration._build_many(
+                parameters.nonzero_sigma_index.sum(), np.arange(market_ids.size)
+            )
             repeats = np.bincount(micro_ids)
             duplicate = lambda x: np.repeat(x, repeats, axis=0) if x is not None else None
             demographics = duplicate(demographics)

@@ -7,7 +7,6 @@ import numpy as np
 
 from . import options
 from .configurations.formulation import ColumnFormulation
-from .primitives import Container
 from .utilities.algebra import vech
 from .utilities.basics import Array, Bounds, format_number, format_se, format_table
 
@@ -16,6 +15,7 @@ from .utilities.basics import Array, Bounds, format_number, format_se, format_ta
 if TYPE_CHECKING:
     from .economies.economy import Economy  # noqa
     from .markets.market import Market  # noqa
+    from .primitives import Container
 
 
 class Parameter(abc.ABC):
@@ -34,7 +34,7 @@ class Coefficient(Parameter):
     """Information about a single coefficient parameter in sigma, pi, beta, or gamma."""
 
     @abc.abstractmethod
-    def get_product_formulation(self, container: Container) -> ColumnFormulation:
+    def get_product_formulation(self, container: 'Container') -> ColumnFormulation:
         """Get the product formulation associated with the parameter."""
 
     @abc.abstractmethod
@@ -45,7 +45,7 @@ class Coefficient(Parameter):
 class NonlinearCoefficient(Coefficient):
     """Information about a single nonlinear parameter in sigma or pi."""
 
-    def get_product_formulation(self, container: Container) -> ColumnFormulation:
+    def get_product_formulation(self, container: 'Container') -> ColumnFormulation:
         """Get the product formulation associated with the parameter."""
         return container._X2_formulations[self.location[0]]
 
@@ -109,7 +109,7 @@ class OneGroupRhoParameter(RhoParameter):
 class LinearCoefficient(Coefficient):
     """Information about a single linear parameter in beta or gamma."""
 
-    def get_product_formulation(self, container: Container) -> ColumnFormulation:
+    def get_product_formulation(self, container: 'Container') -> ColumnFormulation:
         """Get the product formulation associated with the parameter."""
         return container._X2_formulations[self.location[0]]
 
@@ -122,7 +122,7 @@ class LinearCoefficient(Coefficient):
 class BetaParameter(LinearCoefficient):
     """Information about a single linear parameter in beta."""
 
-    def get_product_formulation(self, container: Container) -> ColumnFormulation:
+    def get_product_formulation(self, container: 'Container') -> ColumnFormulation:
         """Get the product formulation associated with the parameter."""
         return container._X1_formulations[self.location[0]]
 
@@ -130,7 +130,7 @@ class BetaParameter(LinearCoefficient):
 class GammaParameter(LinearCoefficient):
     """Information about a single linear parameter in gamma."""
 
-    def get_product_formulation(self, container: Container) -> ColumnFormulation:
+    def get_product_formulation(self, container: 'Container') -> ColumnFormulation:
         """Get the product formulation associated with the parameter."""
         return container._X3_formulations[self.location[0]]
 
