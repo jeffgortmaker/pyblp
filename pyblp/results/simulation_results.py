@@ -230,7 +230,9 @@ class SimulationResults(EconomyResults):
 
     def to_dict(
             self, attributes: Sequence[str] = (
-                'product_data', 'computation_time', 'fp_converged', 'fp_iterations', 'contraction_evaluations'
+                'product_data', 'delta', 'costs', 'computation_time', 'fp_converged', 'fp_iterations',
+                'contraction_evaluations', 'profit_gradients', 'profit_gradient_norms', 'profit_hessians',
+                'profit_hessian_eigenvalues'
             )) -> dict:
         """Convert these results into a dictionary that maps attribute names to values.
 
