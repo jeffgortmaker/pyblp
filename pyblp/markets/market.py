@@ -1504,6 +1504,8 @@ class Market(Container):
                 if weights.shape[2] == 1 + self.J:
                     assert eliminated_outside_probabilities is not None
                     dataset_weights[:, -self.J:, 0] *= eliminated_outside_probabilities.T
+                if weights.shape[1] == weights.shape[2] == 1 + self.J:
+                    dataset_weights[:, 0, 0] = 0
 
             # truncate numerical errors from below by zero
             dataset_weights[dataset_weights < 0] = 0
@@ -1541,6 +1543,9 @@ class Market(Container):
                             assert eliminated_outside_probabilities is not None
                             product1[:, -self.J:, 0] *= eliminated_outside_probabilities.T
                             product2[:, -self.J:, 0] *= eliminated_outside_probabilities_tangent_mapping[p].T
+                        if weights.shape[1] == weights.shape[2] == 1 + self.J:
+                            product1[:, 0, 0] = 0
+                            product2[:, 0, 0] = 0
 
                         weights_tangent *= product1 + product2
 

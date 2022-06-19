@@ -396,17 +396,17 @@ def large_blp_simulation() -> SimulationFixture:
             ),
         ),
         MicroMoment(
-            name="diversion interaction",
+            name="unconditional diversion interaction",
             dataset=MicroDataset(
                 name="inside first and second",
                 observations=simulation.N,
-                compute_weights=lambda _, p, a: np.ones((a.size, p.size, p.size)),
+                compute_weights=lambda _, p, a: np.ones((a.size, 1 + p.size, 1 + p.size)),
                 market_ids=[simulation.unique_market_ids[0]],
             ),
             value=0,
             compute_values=lambda _, p, a: (
-                np.tile(p.X2[:, [2]], (a.size, 1, p.size)) *
-                np.tile(p.X2[:, [2]], (a.size, 1, p.size)).swapaxes(1, 2)
+                np.tile(np.c_[np.r_[0, p.X2[:, 2]]], (a.size, 1, 1 + p.size)) *
+                np.tile(np.c_[np.r_[0, p.X2[:, 2]]], (a.size, 1, 1 + p.size)).swapaxes(1, 2)
             ),
         ),
     ])
