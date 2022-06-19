@@ -225,25 +225,34 @@ def test_agent_resampling(simulated_problem: SimulatedProblemFixture) -> None:
 @pytest.mark.usefixtures('simulated_problem')
 def test_micro_chunking(simulated_problem: SimulatedProblemFixture) -> None:
     """Test that micro chunking doesn't substantially change anything."""
-    _, _, problem, solve_options, _ = simulated_problem
+    simulation, simulation_results, problem, solve_options, _ = simulated_problem
 
     # skip configurations without micro moments
-    if 'micro_moments' not in solve_options:
+    if 'micro_moments' not in solve_options or not solve_options['micro_moments']:
         return pytest.skip("Micro chunking has no effect when there are no micro moments.")
 
     # get some baseline results
     updated_solve_options = copy.deepcopy(solve_options)
     updated_solve_options['optimization'] = Optimization('return')
+    agent_scores1 = simulation_results.compute_agent_scores(
+        solve_options['micro_moments'][0].dataset, integration=simulation.integration
+    )
     problem_results1 = problem.solve(**updated_solve_options)
 
     # get some results with chunking
     assert pyblp.options.micro_computation_chunks == 1
     for chunks in [2, 3]:
         pyblp.options.micro_computation_chunks = chunks
+        agent_scores2 = simulation_results.compute_agent_scores(
+            solve_options['micro_moments'][0].dataset, integration=simulation.integration
+        )
         problem_results2 = problem.solve(**updated_solve_options)
         pyblp.options.micro_computation_chunks = 1
 
         # verify that all results are very close
+        np.testing.assert_allclose(
+            list(agent_scores1[0].values())[0], list(agent_scores2[0].values())[0], atol=1e-12, rtol=1e-6
+        )
         for key, result in problem_results1.__dict__.items():
             if isinstance(result, np.ndarray) and result.dtype != np.object_:
                 np.testing.assert_allclose(result, getattr(problem_results2, key), atol=1e-12, rtol=1e-6, err_msg=key)
@@ -1354,7 +1363,7 @@ def test_micro_scores(simulated_problem: SimulatedProblemFixture) -> None:
 
     # test each results type and dataset separately
     results_mapping = {
-        # 'simulation': simulation_results,
+        'simulation': simulation_results,
         'problem': problem_results,
     }
     datasets = {m.dataset for m in solve_options['micro_moments']}

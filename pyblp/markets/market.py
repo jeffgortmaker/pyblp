@@ -1,7 +1,7 @@
 """Market underlying the BLP model."""
 
 import functools
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 import numpy as np
 
@@ -1567,6 +1567,30 @@ class Market(Container):
 
         return weights_mapping, denominator_mapping, weights_tangent_mapping, denominator_tangent_mapping
 
+    def generate_micro_chunks(
+            self, probabilities: Optional[Array] = None,
+            probabilities_tangent_mapping: Optional[Dict[int, Array]] = None) -> (
+            Iterator[Tuple[Optional[Array], Optional[Array], Optional[Dict[int, Array]]]]):
+        """Generate chunks of agents for micro computations to reduce memory usage."""
+        agent_indices_chunks = [None]
+        if options.micro_computation_chunks > 1:
+            agent_indices_chunks = np.array_split(np.arange(self.I), options.micro_computation_chunks)
+
+        probabilities_chunk = probabilities
+        probabilities_tangent_mapping_chunk = probabilities_tangent_mapping
+        for agent_indices in agent_indices_chunks:
+            if agent_indices is not None:
+                if agent_indices.size == 0:
+                    continue
+                if probabilities is not None:
+                    probabilities_chunk = probabilities[:, agent_indices]
+                if probabilities_tangent_mapping is not None:
+                    probabilities_tangent_mapping_chunk = {}
+                    for p, probabilities_tangent in probabilities_tangent_mapping.items():
+                        probabilities_tangent_mapping_chunk[p] = probabilities_tangent[:, agent_indices]
+
+            yield agent_indices, probabilities_chunk, probabilities_tangent_mapping_chunk
+
     def compute_micro_contributions(
             self, moments: Moments, delta: Optional[Array] = None, probabilities: Optional[Array] = None,
             probabilities_tangent_mapping: Optional[Dict[int, Array]] = None, compute_jacobians: bool = False,
@@ -1589,21 +1613,8 @@ class Market(Container):
             (moments.MM, moments.MM), 0 if compute_covariances else np.nan, options.dtype
         )
 
-        # optionally split up computation by groups of agents to reduce memory usage
-        agent_indices_chunks = [None]
-        probabilities_chunk = probabilities
-        probabilities_tangent_mapping_chunk = probabilities_tangent_mapping
-        if options.micro_computation_chunks > 1:
-            agent_indices_chunks = np.array_split(np.arange(self.I), options.micro_computation_chunks)
-        for agent_indices in agent_indices_chunks:
-            if agent_indices is not None:
-                if probabilities is not None:
-                    probabilities_chunk = probabilities[:, agent_indices]
-                if probabilities_tangent_mapping is not None:
-                    probabilities_tangent_mapping_chunk = {}
-                    for p, probabilities_tangent in probabilities_tangent_mapping.items():
-                        probabilities_tangent_mapping_chunk[p] = probabilities_tangent[:, agent_indices]
-
+        micro_chunks = self.generate_micro_chunks(probabilities, probabilities_tangent_mapping)
+        for agent_indices, probabilities_chunk, probabilities_tangent_mapping_chunk in micro_chunks:
             # compute dataset contributions
             datasets = [m.dataset for m in moments.micro_moments]
             (

@@ -438,15 +438,17 @@ class EconomyResultsMarket(Market):
         )
 
         # compute contributions
-        _, denominator_mapping, _, tangent_mapping = self.compute_micro_dataset_contributions(
-            [dataset], self.delta, probabilities, probabilities_tangent_mapping, compute_jacobians=True
-        )
-        if dataset in denominator_mapping:
-            denominator = denominator_mapping[dataset]
-            jacobian = np.array([tangent_mapping[(dataset, p)] for p in range(self.parameters.P)])
-        else:
-            denominator = 0
-            jacobian = np.zeros(self.parameters.P, options.dtype)
+        denominator = 0
+        jacobian = np.zeros(self.parameters.P, options.dtype)
+        micro_chunks = self.generate_micro_chunks(probabilities, probabilities_tangent_mapping)
+        for agent_indices, probabilities_chunk, probabilities_tangent_mapping_chunk in micro_chunks:
+            _, denominator_mapping_chunk, _, tangent_mapping_chunk = self.compute_micro_dataset_contributions(
+                [dataset], self.delta, probabilities_chunk, probabilities_tangent_mapping_chunk, compute_jacobians=True,
+                agent_indices=agent_indices
+            )
+            if dataset in denominator_mapping_chunk:
+                denominator += denominator_mapping_chunk[dataset]
+                jacobian += np.array([tangent_mapping_chunk[(dataset, p)] for p in range(self.parameters.P)])
 
         return xi_jacobian, denominator, jacobian, errors
 
@@ -467,42 +469,57 @@ class EconomyResultsMarket(Market):
         )
 
         # obtain weights and their derivatives
-        weights_mapping, _, tangent_mapping, _ = self.compute_micro_dataset_contributions(
-            [dataset], self.delta, probabilities, probabilities_tangent_mapping, compute_jacobians=True
-        )
-        if dataset in weights_mapping:
-            weights = weights_mapping[dataset]
-            tangent = np.stack([tangent_mapping[(dataset, p)] for p in range(self.parameters.P)], axis=-1)
-        else:
-            weights = np.zeros_like(self.compute_micro_weights(dataset))
-            tangent = np.zeros(list(weights.shape) + [self.parameters.P], options.dtype)
-
-        # validate choices and select corresponding weights if specified
-        if j is not None:
-            try:
-                weights = weights[:, j]
-                tangent = tangent[:, j]
-            except IndexError as exception:
-                message = f"In market '{self.t}', choice index '{j}' is not between 0 and {weights.shape[1] - 1}."
-                raise ValueError(message) from exception
-
-        # validate second choices and select corresponding weights if specified and there are second choices
-        if len(weights.shape) == 1 + int(j is None) + 1:
-            if j is not None and k is None:
-                raise ValueError(
-                    "The dataset is configured to support second choice data, so micro_data must have "
-                    "second_choice_indices."
+        numerator_chunks: List[Array] = []
+        jacobian_chunks: List[Array] = []
+        micro_chunks = self.generate_micro_chunks(probabilities, probabilities_tangent_mapping)
+        for agent_indices, probabilities_chunk, probabilities_tangent_mapping_chunk in micro_chunks:
+            weights_mapping_chunk, _, tangent_mapping_chunk, _ = self.compute_micro_dataset_contributions(
+                [dataset], self.delta, probabilities_chunk, probabilities_tangent_mapping_chunk, compute_jacobians=True,
+                agent_indices=agent_indices
+            )
+            if dataset in weights_mapping_chunk:
+                weights_chunk = weights_mapping_chunk[dataset]
+                tangent_chunk = np.stack(
+                    [tangent_mapping_chunk[(dataset, p)] for p in range(self.parameters.P)], axis=-1
                 )
-            if k is not None:
+            else:
+                weights_chunk = np.zeros_like(self.compute_micro_weights(dataset, agent_indices))
+                tangent_chunk = np.zeros(list(weights_chunk.shape) + [self.parameters.P], options.dtype)
+
+            # validate choices and select corresponding weights if specified
+            if j is not None:
                 try:
-                    weights = weights[:, k]
-                    tangent = tangent[:, k]
+                    weights_chunk = weights_chunk[:, j]
+                    tangent_chunk = tangent_chunk[:, j]
                 except IndexError as exception:
-                    message = f"In market '{self.t}', choice index '{k}' is not between 0 and {weights.shape[-1] - 1}."
+                    message = (
+                        f"In market '{self.t}', choice index '{j}' is not between 0 and {weights_chunk.shape[1] - 1}."
+                    )
                     raise ValueError(message) from exception
 
-        # integrate over agents to get the numerator contributions
-        numerator = weights.sum(axis=0)
-        jacobian = tangent.sum(axis=0)
+            # validate second choices and select corresponding weights if specified and there are second choices
+            if len(weights_chunk.shape) == 1 + int(j is None) + 1:
+                if j is not None and k is None:
+                    raise ValueError(
+                        "The dataset is configured to support second choice data, so micro_data must have "
+                        "second_choice_indices."
+                    )
+                if k is not None:
+                    try:
+                        weights_chunk = weights_chunk[:, k]
+                        tangent_chunk = tangent_chunk[:, k]
+                    except IndexError as exception:
+                        message = (
+                            f"In market '{self.t}', second choice index '{k}' is not between 0 and "
+                            f"{weights_chunk.shape[-1] - 1}."
+                        )
+                        raise ValueError(message) from exception
+
+            # integrate over agents to get the numerator contributions
+            numerator_chunks.append(weights_chunk.sum(axis=0))
+            jacobian_chunks.append(tangent_chunk.sum(axis=0))
+
+        numerator = np.stack(numerator_chunks).sum(axis=0)
+        jacobian = np.stack(jacobian_chunks).sum(axis=0)
 
         return numerator, jacobian, errors
