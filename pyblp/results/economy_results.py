@@ -1353,7 +1353,9 @@ class EconomyResults(SimpleEconomyResults):
         scores = []
         for p in range(self._parameters.P):
             with np.errstate(all='ignore'):
-                scores.append(numerator_jacobian[..., p] / numerator - denominator_jacobian[..., p] / denominator)
+                scores_p = numerator_jacobian[..., p] / numerator - denominator_jacobian[..., p] / denominator
+            scores_p[~np.isfinite(scores_p)] = np.nan
+            scores.append(scores_p)
 
         # output how long it took to compute scores
         end_time = time.time()
@@ -1462,7 +1464,9 @@ class EconomyResults(SimpleEconomyResults):
                 if p == len(scores):
                     scores.append({})
                 with np.errstate(all='ignore'):
-                    scores[p][t] = numerator_jacobian[..., p] / numerator - denominator_jacobian[..., p] / denominator
+                    scores_pt = numerator_jacobian[..., p] / numerator - denominator_jacobian[..., p] / denominator
+                scores_pt[~np.isfinite(scores_pt)] = np.nan
+                scores[p][t] = scores_pt
 
         # output how long it took to compute scores
         end_time = time.time()
