@@ -441,6 +441,10 @@ class MicroAgents(object):
         else:
             if not isinstance(integration, Integration):
                 raise ValueError("integration must be None or an Integration instance.")
+            if parameters.nonzero_sigma_index.sum() == 0:
+                raise ValueError(
+                    "There is no unobserved heterogeneity over which to integrate, so integration must be None."
+                )
 
             # duplicate observations by as many rows as there are built nodes
             micro_ids, nodes, weights = integration._build_many(
