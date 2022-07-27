@@ -1,0 +1,11 @@
+,value
+E[age | mi],0.783
+E[fs | mi],3.86
+E[age | sw],0.73
+E[fs | sw],3.17
+E[age | su],0.74
+E[fs | su],2.97
+E[age | pv],0.652
+E[fs | pv],3.47
+E[new | mid],0.0794
+E[new | high],0.1581
