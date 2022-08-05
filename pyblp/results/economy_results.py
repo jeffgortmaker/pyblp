@@ -1146,7 +1146,7 @@ class EconomyResults(SimpleEconomyResults):
         return combined
 
     def compute_micro_values(self, micro_moments: Sequence[MicroMoment]) -> Array:
-        r"""Estimate micro moment values, :math:`v_m`.
+        r"""Estimate micro moment values, :math:`f_m(v)`.
 
         Parameters
         ----------
@@ -1156,7 +1156,7 @@ class EconomyResults(SimpleEconomyResults):
         Returns
         -------
         `ndarray`
-            Micro moment values :math:`v_m`.
+            Micro moment values :math:`f_m(v)`.
 
         Examples
         --------
@@ -1182,29 +1182,41 @@ class EconomyResults(SimpleEconomyResults):
             )
             return market_s, moments
 
-        # compute micro moments values market-by-market
-        micro_numerator_mapping: Dict[Hashable, Array] = {}
-        micro_denominator_mapping: Dict[Hashable, Array] = {}
+        # compute micro moment part contributions market-by-market
+        parts_numerator_mapping: Dict[Hashable, Array] = {}
+        parts_denominator_mapping: Dict[Hashable, Array] = {}
         generator = generate_items(
             self._economy.unique_market_ids, market_factory, EconomyResultsMarket.safely_compute_micro_contributions
         )
-        for t, (micro_numerator_t, micro_denominator_t, errors_t) in generator:
-            micro_numerator_mapping[t] = scipy.sparse.csr_matrix(micro_numerator_t)
-            micro_denominator_mapping[t] = scipy.sparse.csr_matrix(micro_denominator_t)
+        for t, (parts_numerator_t, parts_denominator_t, errors_t) in generator:
+            parts_numerator_mapping[t] = scipy.sparse.csr_matrix(parts_numerator_t)
+            parts_denominator_mapping[t] = scipy.sparse.csr_matrix(parts_denominator_t)
             errors.extend(errors_t)
 
         # aggregate micro moments across all markets (this is done after market-by-market computation to preserve
         #   numerical stability with different market orderings)
         with np.errstate(all='ignore'):
-            micro_numerator = scipy.sparse.csr_matrix((moments.MM, 1), dtype=options.dtype)
-            micro_denominator = scipy.sparse.csr_matrix((moments.MM, 1), dtype=options.dtype)
+            # construct micro moment parts
+            parts_numerator = scipy.sparse.csr_matrix((moments.PM, 1), dtype=options.dtype)
+            parts_denominator = scipy.sparse.csr_matrix((moments.PM, 1), dtype=options.dtype)
             for t in self._economy.unique_market_ids:
-                micro_numerator += micro_numerator_mapping[t]
-                micro_denominator += micro_denominator_mapping[t]
+                parts_numerator += parts_numerator_mapping[t]
+                parts_denominator += parts_denominator_mapping[t]
 
-            micro_numerator = micro_numerator.toarray()
-            micro_denominator = micro_denominator.toarray()
-            micro_values = micro_numerator / micro_denominator
+            parts_numerator = parts_numerator.toarray()
+            parts_denominator = parts_denominator.toarray()
+            parts_values = parts_numerator / parts_denominator
+
+            # from the parts, construct micro moment values
+            micro_values = np.zeros((moments.MM, 1), options.dtype)
+            for m, moment in enumerate(moments.micro_moments):
+                part_indices = [moments.micro_parts.index(p) for p in moment.parts]
+                micro_value = moment.compute_value(parts_values[part_indices])
+                micro_value = np.asarray(micro_value).flatten()
+                if micro_value.size != 1:
+                    raise TypeError(f"compute_value of micro moment '{moment}' should return a float.")
+
+                micro_values[m] = micro_value
 
         # output a warning about any errors
         if errors:
@@ -1399,14 +1411,11 @@ class EconomyResults(SimpleEconomyResults):
             corresponding parameter and market. The array's dimensions correspond to the dimensions of the weights
             returned by ``compute_weights`` passed to ``dataset``.
 
-            Taking the mean of a parameter's scores delivers the observed ``value`` for an optimal
-            :class:`MicroMoment` that matches the score for that parameter.
-
-            To build an optimal :class:`MicroMoment` that matches the score for a parameter, ``compute_values`` should
-            select the array corresponding to that parameter and the requested market ``t``. Any ``numpy.nan` values in
-            this array correspond to agent-choices that are assigned a probability of :math:`\mathscr{P}_n = 0` by the
-            sampling process defined by ``dataset``, so should be replaced by some arbitrary number (e.g., by passing
-            the array of scores through ``numpy.nan_to_num``).
+            To build an optimal :class:`MicroMoment` that matches the score for a parameter, ``compute_values``
+            in its single :class:`MicroPart` should select the array corresponding to that parameter and the requested
+            market ``t``. Any ``numpy.nan` values in this array correspond to agent-choices that are assigned a
+            probability of :math:`\mathscr{P}_n = 0` by the sampling process defined by ``dataset``, so should be
+            replaced by some arbitrary number (e.g., by passing the array of scores through ``numpy.nan_to_num``).
 
         """
 

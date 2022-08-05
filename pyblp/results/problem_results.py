@@ -179,14 +179,12 @@ class ProblemResults(EconomyResults):
         Estimated supply-side fixed effects :math:`\omega_{k_1} + \cdots \omega_{k_{E_D}}` in :eq:`fe`, which are only
         computed when there are supply-side fixed effects.
     micro : `ndarray`
-        Micro moments, :math:`\bar{g}_M`, in :eq:`averaged_micro_moments`.
+        Micro moments, :math:`\bar{g}_M`, in :eq:`micro_moment`.
     micro_values : `ndarray`
-        Estimated micro moment values, :math:`v_m`. Rows are in the same order as :attr:`ProblemResults.micro`.
+        Estimated micro moment values, :math:`f_m(v)`. Rows are in the same order as :attr:`ProblemResults.micro`.
     micro_covariances : `ndarray`
-        Estimated asymptotic micro moment covariance matrix with element :math:`(m, m')` computed according to
-        :eq:`micro_moment_covariances`. If overridden by ``micro_sample_covariances`` in :meth:`Problem.solve`,
-        elements of ``micro_sample_covariances`` are multiplied by dataset observation counts to convert sample
-        covariances into asymptotic covariances.
+        Estimated micro moment covariance matrix :math:`S_M` in :eq:`scaled_micro_moment_covariances` divided by
+        :math:`N`. Equal to ``micro_sample_covariances`` if overridden in :meth:`Problem.solve`.
     moments : `ndarray`
         Moments, :math:`\bar{g}`, in :eq:`averaged_moments`.
     moments_jacobian : `ndarray`
@@ -553,13 +551,7 @@ class ProblemResults(EconomyResults):
         S = compute_gmm_moment_covariances(u_list, Z_list, S_type, self.problem.products.clustering_ids, center_moments)
         self.problem._detect_singularity(S, "the estimated covariance matrix of aggregate GMM moments")
         if moments.MM > 0:
-            scaled_covariances = self.micro_covariances.copy()
-            for (m, moment_m), (n, moment_n) in itertools.product(enumerate(moments.micro_moments), repeat=2):
-                scaled_covariances[m, n] *= (
-                    self.problem.N / np.sqrt(moment_m.dataset.observations * moment_n.dataset.observations)
-                )
-
-            S = scipy.linalg.block_diag(S, scaled_covariances)
+            S = scipy.linalg.block_diag(S, self.problem.N * self.micro_covariances)
 
         S += self.simulation_covariances
         return S

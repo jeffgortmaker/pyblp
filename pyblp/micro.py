@@ -2,7 +2,7 @@
 
 import collections.abc
 import functools
-from typing import Callable, List, Optional, Sequence, Set, TYPE_CHECKING, Union
+from typing import Any, Callable, List, Optional, Sequence, Set, TYPE_CHECKING, Union
 
 import numpy as np
 
@@ -18,9 +18,9 @@ class MicroDataset(StringRepresentation):
     r"""Configuration for a micro dataset :math:`d` on which micro moments are computed.
 
     A micro dataset :math:`d`, often a survey, is defined by survey weights :math:`w_{dijt}`, which are used in
-    :eq:`averaged_micro_moments`. For example, :math:`w_{dijt} = 1\{j \neq 0, t \in T_d\}` defines a micro dataset that
-    is a selected sample of inside purchasers in a few markets :math:`T_d \subset T`, giving each market an equal
-    sampling weight. Different micro datasets are independent.
+    :eq:`micro_moment`. For example, :math:`w_{dijt} = 1\{j \neq 0, t \in T_d\}` defines a micro dataset that is a
+    selected sample of inside purchasers in a few markets :math:`T_d \subset T`, giving each market an equal sampling
+    weight. Different micro datasets are independent.
 
     .. warning::
 
@@ -28,9 +28,9 @@ class MicroDataset(StringRepresentation):
 
     Parameters
     ----------
-    name : str
+    name : `str`
         The unique name of the dataset, which will be used for outputting information about micro moments.
-    observations : int
+    observations : `int`
         The number of observations :math:`N_d` in the micro dataset.
     compute_weights : `callable`
         Function for computing survey weights :math:`w_{dijt}` in a market of the following form::
@@ -137,12 +137,13 @@ class MicroDataset(StringRepresentation):
         return f"{len(self.market_ids)} Markets"
 
 
-class MicroMoment(StringRepresentation):
-    r"""Configuration for a micro moment :math:`m`.
+class MicroPart(StringRepresentation):
+    r"""Configuration for a micro moment part :math:`p`.
 
-    Each micro moment :math:`m` is defined by its dataset :math:`d_m` and micro values :math:`v_{mijt}`, which are used
-    in :eq:`averaged_micro_moments`. For example, a micro moment :math:`m` with :math:`v_{mijt} = y_{it}x_{jt}` matches
-    the mean of an interaction between some demographic :math:`y_{it}` and some product characteristic :math:`x_{jt}`.
+    Each micro moment part :math:`p` is defined by its dataset :math:`d_p` and micro values :math:`v_{pijt}`, which are
+    used in :eq:`observed_micro_part` and :eq:`simulated_micro_part`. For example, a micro moment part :math:`p` with
+    :math:`v_{pijt} = y_{it} x_{jt}` yields the mean :math:`\bar{v}_p` or expectation :math:`v_p` of an interaction
+    between some demographic :math:`y_{it}` and product characteristic :math:`x_{jt}`.
 
     .. warning::
 
@@ -150,14 +151,12 @@ class MicroMoment(StringRepresentation):
 
     Parameters
     ----------
-    name : str
-        The unique name of the micro moment, which will be used for outputting information about micro moments.
-    dataset : MicroDataset
-        The :class:`MicroDataset` :math:`d_m` on which the observed ``value`` was computed.
-    value : float
-        The observed value :math:`\bar{v}_m` in :eq:`observed_micro_value`.
+    name : `str`
+        The unique name of the micro moment part, which will be used for outputting information about micro moments.
+    dataset : `MicroDataset`
+        The :class:`MicroDataset` :math:`d_p` on which the micro part is computed.
     compute_values : `callable`
-        Function for computing micro values :math:`v_{mijt}` (or :math:`v_{mijkt}` if the dataset :math:`d_m` contains
+        Function for computing micro values :math:`v_{pijt}` (or :math:`v_{pijkt}` if the dataset :math:`d_p` contains
         second choice data) in a market of the following form::
 
             compute_values(t, products, agents) --> values
@@ -173,74 +172,197 @@ class MicroMoment(StringRepresentation):
         - :doc:`Tutorial </tutorial>`
 
     """
-
     name: str
     dataset: MicroDataset
-    value: float
     compute_values: functools.partial
 
-    def __init__(self, name: str, dataset: MicroDataset, value: float, compute_values: Callable) -> None:
+    def __init__(self, name: str, dataset: MicroDataset, compute_values: Callable) -> None:
         """Validate information to the greatest extent possible without calling the function."""
         if not isinstance(name, str):
             raise TypeError("name must be a string.")
         if not isinstance(dataset, MicroDataset):
             raise TypeError("dataset must be a MicroDataset instance.")
-        if not isinstance(value, (int, float)):
-            raise TypeError("value must be a float.")
         if not callable(compute_values):
             raise ValueError("compute_values must be callable.")
 
         self.name = name
         self.dataset = dataset
-        self.value = value
         self.compute_values = functools.partial(compute_values)
 
     def __str__(self) -> str:
+        """Format information about the part as a string."""
+        return f"{self.name} on {self.dataset}"
+
+
+class MicroMoment(StringRepresentation):
+    r"""Configuration for a micro moment :math:`m`.
+
+    Each micro moment :math:`m` matches a function :math:`f_m(v)` of one or more micro moment parts :math:`v` in
+    :eq:`micro_moment`. For example, :math:`f_m(v) = v_p` with :math:`v_{pijt} = y_{it} x_{jt}` matches the mean of
+    an interaction between some demographic :math:`y_{it}` and some product characteristic :math:`x_{jt}`.
+
+    Non-simple averages such as conditional means, covariances, correlations, or regression coefficients can be matched
+    by choosing an appropriate function :math:`f_m`. For example, :math:`f_m(v) = v_1 / v_2` with
+    :math:`v_{1ijt} = y_{it}x_{jt}1\{j \neq 0\}` and :math:`v_{2ijt} = 1\{j \neq 0\}` matches the conditional mean of an
+    interaction between :math:`y_{it}` and :math:`x_{jt}` among those who do not choose the outside option
+    :math:`j = 0`.
+
+    .. warning::
+
+        Micro moments are under active development. Their API and functionality may change as development progresses.
+
+    Parameters
+    ----------
+    name : `str`
+        The unique name of the micro moment, which will be used for outputting information about micro moments.
+    value : `float`
+        The observed value :math:`f_m(\bar{v})`.
+    parts : `MicroPart or sequence of MicroPart`
+        The :class:`MicroPart` configurations on which :math:`f_m(\cdot)` depends. If this is just a single part
+        :math:`p` and not a sequence, it is assumed that :math:`f_m = v_p` so that the micro moment matches :math:`v_p`.
+        If this is a sequence, both ``compute_value`` and ``compute_gradient`` need to be specified.
+    compute_value : `callable, optional`
+        Function for computing the simulated micro value :math:`f_m(v)` (only if ``parts`` is a sequence) of the
+        following form::
+
+            compute_value(part_values) --> value
+
+        where ``part_values`` is the array :math:`v` with as many values as there are ``parts`` and the returned
+        ``value`` is the scalar :math:`f_m(v)`.
+
+    compute_gradient : `callable, optional`
+        Function for computing the gradient of the simulated micro value with respect to its parts (only required if
+        ``parts`` is a sequence) of the following form::
+
+            compute_gradient(part_values) --> gradient
+
+        where ``part_values`` is the array :math:`v` with as many value as there are ``parts`` and the returned
+        ``gradient`` is :math:`\frac{\partial f_m(v)}{\partial v}`, an array of the same shape. This is used to compute
+        both analytic gradients and moment covariances.
+
+    Examples
+    --------
+        - :doc:`Tutorial </tutorial>`
+
+    """
+
+    name: str
+    value: float
+    parts: Sequence[MicroPart]
+    compute_value: functools.partial
+    compute_gradient: functools.partial
+
+    def __init__(
+            self, name: str, value: Any, parts: Union[MicroPart, Sequence[MicroPart]],
+            compute_value: Optional[Callable] = None, compute_gradient: Optional[Callable] = None) -> None:
+        """Validate information to the greatest extent possible without calling the functions."""
+        if not isinstance(name, str):
+            raise TypeError("name must be a string.")
+
+        value = np.asarray(value).flatten()
+        if value.size != 1:
+            raise TypeError("value must be a float.")
+        if not np.isfinite(value):
+            raise ValueError("value must be a finite number.")
+
+        if isinstance(parts, MicroPart):
+            parts = [parts]
+            if compute_value is None:
+                compute_value = lambda v: float(v)
+            if compute_gradient is None:
+                compute_gradient = lambda v: np.ones_like(v)
+        else:
+            if not isinstance(parts, collections.abc.Sequence) or len(parts) < 1:
+                raise TypeError("parts must be a MicroPart instance or a sequence of instances.")
+            if compute_value is None:
+                raise TypeError("Since parts is a sequence of MicroPart instances, compute_value must be specified.")
+            if compute_gradient is None:
+                raise TypeError("Since parts is a sequence of MicroPart instances, compute_gradient must be specified.")
+            for p, part in enumerate(parts):
+                if not isinstance(part, MicroPart):
+                    raise TypeError("parts must be a MicroPart instance of a sequence of instances.")
+                for part2 in parts[:p]:
+                    if part == part2:
+                        raise ValueError(f"There is more than one of the micro parts '{part}'.")
+                    if part.name == part2.name:
+                        raise ValueError(f"Micro part '{part}' has the same name as '{part2}'.")
+                    if part.dataset != part2.dataset and part.dataset.name == part2.dataset.name:
+                        raise ValueError(
+                            f"The dataset of '{part}' is not the same instance as that of '{part2}', but the two "
+                            f"datasets have the same name."
+                        )
+        if not callable(compute_value):
+            raise ValueError("When specified, compute_value must be callable.")
+        if not callable(compute_gradient):
+            raise ValueError("When specified, compute_gradient must be callable.")
+
+        self.name = name
+        self.value = float(value)
+        self.parts = parts
+        self.compute_value = functools.partial(compute_value)
+        self.compute_gradient = functools.partial(compute_gradient)
+
+    def __str__(self) -> str:
         """Format information about the moment as a string."""
-        return f"{self.name}: {format_number(self.value)} ({self.dataset})"
+        parts_string = str(self.parts) if isinstance(self.parts, MicroPart) else "; ".join(str(p) for p in self.parts)
+        return f"{self.name}: {format_number(self.value)} ({parts_string})"
 
 
 class Moments(object):
     """Information about a sequence of micro moments."""
 
     micro_moments: Sequence[MicroMoment]
+    micro_parts: Sequence[MicroPart]
     values: Array
     MM: int
+    PM: int
 
-    def __init__(self, micro_moments: Sequence[MicroMoment], economy: Optional['Economy'] = None) -> None:
+    def __init__(self, micro_moments: Sequence[MicroMoment], economy: 'Economy') -> None:
         """Validate and store information about a sequence of micro moment instances."""
-        if economy is not None:
-            if not isinstance(micro_moments, collections.abc.Sequence):
-                raise TypeError("micro_moments must be a sequence of micro moment instances.")
-            for m, moment in enumerate(micro_moments):
-                if not isinstance(moment, MicroMoment):
-                    raise TypeError("micro_moments must consist only of micro moment instances.")
-                try:
-                    moment.dataset._validate(economy)
-                except Exception as exception:
-                    message = f"The micro dataset '{moment.dataset}' is invalid because of the above exception."
-                    raise ValueError(message) from exception
-                for moment2 in micro_moments[:m]:
-                    if moment == moment2:
-                        raise ValueError(f"There is more than one of the micro moment '{moment}'.")
-                    if moment.name == moment2.name:
-                        raise ValueError(f"Micro moment '{moment}' has the same name as '{moment2}'.")
-                    if moment.dataset != moment2.dataset and moment.dataset.name == moment2.dataset.name:
-                        raise ValueError(
-                            f"The dataset of '{moment}' is not the same instance as that of '{moment2}', but the two "
-                            f"datasets have the same name."
-                        )
+        if not isinstance(micro_moments, collections.abc.Sequence):
+            raise TypeError("micro_moments must be a sequence of micro moment instances.")
+        for m, moment in enumerate(micro_moments):
+            if not isinstance(moment, MicroMoment):
+                raise TypeError("micro_moments must consist only of micro moment instances.")
+            for moment2 in micro_moments[:m]:
+                if moment == moment2:
+                    raise ValueError(f"There is more than one of the micro moment '{moment}'.")
+                if moment.name == moment2.name:
+                    raise ValueError(f"Micro moment '{moment}' has the same name as '{moment2}'.")
+
+        micro_parts = []
+        for moment in micro_moments:
+            for part in moment.parts:
+                if part not in micro_parts:
+                    micro_parts.append(part)
+
+        for p, part in enumerate(micro_parts):
+            try:
+                part.dataset._validate(economy)
+            except Exception as exception:
+                message = f"The micro dataset '{part.dataset}' is invalid because of the above exception."
+                raise ValueError(message) from exception
+            for part2 in micro_parts[:p]:
+                if part.name == part2.name:
+                    raise ValueError(f"Micro part '{part}' has the same name as '{part2}'.")
+                if part.dataset != part2.dataset and part.dataset.name == part2.dataset.name:
+                    raise ValueError(
+                        f"The dataset of '{part}' is not the same instance as that of '{part2}', but the two "
+                        f"datasets have the same name."
+                    )
 
         self.micro_moments = micro_moments
+        self.micro_parts = micro_parts
         self.values = np.c_[[m.value for m in micro_moments]]
         self.MM = len(micro_moments)
+        self.PM = len(micro_parts)
 
     def format(self, title: str, values: Optional[Array] = None) -> str:
         """Format micro moments and their associated datasets as a string."""
         header = ["Observed"]
         if values is not None:
             header.extend(["Estimated", "Difference"])
-        header.extend(["Moment", "Dataset", "Observations", "Markets"])
+        header.extend(["Moment", "Part", "Dataset", "Observations", "Markets"])
 
         data: List[List[str]] = []
         for m, moment in enumerate(self.micro_moments):
@@ -249,10 +371,24 @@ class Moments(object):
                 row.extend([format_number(values[m]), format_number(moment.value - values[m])])
             row.extend([
                 moment.name,
-                moment.dataset.name,
-                str(moment.dataset.observations),
-                moment.dataset._format_markets(),
+                moment.parts[0].name,
+                moment.parts[0].dataset.name,
+                str(moment.parts[0].dataset.observations),
+                moment.parts[0].dataset._format_markets(),
             ])
             data.append(row)
+
+            for part in moment.parts[1:]:
+                row = [""]
+                if values is not None:
+                    row.extend(["", ""])
+                row.extend([
+                    "",
+                    part.name,
+                    part.dataset.name,
+                    str(part.dataset.observations),
+                    part.dataset._format_markets(),
+                ])
+                data.append(row)
 
         return format_table(header, *data, title=title)

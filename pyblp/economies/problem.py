@@ -3,7 +3,6 @@
 import abc
 import collections.abc
 import functools
-import itertools
 import time
 from typing import Any, Callable, Dict, Hashable, List, Mapping, Optional, Sequence, Tuple, Union
 
@@ -435,16 +434,10 @@ class ProblemEconomy(Economy):
                different parameter starting values.
 
         micro_sample_covariances : `array-like, optional`
-            Sample covariance matrix for the :math:`M_M` micro moments. By default, element :math:`(m, m')` of their
-            asymptotic covariance matrix is computed according to :eq:`micro_moment_covariances`. This override could be
-            used, for example, if instead of estimating covariances at some estimated :math:`\hat{\theta}`, one wants to
-            use a boostrap procedure to compute their covariances directly from the micro data.
-
-            Any sample covariances specified here will be multiplied by :class:`MicroDataset` ``observations`` to
-            replace the asymptotic covariances defined in :eq:`micro_moment_covariances`. Since asymptotic covariances
-            are ultimately divided by these same ``observations``, the number of ``observations`` will not matter for
-            the purposes of standard error and weighting matrix estimation when ``micro_sample_covariances`` is
-            specified.
+            Sample covariance matrix for the :math:`M_M` micro moments. By default, their asymptotic covariance matrix
+            is computed according to :eq:`scaled_micro_moment_covariances`. This override could be used, for example, if
+            instead of estimating covariances at some estimated :math:`\hat{\theta}`, one wanted to use a boostrap
+            procedure to compute their covariances directly from the micro data.
 
         resample_agent_data : `callable, optional`
             If specified, simulation error in moment covariances will be accounted for by resampling
@@ -514,13 +507,6 @@ class ProblemEconomy(Economy):
                     raise ValueError(f"micro_sample_covariances must be a square {moments.MM} by {moments.MM} matrix.")
                 self._require_psd(micro_sample_covariances, "micro_sample_covariances")
                 self._detect_singularity(micro_sample_covariances, "micro_sample_covariances")
-
-                # convert sample covariances to estimates of asymptotic covariances
-                micro_moment_covariances = micro_sample_covariances.copy()
-                for (m, moment_m), (n, moment_n) in itertools.product(enumerate(moments.micro_moments), repeat=2):
-                    micro_moment_covariances[m, n] *= np.sqrt(
-                        moment_m.dataset.observations * moment_n.dataset.observations
-                    )
 
         # determine whether to check micro moment collinearity
         detect_micro_collinearity = (
@@ -801,25 +787,25 @@ class ProblemEconomy(Economy):
                 )
 
             # if necessary, identify micro datasets in which there could possibly be collinearity issues
-            micro_collinearity_candidates: Dict[MicroDataset, List[int]] = {}
+            parts_collinearity_candidates: Dict[MicroDataset, List[int]] = {}
             if detect_micro_collinearity:
-                for m, moment in enumerate(moments.micro_moments):
-                    micro_collinearity_candidates.setdefault(moment.dataset, []).append(m)
-                micro_collinearity_candidates = {d: v for d, v in micro_collinearity_candidates.items() if len(v) > 1}
+                for p, part in enumerate(moments.micro_parts):
+                    parts_collinearity_candidates.setdefault(part.dataset, []).append(p)
+                parts_collinearity_candidates = {d: v for d, v in parts_collinearity_candidates.items() if len(v) > 1}
 
-            # compute delta, contributions to micro moment values, transformed marginal costs, Jacobians, and
+            # compute delta, contributions to micro moment parts, transformed marginal costs, Jacobians, and
             #   covariances market-by-market
-            micro_numerator_mapping: Dict[Hashable, Array] = {}
-            micro_denominator_mapping: Dict[Hashable, Array] = {}
-            micro_numerator_jacobian_mapping: Dict[Hashable, Array] = {}
-            micro_denominator_jacobian_mapping: Dict[Hashable, Array] = {}
-            micro_covariances_numerator_mapping: Dict[Hashable, Array] = {}
-            micro_collinearity_candidate_values: Dict[Hashable, Dict[MicroDataset, Array]] = {}
+            parts_numerator_mapping: Dict[Hashable, Array] = {}
+            parts_denominator_mapping: Dict[Hashable, Array] = {}
+            parts_numerator_jacobian_mapping: Dict[Hashable, Array] = {}
+            parts_denominator_jacobian_mapping: Dict[Hashable, Array] = {}
+            parts_covariances_numerator_mapping: Dict[Hashable, Array] = {}
+            parts_collinearity_candidate_values: Dict[Hashable, Dict[MicroDataset, Array]] = {}
             generator = generate_items(self.unique_market_ids, market_factory, ProblemMarket.solve)
             for t, generated_t in generator:
                 (
-                    delta_t, xi_jacobian_t, micro_numerator_t, micro_denominator_t, micro_numerator_jacobian_t,
-                    micro_denominator_jacobian_t, micro_covariances_numerator_t, weights_mapping_t, values_mapping_t,
+                    delta_t, xi_jacobian_t, parts_numerator_t, parts_denominator_t, parts_numerator_jacobian_t,
+                    parts_denominator_jacobian_t, parts_covariances_numerator_t, weights_mapping_t, values_mapping_t,
                     clipped_shares_t, iteration_stats_t, tilde_costs_t, omega_jacobian_t, clipped_costs_t, errors_t
                 ) = generated_t
 
@@ -827,20 +813,20 @@ class ProblemEconomy(Economy):
                 xi_jacobian[self._product_market_indices[t], :parameters.P] = xi_jacobian_t
                 clipped_shares[self._product_market_indices[t]] = clipped_shares_t
                 iteration_stats[t] = iteration_stats_t
-                micro_numerator_mapping[t] = scipy.sparse.csr_matrix(micro_numerator_t)
-                micro_denominator_mapping[t] = scipy.sparse.csr_matrix(micro_denominator_t)
+                parts_numerator_mapping[t] = scipy.sparse.csr_matrix(parts_numerator_t)
+                parts_denominator_mapping[t] = scipy.sparse.csr_matrix(parts_denominator_t)
                 if compute_jacobians:
-                    micro_numerator_jacobian_mapping[t] = scipy.sparse.csr_matrix(micro_numerator_jacobian_t)
-                    micro_denominator_jacobian_mapping[t] = scipy.sparse.csr_matrix(micro_denominator_jacobian_t)
+                    parts_numerator_jacobian_mapping[t] = scipy.sparse.csr_matrix(parts_numerator_jacobian_t)
+                    parts_denominator_jacobian_mapping[t] = scipy.sparse.csr_matrix(parts_denominator_jacobian_t)
                 if compute_micro_covariances:
-                    micro_covariances_numerator_mapping[t] = scipy.sparse.csr_matrix(micro_covariances_numerator_t)
+                    parts_covariances_numerator_mapping[t] = scipy.sparse.csr_matrix(parts_covariances_numerator_t)
                 if detect_micro_collinearity:
-                    micro_collinearity_candidate_values[t] = {}
-                    for dataset, moment_indices in micro_collinearity_candidates.items():
+                    parts_collinearity_candidate_values[t] = {}
+                    for dataset, part_indices in parts_collinearity_candidates.items():
                         if dataset in weights_mapping_t:
                             nonzero = np.nonzero(weights_mapping_t[dataset])
-                            micro_collinearity_candidate_values[t][dataset] = np.column_stack(
-                                [values_mapping_t[m][nonzero].flatten() for m in moment_indices]
+                            parts_collinearity_candidate_values[t][dataset] = np.column_stack(
+                                [values_mapping_t[p][nonzero].flatten() for p in part_indices]
                             )
                 if self.K3 > 0:
                     tilde_costs[self._product_market_indices[t]] = tilde_costs_t
@@ -854,55 +840,106 @@ class ProblemEconomy(Economy):
             #   market-by-market computation to preserve numerical stability with different market orderings)
             if moments.MM > 0:
                 with np.errstate(all='ignore'):
-                    micro_numerator = scipy.sparse.csr_matrix(micro.shape, dtype=options.dtype)
-                    micro_denominator = scipy.sparse.csr_matrix(micro.shape, dtype=options.dtype)
+                    # construct micro moment parts
+                    parts_numerator = scipy.sparse.csr_matrix((moments.PM, 1), dtype=options.dtype)
+                    parts_denominator = scipy.sparse.csr_matrix((moments.PM, 1), dtype=options.dtype)
                     for t in self.unique_market_ids:
-                        micro_numerator += micro_numerator_mapping[t]
-                        micro_denominator += micro_denominator_mapping[t]
+                        parts_numerator += parts_numerator_mapping[t]
+                        parts_denominator += parts_denominator_mapping[t]
 
-                    micro_numerator = micro_numerator.toarray()
-                    micro_denominator = micro_denominator.toarray()
-                    micro_values = micro_numerator / micro_denominator
+                    parts_numerator = parts_numerator.toarray()
+                    parts_denominator = parts_denominator.toarray()
+                    parts_values = parts_numerator / parts_denominator
+
+                    # from the parts, construct micro moment values and if needed their gradient too
+                    micro_gradients = np.zeros((moments.MM, moments.PM), options.dtype)
+                    for m, moment in enumerate(moments.micro_moments):
+                        part_indices = [moments.micro_parts.index(p) for p in moment.parts]
+                        micro_value = moment.compute_value(parts_values[part_indices])
+                        micro_value = np.asarray(micro_value).flatten()
+                        if micro_value.size != 1:
+                            raise TypeError(f"compute_value of micro moment '{moment}' should return a float.")
+                        if not np.isfinite(micro_value):
+                            warn(f"compute_value of micro moment '{moment}' returned {format_number(micro_value)}.")
+
+                        micro_values[m] = micro_value
+
+                        if compute_jacobians or compute_micro_covariances:
+                            micro_gradient = moment.compute_gradient(parts_values[part_indices])
+                            micro_gradient = np.asarray(micro_gradient, options.dtype).flatten()
+                            if micro_gradient.size != len(moment.parts):
+                                raise ValueError(
+                                    f"compute_gradient of micro moment '{moment}' should return an array of size "
+                                    f"{len(moment.parts)}, but it returned one of size {micro_gradient.size}."
+                                )
+                            for p, part in enumerate(moment.parts):
+                                if not np.isfinite(micro_gradient[p]):
+                                    warn(
+                                        f"compute_gradient of micro moment '{moment}' returned "
+                                        f"{format_number(micro_gradient[p])} for part '{part}'."
+                                    )
+
+                            micro_gradients[m, part_indices] = micro_gradient
+
+                    # construct micro moments
                     micro = moments.values - micro_values
 
+                    # construct the micro moment Jacobian
                     if compute_jacobians:
-                        micro_numerator_jacobian = scipy.sparse.csr_matrix(micro_jacobian.shape, dtype=options.dtype)
-                        micro_denominator_jacobian = scipy.sparse.csr_matrix(micro_jacobian.shape, dtype=options.dtype)
+                        # construct the micro moment parts Jacobian
+                        parts_numerator_jacobian = scipy.sparse.csr_matrix(
+                            (moments.PM, parameters.P), dtype=options.dtype
+                        )
+                        parts_denominator_jacobian = scipy.sparse.csr_matrix(
+                            (moments.PM, parameters.P), dtype=options.dtype
+                        )
                         for t in self.unique_market_ids:
-                            micro_numerator_jacobian += micro_numerator_jacobian_mapping[t]
-                            micro_denominator_jacobian += micro_denominator_jacobian_mapping[t]
+                            parts_numerator_jacobian += parts_numerator_jacobian_mapping[t]
+                            parts_denominator_jacobian += parts_denominator_jacobian_mapping[t]
 
-                        micro_numerator_jacobian = micro_numerator_jacobian.toarray()
-                        micro_denominator_jacobian = micro_denominator_jacobian.toarray()
-                        micro_jacobian = (
-                            -(micro_numerator_jacobian - micro_values * micro_denominator_jacobian) / micro_denominator
+                        parts_numerator_jacobian = parts_numerator_jacobian.toarray()
+                        parts_denominator_jacobian = parts_denominator_jacobian.toarray()
+                        parts_jacobian = (
+                            (parts_numerator_jacobian - parts_values * parts_denominator_jacobian) / parts_denominator
                         )
 
+                        # construc the micro moment Jacobian with the product rule
+                        micro_jacobian = -micro_gradients @ parts_jacobian
+
+                    # construct micro moment covariances from part covariances
                     if compute_micro_covariances:
-                        micro_covariances_numerator = scipy.sparse.csr_matrix(
-                            micro_covariances.shape, dtype=options.dtype
+                        # construct non-centered, non-scaled, non-symmetric part covariances
+                        parts_covariances_numerator = scipy.sparse.csr_matrix(
+                            (moments.PM, moments.PM), dtype=options.dtype
                         )
                         for t in self.unique_market_ids:
-                            micro_covariances_numerator += micro_covariances_numerator_mapping[t]
+                            parts_covariances_numerator += parts_covariances_numerator_mapping[t]
 
-                        micro_covariances_numerator = micro_covariances_numerator.toarray()
-                        micro_covariances = micro_covariances_numerator / micro_denominator
+                        parts_covariances_numerator = parts_covariances_numerator.toarray()
+                        parts_covariances = parts_covariances_numerator / parts_denominator
 
-                        # subtract away means from second moments
-                        for m1, (moment1, value1) in enumerate(zip(moments.micro_moments, micro_values)):
-                            for m2, (moment2, value2) in enumerate(zip(moments.micro_moments, micro_values)):
-                                if m2 <= m1 and moment1.dataset == moment2.dataset:
-                                    micro_covariances[m2, m1] -= value1 * value2
+                        # subtract away means from second moments and scale by observation counts
+                        for p1, (part1, value1) in enumerate(zip(moments.micro_parts, parts_values)):
+                            for p2, (part2, value2) in enumerate(zip(moments.micro_parts, parts_values)):
+                                if p2 <= p1 and part1.dataset == part2.dataset:
+                                    parts_covariances[p2, p1] -= value1 * value2
+                                    parts_covariances[p2, p1] /= part1.dataset.observations
 
                         # fill the lower triangle
-                        lower_indices = np.tril_indices(moments.MM, -1)
-                        micro_covariances[lower_indices] = micro_covariances.T[lower_indices]
-                        self._detect_singularity(micro_covariances, "the estimated covariance matrix of micro moments")
+                        lower_indices = np.tril_indices(moments.PM, -1)
+                        parts_covariances[lower_indices] = parts_covariances.T[lower_indices]
+                        self._detect_singularity(
+                            parts_covariances, "the estimated covariance matrix of micro moment parts"
+                        )
 
+                        # compute micro moment covariances with the delta method
+                        micro_covariances = micro_gradients @ parts_covariances @ micro_gradients.T
+
+                    # detect collinearity between micro moment parts
                     if detect_micro_collinearity:
-                        for dataset, moment_indices in micro_collinearity_candidates.items():
+                        for dataset, part_indices in parts_collinearity_candidates.items():
                             market_ids = self.unique_market_ids if dataset.market_ids is None else dataset.market_ids
-                            values = np.row_stack([micro_collinearity_candidate_values[t][dataset] for t in market_ids])
+                            values = np.row_stack([parts_collinearity_candidate_values[t][dataset] for t in market_ids])
                             collinear, successful = precisely_identify_collinearity(values)
                             common_message = (
                                 "To disable collinearity checks, set "
@@ -914,12 +951,12 @@ class ProblemEconomy(Economy):
                                     f"checking for collinearity issues. {common_message}"
                                 )
                             if collinear.any():
-                                labels = [moments.micro_moments[m].name for m in moment_indices]
+                                labels = [moments.micro_parts[p].name for p in part_indices]
                                 collinear_labels = ", ".join(f"'{l}'" for l, c in zip(labels, collinear) if c)
                                 warn(
-                                    f"Detected collinearity issues with the values of micro moments "
-                                    f"[{collinear_labels}] and at least one other micro moment in micro dataset "
-                                    f"'{dataset.name}'. {common_message}"
+                                    f"Detected collinearity issues with the values of micro moment parts "
+                                    f"[{collinear_labels}] and at least one other micro moment part based on micro "
+                                    f"dataset '{dataset.name}'. {common_message}"
                                 )
 
         # replace invalid elements in delta, micro moments, and transformed marginal costs with their last values
@@ -1041,6 +1078,7 @@ class ProblemEconomy(Economy):
                 gradient = 2 * (mean_G.T @ W @ mean_g)
                 if scale_objective:
                     gradient *= self.N
+
             bad_gradient_index = ~np.isfinite(gradient)
             if np.any(bad_gradient_index):
                 gradient[bad_gradient_index] = progress.gradient[bad_gradient_index]

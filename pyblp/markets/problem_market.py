@@ -25,7 +25,7 @@ class ProblemMarket(Market):
             ]):
         """Compute the mean utility for this market that equates market shares to observed values by solving a fixed
         point problem. Then, if compute_jacobians is True, compute the Jacobian (holding beta fixed) of xi
-        (equivalently, of delta) with respect to theta. Compute any contributions to micro moment values, their Jacobian
+        (equivalently, of delta) with respect to theta. Compute any contributions to micro moment parts, their Jacobian
         with respect to theta (if compute_jacobians is True), and, if compute_micro_covariances is True, their
         covariance contributions. If there is a supply side, compute transformed marginal costs for this market. Then,
         if compute_jacobian is True, compute the Jacobian (holding gamma fixed) of omega (equivalently, of transformed
@@ -44,7 +44,7 @@ class ProblemMarket(Market):
 
         # if needed, pre-compute probabilities
         probabilities = conditionals = None
-        if compute_jacobians or moments.MM > 0 or self.K3 > 0:
+        if compute_jacobians or moments.PM > 0 or self.K3 > 0:
             probabilities, conditionals = self.compute_probabilities(valid_delta)
 
         # if needed, pre-compute derivatives of probabilities with respect to parameters (conditionals tangents are only
@@ -69,26 +69,26 @@ class ProblemMarket(Market):
             errors.extend(xi_jacobian_errors)
 
         # if needed, adjust for the contribution of xi's dependence on theta
-        if compute_jacobians and (moments.MM > 0 or self.K3 > 0):
+        if compute_jacobians and (moments.PM > 0 or self.K3 > 0):
             assert probabilities is not None
             self.update_probabilities_by_parameter_tangent_mapping(
                 probabilities_tangent_mapping, conditionals_tangent_mapping, probabilities, conditionals, xi_jacobian
             )
 
-        # compute contributions to micro moments, their Jacobian, and their covariances
-        if moments.MM == 0:
-            micro_numerator = np.zeros((moments.MM, 0), options.dtype)
-            micro_denominator = np.zeros((moments.MM, 0), options.dtype)
-            micro_numerator_jacobian = np.full((moments.MM, self.parameters.P), np.nan, options.dtype)
-            micro_denominator_jacobian = np.full((moments.MM, self.parameters.P), np.nan, options.dtype)
-            micro_covariances_numerator = np.full((moments.MM, moments.MM), np.nan, options.dtype)
+        # compute contributions to micro moment parts, their Jacobian, and their covariances
+        if moments.PM == 0:
+            parts_numerator = np.zeros((moments.PM, 0), options.dtype)
+            parts_denominator = np.zeros((moments.PM, 0), options.dtype)
+            parts_numerator_jacobian = np.full((moments.PM, self.parameters.P), np.nan, options.dtype)
+            parts_denominator_jacobian = np.full((moments.PM, self.parameters.P), np.nan, options.dtype)
+            parts_covariances_numerator = np.full((moments.PM, moments.PM), np.nan, options.dtype)
             weights_mapping = {}
             values_mapping = {}
         else:
             assert probabilities is not None
             (
-                micro_numerator, micro_denominator, micro_numerator_jacobian, micro_denominator_jacobian,
-                micro_covariances_numerator, weights_mapping, values_mapping, micro_errors
+                parts_numerator, parts_denominator, parts_numerator_jacobian, parts_denominator_jacobian,
+                parts_covariances_numerator, weights_mapping, values_mapping, micro_errors
             ) = (
                 self.safely_compute_micro_contributions(
                     moments, valid_delta, probabilities, probabilities_tangent_mapping, compute_jacobians,
@@ -130,8 +130,8 @@ class ProblemMarket(Market):
                 omega_jacobian[clipped_costs.flat] = 0
 
         return (
-            delta, xi_jacobian, micro_numerator, micro_denominator, micro_numerator_jacobian,
-            micro_denominator_jacobian, micro_covariances_numerator, weights_mapping, values_mapping, clipped_shares,
+            delta, xi_jacobian, parts_numerator, parts_denominator, parts_numerator_jacobian,
+            parts_denominator_jacobian, parts_covariances_numerator, weights_mapping, values_mapping, clipped_shares,
             stats, tilde_costs, omega_jacobian, clipped_costs, errors
         )
 
@@ -162,11 +162,11 @@ class ProblemMarket(Market):
             probabilities_tangent_mapping: Dict[int, Array], compute_jacobians: bool, compute_covariances: bool,
             keep_mappings: bool) -> (
             Tuple[Array, Array, Array, Array, Array, Dict[MicroDataset, Array], Dict[int, Array], List[Error]]):
-        """Compute micro moment value contributions, handling any numerical errors."""
+        """Compute micro moment part contributions, handling any numerical errors."""
         errors: List[Error] = []
         (
-            micro_numerator, micro_denominator, micro_numerator_jacobian, micro_denominator_jacobian,
-            micro_covariances_numerator, weights_mapping, values_mapping
+            parts_numerator, parts_denominator, parts_numerator_jacobian, parts_denominator_jacobian,
+            parts_covariances_numerator, weights_mapping, values_mapping
         ) = (
             self.compute_micro_contributions(
                 moments, delta, probabilities, probabilities_tangent_mapping, compute_jacobians, compute_covariances,
@@ -174,8 +174,8 @@ class ProblemMarket(Market):
             )
         )
         return (
-            micro_numerator, micro_denominator, micro_numerator_jacobian, micro_denominator_jacobian,
-            micro_covariances_numerator, weights_mapping, values_mapping, errors
+            parts_numerator, parts_denominator, parts_numerator_jacobian, parts_denominator_jacobian,
+            parts_covariances_numerator, weights_mapping, values_mapping, errors
         )
 
     @NumericalErrorHandler(exceptions.CostsNumericalError)

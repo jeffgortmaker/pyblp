@@ -8,7 +8,7 @@ import numpy as np
 from .. import exceptions, options
 from ..configurations.iteration import ContractionResults, Iteration
 from ..economies.economy import Economy
-from ..micro import MicroDataset, MicroMoment, Moments
+from ..micro import MicroDataset, MicroPart, Moments
 from ..parameters import BetaParameter, GammaParameter, NonlinearCoefficient, Parameter, Parameters, RhoParameter
 from ..primitives import Container
 from ..utilities.algebra import approximately_invert, approximately_solve
@@ -1357,21 +1357,21 @@ class Market(Container):
 
         return weights
 
-    def compute_micro_values(self, moment: MicroMoment, weights: Array, agent_indices: Optional[Array] = None) -> Array:
+    def compute_micro_values(self, part: MicroPart, weights: Array, agent_indices: Optional[Array] = None) -> Array:
         """Compute and validate micro moment values."""
         agents = self.agents
         if agent_indices is not None:
             agents = agents[agent_indices]
 
         try:
-            values = np.asarray(moment.compute_values(self.t, self.products, agents), options.dtype)
+            values = np.asarray(part.compute_values(self.t, self.products, agents), options.dtype)
         except Exception as exception:
-            message = f"Failed to compute values for micro moment '{moment}' because of the above exception."
+            message = f"Failed to compute values for micro moment part '{part}' because of the above exception."
             raise RuntimeError(message) from exception
 
         if values.shape != weights.shape:
             raise ValueError(
-                f"In market {self.t}, micro moment '{moment}' returned an array of shape {values.shape} from "
+                f"In market {self.t}, micro moment part '{part}' returned an array of shape {values.shape} from "
                 f"compute_values, which is not {weights.shape}, the shape of the array returned by its "
                 f"dataset's compute_weights."
             )
@@ -1596,27 +1596,27 @@ class Market(Container):
             probabilities_tangent_mapping: Optional[Dict[int, Array]] = None, compute_jacobians: bool = False,
             compute_covariances: bool = False, keep_mappings: bool = False) -> (
             Tuple[Array, Array, Array, Array, Array, Dict[MicroDataset, Array], Dict[int, Array]]):
-        """Compute contributions to micro moment values, Jacobians, and covariances. By default, use the mean utilities
+        """Compute contributions to micro moment parts, Jacobians, and covariances. By default, use the mean utilities
         with which this market was initialized and do not compute Jacobian and covariance contributions.
         """
         weights_mapping: Dict[MicroDataset, Array] = {}
         values_mapping: Dict[int, Array] = {}
-        micro_numerator = np.zeros((moments.MM, 1), options.dtype)
-        micro_denominator = np.zeros((moments.MM, 1), options.dtype)
-        micro_numerator_jacobian = np.full(
-            (moments.MM, self.parameters.P), 0 if compute_jacobians else np.nan, options.dtype
+        parts_numerator = np.zeros((moments.PM, 1), options.dtype)
+        parts_denominator = np.zeros((moments.PM, 1), options.dtype)
+        parts_numerator_jacobian = np.full(
+            (moments.PM, self.parameters.P), 0 if compute_jacobians else np.nan, options.dtype
         )
-        micro_denominator_jacobian = np.full(
-            (moments.MM, self.parameters.P), 0 if compute_jacobians else np.nan, options.dtype
+        parts_denominator_jacobian = np.full(
+            (moments.PM, self.parameters.P), 0 if compute_jacobians else np.nan, options.dtype
         )
-        micro_covariances_numerator = np.full(
-            (moments.MM, moments.MM), 0 if compute_covariances else np.nan, options.dtype
+        parts_covariances_numerator = np.full(
+            (moments.PM, moments.PM), 0 if compute_covariances else np.nan, options.dtype
         )
 
         micro_chunks = self.generate_micro_chunks(probabilities, probabilities_tangent_mapping)
         for agent_indices, probabilities_chunk, probabilities_tangent_mapping_chunk in micro_chunks:
             # compute dataset contributions
-            datasets = [m.dataset for m in moments.micro_moments]
+            datasets = [m.dataset for m in moments.micro_parts]
             (
                 weights_mapping_chunk, denominator_mapping_chunk, weights_tangent_mapping_chunk,
                 denominator_tangent_mapping_chunk
@@ -1635,47 +1635,47 @@ class Market(Container):
                     else:
                         weights_mapping[dataset] = np.row_stack([weights_mapping[dataset], weights_chunk])
 
-            # compute this market's contribution to micro moment values' and covariances' numerators and denominators
+            # compute this market's contribution to micro moment parts' and covariances' numerators and denominators
             values_mapping_chunk: Dict[int, Array] = {}
-            for m, moment in enumerate(moments.micro_moments):
-                dataset = moment.dataset
+            for p, part in enumerate(moments.micro_parts):
+                dataset = part.dataset
                 if dataset not in weights_mapping_chunk:
                     continue
 
                 # compute and validate moment values
                 weights_chunk = weights_mapping_chunk[dataset]
-                values_chunk = self.compute_micro_values(moment, weights_chunk, agent_indices)
+                values_chunk = self.compute_micro_values(part, weights_chunk, agent_indices)
 
                 # cache values if necessary
                 if keep_mappings:
-                    values_mapping_chunk[m] = values_chunk
-                    if m not in values_mapping:
-                        values_mapping[m] = values_chunk
+                    values_mapping_chunk[p] = values_chunk
+                    if p not in values_mapping:
+                        values_mapping[p] = values_chunk
                     else:
-                        values_mapping[m] = np.row_stack([values_mapping[m], values_chunk])
+                        values_mapping[p] = np.row_stack([values_mapping[p], values_chunk])
 
                 # compute the contribution to the numerator and denominator
                 weighted_values_chunk = weights_chunk * values_chunk
-                micro_numerator[m] += np.sum(weighted_values_chunk)
-                micro_denominator[m] += denominator_mapping_chunk[dataset]
+                parts_numerator[p] += np.sum(weighted_values_chunk)
+                parts_denominator[p] += denominator_mapping_chunk[dataset]
                 if compute_jacobians:
-                    for p in range(self.parameters.P):
-                        micro_numerator_jacobian[m, p] += np.sum(
-                            weights_tangent_mapping_chunk[(dataset, p)] * values_chunk
+                    for q in range(self.parameters.P):
+                        parts_numerator_jacobian[p, q] += np.sum(
+                            weights_tangent_mapping_chunk[(dataset, q)] * values_chunk
                         )
-                        micro_denominator_jacobian[m, p] += denominator_tangent_mapping_chunk[(dataset, p)]
+                        parts_denominator_jacobian[p, q] += denominator_tangent_mapping_chunk[(dataset, q)]
 
                 # compute the contribution to the covariance numerator
                 if compute_covariances:
-                    for m2, moment2 in enumerate(moments.micro_moments):
-                        if m2 <= m and moment2.dataset == moment.dataset:
-                            values2_chunk = values_mapping_chunk.get(m2)
+                    for p2, part2 in enumerate(moments.micro_parts):
+                        if p2 <= p and part2.dataset == part.dataset:
+                            values2_chunk = values_mapping_chunk.get(p2)
                             if values2_chunk is None:
-                                values2_chunk = self.compute_micro_values(moment2, weights_chunk, agent_indices)
+                                values2_chunk = self.compute_micro_values(part2, weights_chunk, agent_indices)
 
-                            micro_covariances_numerator[m2, m] += np.sum(weighted_values_chunk * values2_chunk)
+                            parts_covariances_numerator[p2, p] += np.sum(weighted_values_chunk * values2_chunk)
 
         return (
-            micro_numerator, micro_denominator, micro_numerator_jacobian, micro_denominator_jacobian,
-            micro_covariances_numerator, weights_mapping, values_mapping
+            parts_numerator, parts_denominator, parts_numerator_jacobian, parts_denominator_jacobian,
+            parts_covariances_numerator, weights_mapping, values_mapping
         )

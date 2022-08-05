@@ -12,8 +12,8 @@ import scipy.optimize
 
 import pyblp.exceptions
 from pyblp import (
-    Formulation, Integration, Iteration, MicroDataset, MicroMoment, Optimization, Problem, Simulation, build_ownership,
-    data_to_dict, parallel
+    Formulation, Integration, Iteration, MicroDataset, MicroPart, MicroMoment, Optimization, Problem, Simulation,
+    build_ownership, data_to_dict, parallel
 )
 from pyblp.utilities.basics import (
     Array, Options, RecArray, update_matrices, compute_finite_differences, compute_second_finite_differences
@@ -235,7 +235,7 @@ def test_micro_chunking(simulated_problem: SimulatedProblemFixture) -> None:
     updated_solve_options = copy.deepcopy(solve_options)
     updated_solve_options['optimization'] = Optimization('return')
     agent_scores1 = simulation_results.compute_agent_scores(
-        solve_options['micro_moments'][0].dataset, integration=simulation.integration
+        solve_options['micro_moments'][0].parts[0].dataset, integration=simulation.integration
     )
     problem_results1 = problem.solve(**updated_solve_options)
 
@@ -244,7 +244,7 @@ def test_micro_chunking(simulated_problem: SimulatedProblemFixture) -> None:
     for chunks in [2, 3]:
         pyblp.options.micro_computation_chunks = chunks
         agent_scores2 = simulation_results.compute_agent_scores(
-            solve_options['micro_moments'][0].dataset, integration=simulation.integration
+            solve_options['micro_moments'][0].parts[0].dataset, integration=simulation.integration
         )
         problem_results2 = problem.solve(**updated_solve_options)
         pyblp.options.micro_computation_chunks = 1
@@ -1311,38 +1311,41 @@ def test_micro_values(simulated_problem: SimulatedProblemFixture) -> None:
 
     # test each micro value separately
     for moment in solve_options['micro_moments']:
-        # simulate micro data
-        dataset = MicroDataset(
-            name=moment.dataset.name,
-            observations=1_000_000,
-            compute_weights=moment.dataset.compute_weights,
-            market_ids=moment.dataset.market_ids,
-        )
-        micro_data = simulation_results.simulate_micro_data(dataset, seed=0)
+        part_values = []
+        for part in moment.parts:
+            # simulate micro data
+            dataset = MicroDataset(
+                name=part.dataset.name,
+                observations=1_000_000,
+                compute_weights=part.dataset.compute_weights,
+                market_ids=part.dataset.market_ids,
+            )
+            micro_data = simulation_results.simulate_micro_data(dataset, seed=0)
 
-        # collect market IDs
-        if dataset.market_ids is None:
-            market_ids = problem.unique_market_ids
-        else:
-            market_ids = np.asarray(list(dataset.market_ids))
+            # collect market IDs
+            if dataset.market_ids is None:
+                market_ids = problem.unique_market_ids
+            else:
+                market_ids = np.asarray(list(dataset.market_ids))
 
-        # collect values market-by-market
-        values_list = []
-        for t in market_ids:
-            products = problem.products[problem.products.market_ids.flat == t]
+            # collect values market-by-market
+            values_list = []
+            for t in market_ids:
+                products = problem.products[problem.products.market_ids.flat == t]
+                agents = problem.agents[problem.agents.market_ids.flat == t]
+                values = part.compute_values(t, products, agents)
 
-            agents = problem.agents[problem.agents.market_ids.flat == t]
-            values = moment.compute_values(t, products, agents)
+                data = micro_data[micro_data.market_ids.flat == t]
+                indices = [data.agent_indices.flatten(), data.choice_indices.flatten()]
+                if len(values.shape) == 3:
+                    indices.append(data.second_choice_indices.flatten())
 
-            data = micro_data[micro_data.market_ids.flat == t]
-            indices = [data.agent_indices.flatten(), data.choice_indices.flatten()]
-            if len(values.shape) == 3:
-                indices.append(data.second_choice_indices.flatten())
+                values_list.append(values[tuple(indices)])
 
-            values_list.append(values[tuple(indices)])
+            part_values.append(np.concatenate(values_list).mean())
 
-        # compare the mean computed from the micro data with the actual value
-        value = np.concatenate(values_list).mean()
+        # compute the micro values
+        value = moment.compute_value(np.array(part_values))
         np.testing.assert_allclose(moment.value, value, atol=0, rtol=0.01, err_msg=moment)
 
 
@@ -1366,7 +1369,7 @@ def test_micro_scores(simulated_problem: SimulatedProblemFixture) -> None:
         'simulation': simulation_results,
         'problem': problem_results,
     }
-    datasets = {m.dataset for m in solve_options['micro_moments']}
+    datasets = {p.dataset for m in solve_options['micro_moments'] for p in m.parts}
     for (name, results), dataset in itertools.product(results_mapping.items(), datasets):
         # test that true micro score expectations without any unobserved heterogeneity are zero
         true_observed_scores = results.compute_agent_scores(dataset)
@@ -1375,8 +1378,11 @@ def test_micro_scores(simulated_problem: SimulatedProblemFixture) -> None:
             true_observed_moments.append(MicroMoment(
                 name=f'{dataset.name}, parameter {p}',
                 value=0,
-                dataset=dataset,
-                compute_values=lambda t, _, __, v=true_observed_scores_p: np.nan_to_num(v[t]),
+                parts=MicroPart(
+                    name=f'{dataset.name}, parameter {p}',
+                    dataset=dataset,
+                    compute_values=lambda t, _, __, v=true_observed_scores_p: np.nan_to_num(v[t]),
+                ),
             ))
 
         true_observed_means = results.compute_micro_values(true_observed_moments)
@@ -1395,8 +1401,11 @@ def test_micro_scores(simulated_problem: SimulatedProblemFixture) -> None:
             true_moments.append(MicroMoment(
                 name=f'{dataset.name}, parameter {p}',
                 value=0,
-                dataset=dataset,
-                compute_values=lambda t, _, __, v=true_scores_p: np.nan_to_num(v[t]),
+                parts=MicroPart(
+                    name=f'{dataset.name}, parameter {p}',
+                    dataset=dataset,
+                    compute_values=lambda t, _, __, v=true_scores_p: np.nan_to_num(v[t]),
+                ),
             ))
 
         true_means = results.compute_micro_values(true_moments)

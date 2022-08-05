@@ -63,13 +63,14 @@ Once initialized, the following method solves the problem.
 Micro Moment Classes
 --------------------
 
-Micro dataset configurations are passed to micro moment configurations, which in turn can be passed to :meth:`Problem.solve`.
+Micro dataset configurations are passed to micro part configurations, which are passed to micro moment configurations, which in turn can be passed to :meth:`Problem.solve`.
 
 .. autosummary::
    :toctree: _api
    :template: class_with_signature.rst
 
    MicroDataset
+   MicroPart
    MicroMoment
 
 

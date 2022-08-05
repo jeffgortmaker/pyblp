@@ -248,44 +248,53 @@ More detailed micro data on individual choices can be used to supplement the sta
 
 .. math:: \bar{g} = \begin{bmatrix} \bar{g}_D \\ \bar{g}_S \\ \bar{g}_M \end{bmatrix}.
 
-Each micro moment :math:`m` is the difference between an observed value :math:`\bar{v}_m` and its simulated analogue :math:`v_m`:
+Each micro moment :math:`m` is the difference between an observed value :math:`f_m(\bar{v})` and its simulated analogue :math:`f_m(v)`:
 
-.. math:: \bar{g}_{M,m} = \bar{v}_m - v_m
-    :label: averaged_micro_moments
+.. math:: \bar{g}_{M,m} = f_m(\bar{v}) - f_m(v),
+    :label: micro_moment
 
-The observed value is an average over observations :math:`n \in N_{d_m}` in the micro dataset :math:`d_m`:
+in which :math:`f_m(\cdot)` is a function that maps a vector of :math:`p = 1, \ldots, P_M` micro moment parts :math:`\bar{v} = (\bar{v}_1, \dots, \bar{v}_{P_M})'` or :math:`v = (v_1, \dots, v_{P_M})'` into a micro statistic. Each sample micro moment part :math:`p` is an average over observations :math:`n \in N_{d_m}` in the associated micro dataset :math:`d_p`:
 
-.. math:: \bar{v}_m = \frac{1}{N_{d_m}} \sum_{n \in N_{d_m}} v_{mi_nj_nt_n}.
-    :label: observed_micro_value
+.. math:: \bar{v}_p = \frac{1}{N_{d_p}} \sum_{n \in N_{d_p}} v_{pi_nj_nt_n}.
+    :label: observed_micro_part
 
 Its simulated analogue is
 
-.. math:: v_m = \frac{\sum_{t \in T} \sum_{i \in I_t} \sum_{j \in J_t \cup \{0\}} w_{it} s_{ijt} w_{d_mijt} v_{mijt}}{\sum_{t \in T} \sum_{i \in I_t} \sum_{j \in J_t \cup \{0\}} w_{it} s_{ijt} w_{d_mijt}},
-    :label: simulated_micro_value
+.. math:: v_p = \frac{\sum_{t \in T} \sum_{i \in I_t} \sum_{j \in J_t \cup \{0\}} w_{it} s_{ijt} w_{d_pijt} v_{pijt}}{\sum_{t \in T} \sum_{i \in I_t} \sum_{j \in J_t \cup \{0\}} w_{it} s_{ijt} w_{d_pijt}},
+    :label: simulated_micro_part
 
-In which :math:`w_{it} s_{ijt} w_{d_mijt}` is the probability an observation in the micro dataset is for an agent :math:`i` who chooses :math:`j` in market :math:`t`.
+In which :math:`w_{it} s_{ijt} w_{d_pijt}` is the probability an observation in the micro dataset is for an agent :math:`i` who chooses :math:`j` in market :math:`t`.
+
+The simplest type of micro moment is just an average over the entire sample, with :math:`f_m(v) = v_1`. For example, with :math:`v_{1ijt}` equal to the income for an agent :math:`i` who chooses :math:`j` in market :math:`t`, micro moment :math:`m` would match the average income in dataset :math:`d_p`. Observed values such as conditional expectations, covariances, correlations, or regression coefficients can be matched by choosing the appropriate function :math:`f_m`. For example, with :math:`v_{2ijt}` equal to the interaction between income and an indicator for the choice of the outside option, and with :math:`v_{3ijt}` equal to an indicator for the choiced of the outside option, :math:`f_m(v) = v_2 / v_3` would match an observed conditional mean income within those who choose the outside option.
 
 A micro dataset :math:`d`, often a survey, is defined by survey weights :math:`w_{dijt}`. For example, :math:`w_{dijt} = 1\{j \neq 0, t \in T_d\}` defines a micro dataset that is a selected sample of inside purchasers in a few markets :math:`T_d \subset T`, giving each market an equal sampling weight. Different micro datasets are independent.
 
-A micro dataset will often admit multiple micro moments. Each micro moment :math:`m` is defined by its dataset :math:`d_m` and micro values :math:`v_{mijt}`. For example, a micro moment :math:`m` with :math:`v_{mijt} = y_{it}x_{jt}` matches the mean of an interaction between some demographic :math:`y_{it}` and some product characteristic :math:`x_{jt}`.
+A micro dataset will often admit multiple micro moment parts. Each micro moment part :math:`p` is defined by its dataset :math:`d_p` and micro values :math:`v_{pijt}`. For example, a micro moment part :math:`p` with :math:`v_{pijt} = y_{it}x_{jt}` delivers the mean :math:`\bar{v}_p` or expectation :math:`v_p` of an interaction between some demographic :math:`y_{it}` and some product characteristic :math:`x_{jt}`.
 
-Micro moments are computed for each :math:`\theta` and contribute to the GMM objective :math:`q(\theta)` in :eq:`objective`. Their derivatives with respect to :math:`\theta` are added as rows to :math:`\bar{G}` in :eq:`averaged_moments_jacobian`, and blocks are added to both :math:`W` and :math:`S` in :eq:`2sls_W` and :eq:`W`. The covariance between standard moments and micro moments is zero, so these matrices are block-diagonal. The scaled covariance between micro moments :math:`m` and :math:`m'` in :math:`S` is zero if on different micro datasets :math:`d_m \neq d_{m'}`; otherwise, if on the same dataset :math:`d_m = d_{m'} = d`,
+A micro moment is a function of one or more micro moment parts. The simplest type is a function of only one micro moment part, and matches the simple average defined by the micro moment part. For example, :math:`f_m(v) = v_p` with :math:`v_{pijt} = y_{it} x_{jt}` matches the mean of an interaction between :math:`y_{it}` and :math:`x_{jt}`. Non-simple averages such as conditional means, covariances, correlations, or regression coefficients can be matched by choosing an appropriate function :math:`f_m`. For example, :math:`f_m(v) = v_1 / v_2` with :math:`v_{1ijt} = y_{it}x_{jt}1\{j \neq 0\}` and :math:`v_{2ijt} = 1\{j \neq 0\}` matches the conditional mean of an interaction between :math:`y_{it}` and :math:`x_{jt}` among those who do not choose the outside option :math:`j = 0`.
 
-.. math:: S_{M,mm'} = \frac{N}{N_d} \text{Cov}(v_{mi_nj_nt_n}, v_{m'i_nj_nt_n}),
+Micro moments are computed for each :math:`\theta` and contribute to the GMM objective :math:`q(\theta)` in :eq:`objective`. Their derivatives with respect to :math:`\theta` are added as rows to :math:`\bar{G}` in :eq:`averaged_moments_jacobian`, and blocks are added to both :math:`W` and :math:`S` in :eq:`2sls_W` and :eq:`W`. The covariance between standard moments and micro moments is zero, so these matrices are block-diagonal. The delta method delivers the covariance matrix for the micro moments:
+
+.. math:: S_M = \frac{\partial f(v)}{\partial v'} S_P \frac{\partial f(v)'}{\partial v}.
    :label: scaled_micro_moment_covariances
+
+The scaled covariance between micro moment parts :math:`p` and :math:`q` in :math:`S_P` is zero if they are based on different micro datasets :math:`d_p` \neq d_q`; otherwise, if based on the same dataset :math:`d_p = d_q = d`,
+
+.. math:: S_{P,pq} = \frac{N}{N_d} \text{Cov}(v_{pi_nj_nt_n}, v_{qi_nj_nt_n}),
+   :label: scaled_micro_part_covariance
 
 in which
 
-.. math:: \text{Cov}(v_{mi_nj_nt_n}, v_{m'i_nj_nt_n}) = \frac{\sum_{t \in T} \sum_{i \in I_t} \sum_{j \in J_t \cup \{0\}} w_{it} s_{ijt} w_{dijt} (v_{mijt} - v_m)(v_{m'ijt} - v_{m'})}{\sum_{t \in T} \sum_{i \in I_t} \sum_{j \in J_t \cup \{0\}} w_{it} s_{ijt} w_{dijt}}.
-    :label: micro_moment_covariances
+.. math:: \text{Cov}(v_{pi_nj_nt_n}, v_{qi_nj_nt_n}) = \frac{\sum_{t \in T} \sum_{i \in I_t} \sum_{j \in J_t \cup \{0\}} w_{it} s_{ijt} w_{dijt} (v_{pijt} - v_p)(v_{qijt} - v_q)}{\sum_{t \in T} \sum_{i \in I_t} \sum_{j \in J_t \cup \{0\}} w_{it} s_{ijt} w_{dijt}}.
+    :label: micro_part_covariance
 
-Micro moments based on second choice data match averages over values :math:`v_{mijkt}` where :math:`k` indexes second choices, and are based on datasets defined by survey weights :math:`w_{dijkt}`. The observed value is
+Micro moment parts based on second choice are averages over values :math:`v_{pijkt}` where :math:`k` indexes second choices, and are based on datasets defined by survey weights :math:`w_{dijkt}`. A sample micro moment part is
 
-.. math:: \bar{v}_m = \frac{1}{N_{d_m}} \sum_{n \in N_{d_m}} v_{mi_nj_nk_nt_n}.
+.. math:: \bar{v}_p = \frac{1}{N_{d_p}} \sum_{n \in N_{d_p}} v_{pi_nj_nk_nt_n}.
 
 Its simulated analogue is
 
-.. math:: v_m = \frac{\sum_{t \in T} \sum_{i \in I_t} \sum_{j, k \in J_t \cup \{0\}} w_{it} s_{ijt} s_{ik(-j)t} w_{d_mijkt} v_{mijkt}}{\sum_{t \in T} \sum_{i \in I_t} \sum_{j, k \in J_t \cup \{0\}} w_{it} s_{ijt} s_{ik(-j)t} w_{d_mijkt}},
+.. math:: v_p = \frac{\sum_{t \in T} \sum_{i \in I_t} \sum_{j, k \in J_t \cup \{0\}} w_{it} s_{ijt} s_{ik(-j)t} w_{d_pijkt} v_{pijkt}}{\sum_{t \in T} \sum_{i \in I_t} \sum_{j, k \in J_t \cup \{0\}} w_{it} s_{ijt} s_{ik(-j)t} w_{d_pijkt}},
 
 in which second choice probabilities are :math:`s_{ik(-j)t} = \frac{s_{ikt}}{1 - s_{ijt}}` if :math:`k \neq j` and zero if :math:`k = j`. Covariances are defined analogously.
 

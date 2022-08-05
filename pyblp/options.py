@@ -99,11 +99,11 @@ psd_atol : `float`
 psd_rtol : `float`
     Relative tolerance for detecting non-positive definite matrices, which is by default also ``1e-8``.
 detect_micro_collinearity : `bool`
-    Whether to check if micro values :math:`v_{mijt}` (or :math:`v_{mijkt}` with second choices) are collinear with one
+    Whether to check if micro values :math:`v_{pijt}` (or :math:`v_{pijkt}` with second choices) are collinear with one
     another by computing these values once, stacking them, and using ``pyblp.options.collinear_atol` and
     ``pyblp.options.collinear_rtol``.
 
-    By default, micro moments are not checked for collinearity because this procedure can require a large amount of
+    By default, micro values are not checked for collinearity because this procedure can require a large amount of
     memory. To enable this check, set ``pyblp.options.detect_micro_collinearity = True``. If this uses a large amount
     of memory, one option is to temporarily reduce the number of markets, observations, or agents to cut down on memory
     while debugging one's code to see which micro moments are collinear with one another.

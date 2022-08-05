@@ -415,10 +415,10 @@ class EconomyResultsMarket(Market):
 
     @NumericalErrorHandler(exceptions.SyntheticMicroMomentsNumericalError)
     def safely_compute_micro_contributions(self, moments: Moments) -> Tuple[Array, Array, List[Error]]:
-        """Compute micro moment value contributions, handling any numerical errors."""
+        """Compute micro moment part contributions, handling any numerical errors."""
         errors: List[Error] = []
-        micro_numerator, micro_denominator, _, _, _, _, _ = self.compute_micro_contributions(moments)
-        return micro_numerator, micro_denominator, errors
+        parts_numerator, parts_denominator, _, _, _, _, _ = self.compute_micro_contributions(moments)
+        return parts_numerator, parts_denominator, errors
 
     @NumericalErrorHandler(exceptions.MicroScoresNumericalError)
     def safely_compute_score_denominator_contributions(
