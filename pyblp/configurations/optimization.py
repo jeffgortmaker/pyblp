@@ -432,7 +432,8 @@ def knitro_optimizer(
             warnings.simplefilter('ignore')
             return_code = knitro.KTR_solve(
                 kc=knitro_context, x=values_store, lambda_=np.zeros_like(initial_values), evalStatus=0,
-                obj=np.array([0]), c=None, objGrad=None, jac=None, hess=None, hessVector=None, userParams=None
+                obj=np.array([0], np.float64), c=None, objGrad=None, jac=None, hess=None, hessVector=None,
+                userParams=None
             )
 
         # Knitro was only successful if its return code was 0 (final solution satisfies the termination conditions for
