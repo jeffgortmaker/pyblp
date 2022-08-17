@@ -772,13 +772,15 @@ class Market(Container):
             if not constant_costs:
                 updated_costs = self.update_costs_with_variable(costs, 'shares', shares)
 
-            # compute zeta
+            # compute zeta (bound the diagonal of capital lambda from below to help deal with underflow)
             utility_derivatives = get_derivatives(x)
             probability_utility_derivatives = probabilities * utility_derivatives
             capital_lamda_diagonal, capital_gamma = self.compute_capital_lamda_gamma(
                 probability_utility_derivatives, probabilities, conditionals
             )
-            capital_lamda_inv = np.diag(1 / capital_lamda_diagonal)
+            capital_lamda_inv_diagonal = 1 / capital_lamda_diagonal
+            capital_lamda_inv_diagonal[~np.isfinite(capital_lamda_inv_diagonal)] = 1 / 1e-300
+            capital_lamda_inv = np.diag(capital_lamda_inv_diagonal)
             capital_gamma_tilde = ownership_matrix * capital_gamma
             margin = x - updated_costs
             capital_gamma_tilde_margin = capital_gamma_tilde.T @ margin
