@@ -928,12 +928,10 @@ class ProblemEconomy(Economy):
                         # fill the lower triangle
                         lower_indices = np.tril_indices(moments.PM, -1)
                         parts_covariances[lower_indices] = parts_covariances.T[lower_indices]
-                        self._detect_singularity(
-                            parts_covariances, "the estimated covariance matrix of micro moment parts"
-                        )
 
                         # compute micro moment covariances with the delta method
                         micro_covariances = micro_gradients @ parts_covariances @ micro_gradients.T
+                        self._detect_singularity(micro_covariances, "the estimated covariance matrix of micro moments")
 
                     # detect collinearity between micro moment parts
                     if detect_micro_collinearity:
