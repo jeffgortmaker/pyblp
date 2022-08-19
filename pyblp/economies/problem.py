@@ -502,11 +502,11 @@ class ProblemEconomy(Economy):
             output("")
             output(moments.format("Micro Moments"))
             if micro_sample_covariances is not None:
-                micro_sample_covariances = np.c_[np.asarray(micro_sample_covariances, options.dtype)]
-                if micro_sample_covariances.shape != (moments.MM, moments.MM):
+                micro_moment_covariances = np.c_[np.asarray(micro_sample_covariances, options.dtype)]
+                if micro_moment_covariances.shape != (moments.MM, moments.MM):
                     raise ValueError(f"micro_sample_covariances must be a square {moments.MM} by {moments.MM} matrix.")
-                self._require_psd(micro_sample_covariances, "micro_sample_covariances")
-                self._detect_singularity(micro_sample_covariances, "micro_sample_covariances")
+                self._require_psd(micro_moment_covariances, "micro_sample_covariances")
+                self._detect_singularity(micro_moment_covariances, "micro_sample_covariances")
 
         # determine whether to check micro moment collinearity
         detect_micro_collinearity = (
