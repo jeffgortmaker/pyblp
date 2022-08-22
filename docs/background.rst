@@ -164,6 +164,7 @@ The second term in this expression is derived from the definition of :math:`\eta
 
 One thing to note is that :math:`\frac{\partial\xi}{\partial\theta} = \frac{\partial\delta}{\partial\theta}` and :math:`\frac{\partial\omega}{\partial\theta} = \frac{\partial\tilde{c}}{\partial\theta}` need not hold during optimization if we concentrate out linear parameters because these are then functions of :math:`\theta`. Fortunately, one can use orthogonality conditions to show that it is fine to treat these parameters as fixed when computing the gradient.
 
+
 Weighting Matrices
 ~~~~~~~~~~~~~~~~~~
 
@@ -273,7 +274,7 @@ A micro dataset will often admit multiple micro moment parts. Each micro moment 
 
 A micro moment is a function of one or more micro moment parts. The simplest type is a function of only one micro moment part, and matches the simple average defined by the micro moment part. For example, :math:`f_m(v) = v_p` with :math:`v_{pijt} = y_{it} x_{jt}` matches the mean of an interaction between :math:`y_{it}` and :math:`x_{jt}`. Non-simple averages such as conditional means, covariances, correlations, or regression coefficients can be matched by choosing an appropriate function :math:`f_m`. For example, :math:`f_m(v) = v_1 / v_2` with :math:`v_{1ijt} = y_{it}x_{jt}1\{j \neq 0\}` and :math:`v_{2ijt} = 1\{j \neq 0\}` matches the conditional mean of an interaction between :math:`y_{it}` and :math:`x_{jt}` among those who do not choose the outside option :math:`j = 0`.
 
-Micro moments are computed for each :math:`\theta` and contribute to the GMM objective :math:`q(\theta)` in :eq:`objective`. Their derivatives with respect to :math:`\theta` are added as rows to :math:`\bar{G}` in :eq:`averaged_moments_jacobian`, and blocks are added to both :math:`W` and :math:`S` in :eq:`2sls_W` and :eq:`W`. The covariance between standard moments and micro moments is zero, so these matrices are block-diagonal. The delta method delivers the covariance matrix for the micro moments:
+Technically, if not all micro moments :math:`m` are simple averages :math:`f_m(v) = v_m`, then the resulting estimator will no longer be a GMM estimator, but rather a more generic minimum distance estimator, since these "micro moments" are not technically sample moments. Regardless, the package uses GMM terminology for simplicity's sake, and the statistical expressions are all the same. Micro moments are computed for each :math:`\theta` and contribute to the GMM (or minimum distance) objective :math:`q(\theta)` in :eq:`objective`. Their derivatives with respect to :math:`\theta` are added as rows to :math:`\bar{G}` in :eq:`averaged_moments_jacobian`, and blocks are added to both :math:`W` and :math:`S` in :eq:`2sls_W` and :eq:`W`. The covariance between standard moments and micro moments is zero, so these matrices are block-diagonal. The delta method delivers the covariance matrix for the micro moments:
 
 .. math:: S_M = \frac{\partial f(v)}{\partial v'} S_P \frac{\partial f(v)'}{\partial v}.
    :label: scaled_micro_moment_covariances
