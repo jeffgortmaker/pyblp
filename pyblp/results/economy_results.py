@@ -1319,11 +1319,11 @@ class EconomyResults(SimpleEconomyResults):
         Returns
         -------
         `list`
-            Scores :math:`\mathscr{S}_n`. The list is in the same order as :attr:`ProblemResults.theta`. Each element
-            of the list is an array of scores for the corresponding parameter. The array is in the same order as
-            observations appear in the ``micro_data``. Note that it is possible for parameters in
-            :attr:`ProblemResults.theta` to mechanically have zero scores, for example if they are on a constant
-            demographic.
+            Scores :math:`\mathscr{S}_n`. The list is in the same order as :attr:`ProblemResults.theta` (also see
+            :attr:`ProblemResults.theta_labels`). Each element of the list is an array of scores for the corresponding
+            parameter. The array is in the same order as observations appear in the ``micro_data``. Note that it is
+            possible for parameters in :attr:`ProblemResults.theta` to mechanically have zero scores, for example if
+            they are on a constant demographic.
 
             Taking the mean of a parameter's scores delivers the observed ``value`` for an optimal
             :class:`MicroMoment` that matches the score for that parameter.
@@ -1408,12 +1408,12 @@ class EconomyResults(SimpleEconomyResults):
         Returns
         -------
         `list`
-            Scores :math:`\mathscr{S}_n`. The list is in the same order as :attr:`ProblemResults.theta`. Each element
-            of the list is a mapping from market IDs supported by the ``dataset`` to an array of scores for the
-            corresponding parameter and market. The array's dimensions correspond to the dimensions of the weights
-            returned by ``compute_weights`` passed to ``dataset``. Note that it is possible for parameters in
-            :attr:`ProblemResults.theta` to mechanically have zero scores, for example if they are on a constant
-            demographic.
+            Scores :math:`\mathscr{S}_n`. The list is in the same order as :attr:`ProblemResults.theta` (also see
+            :attr:`ProblemResults.theta_labels`). Each element of the list is a mapping from market IDs supported by the
+            ``dataset`` to an array of scores for the corresponding parameter and market. The array's dimensions
+            correspond to the dimensions of the weights returned by ``compute_weights`` passed to ``dataset``. Note that
+            it is possible for parameters in :attr:`ProblemResults.theta` to mechanically have zero scores, for example
+            if they are on a constant demographic.
 
             To build an optimal :class:`MicroMoment` that matches the score for a parameter, ``compute_values``
             in its single :class:`MicroPart` should select the array corresponding to that parameter and the requested

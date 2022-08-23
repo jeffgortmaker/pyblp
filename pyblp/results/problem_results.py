@@ -151,6 +151,8 @@ class ProblemResults(EconomyResults):
         Variable labels for :math:`\beta`, which are derived from the formulation for :math:`X_1`.
     gamma_labels : `list of str`
         Variable labels for :math:`\gamma`, which are derived from the formulation for :math:`X_3`.
+    theta_labels : `list of str`
+        Variable labels for :math:`\theta`, which are derived from the above labels.
     delta : `ndarray`
         Estimated mean utility, :math:`\delta(\hat{\theta})`.
     clipped_shares : `ndarray`
@@ -278,6 +280,7 @@ class ProblemResults(EconomyResults):
     rho_labels: List[str]
     beta_labels: List[str]
     gamma_labels: List[str]
+    theta_labels: List[str]
     delta: Array
     clipped_shares: Array
     tilde_costs: Array
@@ -433,6 +436,7 @@ class ProblemResults(EconomyResults):
         self.rho_labels = self._parameters.rho_labels
         self.beta_labels = self._parameters.beta_labels
         self.gamma_labels = self._parameters.gamma_labels
+        self.theta_labels = self._parameters.theta_labels
 
         # ignore computational errors when updating the weighting matrix and computing covariances
         with np.errstate(all='ignore'):
@@ -652,10 +656,10 @@ class ProblemResults(EconomyResults):
                 'cumulative_contraction_evaluations', 'parameters', 'parameter_covariances', 'theta', 'sigma',
                 'sigma_squared', 'pi', 'rho', 'beta', 'gamma', 'sigma_se', 'sigma_squared_se', 'pi_se', 'rho_se',
                 'beta_se', 'gamma_se', 'sigma_bounds', 'pi_bounds', 'rho_bounds', 'beta_bounds', 'gamma_bounds',
-                'sigma_labels', 'pi_labels', 'rho_labels', 'beta_labels', 'gamma_labels', 'delta', 'tilde_costs',
-                'clipped_shares', 'clipped_costs', 'xi', 'omega', 'xi_fe', 'omega_fe', 'micro', 'micro_values',
-                'micro_covariances', 'moments', 'moments_jacobian', 'simulation_covariances', 'objective',
-                'xi_by_theta_jacobian', 'omega_by_theta_jacobian', 'micro_by_theta_jacobian', 'gradient',
+                'sigma_labels', 'pi_labels', 'rho_labels', 'beta_labels', 'gamma_labels', 'theta_labels', 'delta',
+                'tilde_costs', 'clipped_shares', 'clipped_costs', 'xi', 'omega', 'xi_fe', 'omega_fe', 'micro',
+                'micro_values', 'micro_covariances', 'moments', 'moments_jacobian', 'simulation_covariances',
+                'objective', 'xi_by_theta_jacobian', 'omega_by_theta_jacobian', 'micro_by_theta_jacobian', 'gradient',
                 'projected_gradient', 'projected_gradient_norm', 'hessian', 'reduced_hessian',
                 'reduced_hessian_eigenvalues', 'W', 'updated_W'
             )) -> dict:

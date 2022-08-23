@@ -143,6 +143,7 @@ class Parameters(object):
     rho_labels: List[str]
     beta_labels: List[str]
     gamma_labels: List[str]
+    theta_labels: List[str]
     rc_types: List[str]
     sigma: Array
     sigma_squared: Array
@@ -280,6 +281,9 @@ class Parameters(object):
 
         # identify whether there are any bounds
         self.any_bounds = np.isfinite(self.compress_bounds()).any()
+
+        # define labels for theta
+        self.theta_labels = self.compress_labels()
 
     @staticmethod
     def initialize_matrix(
@@ -507,7 +511,7 @@ class Parameters(object):
             (PiParameter, self.pi),
             (RhoParameter, self.rho),
             (BetaParameter, self.beta),
-            (GammaParameter, self.gamma)
+            (GammaParameter, self.gamma),
         ]
         return np.r_[[v[p.location] for t, v in items for p in self.unfixed if isinstance(p, t)]]
 
@@ -518,9 +522,20 @@ class Parameters(object):
             (PiParameter, self.pi_bounds),
             (RhoParameter, self.rho_bounds),
             (BetaParameter, self.beta_bounds),
-            (GammaParameter, self.gamma_bounds)
+            (GammaParameter, self.gamma_bounds),
         ]
         return [(l[p.location], u[p.location]) for t, (l, u) in items for p in self.unfixed if isinstance(p, t)]
+
+    def compress_labels(self) -> List[str]:
+        """Compress labels into a list of labels for theta."""
+        items = [
+            (SigmaParameter, np.array([[f'{k1} x {k2}' for k2 in self.sigma_labels] for k1 in self.sigma_labels])),
+            (PiParameter, np.array([[f'{k1} x {k2}' for k2 in self.pi_labels] for k1 in self.sigma_labels])),
+            (RhoParameter, np.c_[np.array(self.rho_labels)]),
+            (BetaParameter, np.c_[np.array(self.beta_labels)]),
+            (GammaParameter, np.c_[np.array(self.gamma_labels)]),
+        ]
+        return [v[p.location] for t, v in items for p in self.unfixed if isinstance(p, t)]
 
     def expand(self, theta_like: Array, nullify: bool = False) -> Tuple[Array, Array, Array, Array, Array]:
         """Recover matrices of the same size as parameter matrices from a vector of the same size as theta. By default,
@@ -537,7 +552,7 @@ class Parameters(object):
             (PiParameter, pi_like),
             (RhoParameter, rho_like),
             (BetaParameter, beta_like),
-            (GammaParameter, gamma_like)
+            (GammaParameter, gamma_like),
         ]
 
         # fill values of unfixed parameters
