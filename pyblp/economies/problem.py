@@ -860,7 +860,10 @@ class ProblemEconomy(Economy):
                         if micro_value.size != 1:
                             raise TypeError(f"compute_value of micro moment '{moment}' should return a float.")
                         if not np.isfinite(micro_value):
-                            warn(f"compute_value of micro moment '{moment}' returned {format_number(micro_value)}.")
+                            warn(
+                                f"compute_value of micro moment '{moment}' returned "
+                                f"{format_number(micro_value).strip()}."
+                            )
 
                         micro_values[m] = micro_value
 
@@ -876,7 +879,7 @@ class ProblemEconomy(Economy):
                                 if not np.isfinite(micro_gradient[p]):
                                     warn(
                                         f"compute_gradient of micro moment '{moment}' returned "
-                                        f"{format_number(micro_gradient[p])} for part '{part}'."
+                                        f"{format_number(micro_gradient[p]).strip()} for part '{part}'."
                                     )
 
                             micro_gradients[m, part_indices] = micro_gradient

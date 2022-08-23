@@ -601,7 +601,7 @@ class InversionError(Error):
 
     def __str__(self) -> str:
         """Supplement the error with the condition number."""
-        return f"{super().__str__()} Condition number: {format_number(self._condition)}."
+        return f"{super().__str__()} Condition number: {format_number(self._condition).strip()}."
 
 
 class InversionReplacementError(InversionError):
