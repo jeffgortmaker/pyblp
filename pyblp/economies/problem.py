@@ -1348,7 +1348,11 @@ class Problem(ProblemEconomy):
             - ``'linear'`` (default) - The random coefficient is as defined in :eq:`mu`.
 
             - ``'log'`` - The random coefficient's column in :eq:`mu` is exponentiated before being pre-multiplied by
-              :math:`X_2`.
+              :math:`X_2`. It will take on values bounded from below by zero.
+
+            - ``'logit'`` - The random coefficient's column in :eq:`mu` is passed through the inverse logit function
+              before being pre-multiplied by :math:`X_2`. It will take on values bounded from below by zero and above by
+              one.
 
         The list should have as many strings as there are columns in :math:`X_2`. Each string determines the type of the
         random coefficient on the corresponding product characteristic in :math:`X_2`.

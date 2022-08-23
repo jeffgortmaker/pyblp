@@ -4,6 +4,7 @@ import functools
 from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 import numpy as np
+import scipy.special
 
 from .. import exceptions, options
 from ..configurations.iteration import ContractionResults, Iteration
@@ -167,6 +168,14 @@ class Market(Container):
                 else:
                     assert len(coefficients.shape) == 3
                     coefficients[:, k] = np.exp(coefficients[:, k])
+            elif rc_type == 'logit':
+                if len(coefficients.shape) == 2:
+                    coefficients[k] = scipy.special.expit(coefficients[k])
+                else:
+                    assert len(coefficients.shape) == 3
+                    coefficients[:, k] = scipy.special.expit(coefficients[:, k])
+            else:
+                assert rc_type == 'linear'
 
         return coefficients
 
@@ -180,6 +189,10 @@ class Market(Container):
 
         if self.parameters.rc_types[k] == 'log':
             coefficient = np.exp(coefficient)
+        elif self.parameters.rc_types[k] == 'logit':
+            coefficient = scipy.special.expit(coefficient)
+        else:
+            assert self.parameters.rc_types[k] == 'linear'
 
         return coefficient
 
@@ -856,6 +869,12 @@ class Market(Container):
             v = parameter.get_agent_characteristic(self)
             if parameter.get_rc_type(self) == 'log':
                 v = v * self.compute_single_random_coefficient(parameter.location[0]).T
+            elif parameter.get_rc_type(self) == 'logit':
+                rc = self.compute_single_random_coefficient(parameter.location[0]).T
+                v = v * rc * (1 - rc)
+            else:
+                assert parameter.get_rc_type(self) == 'linear'
+
             tangent += X2_derivatives[:, [parameter.location[0]]] * v.T
         else:
             assert isinstance(parameter, (GammaParameter, RhoParameter))
@@ -939,6 +958,12 @@ class Market(Container):
                 v = parameter.get_agent_characteristic(self)
                 if parameter.get_rc_type(self) == 'log':
                     v = v * self.compute_single_random_coefficient(parameter.location[0]).T
+                elif parameter.get_rc_type(self) == 'logit':
+                    rc = self.compute_single_random_coefficient(parameter.location[0]).T
+                    v = v * rc * (1 - rc)
+                else:
+                    assert parameter.get_rc_type(self) == 'linear'
+
                 probabilities_tangent = probabilities * v.T * (x - x.T @ probabilities)
             else:
                 assert isinstance(parameter, GammaParameter)
@@ -970,6 +995,11 @@ class Market(Container):
             v = parameter.get_agent_characteristic(self)
             if parameter.get_rc_type(self) == 'log':
                 v = v * self.compute_single_random_coefficient(parameter.location[0]).T
+            elif parameter.get_rc_type(self) == 'logit':
+                rc = self.compute_single_random_coefficient(parameter.location[0]).T
+                v = v * rc * (1 - rc)
+            else:
+                assert parameter.get_rc_type(self) == 'linear'
 
             # compute the tangent of conditional probabilities with respect to the parameter
             vx = v.T * x

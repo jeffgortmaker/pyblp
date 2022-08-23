@@ -110,8 +110,8 @@ class Economy(Container, StringRepresentation):
                 raise TypeError("rc_types must be None or a sequence.")
             if len(rc_types) != self.K2:
                 raise ValueError(f"rc_types must be None or a sequence of length {self.K2}.")
-            if any(d not in {'linear', 'log'} for d in rc_types):
-                raise TypeError("rc_types must be None or a sequence of 'linear' or 'log' strings.")
+            if any(d not in {'linear', 'log', 'logit'} for d in rc_types):
+                raise TypeError("rc_types must be None or a sequence of 'linear', 'log', or 'logit' strings.")
             self.rc_types = list(rc_types)
 
         # validate the scale of epsilon
