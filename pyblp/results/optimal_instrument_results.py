@@ -203,8 +203,8 @@ class OptimalInstrumentResults(StringRepresentation):
 
     def to_problem(
             self, supply_shifter_formulation: Optional[Formulation] = None,
-            demand_shifter_formulation: Optional[Formulation] = None, product_data: Optional[Mapping] = None) -> (
-            'OptimalInstrumentProblem'):
+            demand_shifter_formulation: Optional[Formulation] = None, product_data: Optional[Mapping] = None,
+            drop_indices: Optional[Sequence[int]] = None) -> 'OptimalInstrumentProblem':
         r"""Re-create the problem with estimated feasible optimal instruments.
 
         The re-created problem will be exactly the same, except that instruments will be replaced with estimated
@@ -271,10 +271,14 @@ class OptimalInstrumentResults(StringRepresentation):
             :class:`Formulation` configuration for demand shifters to be included in the set of optimal supply-side
             instruments. This is only used if a supply side was estimated. Intercepts will be ignored. By default,
             :attr:`OptimalInstrumentResults.demand_shifter_formulation` is used.
-        product_data : `structured array-like`
+        product_data : `structured array-like, optional`
             Product data used instead of what was saved from ``product_data`` when initializing the original
             :class:`Problem`. This may need to be specified if either the supply or demand shifter formulation contains
             some term that was not stored into memory, such as a categorical variable or a mathematical expression.
+        drop_indices : `sequence of int, optional`
+            Which column indices to drop from :attr:`OptimalInstrumentResults.demand_instruments` and
+            :attr:`OptimalInstrumentResults.supply_instruments`. By default, the only columns dropped are those that
+            correspond to parameters in :math:`\theta` on exogenous linear characteristics.
 
         Returns
         -------
@@ -318,13 +322,19 @@ class OptimalInstrumentResults(StringRepresentation):
         else:
             demand_shifter_formulation = None
 
-        # identify which parameters in theta are are exogenous linear characteristics
+        # identify which parameters in theta that are on exogenous linear characteristics
         dropped_index = np.zeros(self.problem_results._parameters.P, np.bool_)
-        for p, parameter in enumerate(self.problem_results._parameters.unfixed):
-            if isinstance(parameter, LinearCoefficient):
-                names = parameter.get_product_formulation(self.problem_results.problem).names
-                if 'prices' not in names and 'shares' not in names:
-                    dropped_index[p] = True
+        if drop_indices is not None:
+            if not isinstance(drop_indices, Sequence) or not all(isinstance(i, int) for i in drop_indices):
+                raise TypeError("drop_indices must be a sequence of integers.")
+            for index in drop_indices:
+                dropped_index[index] = True
+        else:
+            for p, parameter in enumerate(self.problem_results._parameters.unfixed):
+                if isinstance(parameter, LinearCoefficient):
+                    names = parameter.get_product_formulation(self.problem_results.problem).names
+                    if 'prices' not in names and 'shares' not in names:
+                        dropped_index[p] = True
 
         # build excluded demand-side instruments
         demand_instruments = self.demand_instruments[:, ~dropped_index]
