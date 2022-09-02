@@ -27,6 +27,7 @@ from .conftest import SimulatedProblemFixture
     pytest.param({'scale_objective': True}, id="scaled objective"),
     pytest.param({'center_moments': False, 'W_type': 'unadjusted', 'se_type': 'clustered'}, id="complex covariances"),
     pytest.param({'delta_behavior': 'last'}, id="faster starting delta values"),
+    pytest.param({'delta_behavior': 'logit'}, id="logit starting delta values"),
     pytest.param({'fp_type': 'linear'}, id="non-safe linear fixed point"),
     pytest.param({'fp_type': 'safe_nonlinear'}, id="nonlinear fixed point"),
     pytest.param({'fp_type': 'nonlinear'}, id="non-safe nonlinear fixed point"),

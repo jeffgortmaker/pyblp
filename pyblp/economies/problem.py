@@ -302,6 +302,11 @@ class ProblemEconomy(Economy):
                 - ``'first'`` (default) - Start at the values configured by ``delta`` during the first GMM step, and at
                   the values computed by the last GMM step for each subsequent step.
 
+                - ``'logit'`` - Start at the solution to the logit model in :eq:`logit_delta`, or if :math:`\rho` is
+                  specified, the solution to the nested logit model in :eq:`nested_logit_delta`. If the initial
+                  ``delta`` is left unspecified and there is no nesting parameter being optimized over, this will
+                  generally be equivalent to ``'first'``.
+
                 - ``'last'`` - Start at the values of :math:`\delta(\theta)` computed during the last objective
                   evaluation, or, if this is the first evaluation, at the values configured by ``delta``. This behavior
                   tends to speed up computation but may introduce some instability into estimation.
@@ -480,8 +485,8 @@ class ProblemEconomy(Economy):
             raise ValueError("error_behavior must be 'revert', 'punish', or 'raise'.")
         if not isinstance(error_punishment, (float, int)) or error_punishment < 0:
             raise ValueError("error_punishment must be a positive float.")
-        if delta_behavior not in {'last', 'first'}:
-            raise ValueError("delta_behavior must be 'last' or 'first'.")
+        if delta_behavior not in {'last', 'logit', 'first'}:
+            raise ValueError("delta_behavior must be 'last', 'logit', or 'first'.")
         iteration = self._coerce_optional_delta_iteration(iteration)
         self._validate_fp_type(fp_type)
         if W_type not in {'robust', 'unadjusted', 'clustered'}:
@@ -759,6 +764,10 @@ class ProblemEconomy(Economy):
         if self.K2 == self.K3 == moments.MM == 0 and (parameters.P == 0 or not compute_jacobians):
             delta = self._compute_logit_delta(rho)
         else:
+            next_delta = progress.next_delta
+            if delta_behavior == 'logit':
+                next_delta = self._compute_logit_delta(rho)
+
             # get market indices for any overridden agents
             agent_market_indices_override = None
             if agents_override is not None:
@@ -778,7 +787,7 @@ class ProblemEconomy(Economy):
                     agents_override_s = agents_override[agent_market_indices_override[s]]
 
                 market_s = ProblemMarket(self, s, parameters, sigma, pi, rho, beta, agents_override=agents_override_s)
-                delta_s = progress.next_delta[self._product_market_indices[s]]
+                delta_s = next_delta[self._product_market_indices[s]]
                 last_delta_s = progress.delta[self._product_market_indices[s]]
                 last_tilde_costs_s = progress.tilde_costs[self._product_market_indices[s]]
                 return (
@@ -1098,10 +1107,8 @@ class ProblemEconomy(Economy):
                     gradient = np.zeros_like(progress.gradient)
 
         # select the delta that will be used in the next objective evaluation
-        if delta_behavior == 'last':
-            next_delta = delta
-        else:
-            assert delta_behavior == 'first'
+        next_delta = delta
+        if delta_behavior == 'first':
             next_delta = progress.next_delta
 
         # optionally compute the Hessian with central finite differences
