@@ -1352,10 +1352,12 @@ class Problem(ProblemEconomy):
     rc_types : `sequence of str, optional`
         Random coefficient types:
 
-            - ``'linear'`` (default) - The random coefficient is as defined in :eq:`mu`.
+            - ``'linear'`` (default) - The random coefficient is as defined in :eq:`mu`. All elliptical distributions
+              are supported, including the normal distribution.
 
             - ``'log'`` - The random coefficient's column in :eq:`mu` is exponentiated before being pre-multiplied by
-              :math:`X_2`. It will take on values bounded from below by zero.
+              :math:`X_2`. It will take on values bounded from below by zero. All log-elliptical distributions are
+              supported, including the lognormal distribution.
 
             - ``'logit'`` - The random coefficient's column in :eq:`mu` is passed through the inverse logit function
               before being pre-multiplied by :math:`X_2`. It will take on values bounded from below by zero and above by
