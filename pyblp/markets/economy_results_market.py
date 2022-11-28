@@ -443,8 +443,8 @@ class EconomyResultsMarket(Market):
         micro_chunks = self.generate_micro_chunks(probabilities, probabilities_tangent_mapping)
         for agent_indices, probabilities_chunk, probabilities_tangent_mapping_chunk in micro_chunks:
             _, denominator_mapping_chunk, _, tangent_mapping_chunk = self.compute_micro_dataset_contributions(
-                [dataset], self.delta, probabilities_chunk, probabilities_tangent_mapping_chunk, compute_jacobians=True,
-                agent_indices=agent_indices
+                [dataset], self.delta, probabilities_chunk, probabilities_tangent_mapping_chunk, xi_jacobian,
+                compute_jacobians=True, agent_indices=agent_indices
             )
             if dataset in denominator_mapping_chunk:
                 denominator += denominator_mapping_chunk[dataset]
@@ -474,8 +474,8 @@ class EconomyResultsMarket(Market):
         micro_chunks = self.generate_micro_chunks(probabilities, probabilities_tangent_mapping)
         for agent_indices, probabilities_chunk, probabilities_tangent_mapping_chunk in micro_chunks:
             weights_mapping_chunk, _, tangent_mapping_chunk, _ = self.compute_micro_dataset_contributions(
-                [dataset], self.delta, probabilities_chunk, probabilities_tangent_mapping_chunk, compute_jacobians=True,
-                agent_indices=agent_indices
+                [dataset], self.delta, probabilities_chunk, probabilities_tangent_mapping_chunk, xi_jacobian,
+                compute_jacobians=True, agent_indices=agent_indices
             )
             if dataset in weights_mapping_chunk:
                 weights_chunk = weights_mapping_chunk[dataset]
