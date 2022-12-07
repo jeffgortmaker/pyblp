@@ -404,6 +404,41 @@ class Market(Container):
 
         return probabilities, conditionals
 
+    def compute_eliminated_probabilities(
+            self, probabilities: Array, delta: Optional[Array] = None, mu: Optional[Array] = None,
+            eliminate_outside: bool = False, eliminate_product: Optional[int] = None) -> Array:
+        """Convert choice probabilities into probabilities with the outside option, an inside product, or both removed
+        from the choice set. If there are any errors, revert to the full derivation of these eliminated probabilities,
+        using the delta with which this market was initialized.
+        """
+
+        # compute the denominator of the expression
+        if eliminate_outside and eliminate_product is not None:
+            eliminate_index = np.arange(self.J) != eliminate_product
+            denominator = probabilities.sum(axis=0, where=eliminate_index[:, None], keepdims=True)
+        elif eliminate_outside:
+            denominator = probabilities.sum(axis=0, keepdims=True)
+        elif eliminate_product is not None:
+            denominator = 1 - probabilities[eliminate_product][None]
+        else:
+            return probabilities
+
+        # try to compute the eliminated probabilities, ignoring any divisions by zero or underflow
+        with np.errstate(all='ignore'):
+            eliminated = probabilities / denominator
+
+        # the probability of choosing an eliminated inside product is zero
+        if eliminate_product is not None:
+            eliminated[eliminate_product] = 0
+
+        # if there were any errors, compute the eliminated probabilities directly
+        if not np.isfinite(eliminated).all():
+            eliminated, _ = self.compute_probabilities(
+                delta, mu, eliminate_outside=eliminate_outside, eliminate_product=eliminate_product
+            )
+
+        return eliminated
+
     def compute_delta(
             self, initial_delta: Array, iteration: Iteration, fp_type: str, shares_bounds: Bounds) -> (
             Tuple[Array, Array, SolverStats, List[Error]]):
@@ -851,8 +886,8 @@ class Market(Container):
 
     def compute_probabilities_by_parameter_tangent_mapping(
             self, probabilities: Array, conditionals: Optional[Array], delta: Optional[Array] = None,
-            agent_indices: Optional[Array] = None, keep_conditionals: bool = True,
-            eliminate_product: Optional[int] = None) -> Tuple[Dict[int, Array], Dict[int, Optional[Array]]]:
+            keep_conditionals: bool = True) -> (
+            Tuple[Dict[int, Array], Dict[int, Optional[Array]]]):
         """Computing a mapping from parameter index to tangent of probabilities with respect to a parameter. By default,
         use unchanged delta. By default, also compute conditionals derivatives if computed.
         """
@@ -860,7 +895,7 @@ class Market(Container):
         conditionals_mapping: Dict[int, Array] = {}
         for p, parameter in enumerate(self.parameters.unfixed):
             probabilities_mapping[p], conditionals_mapping[p] = self.compute_probabilities_by_parameter_tangent(
-                parameter, probabilities, conditionals, delta, agent_indices, eliminate_product
+                parameter, probabilities, conditionals, delta
             )
             if not keep_conditionals:
                 conditionals_mapping[p] = None
@@ -907,8 +942,7 @@ class Market(Container):
 
     def compute_probabilities_by_parameter_tangent(
             self, parameter: Parameter, probabilities: Array, conditionals: Optional[Array],
-            delta: Optional[Array] = None, agent_indices: Optional[Array] = None,
-            eliminate_product: Optional[int] = None) -> Tuple[Array, Optional[Array]]:
+            delta: Optional[Array] = None) -> Tuple[Array, Optional[Array]]:
         """Compute the tangent of probabilities with respect to a parameter. By default, use unchanged delta."""
         if delta is None:
             assert self.delta is not None
@@ -929,10 +963,6 @@ class Market(Container):
                     v = v * rc * (1 - rc)
                 else:
                     assert parameter.get_rc_type(self) == 'linear'
-
-                # if specified, only use certain agents
-                if agent_indices is not None:
-                    v = v[agent_indices]
 
                 probabilities_tangent = probabilities * v.T * (x - x.T @ probabilities)
             else:
@@ -971,10 +1001,6 @@ class Market(Container):
             else:
                 assert parameter.get_rc_type(self) == 'linear'
 
-            # if specified, only use certain agents
-            if agent_indices is not None:
-                v = v[agent_indices]
-
             # compute the tangent of conditional probabilities with respect to the parameter
             vx = v.T * x
             A = conditionals * vx
@@ -989,22 +1015,13 @@ class Market(Container):
             group_associations = parameter.get_group_associations(self)
             associations = self.groups.expand(group_associations)
 
-            # if specified, only use certain agents
-            mu = self.mu
-            if agent_indices is not None:
-                mu = mu[:, agent_indices]
-
             # utilities are needed to compute tangents with respect to rho
-            utilities = (delta + mu) / (1 - self.rho)
+            utilities = (delta + self.mu) / (1 - self.rho)
 
             # compute the tangent of conditional probabilities with respect to the parameter
             A = conditionals * utilities / (1 - self.rho)
             A_sums = self.groups.sum(A)
             conditionals_tangent = associations * (A - conditionals * self.groups.expand(A_sums))
-
-            # handle any eliminated products, for which the expression is a bit different
-            if eliminate_product is not None:
-                utilities[eliminate_product] = -np.inf
 
             # compute the tangent of marginal probabilities with respect to the parameter (re-scale for robustness)
             utility_reduction = np.clip(utilities.max(axis=0, keepdims=True), 0, None)
@@ -1395,8 +1412,8 @@ class Market(Container):
 
     def compute_micro_dataset_contributions(
             self, datasets: List[MicroDataset], delta: Optional[Array] = None, probabilities: Optional[Array] = None,
-            probabilities_tangent_mapping: Optional[Dict[int, Array]] = None, xi_jacobian: Optional[Array] = None,
-            compute_jacobians: bool = False, agent_indices: Optional[Array] = None) -> (
+            probabilities_tangent_mapping: Optional[Dict[int, Array]] = None, compute_jacobians: bool = False,
+            agent_indices: Optional[Array] = None) -> (
             Tuple[
                 Dict[MicroDataset, Array], Dict[MicroDataset, Array], Dict[Tuple[MicroDataset, int], Array],
                 Dict[Tuple[MicroDataset, int], Array]
@@ -1434,9 +1451,7 @@ class Market(Container):
                 probabilities, _ = self.compute_probabilities(delta, mu)
 
             # pre-compute outside probabilities
-            need_outside_probabilities = len(weights.shape) == 2 and weights.shape[1] == 1 + self.J
-            need_outside_probabilities |= len(weights.shape) == 3 and weights.shape[2] == 1 + self.J
-            if need_outside_probabilities and outside_probabilities is None:
+            if outside_probabilities is None and weights.shape[1] == 1 + self.J:
                 outside_probabilities = 1 - probabilities.sum(axis=0)
 
                 if compute_jacobians:
@@ -1445,109 +1460,46 @@ class Market(Container):
                         outside_probabilities_tangent_mapping[p] = -probabilities_tangent.sum(axis=0)
 
             # pre-compute second choice probabilities
-            need_eliminated_probabilities = len(weights.shape) == 3
-            if need_eliminated_probabilities and eliminated_probabilities is None:
+            if len(weights.shape) == 3 and eliminated_probabilities is None:
                 eliminated_probabilities_list = []
-                eliminated_conditionals_list = []
                 for j in range(self.J):
-                    # use a fast analytic trick for non-nested probabilities
-                    eliminated_probabilities_j = eliminated_conditionals_j = None
-                    if self.H == 0:
-                        with np.errstate(all='ignore'):
-                            eliminated_probabilities_j = probabilities / (1 - probabilities[j][None])
-                            eliminated_probabilities_j[j] = 0
-
-                    # re-compute probabilities if there is nesting or there was a numerical error
-                    if eliminated_probabilities_j is None or not np.isfinite(eliminated_probabilities_j).all():
-                        eliminated_probabilities_j, eliminated_conditionals_j = self.compute_probabilities(
-                            delta, mu, eliminate_product=j
-                        )
-
-                    eliminated_probabilities_list.append(eliminated_probabilities_j)
-                    eliminated_conditionals_list.append(eliminated_conditionals_j)
+                    eliminated_probabilities_list.append(self.compute_eliminated_probabilities(
+                        probabilities, delta, mu, eliminate_product=j
+                    ))
 
                 eliminated_probabilities = np.stack(eliminated_probabilities_list)
 
                 if compute_jacobians:
-                    # use a fast analytic trick for non-nested probabilities
-                    if self.H == 0:
-                        with np.errstate(all='ignore'):
-                            eliminated_ratios = eliminated_probabilities / probabilities[None]
-                            eliminated_ratios[~np.isfinite(eliminated_ratios)] = 0
+                    with np.errstate(all='ignore'):
+                        eliminated_ratios = eliminated_probabilities / probabilities[None]
+                        eliminated_ratios[~np.isfinite(eliminated_ratios)] = 0
 
-                        assert probabilities_tangent_mapping is not None
-                        for p, probabilities_tangent in probabilities_tangent_mapping.items():
-                            eliminated_probabilities_tangent_mapping[p] = eliminated_ratios * (
-                                probabilities_tangent[None] + eliminated_probabilities * probabilities_tangent[:, None]
-                            )
-                    else:
-                        assert xi_jacobian is not None
-
-                        # compute from scratch for nested probabilities
-                        eliminated_probabilities_tangent_mappings: Any = {}
-                        for j in range(self.J):
-                            eliminated_probabilities_tangent_mappings[j], conditionals_tangent_mapping = (
-                                self.compute_probabilities_by_parameter_tangent_mapping(
-                                    eliminated_probabilities[j], eliminated_conditionals_list[j], delta, agent_indices,
-                                    eliminate_product=j, keep_conditionals=False
-                                )
-                            )
-                            self.update_probabilities_by_parameter_tangent_mapping(
-                                eliminated_probabilities_tangent_mappings[j], conditionals_tangent_mapping,
-                                eliminated_probabilities[j], eliminated_conditionals_list[j], xi_jacobian
-                            )
-
-                        for p in range(self.parameters.P):
-                            eliminated_probabilities_tangent_mapping[p] = np.stack(
-                                [eliminated_probabilities_tangent_mappings[j][p] for j in range(self.J)]
-                            )
+                    assert probabilities_tangent_mapping is not None
+                    for p, probabilities_tangent in probabilities_tangent_mapping.items():
+                        eliminated_probabilities_tangent_mapping[p] = eliminated_ratios * (
+                            probabilities_tangent[None] + eliminated_probabilities * probabilities_tangent[:, None]
+                        )
 
             # pre-compute probabilities after the outside option has been removed
-            need_outside_eliminated_probabilities = len(weights.shape) == 3 and weights.shape[1] == 1 + self.J
-            if need_outside_eliminated_probabilities and outside_eliminated_probabilities is None:
-                # use a fast analytic trick for non-nested probabilities
-                outside_eliminated_probabilities = outside_eliminated_conditionals = None
-                if self.H == 0:
-                    with np.errstate(all='ignore'):
-                        outside_eliminated_probabilities = probabilities / probabilities.sum(axis=0, keepdims=True)
-
-                # re-compute probabilities if there is nesting or there was a numerical error
-                if outside_eliminated_probabilities is None or not np.isfinite(outside_eliminated_probabilities).all():
-                    outside_eliminated_probabilities, outside_eliminated_conditionals = self.compute_probabilities(
-                        delta, mu, eliminate_outside=True
-                    )
+            if len(weights.shape) == 3 and outside_eliminated_probabilities is None and weights.shape[1] == 1 + self.J:
+                outside_eliminated_probabilities = self.compute_eliminated_probabilities(
+                    probabilities, delta, mu, eliminate_outside=True
+                )
 
                 if compute_jacobians:
-                    # use a fast analytic trick for non-nested probabilities
-                    if self.H == 0:
-                        with np.errstate(all='ignore'):
-                            outside_eliminated_ratio = outside_eliminated_probabilities / probabilities
-                            outside_eliminated_ratio[~np.isfinite(outside_eliminated_ratio)] = 0
+                    with np.errstate(all='ignore'):
+                        outside_eliminated_ratio = outside_eliminated_probabilities / probabilities
+                        outside_eliminated_ratio[~np.isfinite(outside_eliminated_ratio)] = 0
 
-                        assert probabilities_tangent_mapping is not None
-                        for p, probabilities_tangent in probabilities_tangent_mapping.items():
-                            outside_eliminated_probabilities_tangent_mapping[p] = outside_eliminated_ratio * (
-                                probabilities_tangent -
-                                outside_eliminated_probabilities * probabilities_tangent.sum(axis=0, keepdims=True)
-                            )
-                    else:
-                        assert xi_jacobian is not None
-
-                        # compute from scratch for nested probabilities
-                        outside_eliminated_probabilities_tangent_mapping, conditionals_tangent_mapping = (
-                            self.compute_probabilities_by_parameter_tangent_mapping(
-                                outside_eliminated_probabilities, outside_eliminated_conditionals, delta,
-                                agent_indices, keep_conditionals=False
-                            )
-                        )
-                        self.update_probabilities_by_parameter_tangent_mapping(
-                            outside_eliminated_probabilities_tangent_mapping, conditionals_tangent_mapping,
-                            outside_eliminated_probabilities, outside_eliminated_conditionals, xi_jacobian
+                    assert probabilities_tangent_mapping is not None
+                    for p, probabilities_tangent in probabilities_tangent_mapping.items():
+                        outside_eliminated_probabilities_tangent_mapping[p] = outside_eliminated_ratio * (
+                            probabilities_tangent -
+                            outside_eliminated_probabilities * probabilities_tangent.sum(axis=0, keepdims=True)
                         )
 
             # pre-compute outside second choice probabilities
-            need_eliminated_outside_probabilities = len(weights.shape) == 3 and weights.shape[2] == 1 + self.J
-            if need_eliminated_outside_probabilities and eliminated_outside_probabilities is None:
+            if len(weights.shape) == 3 and eliminated_outside_probabilities is None and weights.shape[2] == 1 + self.J:
                 assert eliminated_probabilities is not None
                 eliminated_outside_probabilities = 1 - eliminated_probabilities.sum(axis=1)
 
@@ -1575,21 +1527,17 @@ class Market(Container):
             else:
                 assert len(weights.shape) == 3
                 assert eliminated_probabilities is not None
-                product = np.zeros_like(weights)
-                product[:, -self.J:, -self.J:] += np.moveaxis(eliminated_probabilities, (0, 1, 2), (1, 2, 0))
-                product[:, :, -self.J:] -= probabilities.T[:, None]
-                product[:, -self.J:, -self.J:][:, np.arange(self.J), np.arange(self.J)] = 0
+                dataset_weights[:, -self.J:] *= probabilities.T[..., None]
+                dataset_weights[:, -self.J:, -self.J:] *= np.moveaxis(eliminated_probabilities, (0, 1, 2), (1, 2, 0))
                 if weights.shape[1] == 1 + self.J:
-                    assert outside_eliminated_probabilities is not None
-                    product[:, 0, -self.J:] += outside_eliminated_probabilities.T
+                    assert outside_probabilities is not None and outside_eliminated_probabilities is not None
+                    dataset_weights[:, 0] *= outside_probabilities[:, None]
+                    dataset_weights[:, 0, -self.J:] *= outside_eliminated_probabilities.T
                 if weights.shape[2] == 1 + self.J:
-                    assert eliminated_outside_probabilities is not None and outside_probabilities is not None
-                    product[:, -self.J:, 0] += eliminated_outside_probabilities.T
-                    product[:, :, 0] -= outside_probabilities[:, None]
+                    assert eliminated_outside_probabilities is not None
+                    dataset_weights[:, -self.J:, 0] *= eliminated_outside_probabilities.T
                 if weights.shape[1] == weights.shape[2] == 1 + self.J:
-                    product[:, 0, 0] = 0
-
-                dataset_weights *= product
+                    dataset_weights[:, 0, 0] = 0
 
             # truncate numerical errors from below by zero
             dataset_weights[dataset_weights < 0] = 0
@@ -1609,23 +1557,29 @@ class Market(Container):
                     else:
                         assert len(weights.shape) == 3
                         assert eliminated_probabilities is not None
-                        product = np.zeros_like(weights_tangent)
-                        product[:, -self.J:, -self.J:] += np.moveaxis(
+                        product1 = np.ones_like(weights_tangent)
+                        product2 = np.ones_like(weights_tangent)
+                        product1[:, -self.J:] = probabilities_tangent_mapping[p].T[..., None]
+                        product2[:, -self.J:] = probabilities.T[..., None]
+                        product1[:, -self.J:, -self.J:] *= np.moveaxis(eliminated_probabilities, (0, 1, 2), (1, 2, 0))
+                        product2[:, -self.J:, -self.J:] *= np.moveaxis(
                             eliminated_probabilities_tangent_mapping[p], (0, 1, 2), (1, 2, 0)
                         )
-                        product[:, :, -self.J:] -= probabilities_tangent_mapping[p].T[:, None]
-                        product[:, -self.J:, -self.J:][:, np.arange(self.J), np.arange(self.J)] = 0
                         if weights.shape[1] == 1 + self.J:
-                            assert outside_eliminated_probabilities is not None
-                            product[:, 0, -self.J:] += outside_eliminated_probabilities_tangent_mapping[p].T
+                            assert outside_probabilities is not None and outside_eliminated_probabilities is not None
+                            product1[:, 0] = outside_probabilities_tangent_mapping[p][:, None]
+                            product2[:, 0] = outside_probabilities[:, None]
+                            product1[:, 0, -self.J:] *= outside_eliminated_probabilities.T
+                            product2[:, 0, -self.J:] *= outside_eliminated_probabilities_tangent_mapping[p].T
                         if weights.shape[2] == 1 + self.J:
-                            assert eliminated_outside_probabilities is not None and outside_probabilities is not None
-                            product[:, -self.J:, 0] += eliminated_outside_probabilities_tangent_mapping[p].T
-                            product[:, :, 0] -= outside_probabilities_tangent_mapping[p][:, None]
+                            assert eliminated_outside_probabilities is not None
+                            product1[:, -self.J:, 0] *= eliminated_outside_probabilities.T
+                            product2[:, -self.J:, 0] *= eliminated_outside_probabilities_tangent_mapping[p].T
                         if weights.shape[1] == weights.shape[2] == 1 + self.J:
-                            product[:, 0, 0] = 0
+                            product1[:, 0, 0] = 0
+                            product2[:, 0, 0] = 0
 
-                        weights_tangent *= product
+                        weights_tangent *= product1 + product2
 
                     weights_tangent_mapping[(dataset, p)] = weights_tangent
 
@@ -1671,8 +1625,8 @@ class Market(Container):
 
     def compute_micro_contributions(
             self, moments: Moments, delta: Optional[Array] = None, probabilities: Optional[Array] = None,
-            probabilities_tangent_mapping: Optional[Dict[int, Array]] = None, xi_jacobian: Optional[Array] = None,
-            compute_jacobians: bool = False, compute_covariances: bool = False, keep_mappings: bool = False) -> (
+            probabilities_tangent_mapping: Optional[Dict[int, Array]] = None, compute_jacobians: bool = False,
+            compute_covariances: bool = False, keep_mappings: bool = False) -> (
             Tuple[Array, Array, Array, Array, Array, Dict[MicroDataset, Array], Dict[int, Array]]):
         """Compute contributions to micro moment parts, Jacobians, and covariances. By default, use the mean utilities
         with which this market was initialized and do not compute Jacobian and covariance contributions.
@@ -1700,8 +1654,8 @@ class Market(Container):
                 denominator_tangent_mapping_chunk
             ) = (
                 self.compute_micro_dataset_contributions(
-                    datasets, delta, probabilities_chunk, probabilities_tangent_mapping_chunk, xi_jacobian,
-                    compute_jacobians, agent_indices
+                    datasets, delta, probabilities_chunk, probabilities_tangent_mapping_chunk, compute_jacobians,
+                    agent_indices
                 )
             )
 
