@@ -2,13 +2,18 @@
 
 import copy
 import itertools
+import os
 import pickle
+import shutil
+import subprocess
+import tempfile
 from typing import Any, Callable, Dict, List, Optional, Tuple
 import warnings
 
 import numpy as np
 import pytest
 import scipy.optimize
+import scipy.special
 
 import pyblp.exceptions
 from pyblp import (
@@ -1302,6 +1307,148 @@ def test_extra_demographics(simulated_problem: SimulatedProblemFixture) -> None:
 
 
 @pytest.mark.usefixtures('simulated_problem')
+def test_logit_errors(simulated_problem: SimulatedProblemFixture) -> None:
+    """Test that first and second choice probabilities are correct by comparing frequencies of second choices when
+    simulated according to analytic expression that integrate over logit errors when simulating logit errors directly.
+    For nested logit errors, call the R package evd by Alec Stephenson.
+    """
+    simulation, simulation_results, problem, _, _ = simulated_problem
+
+    # skip problems with supply since this test will be the same
+    if problem.K3 > 0:
+        return pytest.skip("Configurations with supply give the same test.")
+
+    # select only a few products (if there's nesting, select two from each of two nests)
+    J = 4
+    small_product_data = simulation_results.product_data[:J].copy()
+    small_product_data.shares[:] = np.c_[[0.1, 0.2, 0.3, 0.15]]
+    small_product_data.market_ids[:] = simulation.unique_market_ids[0]
+    if small_product_data.ownership.size > 0:
+        small_product_data = update_matrices(small_product_data, {
+            'ownership': (small_product_data.ownership[:, :J], small_product_data.ownership.dtype)
+        })
+    if simulation.H > 0:
+        small_product_data.nesting_ids[:2] = simulation.unique_nesting_ids[0]
+        small_product_data.nesting_ids[2:] = simulation.unique_nesting_ids[1]
+
+    # select just the first consumer type
+    small_agent_data = None
+    if simulation.agent_data is not None:
+        small_agent_data = simulation.agent_data[[0]].copy()
+        small_agent_data.weights[:] = 1
+
+    # create a simulation with only a few products and one consumer type to reduce the number of needed simulation draws
+    small_product_data = update_matrices(small_product_data, {'extra': (np.zeros(J), np.float64)})
+    assert simulation.product_formulations[0] is not None
+    product_formulations = (
+        Formulation(f'{simulation.product_formulations[0]._formula} + extra'),
+        simulation.product_formulations[1],
+    )
+    beta = np.r_[simulation.beta.flatten(), 1]
+    small_simulation = Simulation(
+        product_formulations, small_product_data, beta, simulation.sigma, simulation.pi, rho=simulation.rho[:2],
+        agent_formulation=simulation.agent_formulation, agent_data=small_agent_data, xi=simulation.xi[:J],
+        rc_types=simulation.rc_types, epsilon_scale=simulation.epsilon_scale
+    )
+    small_results = small_simulation.replace_exogenous('extra')
+
+    # simulate according to analytic second choice probabilities, integrating over idiosyncratic preferences
+    observations = 1_000_000
+    dataset = MicroDataset(
+        name="Second Choices",
+        observations=observations,
+        compute_weights=lambda _, p, a: np.ones((a.size, 1 + p.size, 1 + p.size)),
+    )
+    micro_data = small_results.simulate_micro_data(dataset, seed=0)
+
+    # compute random coefficients
+    coefficients = small_simulation.sigma @ small_simulation.agents.nodes.T
+    if small_simulation.D > 0:
+        coefficients = coefficients + small_simulation.pi @ small_simulation.agents.demographics.T
+
+    for k, rc_type in enumerate(small_simulation.rc_types):
+        if rc_type == 'log':
+            if len(coefficients.shape) == 2:
+                coefficients[k] = np.exp(coefficients[k])
+            else:
+                coefficients[:, k] = np.exp(coefficients[:, k])
+        elif rc_type == 'logit':
+            if len(coefficients.shape) == 2:
+                coefficients[k] = scipy.special.expit(coefficients[k])
+            else:
+                coefficients[:, k] = scipy.special.expit(coefficients[:, k])
+
+    # compute mu
+    if len(coefficients.shape) == 2:
+        mu = small_simulation.products.X2 @ coefficients
+    else:
+        mu = (small_simulation.products.X2[..., None] * coefficients).sum(axis=1)
+
+    # simulate logit shocks, either in Python for simple logit or by calling R for nested logit
+    epsilon: Array
+    if simulation.H == 0:
+        epsilon = simulation.epsilon_scale * np.random.default_rng(0).gumbel(size=(observations, 1 + J))
+    else:
+        if shutil.which('Rscript') is None:
+            return pytest.skip("Failed to find an R executable in this environment.")
+
+        # build asymmetry and dependence configurations for simulating nested logit shocks with the evd package
+        asymmetry = []
+        dependence = []
+        for size in range(1, 2 + J):
+            for combination in itertools.combinations(range(1 + J), size):
+                asymmetry.append(len(combination) * [int(combination in {(0,), (1, 2), (3, 4)})])
+                if size > 1:
+                    if combination == (1, 2):
+                        dependence.append(1 - float(simulation.rho if simulation.rho.size == 1 else simulation.rho[0]))
+                    elif combination == (3, 4):
+                        dependence.append(1 - float(simulation.rho if simulation.rho.size == 1 else simulation.rho[1]))
+                    else:
+                        dependence.append(1)
+
+        # simulate the shocks with R, save them to a temporary file, and load them into memory
+        epsilon = None
+        with tempfile.NamedTemporaryFile(delete=False) as handle:
+            asy = 'list(' + ', '.join('c(' + ', '.join(str(v) for v in a) + ')' for a in asymmetry) + ')'
+            dep = 'c(' + ', '.join(str(v) for v in dependence) + ')'
+            path = handle.name.replace('\\', '/')
+            try:
+                command = ';'.join([
+                    "suppressWarnings(library('evd'))",
+                    "set.seed(0)",
+                    f"epsilon = rmvevd(n={observations}, dep={dep}, asy={asy}, model='alog', d={1 + J})",
+                    f"write.table(epsilon, file='{path}', row.names=FALSE, col.names=FALSE)",
+                ])
+                subprocess.run(['Rscript', '-e', command])
+                epsilon = np.loadtxt(handle.name)
+            finally:
+                try:
+                    os.remove(handle.name)
+                except OSError:
+                    pass
+
+    # compute deterministic choices given simulated idiosyncratic preferences
+    utilities = np.r_[0, small_results.delta.flatten() + mu.flatten()] + epsilon
+    choice_indices = np.argmax(utilities, axis=1)
+    utilities[np.arange(observations), choice_indices] = -np.inf
+    second_choice_indices = np.argmax(utilities, axis=1)
+
+    # compute histograms
+    histogram1 = np.zeros(1 + J)
+    histogram2 = np.zeros(1 + J)
+    second_histogram1 = np.zeros((1 + J, 1 + J))
+    second_histogram2 = np.zeros((1 + J, 1 + J))
+    np.add.at(histogram1, micro_data.choice_indices, 1 / observations)
+    np.add.at(histogram2, choice_indices, 1 / observations)
+    np.add.at(second_histogram1, (micro_data.choice_indices, micro_data.second_choice_indices), 1 / observations)
+    np.add.at(second_histogram2, (choice_indices, second_choice_indices), 1 / observations)
+
+    # compare histograms
+    np.testing.assert_allclose(histogram2, histogram1, rtol=0.01, atol=0.001)
+    np.testing.assert_allclose(second_histogram2, second_histogram1, rtol=0.01, atol=0.001)
+
+
+@pytest.mark.usefixtures('simulated_problem')
 def test_micro_values(simulated_problem: SimulatedProblemFixture) -> None:
     """Test that true micro values are close to those computed from simulated micro data."""
     simulation, simulation_results, problem, solve_options, problem_results = simulated_problem
@@ -1546,7 +1693,7 @@ def test_sigma_squared_se(simulated_problem: SimulatedProblemFixture) -> None:
 def test_logit(
         simulated_problem: SimulatedProblemFixture, method: str, center_moments: bool, W_type: str, se_type: str) -> (
         None):
-    """Test that Logit estimates are the same as those from the the linearmodels package."""
+    """Test that Logit estimates are the same as those from the linearmodels package."""
     _, simulation_results, problem, _, _ = simulated_problem
 
     # skip more complicated simulations

@@ -295,9 +295,9 @@ Micro moment parts based on second choice are averages over values :math:`v_{pij
 
 Its simulated analogue is
 
-.. math:: v_p = \frac{\sum_{t \in T} \sum_{i \in I_t} \sum_{j, k \in J_t \cup \{0\}} w_{it} s_{ijt} s_{ik(-j)t} w_{d_pijkt} v_{pijkt}}{\sum_{t \in T} \sum_{i \in I_t} \sum_{j, k \in J_t \cup \{0\}} w_{it} s_{ijt} s_{ik(-j)t} w_{d_pijkt}},
+.. math:: v_p = \frac{\sum_{t \in T} \sum_{i \in I_t} \sum_{j, k \in J_t \cup \{0\}} w_{it} s_{ijt} s_{ik(-j)t} w_{d_pijkt} v_{pijkt}}{\sum_{t \in T} \sum_{i \in I_t} \sum_{j, k \in J_t \cup \{0\}} w_{it} s_{ijt} s_{ik(-j)t} w_{d_pijkt}}.
 
-in which second choice probabilities are :math:`s_{ik(-j)t} = \frac{s_{ikt}}{1 - s_{ijt}}` if :math:`k \neq j` and zero if :math:`k = j`. Covariances are defined analogously.
+Covariances are defined analogously.
 
 
 Random Coefficients Nested Logit
