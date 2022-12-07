@@ -493,11 +493,8 @@ class ProblemEconomy(Economy):
             raise ValueError("W_type must be 'robust', 'unadjusted', or 'clustered'.")
         if se_type not in {'robust', 'unadjusted', 'clustered'}:
             raise ValueError("se_type must be 'robust', 'unadjusted', or 'clustered'.")
-        if 'clustered' in {W_type, se_type}:
-            if 'clustering_ids' not in self.products.dtype.names or self.products.clustering_ids.size == 0:
-                raise ValueError(
-                    "W_type or se_type is 'clustered' but clustering_ids were not specified in product_data."
-                )
+        if 'clustered' in {W_type, se_type} and 'clustering_ids' not in self.products.dtype.names:
+            raise ValueError("W_type or se_type is 'clustered' but clustering_ids were not specified in product_data.")
 
         # configure or validate bounds on shares and costs
         shares_bounds = self._coerce_optional_bounds(shares_bounds, 'shares_bounds')
