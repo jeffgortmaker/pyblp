@@ -71,8 +71,14 @@ def parallel(processes: int, use_pathos: bool = False) -> Iterator[None]:
     # validate the number of processes
     if not isinstance(processes, int):
         raise TypeError("processes must be an int.")
-    if processes < 2:
-        raise ValueError("processes must be at least 2.")
+    if processes < 1:
+        raise ValueError("processes must be at least 1.")
+
+    # if there is only one process, do no multiprocessing
+    if processes == 1:
+        output("There is only one process, so there is no parallel processing to do.")
+        yield
+        return
 
     # start the process pool, wait for work to be done, and then terminate it
     output(f"Starting a pool of {processes} processes ...")
