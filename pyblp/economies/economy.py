@@ -250,7 +250,7 @@ class Economy(Container, StringRepresentation):
         """
         if firm_ids is None:
             return None
-        firm_ids = np.c_[np.asarray(firm_ids, options.dtype)]
+        firm_ids = np.c_[np.asarray(firm_ids, np.object_)]
         rows = self.N
         if market_ids is not None:
             rows = sum(i.size for t, i in self._product_market_indices.items() if t in market_ids)
