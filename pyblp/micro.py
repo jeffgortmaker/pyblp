@@ -51,6 +51,14 @@ class MicroDataset(StringRepresentation):
             - :math:`I \times (1 + J_t)`: The first column indexes the outside option, which can have nonzero survey
               weights :math:`w_{di0t}`.
 
+        .. warning::
+
+            If using different lambda functions to define different ``compute_weights`` functions in a loop, any
+            variables that are changing within the loop should be passed as extra arguments to the function to preserve
+            their scope. For example, ``lambda t, p, a: weights[t]`` where ``weights`` is some dictionary that is
+            changing in the outer loop should instead be ``lambda t, p, a, weights=weights: weights[t]``; otherwise,
+            the ``weights``in the current loop's iteration will be lost.
+
         If the micro dataset contains second choice data, ``weights`` can have a third axis corresponding to second
         choices :math:`k` in :math:`w_{dijkt}`:
 
@@ -166,6 +174,15 @@ class MicroPart(StringRepresentation):
         ``pyblp.options.micro_computation_chunks`` is larger than its default of ``1``, in which case ``agents`` is a
         chunk of the market's :class:`Agents`. The returned ``values`` should be an array of the same shape as the
         ``weights`` returned by ``compute_weights`` of ``dataset``.
+
+        .. warning::
+
+            If using different lambda functions to define different ``compute_values`` functions in a loop, any
+            variables that are changing within the loop should be passed as extra arguments to the function to preserve
+            their scope. For example, ``lambda t, p, a: np.outer(a.demographics[:, d], p.X2[:, c])`` where ``d`` and
+            ``c`` are indices that are changing in the outer loop should instead be
+            ``lambda t, p, a, d=d, c=c: np.outer(a.demographics[:, d], p.X2[:, c])``; otherwise, the values of ``d``
+            and ``c`` in the current loop's iteration will be lost.
 
     Examples
     --------
