@@ -57,7 +57,7 @@ class MicroDataset(StringRepresentation):
             variables that are changing within the loop should be passed as extra arguments to the function to preserve
             their scope. For example, ``lambda t, p, a: weights[t]`` where ``weights`` is some dictionary that is
             changing in the outer loop should instead be ``lambda t, p, a, weights=weights: weights[t]``; otherwise,
-            the ``weights``in the current loop's iteration will be lost.
+            the ``weights`` in the current loop's iteration will be lost.
 
         If the micro dataset contains second choice data, ``weights`` can have a third axis corresponding to second
         choices :math:`k` in :math:`w_{dijkt}`:
