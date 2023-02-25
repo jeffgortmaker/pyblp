@@ -244,6 +244,16 @@ class Economy(Container, StringRepresentation):
         if name not in names:
             raise NameError(f"'{name}' is not None or one of the underlying variables, {list(sorted(names))}.")
 
+    def _validate_product_ids_index(self, product_ids_index: int) -> None:
+        """Validate that a product IDs index is valid."""
+        if not isinstance(product_ids_index, int) or product_ids_index < 0:
+            raise ValueError("The product IDs index must be a non-negative int.")
+        if self.products.product_ids.size == 0:
+            raise ValueError("Since the product IDs index is not None, product_data must have product_ids.")
+        max_index = self.products.product_ids.shape[1] - 1
+        if not 0 <= product_ids_index <= max_index:
+            raise ValueError(f"The product IDs index should be at most {max_index}.")
+
     def _coerce_optional_firm_ids(self, firm_ids: Optional[Any], market_ids: Optional[Array] = None) -> Array:
         """Coerce optional array-like firm IDs into a column vector and validate it. By default, assume that firm IDs
         are for all markets.

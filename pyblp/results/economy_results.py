@@ -968,7 +968,7 @@ class SimpleEconomyResults(abc.ABC, StringRepresentation):
 
     def compute_consumer_surpluses(
             self, prices: Optional[Any] = None, keep_all: bool = False, eliminate_product_ids: Optional[Any] = None,
-            market_id: Optional[Any] = None) -> Array:
+            product_ids_index: int = 0, market_id: Optional[Any] = None) -> Array:
         r"""Estimate population-normalized consumer surpluses, :math:`\text{CS}`.
 
         Assuming away nonlinear income effects, the surplus in market :math:`t` is
@@ -1017,6 +1017,10 @@ class SimpleEconomyResults(abc.ABC, StringRepresentation):
             IDs of the products to eliminate from the choice set. These IDs should show up in the ``product_ids`` field
             of ``product_data`` in :class:`Problem`. Eliminating one or more products and comparing consumer surpluses
             gives a measure of willingness to pay for these products.
+        product_ids_index : `int, optional`
+            Index between ``0`` and the number of columns in the ``product_ids`` field of ``product_data`` minus one,
+            inclusive, which determines which column of product IDs ``eliminate_product_ids`` refers to. By default, it
+            refers to the first column, which is index ``0``.
         market_id : `object, optional`
             ID of the market in which to compute consumer surplus. By default, consumer surpluses are computed in all
             markets and stacked.
@@ -1036,11 +1040,13 @@ class SimpleEconomyResults(abc.ABC, StringRepresentation):
 
         """
         output("Computing consumer surpluses with the equation that assumes away nonlinear income effects ...")
+        if eliminate_product_ids is not None:
+            self._economy._validate_product_ids_index(product_ids_index)
         market_ids = self._select_market_ids(market_id)
         prices = self._coerce_optional_prices(prices, market_ids)
         return self._combine_arrays(
             EconomyResultsMarket.safely_compute_consumer_surplus, market_ids,
-            fixed_args=[keep_all, eliminate_product_ids], market_args=[prices]
+            fixed_args=[keep_all, eliminate_product_ids, product_ids_index], market_args=[prices]
         )
 
 

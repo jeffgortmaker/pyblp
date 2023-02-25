@@ -1279,7 +1279,8 @@ class Problem(ProblemEconomy):
 
         It may be convenient to define IDs for different products:
 
-            - **product_ids** (`object, optional`) - IDs that identify products within markets.
+            - **product_ids** (`object, optional`) - IDs that identify products within markets. There can be multiple
+              columns.
 
         Finally, clustering groups can be specified to account for within-group correlation while updating the weighting
         matrix and estimating standard errors:

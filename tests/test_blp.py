@@ -981,8 +981,8 @@ def test_result_positivity(simulated_problem: SimulatedProblemFixture) -> None:
     test_positive(results.compute_consumer_surpluses(changed_prices, market_id=t))
 
     # compute willingness to pay when the simulation has product IDs and test its positivity
-    if simulation.products.product_ids.size > 0:
-        unique_product_ids = np.unique(simulation.products.product_ids[simulation.products.market_ids == t])
+    if simulation.products.product_ids[:, 0].size > 0:
+        unique_product_ids = np.unique(simulation.products.product_ids[simulation.products.market_ids.flat == t, 0])
         eliminate0 = results.compute_consumer_surpluses(market_id=t)
         eliminate1 = results.compute_consumer_surpluses(market_id=t, eliminate_product_ids=unique_product_ids[:1])
         eliminate2 = results.compute_consumer_surpluses(market_id=t, eliminate_product_ids=unique_product_ids[:2])
@@ -1467,6 +1467,7 @@ def test_micro_values(simulated_problem: SimulatedProblemFixture) -> None:
                 observations=1_000_000,
                 compute_weights=part.dataset.compute_weights,
                 market_ids=part.dataset.market_ids,
+                eliminated_product_ids_index=part.dataset.eliminated_product_ids_index,
             )
             micro_data = simulation_results.simulate_micro_data(dataset, seed=0)
 
@@ -1563,6 +1564,7 @@ def test_micro_scores(simulated_problem: SimulatedProblemFixture) -> None:
             observations=2_000,
             compute_weights=dataset.compute_weights,
             market_ids=dataset.market_ids,
+            eliminated_product_ids_index=dataset.eliminated_product_ids_index,
         )
         data = data_to_dict(results.simulate_micro_data(dataset, seed=0))
 

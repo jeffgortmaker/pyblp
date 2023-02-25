@@ -106,7 +106,8 @@ class Simulation(Economy):
 
         It may be convenient to define IDs for different products:
 
-            - **product_ids** (`object, optional`) - IDs that identify products within markets.
+            - **product_ids** (`object, optional`) - IDs that identify products within markets. There can be multiple
+              columns.
 
         To simulate a nested logit or random coefficients nested logit (RCNL) model, nesting groups must be specified:
 

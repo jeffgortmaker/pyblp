@@ -80,6 +80,12 @@ class MicroDataset(StringRepresentation):
             issue, consider setting ``pyblp.options.micro_computation_chunks`` to a value higher than its default of
             ``1``, such as the highest :math:`J_t`. This will cut down on memory usage without much affecting speed.
 
+    eliminated_product_ids_index : `int, optional`
+        This option determines whether the dataset's second choices are after only the first choice product :math:`j` is
+        eliminated from the choice set, in which case this should be ``None``, the default, or if a group of products
+        including the first choice product is eliminated, in which case this should be a number between ``0`` and the
+        number of columns in the ``product_ids`` field of ``product_data`` minus one, inclusive. The column of
+        ``product_ids`` determines the groups.
     market_ids : `array-like, optional`
         Distinct market IDs with nonzero survey weights :math:`w_{dijt}`. For other markets, :math:`w_{dijt} = 0`, and
         ``compute_weights`` will not be called.
@@ -94,9 +100,11 @@ class MicroDataset(StringRepresentation):
     observations: int
     compute_weights: functools.partial
     market_ids: Optional[Set]
+    eliminated_product_ids_index: Optional[int]
 
     def __init__(
             self, name: str, observations: int, compute_weights: Callable,
+            eliminated_product_ids_index: Optional[int] = None,
             market_ids: Optional[Union[Sequence, Array]] = None) -> None:
         """Validate information to the greatest extent possible without an economy or calling the function."""
         if not isinstance(name, str):
@@ -109,6 +117,12 @@ class MicroDataset(StringRepresentation):
         self.name = name
         self.observations = observations
         self.compute_weights = functools.partial(compute_weights)
+
+        # validate the product IDs index
+        self.eliminated_product_ids_index = eliminated_product_ids_index
+        if eliminated_product_ids_index is not None:
+            if not isinstance(eliminated_product_ids_index, int) or eliminated_product_ids_index < 0:
+                raise ValueError("eliminated_product_ids_index must be None or a non-negative int.")
 
         # validate market IDs, checking for duplicates
         if market_ids is None:
@@ -128,7 +142,11 @@ class MicroDataset(StringRepresentation):
         return f"{self.name}: {self.observations} Observations in {self._format_markets(text=True)}"
 
     def _validate(self, economy: 'Economy') -> None:
-        """Check that all market IDs associated with this dataset are in the economy."""
+        """Check that all market IDs associated with this dataset are in the economy and that any eliminated product
+        IDs index is valid.
+        """
+        if self.eliminated_product_ids_index is not None:
+            economy._validate_product_ids_index(self.eliminated_product_ids_index)
         if self.market_ids is not None:
             extra_ids = self.market_ids - set(economy.unique_market_ids)
             if extra_ids:

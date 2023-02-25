@@ -353,8 +353,8 @@ class EconomyResultsMarket(Market):
 
     @NumericalErrorHandler(exceptions.PostEstimationNumericalError)
     def safely_compute_consumer_surplus(
-            self, keep_all: bool, eliminate_product_ids: Optional[Any], prices: Optional[Array]) -> (
-            Tuple[Array, List[Error]]):
+            self, keep_all: bool, eliminate_product_ids: Optional[Any], product_ids_index: int,
+            prices: Optional[Array]) -> Tuple[Array, List[Error]]:
         """Estimate population-normalized consumer surplus or keep all individual-level surpluses. By default, use
         unchanged prices, handling any numerical errors.
         """
@@ -379,7 +379,7 @@ class EconomyResultsMarket(Market):
 
         # eliminate any products from the choice set
         if eliminate_product_ids is not None:
-            for j, product_id in enumerate(self.products.product_ids):
+            for j, product_id in enumerate(self.products.product_ids[:, product_ids_index]):
                 if product_id in eliminate_product_ids:
                     exp_utilities[j] = 0
 

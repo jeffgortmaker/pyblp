@@ -295,7 +295,9 @@ Micro moment parts based on second choice are averages over values :math:`v_{pij
 
 Its simulated analogue is
 
-.. math:: v_p = \frac{\sum_{t \in T} \sum_{i \in I_t} \sum_{j, k \in J_t \cup \{0\}} w_{it} s_{ijt} s_{ik(-j)t} w_{d_pijkt} v_{pijkt}}{\sum_{t \in T} \sum_{i \in I_t} \sum_{j, k \in J_t \cup \{0\}} w_{it} s_{ijt} s_{ik(-j)t} w_{d_pijkt}}.
+.. math:: v_p = \frac{\sum_{t \in T} \sum_{i \in I_t} \sum_{j, k \in J_t \cup \{0\}} w_{it} s_{ijt} s_{ik(-j)t} w_{d_pijkt} v_{pijkt}}{\sum_{t \in T} \sum_{i \in I_t} \sum_{j, k \in J_t \cup \{0\}} w_{it} s_{ijt} s_{ik(-j)t} w_{d_pijkt}},
+
+in which :math:`s_{ik(-j)t}` is the probability of choosing :math:`k` when :math:`j` is removed from the choice set. One can also define micro moment parts based on second choices where a group of products :math:`h(j)` containing the first choice :math:`j` is removed from the choice set. In this case, the above second choice probabilities become :math:`s_{ik(-h(j))t}`.
 
 Covariances are defined analogously.
 

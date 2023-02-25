@@ -302,7 +302,7 @@ def large_blp_simulation() -> SimulationFixture:
         product_data={
             'market_ids': id_data.market_ids,
             'firm_ids': id_data.firm_ids,
-            'product_ids': product_ids,
+            'product_ids': np.c_[product_ids, np.mod(product_ids, 2)],
             'clustering_ids': np.random.RandomState(2).choice(range(30), id_data.size)
         },
         beta=[1, 1, 2, 3, 1],
@@ -339,11 +339,18 @@ def large_blp_simulation() -> SimulationFixture:
         ]
     }
 
-    inside_diversion_micro_dataset = MicroDataset(
+    inside_diversion_micro_dataset0 = MicroDataset(
         name="diversion from 1",
         observations=simulation.N,
-        compute_weights=lambda _, p, a: np.tile(p.product_ids == 1, (a.size, 1, 1 + p.size)),
+        compute_weights=lambda _, p, a: np.tile(p.product_ids[:, [0]] == 1, (a.size, 1, 1 + p.size)),
         market_ids=simulation.unique_market_ids[6:10],
+    )
+    inside_diversion_micro_dataset1 = MicroDataset(
+        name="diversion from 1, grouped",
+        observations=simulation.N,
+        compute_weights=lambda _, p, a: np.tile(p.product_ids[:, [0]] == 1, (a.size, 1, 1 + p.size)),
+        market_ids=simulation.unique_market_ids[6:10],
+        eliminated_product_ids_index=1,
     )
     outside_diversion_micro_dataset = MicroDataset(
         name="diversion from outside",
@@ -362,7 +369,7 @@ def large_blp_simulation() -> SimulationFixture:
                 dataset=MicroDataset(
                     name="product 0",
                     observations=simulation.N,
-                    compute_weights=lambda _, p, a: np.tile(p.product_ids.flat == 0, (a.size, 1)),
+                    compute_weights=lambda _, p, a: np.tile(p.product_ids[:, 0] == 0, (a.size, 1)),
                 ),
                 compute_values=lambda _, p, a: np.tile(a.demographics[:, [1]], (1, p.size)),
             ),
@@ -376,7 +383,7 @@ def large_blp_simulation() -> SimulationFixture:
                     name="product 0 and outside",
                     observations=simulation.N,
                     compute_weights=lambda _, p, a: np.c_[
-                        np.ones((a.size, 1)), np.tile(p.product_ids.flat == 0, (a.size, 1))
+                        np.ones((a.size, 1)), np.tile(p.product_ids[:, 0] == 0, (a.size, 1))
                     ],
                     market_ids=simulation.unique_market_ids[1:4],
                 ),
@@ -390,9 +397,42 @@ def large_blp_simulation() -> SimulationFixture:
             value=0,
             parts=MicroPart(
                 name="1 to 0 diversion ratio",
-                dataset=inside_diversion_micro_dataset,
+                dataset=inside_diversion_micro_dataset0,
                 compute_values=lambda _, p, a: np.concatenate(
-                    [np.zeros((a.size, p.size, 1)), np.tile(p.product_ids.flat == 0, (a.size, p.size, 1))], axis=2
+                    [np.zeros((a.size, p.size, 1)), np.tile(p.product_ids[:, 0] == 0, (a.size, p.size, 1))], axis=2
+                ),
+            ),
+        ),
+        MicroMoment(
+            name="1 to outside diversion ratio",
+            value=0,
+            parts=MicroPart(
+                name="1 to outside diversion ratio",
+                dataset=inside_diversion_micro_dataset0,
+                compute_values=lambda _, p, a: np.concatenate(
+                    [np.ones((a.size, p.size, 1)), np.zeros((a.size, p.size, p.size))], axis=2
+                ),
+            ),
+        ),
+        MicroMoment(
+            name="1 to 0 diversion ratio, grouped",
+            value=0,
+            parts=MicroPart(
+                name="1 to 0 diversion ratio, grouped",
+                dataset=inside_diversion_micro_dataset1,
+                compute_values=lambda _, p, a: np.concatenate(
+                    [np.zeros((a.size, p.size, 1)), np.tile(p.product_ids[:, 0] == 0, (a.size, p.size, 1))], axis=2
+                ),
+            ),
+        ),
+        MicroMoment(
+            name="1 to outside diversion ratio, grouped",
+            value=0,
+            parts=MicroPart(
+                name="1 to outside diversion ratio, grouped",
+                dataset=inside_diversion_micro_dataset1,
+                compute_values=lambda _, p, a: np.concatenate(
+                    [np.ones((a.size, p.size, 1)), np.zeros((a.size, p.size, p.size))], axis=2
                 ),
             ),
         ),
@@ -402,18 +442,7 @@ def large_blp_simulation() -> SimulationFixture:
             parts=MicroPart(
                 name="outside to 0 diversion ratio",
                 dataset=outside_diversion_micro_dataset,
-                compute_values=lambda _, p, a: np.tile(p.product_ids.flat == 0, (a.size, 1 + p.size, 1)),
-            ),
-        ),
-        MicroMoment(
-            name="1 to outside diversion ratio",
-            value=0,
-            parts=MicroPart(
-                name="1 to outside diversion ratio",
-                dataset=inside_diversion_micro_dataset,
-                compute_values=lambda _, p, a: np.concatenate(
-                    [np.ones((a.size, p.size, 1)), np.zeros((a.size, p.size, p.size))], axis=2
-                ),
+                compute_values=lambda _, p, a: np.tile(p.product_ids[:, 0] == 0, (a.size, 1 + p.size, 1)),
             ),
         ),
         MicroMoment(
@@ -503,7 +532,7 @@ def large_nested_blp_simulation() -> SimulationFixture:
         product_data={
             'market_ids': id_data.market_ids,
             'firm_ids': id_data.firm_ids,
-            'product_ids': product_ids,
+            'product_ids': np.c_[product_ids, np.mod(product_ids, 2)],
             'nesting_ids': state.choice(['f', 'g', 'h'], id_data.size),
             'clustering_ids': state.choice(range(30), id_data.size),
         },
@@ -546,11 +575,18 @@ def large_nested_blp_simulation() -> SimulationFixture:
         dataset=inside_micro_dataset,
         compute_values=lambda _, p, a: np.tile((a.agent_ids == 2) | (a.agent_ids == 3), (1, p.size)),
     )
-    inside_diversion_micro_dataset = MicroDataset(
+    inside_diversion_micro_dataset0 = MicroDataset(
         name="diversion from 1",
         observations=simulation.N,
-        compute_weights=lambda _, p, a: np.tile(p.product_ids == 1, (a.size, 1, 1 + p.size)),
+        compute_weights=lambda _, p, a: np.tile(p.product_ids[:, [0]] == 1, (a.size, 1, 1 + p.size)),
         market_ids=[simulation.unique_market_ids[2]],
+    )
+    inside_diversion_micro_dataset1 = MicroDataset(
+        name="diversion from 1, grouped",
+        observations=simulation.N,
+        compute_weights=lambda _, p, a: np.tile(p.product_ids[:, [0]] == 1, (a.size, 1, 1 + p.size)),
+        market_ids=[simulation.unique_market_ids[2]],
+        eliminated_product_ids_index=1,
     )
     outside_diversion_micro_dataset = MicroDataset(
         name="diversion from outside",
@@ -616,9 +652,9 @@ def large_nested_blp_simulation() -> SimulationFixture:
             value=0,
             parts=MicroPart(
                 name="1 to 0 diversion ratio",
-                dataset=inside_diversion_micro_dataset,
+                dataset=inside_diversion_micro_dataset0,
                 compute_values=lambda _, p, a: np.concatenate(
-                    [np.zeros((a.size, p.size, 1)), np.tile(p.product_ids.flat == 0, (a.size, p.size, 1))], axis=2
+                    [np.zeros((a.size, p.size, 1)), np.tile(p.product_ids[:, 0] == 0, (a.size, p.size, 1))], axis=2
                 ),
             ),
         ),
@@ -627,7 +663,29 @@ def large_nested_blp_simulation() -> SimulationFixture:
             value=0,
             parts=MicroPart(
                 name="1 to outside diversion ratio",
-                dataset=inside_diversion_micro_dataset,
+                dataset=inside_diversion_micro_dataset0,
+                compute_values=lambda _, p, a: np.concatenate(
+                    [np.ones((a.size, p.size, 1)), np.zeros((a.size, p.size, p.size))], axis=2
+                ),
+            ),
+        ),
+        MicroMoment(
+            name="1 to 0 diversion ratio, grouped",
+            value=0,
+            parts=MicroPart(
+                name="1 to 0 diversion ratio, grouped",
+                dataset=inside_diversion_micro_dataset1,
+                compute_values=lambda _, p, a: np.concatenate(
+                    [np.zeros((a.size, p.size, 1)), np.tile(p.product_ids[:, 0] == 0, (a.size, p.size, 1))], axis=2
+                ),
+            ),
+        ),
+        MicroMoment(
+            name="1 to outside diversion ratio, grouped",
+            value=0,
+            parts=MicroPart(
+                name="1 to outside diversion ratio, grouped",
+                dataset=inside_diversion_micro_dataset1,
                 compute_values=lambda _, p, a: np.concatenate(
                     [np.ones((a.size, p.size, 1)), np.zeros((a.size, p.size, p.size))], axis=2
                 ),
@@ -639,7 +697,7 @@ def large_nested_blp_simulation() -> SimulationFixture:
             parts=MicroPart(
                 name="outside to 0 diversion ratio",
                 dataset=outside_diversion_micro_dataset,
-                compute_values=lambda _, p, a: np.tile(p.product_ids.flat == 0, (a.size, 1 + p.size, 1)),
+                compute_values=lambda _, p, a: np.tile(p.product_ids[:, 0] == 0, (a.size, 1 + p.size, 1)),
             ),
         ),
     ])
