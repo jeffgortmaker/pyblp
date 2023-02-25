@@ -197,8 +197,6 @@ class Products(object):
         if firm_ids is not None:
             ownership = extract_matrix(product_data, 'ownership')
             if ownership is not None:
-                if not np.isfinite(ownership).all():
-                    raise ValueError("The ownership field of product_data should not have NaNs or infinities.")
                 max_J = market_groups.counts.max()
                 if ownership.shape[1] != max_J:
                     raise ValueError(
