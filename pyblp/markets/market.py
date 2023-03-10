@@ -1733,9 +1733,17 @@ class Market(Container):
             probabilities_tangent_mapping: Optional[Dict[int, Array]] = None) -> (
             Iterator[Tuple[Optional[Array], Optional[Array], Optional[Dict[int, Array]]]]):
         """Generate chunks of agents for micro computations to reduce memory usage."""
+        chunks = options.micro_computation_chunks
+        if isinstance(chunks, dict):
+            chunks = chunks.get(self.t, 1)
+        if not isinstance(chunks, int) or chunks < 1:
+            raise TypeError(
+                "micro_computation_chunks must be a positive int or a dict mapping market IDs to positive ints."
+            )
+
         agent_indices_chunks = [None]
-        if options.micro_computation_chunks > 1:
-            agent_indices_chunks = np.array_split(np.arange(self.I), options.micro_computation_chunks)
+        if chunks > 1:
+            agent_indices_chunks = np.array_split(np.arange(self.I), chunks)
 
         probabilities_chunk = probabilities
         probabilities_tangent_mapping_chunk = probabilities_tangent_mapping

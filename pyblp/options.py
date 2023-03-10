@@ -108,14 +108,17 @@ detect_micro_collinearity : `bool`
     of memory, one option is to temporarily reduce the number of markets, observations, or agents to cut down on memory
     while debugging one's code to see which micro moments are collinear with one another.
 
-micro_computation_chunks : `int`
+micro_computation_chunks : `int or dict`
     How finely to break up micro moment computation within market. Computation is broken up by groups of agents within
     market. This can help reduce the amount of memory being used by micro moments when there are a large number of
     agents and products, and especially when second choice micro moments are being used.
 
     By default, micro moment computation is done in one chunk for each market. To reduce memory usage without changing
     any estimation results, for example by splitting up computation into 10 chunks, use
-    ``pyblp.options. micro_computation_chunks = 10``.
+    ``pyblp.options.micro_computation_chunks = 10``.
+
+    If a dictionary, this should map market IDs to the number of chunks to use. For example, to only chunk computation
+    in market ID ``'big market'``, use ``pyblp.options.micro_computation_chunks = {'big_market': 10}``.
 
 drop_product_fields : `bool`
     Whether to conserve memory by dropping product data fields that are not needed for market-level computation when
