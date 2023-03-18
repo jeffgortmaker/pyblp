@@ -59,6 +59,18 @@ class MicroDataset(StringRepresentation):
             changing in the outer loop should instead be ``lambda t, p, a, weights=weights: weights[t]``; otherwise,
             the ``weights`` in the current loop's iteration will be lost.
 
+        .. warning::
+
+            If using product-specific demographics, ``agents.demographics`` will be a :math:`I_t \times D \times J_t`
+            array, instead of a :math:`I_t \times D` array like usual. Non-product specific demographics will be
+            repeated :math:`J_t` times.
+
+        .. note::
+
+            Particularly when using product-specific demographics or second choices, it may be convenient to use
+            ``numpy.einsum``, which handles many multiplying multi-dimensional arrays with common dimensions in an
+            elegant way.
+
         If the micro dataset contains second choice data, ``weights`` can have a third axis corresponding to second
         choices :math:`k` in :math:`w_{dijkt}`:
 
@@ -201,6 +213,18 @@ class MicroPart(StringRepresentation):
             ``c`` are indices that are changing in the outer loop should instead be
             ``lambda t, p, a, d=d, c=c: np.outer(a.demographics[:, d], p.X2[:, c])``; otherwise, the values of ``d``
             and ``c`` in the current loop's iteration will be lost.
+
+        .. warning::
+
+            If using product-specific demographics, ``agents.demographics`` will be a :math:`I_t \times D \times J_t`
+            array, instead of a :math:`I_t \times D` array like usual. Non-product specific demographics will be
+            repeated :math:`J_t` times.
+
+        .. note::
+
+            Particularly when using product-specific demographics or second choices, it may be convenient to use
+            ``numpy.einsum``, which handles many multiplying multi-dimensional arrays with common dimensions in an
+            elegant way.
 
     Examples
     --------
