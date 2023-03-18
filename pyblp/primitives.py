@@ -293,7 +293,7 @@ class Agents(object):
                     raise ValueError("agent_formulation does not support fixed effect absorption.")
                 demographics, demographics_formulations = build_demographics(products, agent_data, agent_formulation)
                 assert demographics is not None
-                if not np.isfinite(demographics).all():
+                if len(demographics.shape) == 2 and not np.isfinite(demographics).all():
                     raise ValueError(
                         "Variables in agent_data that contribute to demographics should not have NaNs or infinities."
                     )
