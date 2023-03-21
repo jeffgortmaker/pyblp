@@ -513,7 +513,7 @@ def build_demographics(
         for j in range(max_J):
             try:
                 demographics_j, demographics_formulations, _ = agent_formulation._build_matrix(
-                    data, fallback_index=j
+                    data, fallback_index=j, ignore_na=True
                 )
             except patsy.PatsyError as exception_j:
                 if j == 0:

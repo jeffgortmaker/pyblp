@@ -165,7 +165,7 @@ class Formulation(StringRepresentation):
         return ' + '.join(names)
 
     def _build_matrix(
-            self, data: Mapping, fallback_index: Optional[int] = None) -> (
+            self, data: Mapping, fallback_index: Optional[int] = None, ignore_na: bool = False) -> (
             Tuple[Array, List['ColumnFormulation'], Data]):
         """Convert a mapping from variable names to arrays into the designed matrix, a list of column formulations that
         describe the columns of the matrix, and a mapping from variable names to arrays of data underlying the matrix,
@@ -231,7 +231,7 @@ class Formulation(StringRepresentation):
                     if symbol.name in underlying_data:
                         underlying_data[symbol.name] = indicator
 
-        matrix = build_matrix(matrix_design, data_mapping)
+        matrix = build_matrix(matrix_design, data_mapping, ignore_na)
         return matrix[:, column_indices], column_formulations, underlying_data
 
     def _build_ids(self, data: Mapping) -> Array:
@@ -460,7 +460,7 @@ def design_matrix(terms: Sequence[patsy.desc.Term], data: Mapping) -> patsy.desi
     return patsy.build.design_matrix_builders([terms], lambda: iter([data]), EvaluationEnvironment([data]))[0]
 
 
-def build_matrix(design: patsy.design_info.DesignInfo, data: Mapping) -> Array:
+def build_matrix(design: patsy.design_info.DesignInfo, data: Mapping, ignore_na: bool = False) -> Array:
     """Build a matrix according to its design and data mapping variable names to arrays."""
 
     # identify the number of rows in the data
@@ -471,7 +471,8 @@ def build_matrix(design: patsy.design_info.DesignInfo, data: Mapping) -> Array:
         return np.ones((size, 1))
 
     # build the matrix and raise an exception if there are any null values
-    matrix = patsy.build.build_design_matrices([design], data, NA_action='raise')[0].base
+    na_action = patsy.NAAction(NA_types=[]) if ignore_na else 'raise'
+    matrix = patsy.build.build_design_matrices([design], data, NA_action=na_action)[0].base
 
     # if the design did not use any data, the matrix may be a single row that needs to be stacked to the proper height
     return matrix if matrix.shape[0] == size else np.repeat(matrix[[0]], size, axis=0)
