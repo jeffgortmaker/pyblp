@@ -574,6 +574,9 @@ def data_to_dict(data: RecArray, ignore_empty: bool = True) -> Dict[str, Array]:
         raise TypeError("data must be a NumPy record array.")
 
     mapping: Dict[str, Array] = {}
+    if data.dtype.names is None:
+        return mapping
+
     for key in data.dtype.names:
         if len(data[key].shape) > 2:
             raise ValueError("Arrays with more than two dimensions are not supported.")

@@ -170,7 +170,8 @@ def test_bootstrap(simulated_problem: SimulatedProblemFixture) -> None:
         bootstrapped_values = method(bootstrapped_results)
         median = np.median(values)
         bootstrapped_medians = np.nanmedian(bootstrapped_values, axis=range(1, bootstrapped_values.ndim))
-        lb, ub = np.percentile(bootstrapped_medians, [2.5, 97.5])
+        lb = np.percentile(bootstrapped_medians, 2.5)
+        ub = np.percentile(bootstrapped_medians, 97.5)
         np.testing.assert_array_less(np.squeeze(lb), np.squeeze(median) + 1e-14, err_msg=name)
         np.testing.assert_array_less(np.squeeze(median), np.squeeze(ub) + 1e-14, err_msg=name)
 
@@ -933,7 +934,7 @@ def test_elasticity_aggregates_and_means(simulated_problem: SimulatedProblemFixt
         np.testing.assert_array_less(
             np.abs(results.compute_aggregate_elasticities(factor, name)),
             np.abs(results.extract_diagonal_means(results.compute_elasticities(name))),
-            err_msg=name,
+            err_msg=str(name),
             verbose=True
         )
 
@@ -956,7 +957,7 @@ def test_diversion_ratios(simulated_problem: SimulatedProblemFixture) -> None:
     names = {n for f in simulation._X1_formulations + simulation._X2_formulations for n in f.names}
     for name in names - {'prices'} | {None}:
         ratios = results.compute_diversion_ratios(name, market_id=t)
-        np.testing.assert_allclose(ratios.sum(axis=1), 1, atol=1e-14, rtol=0, err_msg=name)
+        np.testing.assert_allclose(ratios.sum(axis=1), 1, atol=1e-14, rtol=0, err_msg=str(name))
 
 
 @pytest.mark.usefixtures('simulated_problem')

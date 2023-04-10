@@ -94,8 +94,8 @@ class ImportanceSamplingResults(StringRepresentation):
         ]
         values = [
             format_seconds(self.computation_time), self.sampled_agents.shape[0], self.draws,
-            np.min(self.effective_draws).astype(int), np.min(self.effective_draws_for_variance).astype(int),
-            np.min(self.effective_draws_for_skewness).astype(int), np.min(self.weight_sums), np.max(self.weight_sums)
+            int(np.min(self.effective_draws)), int(np.min(self.effective_draws_for_variance)),
+            int(np.min(self.effective_draws_for_skewness)), np.min(self.weight_sums), np.max(self.weight_sums)
         ]
         return format_table(header, values, title="Importance Sampling Results Summary")
 

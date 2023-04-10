@@ -388,7 +388,7 @@ class EconomyResultsMarket(Market):
             log_scale = -utility_reduction
         else:
             exp_utilities = np.exp(np.log(self.groups.sum(exp_utilities)) * (1 - self.group_rho))
-            min_rho = np.min(self.group_rho)
+            min_rho: float = np.min(self.group_rho)
             log_scale = -utility_reduction * (1 - min_rho)
             if self.rho_size > 1:
                 scale_weights = np.exp(-utility_reduction * (self.group_rho - min_rho))

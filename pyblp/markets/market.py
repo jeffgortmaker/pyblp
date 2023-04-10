@@ -473,7 +473,7 @@ class Market(Container):
             # add information about the max norm
             nonlocal smallest_max_norm
             header.extend([("Delta" if 'linear' in fp_type else "Exp Delta", "Max Norm"), ("Max Norm", "Improvement")])
-            max_norm = np.max(np.abs(x - x0))
+            max_norm: float = np.max(np.abs(x - x0))
             values.append(format_number(max_norm))
             improvement = smallest_max_norm - max_norm
             if np.isfinite(improvement) and improvement > 0:
@@ -725,7 +725,7 @@ class Market(Container):
             # add information about the max norm
             nonlocal smallest_max_norm
             header.extend([("Prices", "Max Norm"), ("Max Norm", "Improvement")])
-            max_norm = np.max(np.abs(x - x0))
+            max_norm: float = np.max(np.abs(x - x0))
             values.append(format_number(max_norm))
             improvement = smallest_max_norm - max_norm
             if np.isfinite(improvement) and improvement > 0:
@@ -1533,6 +1533,7 @@ class Market(Container):
                         for p, probabilities_tangent in probabilities_tangent_mapping.items():
                             probabilities_tangent_sum = probabilities_tangent
                             if ids_index is not None:
+                                assert product_groups is not None
                                 probabilities_tangent_sum = product_groups.sum(probabilities_tangent)
                                 probabilities_tangent_sum = product_groups.expand(probabilities_tangent_sum)
 
@@ -1565,7 +1566,7 @@ class Market(Container):
                                     [eliminated_probabilities_tangent_mappings[j][p] for j in range(self.J)]
                                 )
                         else:
-                            assert product_groups is not None
+                            assert product_ids is not None and product_groups is not None
 
                             # eliminate each product ID separately
                             for id_index, product_id in enumerate(product_groups.unique):
