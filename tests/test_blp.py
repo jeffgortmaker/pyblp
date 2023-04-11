@@ -982,7 +982,7 @@ def test_result_positivity(simulated_problem: SimulatedProblemFixture) -> None:
     test_positive(results.compute_consumer_surpluses(changed_prices, market_id=t))
 
     # compute willingness to pay when the simulation has product IDs and test its positivity
-    if simulation.products.product_ids[:, 0].size > 0:
+    if simulation.products.product_ids.size > 0:
         unique_product_ids = np.unique(simulation.products.product_ids[simulation.products.market_ids.flat == t, 0])
         eliminate0 = results.compute_consumer_surpluses(market_id=t)
         eliminate1 = results.compute_consumer_surpluses(market_id=t, eliminate_product_ids=unique_product_ids[:1])
