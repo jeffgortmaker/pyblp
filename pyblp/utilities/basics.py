@@ -1,6 +1,7 @@
 """Basic functionality."""
 
 import contextlib
+import copyreg
 import functools
 import inspect
 import multiprocessing.pool
@@ -79,6 +80,12 @@ def parallel(processes: int, use_pathos: bool = False) -> Iterator[None]:
         output("There is only one process, so there is no parallel processing to do.")
         yield
         return
+
+    # register hooks for pickling and unpickling SymPy's global parameters object
+    from sympy.core.parameters import _global_parameters
+    unpickle_global_parameters = lambda x: _global_parameters(**x)
+    pickle_global_parameters = lambda x: (unpickle_global_parameters, (x.__dict__,))
+    copyreg.pickle(_global_parameters, pickle_global_parameters)
 
     # start the process pool, wait for work to be done, and then terminate it
     output(f"Starting a pool of {processes} processes ...")
