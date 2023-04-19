@@ -4,6 +4,16 @@ Version Notes
 These notes will only include major changes.
 
 
+1.0
+---
+
+- Support matching smooth functions of micro means
+- Optimal micro moments
+- Support elimination of groups of products for second choices
+- Micro data simulation
+- Micro moment tutorials
+
+
 0.13
 ----
 

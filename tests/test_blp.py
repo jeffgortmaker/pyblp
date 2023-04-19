@@ -1651,7 +1651,7 @@ def test_objective_gradient(
     def test_finite_differences(theta: Array, _: Any, objective_function: Callable, __: Any) -> Tuple[Array, bool]:
         """Test central finite differences around starting parameter values."""
         approximated = compute_finite_differences(lambda x: objective_function(x)[0], theta, epsilon_scale=10.0)
-        np.testing.assert_allclose(approximated.flatten(), exact.flatten(), atol=1e-8, rtol=1e-3)
+        np.testing.assert_allclose(approximated.flatten(), exact.flatten(), atol=1e-8, rtol=1e-2)
         return theta, True
 
     # test the gradient

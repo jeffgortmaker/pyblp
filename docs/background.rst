@@ -249,7 +249,7 @@ More detailed micro data on individual choices can be used to supplement the sta
 
 .. math:: \bar{g} = \begin{bmatrix} \bar{g}_D \\ \bar{g}_S \\ \bar{g}_M \end{bmatrix}.
 
-Each micro moment :math:`m` is the difference between an observed value :math:`f_m(\bar{v})` and its simulated analogue :math:`f_m(v)`:
+:ref:`references:Conlon and Gortmaker (2023)` provides a standardized framework for incorporating micro moments into BLP-style estimation. What follows is a simplified summary of this framework. Each micro moment :math:`m` is the difference between an observed value :math:`f_m(\bar{v})` and its simulated analogue :math:`f_m(v)`:
 
 .. math:: \bar{g}_{M,m} = f_m(\bar{v}) - f_m(v),
     :label: micro_moment

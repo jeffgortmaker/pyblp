@@ -1,13 +1,19 @@
 References
 ==========
 
-This page contains a full list of references cited in the documentation, including the original work of :ref:`references:Berry, Levinsohn, and Pakes (1995)`. If you use PyBLP in your research, we ask that you also cite the below :ref:`references:Conlon and Gortmaker (2020)`, which describes the advances implemented in the package.
+This page contains a full list of references cited in the documentation, including the original work of :ref:`references:Berry, Levinsohn, and Pakes (1995)`. If you use PyBLP in your research, we ask that you also cite the below :ref:`references:Conlon and Gortmaker (2020)`, which describes the advances implemented in the package. If you use PyBLP's micro moments functionality, we ask that you also cite :ref:`references:Conlon and Gortmaker (2023)`, which describes the standardized framework implemented by PyBLP for incorporating micro data into BLP-style estimation.
 
 
 Conlon and Gortmaker (2020)
 ---------------------------
 
 Conlon, Christopher, and Jeff Gortmaker (2020). `Best practices for differentiated products demand estimation with PyBLP <https://ideas.repec.org/a/bla/randje/v51y2020i4p1108-1161.html>`_. *RAND Journal of Economics, 51* (4), 1108-1161.
+
+
+Conlon and Gortmaker (2023)
+---------------------------
+
+Conlon, Christopher, and Jeff Gortmaker (2023). `Incorporating micro data into differentiated products demand estimation with PyBLP <https://jeffgortmaker.com/files/micro.pdf>`_. Working paper.
 
 
 Other References

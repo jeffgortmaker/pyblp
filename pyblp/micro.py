@@ -22,6 +22,9 @@ class MicroDataset(StringRepresentation):
     selected sample of inside purchasers in a few markets :math:`T_d \subset T`, giving each market an equal sampling
     weight. Different micro datasets are independent.
 
+    See :ref:`references:Conlon and Gortmaker (2023)` for a more in-depth discussion of the standardized framework used
+    by PyBLP for incorporating micro data into BLP-style estimation.
+
     Parameters
     ----------
     name : `str`
@@ -179,6 +182,9 @@ class MicroPart(StringRepresentation):
     :math:`v_{pijt} = y_{it} x_{jt}` yields the mean :math:`\bar{v}_p` or expectation :math:`v_p` of an interaction
     between some demographic :math:`y_{it}` and product characteristic :math:`x_{jt}`.
 
+    See :ref:`references:Conlon and Gortmaker (2023)` for a more in-depth discussion of the standardized framework used
+    by PyBLP for incorporating micro data into BLP-style estimation.
+
     Parameters
     ----------
     name : `str`
@@ -257,6 +263,9 @@ class MicroMoment(StringRepresentation):
     :math:`v_{1ijt} = y_{it}x_{jt}1\{j \neq 0\}` and :math:`v_{2ijt} = 1\{j \neq 0\}` matches the conditional mean of an
     interaction between :math:`y_{it}` and :math:`x_{jt}` among those who do not choose the outside option
     :math:`j = 0`.
+
+    See :ref:`references:Conlon and Gortmaker (2023)` for a more in-depth discussion of the standardized framework used
+    by PyBLP for incorporating micro data into BLP-style estimation.
 
     Parameters
     ----------

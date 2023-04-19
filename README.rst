@@ -49,10 +49,21 @@ If you use PyBLP in your research, we ask that you also cite `Conlon and Gortmak
     }
 
 
+If you use PyBLP's micro moments functionality, we ask that you also cite `Conlon and Gortmaker (2023) <https://jeffgortmaker.com/files/micro.pdf>`_, which describes the standardized framework implemented by PyBLP for incorporating micro data into BLP-style estimation.
+::
+
+    @misc{MicroPyBLP,
+        author = {Conlon, Christopher and Gortmaker, Jeff},
+        title = {Incorporating micro data into differentiated products demand estimation with {PyBLP}},
+        note = {Working paper},
+        year = {2023}
+    }
+
+
 Installation
 ------------
 
-The PyBLP package has been tested on `Python <https://www.python.org/downloads/>`_ versions 3.6 through 3.9. The `SciPy instructions <https://scipy.org/install/>`_ for installing related packages is a good guide for how to install a scientific Python environment. A good choice is the `Anaconda Distribution <https://www.anaconda.com/products/distribution>`_, since it comes packaged with the following PyBLP dependencies: `NumPy <https://numpy.org/>`_, `SciPy <https://scipy.org/>`_, `SymPy <https://www.sympy.org/en/index.html>`_, and `Patsy <https://patsy.readthedocs.io/en/latest/>`_. For absorption of high dimension fixed effects, PyBLP also depends on its companion package `PyHDFE <https://github.com/jeffgortmaker/pyhdfe>`_, which will be installed when PyBLP is installed.
+The PyBLP package has been tested on `Python <https://www.python.org/downloads/>`_ versions 3.6 through 3.9. The `SciPy instructions <https://scipy.org/install/>`_ for installing related packages is a good guide for how to install a scientific Python environment. A good choice is the `Anaconda Distribution <https://www.anaconda.com/download>`_, since it comes packaged with the following PyBLP dependencies: `NumPy <https://numpy.org/>`_, `SciPy <https://scipy.org/>`_, `SymPy <https://www.sympy.org/en/index.html>`_, and `Patsy <https://patsy.readthedocs.io/en/latest/>`_. For absorption of high dimension fixed effects, PyBLP also depends on its companion package `PyHDFE <https://github.com/jeffgortmaker/pyhdfe>`_, which will be installed when PyBLP is installed.
 
 However, PyBLP may not work with old versions of its dependencies. You can update PyBLP's Anaconda dependencies with::
 
@@ -145,16 +156,6 @@ Features
 - Market-by-market parallelization
 - Extended floating point precision
 - Robust error handling
-
-
-Features Slated for Future Versions
------------------------------------
-
-- Fast, "Robust," and Approximately Correct (FRAC) estimation
-- Analytic Hessians
-- Mathematical Program with Equilibrium Constraints (MPEC)
-- Generalized Empirical Likelihood (GEL)
-- Discrete types
 
 
 Bugs and Requests
