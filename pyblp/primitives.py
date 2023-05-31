@@ -49,6 +49,8 @@ class Products(object):
         Full set of supply-side instruments, :math:`Z_S`, which typically consists of excluded supply-side instruments
         and :math:`X_3^\text{ex}`. If there are any supply-side fixed effects, these instruments will be residualized
         with respect to these fixed effects.
+    ZC : `ndarray`
+        Covariance instruments, :math:`Z_C`, as in :ref:`references:MacKay and Miller (2023)`.
     X1 : `ndarray`
         Demand-side linear product characteristics, :math:`X_1`. If there are any demand-side fixed effects, these
         characteristics will be residualized with respect to these fixed effects.
@@ -72,6 +74,7 @@ class Products(object):
     prices: Array
     ZD: Array
     ZS: Array
+    ZC: Array
     X1: Array
     X2: Array
     X3: Array
@@ -143,6 +146,13 @@ class Products(object):
                 for index, formulation in enumerate(X3_formulations):
                     if 'shares' not in formulation.names:
                         ZS = X3[:, [index]] if ZS is None else np.c_[ZS, X3[:, [index]]]
+
+        # load covariance instruments
+        ZC = None
+        if instruments and X3 is not None:
+            ZC = extract_matrix(product_data, 'covariance_instruments')
+            if ZC is not None and not np.isfinite(ZC).all():
+                raise ValueError("The covariance_instruments field of product_data should not have NaNs or infinities.")
 
         # load fixed effect IDs
         demand_ids = None
@@ -217,12 +227,13 @@ class Products(object):
             'ownership': (ownership, options.dtype),
             'shares': (shares, options.dtype),
             'ZD': (ZD, options.dtype),
-            'ZS': (ZS, options.dtype)
+            'ZS': (ZS, options.dtype),
+            'ZC': (ZC, options.dtype),
         })
         product_mapping.update({
             (tuple(X1_formulations), 'X1'): (X1, options.dtype),
             (tuple(X2_formulations), 'X2'): (X2, options.dtype),
-            (tuple(X3_formulations), 'X3'): (X3, options.dtype)
+            (tuple(X3_formulations), 'X3'): (X3, options.dtype),
         })
 
         # structure and validate variables underlying X1, X2, and X3

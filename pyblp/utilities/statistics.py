@@ -34,9 +34,9 @@ class IV(object):
             self.errors.append(exceptions.LinearParameterCovariancesInversionError(covariances_inverse, replacement))
 
     def estimate(
-            self, X_list: List[Array], Z_list: List[Array], W: Array, y_list: List[Array]) -> (
-            Tuple[List[Array], List[Array]]):
-        """Estimate parameters and compute residuals."""
+            self, X_list: List[Array], Z_list: List[Array], W: Array, y_list: List[Array], jacobian_list: List[Array],
+            convert_jacobians: bool) -> Tuple[List[Array], List[Array], List[Array]]:
+        """Estimate parameters and compute residuals. Optionally convert Jacobians of y into Jacobians of residuals."""
 
         # stack matrices
         X = scipy.linalg.block_diag(*X_list)
@@ -44,13 +44,20 @@ class IV(object):
         y = np.vstack(y_list)
 
         # estimate the model
-        parameters = self.covariances @ (X.T @ Z) @ W @ (Z.T @ y)
+        XZ = X.T @ Z
+        parameters = self.covariances @ XZ @ W @ (Z.T @ y)
         residuals = y - X @ parameters
 
         # split the parameters and residuals into lists
         parameters_list = np.split(parameters, [x.shape[1] for x in X_list[:-1]], axis=0)
         residuals_list = np.split(residuals, len(X_list), axis=0)
-        return parameters_list, residuals_list
+
+        # optionally convert Jacobians
+        if convert_jacobians:
+            jacobian = (np.eye(y.size) - X @ self.covariances @ XZ @ W @ Z.T) @ np.vstack(jacobian_list)
+            jacobian_list = np.split(jacobian, len(jacobian_list), axis=0)
+
+        return parameters_list, residuals_list, jacobian_list
 
 
 def compute_gmm_weights(S: Array) -> Tuple[Array, List[Error]]:

@@ -319,7 +319,8 @@ class ProblemResults(EconomyResults):
             step_start_time: float, optimization_start_time: float, optimization_end_time: float,
             optimization_stats: SolverStats, iteration_stats: Sequence[Dict[Hashable, SolverStats]],
             scaled_objective: bool, shares_bounds: Bounds, costs_bounds: Bounds,
-            micro_moment_covariances: Optional[Array], center_moments: bool, W_type: str, se_type: str) -> None:
+            micro_moment_covariances: Optional[Array], center_moments: bool, W_type: str, se_type: str,
+            covariance_moments_mean: float) -> None:
         """Compute cumulative progress statistics, update weighting matrices, and estimate standard errors."""
         self.sigma, self.pi, self.rho, _, _ = progress.parameters.expand(progress.theta)
         self._errors = progress.errors
@@ -441,7 +442,7 @@ class ProblemResults(EconomyResults):
         # ignore computational errors when updating the weighting matrix and computing covariances
         with np.errstate(all='ignore'):
             # update the weighting matrix
-            S_for_weights = self._compute_S(progress.moments, W_type, center_moments)
+            S_for_weights = self._compute_S(progress.moments, W_type, covariance_moments_mean, center_moments)
             self.updated_W, W_errors = compute_gmm_weights(S_for_weights)
             self._errors.extend(W_errors)
 
@@ -453,7 +454,7 @@ class ProblemResults(EconomyResults):
             if last_step:
                 S_for_covariances = S_for_weights
                 if se_type != W_type or center_moments:
-                    S_for_covariances = self._compute_S(progress.moments, se_type)
+                    S_for_covariances = self._compute_S(progress.moments, se_type, covariance_moments_mean)
 
                 # if this is the first step, an unadjusted weighting matrix needs to be used when computing unadjusted
                 #   covariances so that they are scaled properly
@@ -534,6 +535,13 @@ class ProblemResults(EconomyResults):
                 np.zeros_like(self.problem.products.X1[:, self._parameters.eliminated_beta_index.flat]),
                 -self.problem.products.X3[:, self._parameters.eliminated_gamma_index.flat]
             ])
+            if self.problem.MC > 0:
+                Z_list.append(self.problem.products.ZC)
+                jacobian_list.append(np.c_[
+                    self.xi_by_theta_jacobian * self.omega + self.xi * self.omega_by_theta_jacobian,
+                    -self.problem.products.X1[:, self._parameters.eliminated_beta_index.flat] * self.omega,
+                    self.xi * -self.problem.products.X3[:, self._parameters.eliminated_gamma_index.flat]
+                ])
         mean_G = np.r_[
             compute_gmm_moments_jacobian_mean(jacobian_list, Z_list),
             np.c_[
@@ -544,13 +552,17 @@ class ProblemResults(EconomyResults):
         ]
         return mean_G
 
-    def _compute_S(self, moments: Moments, S_type: str, center_moments: bool = False) -> Array:
+    def _compute_S(
+            self, moments: Moments, S_type: str, covariance_moments_mean: float, center_moments: bool = False) -> Array:
         """Compute moment covariances."""
         u_list = [self.xi]
         Z_list = [self.problem.products.ZD]
         if self.problem.K3 > 0:
             u_list.append(self.omega)
             Z_list.append(self.problem.products.ZS)
+            if self.problem.MC > 0:
+                u_list.append(self.xi * self.omega - covariance_moments_mean)
+                Z_list.append(self.problem.products.ZC)
 
         S = compute_gmm_moment_covariances(u_list, Z_list, S_type, self.problem.products.clustering_ids, center_moments)
         self.problem._detect_singularity(S, "the estimated covariance matrix of aggregate GMM moments")
@@ -1065,6 +1077,13 @@ class ProblemResults(EconomyResults):
            expression can be corrected by multiplying it with a conformable matrix of ones and zeros that remove the
            collinearity problem. The question of which rows to exclude is addressed in
            :meth:`OptimalInstrumentResults.to_problem`.
+
+        .. warning::
+
+           Currently, only optimal instruments for the standard demand- and supply-side moments are supported. If
+           ``covariance_instruments`` were specified in ``product_data``, the computed optimal instruments will only be
+           optimal with respect to the demand- and supply-side moments, not with respect to the addition of any
+           covariance moments as well.
 
         Parameters
         ----------

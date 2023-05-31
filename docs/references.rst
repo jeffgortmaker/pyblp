@@ -163,6 +163,12 @@ Lovell (1963)
 Lovell, Michael C. (1963). `Seasonal adjustment of economic time series and multiple regression analysis <https://www.tandfonline.com/doi/abs/10.1080/01621459.1963.10480682>`_. *Journal of the American Statistical Association, 58* (304), 993-1010.
 
 
+MacKay and Miller (2023)
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+MacKay, Alexander and Nathan Miller (2023). `Estimating models of supply and demand: Instruments and covariance restrictions <https://www.hbs.edu/faculty/Pages/item.aspx?num=55227>`_. HBS working paper 19-051.
+
+
 Morrow and Skerlos (2011)
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 

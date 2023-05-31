@@ -30,6 +30,7 @@ from .conftest import SimulatedProblemFixture
 @pytest.mark.parametrize('solve_options_update', [
     pytest.param({'method': '2s'}, id="two-step"),
     pytest.param({'scale_objective': True}, id="scaled objective"),
+    pytest.param({'covariance_moments_mean': 1e-14}, id="tiny covariance moments mean"),
     pytest.param({'center_moments': False, 'W_type': 'unadjusted', 'se_type': 'clustered'}, id="complex covariances"),
     pytest.param({'delta_behavior': 'last'}, id="faster starting delta values"),
     pytest.param({'delta_behavior': 'logit'}, id="logit starting delta values"),
@@ -54,6 +55,10 @@ def test_accuracy(simulated_problem: SimulatedProblemFixture, solve_options_upda
         return pytest.skip("A different iteration configuration has no impact when there is no heterogeneity.")
     if simulation.epsilon_scale != 1 and 'nonlinear' in solve_options_update.get('fp_type', 'safe_linear'):
         return pytest.skip("Nonlinear fixed point configurations are not supported when epsilon is scaled.")
+
+    # skip the covariance moments value difference when it doesn't matter
+    if 'covariance_moments_mean' in solve_options_update and (problem.K3 == 0 or problem.MC == 0):
+        return pytest.skip("There is nothing to test with the covariance moments mean with no covariance moments.")
 
     # update the default options and solve the problem
     updated_solve_options = copy.deepcopy(solve_options)
@@ -400,7 +405,8 @@ def test_fixed_effects(
     product_data = {k: simulation_results.product_data[k] for k in simulation_results.product_data.dtype.names}
     product_data.update({
         'demand_instruments': problem.products.ZD[:, :-problem.K1],
-        'supply_instruments': problem.products.ZS[:, :-problem.K3]
+        'supply_instruments': problem.products.ZS[:, :-problem.K3],
+        'covariance_instruments': problem.products.ZC,
     })
 
     # remove constants and delete associated elements in the initial beta
@@ -457,6 +463,7 @@ def test_fixed_effects(
         solve_options1['W'] = scipy.linalg.pinv(scipy.linalg.block_diag(
             problem1.products.ZD.T @ problem1.products.ZD,
             problem1.products.ZS.T @ problem1.products.ZS,
+            problem1.products.ZC.T @ problem1.products.ZC,
             np.eye(len(solve_options1['micro_moments'])),
         ))
     problem_results1 = problem1.solve(**solve_options1)
@@ -482,6 +489,7 @@ def test_fixed_effects(
         solve_options2['W'] = scipy.linalg.pinv(scipy.linalg.block_diag(
             problem2.products.ZD.T @ problem2.products.ZD,
             problem2.products.ZS.T @ problem2.products.ZS,
+            problem2.products.ZC.T @ problem2.products.ZC,
             np.eye(len(solve_options2['micro_moments'])),
         ))
     problem_results2 = problem2.solve(**solve_options2)
@@ -514,6 +522,7 @@ def test_fixed_effects(
             solve_options3['W'] = scipy.linalg.pinv(scipy.linalg.block_diag(
                 problem3.products.ZD.T @ problem3.products.ZD,
                 problem3.products.ZS.T @ problem3.products.ZS,
+                problem3.products.ZC.T @ problem3.products.ZC,
                 np.eye(len(solve_options3['micro_moments'])),
             ))
         problem_results3 = problem3.solve(**solve_options3)
@@ -1585,8 +1594,13 @@ def test_micro_scores(simulated_problem: SimulatedProblemFixture) -> None:
 
 @pytest.mark.usefixtures('simulated_problem')
 @pytest.mark.parametrize('eliminate', [
-    pytest.param(True, id="linear parameters eliminated"),
-    pytest.param(False, id="linear parameters not eliminated")
+    pytest.param('all', id="all possible linear parameters eliminated"),
+    pytest.param('some', id="some linear parameters eliminated"),
+    pytest.param('no', id="no linear parameters eliminated")
+])
+@pytest.mark.parametrize('fe', [
+    pytest.param(False, id="no FE"),
+    pytest.param(True, id="FE"),
 ])
 @pytest.mark.parametrize('demand', [
     pytest.param(True, id="demand"),
@@ -1596,23 +1610,30 @@ def test_micro_scores(simulated_problem: SimulatedProblemFixture) -> None:
     pytest.param(True, id="supply"),
     pytest.param(False, id="no supply")
 ])
+@pytest.mark.parametrize('covariance', [
+    pytest.param(True, id="covariance"),
+    pytest.param(False, id="no covariance")
+])
 @pytest.mark.parametrize('micro', [
     pytest.param(True, id="micro"),
     pytest.param(False, id="no micro")
 ])
 def test_objective_gradient(
-        simulated_problem: SimulatedProblemFixture, eliminate: bool, demand: bool, supply: bool, micro: bool) -> None:
+        simulated_problem: SimulatedProblemFixture, eliminate: str, fe: bool, demand: bool, supply: bool,
+        covariance: bool, micro: bool) -> None:
     """Implement central finite differences in a custom optimization routine to test that analytic gradient values
     are close to estimated values.
     """
-    simulation, _, problem, solve_options, problem_results = simulated_problem
+    simulation, simulation_results, problem, solve_options, problem_results = simulated_problem
 
     # skip some redundant tests
     if supply and problem.K3 == 0:
         return pytest.skip("The problem does not have supply-side moments to test.")
+    if covariance and (problem.K3 == 0 or problem.MC == 0):
+        return pytest.skip("The problem does not have covariance moments to test.")
     if micro and not solve_options['micro_moments']:
         return pytest.skip("The problem does not have micro moments to test.")
-    if not demand and not supply and not micro:
+    if not demand and not supply and not covariance and not micro:
         return pytest.skip("There are no moments to test.")
 
     # configure the options used to solve the problem
@@ -1620,23 +1641,59 @@ def test_objective_gradient(
     updated_solve_options.update({k: 0.9 * solve_options[k] for k in ['sigma', 'pi', 'rho', 'beta']})
 
     # optionally include linear parameters in theta
-    if not eliminate:
+    if eliminate == 'no':
+        if problem.K1 > 0:
+            updated_solve_options['beta'] = 0.9 * simulation.beta
+        if problem.K3 > 0:
+            updated_solve_options['gamma'] = 0.9 * simulation.gamma
+    elif eliminate == 'some':
         if problem.K1 > 0:
             updated_solve_options['beta'][-1] = 0.9 * simulation.beta[-1]
         if problem.K3 > 0:
             updated_solve_options['gamma'] = np.full_like(simulation.gamma, np.nan)
             updated_solve_options['gamma'][-1] = 0.9 * simulation.gamma[-1]
+    else:
+        assert eliminate == 'all'
+
+    # optionally add a fixed effect
+    if fe:
+        # make product data mutable and add instruments
+        product_data = {k: simulation_results.product_data[k] for k in simulation_results.product_data.dtype.names}
+        product_data.update({
+            'demand_instruments': problem.products.ZD[:, :-problem.K1],
+            'supply_instruments': problem.products.ZS[:, :-problem.K3],
+            'covariance_instruments': problem.products.ZC,
+        })
+
+        # remove constants and delete associated elements in the initial beta
+        product_formulations = list(problem.product_formulations).copy()
+        assert product_formulations[0] is not None
+        constant_indices = [i for i, e in enumerate(product_formulations[0]._expressions) if not e.free_symbols]
+        updated_solve_options['beta'] = np.delete(updated_solve_options['beta'], constant_indices, axis=0)
+
+        # add fixed effect IDs to the data
+        state = np.random.RandomState(seed=0)
+        ids = state.choice(['a', 'b', 'c'], problem.N)
+        product_data['demand_ids'] = ids
+
+        # update the problem
+        product_formulations[0] = Formulation(f'{product_formulations[0]._formula} - 1', absorb='demand_ids')
+        problem = Problem(
+            product_formulations, product_data, problem.agent_formulation, simulation.agent_data,
+            rc_types=simulation.rc_types, epsilon_scale=simulation.epsilon_scale, costs_type=simulation.costs_type
+        )
 
     # zero out weighting matrix blocks to only test individual contributions of the gradient
-    updated_solve_options['W'] = copy.deepcopy(problem_results.W)
-    if micro:
-        MM = len(updated_solve_options['micro_moments'])
-        updated_solve_options['W'][-MM:, -MM:] = np.eye(MM)
-    updated_solve_options['W'] = np.eye(problem_results.W.shape[0])
+    updated_solve_options['W'] = np.eye(problem.MD + problem.MS + problem.MC + len(solve_options['micro_moments']))
     if not demand:
         updated_solve_options['W'][:problem.MD, :problem.MD] = 0
     if not supply and problem.K3 > 0:
-        updated_solve_options['W'][problem.MD:problem.MD + problem.MS, problem.MD:problem.MD + problem.MS] = 0
+        MDS = problem.MD + problem.MS
+        updated_solve_options['W'][problem.MD:MDS, problem.MD:MDS] = 0
+    if not covariance and problem.K3 > 0:
+        MDS = problem.MD + problem.MS
+        MDSC = MDS + problem.MC
+        updated_solve_options['W'][MDS:MDSC, MDS:MDSC] = 0
     if not micro and updated_solve_options['micro_moments']:
         MM = len(updated_solve_options['micro_moments'])
         updated_solve_options['W'][-MM:, -MM:] = 0

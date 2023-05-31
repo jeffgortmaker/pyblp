@@ -39,6 +39,7 @@ class Economy(Container, StringRepresentation):
     D: int
     MD: int
     MS: int
+    MC: int
     ED: int
     ES: int
     H: int
@@ -80,6 +81,7 @@ class Economy(Container, StringRepresentation):
         self.D = self.agents.demographics.shape[1]
         self.MD = self.products.ZD.shape[1]
         self.MS = self.products.ZS.shape[1]
+        self.MC = self.products.ZC.shape[1]
         self.ED = self.products.demand_ids.shape[1]
         self.ES = self.products.supply_ids.shape[1]
         self.H = self.unique_nesting_ids.size
@@ -134,7 +136,7 @@ class Economy(Container, StringRepresentation):
         """Format information about the nonzero dimensions of the economy as a string."""
         header: List[str] = []
         values: List[str] = []
-        for key in ['T', 'N', 'F', 'I', 'K1', 'K2', 'K3', 'D', 'MD', 'MS', 'ED', 'ES', 'H']:
+        for key in ['T', 'N', 'F', 'I', 'K1', 'K2', 'K3', 'D', 'MD', 'MS', 'MC', 'ED', 'ES', 'H']:
             value = getattr(self, key)
             if value > 0:
                 header.append(f" {key} ")
@@ -180,7 +182,8 @@ class Economy(Container, StringRepresentation):
         }
         matrix_labels.update({
             'ZD': [f'demand_instruments{i}' for i in range(self.MD - len(matrix_labels['ZD']))] + matrix_labels['ZD'],
-            'ZS': [f'demand_instruments{i}' for i in range(self.MS - len(matrix_labels['ZS']))] + matrix_labels['ZS']
+            'ZS': [f'supply_instruments{i}' for i in range(self.MS - len(matrix_labels['ZS']))] + matrix_labels['ZS'],
+            'ZC': [f'covariance_instruments{i}' for i in range(self.MC)],
         })
 
         # check each matrix for collinearity

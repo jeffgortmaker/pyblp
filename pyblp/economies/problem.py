@@ -51,9 +51,9 @@ class ProblemEconomy(Economy):
             delta_behavior: str = 'first', iteration: Optional[Iteration] = None, fp_type: str = 'safe_linear',
             shares_bounds: Optional[Tuple[Any, Any]] = (1e-300, None), costs_bounds: Optional[Tuple[Any, Any]] = None,
             W: Optional[Any] = None, center_moments: bool = True, W_type: str = 'robust', se_type: str = 'robust',
-            micro_moments: Sequence[MicroMoment] = (), micro_sample_covariances: Optional[Any] = None,
-            resample_agent_data: Optional[Callable[[int], Optional[Mapping]]] = None) -> (
-            ProblemResults):
+            covariance_moments_mean: float = 0, micro_moments: Sequence[MicroMoment] = (),
+            micro_sample_covariances: Optional[Any] = None,
+            resample_agent_data: Optional[Callable[[int], Optional[Mapping]]] = None) -> ProblemResults:
         r"""Solve the problem.
 
         The problem is solved in one or more GMM steps. During each step, any parameters in :math:`\theta` are optimized
@@ -421,6 +421,11 @@ class ProblemEconomy(Economy):
             block-diagonal with a micro moment block equal to the scaled covariance matrix defined in
             :eq:`scaled_micro_moment_covariances`.
 
+        covariance_moments_mean : `float, optional`
+            If ``covariance_instruments`` were specified in ``product_data``, this can be used to choose a
+            :math:`m \neq 0` in covariance moments :math:`E[g_{C,jt}] = E[(\xi_{jt}\omega_{jt} - m)Z_{C,jt}] = 0` where
+            :math:`m` is by default zero. This can be used for sensitivity testing to see how different covariances
+            may affect estimates.
         micro_moments : `sequence of MicroMoment, optional`
             Configurations for the :math:`M_M` :class:`MicroMoment` instances that will be added to the standard set of
             moments. By default, no micro moments are used, so :math:`M_M = 0`.
@@ -498,6 +503,8 @@ class ProblemEconomy(Economy):
                 raise ValueError(
                     "W_type or se_type is 'clustered' but clustering_ids were not specified in product_data."
                 )
+        if not isinstance(covariance_moments_mean, (int, float)):
+            raise ValueError("covariance_moments_mean must be a float.")
 
         # configure or validate bounds on shares and costs
         shares_bounds = self._coerce_optional_bounds(shares_bounds, 'shares_bounds')
@@ -553,7 +560,7 @@ class ProblemEconomy(Economy):
         # load or compute the weighting matrix
         if W is not None:
             W = np.c_[np.asarray(W, options.dtype)]
-            M = self.MD + self.MS + moments.MM
+            M = self.MD + self.MS + self.MC + moments.MM
             if W.shape != (M, M):
                 raise ValueError(f"W must be a square {M} by {M} matrix.")
             self._require_psd(W, "W")
@@ -562,6 +569,7 @@ class ProblemEconomy(Economy):
             S = scipy.linalg.block_diag(
                 self.products.ZD.T @ self.products.ZD / self.N,
                 self.products.ZS.T @ self.products.ZS / self.N,
+                self.products.ZC.T @ self.products.ZC / self.N,
             )
             self._detect_singularity(S, "the 2SLS weighting matrix")
             W, successful = precisely_invert(S)
@@ -625,7 +633,8 @@ class ProblemEconomy(Economy):
             # wrap computation of progress information with step-specific information
             compute_step_progress = functools.partial(
                 self._compute_progress, parameters, moments, iv, W, scale_objective, error_behavior, error_punishment,
-                delta_behavior, iteration, fp_type, shares_bounds, costs_bounds, finite_differences, resample_agent_data
+                delta_behavior, iteration, fp_type, shares_bounds, costs_bounds, finite_differences,
+                covariance_moments_mean, resample_agent_data
             )
 
             # initialize optimization progress
@@ -703,7 +712,7 @@ class ProblemEconomy(Economy):
             results = ProblemResults(
                 final_progress, last_results, step, last_step, step_start_time, optimization_start_time,
                 optimization_end_time, optimization_stats, iteration_stats, scale_objective, shares_bounds,
-                costs_bounds, micro_moment_covariances, center_moments, W_type, se_type
+                costs_bounds, micro_moment_covariances, center_moments, W_type, se_type, covariance_moments_mean
             )
             self._handle_errors(results._errors, error_behavior)
             output(f"Computed results after {format_seconds(results.total_time - results.optimization_time)}.")
@@ -730,7 +739,7 @@ class ProblemEconomy(Economy):
     def _compute_progress(
             self, parameters: Parameters, moments: Moments, iv: IV, W: Array, scale_objective: bool,
             error_behavior: str, error_punishment: float, delta_behavior: str, iteration: Iteration, fp_type: str,
-            shares_bounds: Bounds, costs_bounds: Bounds, finite_differences: bool,
+            shares_bounds: Bounds, costs_bounds: Bounds, finite_differences: bool, covariance_moments_mean: float,
             resample_agent_data: Optional[Callable[[int], Optional[Mapping]]], theta: Array,
             progress: 'InitialProgress', compute_gradient: bool, compute_hessian: bool,
             compute_micro_covariances: bool, detect_micro_collinearity: bool,
@@ -1014,10 +1023,10 @@ class ProblemEconomy(Economy):
                 """Evaluate a stack of xi, micro moments, and omega at a perturbed parameter vector."""
                 perturbed_progress = self._compute_progress(
                     parameters, moments, iv, W, scale_objective, error_behavior, error_punishment, delta_behavior,
-                    iteration, fp_type, shares_bounds, costs_bounds, finite_differences=False, resample_agent_data=None,
-                    theta=perturbed_theta, progress=progress, compute_gradient=False, compute_hessian=False,
-                    compute_micro_covariances=False, detect_micro_collinearity=False,
-                    compute_simulation_covariances=False,
+                    iteration, fp_type, shares_bounds, costs_bounds, finite_differences=False,
+                    covariance_moments_mean=covariance_moments_mean, resample_agent_data=None, theta=perturbed_theta,
+                    progress=progress, compute_gradient=False, compute_hessian=False, compute_micro_covariances=False,
+                    detect_micro_collinearity=False, compute_simulation_covariances=False,
                 )
                 perturbed_stack = perturbed_progress.iv_delta
                 if moments.MM > 0:
@@ -1044,13 +1053,24 @@ class ProblemEconomy(Economy):
             theta_gamma = np.c_[gamma[~parameters.eliminated_gamma_index]]
             iv_tilde_costs -= self._compute_true_X3(index=~parameters.eliminated_gamma_index.flatten()) @ theta_gamma
 
+        # check whether delta and tilde cost Jacobians need to be explicitly converted into xi and omega Jacobians to
+        #   account for concentrating out linear parameters (without covariance moments, it turns out that convenient
+        #   orthogonality conditions makes this unnecessary, which cuts down significantly on additional computation)
+        convert_jacobians = self.MC > 0 and (compute_gradient or finite_differences) and parameters.P > 0
+
         # absorb any fixed effects
         if self._absorb_demand_ids is not None:
             iv_delta, demand_absorption_errors = self._absorb_demand_ids(iv_delta)
             errors.extend(demand_absorption_errors)
+            if convert_jacobians:
+                xi_jacobian, demand_jacobian_absorption_errors = self._absorb_demand_ids(xi_jacobian)
+                errors.extend(demand_jacobian_absorption_errors)
         if self._absorb_supply_ids is not None:
             iv_tilde_costs, supply_absorption_errors = self._absorb_supply_ids(iv_tilde_costs)
             errors.extend(supply_absorption_errors)
+            if convert_jacobians:
+                omega_jacobian, supply_jacobian_absorption_errors = self._absorb_supply_ids(omega_jacobian)
+                errors.extend(supply_jacobian_absorption_errors)
 
         # collect inputs into GMM estimation
         X_list = [self.products.X1[:, parameters.eliminated_beta_index.flat]]
@@ -1064,14 +1084,24 @@ class ProblemEconomy(Economy):
             jacobian_list.append(omega_jacobian)
 
         # recover the linear parameters and structural error terms
-        parameters_list, u_list = iv.estimate(X_list, Z_list, W[:self.MD + self.MS, :self.MD + self.MS], y_list)
+        parameters_list, u_list, jacobian_list = iv.estimate(
+            X_list, Z_list, W[:self.MD + self.MS, :self.MD + self.MS], y_list, jacobian_list, convert_jacobians
+        )
         beta[parameters.eliminated_beta_index] = parameters_list[0].flat
-        xi = u_list[0]
         if self.K3 == 0:
+            xi = u_list[0]
             omega = np.full((self.N, 0), np.nan, options.dtype)
+            xi_jacobian = jacobian_list[0]
         else:
             gamma[parameters.eliminated_gamma_index] = parameters_list[1].flat
-            omega = u_list[1]
+            xi, omega = u_list
+            xi_jacobian, omega_jacobian = jacobian_list
+
+            # add any covariance moments
+            if self.MC > 0:
+                u_list.append(xi * omega - covariance_moments_mean)
+                Z_list.append(self.products.ZC)
+                jacobian_list.append(xi_jacobian * omega + xi * omega_jacobian)
 
         # compute the objective value and replace it with its last value if computation failed
         with np.errstate(all='ignore'):
@@ -1083,10 +1113,7 @@ class ProblemEconomy(Economy):
             objective = progress.objective
             errors.append(exceptions.ObjectiveReversionError())
 
-        # compute the gradient and replace any invalid elements with their last values (even if we concentrate out
-        #   linear parameters, it turns out that one can use orthogonality conditions to show that treating the linear
-        #   parameters as fixed is fine, so that we can treat xi and omega Jacobians as equal to delta and transformed
-        #   marginal cost Jacobians when computing the gradient)
+        # compute the gradient and replace any invalid elements with their last values
         gradient = np.full_like(progress.gradient, np.nan)
         if compute_gradient:
             with np.errstate(all='ignore'):
@@ -1124,8 +1151,8 @@ class ProblemEconomy(Economy):
                 """Evaluate the gradient at a perturbed parameter vector."""
                 perturbed_progress = self._compute_progress(
                     parameters, moments, iv, W, scale_objective, error_behavior, error_punishment, delta_behavior,
-                    iteration, fp_type, shares_bounds, costs_bounds, finite_differences, resample_agent_data,
-                    perturbed_theta, progress, compute_gradient=True, compute_hessian=False,
+                    iteration, fp_type, shares_bounds, costs_bounds, finite_differences, covariance_moments_mean,
+                    resample_agent_data, perturbed_theta, progress, compute_gradient=True, compute_hessian=False,
                     compute_micro_covariances=False, detect_micro_collinearity=False,
                     compute_simulation_covariances=False,
                 )
@@ -1154,10 +1181,10 @@ class ProblemEconomy(Economy):
 
                 resampled_progress = self._compute_progress(
                     parameters, moments, iv, W, scale_objective, error_behavior, error_punishment, delta_behavior,
-                    iteration, fp_type, shares_bounds, costs_bounds, finite_differences, resample_agent_data, theta,
-                    progress, compute_gradient=False, compute_hessian=False, compute_micro_covariances=False,
-                    detect_micro_collinearity=False, compute_simulation_covariances=False,
-                    agents_override=resampled_agents,
+                    iteration, fp_type, shares_bounds, costs_bounds, finite_differences, covariance_moments_mean,
+                    resample_agent_data, theta, progress, compute_gradient=False, compute_hessian=False,
+                    compute_micro_covariances=False, detect_micro_collinearity=False,
+                    compute_simulation_covariances=False, agents_override=resampled_agents,
                 )
                 mean_g_samples.append(resampled_progress.mean_g.flatten())
 
@@ -1247,6 +1274,20 @@ class Problem(ProblemEconomy):
               the formulated exogenous supply-side characteristics, :math:`X_3^\text{ex}`, constitute the full set of
               supply-side instruments, :math:`Z_S`. To instead specify the full matrix :math:`Z_S`, set
               ``add_exogenous`` to ``False``.
+
+            - **covariance_instruments** : (`numeric, optional`) - Covariance instruments :math:`Z_C`. If specified,
+              additional moments :math:`E[g_{C,jt}] = E[\xi_{jt}\omega_{jt}Z_{C,jt}] = 0` will be added, as in
+              :ref:`references:MacKay and Miller (2023)`.
+
+              If any fixed effects are absorbed, :math:`\xi_{jt}` and :math:`\omega_{jt}` in these new covariance
+              moments are replaced with :math:`\Delta\xi_{jt}` and/or :math:`\Delta\omega_{jt}` in :eq:`fe`. The default
+              2SLS weighting matrix will have an additional :math:(Z_C'Z_C / N)^{-1}` block after the first two.
+
+              .. note::
+
+                 In the current implementation, these covariance restrictions only affect the nonlinear parameters. The
+                 linear parameters are estimated using other moments. In the case of overidentification, the estimator
+                 may not be fully efficient because of this implementation decision.
 
         The recommendation in :ref:`references:Conlon and Gortmaker (2020)` is to start with differentiation instruments
         of :ref:`references:Gandhi and Houde (2017)`, which can be built with :func:`build_differentiation_instruments`,
@@ -1490,6 +1531,8 @@ class Problem(ProblemEconomy):
     MS : `int`
         Number of supply-side instruments, :math:`M_S`, which is typically the number of excluded supply-side
         instruments plus the number of exogenous supply-side linear product characteristics, :math:`K_3^\text{ex}`.
+    MC : `int`
+        Number of covariance instruments, :math:`M_C`.
     ED : `int`
         Number of absorbed dimensions of demand-side fixed effects, :math:`E_D`.
     ES : `int`

@@ -335,6 +335,8 @@ class Simulation(Economy):
     MS : `int`
         Number of supply-side instruments, :math:`M_S`, which is always zero because  instruments are added or
         constructed in :meth:`SimulationResults.to_problem`.
+    MC : `int`
+        Number of covariance instruments, :math:`M_C`.
     ED : `int`
         Number of absorbed dimensions of demand-side fixed effects, :math:`E_D`, which is always zero because
         simulations do not support fixed effect absorption.

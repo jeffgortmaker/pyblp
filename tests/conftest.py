@@ -119,12 +119,20 @@ def large_logit_simulation() -> SimulationFixture:
         gamma=[0.1, 0.2, 0.3, -0.2],
         xi_variance=0.00001,
         omega_variance=0.00001,
-        correlation=0.1,
+        correlation=0,
         costs_type='log',
         seed=2
     )
     simulation_results = simulation.replace_endogenous(constant_costs=False)
-    return simulation, simulation_results, {}, []
+
+    demand_instruments, supply_instruments = simulation_results._compute_default_instruments()
+    simulated_data_override = {
+        'demand_instruments': demand_instruments,
+        'supply_instruments': supply_instruments,
+        'covariance_instruments': np.ones(simulation.N),
+    }
+
+    return simulation, simulation_results, simulated_data_override, []
 
 
 @pytest.fixture(scope='session')
@@ -258,6 +266,13 @@ def medium_blp_simulation() -> SimulationFixture:
     )
     simulation_results = simulation.replace_endogenous()
 
+    demand_instruments, supply_instruments = simulation_results._compute_default_instruments()
+    simulated_data_override = {
+        'demand_instruments': demand_instruments,
+        'supply_instruments': supply_instruments,
+        'covariance_instruments': build_matrix(Formulation('0 + x + a'), simulation.product_data),
+    }
+
     simulated_micro_moments = replace_micro_moment_values(simulation_results, [MicroMoment(
         name="demographic interaction",
         value=0,
@@ -273,7 +288,7 @@ def medium_blp_simulation() -> SimulationFixture:
         ),
     )])
 
-    return simulation, simulation_results, {}, simulated_micro_moments
+    return simulation, simulation_results, simulated_data_override, simulated_micro_moments
 
 
 @pytest.fixture(scope='session')
