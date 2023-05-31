@@ -1281,7 +1281,7 @@ class Problem(ProblemEconomy):
 
               If any fixed effects are absorbed, :math:`\xi_{jt}` and :math:`\omega_{jt}` in these new covariance
               moments are replaced with :math:`\Delta\xi_{jt}` and/or :math:`\Delta\omega_{jt}` in :eq:`fe`. The default
-              2SLS weighting matrix will have an additional :math:(Z_C'Z_C / N)^{-1}` block after the first two.
+              2SLS weighting matrix will have an additional :math:`(Z_C'Z_C / N)^{-1}` block after the first two.
 
               .. note::
 
