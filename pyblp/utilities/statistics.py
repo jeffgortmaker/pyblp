@@ -128,16 +128,7 @@ def compute_gmm_moments_mean(u_list: List[Array], Z_list: List[Array]) -> Array:
 
 def compute_gmm_moments_jacobian_mean(jacobian_list: List[Array], Z_list: List[Array]) -> Array:
     """Compute the Jacobian of GMM moments with respect to parameters, averaged across observations."""
-
-    # tensors or loops are not needed when there is only one equation
-    if len(jacobian_list) == 1:
-        N = Z_list[0].shape[0]
-        return Z_list[0].T @ jacobian_list[0] / N
-
-    # tensors are faster than loops for more than one equation
-    Z_transpose_stack = np.dstack(np.split(scipy.linalg.block_diag(*Z_list), len(jacobian_list)))
-    jacobian_stack = np.dstack(jacobian_list).swapaxes(1, 2)
-    return (Z_transpose_stack @ jacobian_stack).mean(axis=0)
+    return np.concatenate([j[:, None] * Z[:, :, None] for j, Z in zip(jacobian_list, Z_list)], axis=1).mean(axis=0)
 
 
 def compute_sigma_squared_vector_covariances(sigma: Array, sigma_vector_covariances: Array) -> Array:
