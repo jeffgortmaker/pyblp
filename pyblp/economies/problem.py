@@ -557,10 +557,20 @@ class ProblemEconomy(Economy):
                 output(parameters.format_upper_bounds("Upper Bounds"))
                 output("")
 
+        # warn if it seems like the model is under-identified
+        M = self.MD + self.MS + self.MC + moments.MM
+        P_total = len(parameters.unfixed) + len(parameters.eliminated)
+        if P_total > M:
+            warn(
+                f"The model may be under-identified. The total number of unfixed parameters is {P_total}, which is "
+                f"more than the total number of moments, {M}. Consider checking whether instruments were properly "
+                f"specified when initializing the problem, and whether parameters were properly configured when "
+                f"solving the problem."
+            )
+
         # load or compute the weighting matrix
         if W is not None:
             W = np.c_[np.asarray(W, options.dtype)]
-            M = self.MD + self.MS + self.MC + moments.MM
             if W.shape != (M, M):
                 raise ValueError(f"W must be a square {M} by {M} matrix.")
             self._require_psd(W, "W")
