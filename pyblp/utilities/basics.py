@@ -51,7 +51,11 @@ def parallel(processes: int, use_pathos: bool = False) -> Iterator[None]:
         Number of Python processes that will be created and used by any method that supports parallel processing.
     use_pathos : `bool, optional`
         Whether to use `pathos <https://pathos.readthedocs.io/en/latest/>`_ (which will need to be installed) instead of
-        the default, built-in :mod:`multiprocessing` module.
+        the default, built-in :mod:`multiprocessing` module. Since pathos uses
+        `dill <https://dill.readthedocs.io/en/latest/>`_ to pickle and pass objects between processes, it can support
+        more objects than the default `multiprocessing <https://docs.python.org/3/library/multiprocessing.html>`_
+        module, which uses the default `pickle <https://docs.python.org/3/library/pickle.html>`_ module. However, dill
+        can be much slower, so using pathos can further increase overhead of passing data between processes.
 
     Examples
     --------
@@ -128,13 +132,17 @@ def parallel(processes: int, use_pathos: bool = False) -> Iterator[None]:
                 output(f"Terminating the pool of {processes} processes ...")
                 terminate_time = time.time()
         except AttributeError as exception:
-            if "Can't pickle local object" not in str(exception) or "<lambda>" not in str(exception):
+            if "Can't pickle local object" not in str(exception):
                 raise
-            pathos_message = (
-                "The built-in multiprocessing module does not support lambda functions. Consider setting "
-                "the use_pathos of parallel to True."
+            object_message = "lambda functions" if '<lambda>' in str(exception) else "some objects"
+            pickling_message = (
+                f"The built-in multiprocessing module does not support {object_message}, such as the one referenced in "
+                f"the above exception. Consider setting the use_pathos argument of parallel to True, which will use "
+                f"the dill package for multiprocessing, which supports more objects. If using pathos results in large "
+                f"slow downs, consider applying a custom picking patch to the above object's class with the copyreg "
+                f"module."
             )
-            raise RuntimeError(pathos_message) from exception
+            raise RuntimeError(pickling_message) from exception
         finally:
             pool = None
     output(f"Terminated the process pool after {format_seconds(time.time() - terminate_time)}.")
