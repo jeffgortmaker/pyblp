@@ -5,6 +5,7 @@ import copyreg
 import functools
 import inspect
 import multiprocessing.pool
+import pickle
 import re
 import sys
 import time
@@ -115,6 +116,12 @@ def parallel(processes: int, use_pathos: bool = False) -> Iterator[None]:
                 raise
             raise ImportError("dill must be installed when use_pathos is True.") from exception
 
+        # revert to standard pickling of NumPy record arrays because dill's approach is very slow
+        @dill.register(np.recarray)
+        def pickle_recarray(pickler: dill.Pickler, x: RecArray) -> Any:
+            """Revert to standard pickling."""
+            pickler.save_reduce(pickle.loads, (pickle.dumps(x),), obj=x)
+
         try:
             with pathos.multiprocessing.Pool(processes) as pool:
                 output(f"Started the process pool after {format_seconds(time.time() - start_time)}.")
@@ -140,7 +147,7 @@ def parallel(processes: int, use_pathos: bool = False) -> Iterator[None]:
                 f"the above exception. Consider setting the use_pathos argument of parallel to True, which will use "
                 f"the dill package for multiprocessing, which supports more objects. If using pathos results in large "
                 f"slow downs, consider applying a custom picking patch to the above object's class with the copyreg "
-                f"module."
+                f"module (for standard multiprocessing and pickling) or with dill.register (for pathos and dill)."
             )
             raise RuntimeError(pickling_message) from exception
         finally:
