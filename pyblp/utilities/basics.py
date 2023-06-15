@@ -93,7 +93,7 @@ def parallel(processes: int, use_pathos: bool = False) -> Iterator[None]:
     global pool
     if use_pathos:
         try:
-            from pathos.multiprocessing import ProcessPool
+            import pathos
         except ImportError as exception:
             if "pathos" not in str(exception):
                 raise
@@ -111,26 +111,13 @@ def parallel(processes: int, use_pathos: bool = False) -> Iterator[None]:
                 raise
             raise ImportError("dill must be installed when use_pathos is True.") from exception
 
-        # pathos' process pool requires a bit more hand-holding
         try:
-            pool = ProcessPool(nodes=processes)
-            output(f"Started the process pool after {format_seconds(time.time() - start_time)}.")
-            yield
+            with pathos.multiprocessing.Pool(processes) as pool:
+                output(f"Started the process pool after {format_seconds(time.time() - start_time)}.")
+                yield
+                output(f"Terminating the pool of {processes} processes ...")
+                terminate_time = time.time()
         finally:
-            output(f"Terminating the pool of {processes} processes ...")
-            terminate_time = time.time()
-            try:
-                pool.close()
-            except Exception:
-                pass
-            try:
-                pool.join()
-            except Exception:
-                pass
-            try:
-                pool.clear()
-            except Exception:
-                pass
             pool = None
             dill.settings['recurse'] = default_dill_recurse
     else:
@@ -160,11 +147,7 @@ def generate_items(keys: Iterable, factory: Callable[[Any], tuple], method: Call
     """
     if pool is None:
         return (generate_items_worker((k, factory(k), method)) for k in keys)
-    try:
-        return pool.imap_unordered(generate_items_worker, ((k, factory(k), method) for k in keys))
-    except AttributeError:
-        # a pathos ProcessPool uses uimap instead of imap_unordered
-        return pool.uimap(generate_items_worker, ((k, factory(k), method) for k in keys))
+    return pool.imap_unordered(generate_items_worker, ((k, factory(k), method) for k in keys))
 
 
 def generate_items_worker(args: Tuple[Any, tuple, Callable]) -> Tuple[Any, Any]:
