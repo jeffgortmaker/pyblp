@@ -98,6 +98,20 @@ def parallel(processes: int, use_pathos: bool = False) -> Iterator[None]:
             if "pathos" not in str(exception):
                 raise
             raise ImportError("pathos must be installed when use_pathos is True.") from exception
+
+        # enable pathos' pickling library's recursion feature, which is necessary in particular because SymPy is a
+        #   dependency that automatically uses gmpy2 when installed, which has some classes that need this feature to
+        #   be pickled
+        try:
+            import dill
+            default_dill_recurse = dill.settings['recurse']
+            dill.settings['recurse'] = True
+        except ImportError as exception:
+            if "dill" not in str(exception):
+                raise
+            raise ImportError("dill must be installed when use_pathos is True.") from exception
+
+        # pathos' process pool requires a bit more hand-holding
         try:
             pool = ProcessPool(nodes=processes)
             output(f"Started the process pool after {format_seconds(time.time() - start_time)}.")
@@ -118,6 +132,7 @@ def parallel(processes: int, use_pathos: bool = False) -> Iterator[None]:
             except Exception:
                 pass
             pool = None
+            dill.settings['recurse'] = default_dill_recurse
     else:
         try:
             with multiprocessing.pool.Pool(processes) as pool:
