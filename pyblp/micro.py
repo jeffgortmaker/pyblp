@@ -324,9 +324,9 @@ class MicroMoment(StringRepresentation):
         if isinstance(parts, MicroPart):
             parts = [parts]
             if compute_value is None:
-                compute_value = lambda v: float(v)
+                compute_value = default_compute_value
             if compute_gradient is None:
-                compute_gradient = lambda v: np.ones_like(v)
+                compute_gradient = default_compute_gradient
         else:
             if not isinstance(parts, collections.abc.Sequence) or len(parts) < 1:
                 raise TypeError("parts must be a MicroPart instance or a sequence of instances.")
@@ -362,6 +362,18 @@ class MicroMoment(StringRepresentation):
         """Format information about the moment as a string."""
         parts_string = str(self.parts) if isinstance(self.parts, MicroPart) else "; ".join(str(p) for p in self.parts)
         return f"{self.name}: {format_number(self.value)} ({parts_string})"
+
+
+def default_compute_value(part_values: Array) -> float:
+    """Define the default micro value computation function for a single micro part. This needs to be at the module
+    level to allow for standard multiprocessing to work.
+    """
+    return float(part_values)
+
+
+def default_compute_gradient(part_values: Array) -> Array:
+    """Define the same but for the gradient."""
+    return np.ones_like(part_values)
 
 
 class Moments(object):
