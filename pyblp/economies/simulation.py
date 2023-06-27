@@ -187,6 +187,25 @@ class Simulation(Economy):
         the market, as ordered in ``product_data``. The last index should be the number of products in the largest
         market, minus one. For markets with fewer products than this maximum number, latter columns will be ignored.
 
+        Finally, by default each agent :math:`i` in market :math:`t` is faced with the same choice set of product
+        :math:`j`, but it is possible to specify agent-specific availability :math:`a_{ijt}` much in the same way that
+        product-specific demographics are specified. To do so, the following field can be specified:
+
+            - **availability** : (`numeric, optional`) - Agent-specific product availability, :math:`a`. Choice
+              probabilities in :eq:`probabilities` are modified according to
+
+              .. math:: s_{ijt} = \frac{a_{ijt} \exp V_{ijt}}{1 + \sum_{k \in J_t} a_{ijt} \exp V_{ikt}},
+
+              and similarly for the nested logit model and consumer surplus calculations. By default, all
+              :math:`a_{ijt} = 1`. To have a product :math:`j` be unavailable to agent :math:`i`, set
+              :math:`a_{ijt} = 0`.
+
+              Agent-specific availability is specified in the same way that product-specific demographics are specified.
+              In ``agent_data``, one can include ``'availability0'``, ``'availability1'``, ``'availability2'``, and so
+              on, where the index corresponds to the order in which products appear within market in ``product_data``.
+              The last index should be the number of products in the largest market, minus one. For markets with fewer
+              products than this maximum number, latter columns will be ignored.
+
     integration : `Integration, optional`
         :class:`Integration` configuration for how to build nodes and weights for integration over agent choice
         probabilities, which will replace any ``nodes`` and ``weights`` fields in ``agent_data``. This configuration is
@@ -459,12 +478,13 @@ class Simulation(Economy):
                 if not isinstance(integration, Integration):
                     raise ValueError("integration must be None or an Integration instance.")
                 agent_market_ids, nodes, weights = integration._build_many(products.X2.shape[1], np.unique(market_ids))
-                agent_ids = None
+                agent_ids = availability = None
             elif agent_data is not None:
                 agent_market_ids = extract_matrix(agent_data, 'market_ids')
                 agent_ids = extract_matrix(agent_data, 'agent_ids')
                 nodes = extract_matrix(agent_data, 'nodes')
                 weights = extract_matrix(agent_data, 'weights')
+                availability = extract_matrix(agent_data, 'availability')
             else:
                 raise ValueError("At least one of agent_data or integration must be specified.")
 
@@ -473,7 +493,8 @@ class Simulation(Economy):
                 'market_ids': (agent_market_ids, np.object_),
                 'agent_ids': (agent_ids, np.object_),
                 'nodes': (nodes, options.dtype),
-                'weights': (weights, options.dtype)
+                'weights': (weights, options.dtype),
+                'availability': (availability, options.dtype),
             }
             if agent_formulation is not None:
                 for name in sorted(agent_formulation._names - set(agent_mapping)):

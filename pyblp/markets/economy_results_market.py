@@ -377,6 +377,10 @@ class EconomyResultsMarket(Market):
         exp_utilities = np.exp(utilities - utility_reduction)
         scale_weights = 1
 
+        # optionally adjust for agent-specific product availability
+        if self.agents.availability.size > 0:
+            exp_utilities *= self.agents.availability.T
+
         # eliminate any products from the choice set
         if eliminate_product_ids is not None:
             for j, product_id in enumerate(self.products.product_ids[:, product_ids_index]):

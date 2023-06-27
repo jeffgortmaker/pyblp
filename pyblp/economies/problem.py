@@ -1385,8 +1385,8 @@ class Problem(ProblemEconomy):
               same ID within a market.
 
         Along with ``market_ids`` and ``agent_ids``, the names of any additional fields can be typically be used as
-        variables in ``agent_formulation``. The exception is the name ``'demographics'``, which is reserved for use by
-        :class:`Agents`.
+        variables in ``agent_formulation``. Exceptions are the names ``'demographics'`` and ``'availability'``, which
+        are reserved for use by :class:`Agents`.
 
         In addition to standard demographic variables :math:`d_{it}`, it is also possible to specify product-specific
         demographics :math:`d_{ijt}`. A typical example is geographic distance of agent :math:`i` from product
@@ -1396,6 +1396,25 @@ class Problem(ProblemEconomy):
         ``product_data``. For example, ``'distance5'`` should measure the distance of agents to the fifth product within
         the market, as ordered in ``product_data``. The last index should be the number of products in the largest
         market, minus one. For markets with fewer products than this maximum number, latter columns will be ignored.
+
+        Finally, by default each agent :math:`i` in market :math:`t` is faced with the same choice set of product
+        :math:`j`, but it is possible to specify agent-specific availability :math:`a_{ijt}` much in the same way that
+        product-specific demographics are specified. To do so, the following field can be specified:
+
+            - **availability** : (`numeric, optional`) - Agent-specific product availability, :math:`a`. Choice
+              probabilities in :eq:`probabilities` are modified according to
+
+              .. math:: s_{ijt} = \frac{a_{ijt} \exp V_{ijt}}{1 + \sum_{k \in J_t} a_{ijt} \exp V_{ikt}},
+
+              and similarly for the nested logit model and consumer surplus calculations. By default, all
+              :math:`a_{ijt} = 1`. To have a product :math:`j` be unavailable to agent :math:`i`, set
+              :math:`a_{ijt} = 0`.
+
+              Agent-specific availability is specified in the same way that product-specific demographics are specified.
+              In ``agent_data``, one can include ``'availability0'``, ``'availability1'``, ``'availability2'``, and so
+              on, where the index corresponds to the order in which products appear within market in ``product_data``.
+              The last index should be the number of products in the largest market, minus one. For markets with fewer
+              products than this maximum number, latter columns will be ignored.
 
     integration : `Integration, optional`
         :class:`Integration` configuration for how to build nodes and weights for integration over agent choice

@@ -76,7 +76,7 @@ class Market(Container):
             self.products = update_matrices(self.products, products_update_mapping)
 
         # fill missing columns of integration nodes (associated with zeros in sigma) with zeros and drop extra
-        #   product-specific demographic values for product indices not in this market
+        #   product-specific demographic/agent-specific product availability values for products not in this market
         agents_update_mapping: Dict[str, Tuple[Optional[Array], Any]] = {}
         if self.agents.nodes.shape[1] != economy.K2 and not parameters.nonzero_sigma_index.all():
             nodes = np.zeros((self.agents.shape[0], economy.K2), self.agents.nodes.dtype)
@@ -85,6 +85,9 @@ class Market(Container):
         if len(self.agents.demographics.shape) == 3:
             demographics = self.agents.demographics[..., :self.products.size]
             agents_update_mapping['demographics'] = (demographics, demographics.dtype)
+        if self.agents.availability.size > 0:
+            availability = self.agents.availability[..., :self.products.size]
+            agents_update_mapping['availability'] = (availability, availability.dtype)
         if agents_update_mapping:
             self.agents = update_matrices(self.agents, agents_update_mapping)
 
@@ -331,8 +334,8 @@ class Market(Container):
             self, delta: Array = None, mu: Optional[Array] = None, linear: bool = True, safe: bool = True,
             utility_reduction: Optional[Array] = None, numerator: Optional[Array] = None,
             eliminate_outside: bool = False, eliminate_product: Optional[int] = None,
-            eliminate_product_id: Optional[Any] = None, product_ids_index: Optional[int] = None) -> (
-            Tuple[Array, Optional[Array]]):
+            eliminate_product_id: Optional[Any] = None, product_ids_index: Optional[int] = None,
+            availability: Optional[Array] = None) -> Tuple[Array, Optional[Array]]:
         """Compute choice probabilities. By default, use unchanged delta and mu values. If linear is False, delta and mu
         must be specified and already be exponentiated. If safe is True, scale the logit equation by the exponential of
         negative the maximum utility for each agent, and if utility_reduction is specified, it should be values that
@@ -383,6 +386,12 @@ class Market(Container):
         # optionally eliminate the outside option from the choice set
         if eliminate_outside:
             scale = 0
+
+        # optionally adjust for agent-specific product availability
+        if availability is None and self.agents.availability.size > 0:
+            availability = self.agents.availability
+        if availability is not None:
+            exp_utilities *= availability.T
 
         # optionally eliminate a product from the choice set
         if eliminate_product is not None:
@@ -1023,11 +1032,21 @@ class Market(Container):
             # compute the tangent of marginal probabilities with respect to the parameter (re-scale for robustness)
             utility_reduction = np.clip(utilities.max(axis=0, keepdims=True), 0, None)
             with np.errstate(divide='ignore', invalid='ignore'):
+                exp_utilities = np.exp(utilities - utility_reduction)
+
+                # hand agent-specific product availability
+                if self.agents.availability.size > 0:
+                    availability = self.agents.availability
+                    if agent_indices is not None:
+                        availability = availability[agent_indices]
+                    exp_utilities *= availability.T
+
                 B = marginals * (
                     A_sums * (1 - self.group_rho) -
-                    (np.log(self.groups.sum(np.exp(utilities - utility_reduction))) + utility_reduction)
+                    (np.log(self.groups.sum(exp_utilities)) + utility_reduction)
                 )
                 marginals_tangent = group_associations * B - marginals * (group_associations.T @ B)
+
             marginals_tangent[~np.isfinite(marginals_tangent)] = 0
 
         else:
@@ -1421,8 +1440,11 @@ class Market(Container):
             delta = self.delta
 
         mu = None
+        availability = None
         if agent_indices is not None:
             mu = self.mu[:, agent_indices]
+            if self.agents.availability.size > 0:
+                availability = self.agents.availability[agent_indices]
 
         # pre-compute and validate micro dataset weights, multiplying these with probabilities and using these to
         #   compute micro value denominators
@@ -1454,7 +1476,7 @@ class Market(Container):
 
             # pre-compute probabilities
             if probabilities is None:
-                probabilities, _ = self.compute_probabilities(delta, mu)
+                probabilities, _ = self.compute_probabilities(delta, mu, availability=availability)
 
             # pre-compute outside probabilities
             need_outside_probabilities = len(weights.shape) == 2 and weights.shape[1] == 1 + self.J
@@ -1485,7 +1507,7 @@ class Market(Container):
                         # re-compute probabilities if there is nesting or there was a numerical error
                         if eliminated_probabilities_j is None or not np.isfinite(eliminated_probabilities_j).all():
                             eliminated_probabilities_j, eliminated_conditionals_j = self.compute_probabilities(
-                                delta, mu, eliminate_product=j
+                                delta, mu, eliminate_product=j, availability=availability
                             )
 
                         eliminated_probabilities_list.append(eliminated_probabilities_j)
@@ -1510,7 +1532,8 @@ class Market(Container):
                         # re-compute probabilities if there is nesting or there was a numerical error
                         if eliminated_probabilities_j is None or not np.isfinite(eliminated_probabilities_j).all():
                             eliminated_probabilities_j, eliminated_conditionals_j = self.compute_probabilities(
-                                delta, mu, eliminate_product_id=product_id, product_ids_index=ids_index
+                                delta, mu, eliminate_product_id=product_id, product_ids_index=ids_index,
+                                availability=availability
                             )
 
                         eliminated_probabilities_list.append(eliminated_probabilities_j)
@@ -1602,7 +1625,7 @@ class Market(Container):
                 # re-compute probabilities if there is nesting or there was a numerical error
                 if outside_eliminated_probabilities is None or not np.isfinite(outside_eliminated_probabilities).all():
                     outside_eliminated_probabilities, outside_eliminated_conditionals = self.compute_probabilities(
-                        delta, mu, eliminate_outside=True
+                        delta, mu, eliminate_outside=True, availability=availability
                     )
 
                 if compute_jacobians:

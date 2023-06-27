@@ -260,6 +260,8 @@ class Agents(object):
         Unobserved agent characteristics called integration nodes, :math:`\nu`.
     demographics : `ndarray`
         Observed agent characteristics, :math:`d`.
+    availability : `ndarray`
+        Agent-specific product availability, :math:`a`.
 
     """
 
@@ -268,6 +270,7 @@ class Agents(object):
     weights: Array
     nodes: Array
     demographics: Array
+    availability: Array
 
     def __new__(
             cls, products: RecArray, agent_formulation: Optional[Formulation] = None,
@@ -282,6 +285,7 @@ class Agents(object):
         nodes = None
         demographics = None
         demographics_formulations: List[ColumnFormulation] = []
+        availability = None
 
         # if there are only linear characteristics, build a trivial set of agents
         K2 = products.X2.shape[1]
@@ -309,10 +313,11 @@ class Agents(object):
                         "Variables in agent_data that contribute to demographics should not have NaNs or infinities."
                     )
 
-            # load IDs
+            # load IDs and any availability
             if agent_data is not None:
                 market_ids = extract_matrix(agent_data, 'market_ids')
                 agent_ids = extract_matrix(agent_data, 'agent_ids')
+                availability = extract_matrix(agent_data, 'availability')
                 if market_ids is None:
                     raise KeyError("agent_data must have a market_ids field.")
                 if market_ids.shape[1] > 1:
@@ -321,6 +326,13 @@ class Agents(object):
                     raise ValueError("The market_ids field of agent_data must have the same IDs as product data.")
                 if agent_ids is not None and agent_ids.shape[1] > 1:
                     raise ValueError("The agent_ids field of agent_data must be one-dimensional.")
+                if availability is not None:
+                    max_J = max(i.size for i in get_indices(products.market_ids).values())
+                    if availability.shape[1] < max_J:
+                        raise ValueError(
+                            f"The availability field of agent_data must have at least {max_J} columns, which is the "
+                            f"number of products in the market with the most products."
+                        )
 
             # build nodes and weights
             if integration is not None:
@@ -383,7 +395,8 @@ class Agents(object):
             'agent_ids': (agent_ids, np.object_),
             'weights': (weights, options.dtype),
             'nodes': (nodes, options.dtype),
-            (tuple(demographics_formulations), 'demographics'): (demographics, options.dtype)
+            (tuple(demographics_formulations), 'demographics'): (demographics, options.dtype),
+            'availability': (availability, options.dtype),
         })
 
 
@@ -396,6 +409,7 @@ class MicroAgents(object):
     weights: Array
     nodes: Array
     demographics: Array
+    availability: Array
     choice_indices: Array
     second_choice_indices: Array
 
@@ -408,9 +422,10 @@ class MicroAgents(object):
         if K2 == 0:
             raise ValueError("X2 is not formulated.")
 
-        # load IDs and indices
+        # load IDs, availability, and indices
         market_ids = extract_matrix(micro_data, 'market_ids')
         agent_ids = extract_matrix(micro_data, 'agent_ids')
+        availability = extract_matrix(micro_data, 'availability')
         choice_indices = extract_matrix(micro_data, 'choice_indices')
         second_choice_indices = extract_matrix(micro_data, 'second_choice_indices')
         if market_ids is None:
@@ -421,6 +436,13 @@ class MicroAgents(object):
             raise ValueError("The market_ids field of micro_data must not have IDs that are not in product data.")
         if agent_ids is not None and agent_ids.shape[1] > 1:
             raise ValueError("The agent_ids field of micro_data must be one-dimensional.")
+        if availability is not None:
+            max_J = max(i.size for i in get_indices(products.market_ids).values())
+            if availability.shape[1] < max_J:
+                raise ValueError(
+                    f"The availability field of micro_data must have at least {max_J} columns, which is the number of "
+                    f"products in the market with the most products."
+                )
         if choice_indices is not None and choice_indices.shape[1] > 1:
             raise ValueError("The choice_indices field of micro_data must be one-dimensional.")
         if second_choice_indices is not None and second_choice_indices.shape[1] > 1:
@@ -480,6 +502,7 @@ class MicroAgents(object):
             repeats = np.bincount(micro_ids)
             duplicate = lambda x: np.repeat(x, repeats, axis=0) if x is not None else None
             demographics = duplicate(demographics)
+            availability = duplicate(availability)
             market_ids = duplicate(market_ids)
             agent_ids = duplicate(agent_ids)
             choice_indices = duplicate(choice_indices)
@@ -503,6 +526,7 @@ class MicroAgents(object):
             'weights': (weights, options.dtype),
             'nodes': (nodes, options.dtype),
             (tuple(demographics_formulations), 'demographics'): (demographics, options.dtype),
+            'availability': (availability, options.dtype),
             'choice_indices': (choice_indices, np.int64),
             'second_choice_indices': (second_choice_indices, np.int64),
         })

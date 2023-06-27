@@ -1267,7 +1267,8 @@ class EconomyResults(SimpleEconomyResults):
         micro_data : `structured array-like`
             Each row corresponds either to an observation :math:`n` or if there are multiple rows per observation, to
             an :math:`i \in I_n` that integrates over unobserved heterogeneity. In addition to the names of any
-            demographics used in the ``agent_formulation``, the following fields are required:
+            demographics used in the ``agent_formulation`` and any specification of agent-specific product
+            ``'availability'``, the following fields are required:
 
                 - **market_ids** : (`object`) - Market IDs :math:`t_n` for each observation :math:`n`.
 
@@ -1457,6 +1458,7 @@ class EconomyResults(SimpleEconomyResults):
                 'agent_ids': agents.agent_ids,
                 'nodes': agents.nodes,
                 'weights': np.ones(agents.size),
+                'availability': agents.availability,
             }
             micro_agents = MicroAgents(
                 self._economy.products, self._parameters, micro_data, demographics, demographics_formulations,

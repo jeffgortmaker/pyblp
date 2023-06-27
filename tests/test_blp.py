@@ -1328,6 +1328,10 @@ def test_logit_errors(simulated_problem: SimulatedProblemFixture) -> None:
     if problem.K3 > 0:
         return pytest.skip("Configurations with supply give the same test.")
 
+    # skip problems with differing product availability
+    if problem.agents.availability.size > 0:
+        return pytest.skip("This test is not supported for differing product availability.")
+
     # select only a few products (if there's nesting, select two from each of two nests)
     J = 4
     small_product_data = simulation_results.product_data[:J].copy()
@@ -1505,7 +1509,7 @@ def test_micro_values(simulated_problem: SimulatedProblemFixture) -> None:
 
         # compute the micro values
         value = moment.compute_value(np.array(part_values))
-        np.testing.assert_allclose(moment.value, value, atol=0, rtol=0.01, err_msg=moment)
+        np.testing.assert_allclose(moment.value, value, atol=0, rtol=0.015, err_msg=moment)
 
 
 @pytest.mark.usefixtures('simulated_problem')

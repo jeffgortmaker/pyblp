@@ -234,6 +234,21 @@ def medium_blp_simulation() -> SimulationFixture:
     scaled epsilon.
     """
     id_data = build_id_data(T=10, J=25, F=6)
+
+    integration = Integration('product', 4)
+    agent_data = build_integration(integration, 2)
+    unique_market_ids = np.unique(id_data.market_ids)
+    max_J = max(i.size for i in get_indices(id_data.market_ids).values())
+
+    state = np.random.RandomState(2)
+    availability = {}
+    for j in range(max_J):
+        availability[f'availability{j}'] = state.choice(
+            [0, 0.5, 1],
+            p=[0.05, 0.05, 0.9],
+            size=unique_market_ids.size * agent_data.weights.size,
+        )
+
     simulation = Simulation(
         product_formulations=(
             Formulation('1 + x + prices'),
@@ -257,7 +272,13 @@ def medium_blp_simulation() -> SimulationFixture:
         ],
         gamma=[1, 1, 2],
         agent_formulation=Formulation('0 + f'),
-        integration=Integration('product', 4),
+        agent_data={
+            'market_ids': np.repeat(unique_market_ids, agent_data.weights.size),
+            'agent_ids': np.tile(np.arange(agent_data.weights.size), unique_market_ids.size),
+            'weights': np.tile(agent_data.weights.flat, unique_market_ids.size),
+            'nodes': np.tile(agent_data.nodes, (unique_market_ids.size, 1)),
+            **availability,
+        },
         xi_variance=0.00001,
         omega_variance=0.00001,
         correlation=0.8,
@@ -538,6 +559,16 @@ def large_nested_blp_simulation() -> SimulationFixture:
     max_J = max(i.size for i in get_indices(id_data.market_ids).values())
 
     state = np.random.RandomState(2)
+    demographics = {}
+    availability = {}
+    for j in range(max_J):
+        demographics[f'g{j}'] = state.uniform(size=unique_market_ids.size * agent_data.weights.size)
+        availability[f'availability{j}'] = state.choice(
+            [0.5, 1],
+            p=[0.2, 0.8],
+            size=unique_market_ids.size * agent_data.weights.size,
+        )
+
     simulation = Simulation(
         product_formulations=(
             Formulation('1 + x + y + z + q'),
@@ -556,7 +587,8 @@ def large_nested_blp_simulation() -> SimulationFixture:
             'agent_ids': np.tile(np.arange(agent_data.weights.size), unique_market_ids.size),
             'weights': np.tile(agent_data.weights.flat, unique_market_ids.size),
             'nodes': np.tile(agent_data.nodes, (unique_market_ids.size, 1)),
-            **{f'g{j}': state.uniform(size=unique_market_ids.size * agent_data.weights.size) for j in range(max_J)},
+            **demographics,
+            **availability,
         },
         beta=[1, 1, 2, 3, 1],
         sigma=[

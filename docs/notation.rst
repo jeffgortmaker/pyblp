@@ -89,6 +89,7 @@ Symbol                                                 Dimensions               
 :math:`\Gamma`                                         :math:`J_t \times J_t`              Another matrix used to decompose :math:`\eta` and :math:`\zeta` in market :math:`t`
 :math:`d`                                              :math:`I_t \times D`                Observed agent characteristics called demographics in market :math:`t`
 :math:`\nu`                                            :math:`I_t \times K_2`              Unobserved agent characteristics called integration nodes in market :math:`t`
+:math:`a`                                              :math:`I_t \times J_t`              Agent-specific product availability in market :math:`t`
 :math:`w`                                              :math:`I_t \times 1`                Integration weights in market :math:`t`
 :math:`\delta`                                         :math:`N \times 1`                  Mean utility
 :math:`\mu`                                            :math:`J_t \times I_t`              Agent-specific portion of utility in market :math:`t`
