@@ -664,6 +664,7 @@ class Market(Container):
             probability_utility_derivatives, probabilities, conditionals
         )
         np.einsum('jj->j', capital_delta)[...] -= capital_lamda_diagonal
+        capital_delta = capital_delta.T
         capital_delta *= ownership
 
         # use solve if not keeping the inverse of capital delta
@@ -1328,6 +1329,7 @@ class Market(Container):
                 )
             )
             np.einsum('jj->j', capital_delta_tangent)[...] -= capital_lamda_diagonal_tangent
+            capital_delta_tangent = capital_delta_tangent.T
             capital_delta_tangent *= ownership
 
             # subtract this parameter's contribution

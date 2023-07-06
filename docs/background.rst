@@ -64,9 +64,9 @@ In a single market, the corresponding multi-product differentiated Bertrand firs
 .. math:: p - c = \underbrace{\Delta^{-1}s}_{\eta},
    :label: eta
 
-where the multi-product Bertrand markup :math:`\eta` depends on :math:`\Delta`, a :math:`J_t \times J_t` matrix of intra-firm (negative) demand derivatives:
+where the multi-product Bertrand markup :math:`\eta` depends on :math:`\Delta`, a :math:`J_t \times J_t` matrix of intra-firm (negative, transposed) demand derivatives:
 
-.. math:: \Delta = -\mathscr{H} \odot \frac{\partial s}{\partial p}.
+.. math:: \Delta = -\mathscr{H} \odot \frac{\partial s}{\partial p}'.
 
 Here, :math:`\mathscr{H}` denotes the market-level ownership or product holdings matrix in the market, where :math:`\mathscr{H}_{jk}` is typically :math:`1` if the same firm produces products :math:`j` and :math:`k`, and :math:`0` otherwise.
 

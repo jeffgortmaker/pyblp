@@ -632,7 +632,7 @@ def test_special_ownership(simulated_problem: SimulatedProblemFixture) -> None:
 
 
 @pytest.mark.usefixtures('simulated_problem')
-def test_costs(simulated_problem: SimulatedProblemFixture) -> None:
+def test_specified_ownership(simulated_problem: SimulatedProblemFixture) -> None:
     """Test that marginal costs computed under specified firm IDs and ownership are the same as costs computed when
     firm IDs and ownership are left unspecified.
     """
@@ -652,6 +652,16 @@ def test_costs(simulated_problem: SimulatedProblemFixture) -> None:
     costs3 = results.compute_costs(ownership=build_ownership(simulation_results.product_data))
     np.testing.assert_equal(costs1, costs2)
     np.testing.assert_equal(costs1, costs3)
+
+
+@pytest.mark.usefixtures('simulated_problem')
+def test_costs(simulated_problem: SimulatedProblemFixture) -> None:
+    """Test that true marginal costs can be recovered after estimation at the true parameter values. This is essentially
+    a joint test of the zeta-markup approach to computing equilibrium prices and the eta-markup expression.
+    """
+    _, simulation_results, _, _, _ = simulated_problem
+    costs = simulation_results.compute_costs()
+    np.testing.assert_allclose(costs, simulation_results.costs, atol=1e-10, rtol=1e-10)
 
 
 @pytest.mark.usefixtures('simulated_problem')
