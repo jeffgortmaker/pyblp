@@ -1293,6 +1293,20 @@ class Problem(ProblemEconomy):
               moments are replaced with :math:`\Delta\xi_{jt}` and/or :math:`\Delta\omega_{jt}` in :eq:`fe`. The default
               2SLS weighting matrix will have an additional :math:`(Z_C'Z_C / N)^{-1}` block after the first two.
 
+              .. warning::
+
+                 Covariance restrictions are still an experimental feature. The way in which they are implemented and
+                 used may change somewhat in future releases.
+
+              .. note::
+
+                 Using covariance restrictions to identify a parameter on price can sometimes yield two solutions, where
+                 the "upper" solution may be positive (i.e., implying upward-sloping demand). See
+                 :ref:`references:MacKay and Miller (2023)` for more discussion of this point. In these cases when the
+                 "lower" root is the correct solution, consider bounding the parameter on price from below using
+                 ``beta_bounds`` (if the parameter is in ``beta``) or replacing it with a lognormal coefficient on
+                 price via the ``rc_type`` argument to :class:`Problem`.
+
               .. note::
 
                  In the current implementation, these covariance restrictions only affect the nonlinear parameters. The
