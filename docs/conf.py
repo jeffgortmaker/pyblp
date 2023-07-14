@@ -82,6 +82,7 @@ nbsphinx_prolog = read('templates/nbsphinx_prolog.rst')
 nbsphinx_epilog = read('templates/nbsphinx_epilog.rst')
 linkcheck_ignore = [
     'https://www.anaconda.com/download',  # 403 forbidden, but fine in browser
+    'https://www.tandfonline.com/doi/abs/10.1080/01621459.1963.10480682',  # 403 forbidden, but fine in browser
 ]
 
 # configure HTML information
