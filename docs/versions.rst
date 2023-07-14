@@ -4,6 +4,12 @@ Version Notes
 These notes will only include major changes.
 
 
+1.1
+---
+- Covariance restrictions
+- Demographic-specific product availability
+
+
 1.0
 ---
 
