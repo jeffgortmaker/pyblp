@@ -15,7 +15,7 @@ from .. import exceptions, options
 from ..configurations.formulation import Formulation
 from ..configurations.integration import Integration
 from ..configurations.iteration import Iteration
-from ..configurations.optimization import ObjectiveResults, Optimization
+from ..configurations.optimization import ObjectiveResults, Optimization, OptimizationProgress
 from ..markets.problem_market import ProblemMarket
 from ..micro import MicroDataset, MicroMoment, Moments
 from ..parameters import Parameters
@@ -676,7 +676,11 @@ class ProblemEconomy(Economy):
                     output(formatted_progress)
                 smallest_objective = min(smallest_objective, progress.objective)
                 detect_micro_collinearity = False
-                return progress.objective, progress.gradient if optimization._compute_gradient else None
+                return (
+                    progress.objective,
+                    progress.gradient if optimization._compute_gradient else None,
+                    OptimizationProgress(progress),
+                )
 
             # optimize theta if there are parameters to optimize and this isn't the initial update step
             optimization_stats = SolverStats()

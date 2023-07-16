@@ -56,7 +56,7 @@ def test_entropy(
         p = np.exp(F @ x - log_Z)
         objective = log_Z - K @ x
         gradient = F.T @ p - K if compute_gradient else None
-        return objective, gradient
+        return objective, gradient, None
 
     # simple some methods
     if compute_gradient and method in {'nelder-mead', 'powell'}:

@@ -4,7 +4,7 @@ from . import data, exceptions, options
 from .configurations.formulation import Formulation
 from .configurations.integration import Integration
 from .configurations.iteration import Iteration
-from .configurations.optimization import Optimization
+from .configurations.optimization import Optimization, OptimizationProgress
 from .construction import (
     build_blp_instruments, build_differentiation_instruments, build_id_data, build_integration, build_matrix,
     build_ownership, data_to_dict, save_pickle, read_pickle
@@ -22,10 +22,10 @@ from .utilities.basics import parallel
 from .version import __version__
 
 __all__ = [
-    'data', 'exceptions', 'options', 'Formulation', 'Integration', 'Iteration', 'Optimization', 'build_blp_instruments',
-    'build_differentiation_instruments', 'build_id_data', 'build_integration', 'build_matrix', 'build_ownership',
-    'data_to_dict', 'save_pickle', 'read_pickle', 'ImportanceSamplingProblem', 'OptimalInstrumentProblem', 'Problem',
-    'Simulation', 'MicroDataset', 'MicroPart', 'MicroMoment', 'Agents', 'Products', 'BootstrappedResults',
-    'ImportanceSamplingResults', 'OptimalInstrumentResults', 'ProblemResults', 'SimulationResults', 'parallel',
-    '__version__'
+    'data', 'exceptions', 'options', 'Formulation', 'Integration', 'Iteration', 'Optimization', 'OptimizationProgress',
+    'build_blp_instruments', 'build_differentiation_instruments', 'build_id_data', 'build_integration', 'build_matrix',
+    'build_ownership', 'data_to_dict', 'save_pickle', 'read_pickle', 'ImportanceSamplingProblem',
+    'OptimalInstrumentProblem', 'Problem', 'Simulation', 'MicroDataset', 'MicroPart', 'MicroMoment', 'Agents',
+    'Products', 'BootstrappedResults', 'ImportanceSamplingResults', 'OptimalInstrumentResults', 'ProblemResults',
+    'SimulationResults', 'parallel', '__version__'
 ]

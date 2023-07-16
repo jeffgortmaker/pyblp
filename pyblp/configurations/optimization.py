@@ -6,18 +6,23 @@ import os
 import sys
 import warnings
 from pathlib import Path
-from typing import Any, Callable, Iterable, Iterator, Optional, Tuple, Union
+from typing import Any, Callable, Iterable, Iterator, List, Optional, Tuple, Union, TYPE_CHECKING
 
 import numpy as np
 import scipy.optimize
 
 from .. import options
-from ..utilities.basics import Array, Options, SolverStats, StringRepresentation, format_options
+from ..utilities.basics import Array, Bounds, Options, SolverStats, StringRepresentation, format_options
 
 
 # objective function types
-ObjectiveResults = Tuple[float, Optional[Array]]
+ObjectiveResults = Tuple[float, Optional[Array], Optional['OptimizationProgress']]
 ObjectiveFunction = Callable[[Array], ObjectiveResults]
+
+# only import objects that create import cycles when checking types
+if TYPE_CHECKING:
+    from ..economies.problem import Progress, ProblemEconomy  # noqa
+    from ..results.problem_results import ProblemResults  # noqa
 
 
 class Optimization(StringRepresentation):
@@ -76,9 +81,11 @@ class Optimization(StringRepresentation):
 
         The ``objective_function`` has the following form:
 
-            objective_function(theta) -> (objective, gradient)
+            objective_function(theta) -> (objective, gradient, progress)
 
-        where ``gradient`` is ``None`` if ``compute_gradient is ``False``.
+        where ``gradient`` is ``None`` if ``compute_gradient is ``False`` and ``progress`` is an
+        :class:`OptimizationProgress` object that contains additional information about optimization progress so far,
+        which may be helpful for debugging or to inform non-standard optimization routines.
 
     method_options : `dict, optional`
         Options for the optimization routine.
@@ -276,10 +283,11 @@ class Optimization(StringRepresentation):
             evaluations += 1
             raw_values = np.asanyarray(raw_values)
             values = raw_values.reshape(initial.shape).astype(initial.dtype, copy=False)
-            objective, gradient = verbose_objective_function(values, iterations, evaluations)
+            objective, gradient, progress = verbose_objective_function(values, iterations, evaluations)
             return (
                 float(objective),
-                None if gradient is None else gradient.astype(raw_values.dtype, copy=False).flatten()
+                None if gradient is None else gradient.astype(raw_values.dtype, copy=False).flatten(),
+                progress,
             )
 
         # normalize values
@@ -295,6 +303,203 @@ class Optimization(StringRepresentation):
         return final, stats
 
 
+class OptimizationProgress(object):
+    r"""Information about the current progress of optimization.
+
+    They key attributes of this class needed to define a custom optimization routine are ``objective`` and ``gradient``.
+    Many other attributes of :class:`ProblemResults` are also included, and can be used to help define an alternative
+    optimization routine (e.g., Gauss-Newton), to debug issues, or to add custom ad-hoc moments to the configured
+    problem.
+
+    Attributes
+    ----------
+    problem : `Problem`
+        :class:`Problem` that created this progress.
+    fp_converged : `ndarray`
+        Flags for convergence of the iteration routine used to compute :math:`\delta(\theta)` in each market. Values are
+        in the same order as :attr:`Problem.unique_market_ids`.
+    fp_iterations : `ndarray`
+        Number of major iterations completed by the iteration routine used to compute :math:`\delta(\theta)` in each
+        market. Values are in the same order as :attr:`Problem.unique_market_ids`.
+    contraction_evaluations : `ndarray`
+        Number of times the contraction used to compute :math:`\delta(\theta)` was evaluated in each market. Values
+        are in the same order as :attr:`Problem.unique_market_ids`.
+    theta : `ndarray`
+        Unfixed parameters, :math:`\theta`, in the following order: :math:`\Sigma`, :math:`\Pi`, :math:`\rho`,
+        non-concentrated out elements from :math:`\beta`, and non-concentrated out elements from :math:`\gamma`.
+    sigma : `ndarray`
+        Cholesky root of the covariance matrix for unobserved taste heterogeneity, :math:`\Sigma`.
+    sigma_squared : `ndarray`
+        Covariance matrix for unobserved taste heterogeneity, :math:`\Sigma\Sigma'`.
+    pi : `ndarray`
+        Parameters that measures how agent tastes vary with demographics, :math:`\Pi`.
+    rho : `ndarray`
+        Parameters that measure within nesting group correlations, :math:`\rho`.
+    beta : `ndarray`
+        Demand-side linear parameters, :math:`\beta`.
+    gamma : `ndarray`
+        Supply-side linear parameters, :math:`\gamma`.
+    sigma_bounds : `tuple`
+        Bounds for :math:`\Sigma` that were used during optimization, which are of the form ``(lb, ub)``.
+    pi_bounds : `tuple`
+        Bounds for :math:`\Pi` that were used during optimization, which are of the form ``(lb, ub)``.
+    rho_bounds : `tuple`
+        Bounds for :math:`\rho` that were used during optimization, which are of the form ``(lb, ub)``.
+    beta_bounds : `tuple`
+        Bounds for :math:`\beta` that were used during optimization, which are of the form ``(lb, ub)``.
+    gamma_bounds : `tuple`
+        Bounds for :math:`\gamma` that were used during optimization, which are of the form ``(lb, ub)``.
+    sigma_labels : `list of str`
+        Variable labels for rows and columns of :math:`\Sigma`, which are derived from the formulation for :math:`X_2`.
+    pi_labels : `list of str`
+        Variable labels for columns of :math:`\Pi`, which are derived from the formulation for demographics.
+    rho_labels : `list of str`
+        Variable labels for :math:`\rho`. If :math:`\rho` is not a scalar, this is :attr:`Problem.unique_nesting_ids`.
+    beta_labels : `list of str`
+        Variable labels for :math:`\beta`, which are derived from the formulation for :math:`X_1`.
+    gamma_labels : `list of str`
+        Variable labels for :math:`\gamma`, which are derived from the formulation for :math:`X_3`.
+    theta_labels : `list of str`
+        Variable labels for :math:`\theta`, which are derived from the above labels.
+    delta : `ndarray`
+        Mean utility, :math:`\delta(\theta)`.
+    clipped_shares : `ndarray`
+        Vector of booleans indicating whether the associated simulated shares were clipped during the last fixed point
+        iteration to compute :math:`\delta(\theta)`. All elements will be ``False`` if ``shares_bounds`` in
+        :meth:`Problem.solve` is disabled (by default shares are bounded from below by a small number to alleviate
+        issues with underflow and negative shares).
+    tilde_costs : `ndarray`
+        Estimated transformed marginal costs, :math:`\tilde{c}(\theta)` from :eq:`costs`. If ``costs_bounds`` were
+        specified in :meth:`Problem.solve`, :math:`c` may have been clipped.
+    clipped_costs : `ndarray`
+        Vector of booleans indicating whether the associated marginal costs were clipped. All elements will be ``False``
+        if ``costs_bounds`` in :meth:`Problem.solve` was not specified.
+    xi : `ndarray`
+        Unobserved demand-side product characteristics, :math:`\xi(\theta)`, or equivalently, the demand-side structural
+        error term. When there are demand-side fixed effects, this is :math:`\Delta\xi(\theta)` in :eq:`fe`. That is,
+        fixed effects are not included.
+    omega : `ndarray`
+        Unobserved supply-side product characteristics, :math:`\omega(\theta)`, or equivalently, the supply-side
+        structural error term. When there are supply-side fixed effects, this is :math:`\Delta\omega(\theta)` in
+        :eq:`fe`. That is, fixed effects are not included.
+    micro : `ndarray`
+        Micro moments, :math:`\bar{g}_M`, in :eq:`micro_moment`.
+    micro_values : `ndarray`
+        Micro moment values, :math:`f_m(v)`. Rows are in the same order as :attr:`ProblemResults.micro`.
+    objective : `float`
+        GMM objective value, :math:`q(\theta)`, defined in :eq:`objective`. If ``scale_objective`` was ``True`` in
+        :meth:`Problem.solve` (which is the default), this value was scaled by :math:`N` so that objective values are
+        more comparable across different problem sizes. Note that in some of the BLP literature (and earlier versions of
+        this package), this expression was previously scaled by :math:`N^2`.
+    xi_by_theta_jacobian : `ndarray`
+        :math:`\frac{\partial\xi}{\partial\theta} = \frac{\partial\delta}{\partial\theta}`.
+    omega_by_theta_jacobian : `ndarray`
+        :math:`\frac{\partial\omega}{\partial\theta} = \frac{\partial\tilde{c}}{\partial\theta}`.
+    micro_by_theta_jacobian : `ndarray`
+        :math:`\frac{\partial\bar{g}_M}{\partial\theta}`.
+    gradient : `ndarray`
+        Gradient of the GMM objective, :math:`\nabla q(\theta)`, defined in :eq:`gradient`.
+    projected_gradient : `ndarray`
+        Projected gradient of the GMM objective. When there are no parameter bounds, this will always be equal to
+        :attr:`ProblemResults.gradient`. Otherwise, if an element in :math:`\hat{\theta}` is equal to its lower (upper)
+        bound, the corresponding projected gradient value will be truncated at a maximum (minimum) of zero.
+    projected_gradient_norm : `ndarray`
+        Infinity norm of :attr:`ProblemResults.projected_gradient`.
+    W : `ndarray`
+        Weighting matrix, :math:`W`, used to compute these results.
+
+    """
+
+    problem: 'ProblemEconomy'
+    fp_converged: Array
+    fp_iterations: Array
+    contraction_evaluations: Array
+    theta: Array
+    sigma: Array
+    sigma_squared: Array
+    pi: Array
+    rho: Array
+    beta: Array
+    gamma: Array
+    sigma_bounds: Bounds
+    pi_bounds: Bounds
+    rho_bounds: Bounds
+    beta_bounds: Bounds
+    gamma_bounds: Bounds
+    sigma_labels: List[str]
+    pi_labels: List[str]
+    rho_labels: List[str]
+    beta_labels: List[str]
+    gamma_labels: List[str]
+    theta_labels: List[str]
+    delta: Array
+    clipped_shares: Array
+    tilde_costs: Array
+    clipped_costs: Array
+    xi: Array
+    omega: Array
+    micro: Array
+    micro_values: Array
+    objective: Array
+    xi_by_theta_jacobian: Array
+    omega_by_theta_jacobian: Array
+    micro_by_theta_jacobian: Array
+    gradient: Array
+    projected_gradient: Array
+    projected_gradient_norm: Array
+    W: Array
+
+    def __init__(self, progress: 'Progress'):
+        """Structure all the progress."""
+        self.sigma, self.pi, self.rho, _, _ = progress.parameters.expand(progress.theta)
+        self.problem = progress.problem
+        self.W = progress.W
+        self.theta = progress.theta
+        self.delta = progress.delta
+        self.tilde_costs = progress.tilde_costs
+        self.micro = progress.micro
+        self.micro_values = progress.micro_values
+        self.xi_by_theta_jacobian = progress.xi_jacobian
+        self.omega_by_theta_jacobian = progress.omega_jacobian
+        self.micro_by_theta_jacobian = progress.micro_jacobian
+        self.xi = progress.xi
+        self.omega = progress.omega
+        self.beta = progress.beta
+        self.gamma = progress.gamma
+        self.objective = progress.objective
+        self.gradient = progress.gradient
+        self.projected_gradient = progress.projected_gradient
+        self.projected_gradient_norm = progress.projected_gradient_norm
+        self.clipped_shares = progress.clipped_shares
+        self.clipped_costs = progress.clipped_costs
+
+        # structure fixed point information
+        stats = progress.iteration_stats
+        self.fp_converged = np.array(
+            [stats[t].converged if stats else True for t in self.problem.unique_market_ids], dtype=np.int64
+        )
+        self.fp_iterations = np.array(
+            [stats[t].iterations if stats else 0 for t in self.problem.unique_market_ids], dtype=np.int64
+        )
+        self.contraction_evaluations = np.array(
+            [stats[t].evaluations if stats else 0 for t in self.problem.unique_market_ids], dtype=np.int64
+        )
+
+        # store information about parameters
+        self.sigma_squared = self.sigma @ self.sigma.T
+        self.sigma_bounds = progress.parameters.sigma_bounds
+        self.pi_bounds = progress.parameters.pi_bounds
+        self.rho_bounds = progress.parameters.rho_bounds
+        self.beta_bounds = progress.parameters.beta_bounds
+        self.gamma_bounds = progress.parameters.gamma_bounds
+        self.sigma_labels = progress.parameters.sigma_labels
+        self.pi_labels = progress.parameters.pi_labels
+        self.rho_labels = progress.parameters.rho_labels
+        self.beta_labels = progress.parameters.beta_labels
+        self.gamma_labels = progress.parameters.gamma_labels
+        self.theta_labels = progress.parameters.theta_labels
+
+
 def return_optimizer(initial_values: Array, *_: Any, **__: Any) -> Tuple[Array, bool]:
     """Assume the initial values are the optimal ones."""
     success = True
@@ -306,20 +511,20 @@ def scipy_optimizer(
         iteration_callback: Callable[[], None], method: str, compute_gradient: bool, **scipy_options: Any) -> (
         Tuple[Array, bool]):
     """Optimize with a SciPy method."""
-    cache: Optional[Tuple[Array, ObjectiveResults]] = None
+    cache: Optional[Tuple[Array, Tuple[float, Optional[Array]]]] = None
 
     def objective_wrapper(values: Array) -> float:
         """Return a possibly cached objective value."""
         nonlocal cache
         if cache is None or not np.array_equal(values, cache[0]):
-            cache = (values.copy(), objective_function(values))
+            cache = (values.copy(), objective_function(values)[:2])
         return cache[1][0]
 
     def gradient_wrapper(values: Array) -> Array:
         """Return a possibly cached gradient."""
         nonlocal cache
         if cache is None or not np.array_equal(values, cache[0]):
-            cache = (values.copy(), objective_function(values))
+            cache = (values.copy(), objective_function(values)[:2])
         return cache[1][1]
 
     # by default use the BFGS approximation for the Hessian
@@ -348,7 +553,7 @@ def knitro_optimizer(
     """Optimize with Knitro."""
     with knitro_context_manager() as (knitro, knitro_context):
         iterations = 0
-        cache: Optional[Tuple[Array, ObjectiveResults]] = None
+        cache: Optional[Tuple[Array, Tuple[float, Optional[Array]]]] = None
 
         def combined_callback(
                 request_code: int, _: Any, __: Any, ___: Any, ____: Any, values: Array, _____: Any,
@@ -366,7 +571,7 @@ def knitro_optimizer(
 
             # compute the objective or used cached values
             if cache is None or not np.array_equal(values, cache[0]):
-                cache = (values.copy(), objective_function(values))
+                cache = (values.copy(), objective_function(values)[:2])
             objective, gradient = cache[1]
 
             # define a function that normalizes values so they can be digested by Knitro

@@ -21,6 +21,15 @@ Various components of the package require configurations for how to approximate 
    Iteration
    Optimization
 
+Custom optimization configurations can be used to help debug optimization, to define non-standard optimization routines, or to add ad-hoc moments to configured problems. They can use various information about optimization progress so far.
+
+.. autosummary::
+   :nosignatures:
+   :toctree: _api
+   :template: class_without_signature.rst
+
+   OptimizationProgress
+
 
 Data Manipulation Functions
 ---------------------------

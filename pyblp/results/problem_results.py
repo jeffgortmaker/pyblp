@@ -34,7 +34,7 @@ if TYPE_CHECKING:
     from .bootstrapped_results import BootstrappedResults  # noqa
     from .importance_sampling_results import ImportanceSamplingResults  # noqa
     from .optimal_instrument_results import OptimalInstrumentResults  # noqa
-    from ..economies.problem import Progress  # noqa
+    from ..economies.problem import ProblemEconomy, Progress  # noqa
 
 
 class ProblemResults(EconomyResults):
@@ -156,7 +156,7 @@ class ProblemResults(EconomyResults):
     delta : `ndarray`
         Estimated mean utility, :math:`\delta(\hat{\theta})`.
     clipped_shares : `ndarray`
-        Vector of booleans indicator whether the associated simulated shares were clipped during the last fixed point
+        Vector of booleans indicating whether the associated simulated shares were clipped during the last fixed point
         iteration to compute :math:`\delta(\hat{\theta})`. All elements will be ``False`` if ``shares_bounds`` in
         :meth:`Problem.solve` is disabled (by default shares are bounded from below by a small number to alleviate
         issues with underflow and negative shares).
@@ -237,6 +237,7 @@ class ProblemResults(EconomyResults):
 
     """
 
+    problem: 'ProblemEconomy'
     last_results: Optional['ProblemResults']
     step: int
     optimization_time: float
