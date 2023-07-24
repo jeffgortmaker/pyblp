@@ -1307,9 +1307,9 @@ class Problem(ProblemEconomy):
                  Using covariance restrictions to identify a parameter on price can sometimes yield two solutions, where
                  the "upper" solution may be positive (i.e., implying upward-sloping demand). See
                  :ref:`references:MacKay and Miller (2023)` for more discussion of this point. In these cases when the
-                 "lower" root is the correct solution, consider bounding the parameter on price from below using
-                 ``beta_bounds`` (if the parameter is in ``beta``) or replacing it with a lognormal coefficient on
-                 price via the ``rc_type`` argument to :class:`Problem`.
+                 "lower" root is the correct solution, consider imposing a one-sided bound (e.g., zero) on the parameter
+                 on price to ensure the appropriate sign using ``beta_bounds`` (if the parameter is in ``beta``) or
+                 replacing it with a lognormal coefficient on price via the ``rc_type`` argument to :class:`Problem`.
 
               .. note::
 
