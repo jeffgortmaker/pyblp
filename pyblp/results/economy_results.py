@@ -1424,7 +1424,7 @@ class EconomyResults(SimpleEconomyResults):
 
             To build an optimal :class:`MicroMoment` that matches the score for a parameter, ``compute_values``
             in its single :class:`MicroPart` should select the array corresponding to that parameter and the requested
-            market ``t``. Any ``numpy.nan` values in this array correspond to agent-choices that are assigned a
+            market ``t``. Any ``numpy.nan`` values in this array correspond to agent-choices that are assigned a
             probability of :math:`\mathscr{P}_n = 0` by the sampling process defined by ``dataset``, so should be
             replaced by some arbitrary number (e.g., by passing the array of scores through ``numpy.nan_to_num``).
 
