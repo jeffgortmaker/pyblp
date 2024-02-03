@@ -709,7 +709,7 @@ class ProblemEconomy(Economy):
             if initial_step:
                 output("Updating starting values for the weighting matrix and delta ...")
             elif compute_hessian and not last_step:
-                output("Computing the Hessian and and updating the weighting matrix ...")
+                output("Computing the Hessian and updating the weighting matrix ...")
             elif compute_hessian:
                 output("Computing the Hessian and estimating standard errors ...")
             elif not last_step:
