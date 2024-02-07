@@ -17,7 +17,7 @@ assert version_match is not None
 setup(
     name='pyblp',
     packages=find_packages(),
-    python_requires='>=3.7',
+    python_requires='>=3.6',
     install_requires=read('requirements.txt').splitlines(),
     extras_require={
         'tests': ['pytest', 'pytest-xdist', 'linearmodels', 'dill', 'pathos'],
