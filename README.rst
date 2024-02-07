@@ -63,7 +63,7 @@ If you use PyBLP's micro moments functionality, we ask that you also cite `Conlo
 Installation
 ------------
 
-The PyBLP package has been tested on `Python <https://www.python.org/downloads/>`_ versions 3.6 through 3.9. The `SciPy instructions <https://scipy.org/install/>`_ for installing related packages is a good guide for how to install a scientific Python environment. A good choice is the `Anaconda Distribution <https://www.anaconda.com/download>`_, since it comes packaged with the following PyBLP dependencies: `NumPy <https://numpy.org/>`_, `SciPy <https://scipy.org/>`_, `SymPy <https://www.sympy.org/en/index.html>`_, and `Patsy <https://patsy.readthedocs.io/en/latest/>`_. For absorption of high dimension fixed effects, PyBLP also depends on its companion package `PyHDFE <https://github.com/jeffgortmaker/pyhdfe>`_, which will be installed when PyBLP is installed.
+The PyBLP package has been tested on `Python <https://www.python.org/downloads/>`_ versions 3.7 through 3.9. The `SciPy instructions <https://scipy.org/install/>`_ for installing related packages is a good guide for how to install a scientific Python environment. A good choice is the `Anaconda Distribution <https://www.anaconda.com/download>`_, since it comes packaged with the following PyBLP dependencies: `NumPy <https://numpy.org/>`_, `SciPy <https://scipy.org/>`_, `SymPy <https://www.sympy.org/en/index.html>`_, and `Patsy <https://patsy.readthedocs.io/en/latest/>`_. For absorption of high dimension fixed effects, PyBLP also depends on its companion package `PyHDFE <https://github.com/jeffgortmaker/pyhdfe>`_, which will be installed when PyBLP is installed.
 
 However, PyBLP may not work with old versions of its dependencies. You can update PyBLP's Anaconda dependencies with::
 
