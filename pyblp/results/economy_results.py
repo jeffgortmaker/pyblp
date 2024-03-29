@@ -17,7 +17,7 @@ from ..parameters import Parameters
 from ..primitives import Agents, MicroAgents, build_demographics
 from ..utilities.basics import (
     Array, Error, RecArray, StringRepresentation, format_seconds, generate_items, get_indices, output, output_progress,
-    structure_matrices
+    structure_matrices, warn
 )
 
 
@@ -1042,6 +1042,11 @@ class SimpleEconomyResults(abc.ABC, StringRepresentation):
         output("Computing consumer surpluses with the equation that assumes away nonlinear income effects ...")
         if eliminate_product_ids is not None:
             self._economy._validate_product_ids_index(product_ids_index)
+            if isinstance(eliminate_product_ids, str):
+                warn(
+                    "Specifying a string for eliminate_product_ids may lead to unexpected behavior. It should "
+                    "typically typically be a list or tuple of product IDs."
+                )
         market_ids = self._select_market_ids(market_id)
         prices = self._coerce_optional_prices(prices, market_ids)
         return self._combine_arrays(
