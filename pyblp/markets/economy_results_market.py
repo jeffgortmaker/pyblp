@@ -391,7 +391,9 @@ class EconomyResultsMarket(Market):
         if self.H == 0:
             log_scale = -utility_reduction
         else:
-            exp_utilities = np.exp(np.log(self.groups.sum(exp_utilities)) * (1 - self.group_rho))
+            with np.errstate(divide='ignore', invalid='ignore'):
+                exp_utilities = np.exp(np.log(self.groups.sum(exp_utilities)) * (1 - self.group_rho))
+            exp_utilities[~np.isfinite(exp_utilities)] = 0
             min_rho: float = np.min(self.group_rho)
             log_scale = -utility_reduction * (1 - min_rho)
             if self.rho_size > 1:
