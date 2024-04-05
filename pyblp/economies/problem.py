@@ -724,9 +724,9 @@ class ProblemEconomy(Economy):
             optimization_stats.evaluations += 1
             detect_micro_collinearity = False
             results = ProblemResults(
-                final_progress, last_results, step, last_step, step_start_time, optimization_start_time,
-                optimization_end_time, optimization_stats, iteration_stats, scale_objective, shares_bounds,
-                costs_bounds, micro_moment_covariances, center_moments, W_type, se_type, covariance_moments_mean
+                final_progress, last_results, step, step_start_time, optimization_start_time, optimization_end_time,
+                optimization_stats, iteration_stats, scale_objective, shares_bounds, costs_bounds,
+                micro_moment_covariances, center_moments, W_type, se_type, covariance_moments_mean
             )
             self._handle_errors(results._errors, error_behavior)
             output(f"Computed results after {format_seconds(results.total_time - results.optimization_time)}.")

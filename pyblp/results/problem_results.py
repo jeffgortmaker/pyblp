@@ -25,7 +25,7 @@ from ..utilities.basics import (
 )
 from ..utilities.statistics import (
     compute_gmm_moment_covariances, compute_gmm_parameter_covariances, compute_gmm_moments_jacobian_mean,
-    compute_gmm_weights, compute_sigma_squared_vector_covariances
+    compute_gmm_weights, compute_sigma_squared_vector_covariances, compute_gmm_parameter_sensitivity
 )
 
 
@@ -102,6 +102,9 @@ class ProblemResults(EconomyResults):
         Estimated asymptotic covariance matrix for :math:`\sqrt{N}(\hat{\theta} - \theta_0)`, in which :math:`\theta`
         are the stacked parameters. Standard errors are the square root of the diagonal of this matrix divided by
         :math:`N`. Parameter covariances are not estimated during the first step of two-step GMM.
+    parameter_sensitivity : `ndarray`
+        Estimated local measure of the sensitivity of parameter estimates to moments
+        :math:`-(\bar{G}'W\bar{G})^{-1}\bar{G}'W` from :ref:`references:Andrews, Gentzkow, and Shapiro (2017).
     theta : `ndarray`
         Estimated unfixed parameters, :math:`\hat{\theta}`, in the following order: :math:`\hat{\Sigma}`,
         :math:`\hat{\Pi}`, :math:`\hat{\rho}`, non-concentrated out elements from :math:`\hat{\beta}`, and
@@ -185,12 +188,15 @@ class ProblemResults(EconomyResults):
     micro_values : `ndarray`
         Estimated micro moment values, :math:`f_m(v)`. Rows are in the same order as :attr:`ProblemResults.micro`.
     micro_covariances : `ndarray`
-        Estimated micro moment covariance matrix :math:`S_M` in :eq:`scaled_micro_moment_covariances` divided by
-        :math:`N`. Equal to ``micro_sample_covariances`` if overridden in :meth:`Problem.solve`.
+        Estimated micro moment asymptotic covariance matrix :math:`S_M` in :eq:`scaled_micro_moment_covariances`
+        divided by :math:`N`. Equal to ``micro_sample_covariances`` if overridden in :meth:`Problem.solve`.
     moments : `ndarray`
         Moments, :math:`\bar{g}`, in :eq:`averaged_moments`.
     moments_jacobian : `ndarray`
         Jacobian :math:`\bar{G}` of moments with respect to :math:`\theta`, in :eq:`averaged_moments_jacobian`.
+    moments_covariances : `ndarray
+        Estimated asymptotic covariance matrix of moments :math:`S` in :eq:`robust_S`, :eq:`clustered_S`, or
+        :eq:`unadjusted_S`, depending on ``se_type`` in :meth:`Problem.solve`.
     simulation_covariances : `ndarray`
         Adjustment in :eq:`simulation_S` to moment covariances to account for simulation error. This will be all zeros
         unless ``resample_agent_data`` was specified in :meth:`Problem.solve`.
@@ -258,6 +264,7 @@ class ProblemResults(EconomyResults):
     cumulative_contraction_evaluations: Array
     parameters: Array
     parameter_covariances: Array
+    parameter_sensitivity: Array
     theta: Array
     sigma: Array
     sigma_squared: Array
@@ -295,6 +302,7 @@ class ProblemResults(EconomyResults):
     micro_covariances: Array
     moments: Array
     moments_jacobian: Array
+    moments_covariances: Array
     simulation_covariances: Array
     objective: Array
     xi_by_theta_jacobian: Array
@@ -316,12 +324,11 @@ class ProblemResults(EconomyResults):
     _errors: List[Error]
 
     def __init__(
-            self, progress: 'Progress', last_results: Optional['ProblemResults'], step: int, last_step: bool,
-            step_start_time: float, optimization_start_time: float, optimization_end_time: float,
-            optimization_stats: SolverStats, iteration_stats: Sequence[Dict[Hashable, SolverStats]],
-            scaled_objective: bool, shares_bounds: Bounds, costs_bounds: Bounds,
-            micro_moment_covariances: Optional[Array], center_moments: bool, W_type: str, se_type: str,
-            covariance_moments_mean: float) -> None:
+            self, progress: 'Progress', last_results: Optional['ProblemResults'], step: int, step_start_time: float,
+            optimization_start_time: float, optimization_end_time: float, optimization_stats: SolverStats,
+            iteration_stats: Sequence[Dict[Hashable, SolverStats]], scaled_objective: bool, shares_bounds: Bounds,
+            costs_bounds: Bounds, micro_moment_covariances: Optional[Array], center_moments: bool, W_type: str,
+            se_type: str, covariance_moments_mean: float) -> None:
         """Compute cumulative progress statistics, update weighting matrices, and estimate standard errors."""
         self.sigma, self.pi, self.rho, _, _ = progress.parameters.expand(progress.theta)
         self._errors = progress.errors
@@ -447,42 +454,43 @@ class ProblemResults(EconomyResults):
             self.updated_W, W_errors = compute_gmm_weights(S_for_weights)
             self._errors.extend(W_errors)
 
-            # only compute parameter covariances and standard errors if this is the last step
-            self.moments_jacobian = np.full((self.moments.size, self.parameters.size), np.nan, options.dtype)
-            self.parameter_covariances = np.full((self.parameters.size, self.parameters.size), np.nan, options.dtype)
-            se = np.full((self.parameters.size, 1), np.nan, options.dtype)
-            sigma_squared_vector_se = np.full((self.problem.K2 * (self.problem.K2 + 1) // 2, 1), np.nan, options.dtype)
-            if last_step:
-                S_for_covariances = S_for_weights
-                if se_type != W_type or center_moments:
-                    S_for_covariances = self._compute_S(progress.moments, se_type, covariance_moments_mean)
+            # compute moments Jacobian and covariances
+            self.moments_jacobian = self._compute_mean_G(progress.moments)
+            self.moments_covariances = S_for_weights
+            if se_type != W_type or center_moments:
+                self.moments_covariances = self._compute_S(progress.moments, se_type, covariance_moments_mean)
 
-                # if this is the first step, an unadjusted weighting matrix needs to be used when computing unadjusted
-                #   covariances so that they are scaled properly
-                W_for_covariances = self.W
-                if se_type == 'unadjusted' and self.step == 1:
-                    W_for_covariances, W_for_covariances_errors = compute_gmm_weights(S_for_covariances)
-                    self._errors.extend(W_for_covariances_errors)
+            # if this is the first step, an unadjusted weighting matrix needs to be used when computing unadjusted
+            #   covariances so that they are scaled properly
+            W_for_covariances = self.W
+            if se_type == 'unadjusted' and self.step == 1:
+                W_for_covariances, W_for_covariances_errors = compute_gmm_weights(self.moments_covariances)
+                self._errors.extend(W_for_covariances_errors)
 
-                # compute parameter covariances
-                self.moments_jacobian = self._compute_mean_G(progress.moments)
-                self.parameter_covariances, se_errors = compute_gmm_parameter_covariances(
-                    W_for_covariances, S_for_covariances, self.moments_jacobian, se_type
-                )
-                self._errors.extend(se_errors)
+            # compute parameter covariances
+            self.parameter_covariances, se_errors = compute_gmm_parameter_covariances(
+                W_for_covariances, self.moments_covariances, self.moments_jacobian, se_type
+            )
+            self._errors.extend(se_errors)
 
-                # use the delta method to compute covariances for the parameters in sigma squared
-                theta_covariances = self.parameter_covariances[:self._parameters.P, :self._parameters.P]
-                sigma_vector_covariances = self._parameters.extract_sigma_vector_covariances(theta_covariances)
-                sigma_squared_vector_covariances = compute_sigma_squared_vector_covariances(
-                    self.sigma, sigma_vector_covariances
-                )
+            # compute the sensitivity of parameter estimates to moments
+            self.parameter_sensitivity, sensitivity_errors = compute_gmm_parameter_sensitivity(
+                W_for_covariances, self.moments_jacobian
+            )
+            self._errors.extend(sensitivity_errors)
 
-                # compute standard errors
-                se = np.sqrt(np.c_[self.parameter_covariances.diagonal()] / self.problem.N)
-                sigma_squared_vector_se = np.sqrt(np.c_[sigma_squared_vector_covariances.diagonal()] / self.problem.N)
-                if np.isnan(se).any() or np.isnan(sigma_squared_vector_se).any():
-                    self._errors.append(exceptions.InvalidParameterCovariancesError())
+            # use the delta method to compute covariances for the parameters in sigma squared
+            theta_covariances = self.parameter_covariances[:self._parameters.P, :self._parameters.P]
+            sigma_vector_covariances = self._parameters.extract_sigma_vector_covariances(theta_covariances)
+            sigma_squared_vector_covariances = compute_sigma_squared_vector_covariances(
+                self.sigma, sigma_vector_covariances
+            )
+
+            # compute standard errors
+            se = np.sqrt(np.c_[self.parameter_covariances.diagonal()] / self.problem.N)
+            sigma_squared_vector_se = np.sqrt(np.c_[sigma_squared_vector_covariances.diagonal()] / self.problem.N)
+            if np.isnan(se).any() or np.isnan(sigma_squared_vector_se).any():
+                self._errors.append(exceptions.InvalidParameterCovariancesError())
 
         # expand standard errors
         theta_se, eliminated_beta_se, eliminated_gamma_se = np.split(se, [
@@ -666,15 +674,15 @@ class ProblemResults(EconomyResults):
                 'converged', 'cumulative_converged', 'optimization_iterations', 'cumulative_optimization_iterations',
                 'objective_evaluations', 'cumulative_objective_evaluations', 'fp_converged', 'cumulative_fp_converged',
                 'fp_iterations', 'cumulative_fp_iterations', 'contraction_evaluations',
-                'cumulative_contraction_evaluations', 'parameters', 'parameter_covariances', 'theta', 'sigma',
-                'sigma_squared', 'pi', 'rho', 'beta', 'gamma', 'sigma_se', 'sigma_squared_se', 'pi_se', 'rho_se',
-                'beta_se', 'gamma_se', 'sigma_bounds', 'pi_bounds', 'rho_bounds', 'beta_bounds', 'gamma_bounds',
-                'sigma_labels', 'pi_labels', 'rho_labels', 'beta_labels', 'gamma_labels', 'theta_labels', 'delta',
-                'tilde_costs', 'clipped_shares', 'clipped_costs', 'xi', 'omega', 'xi_fe', 'omega_fe', 'micro',
-                'micro_values', 'micro_covariances', 'moments', 'moments_jacobian', 'simulation_covariances',
-                'objective', 'xi_by_theta_jacobian', 'omega_by_theta_jacobian', 'micro_by_theta_jacobian', 'gradient',
-                'projected_gradient', 'projected_gradient_norm', 'hessian', 'reduced_hessian',
-                'reduced_hessian_eigenvalues', 'W', 'updated_W'
+                'cumulative_contraction_evaluations', 'parameters', 'parameter_covariances', 'parameter_sensitivity',
+                'theta', 'sigma', 'sigma_squared', 'pi', 'rho', 'beta', 'gamma', 'sigma_se', 'sigma_squared_se',
+                'pi_se', 'rho_se', 'beta_se', 'gamma_se', 'sigma_bounds', 'pi_bounds', 'rho_bounds', 'beta_bounds',
+                'gamma_bounds', 'sigma_labels', 'pi_labels', 'rho_labels', 'beta_labels', 'gamma_labels',
+                'theta_labels', 'delta', 'tilde_costs', 'clipped_shares', 'clipped_costs', 'xi', 'omega', 'xi_fe',
+                'omega_fe', 'micro', 'micro_values', 'micro_covariances', 'moments', 'moments_jacobian',
+                'moments_covariances', 'simulation_covariances', 'objective', 'xi_by_theta_jacobian',
+                'omega_by_theta_jacobian', 'micro_by_theta_jacobian', 'gradient', 'projected_gradient',
+                'projected_gradient_norm', 'hessian', 'reduced_hessian', 'reduced_hessian_eigenvalues', 'W', 'updated_W'
             )) -> dict:
         """Convert these results into a dictionary that maps attribute names to values.
 

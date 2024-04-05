@@ -118,6 +118,21 @@ def compute_gmm_parameter_covariances(W: Array, S: Array, mean_G: Array, se_type
     return np.c_[covariances + covariances.T] / 2, errors
 
 
+def compute_gmm_parameter_sensitivity(W: Array, mean_G: Array) -> Tuple[Array, List[Error]]:
+    """Compute the sensitivity measure of Andrews, Gentzkow, and Shapiro (2017)."""
+    errors: List[Error] = []
+
+    # attempt to compute the covariance matrix
+    covariances_inverse = mean_G.T @ W @ mean_G
+    covariances, replacement = approximately_invert(covariances_inverse)
+    if replacement:
+        errors.append(exceptions.GMMParameterCovariancesInversionError(covariances_inverse, replacement))
+
+    # compute the sensitivity measure
+    sensitivity = -covariances @ mean_G.T @ W
+    return sensitivity, errors
+
+
 def compute_gmm_error_covariance(u1: Array, u2: Array) -> Array:
     """Compute the covariance between two error terms."""
     return np.cov(u1.flatten(), u2.flatten(), bias=True)[0][1]
