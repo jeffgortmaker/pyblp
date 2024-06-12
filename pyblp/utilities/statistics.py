@@ -52,9 +52,10 @@ class IV(object):
         parameters_list = np.split(parameters, [x.shape[1] for x in X_list[:-1]], axis=0)
         residuals_list = np.split(residuals, len(X_list), axis=0)
 
-        # optionally convert Jacobians
+        # optionally convert Jacobians (making sure to never create a full square matrix)
         if convert_jacobians:
-            jacobian = (np.eye(y.size) - X @ self.covariances @ XZ @ W @ Z.T) @ np.vstack(jacobian_list)
+            jacobian = np.vstack(jacobian_list)
+            jacobian -= X @ (self.covariances @ (XZ @ (W @ (Z.T @ jacobian))))
             jacobian_list = np.split(jacobian, len(jacobian_list), axis=0)
 
         return parameters_list, residuals_list, jacobian_list
