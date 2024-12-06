@@ -372,13 +372,13 @@ class EvaluationEnvironment(patsy.eval.EvalEnvironment):
         # parse the SymPy expression, preserving the function that marks variables as categorical
         expression = parse_expression(string, mark_categorical=True)
 
-        # replace categorical variables with unicode objects and explicitly mark them as categorical so that labels are
+        # replace categorical variables with string objects and explicitly mark them as categorical so that labels are
         #   unique and so that all categorical variables are treated the same
         C = sp.Function('C')
         for symbol in expression.free_symbols:
             if not np.issubdtype(data[symbol.name].dtype, getattr(np, 'number')):
                 expression = expression.replace(symbol, C(symbol))
-                data[symbol.name] = data[symbol.name].astype(np.unicode_).astype(np.object_)
+                data[symbol.name] = data[symbol.name].astype(np.str_).astype(np.object_)
 
         # evaluate the expression and handle universally-marked categorical variables with a non-default coding class
         evaluated = evaluate_expression(expression, self._namespaces[0], function_mapping={
