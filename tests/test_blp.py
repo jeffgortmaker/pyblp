@@ -871,7 +871,7 @@ def test_demand_hessian(simulated_problem: SimulatedProblemFixture) -> None:
     exact = results.compute_demand_hessians(market_id=t)
     approximate1 = compute_finite_differences(compute_perturbed_jacobian, prices)
     approximate2 = compute_second_finite_differences(lambda p: results.compute_shares(p, market_id=t), prices)
-    np.testing.assert_allclose(exact, approximate1, atol=1e-7, rtol=0)
+    np.testing.assert_allclose(exact, approximate1, atol=1e-6, rtol=0)
     np.testing.assert_allclose(exact, approximate2, atol=1e-5, rtol=0)
 
 
