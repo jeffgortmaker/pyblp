@@ -35,19 +35,19 @@ from pyblp.utilities.basics import Array, Data
     ),
     pytest.param(
         ['0 + x + C(x)'],
-        lambda d: [d['x']] + [d[f'x[{v}]'] for v in np.unique(d['x'])],
+        lambda d: [d['x']] + [d.get(f'x[{v}]', d.get(f'x[np.float64({v})]')) for v in np.unique(d['x'])],
         lambda d: [d['1']] + [d['0']] * d['x'].size,
         id="discretized continuous variable"
     ),
     pytest.param(
         ['0 + a', '0 + C(a)', 'C(a) - 1'],
-        lambda d: [d["a['a1']"], d["a['a2']"]],
+        lambda d: [d.get("a['a1']", d.get("a[np.str_('a1')]")), d.get("a['a2']", d.get("a[np.str_('a2')]"))],
         lambda d: [d['0'], d['0']],
         id="full-rank coding of categorical variable"
     ),
     pytest.param(
         ['a', 'C(a)', '1 + C(a)'],
-        lambda d: [d['1'], d["a['a2']"]],
+        lambda d: [d['1'], d.get("a['a2']", d.get("a[np.str_('a2')]"))],
         lambda d: [d['0'], d['0']],
         id="reduced-rank coding of categorical variable"
     ),
@@ -72,10 +72,19 @@ from pyblp.utilities.basics import Array, Data
     pytest.param(
         ['0 + a:b + a:x + x:y', '0 + C(a):C(b) + a:x + x:y'],
         lambda d: [
-            d["a['a1']"] * d["b['b1']"], d["a['a2']"] * d["b['b1']"], d["a['a1']"] * d["b['b2']"],
-            d["a['a2']"] * d["b['b2']"], d["a['a1']"] * d['x'], d["a['a2']"] * d['x'], d['x'] * d['y']
+            d.get("a['a1']", d.get("a[np.str_('a1')]")) * d.get("b['b1']", d.get("b[np.str_('b1')]")),
+            d.get("a['a2']", d.get("a[np.str_('a2')]")) * d.get("b['b1']", d.get("b[np.str_('b1')]")),
+            d.get("a['a1']", d.get("a[np.str_('a1')]")) * d.get("b['b2']", d.get("b[np.str_('b2')]")),
+            d.get("a['a2']", d.get("a[np.str_('a2')]")) * d.get("b['b2']", d.get("b[np.str_('b2')]")),
+            d.get("a['a1']", d.get("a[np.str_('a1')]")) * d['x'],
+            d.get("a['a2']", d.get("a[np.str_('a2')]")) * d['x'],
+            d['x'] * d['y'],
         ],
-        lambda d: [d['0']] * 4 + [d["a['a1']"], d["a['a2']"], d['y']],
+        lambda d: [d['0']] * 4 + [
+            d.get("a['a1']", d.get("a[np.str_('a1')]")),
+            d.get("a['a2']", d.get("a[np.str_('a2')]")),
+            d['y'],
+        ],
         id="interactions"
     )
 ])
