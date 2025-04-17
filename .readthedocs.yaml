@@ -17,4 +17,4 @@ formats:
   - pdf
 
 sphinx:
-  - configuration: docs/conf.py
+  configuration: docs/conf.py
