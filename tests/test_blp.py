@@ -1112,7 +1112,7 @@ def test_gradient_optionality(simulated_problem: SimulatedProblemFixture, scipy_
             Tuple[Array, bool]):
         """Optimize without gradients."""
         optimize_results = scipy.optimize.minimize(
-            lambda x: objective_function(x)[2].objective, initial, method=scipy_method, bounds=bounds,
+            lambda x: objective_function(x)[2].objective.flatten(), initial, method=scipy_method, bounds=bounds,
             options=method_options
         )
         return optimize_results.x, optimize_results.success
