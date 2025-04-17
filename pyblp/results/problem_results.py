@@ -104,7 +104,7 @@ class ProblemResults(EconomyResults):
         :math:`N`. Parameter covariances are not estimated during the first step of two-step GMM.
     parameter_sensitivity : `ndarray`
         Estimated local measure of the sensitivity of parameter estimates to moments
-        :math:`-(\bar{G}'W\bar{G})^{-1}\bar{G}'W` from :ref:`references:Andrews, Gentzkow, and Shapiro (2017).
+        :math:`-(\bar{G}'W\bar{G})^{-1}\bar{G}'W` from :ref:`references:Andrews, Gentzkow, and Shapiro (2017)`.
     theta : `ndarray`
         Estimated unfixed parameters, :math:`\hat{\theta}`, in the following order: :math:`\hat{\Sigma}`,
         :math:`\hat{\Pi}`, :math:`\hat{\rho}`, non-concentrated out elements from :math:`\hat{\beta}`, and
@@ -194,7 +194,7 @@ class ProblemResults(EconomyResults):
         Moments, :math:`\bar{g}`, in :eq:`averaged_moments`.
     moments_jacobian : `ndarray`
         Jacobian :math:`\bar{G}` of moments with respect to :math:`\theta`, in :eq:`averaged_moments_jacobian`.
-    moments_covariances : `ndarray
+    moments_covariances : `ndarray`
         Estimated asymptotic covariance matrix of moments :math:`S` in :eq:`robust_S`, :eq:`clustered_S`, or
         :eq:`unadjusted_S`, depending on ``se_type`` in :meth:`Problem.solve`.
     simulation_covariances : `ndarray`
