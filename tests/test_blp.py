@@ -1118,7 +1118,8 @@ def test_gradient_optionality(simulated_problem: SimulatedProblemFixture, scipy_
         return optimize_results.x, optimize_results.success
 
     # solve the problem when not using gradients and when not computing them (use the identity weighting matrix to make
-    #   tiny gradients with some initial weighting matrices less problematic when comparing values)
+    #   tiny gradients with some initial weighting matrices less problematic when comparing values, and ignore some
+    #   trivial underflow warnings)
     updated_solve_options1 = copy.deepcopy(solve_options)
     updated_solve_options2 = copy.deepcopy(solve_options)
     updated_solve_options1.update({
@@ -1128,8 +1129,9 @@ def test_gradient_optionality(simulated_problem: SimulatedProblemFixture, scipy_
         'optimization': Optimization(scipy_method, method_options, compute_gradient=False),
         'finite_differences': True,
     })
-    results1 = problem.solve(**updated_solve_options1)
-    results2 = problem.solve(**updated_solve_options2)
+    with np.errstate(under='ignore'):
+        results1 = problem.solve(**updated_solve_options1)
+        results2 = problem.solve(**updated_solve_options2)
 
     # test that all arrays close except for those created with finite differences after the fact
     for key, result1 in results1.__dict__.items():
@@ -1251,8 +1253,9 @@ def test_bounds(simulated_problem: SimulatedProblemFixture, method_info: Tuple[s
             with np.errstate(invalid='ignore'):
                 binding_solve_options['gamma'] = np.clip(binding_solve_options['gamma'], *binding_gamma_bounds)
 
-        # solve the problem and test that the bounds are respected (ignore a warning about minimal gradient changes)
-        with warnings.catch_warnings():
+        # solve the problem and test that the bounds are respected (ignore a warning about minimal gradient changes, and
+        #   any non-important warnings about underflow)
+        with warnings.catch_warnings(), np.errstate(under='ignore'):
             warnings.filterwarnings('ignore', category=UserWarning)
             binding_results = problem.solve(**binding_solve_options)
         assert_array_less = lambda a, b: np.testing.assert_array_less(a, b + 1e-14, verbose=True)
