@@ -50,7 +50,7 @@ class Products(object):
         and :math:`X_3^\text{ex}`. If there are any supply-side fixed effects, these instruments will be residualized
         with respect to these fixed effects.
     ZC : `ndarray`
-        Covariance instruments, :math:`Z_C`, as in :ref:`references:MacKay and Miller (2023)`.
+        Covariance instruments, :math:`Z_C`, as in :ref:`references:MacKay and Miller (2025)`.
     X1 : `ndarray`
         Demand-side linear product characteristics, :math:`X_1`. If there are any demand-side fixed effects, these
         characteristics will be residualized with respect to these fixed effects.

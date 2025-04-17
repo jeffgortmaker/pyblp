@@ -260,7 +260,7 @@ def build_differentiation_instruments(
         formulation: Formulation, product_data: Mapping, version: str = 'local', interact: bool = False) -> Array:
     r"""Construct excluded differentiation instruments.
 
-    Differentiation instruments in the spirit of :ref:`references:Gandhi and Houde (2017)` are
+    Differentiation instruments in the spirit of :ref:`references:Gandhi and Houde (2025)` are
 
     .. math:: Z^\text{Diff}(X) = [Z^\text{Diff,Other}(X), Z^\text{Diff,Rival}(X)],
 

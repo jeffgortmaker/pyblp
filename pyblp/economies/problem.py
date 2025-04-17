@@ -1291,7 +1291,7 @@ class Problem(ProblemEconomy):
 
             - **covariance_instruments** : (`numeric, optional`) - Covariance instruments :math:`Z_C`. If specified,
               additional moments :math:`E[g_{C,jt}] = E[\xi_{jt}\omega_{jt}Z_{C,jt}] = 0` will be added, as in
-              :ref:`references:MacKay and Miller (2023)`.
+              :ref:`references:MacKay and Miller (2025)`.
 
               If any fixed effects are absorbed, :math:`\xi_{jt}` and :math:`\omega_{jt}` in these new covariance
               moments are replaced with :math:`\Delta\xi_{jt}` and/or :math:`\Delta\omega_{jt}` in :eq:`fe`. The default
@@ -1306,7 +1306,7 @@ class Problem(ProblemEconomy):
 
                  Using covariance restrictions to identify a parameter on price can sometimes yield two solutions, where
                  the "upper" solution may be positive (i.e., implying upward-sloping demand). See
-                 :ref:`references:MacKay and Miller (2023)` for more discussion of this point. In these cases when the
+                 :ref:`references:MacKay and Miller (2025)` for more discussion of this point. In these cases when the
                  "lower" root is the correct solution, consider imposing a one-sided bound (e.g., zero) on the parameter
                  on price to ensure the appropriate sign using ``beta_bounds`` (if the parameter is in ``beta``) or
                  replacing it with a lognormal coefficient on price via the ``rc_type`` argument to :class:`Problem`.
@@ -1318,7 +1318,7 @@ class Problem(ProblemEconomy):
                  may not be fully efficient because of this implementation decision.
 
         The recommendation in :ref:`references:Conlon and Gortmaker (2020)` is to start with differentiation instruments
-        of :ref:`references:Gandhi and Houde (2017)`, which can be built with :func:`build_differentiation_instruments`,
+        of :ref:`references:Gandhi and Houde (2025)`, which can be built with :func:`build_differentiation_instruments`,
         and then compute feasible optimal instruments with :func:`ProblemResults.compute_optimal_instruments` in the
         second stage.
 

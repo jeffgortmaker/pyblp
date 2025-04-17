@@ -32,31 +32,29 @@ Development of the package has been guided by the work of many researchers and p
 Citation
 --------
 
-If you use PyBLP in your research, we ask that you also cite `Conlon and Gortmaker (2020) <https://jeffgortmaker.com/files/pyblp.pdf>`_, which describes the advances implemented in the package.
+If you use PyBLP in your research, we ask that you also cite `Conlon and Gortmaker (2020) <https://jeffgortmaker.com/files/Best_Practices_for_Differentiated_Products_Demand_Estimation_with_PyBLP.pdf>`_, which describes the advances implemented in the package.
 ::
 
     @article{PyBLP,
-        author = {Conlon, Christopher and Gortmaker, Jeff},
-        title = {Best practices for differentiated products demand estimation with {PyBLP}},
-        journal = {The RAND Journal of Economics},
-        volume = {51},
-        number = {4},
-        pages = {1108-1161},
-        doi = {https://doi.org/10.1111/1756-2171.12352},
-        url = {https://onlinelibrary.wiley.com/doi/abs/10.1111/1756-2171.12352},
-        eprint = {https://onlinelibrary.wiley.com/doi/pdf/10.1111/1756-2171.12352},
-        year = {2020}
+        author={Conlon, Christopher and Gortmaker, Jeff},
+        title={Best practices for differentiated products demand estimation with {PyBLP}},
+        journal={RAND Journal of Economics},
+        volume={51},
+        number={4},
+        pages={1108-1161},
+        year={2020}
     }
 
 
-If you use PyBLP's micro moments functionality, we ask that you also cite `Conlon and Gortmaker (2023) <https://jeffgortmaker.com/files/micro.pdf>`_, which describes the standardized framework implemented by PyBLP for incorporating micro data into BLP-style estimation.
+If you use micro moments with PyBLP, we ask that you also cite `Conlon and Gortmaker (2025) <https://jeffgortmaker.com/files/Incorporating_Micro_Data_into_Differentiated_Products_Demand_Estimation_with_PyBLP.pdf>`_, which describes the standardized framework implemented by PyBLP for incorporating micro data into BLP-style estimation.
 ::
 
-    @misc{MicroPyBLP,
-        author = {Conlon, Christopher and Gortmaker, Jeff},
-        title = {Incorporating micro data into differentiated products demand estimation with {PyBLP}},
-        note = {Working paper},
-        year = {2023}
+    @article{MicroPyBLP,
+        author={Conlon, Christopher and Gortmaker, Jeff},
+        title={Incorporating micro data into differentiated products demand estimation with {PyBLP}},
+        journal={Journal of Econometrics},
+        pages={105926},
+        year={2025}
     }
 
 

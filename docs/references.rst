@@ -1,19 +1,19 @@
 References
 ==========
 
-This page contains a full list of references cited in the documentation, including the original work of :ref:`references:Berry, Levinsohn, and Pakes (1995)`. If you use PyBLP in your research, we ask that you also cite the below :ref:`references:Conlon and Gortmaker (2020)`, which describes the advances implemented in the package. If you use PyBLP's micro moments functionality, we ask that you also cite :ref:`references:Conlon and Gortmaker (2023)`, which describes the standardized framework implemented by PyBLP for incorporating micro data into BLP-style estimation.
+This page contains a full list of references cited in the documentation, including the original work of :ref:`references:Berry, Levinsohn, and Pakes (1995)`. If you use PyBLP in your research, we ask that you also cite the below :ref:`references:Conlon and Gortmaker (2020)`, which describes the advances implemented in the package. If you use micro moments with PyBLP, we ask that you also cite :ref:`references:Conlon and Gortmaker (2025)`, which describes the standardized framework implemented by PyBLP for incorporating micro data into BLP-style estimation.
 
 
 Conlon and Gortmaker (2020)
 ---------------------------
 
-Conlon, Christopher, and Jeff Gortmaker (2020). `Best practices for differentiated products demand estimation with PyBLP <https://ideas.repec.org/a/bla/randje/v51y2020i4p1108-1161.html>`_. *RAND Journal of Economics, 51* (4), 1108-1161.
+Conlon, Christopher, and Jeff Gortmaker (2020). `Best practices for differentiated products demand estimation with PyBLP <https://jeffgortmaker.com/files/Best_Practices_for_Differentiated_Products_Demand_Estimation_with_PyBLP.pdf>`_. *RAND Journal of Economics, 51* (4), 1108-1161.
 
 
-Conlon and Gortmaker (2023)
+Conlon and Gortmaker (2025)
 ---------------------------
 
-Conlon, Christopher, and Jeff Gortmaker (2023). `Incorporating micro data into differentiated products demand estimation with PyBLP <https://jeffgortmaker.com/files/micro.pdf>`_. Working paper.
+Conlon, Christopher, and Jeff Gortmaker (2025). `Incorporating micro data into differentiated products demand estimation with PyBLP <https://jeffgortmaker.com/files/Incorporating_Micro_Data_into_Differentiated_Products_Demand_Estimation_with_PyBLP.pdf>`_. *Journal of Econometrics*, 105926.
 
 
 Other References
@@ -40,7 +40,7 @@ Armstrong, Timothy B. (2016). `Large market asymptotics for differentiated produ
 Berry (1994)
 ~~~~~~~~~~~~
 
-Berry, Steven (1994). `Estimating discrete-choice models of product  differentiation <https://ideas.repec.org/a/rje/randje/v25y1994isummerp242-262.html>`_. *RAND Journal of Economics, 25* (2), 242-262.
+Berry, Steven (1994). `Estimating discrete-choice models of product differentiation <https://ideas.repec.org/a/rje/randje/v25y1994isummerp242-262.html>`_. *RAND Journal of Economics, 25* (2), 242-262.
 
 
 Berry, Levinsohn, and Pakes (1995)
@@ -91,10 +91,10 @@ Chamberlain (1987)
 Chamberlain, Gary (1987) `Asymptotic efficiency in estimation with conditional moment restrictions <https://ideas.repec.org/a/eee/econom/v34y1987i3p305-334.html>`_. *Journal of Econometrics, 34* (3), 305-334.
 
 
-Conlon and Mortimer (2018)
+Conlon and Mortimer (2021)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Conlon, Christopher T., and Julie H. Mortimer (2018). `Empirical properties of diversion ratios <https://ideas.repec.org/p/nbr/nberwo/24816.html>`_. NBER working paper 24816.
+Conlon, Christopher, and Julie H. Mortimer (2021). `Empirical properties of diversion ratios <https://chrisconlon.github.io/site/diversion.pdf>`_. *RAND Journal of Economics, 52* (4), 693-726.
 
 
 Frisch and Waugh (1933)
@@ -103,10 +103,10 @@ Frisch and Waugh (1933)
 Frisch, Ragnar, and Frederick V. Waugh (1933). `Partial time regressions as compared with individual trends <https://www.econometricsociety.org/publications/econometrica/1933/10/01/partial-time-regressions-compared-individual-trends>`_. *Econometrica, 1* (4), 387-401.
 
 
-Gandhi and Houde (2017)
+Gandhi and Houde (2025)
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-Gandhi, Amit, and Jean-François Houde (2017). `Measuring substitution patterns in differentiated products industries <https://jfhoude.wiscweb.wisc.edu/wp-content/uploads/sites/769/2018/08/GH_v6.pdf>`_. Working paper.
+Gandhi, Amit, and Jean-Francois Houde (2025). `Measuring substitution patterns in differentiated products industries <https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3472810>`_.
 
 
 Grigolon and Verboven (2014)
@@ -163,10 +163,10 @@ Lovell (1963)
 Lovell, Michael C. (1963). `Seasonal adjustment of economic time series and multiple regression analysis <https://www.tandfonline.com/doi/abs/10.1080/01621459.1963.10480682>`_. *Journal of the American Statistical Association, 58* (304), 993-1010.
 
 
-MacKay and Miller (2023)
+MacKay and Miller (2025)
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-MacKay, Alexander and Nathan Miller (2023). `Estimating models of supply and demand: Instruments and covariance restrictions <https://www.hbs.edu/faculty/Pages/item.aspx?num=55227>`_. HBS working paper 19-051.
+MacKay, Alexander and Nathan Miller (2025). `Estimating models of supply and demand: Instruments and covariance restrictions <https://ideas.repec.org/a/aea/aejmic/v17y2025i1p238-81.html>`_. *American Economic Journal: Microeconomics, 17* (1), 238-281.
 
 
 Morrow and Skerlos (2011)
@@ -202,7 +202,7 @@ Owen, Art B. (2013). `Monte Carlo theory, methods and examples <https://artowen.
 Owen (2017)
 ~~~~~~~~~~~
 
-Owen, Art B. (2017). `A randomized Halton algorithm in R <https://arxiv.org/pdf/1706.02808.pdf>`_.
+Owen, Art B. (2017). `A randomized Halton algorithm in R <http://arxiv.org/pdf/1706.02808>`_.
 
 
 Petrin (2002)

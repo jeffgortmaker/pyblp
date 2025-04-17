@@ -265,7 +265,7 @@ class SimpleEconomyResults(abc.ABC, StringRepresentation):
            -\frac{\partial s_{0t}}{\partial x_{jt}} \Big/ \frac{\partial s_{jt}}{\partial x_{jt}}.
 
         Unlike :meth:`ProblemResults.compute_long_run_diversion_ratios`, this gives the marginal treatment effect (MTE)
-        version of the diversion ratio. For more information, see :ref:`references:Conlon and Mortimer (2018)`.
+        version of the diversion ratio. For more information, see :ref:`references:Conlon and Mortimer (2021)`.
 
         Parameters
         ----------
@@ -307,7 +307,7 @@ class SimpleEconomyResults(abc.ABC, StringRepresentation):
         .. math:: \bar{\mathscr{D}}_{jj} = \frac{s_{0(-j)t} - s_0}{s_{jt}}.
 
         Unlike :meth:`ProblemResults.compute_diversion_ratios`, this gives the average treatment effect (ATE) version of
-        the diversion ratio. For more information, see :ref:`references:Conlon and Mortimer (2018)`.
+        the diversion ratio. For more information, see :ref:`references:Conlon and Mortimer (2021)`.
 
         Parameters
         ----------

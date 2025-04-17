@@ -39,7 +39,8 @@ class Optimization(StringRepresentation):
               and newer. A number of environment variables most likely need to be configured properly, such as
               ``KNITRODIR``, ``ARTELYS_LICENSE``, ``LD_LIBRARY_PATH`` (on Linux), and ``DYLD_LIBRARY_PATH`` (on
               Mac OS X). For more information, refer to the
-              `Knitro installation guide <https://www.artelys.com/docs/knitro//1_introduction/installation.html>`_.
+              `Knitro installation guide
+              <https://www.artelys.com:443/app/docs/knitro/1_introduction/installation.html>`_.
 
             - ``'slsqp'`` - Uses the :func:`scipy.optimize.minimize` SLSQP routine.
 
@@ -96,7 +97,7 @@ class Optimization(StringRepresentation):
         which options are available for each optimization routine.
 
         If ``method`` is ``'knitro'``, these options should be
-        `Knitro user options <https://www.artelys.com/docs/knitro//3_referenceManual/userOptions.html>`_. The
+        `Knitro user options <https://www.artelys.com:443/app/docs/knitro/3_referenceManual/userOptions.html>`_. The
         non-standard ``knitro_dir`` option can also be specified. The following options have non-standard default
         values:
 
