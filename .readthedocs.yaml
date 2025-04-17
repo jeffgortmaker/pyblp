@@ -15,3 +15,6 @@ python:
 formats:
   - htmlzip
   - pdf
+
+sphinx:
+  - configuration: docs/conf.py
