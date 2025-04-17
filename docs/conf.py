@@ -52,7 +52,8 @@ extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.mathjax',
     'sphinx.ext.napoleon',
-    'nbsphinx'
+    'nbsphinx',
+    'sphinxcontrib.googleanalytics',
 ]
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3.6/', None),
@@ -92,6 +93,9 @@ html_theme = 'sphinx_rtd_theme'
 latex_elements = {
     'preamble': read('static/preamble.tex')
 }
+
+# configure analytics
+googleanalytics_id = 'G-Y950311SH8'
 
 
 def clean_directories() -> None:
