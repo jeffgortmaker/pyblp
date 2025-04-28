@@ -392,9 +392,14 @@ def build_differentiation_instruments(
                 squared_distances_sum += np.sum(distances**2)
             sd_mapping[k] = np.sqrt(squared_distances_sum / distances_count - (distances_sum / distances_count)**2)
 
+    # identify the number of instruments
+    Z = 0
+    for k in range(K):
+        for _ in range(k, K if interact else k + 1):
+            Z += 2
+
     # build instruments market-by-market to conserve memory
-    other_blocks: List[List[Array]] = []
-    rival_blocks: List[List[Array]] = []
+    instruments = np.zeros((N, Z), options.dtype)
     for t, indices_t in market_indices.items():
         # build distance matrices for all characteristics
         distances_mapping: Dict[int, Array] = {}
@@ -420,16 +425,19 @@ def build_differentiation_instruments(
                 else:
                     raise ValueError("version must be 'local' or 'quadratic'.")
 
-        # append instrument blocks
-        other_blocks.append([])
-        rival_blocks.append([])
+        # create instrument blocks
+        other_block = []
+        rival_block = []
         ownership = (firm_ids[indices_t] == firm_ids[indices_t].T).astype(np.float64)
         nonownership = 1 - ownership
         for term in generate_instrument_terms():
-            other_blocks[-1].append((ownership * term).sum(axis=1, keepdims=True))
-            rival_blocks[-1].append((nonownership * term).sum(axis=1, keepdims=True))
+            other_block.append((ownership * term).sum(axis=1, keepdims=True))
+            rival_block.append((nonownership * term).sum(axis=1, keepdims=True))
 
-    return np.c_[np.block(other_blocks), np.block(rival_blocks)]
+        # add the blocks in order
+        instruments[indices_t] = np.c_[np.block(other_block), np.block(rival_block)]
+
+    return instruments
 
 
 def build_integration(integration: Integration, dimensions: int) -> RecArray:
