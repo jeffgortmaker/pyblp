@@ -392,14 +392,8 @@ def build_differentiation_instruments(
                 squared_distances_sum += np.sum(distances**2)
             sd_mapping[k] = np.sqrt(squared_distances_sum / distances_count - (distances_sum / distances_count)**2)
 
-    # identify the number of instruments
-    Z = 0
-    for k in range(K):
-        for _ in range(k, K if interact else k + 1):
-            Z += 2
-
     # build instruments market-by-market to conserve memory
-    instruments = np.zeros((N, Z), options.dtype)
+    instruments: Optional[Array] = None
     for t, indices_t in market_indices.items():
         # build distance matrices for all characteristics
         distances_mapping: Dict[int, Array] = {}
@@ -434,8 +428,15 @@ def build_differentiation_instruments(
             other_block.append((ownership * term).sum(axis=1, keepdims=True))
             rival_block.append((nonownership * term).sum(axis=1, keepdims=True))
 
-        # add the blocks in order
-        instruments[indices_t] = np.c_[np.block(other_block), np.block(rival_block)]
+        # combine the blocks
+        block = np.c_[np.block(other_block), np.block(rival_block)]
+
+        # initialize the full instruments matrix with the right number of columns if it hasn't yet been initialized
+        if instruments is None:
+            instruments = np.zeros((N, block.shape[1]), options.dtype)
+
+        # fill observations in the right order
+        instruments[indices_t] = block
 
     return instruments
 
