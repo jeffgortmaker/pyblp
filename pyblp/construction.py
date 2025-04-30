@@ -2,7 +2,7 @@
 
 from pathlib import Path
 import pickle
-from typing import Any, Callable, Dict, Iterator, List, Mapping, Optional, Union
+from typing import Any, Callable, Dict, Iterator, Mapping, Optional, Union
 
 import numpy as np
 
