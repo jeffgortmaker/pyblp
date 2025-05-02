@@ -181,7 +181,7 @@ class ProblemResults(EconomyResults):
         Estimated demand-side fixed effects :math:`\xi_{k_1} + \cdots \xi_{k_{E_D}}` in :eq:`fe`, which are only
         computed when there are demand-side fixed effects.
     omega_fe : `ndarray`
-        Estimated supply-side fixed effects :math:`\omega_{k_1} + \cdots \omega_{k_{E_D}}` in :eq:`fe`, which are only
+        Estimated supply-side fixed effects :math:`\omega_{k_1} + \cdots \omega_{k_{E_S}}` in :eq:`fe`, which are only
         computed when there are supply-side fixed effects.
     micro : `ndarray`
         Micro moments, :math:`\bar{g}_M`, in :eq:`micro_moment`.
