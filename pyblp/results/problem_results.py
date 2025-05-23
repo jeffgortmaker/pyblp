@@ -171,18 +171,16 @@ class ProblemResults(EconomyResults):
         if ``costs_bounds`` in :meth:`Problem.solve` was not specified.
     xi : `ndarray`
         Estimated unobserved demand-side product characteristics, :math:`\xi(\hat{\theta})`, or equivalently, the
-        demand-side structural error term. When there are demand-side fixed effects, this is
-        :math:`\Delta\xi(\hat{\theta})` in :eq:`fe`. That is, fixed effects are not included.
+        demand-side structural error term. Any absorbed fixed effects are not included.
     omega : `ndarray`
         Estimated unobserved supply-side product characteristics, :math:`\omega(\hat{\theta})`, or equivalently, the
-        supply-side structural error term. When there are supply-side fixed effects, this is
-        :math:`\Delta\omega(\hat{\theta})` in :eq:`fe`. That is, fixed effects are not included.
+        supply-side structural error term. Any absorbed fixed effects are not included.
     xi_fe : `ndarray`
-        Estimated demand-side fixed effects :math:`\xi_{k_1} + \cdots \xi_{k_{E_D}}` in :eq:`fe`, which are only
-        computed when there are demand-side fixed effects.
+        Estimated demand-side fixed effects :math:`\delta(\hat{\theta}) - X_1\hat{\beta} - \xi(\hat{\theta})`, which are
+        only computed when there are absorbed demand-side fixed effects.
     omega_fe : `ndarray`
-        Estimated supply-side fixed effects :math:`\omega_{k_1} + \cdots \omega_{k_{E_S}}` in :eq:`fe`, which are only
-        computed when there are supply-side fixed effects.
+        Estimated supply-side fixed effects :math:`\tilde{c}(\hat{\theta}) - X_3\hat{\gamma} - \omega(\hat{\theta})`,
+        which are only computed when there are absorbed demand-side fixed effects.
     micro : `ndarray`
         Micro moments, :math:`\bar{g}_M`, in :eq:`micro_moment`.
     micro_values : `ndarray`

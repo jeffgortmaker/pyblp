@@ -226,20 +226,11 @@ Standard errors extracted from this simpler expression are called unadjusted.
 Fixed Effects
 -------------
 
-The unobserved product characteristics can be partitioned into
-
-.. math:: \begin{bmatrix} \xi_{jt} \\ \omega_{jt} \end{bmatrix} = \begin{bmatrix} \xi_{k_1} + \xi_{k_2} + \cdots + \xi_{k_{E_D}} + \Delta\xi_{jt} \\ \omega_{\ell_1} + \omega_{\ell_2} + \cdots + \omega_{\ell_{E_S}} + \Delta\omega_{jt} \end{bmatrix}
-   :label: fe
-
-where :math:`k_1, k_2, \dotsc, k_{E_D}` and :math:`\ell_1, \ell_2, \dotsc, \ell_{E_S}` index unobserved characteristics that are fixed across :math:`E_D` and :math:`E_S` dimensions. For example, with :math:`E_D = 1` dimension of product fixed effects, :math:`\xi_{jt} = \xi_j + \Delta\xi_{jt}`.
-
 Small numbers of fixed effects can be estimated with dummy variables in :math:`X_1`, :math:`X_3`, :math:`Z_D`, and :math:`Z_S`. However, this approach does not scale with high dimensional fixed effects because it requires constructing and inverting an infeasibly large matrix in :eq:`iv`. 
 
-Instead, fixed effects are typically absorbed into :math:`X`, :math:`Z`, and :math:`Y(\theta)` in :eq:`iv`. With one fixed effect, these matrices are simply de-meaned within each level of the fixed effect. Both :math:`X` and :math:`Z` can be de-meaned just once, but :math:`Y(\theta)` must be de-meaned for each new :math:`\theta`.
+Instead, fixed effects are typically absorbed into :math:`X`, :math:`Z`, and :math:`Y(\theta)` in :eq:`iv`. With :math:`E_D = 1` fixed effect on the demand side and/or :math:`E_S = 1` fixed effect on the supply side, these matrices are simply de-meaned within each level of the fixed effect. Both :math:`X` and :math:`Z` can be de-meaned just once, but :math:`Y(\theta)` must be de-meaned for each new :math:`\theta`.
 
-This procedure is equivalent to replacing each column of the matrices with residuals from a regression of the column on the fixed effect. The Frish-Waugh-Lovell (FWL) theorem of :ref:`references:Frisch and Waugh (1933)` and :ref:`references:Lovell (1963)` guarantees that using these residualized matrices gives the same results as including fixed effects as dummy variables. When :math:`E_D > 1` or :math:`E_S > 1`, the matrices are residualized with more involved algorithms.
-
-Once fixed effects have been absorbed, estimation is as described above with the structural errors :math:`\Delta\xi` and :math:`\Delta\omega`.
+This procedure is equivalent to replacing each column of the matrices with residuals from a regression of the column on the fixed effect. The Frish-Waugh-Lovell (FWL) theorem of :ref:`references:Frisch and Waugh (1933)` and :ref:`references:Lovell (1963)` guarantees that using these residualized matrices gives the same results as including fixed effects as dummy variables. When :math:`E_D > 1` or :math:`E_S > 1`, the matrices are residualized with more involved algorithms. Once fixed effects have been absorbed, estimation is as described above.
 
 
 Micro Moments

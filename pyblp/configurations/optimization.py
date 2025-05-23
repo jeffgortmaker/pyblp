@@ -377,12 +377,10 @@ class OptimizationProgress(object):
         if ``costs_bounds`` in :meth:`Problem.solve` was not specified.
     xi : `ndarray`
         Unobserved demand-side product characteristics, :math:`\xi(\theta)`, or equivalently, the demand-side structural
-        error term. When there are demand-side fixed effects, this is :math:`\Delta\xi(\theta)` in :eq:`fe`. That is,
-        fixed effects are not included.
+        error term. Any absorbed fixed effects are not included.
     omega : `ndarray`
         Unobserved supply-side product characteristics, :math:`\omega(\theta)`, or equivalently, the supply-side
-        structural error term. When there are supply-side fixed effects, this is :math:`\Delta\omega(\theta)` in
-        :eq:`fe`. That is, fixed effects are not included.
+        structural error term. Any absorbed fixed effects are not included.
     micro : `ndarray`
         Micro moments, :math:`\bar{g}_M`, in :eq:`micro_moment`.
     micro_values : `ndarray`

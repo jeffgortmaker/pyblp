@@ -1291,11 +1291,8 @@ class Problem(ProblemEconomy):
 
             - **covariance_instruments** : (`numeric, optional`) - Covariance instruments :math:`Z_C`. If specified,
               additional moments :math:`E[g_{C,jt}] = E[\xi_{jt}\omega_{jt}Z_{C,jt}] = 0` will be added, as in
-              :ref:`references:MacKay and Miller (2025)`.
-
-              If any fixed effects are absorbed, :math:`\xi_{jt}` and :math:`\omega_{jt}` in these new covariance
-              moments are replaced with :math:`\Delta\xi_{jt}` and/or :math:`\Delta\omega_{jt}` in :eq:`fe`. The default
-              2SLS weighting matrix will have an additional :math:`(Z_C'Z_C / N)^{-1}` block after the first two.
+              :ref:`references:MacKay and Miller (2025)`. The default 2SLS weighting matrix will have an additional
+              :math:`(Z_C'Z_C / N)^{-1}` block after the first two.
 
               .. warning::
 
