@@ -1294,11 +1294,6 @@ class Problem(ProblemEconomy):
               :ref:`references:MacKay and Miller (2025)`. The default 2SLS weighting matrix will have an additional
               :math:`(Z_C'Z_C / N)^{-1}` block after the first two.
 
-              .. warning::
-
-                 Covariance restrictions are still an experimental feature. The way in which they are implemented and
-                 used may change somewhat in future releases.
-
               .. note::
 
                  Using covariance restrictions to identify a parameter on price can sometimes yield two solutions, where
