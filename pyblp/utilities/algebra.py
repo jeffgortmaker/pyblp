@@ -31,7 +31,7 @@ def precisely_identify_singularity(x: Array) -> Tuple[Array, bool, Array]:
     if options.singular_tol < np.inf:
         condition = compute_condition_number(x)
         successful = not np.isnan(condition)
-        singular = successful and condition > options.singular_tol
+        singular = bool(successful and condition > options.singular_tol)
 
     return singular, successful, condition
 
