@@ -506,7 +506,6 @@ class Market(Container):
             compute_probabilities = functools.partial(self.compute_probabilities, safe='safe' in fp_type)
 
             # define the function used to clip shares outside potentially pre-specified bounds
-            clip_shares = lambda _: None
             if np.isfinite(shares_bounds).all():
                 def clip_shares(shares: Array) -> None:
                     """Clip shares from below and above."""
@@ -530,6 +529,9 @@ class Market(Container):
                     nonlocal clipped_shares
                     clipped_shares = shares > shares_bounds[1]
                     shares[clipped_shares] = shares_bounds[1]
+
+            else:
+                clip_shares = lambda _: None
 
             # define the linear contraction
             if self.H == 0:
