@@ -131,7 +131,7 @@ class ProblemEconomy(Economy):
             .. math::
                :label: ar1
 
-               \xi_{jt} = \phi_\xi \cdot L \xi_{jt} + \Delta_{\phi_\xi} \xi_{jt},
+               \xi_{jt} = \phi_\xi \cdot L \xi_{jt} + \Delta_{\phi_\xi} \xi_{jt}, \\
                \omega_{jt} = \phi_\omega \cdot L \omega_{jt} + \Delta_{\phi_\omega} \omega_{jt},
 
             where the ``lag_indices`` field in ``product_data`` defines the lag operator :math:`L`.
@@ -453,10 +453,10 @@ class ProblemEconomy(Economy):
                 - ``'levels'`` (default) - Standard moments in :eq:`moments`:
                   :math:`g_{D,jt} = \xi_{jt} \cdot Z_{D,jt}`.
 
-                - ``'innovations'`` - Replace unobservables with their AR(1) innovations in :eq:`ar1`:
+                - ``'innovations'`` - Replace :math:`\xi_{jt}` with its innovation in :eq:`ar1`:
                   :math:`g_{D,jt} = \Delta_{\phi_\xi} \xi_{jt} \cdot Z_{D,jt}`.
 
-                - ``'differenced_innovations'`` - Further difference the innovations in :eq:`ar1` to eliminate, for
+                - ``'differenced_innovations'`` - Further difference the innovation in :eq:`ar1` to eliminate, for
                   example, any product-market fixed effects:
                   :math:`g_{D,jt} = \Delta\Delta_{\phi_\xi} \xi_{jt} \cdot Z_{D,jt}`.
 

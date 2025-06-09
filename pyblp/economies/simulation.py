@@ -154,7 +154,7 @@ class Simulation(Economy):
             .. math::
                :label: simulated_ar1
 
-               \xi_{jt} = \phi_\xi \cdot L \xi_{jt} + \Delta_{\phi_\xi} \xi_{jt},
+               \xi_{jt} = \phi_\xi \cdot L \xi_{jt} + \Delta_{\phi_\xi} \xi_{jt}, \\
                \omega_{jt} = \phi_\omega \cdot L \omega_{jt} + \Delta_{\phi_\omega} \omega_{jt},
 
         where the ``lag_indices`` field in ``product_data`` defines the lag operator :math:`L`.
