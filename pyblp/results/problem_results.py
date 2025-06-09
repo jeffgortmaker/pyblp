@@ -15,13 +15,14 @@ from ..configurations.integration import Integration
 from ..configurations.iteration import Iteration
 from ..markets.economy_results_market import EconomyResultsMarket
 from ..micro import Moments
+from ..parameters import PhiParameter
 from ..primitives import Agents
 from ..utilities.algebra import (
     approximately_invert, approximately_solve, compute_condition_number, precisely_compute_eigenvalues, vech_to_full
 )
 from ..utilities.basics import (
     Array, Bounds, Error, Mapping, RecArray, SolverStats, format_number, format_seconds, format_table, generate_items,
-    get_indices, output, output_progress, update_matrices
+    get_indices, output, output_progress, update_matrices, warn
 )
 from ..utilities.statistics import (
     compute_gmm_moment_covariances, compute_gmm_parameter_covariances, compute_gmm_moments_jacobian_mean,
@@ -107,8 +108,8 @@ class ProblemResults(EconomyResults):
         :math:`-(\bar{G}'W\bar{G})^{-1}\bar{G}'W` from :ref:`references:Andrews, Gentzkow, and Shapiro (2017)`.
     theta : `ndarray`
         Estimated unfixed parameters, :math:`\hat{\theta}`, in the following order: :math:`\hat{\Sigma}`,
-        :math:`\hat{\Pi}`, :math:`\hat{\rho}`, non-concentrated out elements from :math:`\hat{\beta}`, and
-        non-concentrated out elements from :math:`\hat{\gamma}`.
+        :math:`\hat{\Pi}`, :math:`\hat{\rho}`, :math:`\hat{\phi}`, non-concentrated out elements from
+        :math:`\hat{\beta}`, and non-concentrated out elements from :math:`\hat{\gamma}`.
     sigma : `ndarray`
         Estimated Cholesky root of the covariance matrix for unobserved taste heterogeneity, :math:`\hat{\Sigma}`.
     sigma_squared : `ndarray`
@@ -117,6 +118,8 @@ class ProblemResults(EconomyResults):
         Estimated parameters that measures how agent tastes vary with demographics, :math:`\hat{\Pi}`.
     rho : `ndarray`
         Estimated parameters that measure within nesting group correlations, :math:`\hat{\rho}`.
+    phi : `ndarray`
+        Estimated demand-side unobservable autocorrelation, :math:`\hat{\phi}`.
     beta : `ndarray`
         Estimated demand-side linear parameters, :math:`\hat{\beta}`.
     gamma : `ndarray`
@@ -130,6 +133,8 @@ class ProblemResults(EconomyResults):
         Estimated standard errors for :math:`\hat{\Pi}`, which are not estimated in the first step of two-step GMM.
     rho_se : `ndarray`
         Estimated standard errors for :math:`\hat{\rho}`, which are not estimated in the first step of two-step GMM.
+    phi_se : `ndarray`
+        Estimated standard error for :math:`\hat{\phi}`, which is not estimated in the first step of two-step GMM.
     beta_se : `ndarray`
         Estimated standard errors for :math:`\hat{\beta}`, which are not estimated in the first step of two-step GMM.
     gamma_se : `ndarray`
@@ -140,6 +145,8 @@ class ProblemResults(EconomyResults):
         Bounds for :math:`\Pi` that were used during optimization, which are of the form ``(lb, ub)``.
     rho_bounds : `tuple`
         Bounds for :math:`\rho` that were used during optimization, which are of the form ``(lb, ub)``.
+    phi_bounds : `tuple`
+        Bounds for :math:`\phi` that were used during optimization, which are of the form ``(lb, ub)``.
     beta_bounds : `tuple`
         Bounds for :math:`\beta` that were used during optimization, which are of the form ``(lb, ub)``.
     gamma_bounds : `tuple`
@@ -150,6 +157,8 @@ class ProblemResults(EconomyResults):
         Variable labels for columns of :math:`\Pi`, which are derived from the formulation for demographics.
     rho_labels : `list of str`
         Variable labels for :math:`\rho`. If :math:`\rho` is not a scalar, this is :attr:`Problem.unique_nesting_ids`.
+    phi_labels : `list of str`
+        Variable labels for :math:`\phi`.
     beta_labels : `list of str`
         Variable labels for :math:`\beta`, which are derived from the formulation for :math:`X_1`.
     gamma_labels : `list of str`
@@ -268,22 +277,26 @@ class ProblemResults(EconomyResults):
     sigma_squared: Array
     pi: Array
     rho: Array
+    phi: Array
     beta: Array
     gamma: Array
     sigma_se: Array
     sigma_squared_se: Array
     pi_se: Array
     rho_se: Array
+    phi_se: Array
     beta_se: Array
     gamma_se: Array
     sigma_bounds: Bounds
     pi_bounds: Bounds
     rho_bounds: Bounds
+    phi_bounds: Bounds
     beta_bounds: Bounds
     gamma_bounds: Bounds
     sigma_labels: List[str]
     pi_labels: List[str]
     rho_labels: List[str]
+    phi_labels: List[str]
     beta_labels: List[str]
     gamma_labels: List[str]
     theta_labels: List[str]
@@ -326,9 +339,10 @@ class ProblemResults(EconomyResults):
             optimization_start_time: float, optimization_end_time: float, optimization_stats: SolverStats,
             iteration_stats: Sequence[Dict[Hashable, SolverStats]], scaled_objective: bool, shares_bounds: Bounds,
             costs_bounds: Bounds, micro_moment_covariances: Optional[Array], center_moments: bool, W_type: str,
-            se_type: str, covariance_moments_mean: float) -> None:
+            se_type: str, demand_moment_types: Sequence[str], supply_moment_types: Sequence[str],
+            covariance_moments_mean: float) -> None:
         """Compute cumulative progress statistics, update weighting matrices, and estimate standard errors."""
-        self.sigma, self.pi, self.rho, _, _ = progress.parameters.expand(progress.theta)
+        self.sigma, self.pi, self.rho, self.phi, _, _ = progress.parameters.expand(progress.theta)
         self._errors = progress.errors
         self.problem = progress.problem
         self.W = progress.W
@@ -436,11 +450,13 @@ class ProblemResults(EconomyResults):
         self.sigma_bounds = self._parameters.sigma_bounds
         self.pi_bounds = self._parameters.pi_bounds
         self.rho_bounds = self._parameters.rho_bounds
+        self.phi_bounds = self._parameters.phi_bounds
         self.beta_bounds = self._parameters.beta_bounds
         self.gamma_bounds = self._parameters.gamma_bounds
         self.sigma_labels = self._parameters.sigma_labels
         self.pi_labels = self._parameters.pi_labels
         self.rho_labels = self._parameters.rho_labels
+        self.phi_labels = self._parameters.phi_labels
         self.beta_labels = self._parameters.beta_labels
         self.gamma_labels = self._parameters.gamma_labels
         self.theta_labels = self._parameters.theta_labels
@@ -448,15 +464,20 @@ class ProblemResults(EconomyResults):
         # ignore computational errors when updating the weighting matrix and computing covariances
         with np.errstate(all='ignore'):
             # update the weighting matrix
-            S_for_weights = self._compute_S(progress.moments, W_type, covariance_moments_mean, center_moments)
+            S_for_weights = self._compute_S(
+                progress.moments, W_type, demand_moment_types, supply_moment_types, covariance_moments_mean,
+                center_moments
+            )
             self.updated_W, W_errors = compute_gmm_weights(S_for_weights)
             self._errors.extend(W_errors)
 
             # compute moments Jacobian and covariances
-            self.moments_jacobian = self._compute_mean_G(progress.moments)
+            self.moments_jacobian = self._compute_mean_G(progress.moments, demand_moment_types, supply_moment_types)
             self.moments_covariances = S_for_weights
             if se_type != W_type or center_moments:
-                self.moments_covariances = self._compute_S(progress.moments, se_type, covariance_moments_mean)
+                self.moments_covariances = self._compute_S(
+                    progress.moments, se_type, demand_moment_types, supply_moment_types, covariance_moments_mean
+                )
 
             # if this is the first step, an unadjusted weighting matrix needs to be used when computing unadjusted
             #   covariances so that they are scaled properly
@@ -495,8 +516,8 @@ class ProblemResults(EconomyResults):
             self._parameters.P,
             self._parameters.P + self._parameters.eliminated_beta_index.sum()
         ])
-        self.sigma_se, self.pi_se, self.rho_se, self.beta_se, self.gamma_se = (
-            self._parameters.expand(theta_se, nullify=True)
+        self.sigma_se, self.pi_se, self.rho_se, self.phi_se, self.beta_se, self.gamma_se = self._parameters.expand(
+            theta_se, nullify=True
         )
         self.sigma_squared_se = vech_to_full(sigma_squared_vector_se, self.problem.K2)
         self.beta_se[self._parameters.eliminated_beta_index] = eliminated_beta_se.flatten()
@@ -517,9 +538,9 @@ class ProblemResults(EconomyResults):
 
         # add sections formatting estimates and micro moments values
         sections.append(self._parameters.format_estimates(
-            f"Estimates ({se_description} in Parentheses)", self.sigma, self.pi, self.rho, self.beta, self.gamma,
-            self.sigma_squared, self.sigma_se, self.pi_se, self.rho_se, self.beta_se, self.gamma_se,
-            self.sigma_squared_se
+            f"Estimates ({se_description} in Parentheses)", self.sigma, self.pi, self.rho, self.phi, self.beta,
+            self.gamma, self.sigma_squared, self.sigma_se, self.pi_se, self.rho_se, self.phi_se, self.beta_se,
+            self.gamma_se, self.sigma_squared_se
         ))
         if self._formatted_moments is not None:
             sections.append(self._formatted_moments)
@@ -527,28 +548,56 @@ class ProblemResults(EconomyResults):
         # join the sections into a single string
         return "\n\n".join(sections)
 
-    def _compute_mean_G(self, moments: Moments) -> Array:
+    def _compute_mean_G(
+            self, moments: Moments, demand_moment_types: Sequence[str], supply_moment_types: Sequence[str]) -> Array:
         """Compute the Jacobian of moments with respect to parameters."""
-        Z_list = [self.problem.products.ZD]
-        jacobian_list = [np.c_[
+
+        # collect instruments
+        Z_list = list(np.split(self.problem.products.ZD, len(demand_moment_types), axis=1))
+        if self.problem.K3 > 0:
+            Z_list.extend(list(np.split(self.problem.products.ZS, len(supply_moment_types), axis=1)))
+        if self.problem.MC > 0:
+            Z_list.append(self.problem.products.ZC)
+
+        # supplement Jacobians with derivatives with respect to concentrated-out linear parameters
+        xi_jacobian = np.c_[
             self.xi_by_theta_jacobian,
             -self.problem.products.X1[:, self._parameters.eliminated_beta_index.flat],
             np.zeros_like(self.problem.products.X3[:, self._parameters.eliminated_gamma_index.flat])
-        ]]
+        ]
+        omega_jacobian = None if self.problem.K3 == 0 else np.c_[
+            self.omega_by_theta_jacobian,
+            np.zeros_like(self.problem.products.X1[:, self._parameters.eliminated_beta_index.flat]),
+            -self.problem.products.X3[:, self._parameters.eliminated_gamma_index.flat]
+        ]
+
+        # collect Jacobians
+        jacobian_list = []
+        for moment_type in demand_moment_types:
+            jacobian_list.append(self.problem._compute_difference(moment_type, xi_jacobian, self.phi[0]))
         if self.problem.K3 > 0:
-            Z_list.append(self.problem.products.ZS)
+            assert omega_jacobian is not None
+            for moment_type in supply_moment_types:
+                jacobian_list.append(self.problem._compute_difference(moment_type, omega_jacobian, self.phi[1]))
+        if self.problem.MC > 0:
             jacobian_list.append(np.c_[
-                self.omega_by_theta_jacobian,
-                np.zeros_like(self.problem.products.X1[:, self._parameters.eliminated_beta_index.flat]),
-                -self.problem.products.X3[:, self._parameters.eliminated_gamma_index.flat]
+                self.xi_by_theta_jacobian * self.omega + self.xi * self.omega_by_theta_jacobian,
+                -self.problem.products.X1[:, self._parameters.eliminated_beta_index.flat] * self.omega,
+                self.xi * -self.problem.products.X3[:, self._parameters.eliminated_gamma_index.flat]
             ])
-            if self.problem.MC > 0:
-                Z_list.append(self.problem.products.ZC)
-                jacobian_list.append(np.c_[
-                    self.xi_by_theta_jacobian * self.omega + self.xi * self.omega_by_theta_jacobian,
-                    -self.problem.products.X1[:, self._parameters.eliminated_beta_index.flat] * self.omega,
-                    self.xi * -self.problem.products.X3[:, self._parameters.eliminated_gamma_index.flat]
-                ])
+
+        # update Jacobians with phi contributions
+        for p, parameter in enumerate(self._parameters.unfixed):
+            if isinstance(parameter, PhiParameter):
+                if parameter.location[0] == 0:
+                    for i, moment_type in enumerate(demand_moment_types):
+                        jacobian_list[i][:, [p]] += self.problem._compute_difference_derivative(moment_type, self.xi)
+                elif self.problem.K3 > 0:
+                    for i, moment_type in enumerate(supply_moment_types):
+                        i += len(demand_moment_types)
+                        jacobian_list[i][:, [p]] += self.problem._compute_difference_derivative(moment_type, self.omega)
+
+        # compute the Jacobian of moments with respect to parameters
         mean_G = np.r_[
             compute_gmm_moments_jacobian_mean(jacobian_list, Z_list),
             np.c_[
@@ -560,22 +609,32 @@ class ProblemResults(EconomyResults):
         return mean_G
 
     def _compute_S(
-            self, moments: Moments, S_type: str, covariance_moments_mean: float, center_moments: bool = False) -> Array:
+            self, moments: Moments, S_type: str, demand_moment_types: Sequence[str], supply_moment_types: Sequence[str],
+            covariance_moments_mean: float, center_moments: bool = False) -> Array:
         """Compute moment covariances."""
-        u_list = [self.xi]
-        Z_list = [self.problem.products.ZD]
-        if self.problem.K3 > 0:
-            u_list.append(self.omega)
-            Z_list.append(self.problem.products.ZS)
-            if self.problem.MC > 0:
-                u_list.append(self.xi * self.omega - covariance_moments_mean)
-                Z_list.append(self.problem.products.ZC)
 
+        # collect instruments
+        Z_list = list(np.split(self.problem.products.ZD, len(demand_moment_types), axis=1))
+        if self.problem.K3 > 0:
+            Z_list.extend(list(np.split(self.problem.products.ZS, len(supply_moment_types), axis=1)))
+        if self.problem.MC > 0:
+            Z_list.append(self.problem.products.ZC)
+
+        # collect structural errors
+        u_list = []
+        for moment_type in demand_moment_types:
+            u_list.append(self.problem._compute_difference(moment_type, self.xi, self.phi[0]))
+        if self.problem.K3 > 0:
+            for moment_type in supply_moment_types:
+                u_list.append(self.problem._compute_difference(moment_type, self.omega, self.phi[1]))
+        if self.problem.MC > 0:
+            u_list.append(self.xi * self.omega - covariance_moments_mean)
+
+        # compute the covariances
         S = compute_gmm_moment_covariances(u_list, Z_list, S_type, self.problem.products.clustering_ids, center_moments)
         self.problem._detect_singularity(S, "the estimated covariance matrix of aggregate GMM moments")
         if moments.MM > 0:
             S = scipy.linalg.block_diag(S, self.problem.N * self.micro_covariances)
-
         S += self.simulation_covariances
         return S
 
@@ -673,14 +732,15 @@ class ProblemResults(EconomyResults):
                 'objective_evaluations', 'cumulative_objective_evaluations', 'fp_converged', 'cumulative_fp_converged',
                 'fp_iterations', 'cumulative_fp_iterations', 'contraction_evaluations',
                 'cumulative_contraction_evaluations', 'parameters', 'parameter_covariances', 'parameter_sensitivity',
-                'theta', 'sigma', 'sigma_squared', 'pi', 'rho', 'beta', 'gamma', 'sigma_se', 'sigma_squared_se',
-                'pi_se', 'rho_se', 'beta_se', 'gamma_se', 'sigma_bounds', 'pi_bounds', 'rho_bounds', 'beta_bounds',
-                'gamma_bounds', 'sigma_labels', 'pi_labels', 'rho_labels', 'beta_labels', 'gamma_labels',
-                'theta_labels', 'delta', 'tilde_costs', 'clipped_shares', 'clipped_costs', 'xi', 'omega', 'xi_fe',
-                'omega_fe', 'micro', 'micro_values', 'micro_covariances', 'moments', 'moments_jacobian',
-                'moments_covariances', 'simulation_covariances', 'objective', 'xi_by_theta_jacobian',
-                'omega_by_theta_jacobian', 'micro_by_theta_jacobian', 'gradient', 'projected_gradient',
-                'projected_gradient_norm', 'hessian', 'reduced_hessian', 'reduced_hessian_eigenvalues', 'W', 'updated_W'
+                'theta', 'sigma', 'sigma_squared', 'pi', 'rho', 'phi', 'beta', 'gamma', 'sigma_se', 'sigma_squared_se',
+                'pi_se', 'rho_se', 'phi_se', 'beta_se', 'gamma_se', 'sigma_bounds', 'pi_bounds', 'rho_bounds',
+                'phi_bounds', 'beta_bounds', 'gamma_bounds', 'sigma_labels', 'pi_labels', 'rho_labels', 'phi_labels',
+                'beta_labels', 'gamma_labels', 'theta_labels', 'delta', 'tilde_costs', 'clipped_shares',
+                'clipped_costs', 'xi', 'omega', 'xi_fe', 'omega_fe', 'micro', 'micro_values', 'micro_covariances',
+                'moments', 'moments_jacobian', 'moments_covariances', 'simulation_covariances', 'objective',
+                'xi_by_theta_jacobian', 'omega_by_theta_jacobian', 'micro_by_theta_jacobian', 'gradient',
+                'projected_gradient', 'projected_gradient_norm', 'hessian', 'reduced_hessian',
+                'reduced_hessian_eigenvalues', 'W', 'updated_W'
             )) -> dict:
         """Convert these results into a dictionary that maps attribute names to values.
 
@@ -960,6 +1020,7 @@ class ProblemResults(EconomyResults):
         bootstrapped_sigma = np.zeros((draws, self.sigma.shape[0], self.sigma.shape[1]), options.dtype)
         bootstrapped_pi = np.zeros((draws, self.pi.shape[0], self.pi.shape[1]), options.dtype)
         bootstrapped_rho = np.zeros((draws, self.rho.shape[0], self.rho.shape[1]), options.dtype)
+        bootstrapped_phi = np.zeros((draws, self.phi.shape[0], self.phi.shape[1]), options.dtype)
         bootstrapped_beta = np.zeros((draws, self.beta.shape[0], self.beta.shape[1]), options.dtype)
         bootstrapped_gamma = np.zeros((draws, self.gamma.shape[0], self.gamma.shape[1]), options.dtype)
         bootstrapped_theta, bootstrapped_eliminated_beta, bootstrapped_eliminated_gamma = np.split(
@@ -970,14 +1031,15 @@ class ProblemResults(EconomyResults):
         bootstrapped_beta[:, self._parameters.eliminated_beta_index.flat] = bootstrapped_eliminated_beta
         bootstrapped_gamma[:, self._parameters.eliminated_gamma_index.flat] = bootstrapped_eliminated_gamma
         for d in range(draws):
-            bootstrapped_sigma[d], bootstrapped_pi[d], bootstrapped_rho[d], beta_d, gamma_d = self._parameters.expand(
-                bootstrapped_theta[d]
+            bootstrapped_sigma[d], bootstrapped_pi[d], bootstrapped_rho[d], bootstrapped_phi[d], beta_d, gamma_d = (
+                self._parameters.expand(bootstrapped_theta[d])
             )
             bootstrapped_beta[d] = np.where(self._parameters.eliminated_beta_index, bootstrapped_beta[d], beta_d)
             bootstrapped_gamma[d] = np.where(self._parameters.eliminated_gamma_index, bootstrapped_gamma[d], gamma_d)
             bootstrapped_sigma[d] = np.clip(bootstrapped_sigma[d], *self.sigma_bounds)
             bootstrapped_pi[d] = np.clip(bootstrapped_pi[d], *self.pi_bounds)
             bootstrapped_rho[d] = np.clip(bootstrapped_rho[d], *self.rho_bounds)
+            bootstrapped_phi[d] = np.clip(bootstrapped_phi[d], *self.phi_bounds)
             bootstrapped_beta[d] = np.clip(bootstrapped_beta[d], *self.beta_bounds)
             bootstrapped_gamma[d] = np.clip(bootstrapped_gamma[d], *self.gamma_bounds)
 
@@ -1024,9 +1086,9 @@ class ProblemResults(EconomyResults):
         # structure the results
         from .bootstrapped_results import BootstrappedResults  # noqa
         results = BootstrappedResults(
-            self, bootstrapped_sigma, bootstrapped_pi, bootstrapped_rho, bootstrapped_beta, bootstrapped_gamma,
-            bootstrapped_prices, bootstrapped_shares, bootstrapped_delta, start_time, time.time(), draws,
-            iteration_stats
+            self, bootstrapped_sigma, bootstrapped_pi, bootstrapped_rho, bootstrapped_phi, bootstrapped_beta,
+            bootstrapped_gamma, bootstrapped_prices, bootstrapped_shares, bootstrapped_delta, start_time, time.time(),
+            draws, iteration_stats
         )
         output(f"Bootstrapped results after {format_seconds(results.computation_time)}.")
         output("")
@@ -1147,6 +1209,12 @@ class ProblemResults(EconomyResults):
         # keep track of long it takes to compute optimal instruments for theta
         output("Computing optimal instruments for theta ...")
         start_time = time.time()
+
+        # warn when optimal instruments make less sense
+        if self._parameters.phi.size > 0:
+            warn("Optimal instruments are not computed with phi in mind.")
+        if self.problem.MC > 0:
+            warn("Optimal instruments are not computed with covariance restrictions in mind.")
 
         # validate the method and create a function that samples from the error distribution
         if method == 'approximate':

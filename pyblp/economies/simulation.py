@@ -104,15 +104,24 @@ class Simulation(Economy):
            ``ownership`` field with three columns can be replaced by three one-dimensional fields: ``ownership0``,
            ``ownership1``, and ``ownership2``.
 
+        To simulate a nested logit or random coefficients nested logit (RCNL) model, nesting groups must be specified:
+
+            - **nesting_ids** (`object, optional`) - IDs that associate products with nesting groups. When these IDs are
+              specified, ``rho`` must be specified as well.
+
         It may be convenient to define IDs for different products:
 
             - **product_ids** (`object, optional`) - IDs that identify products within markets. There can be multiple
               columns.
 
-        To simulate a nested logit or random coefficients nested logit (RCNL) model, nesting groups must be specified:
+        To specify unobservable autocorrelation with ``phi``, indices that define lags of the data must be specified:
 
-            - **nesting_ids** (`object, optional`) - IDs that associate products with nesting groups. When these IDs are
-              specified, ``rho`` must be specified as well.
+            - **lag_indices** : (`int, optional`) - Indices that take on values from :math:`0` to :math:`N - 1`, which
+              define the lag operator :math:`L` on the data. For example, if markets :math:`t` are simply time periods
+              and the identity of products :math:`j` are persistent across periods, then :math:`L x_{jt} = x_{j,t-1}`.
+
+              The value of the current row index indicates that this is the initial period for a product. Otherwise, the
+              value should correspond to the row that is the lagged version of the current row.
 
         Along with ``market_ids``, ``firm_ids``, ``product_ids``, and ``nesting_ids``, the names of any additional
         fields can typically be used as variables in ``product_formulations``. However, there are a few variable names
@@ -137,6 +146,19 @@ class Simulation(Economy):
         all groups defined by the ``nesting_ids`` field of ``product_data``. If this is a vector, it must have :math:`H`
         elements, one for each nesting group. Elements correspond to group IDs in the sorted order of
         :attr:`Simulation.unique_nesting_ids`. If nesting IDs are not specified, this should not be specified either.
+    phi : `float, optional`
+        Parameters measuring unobservable autocorrelation, :math:`\phi = [\phi_\xi, \phi_\omega]'`, which must be
+        specified if ``lag_indices`` in ``product_data`` are specified. This is ignored during simulation if ``xi`` and
+        ``omega'' are specified. Otherwise, if specified, unobservables are drawn according to AR(1) processes:
+
+            .. math::
+               :eq: simulated_ar1
+
+               \xi_{jt} = \phi_\xi \cdot L \xi_{jt} + \Delta_{\phi_\xi} \xi_{jt},
+               \omega_{jt} = \phi_\omega \cdot L \omega_{jt} + \Delta_{\phi_\omega} \omega_{jt},
+
+        where the ``lag_indices`` field in ``product_data`` defines the lag operator :math:`L`.
+
     agent_formulation : `Formulation, optional`
         :class:`Formulation` configuration for the matrix of observed agent characteristics called demographics,
         :math:`d`, which will only be included in the model if this formulation is specified. Any variables that cannot
@@ -217,21 +239,30 @@ class Simulation(Economy):
         zero, fewer columns will be used.
 
     xi : `array-like, optional`
-        Unobserved demand-side product characteristics, :math:`\xi`. By default, if :math:`X_3` is formulated, each pair
-        of unobserved characteristics in this vector and :math:`\omega` is drawn from a mean-zero bivariate normal
-        distribution. This must be specified if :math:`X_3` is not formulated or if ``omega`` is specified.
+        Demand-side unobservable, :math:`\xi`. This must be specified if :math:`X_3` is not formulated or if ``omega``
+        is specified.
+
+        By default, if :math:`X_3` is formulated, this and :math:`\omega_{jt}` are drawn from a mean-zero bivariate
+        normal distribution. If ``phi`` is specified, then innovations :math:`\Delta_{\phi_\xi} \xi_{jt}` and
+        :math:`\Delta_{\phi_\omega} \omega_{jt}` in :eq:`simulated_ar` are drawn instead, and initial values are scaled
+        by :math:`1 - \phi_\xi^2` and :math:`1 - \phi_\omega^2` to be draws from their stationary distribution.
+
     omega : `array-like, optional`
-        Unobserved supply-side product characteristics, :math:`\omega`. By default, if :math:`X_3` is formulated, each
-        pair of unobserved characteristics in this vector and :math:`\xi` is drawn from a mean-zero bivariate normal
-        distribution. This must be specified if :math:`X_3` is formulated and ``xi`` is specified. It is ignored if
-        :math:`X_3` is not formulated.
+        Supply-side unobservable, :math:`\omega`. This must be specified if :math:`X_3` is formulated and ``xi`` is
+        specified. It is ignored if :math:`X_3` is not formulated.
+
+        By default, if :math:`X_3` is formulated, this and :math:`\xi_{jt}` are drawn from a mean-zero bivariate normal
+        distribution. If ``phi`` is specified, then innovations are drawn instead, as described for ``xi``.
+
     xi_variance : `float, optional`
-        Variance of :math:`\xi`. The default value is ``1.0``. This is ignored if ``xi`` or ``omega`` is specified.
+        Variance of :math:`\xi_{jt}` (or its innovation if ``phi`` is specified). The default value is ``1.0``. This is
+        ignored if ``xi`` or ``omega`` is specified.
     omega_variance : `float, optional`
-        Variance of :math:`\omega`. The default value is ``1.0``. This is ignored if ``xi`` or ``omega`` is specified.
+        Variance of :math:`\omega_{jt}` (or its innovation if ``phi`` is specified). The default value is ``1.0``. This
+        is ignored if ``xi`` or ``omega`` is specified.
     correlation : `float, optional`
-        Correlation between :math:`\xi` and :math:`\omega`. The default value is ``0.9``. This is ignored if ``xi`` or
-        ``omega`` is specified.
+        Correlation between :math:`\xi_{jt}` and :math:`\omega_{jt}` (or their innovations if ``phi`` is specified).
+        The default value is ``0.9``. This is ignored if ``xi`` or ``omega`` is specified.
     rc_types : `sequence of str, optional`
         Random coefficient types:
 
@@ -322,6 +353,8 @@ class Simulation(Economy):
         Parameters that measures how agent tastes vary with demographics, :math:`\Pi`.
     rho : `ndarray`
         Parameters that measure within nesting group correlation, :math:`\rho`.
+    phi : `ndarray`
+        Parameters that measure unobservable autocorrelation, :math:`\phi`.
     xi : `ndarray`
         Unobserved demand-side product characteristics, :math:`\xi`.
     omega : `ndarray`
@@ -352,8 +385,7 @@ class Simulation(Economy):
         Number of demand-side instruments, :math:`M_D`, which is always zero because instruments are added or
         constructed in :meth:`SimulationResults.to_problem`.
     MS : `int`
-        Number of supply-side instruments, :math:`M_S`, which is always zero because  instruments are added or
-        constructed in :meth:`SimulationResults.to_problem`.
+        Number of supply-side instruments, :math:`M_S`, which is similarly aways zero.
     MC : `int`
         Number of covariance instruments, :math:`M_C`.
     ED : `int`
@@ -379,6 +411,7 @@ class Simulation(Economy):
     gamma: Array
     pi: Array
     rho: Array
+    phi: Array
     xi: Array
     omega: Optional[Array]
     _parameters: Parameters
@@ -386,7 +419,7 @@ class Simulation(Economy):
     def __init__(
             self, product_formulations: Union[Formulation, Sequence[Optional[Formulation]]], product_data: Mapping,
             beta: Any, sigma: Optional[Any] = None, pi: Optional[Any] = None, gamma: Optional[Any] = None,
-            rho: Optional[Any] = None, agent_formulation: Optional[Formulation] = None,
+            rho: Optional[Any] = None, phi: Optional[Any] = None, agent_formulation: Optional[Formulation] = None,
             agent_data: Optional[Mapping] = None, integration: Optional[Integration] = None, xi: Optional[Any] = None,
             omega: Optional[Any] = None, xi_variance: float = 1, omega_variance: float = 1, correlation: float = 0.9,
             rc_types: Optional[Sequence[str]] = None, epsilon_scale: float = 1.0, costs_type: str = 'linear',
@@ -415,13 +448,16 @@ class Simulation(Economy):
             if agent_formulation._absorbed_terms:
                 raise ValueError("agent_formulation does not support fixed effect absorption.")
 
-        # load IDs and ownership matrices
+        # load IDs, lag indices, and ownership matrices
         market_ids = extract_matrix(product_data, 'market_ids')
         firm_ids = extract_matrix(product_data, 'firm_ids')
         nesting_ids = extract_matrix(product_data, 'nesting_ids')
         product_ids = extract_matrix(product_data, 'product_ids')
         clustering_ids = extract_matrix(product_data, 'clustering_ids')
+        lag_indices = extract_matrix(product_data, 'lag_indices')
         ownership = extract_matrix(product_data, 'ownership')
+
+        # do only additional validation needed for simulation (primary validation will occur when making Products below)
         if market_ids is None:
             raise KeyError("product_data must have a market_ids field.")
         if firm_ids is None:
@@ -450,6 +486,7 @@ class Simulation(Economy):
             'nesting_ids': (nesting_ids, np.object_),
             'product_ids': (product_ids, np.object_),
             'clustering_ids': (clustering_ids, np.object_),
+            'lag_indices': (lag_indices, np.int64),
             'ownership': (ownership, options.dtype),
             'shares': (shares, options.dtype),
             'prices': (prices, options.dtype),
@@ -517,6 +554,15 @@ class Simulation(Economy):
         # initialize the underlying economy
         super().__init__(product_formulations, agent_formulation, products, agents, rc_types, epsilon_scale, costs_type)
 
+        # validate parameters
+        self._parameters = Parameters(self, sigma, pi, rho, phi, beta, gamma)
+        self.sigma = self._parameters.sigma
+        self.pi = self._parameters.pi
+        self.rho = self._parameters.rho
+        self.phi = self._parameters.phi
+        self.beta = self._parameters.beta
+        self.gamma = self._parameters.gamma
+
         # load or simulate the structural errors
         self.xi = xi
         self.omega = omega
@@ -533,20 +579,32 @@ class Simulation(Economy):
             covariances = np.array([[xi_variance, covariance], [covariance, omega_variance]], options.dtype)
             self._require_psd(covariances, "the covariance matrix from xi_variance, omega_variance, and correlation")
             xi_and_omega = state.multivariate_normal([0, 0], covariances, self.N, check_valid='ignore')
+
+            # update with any autocorrelation structure
+            if self._lags is not None:
+                # scale so that initial draws are from stationary distributions
+                xi_and_omega[~self._lags] /= 1 - self.phi.T**2
+
+                # update the next indices until there are no more
+                lookup = np.full(self.N, self.N, dtype=np.int64)
+                np.minimum.at(lookup, self.products.lag_indices[self._lags].flatten(), np.arange(self.N)[self._lags])
+                next_indices = lookup[~self._lags]
+                next_indices = next_indices[next_indices != self.N]
+                while next_indices.size > 0:
+                    current_indices = self.products.lag_indices[next_indices].flatten()
+                    xi_and_omega[next_indices] += self.phi.T * xi_and_omega[current_indices]
+                    next_indices = lookup[next_indices]
+                    next_indices = next_indices[next_indices != self.N]
+
+            # split into two attributes
             self.xi = xi_and_omega[:, [0]].astype(options.dtype)
             self.omega = xi_and_omega[:, [1]].astype(options.dtype)
+
+        # check structural errors need to be manually specified
         if self.xi is None:
             raise ValueError("xi must be specified if X3 is not formulated or omega is specified.")
         if self.omega is None and self.K3 > 0:
             raise ValueError("omega must be specified if X3 is formulated and xi is specified.")
-
-        # validate parameters
-        self._parameters = Parameters(self, sigma, pi, rho, beta, gamma)
-        self.sigma = self._parameters.sigma
-        self.pi = self._parameters.pi
-        self.rho = self._parameters.rho
-        self.beta = self._parameters.beta
-        self.gamma = self._parameters.gamma
 
         # output information about the initialized simulation
         output(f"Initialized the simulation after {format_seconds(time.time() - start_time)}.")

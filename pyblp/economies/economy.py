@@ -43,6 +43,9 @@ class Economy(Container, StringRepresentation):
     ED: int
     ES: int
     H: int
+    _lags: Optional[Array]
+    _second_lags: Optional[Array]
+    _second_lag_indices: Optional[Array]
     _market_indices: Dict[Hashable, int]
     _product_market_indices: Dict[Hashable, Array]
     _agent_market_indices: Dict[Hashable, Array]
@@ -85,6 +88,14 @@ class Economy(Container, StringRepresentation):
         self.ED = self.products.demand_ids.shape[1]
         self.ES = self.products.supply_ids.shape[1]
         self.H = self.unique_nesting_ids.size
+
+        # construct indices and masks for panel data
+        self._lags = self._second_lags = self._second_lag_indices = None
+        if self.products.lag_indices.shape[1] > 0:
+            indices = np.arange(self.N)
+            self._lags = self.products.lag_indices.flat != indices
+            self._second_lag_indices = self.products.lag_indices[self.products.lag_indices.flat].flatten()
+            self._second_lags = self._second_lag_indices != indices[self.products.lag_indices.flat]
 
         # identify market indices
         self._market_indices = {t: i for i, t in enumerate(self.unique_market_ids)}
@@ -394,3 +405,35 @@ class Economy(Container, StringRepresentation):
             delta *= self.epsilon_scale
 
         return delta
+
+    def _compute_difference(self, moment_type: str, x: Array, phi: Array) -> Array:
+        """Either return an array unaltered, compute a quasi-first difference, or further difference these innovations
+        based on the moment type.
+        """
+        if moment_type != 'levels':
+            assert self._lags is not None
+            x = x - phi * x[self.products.lag_indices.flat]
+            if moment_type == 'innovations':
+                x[~self._lags] = 0
+            else:
+                assert moment_type == 'differenced_innovations'
+                assert self._second_lags is not None and self._second_lag_indices is not None
+                x -= x[self._second_lag_indices]
+                x[~self._second_lags] = 0
+        return x
+
+    def _compute_difference_derivative(self, moment_type: str, x: Array) -> Array:
+        """Compute the derivative of the moment transform with respect to phi."""
+        if moment_type == 'levels':
+            return np.zeros_like(x)
+        x = x[self.products.lag_indices.flat]
+        if moment_type == 'innovations':
+            assert self._lags is not None
+            x = -x
+            x[~self._lags] = 0
+        else:
+            assert moment_type == 'differenced_innovations'
+            assert self._second_lags is not None and self._second_lag_indices is not None
+            x = -(x - x[self._second_lag_indices])
+            x[~self._second_lags] = 0
+        return x

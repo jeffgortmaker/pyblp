@@ -31,6 +31,12 @@ Andrews, Gentzkow, and Shapiro (2017)
 Andrews, Isaiah, Matthew Gentzkow, and Jesse M. Shapiro (2017). `Measuring the sensitivity of parameter estimates to estimation moments <https://ideas.repec.org/a/oup/qjecon/v132y2017i4p1553-1592..html>`_. *Quarterly Journal of Economics, 132* (4), 1553-1592.
 
 
+Arellano and Bond (1991)
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+Arellano, Manuel and Stephen Bond (1991). `Some tests of specification for panel data: Monte Carlo evidence and an application to employment equations <https://ideas.repec.org/a/oup/restud/v58y1991i2p277-297..html>_. *Review of Economic Studies, 58* (2), 277–297.
+
+
 Armstrong (2016)
 ~~~~~~~~~~~~~~~~
 

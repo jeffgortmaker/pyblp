@@ -18,7 +18,7 @@ from ..configurations.iteration import Iteration
 from ..configurations.optimization import ObjectiveResults, Optimization, OptimizationProgress
 from ..markets.problem_market import ProblemMarket
 from ..micro import MicroDataset, MicroMoment, Moments
-from ..parameters import Parameters
+from ..parameters import Parameters, PhiParameter
 from ..primitives import Agents, Products
 from ..results.problem_results import ProblemResults
 from ..utilities.algebra import precisely_invert, precisely_identify_collinearity
@@ -42,8 +42,9 @@ class ProblemEconomy(Economy):
 
     def solve(
             self, sigma: Optional[Any] = None, pi: Optional[Any] = None, rho: Optional[Any] = None,
-            beta: Optional[Any] = None, gamma: Optional[Any] = None, sigma_bounds: Optional[Tuple[Any, Any]] = None,
-            pi_bounds: Optional[Tuple[Any, Any]] = None, rho_bounds: Optional[Tuple[Any, Any]] = None,
+            phi: Optional[Any] = None, beta: Optional[Any] = None, gamma: Optional[Any] = None,
+            sigma_bounds: Optional[Tuple[Any, Any]] = None, pi_bounds: Optional[Tuple[Any, Any]] = None,
+            rho_bounds: Optional[Tuple[Any, Any]] = None, phi_bounds: Optional[Tuple[Any, Any]] = None,
             beta_bounds: Optional[Tuple[Any, Any]] = None, gamma_bounds: Optional[Tuple[Any, Any]] = None,
             delta: Optional[Any] = None, method: str = '2s', initial_update: Optional[bool] = None,
             optimization: Optional[Optimization] = None, scale_objective: bool = True, check_optimality: str = 'both',
@@ -51,8 +52,9 @@ class ProblemEconomy(Economy):
             delta_behavior: str = 'first', iteration: Optional[Iteration] = None, fp_type: str = 'safe_linear',
             shares_bounds: Optional[Tuple[Any, Any]] = (1e-300, None), costs_bounds: Optional[Tuple[Any, Any]] = None,
             W: Optional[Any] = None, center_moments: bool = True, W_type: str = 'robust', se_type: str = 'robust',
-            covariance_moments_mean: float = 0, micro_moments: Sequence[MicroMoment] = (),
-            micro_sample_covariances: Optional[Any] = None,
+            demand_moment_types: Union[str, Sequence[str]] = 'levels',
+            supply_moment_types: Union[str, Sequence[str]] = 'levels', covariance_moments_mean: float = 0,
+            micro_moments: Sequence[MicroMoment] = (), micro_sample_covariances: Optional[Any] = None,
             resample_agent_data: Optional[Callable[[int], Optional[Mapping]]] = None) -> ProblemResults:
         r"""Solve the problem.
 
@@ -117,6 +119,23 @@ class ProblemEconomy(Economy):
             Zeros are assumed to be zero throughout estimation and nonzeros are, if not fixed by ``rho_bounds``,
             starting values for unknown elements in :math:`\theta`.
 
+        phi : `array-like, optional`
+            Configuration for which elements in the vector of parameters that measure unobservable autocorrelation,
+            :math:`\phi`, are fixed at zero and starting values for the other elements, which, if not fixed by
+            ``phi_bounds``, are in the vector of unknown elements, :math;`\theta`.
+
+            If ``lag_indices`` in ``product_data`` were specified, this is either a scalar :math:`\phi = \phi_\xi`
+            or, if a supply side was specified, a two-element vector :math:`\phi = [\phi_\xi, \phi_\omega]'`,
+            corresponding to demand- and supply-side unobservable autocorrelations:
+
+            .. math::
+               :eq: ar1
+
+               \xi_{jt} = \phi_\xi \cdot L \xi_{jt} + \Delta_{\phi_\xi} \xi_{jt},
+               \omega_{jt} = \phi_\omega \cdot L \omega_{jt} + \Delta_{\phi_\omega} \omega_{jt},
+
+            where the ``lag_indices`` field in ``product_data`` defines the lag operator :math:`L`.
+
         beta: `array-like, optional`
             Configuration for which elements in the vector of demand-side linear parameters, :math:`\beta`, are
             concentrated out of the problem. Usually, this is left unspecified, unless there is a supply side, in which
@@ -179,6 +198,13 @@ class ProblemEconomy(Economy):
             Lower and upper bounds corresponding to zeros in ``rho`` are set to zero. Setting a lower bound equal to an
             upper bound fixes the corresponding element, removing it from :math:`\theta`. Both ``None`` and
             ``numpy.nan`` are converted to ``-numpy.inf`` in ``lb`` and to ``numpy.inf`` in ``ub``.
+
+        phi_bounds : `tuple, optional`
+            Configuration for :math:`\phi` bounds of the form ``(lb, ub)``, in which both ``lb`` and ``ub`` are of the
+            same size as ``phi``. If ``optimization`` does not support bounds, these will be ignored.
+
+            Setting a lower bound equal to an upper bound fixes this parameter, removing it from :math:`\theta`. Both
+            ``None`` and ``numpy.nan`` are converted to ``-numpy.inf`` in ``lb`` and to ``numpy.inf`` in ``ub``.
 
         beta_bounds : `tuple, optional`
             Configuration for :math:`\beta` bounds of the form ``(lb, ub)``, in which both ``lb`` and ``ub`` are of the
@@ -421,6 +447,43 @@ class ProblemEconomy(Economy):
             block-diagonal with a micro moment block equal to the scaled covariance matrix defined in
             :eq:`scaled_micro_moment_covariances`.
 
+        demand_moment_types : `str or sequence of str, optional`
+            This can be used to replace demand-side moments :math:`\bar{g}_D`. The following types are supported:
+
+                - ``'levels'`` (default) - Standard moments in :eq:`moments`:
+                  :math:`g_{D,jt} = \xi_{jt} \cdot Z_{D,jt}`.
+
+                - ``'innovations'`` - Replace unobservables with their AR(1) innovations in :eq:`ar1`:
+                  :math:`g_{D,jt} = \Delta_{\phi_\xi} \xi_{jt} \cdot Z_{D,jt}`.
+
+                - ``'differenced_innovations'`` - Further difference the innovations in :eq:`ar1` to eliminate, for
+                  example, any product-market fixed effects:
+                  :math:`g_{D,jt} = \Delta\Delta_{\phi_\xi} \xi_{jt} \cdot Z_{D,jt}`.
+
+            Specifying a list instead of a single type will replace :math:`\bar{g}_D` with a
+            corresponding stack, with columns of :math:`Z_D` split according to the number of types. For example, to
+            implement :ref:`references:Arellano and Bond(1991)`'s "system GMM" estimator, one can specify
+            ``demand_moment_types=['innovations', 'differenced_innovations']`` and provide additional columns in
+            :math:`Z_D`, giving
+
+            .. math::
+
+               g_{D,jt} =
+               \begin{bmatrix}
+                   \Delta_{\phi_\xi} \xi_{jt} \cdot Z_{D,jt,1:M_D / 2} \\
+                   \Delta\Delta_{\phi_\xi} \xi_{jt} \cdot Z_{D,jt,M_D / 2 + 1:M_D}
+               \end{bmatrix}
+               .
+
+            .. warning::
+
+                 Alternative moment types are still an experimental feature. The way in which they are implemented
+                 and used may change somewhat in future releases.
+
+        supply_moment_types : `str or sequence of str, optional`
+            This can be used to replace supply-side moments :math:`\bar{g}_S` analogously to how ``demand_moment_types``
+            replaces demand-side moments, but with :math:`\xi` replaced by :math:`\omega`, :math:`\phi_\xi` replaced by
+            :math:`\phi_\omega`, and :math:`Z_D` replaced by :math:`Z_S`.
         covariance_moments_mean : `float, optional`
             If ``covariance_instruments`` were specified in ``product_data``, this can be used to choose a
             :math:`m \neq 0` in covariance moments :math:`E[g_{C,jt}] = E[(\xi_{jt}\omega_{jt} - m)Z_{C,jt}] = 0` where
@@ -477,23 +540,35 @@ class ProblemEconomy(Economy):
         output("Solving the problem ...")
         step_start_time = time.time()
 
-        # validate settings
+        # validate the method
         if method not in {'1s', '2s'}:
             raise TypeError("method must be '1s' or '2s'.")
+
+        # choose a default optimization configuration and validate any specified one
         if optimization is None:
             optimization = Optimization('l-bfgs-b', {'ftol': 0, 'gtol': 1e-8})
         elif not isinstance(optimization, Optimization):
             raise TypeError("optimization must be None or an Optimization instance.")
+
+        # validate the type of optimality
         if check_optimality not in {'gradient', 'both'}:
             raise ValueError("check_optimality must be 'gradient' or 'both'.")
+
+        # validate error behavior and punishments
         if error_behavior not in {'revert', 'punish', 'raise'}:
             raise ValueError("error_behavior must be 'revert', 'punish', or 'raise'.")
         if not isinstance(error_punishment, (float, int)) or error_punishment < 0:
             raise ValueError("error_punishment must be a positive float.")
+
+        # validate delta behavior
         if delta_behavior not in {'last', 'logit', 'first'}:
             raise ValueError("delta_behavior must be 'last', 'logit', or 'first'.")
+
+        # choose a default iteration configuration and validate any non-default ones
         iteration = self._coerce_optional_delta_iteration(iteration)
         self._validate_fp_type(fp_type)
+
+        # validate the weighting matrix and standard error configurations
         if W_type not in {'robust', 'unadjusted', 'clustered'}:
             raise ValueError("W_type must be 'robust', 'unadjusted', or 'clustered'.")
         if se_type not in {'robust', 'unadjusted', 'clustered'}:
@@ -503,6 +578,46 @@ class ProblemEconomy(Economy):
                 raise ValueError(
                     "W_type or se_type is 'clustered' but clustering_ids were not specified in product_data."
                 )
+
+        # validate moment types
+        if not isinstance(demand_moment_types, (tuple, list)):
+            if not isinstance(demand_moment_types, str):
+                raise TypeError("demand_moment_types must be a string or a sequence of strings.")
+            demand_moment_types = [demand_moment_types]
+        if not isinstance(supply_moment_types, (tuple, list)):
+            if not isinstance(supply_moment_types, str):
+                raise TypeError("supply_moment_types must be a string or a sequence of strings.")
+            supply_moment_types = [supply_moment_types]
+        moment_types_info = [
+            ("demand", demand_moment_types, self.MD, self.ED),
+            ("supply", supply_moment_types, self.MS, self.ES),
+        ]
+        for side, moment_types, M, E in moment_types_info:
+            for moment_type in moment_types:
+                if moment_type not in {'levels', 'innovations', 'differenced_innovations'}:
+                    raise ValueError(
+                        f"{side}_moment_types must be 'levels', 'innovations', 'differenced_innovations', or a "
+                        f"sequence of these."
+                    )
+            if np.unique(moment_types).size != len(moment_types):
+                raise ValueError(f"{side}_moment_types cannot have duplicates.")
+            if M % len(moment_types) != 0:
+                raise ValueError(
+                    f"The number of {side}-side instruments (currently {M}) must be evenly divisible by the number of "
+                    f"{side}_moment_types (currently {len(moment_types)})."
+                )
+            if any(t != 'levels' for t in moment_types):
+                if self.MC > 0:
+                    raise NotImplementedError(
+                        f"Non-default {side}_moment_types and covariance restrictions are not currently supported."
+                    )
+                if E > 0:
+                    raise NotImplementedError(
+                        f"Non-default {side}_moment_types and fixed effect absorption are not currently supported. "
+                        f"Dummy variables can be used instead."
+                    )
+
+        # validate a non-default covariance moments mean
         if not isinstance(covariance_moments_mean, (int, float)):
             raise ValueError("covariance_moments_mean must be a float.")
 
@@ -542,8 +657,8 @@ class ProblemEconomy(Economy):
 
         # validate parameters before compressing unfixed parameters into theta and outputting related information
         parameters = Parameters(
-            self, sigma, pi, rho, beta, gamma, sigma_bounds, pi_bounds, rho_bounds, beta_bounds, gamma_bounds,
-            bounded=optimization._supports_bounds, allow_linear_nans=True
+            self, sigma, pi, rho, phi, beta, gamma, sigma_bounds, pi_bounds, rho_bounds, phi_bounds, beta_bounds,
+            gamma_bounds, bounded=optimization._supports_bounds, allow_linear_nans=True
         )
         theta = parameters.compress()
         theta_bounds = parameters.compress_bounds()
@@ -576,9 +691,10 @@ class ProblemEconomy(Economy):
             self._require_psd(W, "W")
             self._detect_singularity(W, "W")
         else:
+            # compute the 2SLS weighting matrix
             S = scipy.linalg.block_diag(
-                self.products.ZD.T @ self.products.ZD / self.N,
-                self.products.ZS.T @ self.products.ZS / self.N,
+                *(Z.T @ Z / self.N for Z in np.split(self.products.ZD, len(demand_moment_types), axis=1)),
+                *(Z.T @ Z / self.N for Z in np.split(self.products.ZS, len(supply_moment_types), axis=1)),
                 self.products.ZC.T @ self.products.ZC / self.N,
             )
             self._detect_singularity(S, "the 2SLS weighting matrix")
@@ -629,22 +745,25 @@ class ProblemEconomy(Economy):
         step = 0 if initial_update else 1
         last_results = None
         while True:
-            # collect inputs into linear parameter estimation
-            X_list = [self.products.X1[:, parameters.eliminated_beta_index.flat]]
-            Z_list = [self.products.ZD]
-            if self.K3 > 0:
-                X_list.append(self.products.X3[:, parameters.eliminated_gamma_index.flat])
-                Z_list.append(self.products.ZS)
+            # only collect inputs into linear parameter estimation if the IV model won't have to be re-initialized for
+            #   every guess of the parameters due to changing autocorrelation parameters
+            iv = None
+            if all(t == 'levels' for m in [demand_moment_types, supply_moment_types] for t in m):
+                X_list = [self.products.X1[:, parameters.eliminated_beta_index.flat]]
+                Z_list = [self.products.ZD]
+                if self.K3 > 0:
+                    X_list.append(self.products.X3[:, parameters.eliminated_gamma_index.flat])
+                    Z_list.append(self.products.ZS)
 
-            # initialize an IV model for linear parameter estimation
-            iv = IV(X_list, Z_list, W[:self.MD + self.MS, :self.MD + self.MS])
-            self._handle_errors(iv.errors, error_behavior)
+                # initialize an IV model for linear parameter estimation
+                iv = IV(X_list, Z_list, W[:self.MD + self.MS, :self.MD + self.MS])
+                self._handle_errors(iv.errors, error_behavior)
 
             # wrap computation of progress information with step-specific information
             compute_step_progress = functools.partial(
                 self._compute_progress, parameters, moments, iv, W, scale_objective, error_behavior, error_punishment,
                 delta_behavior, iteration, fp_type, shares_bounds, costs_bounds, finite_differences,
-                covariance_moments_mean, resample_agent_data
+                demand_moment_types, supply_moment_types, covariance_moments_mean, resample_agent_data
             )
 
             # initialize optimization progress
@@ -726,7 +845,8 @@ class ProblemEconomy(Economy):
             results = ProblemResults(
                 final_progress, last_results, step, step_start_time, optimization_start_time, optimization_end_time,
                 optimization_stats, iteration_stats, scale_objective, shares_bounds, costs_bounds,
-                micro_moment_covariances, center_moments, W_type, se_type, covariance_moments_mean
+                micro_moment_covariances, center_moments, W_type, se_type, demand_moment_types, supply_moment_types,
+                covariance_moments_mean
             )
             self._handle_errors(results._errors, error_behavior)
             output(f"Computed results after {format_seconds(results.total_time - results.optimization_time)}.")
@@ -751,13 +871,14 @@ class ProblemEconomy(Economy):
             step_start_time = time.time()
 
     def _compute_progress(
-            self, parameters: Parameters, moments: Moments, iv: IV, W: Array, scale_objective: bool,
+            self, parameters: Parameters, moments: Moments, iv: Optional[IV], W: Array, scale_objective: bool,
             error_behavior: str, error_punishment: float, delta_behavior: str, iteration: Iteration, fp_type: str,
-            shares_bounds: Bounds, costs_bounds: Bounds, finite_differences: bool, covariance_moments_mean: float,
+            shares_bounds: Bounds, costs_bounds: Bounds, finite_differences: bool, demand_moment_types: Sequence[str],
+            supply_moment_types: Sequence[str], covariance_moments_mean: float,
             resample_agent_data: Optional[Callable[[int], Optional[Mapping]]], theta: Array,
-            progress: 'InitialProgress', compute_gradient: bool, compute_hessian: bool,
-            compute_micro_covariances: bool, detect_micro_collinearity: bool,
-            compute_simulation_covariances: bool, agents_override: Optional[RecArray] = None) -> 'Progress':
+            progress: 'InitialProgress', compute_gradient: bool, compute_hessian: bool, compute_micro_covariances: bool,
+            detect_micro_collinearity: bool, compute_simulation_covariances: bool,
+            agents_override: Optional[RecArray] = None) -> 'Progress':
         """Compute demand- and supply-side contributions before recovering the linear parameters and structural error
         terms. Then, form the GMM objective value and its gradient. Finally, handle any errors that were encountered
         before structuring relevant progress information.
@@ -765,7 +886,7 @@ class ProblemEconomy(Economy):
         errors: List[Error] = []
 
         # expand theta
-        sigma, pi, rho, beta, gamma = parameters.expand(theta)
+        sigma, pi, rho, phi, beta, gamma = parameters.expand(theta)
 
         # initialize delta, micro moments, their Jacobians, micro moment covariances, micro moment values, indices of
         #   clipped shares, and fixed point statistics so that they can be filled
@@ -1038,6 +1159,7 @@ class ProblemEconomy(Economy):
                 perturbed_progress = self._compute_progress(
                     parameters, moments, iv, W, scale_objective, error_behavior, error_punishment, delta_behavior,
                     iteration, fp_type, shares_bounds, costs_bounds, finite_differences=False,
+                    demand_moment_types=demand_moment_types, supply_moment_types=supply_moment_types,
                     covariance_moments_mean=covariance_moments_mean, resample_agent_data=None, theta=perturbed_theta,
                     progress=progress, compute_gradient=False, compute_hessian=False, compute_micro_covariances=False,
                     detect_micro_collinearity=False, compute_simulation_covariances=False,
@@ -1086,36 +1208,86 @@ class ProblemEconomy(Economy):
                 omega_jacobian, supply_jacobian_absorption_errors = self._absorb_supply_ids(omega_jacobian)
                 errors.extend(supply_jacobian_absorption_errors)
 
-        # collect inputs into GMM estimation
-        X_list = [self.products.X1[:, parameters.eliminated_beta_index.flat]]
-        Z_list = [self.products.ZD]
-        y_list = [iv_delta]
-        jacobian_list = [xi_jacobian]
-        if self.K3 > 0:
-            X_list.append(self.products.X3[:, parameters.eliminated_gamma_index.flat])
-            Z_list.append(self.products.ZS)
-            y_list.append(iv_tilde_costs)
-            jacobian_list.append(omega_jacobian)
+        # identify the columns of X1 and X3 that are relevant for concentrating out the linear parameters
+        iv_X1 = self.products.X1[:, parameters.eliminated_beta_index.flat]
+        iv_X3 = None if self.K3 == 0 else self.products.X3[:, parameters.eliminated_gamma_index.flat]
 
-        # recover the linear parameters and structural error terms
+        # collect instruments
+        Z_list = list(np.split(self.products.ZD, len(demand_moment_types), axis=1))
+        if self.K3 > 0:
+            Z_list.extend(list(np.split(self.products.ZS, len(supply_moment_types), axis=1)))
+
+        # collect other inputs into GMM estimation (within side, X's need to be stacked because they will correspond to
+        #   the same concentrated-out linear parameters)
+        X_list = []
+        y_list = []
+        jacobian_list = []
+        for moment_type in demand_moment_types:
+            X_list.append(self._compute_difference(moment_type, iv_X1, phi[0]))
+            y_list.append(self._compute_difference(moment_type, iv_delta, phi[0]))
+            jacobian_list.append(self._compute_difference(moment_type, xi_jacobian, phi[0]))
+            if moment_type != demand_moment_types[0]:
+                X_list = X_list[:-2] + [np.vstack(X_list[-2:])]
+        if self.K3 > 0:
+            assert iv_X3 is not None
+            for moment_type in supply_moment_types:
+                X_list.append(self._compute_difference(moment_type, iv_X3, phi[1]))
+                y_list.append(self._compute_difference(moment_type, iv_tilde_costs, phi[1]))
+                jacobian_list.append(self._compute_difference(moment_type, omega_jacobian, phi[1]))
+                if moment_type != supply_moment_types[0]:
+                    X_list = X_list[:-2] + [np.vstack(X_list[-2:])]
+
+        # re-initialize the IV regression if it changes with the parameter values
+        iv_W = W[:self.MD + self.MS, :self.MD + self.MS]
+        if iv is None:
+            iv = IV(X_list, Z_list, iv_W)
+            errors.extend(iv.errors)
+
+        # run the IV regression and extract the concentrated-out linear parameters
         parameters_list, u_list, jacobian_list = iv.estimate(
-            X_list, Z_list, W[:self.MD + self.MS, :self.MD + self.MS], y_list, jacobian_list, convert_jacobians
+            X_list, Z_list, iv_W, y_list, jacobian_list, convert_jacobians
         )
         beta[parameters.eliminated_beta_index] = parameters_list[0].flat
-        if self.K3 == 0:
-            xi = u_list[0]
-            omega = np.full((self.N, 0), np.nan, options.dtype)
-            xi_jacobian = jacobian_list[0]
-        else:
+        if self.K3 > 0:
             gamma[parameters.eliminated_gamma_index] = parameters_list[1].flat
-            xi, omega = u_list
-            xi_jacobian, omega_jacobian = jacobian_list
 
-            # add any covariance moments
-            if self.MC > 0:
-                u_list.append(xi * omega - covariance_moments_mean)
-                Z_list.append(self.products.ZC)
-                jacobian_list.append(xi_jacobian * omega + xi * omega_jacobian)
+        # extract the demand-side structural error and its Jacobian
+        if 'levels' in demand_moment_types:
+            i = demand_moment_types.index('levels')
+            xi = u_list[i]
+            xi_jacobian = jacobian_list[i]
+        else:
+            assert not convert_jacobians
+            xi = iv_delta - iv_X1 @ parameters_list[0]
+
+        # extract the suppy-side structural error and its Jacobian
+        if self.K3 == 0:
+            omega = np.full((self.N, 0), np.nan, options.dtype)
+        elif 'levels' in supply_moment_types:
+            i = len(demand_moment_types) + supply_moment_types.index('levels')
+            omega = u_list[i]
+            omega_jacobian = jacobian_list[i]
+        else:
+            assert iv_X3 is not None and not convert_jacobians
+            omega = iv_tilde_costs - iv_X3 @ parameters_list[1]
+
+        # update Jacobians with phi contributions
+        if compute_jacobians:
+            for p, parameter in enumerate(parameters.unfixed):
+                if isinstance(parameter, PhiParameter):
+                    if parameter.location[0] == 0:
+                        for i, moment_type in enumerate(demand_moment_types):
+                            jacobian_list[i][:, [p]] += self._compute_difference_derivative(moment_type, xi)
+                    elif self.K3 > 0:
+                        for i, moment_type in enumerate(supply_moment_types):
+                            i += len(demand_moment_types)
+                            jacobian_list[i][:, [p]] += self._compute_difference_derivative(moment_type, omega)
+
+        # add any covariance moments
+        if self.MC > 0:
+            u_list.append(xi * omega - covariance_moments_mean)
+            Z_list.append(self.products.ZC)
+            jacobian_list.append(xi_jacobian * omega + xi * omega_jacobian)
 
         # compute the objective value and replace it with its last value if computation failed
         with np.errstate(all='ignore'):
@@ -1165,10 +1337,10 @@ class ProblemEconomy(Economy):
                 """Evaluate the gradient at a perturbed parameter vector."""
                 perturbed_progress = self._compute_progress(
                     parameters, moments, iv, W, scale_objective, error_behavior, error_punishment, delta_behavior,
-                    iteration, fp_type, shares_bounds, costs_bounds, finite_differences, covariance_moments_mean,
-                    resample_agent_data, perturbed_theta, progress, compute_gradient=True, compute_hessian=False,
-                    compute_micro_covariances=False, detect_micro_collinearity=False,
-                    compute_simulation_covariances=False,
+                    iteration, fp_type, shares_bounds, costs_bounds, finite_differences, demand_moment_types,
+                    supply_moment_types, covariance_moments_mean, resample_agent_data, perturbed_theta, progress,
+                    compute_gradient=True, compute_hessian=False, compute_micro_covariances=False,
+                    detect_micro_collinearity=False, compute_simulation_covariances=False,
                 )
                 return perturbed_progress.gradient
 
@@ -1195,10 +1367,11 @@ class ProblemEconomy(Economy):
 
                 resampled_progress = self._compute_progress(
                     parameters, moments, iv, W, scale_objective, error_behavior, error_punishment, delta_behavior,
-                    iteration, fp_type, shares_bounds, costs_bounds, finite_differences, covariance_moments_mean,
-                    resample_agent_data, theta, progress, compute_gradient=False, compute_hessian=False,
-                    compute_micro_covariances=False, detect_micro_collinearity=False,
-                    compute_simulation_covariances=False, agents_override=resampled_agents,
+                    iteration, fp_type, shares_bounds, costs_bounds, finite_differences, demand_moment_types,
+                    supply_moment_types, covariance_moments_mean, resample_agent_data, theta, progress,
+                    compute_gradient=False, compute_hessian=False, compute_micro_covariances=False,
+                    detect_micro_collinearity=False, compute_simulation_covariances=False,
+                    agents_override=resampled_agents,
                 )
                 mean_g_samples.append(resampled_progress.mean_g.flatten())
 
@@ -1309,14 +1482,6 @@ class Problem(ProblemEconomy):
                  linear parameters are estimated using other moments. In the case of overidentification, the estimator
                  may not be fully efficient because of this implementation decision.
 
-        The recommendation in :ref:`references:Conlon and Gortmaker (2020)` is to start with differentiation instruments
-        of :ref:`references:Gandhi and Houde (2025)`, which can be built with :func:`build_differentiation_instruments`,
-        and then compute feasible optimal instruments with :func:`ProblemResults.compute_optimal_instruments` in the
-        second stage.
-
-        For guidance on how to construct instruments and add them to product data, refer to the examples in the
-        documentation for the :func:`build_blp_instruments` and :func:`build_differentiation_instruments` functions.
-
         If ``firm_ids`` are specified, custom ownership matrices can be specified as well:
 
             - **ownership** : (`numeric, optional`) - Custom stacked :math:`J_t \times J_t` ownership or product
@@ -1342,6 +1507,16 @@ class Problem(ProblemEconomy):
 
             - **product_ids** (`object, optional`) - IDs that identify products within markets. There can be multiple
               columns.
+
+        To estimate unobservable autocorrelation with ``phi`` in :meth:`Problem.solve`, indices that define lags of the
+        data must be specified:
+
+            - **lag_indices** : (`int, optional`) - Indices that take on values from :math:`0` to :math:`N - 1`, which
+              define the lag operator :math:`L` on the data. For example, if markets :math:`t` are simply time periods
+              and the identity of products :math:`j` are persistent across periods, then :math:`L x_{jt} = x_{j,t-1}`.
+
+              The value of the current row index indicates that this is the initial period for a product. Otherwise, the
+              value should correspond to the row that is the lagged version of the current row.
 
         Finally, clustering groups can be specified to account for within-group correlation while updating the weighting
         matrix and estimating standard errors:

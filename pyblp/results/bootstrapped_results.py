@@ -60,6 +60,8 @@ class BootstrappedResults(SimpleEconomyResults):
         Bootstrapped parameters that measures how agent tastes vary with demographics, :math:`\Pi`.
     bootstrapped_rho : `ndarray`
         Bootstrapped parameters that measure within nesting group correlations, :math:`\rho`.
+    bootstrapped_phi : `ndarray`
+        Bootstrapped parameter that measures demand-side unobservable autocorrelation, :math:`\phi`.
     bootstrapped_beta : `ndarray`
         Bootstrapped demand-side linear parameters, :math:`\beta`.
     bootstrapped_gamma : `ndarray`
@@ -96,6 +98,7 @@ class BootstrappedResults(SimpleEconomyResults):
     bootstrapped_sigma: Array
     bootstrapped_pi: Array
     bootstrapped_rho: Array
+    bootstrapped_phi: Array
     bootstrapped_beta: Array
     bootstrapped_gamma: Array
     bootstrapped_prices: Array
@@ -109,15 +112,16 @@ class BootstrappedResults(SimpleEconomyResults):
 
     def __init__(
             self, problem_results: ProblemResults, bootstrapped_sigma: Array, bootstrapped_pi: Array,
-            bootstrapped_rho: Array, bootstrapped_beta: Array, bootstrapped_gamma: Array, bootstrapped_prices: Array,
-            bootstrapped_shares: Array, bootstrapped_delta: Array, start_time: float, end_time: float, draws: int,
-            iteration_stats: Mapping[Hashable, SolverStats]) -> None:
+            bootstrapped_rho: Array, bootstrapped_phi: Array, bootstrapped_beta: Array, bootstrapped_gamma: Array,
+            bootstrapped_prices: Array, bootstrapped_shares: Array, bootstrapped_delta: Array, start_time: float,
+            end_time: float, draws: int, iteration_stats: Mapping[Hashable, SolverStats]) -> None:
         """Structure bootstrapped problem results."""
         super().__init__(problem_results.problem, problem_results._parameters)
         self.problem_results = problem_results
         self.bootstrapped_sigma = bootstrapped_sigma
         self.bootstrapped_pi = bootstrapped_pi
         self.bootstrapped_rho = bootstrapped_rho
+        self.bootstrapped_phi = bootstrapped_phi
         self.bootstrapped_beta = bootstrapped_beta
         self.bootstrapped_gamma = bootstrapped_gamma
         self.bootstrapped_prices = bootstrapped_prices
@@ -306,9 +310,9 @@ class BootstrappedResults(SimpleEconomyResults):
 
     def to_dict(
             self, attributes: Sequence[str] = (
-                'bootstrapped_sigma', 'bootstrapped_pi', 'bootstrapped_rho', 'bootstrapped_beta', 'bootstrapped_gamma',
-                'bootstrapped_prices', 'bootstrapped_shares', 'bootstrapped_delta', 'computation_time', 'draws',
-                'fp_converged', 'fp_iterations', 'contraction_evaluations'
+                'bootstrapped_sigma', 'bootstrapped_pi', 'bootstrapped_rho', 'bootstrapped_phi', 'bootstrapped_beta',
+                'bootstrapped_gamma', 'bootstrapped_prices', 'bootstrapped_shares', 'bootstrapped_delta',
+                'computation_time', 'draws', 'fp_converged', 'fp_iterations', 'contraction_evaluations'
             )) -> dict:
         """Convert these results into a dictionary that maps attribute names to values.
 

@@ -336,6 +336,8 @@ class OptimizationProgress(object):
         Parameters that measures how agent tastes vary with demographics, :math:`\Pi`.
     rho : `ndarray`
         Parameters that measure within nesting group correlations, :math:`\rho`.
+    phi : `ndarray`
+        Parameters that measure unobservable autocorrelation, :math:`\phi`.
     beta : `ndarray`
         Demand-side linear parameters, :math:`\beta`.
     gamma : `ndarray`
@@ -346,6 +348,8 @@ class OptimizationProgress(object):
         Bounds for :math:`\Pi` that were used during optimization, which are of the form ``(lb, ub)``.
     rho_bounds : `tuple`
         Bounds for :math:`\rho` that were used during optimization, which are of the form ``(lb, ub)``.
+    phi_bounds : `tuple`
+        Bounds for :math:`\phi` that were used during optimization, which are of the form ``(lb, ub)``.
     beta_bounds : `tuple`
         Bounds for :math:`\beta` that were used during optimization, which are of the form ``(lb, ub)``.
     gamma_bounds : `tuple`
@@ -356,6 +360,8 @@ class OptimizationProgress(object):
         Variable labels for columns of :math:`\Pi`, which are derived from the formulation for demographics.
     rho_labels : `list of str`
         Variable labels for :math:`\rho`. If :math:`\rho` is not a scalar, this is :attr:`Problem.unique_nesting_ids`.
+    phi_labels : `list of str`
+        Variable labels for :math:`\phi`.
     beta_labels : `list of str`
         Variable labels for :math:`\beta`, which are derived from the formulation for :math:`X_1`.
     gamma_labels : `list of str`
@@ -418,16 +424,19 @@ class OptimizationProgress(object):
     sigma_squared: Array
     pi: Array
     rho: Array
+    phi: Array
     beta: Array
     gamma: Array
     sigma_bounds: Bounds
     pi_bounds: Bounds
     rho_bounds: Bounds
+    phi_bounds: Bounds
     beta_bounds: Bounds
     gamma_bounds: Bounds
     sigma_labels: List[str]
     pi_labels: List[str]
     rho_labels: List[str]
+    phi_labels: List[str]
     beta_labels: List[str]
     gamma_labels: List[str]
     theta_labels: List[str]
@@ -450,7 +459,7 @@ class OptimizationProgress(object):
 
     def __init__(self, progress: 'Progress'):
         """Structure all the progress."""
-        self.sigma, self.pi, self.rho, _, _ = progress.parameters.expand(progress.theta)
+        self.sigma, self.pi, self.rho, self.phi, _, _ = progress.parameters.expand(progress.theta)
         self.problem = progress.problem
         self.W = progress.W
         self.theta = progress.theta
@@ -489,11 +498,13 @@ class OptimizationProgress(object):
         self.sigma_bounds = progress.parameters.sigma_bounds
         self.pi_bounds = progress.parameters.pi_bounds
         self.rho_bounds = progress.parameters.rho_bounds
+        self.phi_bounds = progress.parameters.phi_bounds
         self.beta_bounds = progress.parameters.beta_bounds
         self.gamma_bounds = progress.parameters.gamma_bounds
         self.sigma_labels = progress.parameters.sigma_labels
         self.pi_labels = progress.parameters.pi_labels
         self.rho_labels = progress.parameters.rho_labels
+        self.phi_labels = progress.parameters.phi_labels
         self.beta_labels = progress.parameters.beta_labels
         self.gamma_labels = progress.parameters.gamma_labels
         self.theta_labels = progress.parameters.theta_labels

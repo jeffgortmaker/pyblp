@@ -132,6 +132,7 @@ Features
 - Differentiation instruments
 - Optimal instruments
 - Covariance restrictions
+- Timing assumptions using moments based on unobservable innovations
 - Adjustments for simulation error
 - Tests of overidentifying and model restrictions
 - Parametric boostrapping post-estimation outputs

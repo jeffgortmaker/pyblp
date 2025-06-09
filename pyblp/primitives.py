@@ -34,6 +34,8 @@ class Products(object):
         IDs that identify products within markets.
     clustering_ids : `ndarray`
         IDs used to compute clustered standard errors.
+    lag_indices : `ndarray`
+        Indices of products that correspond to their lags or the current row index to indicate an initial period.
     ownership : `ndarray`
         Stacked :math:`J_t \times J_t` ownership or product holding matrices, :math:`\mathscr{H}`, for each market
         :math:`t`.
@@ -69,6 +71,7 @@ class Products(object):
     nesting_ids: Array
     product_ids: Array
     clustering_ids: Array
+    lag_indices: Array
     ownership: Array
     shares: Array
     prices: Array
@@ -184,6 +187,28 @@ class Products(object):
             if np.unique(clustering_ids).size == 1:
                 raise ValueError("The clustering_ids field of product_data must have at least two distinct IDs.")
 
+        # load lag indices
+        lag_indices = extract_matrix(product_data, 'lag_indices')
+        if lag_indices is not None:
+            N = market_ids.size
+            if lag_indices.shape[1] > 1:
+                raise ValueError("The lag_indices field of product_data must be one-dimensional.")
+            if not (lag_indices >= 0).all() and (lag_indices <= N - 1).all():
+                raise ValueError("The lag_indices field of product_data must be between 0 and N - 1, inclusive.")
+
+            # same-index rows indicate initial periods
+            initial = lag_indices == np.c_[np.arange(N)]
+            if not initial.any():
+                raise ValueError(
+                    "The lag_indices field of product_data must have at least one value equal to the current row index "
+                    "to indicate an initial period."
+                )
+            if np.unique(lag_indices[~initial]).size != (~initial).sum():
+                raise ValueError(
+                    "The lag_indices field of product_data must be unique (except for values equal to the current row "
+                    "index, which indicate initial periods)."
+                )
+
         # load shares
         shares = extract_matrix(product_data, 'shares')
         if shares is None:
@@ -224,6 +249,7 @@ class Products(object):
             'nesting_ids': (nesting_ids, np.object_),
             'product_ids': (product_ids, np.object_),
             'clustering_ids': (clustering_ids, np.object_),
+            'lag_indices': (lag_indices, np.int64),
             'ownership': (ownership, options.dtype),
             'shares': (shares, options.dtype),
             'ZD': (ZD, options.dtype),

@@ -71,10 +71,24 @@ def configure() -> Iterator[None]:
 
 @pytest.fixture(scope='session')
 def small_logit_simulation() -> SimulationFixture:
-    """Solve a simulation with two markets, a linear constant, linear prices, a linear characteristic, a cost
+    """Solve a simulation with six markets, a linear constant, linear prices, a linear characteristic, a cost
     characteristic, and a scaled epsilon.
     """
-    id_data = build_id_data(T=2, J=18, F=3)
+    id_data = build_id_data(T=8, J=18, F=3)
+
+    # build product IDs so that every other market, we get the same products
+    product_ids = id_data.market_ids.copy()
+    for t in np.unique(id_data.market_ids):
+        product_ids[id_data.market_ids == t] = (-1)**t * (1 + np.arange((id_data.market_ids == t).sum()))
+
+    # define lags between these products using the same logic
+    indices = np.arange(len(id_data))
+    lag_indices = np.arange(len(id_data))
+    for t in np.unique(id_data.market_ids):
+        if t > 1:
+            lag_indices[id_data.market_ids.flat == t] = indices[id_data.market_ids.flat == t - 2]
+
+    # simulate the data
     simulation = Simulation(
         product_formulations=(
             Formulation('1 + prices + x'),
@@ -84,18 +98,33 @@ def small_logit_simulation() -> SimulationFixture:
         product_data={
             'market_ids': id_data.market_ids,
             'firm_ids': id_data.firm_ids,
-            'clustering_ids': np.random.RandomState(0).choice(range(10), id_data.size)
+            'clustering_ids': product_ids,
+            'lag_indices': lag_indices,
         },
+        phi=[0.1, 0.2],
         beta=[1, -5, 1],
         gamma=2,
         xi_variance=0.001,
         omega_variance=0.001,
         correlation=0.7,
-        epsilon_scale=0.5,
+        epsilon_scale=0.9,
         seed=0,
     )
     simulation_results = simulation.replace_exogenous('x', 'a')
-    return simulation, simulation_results, {}, []
+
+    demand_instruments, supply_instruments = simulation_results._compute_default_instruments()
+    simulated_data_override = {
+        'demand_instruments': np.c_[
+            demand_instruments,
+            (lag_indices != np.arange(simulation.N)) * simulation_results.product_data.x[lag_indices].flat,
+        ],
+        'supply_instruments': np.c_[
+            supply_instruments,
+            (lag_indices != np.arange(simulation.N)) * simulation_results.product_data.a[lag_indices].flat,
+        ],
+    }
+
+    return simulation, simulation_results, simulated_data_override, []
 
 
 @pytest.fixture(scope='session')
@@ -235,11 +264,23 @@ def medium_blp_simulation() -> SimulationFixture:
     """
     id_data = build_id_data(T=10, J=25, F=6)
 
+    # build product IDs so that every other market, we get the same products
+    product_ids = id_data.market_ids.copy()
+    for t in np.unique(id_data.market_ids):
+        product_ids[id_data.market_ids == t] = (-1) ** t * (1 + np.arange((id_data.market_ids == t).sum()))
+
+    # define lags between these products using the same logic
+    indices = np.arange(len(id_data))
+    lag_indices = np.arange(len(id_data))
+    for t in np.unique(id_data.market_ids):
+        if t > 1:
+            lag_indices[id_data.market_ids.flat == t] = indices[id_data.market_ids.flat == t - 2]
+
+    # construct non-trivial availability
     integration = Integration('product', 4)
     agent_data = build_integration(integration, 2)
     unique_market_ids = np.unique(id_data.market_ids)
     max_J = max(i.size for i in get_indices(id_data.market_ids).values())
-
     state = np.random.RandomState(2)
     availability = {}
     for j in range(max_J):
@@ -258,8 +299,9 @@ def medium_blp_simulation() -> SimulationFixture:
         product_data={
             'market_ids': id_data.market_ids,
             'firm_ids': id_data.firm_ids,
-            'clustering_ids': np.random.RandomState(1).choice(range(20), id_data.size),
-            'ownership': build_ownership(id_data, lambda f, g: 1 if f == g else (0.1 if f > 3 and g > 3 else 0))
+            'clustering_ids': product_ids,
+            'ownership': build_ownership(id_data, lambda f, g: 1 if f == g else (0.1 if f > 3 and g > 3 else 0)),
+            'lag_indices': lag_indices,
         },
         beta=[1, 2, -3],
         sigma=[
@@ -279,6 +321,7 @@ def medium_blp_simulation() -> SimulationFixture:
             'nodes': np.tile(agent_data.nodes, (unique_market_ids.size, 1)),
             **availability,
         },
+        phi=[0.05, 0.03],
         xi_variance=0.00001,
         omega_variance=0.00001,
         correlation=0.8,
@@ -753,44 +796,64 @@ def large_nested_blp_simulation() -> SimulationFixture:
 
 
 @pytest.fixture(scope='session', params=[
-    pytest.param(['small_logit', False], id="small Logit simulation without supply"),
-    pytest.param(['small_logit', True], id="small Logit simulation with supply"),
-    pytest.param(['large_logit', False], id="large Logit simulation without supply"),
-    pytest.param(['large_logit', True], id="large Logit simulation with supply"),
-    pytest.param(['small_nested_logit', False], id="small nested Logit simulation without supply"),
-    pytest.param(['small_nested_logit', True], id="small nested Logit simulation with supply"),
-    pytest.param(['large_nested_logit', False], id="large nested Logit simulation without supply"),
-    pytest.param(['large_nested_logit', True], id="large nested Logit simulation with supply"),
-    pytest.param(['small_blp', False], id="small BLP simulation without supply"),
-    pytest.param(['small_blp', True], id="small BLP simulation with supply"),
-    pytest.param(['medium_blp', False], id="medium BLP simulation without supply"),
-    pytest.param(['medium_blp', True], id="medium BLP simulation with supply"),
-    pytest.param(['large_blp', False], id="large BLP simulation without supply"),
-    pytest.param(['large_blp', True], id="large BLP simulation with supply"),
-    pytest.param(['small_nested_blp', False], id="small nested BLP simulation without supply"),
-    pytest.param(['small_nested_blp', True], id="small nested BLP simulation with supply"),
-    pytest.param(['large_nested_blp', False], id="large nested BLP simulation without supply"),
-    pytest.param(['large_nested_blp', True], id="large nested BLP simulation with supply"),
+    pytest.param(['small_logit', ['levels'], False], id="small logit"),
+    pytest.param(['small_logit', ['innovations'], False], id="small logit w/ innovations"),
+    pytest.param(['small_logit', ['levels', 'differenced_innovations'], False], id="small logit w/ levels+differences"),
+    pytest.param(['small_logit', ['innovations', 'differenced_innovations'], False], id="small logit w/ system"),
+    pytest.param(['small_logit', ['levels'], True], id="small logit w/ supply"),
+    pytest.param(['small_logit', ['innovations'], True], id="small logit w/ innovations+supply"),
+    pytest.param(['small_logit', ['innovations', 'differenced_innovations'], True], id="small logit w/ system+supply"),
+    pytest.param(['large_logit', ['levels'], False], id="large logit"),
+    pytest.param(['large_logit', ['levels'], True], id="large logit w/ supply"),
+    pytest.param(['small_nested_logit', ['levels'], False], id="small nested logit"),
+    pytest.param(['small_nested_logit', ['levels'], True], id="small nested logit w/ supply"),
+    pytest.param(['large_nested_logit', ['levels'], False], id="large nested logit"),
+    pytest.param(['large_nested_logit', ['levels'], True], id="large nested logit w/ supply"),
+    pytest.param(['small_blp', ['levels'], False], id="small BLP"),
+    pytest.param(['small_blp', ['levels'], True], id="small BLP w/ supply"),
+    pytest.param(['medium_blp', ['levels'], False], id="medium BLP"),
+    pytest.param(['medium_blp', ['innovations'], False], id="medium BLP w/ innovations"),
+    pytest.param(['medium_blp', ['levels', 'innovations', 'differenced_innovations'], False], id="medium BLP w/ all"),
+    pytest.param(['medium_blp', ['levels'], True], id="medium BLP w/ supply"),
+    pytest.param(['medium_blp', ['levels', 'innovations'], False], id="medium BLP w/ levels+innovations"),
+    pytest.param(['medium_blp', ['levels', 'differences'], True], id="medium BLP w/ supply+levels+differences"),
+    pytest.param(['large_blp', ['levels'], False], id="large BLP"),
+    pytest.param(['large_blp', ['levels'], True], id="large BLP w/ supply"),
+    pytest.param(['small_nested_blp', ['levels'], False], id="small nested BLP"),
+    pytest.param(['small_nested_blp', ['levels'], True], id="small nested BLP w/ supply"),
+    pytest.param(['large_nested_blp', ['levels'], False], id="large nested BLP"),
+    pytest.param(['large_nested_blp', ['levels'], True], id="large nested BLP w/ supply"),
 ])
 def simulated_problem(request: Any) -> SimulatedProblemFixture:
-    """Configure and solve a simulated problem, either with or without supply-side data. Preclude overflow with rho
-    bounds that are more conservative than the default ones.
+    """Configure and solve a simulated problem, with different moment types, either with or without supply-side data.
+    Preclude overflow with rho bounds that are more conservative than the default ones.
     """
-    name, supply = request.param
+    name, moment_types, supply = request.param
     simulation, simulation_results, simulated_data_override, simulated_micro_moments = (
         request.getfixturevalue(f'{name}_simulation')
     )
 
     # override the simulated data
-    product_data = None
-    if simulated_data_override:
-        product_data = update_matrices(
-            simulation_results.product_data,
-            {k: (v, v.dtype) for k, v in simulated_data_override.items()}
-        )
+    demand_instruments, supply_instruments = simulation_results._compute_default_instruments()
+    data_update = {'demand_instruments': demand_instruments, 'supply_instruments': supply_instruments}
+    data_update.update(simulated_data_override)
+    product_data = update_matrices(simulation_results.product_data, {k: (v, v.dtype) for k, v in data_update.items()})
 
-    # initialize and solve the problem
-    problem = simulation_results.to_problem(simulation.product_formulations[:2 + int(supply)], product_data)
+    # drop lag indices when unneeded
+    if not any(t != 'levels' for t in moment_types):
+        product_data = update_matrices(product_data, {'lag_indices': (np.zeros((simulation.N, 0)), np.int64)})
+
+    # simply duplicate instruments when there are multiple moment types
+    add_exogenous = True
+    if len(moment_types) > 1:
+        add_exogenous = False
+        problem = simulation_results.to_problem(simulation.product_formulations, product_data)
+        product_data = update_matrices(product_data, {
+            'demand_instruments': (np.hstack(len(moment_types) * [problem.products.ZD]), options.dtype),
+            'supply_instruments': (np.hstack(len(moment_types) * [problem.products.ZS]), options.dtype),
+        })
+
+    # configure options for solving the problem
     solve_options = {
         'sigma': simulation.sigma,
         'pi': simulation.pi,
@@ -799,9 +862,19 @@ def simulated_problem(request: Any) -> SimulatedProblemFixture:
         'rho_bounds': (np.zeros_like(simulation.rho), np.minimum(0.9, 1.5 * simulation.rho)),
         'method': '1s',
         'check_optimality': 'gradient',
+        'demand_moment_types': moment_types,
+        'supply_moment_types': moment_types,
         'micro_moments': simulated_micro_moments
     }
+    if any(t != 'levels' for t in moment_types):
+        solve_options['phi'] = simulation.phi[:1 + int(supply)]
+
+    # initialize and solve the problem
+    problem = simulation_results.to_problem(
+        simulation.product_formulations[:2 + int(supply)], product_data, add_exogenous=add_exogenous
+    )
     problem_results = problem.solve(**solve_options)
+
     return simulation, simulation_results, problem, solve_options, problem_results
 
 

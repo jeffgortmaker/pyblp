@@ -63,7 +63,9 @@ def test_accuracy(simulated_problem: SimulatedProblemFixture, solve_options_upda
     # update the default options and solve the problem
     updated_solve_options = copy.deepcopy(solve_options)
     updated_solve_options.update(solve_options_update)
-    updated_solve_options.update({k: 0.5 * solve_options[k] for k in ['sigma', 'pi', 'rho', 'beta']})
+    updated_solve_options.update(
+        {k: 0.5 * solve_options[k] for k in ['sigma', 'pi', 'rho', 'phi', 'beta'] if k in solve_options}
+    )
     results = problem.solve(**updated_solve_options)
 
     # test the accuracy of the estimated parameters
@@ -94,9 +96,15 @@ def test_optimal_instruments(simulated_problem: SimulatedProblemFixture, compute
     })
     new_problem = problem_results.compute_optimal_instruments(**compute_options).to_problem()
 
+    # allow optimal instruments to be created when there's an autoregressive parameter, but don't check that they work
+    if 'phi' in solve_options:
+        return pytest.skip("Optimal instrument construction is not supported with phi.")
+
     # update the default options and solve the problem
     updated_solve_options = copy.deepcopy(solve_options)
-    updated_solve_options.update({k: 0.5 * solve_options[k] for k in ['sigma', 'pi', 'rho', 'beta']})
+    updated_solve_options.update(
+        {k: 0.5 * solve_options[k] for k in ['sigma', 'pi', 'rho', 'phi', 'beta'] if k in solve_options}
+    )
     new_results = new_problem.solve(**updated_solve_options)
 
     # test the accuracy of the estimated parameters
@@ -137,7 +145,9 @@ def test_importance_sampling(simulated_problem: SimulatedProblemFixture) -> None
     # solve the new problem
     new_problem = sampling_results.to_problem()
     updated_solve_options = copy.deepcopy(solve_options)
-    updated_solve_options.update({k: 0.5 * solve_options[k] for k in ['sigma', 'pi', 'rho', 'beta']})
+    updated_solve_options.update(
+        {k: 0.5 * solve_options[k] for k in ['sigma', 'pi', 'rho', 'phi', 'beta'] if k in solve_options}
+    )
     new_results = new_problem.solve(**updated_solve_options)
 
     # test the accuracy of the estimated parameters
@@ -192,7 +202,7 @@ def test_bootstrap_se(simulated_problem: SimulatedProblemFixture) -> None:
     bootstrapped_results = problem_results.bootstrap(draws=1000, seed=0, iteration=Iteration('return'))
 
     # compare SEs
-    for key in ['sigma', 'pi', 'rho', 'beta', 'gamma']:
+    for key in ['sigma', 'pi', 'rho', 'phi', 'beta', 'gamma']:
         analytic_se = np.nan_to_num(getattr(problem_results, f'{key}_se'))
         bootstrapped_se = getattr(bootstrapped_results, f'bootstrapped_{key}').std(axis=0)
         np.testing.assert_allclose(analytic_se, bootstrapped_se, atol=0.001, rtol=0.5, err_msg=key)
@@ -372,6 +382,36 @@ def test_parallel(simulated_problem: SimulatedProblemFixture) -> None:
 
 
 @pytest.mark.usefixtures('simulated_problem')
+def test_concentration(simulated_problem: SimulatedProblemFixture) -> None:
+    """Test that concentrating out linear parameters delivers the same estimates as optimizing over them."""
+    simulation, simulation_results, problem, solve_options, problem_results = simulated_problem
+
+    # we should expect to get slightly different results with covariance restrictions
+    if problem.K3 > 0 and problem.MC > 0:
+        return pytest.skip("We should expect slightly different results with covariance restrictions.")
+
+    # unfix one of each linear parameter and re-solve the problem, holding nonlinear parameters fixed
+    updated_solve_options = copy.deepcopy(solve_options)
+    updated_solve_options.update({
+        'sigma': problem_results.sigma,
+        'pi': problem_results.pi,
+        'rho': problem_results.rho,
+        'phi': problem_results.phi if 'phi' in solve_options else None,
+        'beta': np.r_[0.5 * problem_results.beta[0], solve_options['beta'][1:].flatten()],
+        'gamma': np.r_[0.5 * problem_results.gamma[0], np.full(problem.K3 - 1, np.nan)] if problem.K3 > 0 else None,
+        'sigma_bounds': (problem_results.sigma, problem_results.sigma),
+        'pi_bounds': (problem_results.pi, problem_results.pi),
+        'rho_bounds': (problem_results.rho, problem_results.rho),
+        'phi_bounds': (problem_results.phi, problem_results.phi) if 'phi' in solve_options else None,
+    })
+    updated_results = problem.solve(**updated_solve_options)
+
+    # verify that we get the same linear estimates
+    for key in ['beta', 'gamma']:
+        np.testing.assert_allclose(getattr(problem_results, key), getattr(updated_results, key), atol=0, rtol=0.01)
+
+
+@pytest.mark.usefixtures('simulated_problem')
 @pytest.mark.parametrize(['ED', 'ES', 'absorb_method', 'absorb_options'], [
     pytest.param(1, 0, None, None, id="1 demand FE, default method"),
     pytest.param(0, 1, None, None, id="1 supply FE, default method"),
@@ -396,6 +436,10 @@ def test_fixed_effects(
     if ED == ES == 0:
         return pytest.skip("There are no fixed effects to test.")
 
+    # skip non-default moment types
+    if any(t != 'levels' for t in solve_options['demand_moment_types'] + solve_options['supply_moment_types']):
+        return pytest.skip("FE absorption and non-default moment types are not supported.")
+
     # configure the optimization routine to only do a few iterations to save time and never get to the point where small
     #   numerical differences between methods build up into noticeable differences
     solve_options = copy.deepcopy(solve_options)
@@ -408,6 +452,8 @@ def test_fixed_effects(
         'supply_instruments': problem.products.ZS[:, :-problem.K3],
         'covariance_instruments': problem.products.ZC,
     })
+    if 'phi' not in solve_options and 'lag_indices' in product_data:
+        del product_data['lag_indices']
 
     # remove constants and delete associated elements in the initial beta
     product_formulations = list(problem.product_formulations).copy()
@@ -574,9 +620,9 @@ def test_fixed_effects(
     # test that all problem results expected to be identical are essentially identical, except for standard errors under
     #   micro moments, which are expected to be slightly different
     problem_results_keys = [
-        'theta', 'sigma', 'pi', 'rho', 'beta', 'gamma', 'sigma_se', 'pi_se', 'rho_se', 'beta_se', 'gamma_se',
-        'delta', 'tilde_costs', 'xi', 'omega', 'xi_by_theta_jacobian', 'omega_by_theta_jacobian', 'objective',
-        'gradient', 'projected_gradient'
+        'theta', 'sigma', 'pi', 'rho', 'phi', 'beta', 'gamma', 'sigma_se', 'pi_se', 'rho_se', 'phi_se', 'beta_se',
+        'gamma_se', 'delta', 'tilde_costs', 'xi', 'omega', 'xi_by_theta_jacobian', 'omega_by_theta_jacobian',
+        'objective', 'gradient', 'projected_gradient'
     ]
     for key in problem_results_keys:
         if key.endswith('_se') and solve_options['micro_moments']:
@@ -732,21 +778,42 @@ def test_merger(simulated_problem: SimulatedProblemFixture, ownership: bool, sol
         merger_product_data.firm_ids[merger_product_data.firm_ids < 2] = 0
         merger_ids = merger_product_data.firm_ids
 
+    # drop unneeded lag indices
+    merger_product_data = update_matrices(merger_product_data, {'lag_indices': (np.zeros((simulation.N, 0)), np.int64)})
+
     # get actual prices and shares
     merger_simulation = Simulation(
-        simulation.product_formulations, merger_product_data, simulation.beta, simulation.sigma, simulation.pi,
-        simulation.gamma, simulation.rho, simulation.agent_formulation,
-        simulation.agent_data, xi=simulation.xi, omega=simulation.omega, rc_types=simulation.rc_types,
-        epsilon_scale=simulation.epsilon_scale, costs_type=simulation.costs_type
+        product_formulations=simulation.product_formulations,
+        product_data=merger_product_data,
+        beta=simulation.beta,
+        sigma=simulation.sigma,
+        pi=simulation.pi,
+        gamma=simulation.gamma,
+        rho=simulation.rho,
+        agent_formulation=simulation.agent_formulation,
+        agent_data=simulation.agent_data,
+        xi=simulation.xi,
+        omega=simulation.omega,
+        rc_types=simulation.rc_types,
+        epsilon_scale=simulation.epsilon_scale,
+        costs_type=simulation.costs_type,
     )
     actual = merger_simulation.replace_endogenous(**solve_options)
 
     # compute marginal costs; get estimated prices and shares
     costs = results.compute_costs()
     results_simulation = Simulation(
-        simulation.product_formulations[:2], merger_product_data, results.beta, results.sigma, results.pi,
-        rho=results.rho, agent_formulation=simulation.agent_formulation, agent_data=simulation.agent_data,
-        xi=results.xi, rc_types=simulation.rc_types, epsilon_scale=simulation.epsilon_scale
+        product_formulations=simulation.product_formulations[:2],
+        product_data=merger_product_data,
+        beta=results.beta,
+        sigma=results.sigma,
+        pi=results.pi,
+        rho=results.rho,
+        agent_formulation=simulation.agent_formulation,
+        agent_data=simulation.agent_data,
+        xi=results.xi,
+        rc_types=simulation.rc_types,
+        epsilon_scale=simulation.epsilon_scale,
     )
     estimated = results_simulation.replace_endogenous(costs, problem.products.prices, **solve_options)
     estimated_prices = results.compute_prices(merger_ids, merger_ownership, costs, **solve_options)
@@ -857,10 +924,22 @@ def test_demand_hessian(simulated_problem: SimulatedProblemFixture) -> None:
         """Compute the true Jacobian at perturbed prices."""
         perturbed_product_data = copy.deepcopy(product_data[product_data.market_ids.flat == t])
         perturbed_product_data.prices[:] = perturbed_prices
+        perturbed_product_data = update_matrices(
+            perturbed_product_data, {'lag_indices': (np.zeros((len(perturbed_product_data), 0)), np.int64)}
+        )
         perturbed_simulation = Simulation(
-            problem.product_formulations[:2], perturbed_product_data, results.beta, results.sigma, results.pi,
-            rho=results.rho, agent_formulation=simulation.agent_formulation, agent_data=agent_data,
-            xi=xi, rc_types=problem.rc_types, epsilon_scale=problem.epsilon_scale, costs_type=problem.costs_type
+            product_formulations=problem.product_formulations[:2],
+            product_data=perturbed_product_data,
+            beta=results.beta,
+            sigma=results.sigma,
+            pi=results.pi,
+            rho=results.rho,
+            agent_formulation=simulation.agent_formulation,
+            agent_data=agent_data,
+            xi=xi,
+            rc_types=problem.rc_types,
+            epsilon_scale=problem.epsilon_scale,
+            costs_type=problem.costs_type,
         )
         perturbed_simulation_results = perturbed_simulation.replace_endogenous(
             costs=perturbed_prices, prices=perturbed_prices, iteration=Iteration('return')
@@ -902,14 +981,17 @@ def test_passthrough(simulated_problem: SimulatedProblemFixture) -> None:
     """Use central finite differences to test that analytic values in the passthrough matrix of prices with respect to
     marginal costs are essentially correct.
     """
-    simulation, simulation_results, problem, _, _ = simulated_problem
+    simulation, simulation_results, problem, solve_options, _ = simulated_problem
     product_data = simulation_results.product_data
 
     # obtain results at the true parameter values so there aren't issues with FOCs not matching
     true_results = problem.solve(
         beta=simulation.beta, sigma=simulation.sigma, pi=simulation.pi, rho=simulation.rho,
+        phi=simulation.phi[:1 + int(problem.K3 > 0)] if problem.products.lag_indices.shape[1] > 0 else None,
         gamma=simulation.gamma if problem.K3 > 0 else None, delta=simulation_results.delta, method='1s',
-        check_optimality='gradient', optimization=Optimization('return'), iteration=Iteration('return')
+        check_optimality='gradient', optimization=Optimization('return'), iteration=Iteration('return'),
+        demand_moment_types=solve_options['demand_moment_types'],
+        supply_moment_types=solve_options['supply_moment_types'],
     )
 
     # only do the test for a single market
@@ -1043,6 +1125,7 @@ def test_second_step(simulated_problem: SimulatedProblemFixture) -> None:
         'sigma': results1.sigma,
         'pi': results1.pi,
         'rho': results1.rho,
+        'phi': results1.phi,
         'beta': np.where(np.isnan(solve_options['beta']), np.nan, results1.beta),
         'delta': results1.delta,
         'W': results1.updated_W,
@@ -1070,6 +1153,7 @@ def test_return(simulated_problem: SimulatedProblemFixture) -> None:
         'sigma': simulation.sigma,
         'pi': simulation.pi,
         'rho': simulation.rho,
+        'phi': simulation.phi[:1 + int(problem.K3 > 0)] if 'phi' in solve_options else None,
         'beta': simulation.beta,
         'gamma': simulation.gamma if problem.K3 > 0 else None,
         'delta': problem.products.X1 @ simulation.beta + simulation.xi
@@ -1181,6 +1265,10 @@ def test_bounds(simulated_problem: SimulatedProblemFixture, method_info: Tuple[s
         'beta_bounds': (np.full_like(simulation.beta, -np.inf), np.full_like(simulation.beta, +np.inf)),
         'gamma_bounds': (np.full_like(simulation.gamma, -np.inf), np.full_like(simulation.gamma, +np.inf))
     })
+    if 'phi' in solve_options:
+        unbounded_solve_options['phi_bounds'] = (
+            np.full_like(solve_options['phi'], -np.inf), np.full_like(solve_options['phi'], +np.inf)
+        )
     unbounded_results = problem.solve(**unbounded_solve_options)
 
     # choose a parameter from each set and identify its estimated value
@@ -1252,6 +1340,12 @@ def test_bounds(simulated_problem: SimulatedProblemFixture, method_info: Tuple[s
             binding_solve_options['gamma'][gamma_index] = gamma_value
             with np.errstate(invalid='ignore'):
                 binding_solve_options['gamma'] = np.clip(binding_solve_options['gamma'], *binding_gamma_bounds)
+        if 'phi' in solve_options:
+            binding_solve_options['phi_bounds'] = (
+                solve_options['phi'] - lb_scale * np.abs(solve_options['phi']),
+                solve_options['phi'] + ub_scale * np.abs(solve_options['phi']),
+            )
+            binding_solve_options['phi'] = np.clip(binding_solve_options['phi'], *binding_solve_options['phi_bounds'])
 
         # solve the problem and test that the bounds are respected (ignore a warning about minimal gradient changes, and
         #   any non-important warnings about underflow)
@@ -1274,6 +1368,9 @@ def test_bounds(simulated_problem: SimulatedProblemFixture, method_info: Tuple[s
         if problem.K3 > 0:
             assert_array_less(binding_gamma_bounds[0], binding_results.gamma)
             assert_array_less(binding_results.gamma, binding_gamma_bounds[1])
+        if 'phi' in solve_options:
+            assert_array_less(binding_solve_options['phi_bounds'][0], binding_results.phi)
+            assert_array_less(binding_results.phi, binding_solve_options['phi_bounds'][1])
 
 
 @pytest.mark.usefixtures('simulated_problem')
@@ -1349,6 +1446,9 @@ def test_logit_errors(simulated_problem: SimulatedProblemFixture) -> None:
     # select only a few products (if there's nesting, select two from each of two nests)
     J = 4
     small_product_data = simulation_results.product_data[:J].copy()
+    small_product_data = update_matrices(
+        small_product_data, {'lag_indices': (np.zeros((len(small_product_data), 0)), np.int64)}
+    )
     small_product_data.shares[:] = np.c_[[0.1, 0.2, 0.3, 0.15]]
     small_product_data.market_ids[:] = simulation.unique_market_ids[0]
     if small_product_data.ownership.size > 0:
@@ -1374,9 +1474,17 @@ def test_logit_errors(simulated_problem: SimulatedProblemFixture) -> None:
     )
     beta = np.r_[simulation.beta.flatten(), 1]
     small_simulation = Simulation(
-        product_formulations, small_product_data, beta, simulation.sigma, simulation.pi, rho=simulation.rho[:2],
-        agent_formulation=simulation.agent_formulation, agent_data=small_agent_data, xi=simulation.xi[:J],
-        rc_types=simulation.rc_types, epsilon_scale=simulation.epsilon_scale
+        product_formulations=product_formulations,
+        product_data=small_product_data,
+        beta=beta,
+        sigma=simulation.sigma,
+        pi=simulation.pi,
+        rho=simulation.rho[:2],
+        agent_formulation=simulation.agent_formulation,
+        agent_data=small_agent_data,
+        xi=simulation.xi[:J],
+        rc_types=simulation.rc_types,
+        epsilon_scale=simulation.epsilon_scale,
     )
     small_results = small_simulation.replace_exogenous('extra')
 
@@ -1653,10 +1761,14 @@ def test_objective_gradient(
         return pytest.skip("The problem does not have micro moments to test.")
     if not demand and not supply and not covariance and not micro:
         return pytest.skip("There are no moments to test.")
+    if fe and any(t != 'levels' for t in solve_options['demand_moment_types'] + solve_options['supply_moment_types']):
+        return pytest.skip("FE absorption and non-default moment types are not supported.")
 
     # configure the options used to solve the problem
     updated_solve_options = copy.deepcopy(solve_options)
-    updated_solve_options.update({k: 0.9 * solve_options[k] for k in ['sigma', 'pi', 'rho', 'beta']})
+    updated_solve_options.update(
+        {k: 0.9 * solve_options[k] for k in ['sigma', 'pi', 'rho', 'phi', 'beta'] if k in solve_options}
+    )
 
     # optionally include linear parameters in theta
     if eliminate == 'no':
@@ -1682,6 +1794,8 @@ def test_objective_gradient(
             'supply_instruments': problem.products.ZS[:, :-problem.K3],
             'covariance_instruments': problem.products.ZC,
         })
+        if 'phi' not in solve_options and 'lag_indices' in product_data:
+            del product_data['lag_indices']
 
         # remove constants and delete associated elements in the initial beta
         product_formulations = list(problem.product_formulations).copy()
@@ -1702,31 +1816,25 @@ def test_objective_gradient(
         )
 
     # zero out weighting matrix blocks to only test individual contributions of the gradient
-    updated_solve_options['W'] = np.eye(problem.MD + problem.MS + problem.MC + len(solve_options['micro_moments']))
-    if not demand:
-        updated_solve_options['W'][:problem.MD, :problem.MD] = 0
-    if not supply and problem.K3 > 0:
-        MDS = problem.MD + problem.MS
-        updated_solve_options['W'][problem.MD:MDS, problem.MD:MDS] = 0
-    if not covariance and problem.K3 > 0:
-        MDS = problem.MD + problem.MS
-        MDSC = MDS + problem.MC
-        updated_solve_options['W'][MDS:MDSC, MDS:MDSC] = 0
-    if not micro and updated_solve_options['micro_moments']:
-        MM = len(updated_solve_options['micro_moments'])
-        updated_solve_options['W'][-MM:, -MM:] = 0
+    updated_solve_options['W'] = scipy.linalg.block_diag(
+        np.eye(problem.MD) * demand,
+        np.eye(problem.MS) * supply,
+        np.eye(problem.MC) * covariance,
+        np.eye(len(updated_solve_options['micro_moments'])) * micro,
+    )
 
     # use a restrictive iteration tolerance
     updated_solve_options['iteration'] = Iteration('squarem', {'atol': 1e-14})
 
     # compute the analytic gradient
     updated_solve_options['optimization'] = Optimization('return')
-    exact = problem.solve(**updated_solve_options).gradient
+    results = problem.solve(**updated_solve_options)
+    exact = results.gradient.flatten()
 
     def test_finite_differences(theta: Array, _: Any, objective_function: Callable, __: Any) -> Tuple[Array, bool]:
         """Test central finite differences around starting parameter values."""
         approximated = compute_finite_differences(lambda x: objective_function(x)[0], theta, epsilon_scale=10.0)
-        np.testing.assert_allclose(approximated.flatten(), exact.flatten(), atol=1e-8, rtol=1e-2)
+        np.testing.assert_allclose(approximated.flatten(), exact, atol=1e-8, rtol=1e-2)
         return theta, True
 
     # test the gradient

@@ -10,7 +10,9 @@ from .. import exceptions, options
 from ..configurations.iteration import ContractionResults, Iteration
 from ..economies.economy import Economy
 from ..micro import MicroDataset, MicroPart, Moments
-from ..parameters import BetaParameter, GammaParameter, NonlinearCoefficient, Parameter, Parameters, RhoParameter
+from ..parameters import (
+    BetaParameter, GammaParameter, NonlinearCoefficient, Parameter, Parameters, RhoParameter, PhiParameter
+)
 from ..primitives import Container
 from ..utilities.algebra import approximately_invert, approximately_solve
 from ..utilities.basics import (
@@ -531,7 +533,7 @@ class Market(Container):
                     shares[clipped_shares] = shares_bounds[1]
 
             else:
-                clip_shares = lambda _: None
+                clip_shares = lambda _: None  # type: ignore[assignment]
 
             # define the linear contraction
             if self.H == 0:
@@ -861,7 +863,7 @@ class Market(Container):
 
             tangent += X2_derivatives[:, [parameter.location[0]]] * v.T
         else:
-            assert isinstance(parameter, (GammaParameter, RhoParameter))
+            assert isinstance(parameter, (GammaParameter, RhoParameter, PhiParameter))
 
         if self.epsilon_scale != 1:
             tangent /= self.epsilon_scale
@@ -905,8 +907,8 @@ class Market(Container):
                     conditionals_tangent[:] = 0
                 continue
 
-            # derivatives remain zero for gamma parameters
-            if isinstance(parameter, GammaParameter):
+            # derivatives remain zero for gamma and phi parameters
+            if isinstance(parameter, (GammaParameter, PhiParameter)):
                 continue
 
             # otherwise, need to compute the derivatives of probabilities with respect to xi
@@ -958,7 +960,7 @@ class Market(Container):
 
                 probabilities_tangent = probabilities * v.T * (x - x.T @ probabilities)
             else:
-                assert isinstance(parameter, GammaParameter)
+                assert isinstance(parameter, (GammaParameter, PhiParameter))
                 probabilities_tangent = np.zeros_like(probabilities)
 
             if self.epsilon_scale != 1:
@@ -1053,7 +1055,7 @@ class Market(Container):
             marginals_tangent[~np.isfinite(marginals_tangent)] = 0
 
         else:
-            assert isinstance(parameter, GammaParameter)
+            assert isinstance(parameter, (GammaParameter, PhiParameter))
             conditionals_tangent = np.zeros_like(conditionals)
             marginals_tangent = np.zeros_like(marginals)
 

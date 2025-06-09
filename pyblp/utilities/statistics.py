@@ -50,7 +50,7 @@ class IV(object):
 
         # split the parameters and residuals into lists
         parameters_list = np.split(parameters, [x.shape[1] for x in X_list[:-1]], axis=0)
-        residuals_list = np.split(residuals, len(X_list), axis=0)
+        residuals_list = np.split(residuals, len(y_list), axis=0)
 
         # optionally convert Jacobians (making sure to never create a full square matrix)
         if convert_jacobians:

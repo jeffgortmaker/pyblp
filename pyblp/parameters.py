@@ -106,6 +106,10 @@ class OneGroupRhoParameter(RhoParameter):
         return group_associations
 
 
+class PhiParameter(Parameter):
+    """Information about a single parameter in a phi."""
+
+
 class LinearCoefficient(Coefficient):
     """Information about a single linear parameter in beta or gamma."""
 
@@ -136,11 +140,12 @@ class GammaParameter(LinearCoefficient):
 
 
 class Parameters(object):
-    """Information about sigma, pi, rho, beta, and gamma."""
+    """Information about sigma, pi, rho, phi, beta, gamma."""
 
     sigma_labels: List[str]
     pi_labels: List[str]
     rho_labels: List[str]
+    phi_labels: List[str]
     beta_labels: List[str]
     gamma_labels: List[str]
     theta_labels: List[str]
@@ -149,11 +154,13 @@ class Parameters(object):
     sigma_squared: Array
     pi: Array
     rho: Array
+    phi: Array
     beta: Array
     gamma: Array
     sigma_bounds: Bounds
     pi_bounds: Bounds
     rho_bounds: Bounds
+    phi_bounds: Bounds
     beta_bounds: Bounds
     gamma_bounds: Bounds
     diagonal_sigma: bool
@@ -172,12 +179,13 @@ class Parameters(object):
 
     def __init__(
             self, economy: 'Economy', sigma: Optional[Any] = None, pi: Optional[Any] = None, rho: Optional[Any] = None,
-            beta: Optional[Any] = None, gamma: Optional[Any] = None, sigma_bounds: Optional[Tuple[Any, Any]] = None,
-            pi_bounds: Optional[Tuple[Any, Any]] = None, rho_bounds: Optional[Tuple[Any, Any]] = None,
+            phi: Optional[Any] = None, beta: Optional[Any] = None, gamma: Optional[Any] = None,
+            sigma_bounds: Optional[Tuple[Any, Any]] = None, pi_bounds: Optional[Tuple[Any, Any]] = None,
+            rho_bounds: Optional[Tuple[Any, Any]] = None, phi_bounds: Optional[Tuple[Any, Any]] = None,
             beta_bounds: Optional[Tuple[Any, Any]] = None, gamma_bounds: Optional[Tuple[Any, Any]] = None,
             bounded: bool = False, allow_linear_nans: bool = False, check_alpha: bool = True) -> None:
         """Coerce parameters into usable formats before storing information about fixed (equal bounds) and unfixed
-        (unequal bounds) elements of sigma, pi, rho, beta, and gamma. Also store information about eliminated
+        (unequal bounds) elements of sigma, pi, rho, phi, beta, and gamma. Also store information about eliminated
         (concentrated out) parameters in beta and gamma. If allow_linear_nans is True, allow null linear parameters in
         order to denote those parameters that will be concentrated out. If check_alpha is True, check that alpha isn't
         concentrated out when a supply side is included.
@@ -187,6 +195,7 @@ class Parameters(object):
         self.sigma_labels = [str(f) for f in economy._X2_formulations]
         self.pi_labels = [str(f) for f in economy._demographics_formulations]
         self.rho_labels = [str(i) for i in economy.unique_nesting_ids]
+        self.phi_labels = ["Xi"] + (["Omega"] if economy.K3 > 0 else [])
         self.beta_labels = [str(f) for f in economy._X1_formulations]
         self.gamma_labels = [str(f) for f in economy._X3_formulations]
 
@@ -196,7 +205,10 @@ class Parameters(object):
         # validate and store parameters
         self.sigma = self.initialize_matrix("sigma", "X2 was formulated", sigma, [(economy.K2, economy.K2)])
         self.pi = self.initialize_matrix("pi", "demographics were formulated", pi, [(economy.K2, economy.D)])
-        self.rho = self.initialize_matrix("rho", "nesting IDs were specified", rho, [(economy.H, 1), (1, 1)])
+        self.rho = self.initialize_matrix("rho", "nesting_ids were specified", rho, [(economy.H, 1), (1, 1)])
+        self.phi = self.initialize_matrix(
+            "phi", "lag_indices were specified", phi, [(1 + int(economy.K3 > 0), int(economy._lags is not None))]
+        )
         self.beta = self.initialize_matrix("beta", "X1 was formulated", beta, [(economy.K1, 1)], allow_linear_nans)
         self.gamma = self.initialize_matrix("gamma", "X3 was formulated", gamma, [(economy.K3, 1)], allow_linear_nans)
 
@@ -250,6 +262,7 @@ class Parameters(object):
         self.sigma_bounds = self.initialize_bounds("sigma", self.sigma, sigma_bounds, bounded)
         self.pi_bounds = self.initialize_bounds("pi", self.pi, pi_bounds, bounded)
         self.rho_bounds = self.initialize_bounds("rho", self.rho, rho_bounds, bounded)
+        self.phi_bounds = self.initialize_bounds("phi", self.phi, phi_bounds, bounded)
         self.beta_bounds = self.initialize_bounds("beta", self.beta, beta_bounds, bounded)
         self.gamma_bounds = self.initialize_bounds("gamma", self.gamma, gamma_bounds, bounded)
 
@@ -263,6 +276,7 @@ class Parameters(object):
         self.store(SigmaParameter, zip(*np.tril_indices_from(self.sigma)), self.sigma_bounds)
         self.store(PiParameter, np.ndindex(self.pi.shape), self.pi_bounds)
         self.store(rho_type, np.ndindex(self.rho.shape), self.rho_bounds)
+        self.store(PhiParameter, np.ndindex(self.phi.shape), self.phi_bounds)
         self.store(BetaParameter, np.ndindex(self.beta.shape), self.beta_bounds, self.eliminated_beta_index)
         self.store(GammaParameter, np.ndindex(self.gamma.shape), self.gamma_bounds, self.eliminated_gamma_index)
 
@@ -359,25 +373,25 @@ class Parameters(object):
     def format(self, title: str) -> str:
         """Format fixed and unfixed parameter values as a string."""
         return self.format_theta_parameters(
-            title, self.sigma, self.pi, self.rho, self.beta, self.gamma, self.sigma_squared
+            title, self.sigma, self.pi, self.rho, self.phi, self.beta, self.gamma, self.sigma_squared
         )
 
     def format_lower_bounds(self, title: str) -> str:
         """Format lower bounds for fixed and unfixed parameter values as a string."""
         return self.format_theta_parameters(
-            title, self.sigma_bounds[0], self.pi_bounds[0], self.rho_bounds[0], self.beta_bounds[0],
-            self.gamma_bounds[0]
+            title, self.sigma_bounds[0], self.pi_bounds[0], self.rho_bounds[0], self.phi_bounds[0], self.beta_bounds[0],
+            self.gamma_bounds[0],
         )
 
     def format_upper_bounds(self, title: str) -> str:
         """Format upper bounds for fixed and unfixed parameter values as a string."""
         return self.format_theta_parameters(
-            title, self.sigma_bounds[1], self.pi_bounds[1], self.rho_bounds[1], self.beta_bounds[1],
-            self.gamma_bounds[1]
+            title, self.sigma_bounds[1], self.pi_bounds[1], self.rho_bounds[1], self.phi_bounds[1], self.beta_bounds[1],
+            self.gamma_bounds[1],
         )
 
     def format_theta_parameters(
-            self, title: str, sigma_like: Array, pi_like: Array, rho_like: Array, beta_like: Array,
+            self, title: str, sigma_like: Array, pi_like: Array, rho_like: Array, phi_like: Array, beta_like: Array,
             gamma_like: Array, sigma_squared_like: Optional[Array] = None) -> str:
         """Format fixed and unfixed parameter-like values as a string. Skip sections of parameters without any that
         are in theta.
@@ -387,23 +401,25 @@ class Parameters(object):
                 title, sigma_like, pi_like, sigma_squared_like
             )),
             (RhoParameter, lambda: self.format_rho(title, rho_like)),
+            (PhiParameter, lambda: self.format_phi(title, phi_like)),
             (BetaParameter, lambda: self.format_beta(title, beta_like)),
-            (GammaParameter, lambda: self.format_gamma(title, gamma_like))
+            (GammaParameter, lambda: self.format_gamma(title, gamma_like)),
         ]
         return "\n\n".join(f() for t, f in items if any(isinstance(p, t) for p in self.fixed + self.unfixed))
 
     def format_estimates(
-            self, title: str, sigma: Array, pi: Array, rho: Array, beta: Array, gamma: Array, sigma_squared: Array,
-            sigma_se: Array, pi_se: Array, rho_se: Array, beta_se: Array, gamma_se: Array,
-            sigma_squared_se: Array) -> str:
+            self, title: str, sigma: Array, pi: Array, rho: Array, phi: Array, beta: Array, gamma: Array,
+            sigma_squared: Array, sigma_se: Array, pi_se: Array, rho_se: Array, phi_se: Array, beta_se: Array,
+            gamma_se: Array, sigma_squared_se: Array) -> str:
         """Format all estimates and their standard errors as a string."""
         items = [
             (sigma, lambda: self.format_nonlinear_coefficients(
                 title, sigma, pi, sigma_squared, sigma_se, pi_se, sigma_squared_se
             )),
             (rho, lambda: self.format_rho(title, rho, rho_se)),
+            (phi, lambda: self.format_phi(title, phi, phi_se)),
             (beta, lambda: self.format_beta(title, beta, beta_se)),
-            (gamma, lambda: self.format_gamma(title, gamma, gamma_se))
+            (gamma, lambda: self.format_gamma(title, gamma, gamma_se)),
         ]
         return "\n\n".join(f() for e, f in items if e.size > 0)
 
@@ -411,6 +427,10 @@ class Parameters(object):
         """Format a vector (and optional standard errors) of the same size as rho as a string."""
         header = self.rho_labels if rho_like.size > 1 else ["All Groups"]
         return self.format_vector(f"Rho {title}", RhoParameter, header, rho_like, rho_se_like)
+
+    def format_phi(self, title: str, phi_like: Array, phi_se_like: Optional[Array] = None) -> str:
+        """Format a vector (and optional standard errors) of the same size as stacked phi's as a string."""
+        return self.format_vector(f"Phi {title}", PhiParameter, self.phi_labels, phi_like, phi_se_like)
 
     def format_beta(self, title: str, beta_like: Array, beta_se_like: Optional[Array] = None) -> str:
         """Format a vector (and optional standard errors) of the same size as beta as a string."""
@@ -421,8 +441,8 @@ class Parameters(object):
         return self.format_vector(f"Gamma {title}", BetaParameter, self.gamma_labels, gamma_like, gamma_se_like)
 
     def format_vector(
-            self, title: str, parameter_type: Type[Union[RhoParameter, LinearCoefficient]], header: List[str],
-            vector: Array, vector_se: Optional[Array] = None) -> str:
+            self, title: str, parameter_type: Type[Union[RhoParameter, LinearCoefficient, PhiParameter]],
+            header: List[str], vector: Array, vector_se: Optional[Array] = None) -> str:
         """Format a vector (and optional standard errors) as a string."""
         data = [[format_number(x) for x in vector]]
         if vector_se is not None:
@@ -510,6 +530,7 @@ class Parameters(object):
             (SigmaParameter, self.sigma),
             (PiParameter, self.pi),
             (RhoParameter, self.rho),
+            (PhiParameter, self.phi),
             (BetaParameter, self.beta),
             (GammaParameter, self.gamma),
         ]
@@ -521,6 +542,7 @@ class Parameters(object):
             (SigmaParameter, self.sigma_bounds),
             (PiParameter, self.pi_bounds),
             (RhoParameter, self.rho_bounds),
+            (PhiParameter, self.phi_bounds),
             (BetaParameter, self.beta_bounds),
             (GammaParameter, self.gamma_bounds),
         ]
@@ -532,12 +554,14 @@ class Parameters(object):
             (SigmaParameter, np.array([[f'{k1} x {k2}' for k2 in self.sigma_labels] for k1 in self.sigma_labels])),
             (PiParameter, np.array([[f'{k1} x {k2}' for k2 in self.pi_labels] for k1 in self.sigma_labels])),
             (RhoParameter, np.c_[np.array(self.rho_labels)]),
+            (PhiParameter, np.c_[np.array(self.phi_labels)]),
             (BetaParameter, np.c_[np.array(self.beta_labels)]),
             (GammaParameter, np.c_[np.array(self.gamma_labels)]),
         ]
         return [v[p.location] for t, v in items for p in self.unfixed if isinstance(p, t)]
 
-    def expand(self, theta_like: Array, nullify: bool = False) -> Tuple[Array, Array, Array, Array, Array]:
+    def expand(
+            self, theta_like: Array, nullify: bool = False) -> Tuple[Array, Array, Array, Array, Array, Array]:
         """Recover matrices of the same size as parameter matrices from a vector of the same size as theta. By default,
         fill elements corresponding to fixed parameters with their fixed values. Always fill concentrated out parameters
         with nulls.
@@ -545,12 +569,14 @@ class Parameters(object):
         sigma_like = np.full_like(self.sigma, np.nan)
         pi_like = np.full_like(self.pi, np.nan)
         rho_like = np.full_like(self.rho, np.nan)
+        phi_like = np.full_like(self.phi, np.nan)
         beta_like = np.full_like(self.beta, np.nan)
         gamma_like = np.full_like(self.gamma, np.nan)
         items = [
             (SigmaParameter, sigma_like),
             (PiParameter, pi_like),
             (RhoParameter, rho_like),
+            (PhiParameter, phi_like),
             (BetaParameter, beta_like),
             (GammaParameter, gamma_like),
         ]
@@ -571,7 +597,7 @@ class Parameters(object):
                         values[parameter.location] = parameter.value
                         break
 
-        return sigma_like, pi_like, rho_like, beta_like, gamma_like
+        return sigma_like, pi_like, rho_like, phi_like, beta_like, gamma_like
 
     def extract_sigma_vector_covariances(self, theta_covariances: Array) -> Array:
         """Extract the sub-matrix of covariances for vech(sigma) from a full covariance matrix for theta."""
