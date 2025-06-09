@@ -129,7 +129,7 @@ class ProblemEconomy(Economy):
             corresponding to demand- and supply-side unobservable autocorrelations:
 
             .. math::
-               :eq: ar1
+               :label: ar1
 
                \xi_{jt} = \phi_\xi \cdot L \xi_{jt} + \Delta_{\phi_\xi} \xi_{jt},
                \omega_{jt} = \phi_\omega \cdot L \omega_{jt} + \Delta_{\phi_\omega} \omega_{jt},
@@ -462,7 +462,7 @@ class ProblemEconomy(Economy):
 
             Specifying a list instead of a single type will replace :math:`\bar{g}_D` with a
             corresponding stack, with columns of :math:`Z_D` split according to the number of types. For example, to
-            implement :ref:`references:Arellano and Bond(1991)`'s "system GMM" estimator, one can specify
+            implement :ref:`references:Arellano and Bond (1991)`'s "system GMM" estimator, one can specify
             ``demand_moment_types=['innovations', 'differenced_innovations']`` and provide additional columns in
             :math:`Z_D`, giving
 

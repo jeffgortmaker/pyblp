@@ -149,10 +149,10 @@ class Simulation(Economy):
     phi : `float, optional`
         Parameters measuring unobservable autocorrelation, :math:`\phi = [\phi_\xi, \phi_\omega]'`, which must be
         specified if ``lag_indices`` in ``product_data`` are specified. This is ignored during simulation if ``xi`` and
-        ``omega'' are specified. Otherwise, if specified, unobservables are drawn according to AR(1) processes:
+        ``omega`` are specified. Otherwise, if specified, unobservables are drawn according to AR(1) processes:
 
             .. math::
-               :eq: simulated_ar1
+               :label: simulated_ar1
 
                \xi_{jt} = \phi_\xi \cdot L \xi_{jt} + \Delta_{\phi_\xi} \xi_{jt},
                \omega_{jt} = \phi_\omega \cdot L \omega_{jt} + \Delta_{\phi_\omega} \omega_{jt},
@@ -244,7 +244,7 @@ class Simulation(Economy):
 
         By default, if :math:`X_3` is formulated, this and :math:`\omega_{jt}` are drawn from a mean-zero bivariate
         normal distribution. If ``phi`` is specified, then innovations :math:`\Delta_{\phi_\xi} \xi_{jt}` and
-        :math:`\Delta_{\phi_\omega} \omega_{jt}` in :eq:`simulated_ar` are drawn instead, and initial values are scaled
+        :math:`\Delta_{\phi_\omega} \omega_{jt}` in :eq:`simulated_ar1` are drawn instead, and initial values are scaled
         by :math:`1 - \phi_\xi^2` and :math:`1 - \phi_\omega^2` to be draws from their stationary distribution.
 
     omega : `array-like, optional`
