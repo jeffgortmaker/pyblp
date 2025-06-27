@@ -339,8 +339,8 @@ class ProblemResults(EconomyResults):
             optimization_start_time: float, optimization_end_time: float, optimization_stats: SolverStats,
             iteration_stats: Sequence[Dict[Hashable, SolverStats]], scaled_objective: bool, shares_bounds: Bounds,
             costs_bounds: Bounds, micro_moment_covariances: Optional[Array], center_moments: bool, W_type: str,
-            se_type: str, demand_moment_types: Sequence[str], supply_moment_types: Sequence[str],
-            covariance_moments_mean: float) -> None:
+            se_type: str, demand_moment_types: Sequence[Tuple[str, int]],
+            supply_moment_types: Sequence[Tuple[str, int]], covariance_moments_mean: float) -> None:
         """Compute cumulative progress statistics, update weighting matrices, and estimate standard errors."""
         self.sigma, self.pi, self.rho, self.phi, _, _ = progress.parameters.expand(progress.theta)
         self._errors = progress.errors
@@ -549,13 +549,16 @@ class ProblemResults(EconomyResults):
         return "\n\n".join(sections)
 
     def _compute_mean_G(
-            self, moments: Moments, demand_moment_types: Sequence[str], supply_moment_types: Sequence[str]) -> Array:
+            self, moments: Moments, demand_moment_types: Sequence[Tuple[str, int]],
+            supply_moment_types: Sequence[Tuple[str, int]]) -> Array:
         """Compute the Jacobian of moments with respect to parameters."""
 
         # collect instruments
-        Z_list = list(np.split(self.problem.products.ZD, len(demand_moment_types), axis=1))
+        ZD_indices = np.cumsum([c for _, c in demand_moment_types[:-1]])
+        Z_list = list(np.split(self.problem.products.ZD, ZD_indices, axis=1))
         if self.problem.K3 > 0:
-            Z_list.extend(list(np.split(self.problem.products.ZS, len(supply_moment_types), axis=1)))
+            ZS_indices = np.cumsum([c for _, c in supply_moment_types[:-1]])
+            Z_list.extend(list(np.split(self.problem.products.ZS, ZS_indices, axis=1)))
         if self.problem.MC > 0:
             Z_list.append(self.problem.products.ZC)
 
@@ -573,11 +576,11 @@ class ProblemResults(EconomyResults):
 
         # collect Jacobians
         jacobian_list = []
-        for moment_type in demand_moment_types:
+        for moment_type, _ in demand_moment_types:
             jacobian_list.append(self.problem._compute_difference(moment_type, xi_jacobian, self.phi[0]))
         if self.problem.K3 > 0:
             assert omega_jacobian is not None
-            for moment_type in supply_moment_types:
+            for moment_type, _ in supply_moment_types:
                 jacobian_list.append(self.problem._compute_difference(moment_type, omega_jacobian, self.phi[1]))
         if self.problem.MC > 0:
             jacobian_list.append(np.c_[
@@ -590,10 +593,10 @@ class ProblemResults(EconomyResults):
         for p, parameter in enumerate(self._parameters.unfixed):
             if isinstance(parameter, PhiParameter):
                 if parameter.location[0] == 0:
-                    for i, moment_type in enumerate(demand_moment_types):
+                    for i, (moment_type, _) in enumerate(demand_moment_types):
                         jacobian_list[i][:, [p]] += self.problem._compute_difference_derivative(moment_type, self.xi)
                 elif self.problem.K3 > 0:
-                    for i, moment_type in enumerate(supply_moment_types):
+                    for i, (moment_type, _) in enumerate(supply_moment_types):
                         i += len(demand_moment_types)
                         jacobian_list[i][:, [p]] += self.problem._compute_difference_derivative(moment_type, self.omega)
 
@@ -609,23 +612,26 @@ class ProblemResults(EconomyResults):
         return mean_G
 
     def _compute_S(
-            self, moments: Moments, S_type: str, demand_moment_types: Sequence[str], supply_moment_types: Sequence[str],
-            covariance_moments_mean: float, center_moments: bool = False) -> Array:
+            self, moments: Moments, S_type: str, demand_moment_types: Sequence[Tuple[str, int]],
+            supply_moment_types: Sequence[Tuple[str, int]], covariance_moments_mean: float,
+            center_moments: bool = False) -> Array:
         """Compute moment covariances."""
 
         # collect instruments
-        Z_list = list(np.split(self.problem.products.ZD, len(demand_moment_types), axis=1))
+        ZD_indices = np.cumsum([c for _, c in demand_moment_types[:-1]])
+        Z_list = list(np.split(self.problem.products.ZD, ZD_indices, axis=1))
         if self.problem.K3 > 0:
-            Z_list.extend(list(np.split(self.problem.products.ZS, len(supply_moment_types), axis=1)))
+            ZS_indices = np.cumsum([c for _, c in supply_moment_types[:-1]])
+            Z_list.extend(list(np.split(self.problem.products.ZS, ZS_indices, axis=1)))
         if self.problem.MC > 0:
             Z_list.append(self.problem.products.ZC)
 
         # collect structural errors
         u_list = []
-        for moment_type in demand_moment_types:
+        for moment_type, _ in demand_moment_types:
             u_list.append(self.problem._compute_difference(moment_type, self.xi, self.phi[0]))
         if self.problem.K3 > 0:
-            for moment_type in supply_moment_types:
+            for moment_type, _ in supply_moment_types:
                 u_list.append(self.problem._compute_difference(moment_type, self.omega, self.phi[1]))
         if self.problem.MC > 0:
             u_list.append(self.xi * self.omega - covariance_moments_mean)

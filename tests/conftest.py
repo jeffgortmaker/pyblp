@@ -828,7 +828,7 @@ def simulated_problem(request: Any) -> SimulatedProblemFixture:
     """Configure and solve a simulated problem, with different moment types, either with or without supply-side data.
     Preclude overflow with rho bounds that are more conservative than the default ones.
     """
-    name, moment_types, supply = request.param
+    name, moment_type_strings, supply = request.param
     simulation, simulation_results, simulated_data_override, simulated_micro_moments = (
         request.getfixturevalue(f'{name}_simulation')
     )
@@ -840,17 +840,21 @@ def simulated_problem(request: Any) -> SimulatedProblemFixture:
     product_data = update_matrices(simulation_results.product_data, {k: (v, v.dtype) for k, v in data_update.items()})
 
     # drop lag indices when unneeded
-    if not any(t != 'levels' for t in moment_types):
+    if not any(t != 'levels' for t in moment_type_strings):
         product_data = update_matrices(product_data, {'lag_indices': (np.zeros((simulation.N, 0)), np.int64)})
 
     # simply duplicate instruments when there are multiple moment types
     add_exogenous = True
-    if len(moment_types) > 1:
+    problem = simulation_results.to_problem(
+        simulation.product_formulations[:2 + int(supply)], product_data, add_exogenous=add_exogenous
+    )
+    demand_moment_types = [(t, problem.MD) for t in moment_type_strings]
+    supply_moment_types = [(t, problem.MS) for t in moment_type_strings]
+    if len(moment_type_strings) > 1:
         add_exogenous = False
-        problem = simulation_results.to_problem(simulation.product_formulations, product_data)
         product_data = update_matrices(product_data, {
-            'demand_instruments': (np.hstack(len(moment_types) * [problem.products.ZD]), options.dtype),
-            'supply_instruments': (np.hstack(len(moment_types) * [problem.products.ZS]), options.dtype),
+            'demand_instruments': (np.hstack(len(moment_type_strings) * [problem.products.ZD]), options.dtype),
+            'supply_instruments': (np.hstack(len(moment_type_strings) * [problem.products.ZS]), options.dtype),
         })
 
     # configure options for solving the problem
@@ -862,11 +866,11 @@ def simulated_problem(request: Any) -> SimulatedProblemFixture:
         'rho_bounds': (np.zeros_like(simulation.rho), np.minimum(0.9, 1.5 * simulation.rho)),
         'method': '1s',
         'check_optimality': 'gradient',
-        'demand_moment_types': moment_types,
-        'supply_moment_types': moment_types,
+        'demand_moment_types': demand_moment_types,
+        'supply_moment_types': supply_moment_types,
         'micro_moments': simulated_micro_moments
     }
-    if any(t != 'levels' for t in moment_types):
+    if any(t != 'levels' for t in moment_type_strings):
         solve_options['phi'] = simulation.phi[:1 + int(supply)]
 
     # initialize and solve the problem

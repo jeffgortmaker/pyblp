@@ -102,9 +102,11 @@ def test_optimal_instruments(simulated_problem: SimulatedProblemFixture, compute
 
     # update the default options and solve the problem
     updated_solve_options = copy.deepcopy(solve_options)
-    updated_solve_options.update(
-        {k: 0.5 * solve_options[k] for k in ['sigma', 'pi', 'rho', 'phi', 'beta'] if k in solve_options}
-    )
+    updated_solve_options.update({
+        'demand_moment_types': 'levels',
+        'supply_moment_types': 'levels',
+        **{k: 0.5 * solve_options[k] for k in ['sigma', 'pi', 'rho', 'phi', 'beta'] if k in solve_options}
+    })
     new_results = new_problem.solve(**updated_solve_options)
 
     # test the accuracy of the estimated parameters
@@ -437,13 +439,19 @@ def test_fixed_effects(
         return pytest.skip("There are no fixed effects to test.")
 
     # skip non-default moment types
-    if any(t != 'levels' for t in solve_options['demand_moment_types'] + solve_options['supply_moment_types']):
+    if any(t != 'levels' for t, _ in solve_options['demand_moment_types'] + solve_options['supply_moment_types']):
         return pytest.skip("FE absorption and non-default moment types are not supported.")
 
     # configure the optimization routine to only do a few iterations to save time and never get to the point where small
     #   numerical differences between methods build up into noticeable differences
     solve_options = copy.deepcopy(solve_options)
     solve_options['optimization'] = Optimization('l-bfgs-b', {'maxfun': 3})
+
+    # all moment types are just levels
+    solve_options.update({
+        'demand_moment_types': 'levels',
+        'supply_moment_types': 'levels',
+    })
 
     # make product data mutable and add instruments
     product_data = {k: simulation_results.product_data[k] for k in simulation_results.product_data.dtype.names}
@@ -1761,8 +1769,9 @@ def test_objective_gradient(
         return pytest.skip("The problem does not have micro moments to test.")
     if not demand and not supply and not covariance and not micro:
         return pytest.skip("There are no moments to test.")
-    if fe and any(t != 'levels' for t in solve_options['demand_moment_types'] + solve_options['supply_moment_types']):
-        return pytest.skip("FE absorption and non-default moment types are not supported.")
+    if fe:
+        if any(t != 'levels' for t, _ in solve_options['demand_moment_types'] + solve_options['supply_moment_types']):
+            return pytest.skip("FE absorption and non-default moment types are not supported.")
 
     # configure the options used to solve the problem
     updated_solve_options = copy.deepcopy(solve_options)
@@ -1793,6 +1802,10 @@ def test_objective_gradient(
             'demand_instruments': problem.products.ZD[:, :-problem.K1],
             'supply_instruments': problem.products.ZS[:, :-problem.K3],
             'covariance_instruments': problem.products.ZC,
+        })
+        updated_solve_options.update({
+            'demand_moment_types': 'levels',
+            'supply_moment_types': 'levels',
         })
         if 'phi' not in solve_options and 'lag_indices' in product_data:
             del product_data['lag_indices']

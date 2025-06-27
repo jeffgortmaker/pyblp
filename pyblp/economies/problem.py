@@ -52,8 +52,8 @@ class ProblemEconomy(Economy):
             delta_behavior: str = 'first', iteration: Optional[Iteration] = None, fp_type: str = 'safe_linear',
             shares_bounds: Optional[Tuple[Any, Any]] = (1e-300, None), costs_bounds: Optional[Tuple[Any, Any]] = None,
             W: Optional[Any] = None, center_moments: bool = True, W_type: str = 'robust', se_type: str = 'robust',
-            demand_moment_types: Union[str, Sequence[str]] = 'levels',
-            supply_moment_types: Union[str, Sequence[str]] = 'levels', covariance_moments_mean: float = 0,
+            demand_moment_types: Union[str, Sequence[Tuple[str, int]]] = 'levels',
+            supply_moment_types: Union[str, Sequence[Tuple[str, int]]] = 'levels', covariance_moments_mean: float = 0,
             micro_moments: Sequence[MicroMoment] = (), micro_sample_covariances: Optional[Any] = None,
             resample_agent_data: Optional[Callable[[int], Optional[Mapping]]] = None) -> ProblemResults:
         r"""Solve the problem.
@@ -447,7 +447,7 @@ class ProblemEconomy(Economy):
             block-diagonal with a micro moment block equal to the scaled covariance matrix defined in
             :eq:`scaled_micro_moment_covariances`.
 
-        demand_moment_types : `str or sequence of str, optional`
+        demand_moment_types : `str or sequence of (str, int) tuples, optional`
             This can be used to replace demand-side moments :math:`\bar{g}_D`. The following types are supported:
 
                 - ``'levels'`` (default) - Standard moments in :eq:`moments`:
@@ -460,18 +460,20 @@ class ProblemEconomy(Economy):
                   example, any product-market fixed effects:
                   :math:`g_{D,jt} = \Delta\Delta_{\phi_\xi} \xi_{jt} \cdot Z_{D,jt}`.
 
-            Specifying a list instead of a single type will replace :math:`\bar{g}_D` with a
-            corresponding stack, with columns of :math:`Z_D` split according to the number of types. For example, to
-            implement :ref:`references:Arellano and Bond (1991)`'s "system GMM" estimator, one can specify
-            ``demand_moment_types=['innovations', 'differenced_innovations']`` and provide additional columns in
-            :math:`Z_D`, giving
+            To specify multiple stacked types, a list can be used instead. Each element in the list is a
+            ``(type, instruments)`` tuple where ``type`` is one of the above strings and ``instruments`` is the number
+            of columns in :math:`Z_D` to use. For example,
+            ``demand_moment_types=[('levels', 1), ('innovations', 3), ('differenced_innovations', 3)]`` implements
+            :ref:`references:Arellano and Bond (1991)`'s "system GMM" estimator with an additional moment restriction on
+            levels:
 
             .. math::
 
                g_{D,jt} =
                \begin{bmatrix}
-                   \Delta_{\phi_\xi} \xi_{jt} \cdot Z_{D,jt,1:M_D / 2} \\
-                   \Delta\Delta_{\phi_\xi} \xi_{jt} \cdot Z_{D,jt,M_D / 2 + 1:M_D}
+                   \xi_{jt} \cdot Z_{D,jt,1} \\
+                   \Delta_{\phi_\xi} \xi_{jt} \cdot Z_{D,jt,2:4} \\
+                   \Delta\Delta_{\phi_\xi} \xi_{jt} \cdot Z_{D,jt,5:7}
                \end{bmatrix}
                .
 
@@ -480,7 +482,7 @@ class ProblemEconomy(Economy):
                  Alternative moment types are still an experimental feature. The way in which they are implemented
                  and used may change somewhat in future releases.
 
-        supply_moment_types : `str or sequence of str, optional`
+        supply_moment_types : `str or sequence of (str, int) tuples, optional`
             This can be used to replace supply-side moments :math:`\bar{g}_S` analogously to how ``demand_moment_types``
             replaces demand-side moments, but with :math:`\xi` replaced by :math:`\omega`, :math:`\phi_\xi` replaced by
             :math:`\phi_\omega`, and :math:`Z_D` replaced by :math:`Z_S`.
@@ -582,31 +584,37 @@ class ProblemEconomy(Economy):
         # validate moment types
         if not isinstance(demand_moment_types, (tuple, list)):
             if not isinstance(demand_moment_types, str):
-                raise TypeError("demand_moment_types must be a string or a sequence of strings.")
-            demand_moment_types = [demand_moment_types]
+                raise TypeError("demand_moment_types must be a string or a sequence.")
+            demand_moment_types = [(demand_moment_types, self.MD)]
         if not isinstance(supply_moment_types, (tuple, list)):
             if not isinstance(supply_moment_types, str):
-                raise TypeError("supply_moment_types must be a string or a sequence of strings.")
-            supply_moment_types = [supply_moment_types]
+                raise TypeError("supply_moment_types must be a string or a sequence.")
+            supply_moment_types = [(supply_moment_types, self.MS)]
         moment_types_info = [
             ("demand", demand_moment_types, self.MD, self.ED),
             ("supply", supply_moment_types, self.MS, self.ES),
         ]
         for side, moment_types, M, E in moment_types_info:
-            for moment_type in moment_types:
-                if moment_type not in {'levels', 'innovations', 'differenced_innovations'}:
-                    raise ValueError(
-                        f"{side}_moment_types must be 'levels', 'innovations', 'differenced_innovations', or a "
-                        f"sequence of these."
-                    )
-            if np.unique(moment_types).size != len(moment_types):
-                raise ValueError(f"{side}_moment_types cannot have duplicates.")
-            if M % len(moment_types) != 0:
-                raise ValueError(
-                    f"The number of {side}-side instruments (currently {M}) must be evenly divisible by the number of "
-                    f"{side}_moment_types (currently {len(moment_types)})."
+            for moment_type_tuple in moment_types:
+                moment_type_error = (
+                    f"{side}_moment_types must be 'levels', 'innovations', 'differenced_innovations', or a "
+                    f"sequence of (string, int) tuples where the string is one of these and the int is between 0 "
+                    f"and {M}, inclusive."
                 )
-            if any(t != 'levels' for t in moment_types):
+                if not isinstance(moment_type_tuple, tuple) or len(moment_type_tuple) != 2:
+                    raise TypeError(moment_type_error)
+                moment_type, moment_count = moment_type_tuple
+                if moment_type not in {'levels', 'innovations', 'differenced_innovations'}:
+                    raise ValueError(moment_type_error)
+                if not isinstance(moment_count, int) or not 0 <= moment_count <= M:
+                    raise ValueError(moment_type_error)
+            if np.unique([s for s, _ in moment_types]).size != len(moment_types):
+                raise ValueError(f"{side}_moment_types cannot have duplicate types.")
+            if sum([i for _, i in moment_types]) != M:
+                raise ValueError(
+                    f"{side}_moment_types instrument counts must sum to the number of {side}-side instruments, {M}."
+                )
+            if any(s != 'levels' for s, _ in moment_types):
                 if self.MC > 0:
                     raise NotImplementedError(
                         f"Non-default {side}_moment_types and covariance restrictions are not currently supported."
@@ -692,9 +700,11 @@ class ProblemEconomy(Economy):
             self._detect_singularity(W, "W")
         else:
             # compute the 2SLS weighting matrix
+            ZD_indices = np.cumsum([c for _, c in demand_moment_types[:-1]])
+            ZS_indices = np.cumsum([c for _, c in supply_moment_types[:-1]])
             S = scipy.linalg.block_diag(
-                *(Z.T @ Z / self.N for Z in np.split(self.products.ZD, len(demand_moment_types), axis=1)),
-                *(Z.T @ Z / self.N for Z in np.split(self.products.ZS, len(supply_moment_types), axis=1)),
+                *(Z.T @ Z / self.N for Z in np.split(self.products.ZD, ZD_indices, axis=1)),
+                *(Z.T @ Z / self.N for Z in np.split(self.products.ZS, ZS_indices, axis=1)),
                 self.products.ZC.T @ self.products.ZC / self.N,
             )
             self._detect_singularity(S, "the 2SLS weighting matrix")
@@ -748,7 +758,7 @@ class ProblemEconomy(Economy):
             # only collect inputs into linear parameter estimation if the IV model won't have to be re-initialized for
             #   every guess of the parameters due to changing autocorrelation parameters
             iv = None
-            if all(t == 'levels' for m in [demand_moment_types, supply_moment_types] for t in m):
+            if all(t == 'levels' for m in [demand_moment_types, supply_moment_types] for t, _ in m):
                 X_list = [self.products.X1[:, parameters.eliminated_beta_index.flat]]
                 Z_list = [self.products.ZD]
                 if self.K3 > 0:
@@ -873,11 +883,11 @@ class ProblemEconomy(Economy):
     def _compute_progress(
             self, parameters: Parameters, moments: Moments, iv: Optional[IV], W: Array, scale_objective: bool,
             error_behavior: str, error_punishment: float, delta_behavior: str, iteration: Iteration, fp_type: str,
-            shares_bounds: Bounds, costs_bounds: Bounds, finite_differences: bool, demand_moment_types: Sequence[str],
-            supply_moment_types: Sequence[str], covariance_moments_mean: float,
-            resample_agent_data: Optional[Callable[[int], Optional[Mapping]]], theta: Array,
-            progress: 'InitialProgress', compute_gradient: bool, compute_hessian: bool, compute_micro_covariances: bool,
-            detect_micro_collinearity: bool, compute_simulation_covariances: bool,
+            shares_bounds: Bounds, costs_bounds: Bounds, finite_differences: bool,
+            demand_moment_types: Sequence[Tuple[str, int]], supply_moment_types: Sequence[Tuple[str, int]],
+            covariance_moments_mean: float, resample_agent_data: Optional[Callable[[int], Optional[Mapping]]],
+            theta: Array, progress: 'InitialProgress', compute_gradient: bool, compute_hessian: bool,
+            compute_micro_covariances: bool, detect_micro_collinearity: bool, compute_simulation_covariances: bool,
             agents_override: Optional[RecArray] = None) -> 'Progress':
         """Compute demand- and supply-side contributions before recovering the linear parameters and structural error
         terms. Then, form the GMM objective value and its gradient. Finally, handle any errors that were encountered
@@ -1213,28 +1223,30 @@ class ProblemEconomy(Economy):
         iv_X3 = None if self.K3 == 0 else self.products.X3[:, parameters.eliminated_gamma_index.flat]
 
         # collect instruments
-        Z_list = list(np.split(self.products.ZD, len(demand_moment_types), axis=1))
+        ZD_indices = np.cumsum([c for _, c in demand_moment_types[:-1]])
+        Z_list = list(np.split(self.products.ZD, ZD_indices, axis=1))
         if self.K3 > 0:
-            Z_list.extend(list(np.split(self.products.ZS, len(supply_moment_types), axis=1)))
+            ZS_indices = np.cumsum([c for _, c in supply_moment_types[:-1]])
+            Z_list.extend(list(np.split(self.products.ZS, ZS_indices, axis=1)))
 
         # collect other inputs into GMM estimation (within side, X's need to be stacked because they will correspond to
         #   the same concentrated-out linear parameters)
         X_list = []
         y_list = []
         jacobian_list = []
-        for moment_type in demand_moment_types:
+        for moment_type, _ in demand_moment_types:
             X_list.append(self._compute_difference(moment_type, iv_X1, phi[0]))
             y_list.append(self._compute_difference(moment_type, iv_delta, phi[0]))
             jacobian_list.append(self._compute_difference(moment_type, xi_jacobian, phi[0]))
-            if moment_type != demand_moment_types[0]:
+            if moment_type != demand_moment_types[0][0]:
                 X_list = X_list[:-2] + [np.vstack(X_list[-2:])]
         if self.K3 > 0:
             assert iv_X3 is not None
-            for moment_type in supply_moment_types:
+            for moment_type, _ in supply_moment_types:
                 X_list.append(self._compute_difference(moment_type, iv_X3, phi[1]))
                 y_list.append(self._compute_difference(moment_type, iv_tilde_costs, phi[1]))
                 jacobian_list.append(self._compute_difference(moment_type, omega_jacobian, phi[1]))
-                if moment_type != supply_moment_types[0]:
+                if moment_type != supply_moment_types[0][0]:
                     X_list = X_list[:-2] + [np.vstack(X_list[-2:])]
 
         # re-initialize the IV regression if it changes with the parameter values
@@ -1252,8 +1264,8 @@ class ProblemEconomy(Economy):
             gamma[parameters.eliminated_gamma_index] = parameters_list[1].flat
 
         # extract the demand-side structural error and its Jacobian
-        if 'levels' in demand_moment_types:
-            i = demand_moment_types.index('levels')
+        if any(t == 'levels' for t, _ in demand_moment_types):
+            i = next(i for i, (t, _) in enumerate(demand_moment_types) if t == 'levels')
             xi = u_list[i]
             xi_jacobian = jacobian_list[i]
         else:
@@ -1263,23 +1275,24 @@ class ProblemEconomy(Economy):
         # extract the suppy-side structural error and its Jacobian
         if self.K3 == 0:
             omega = np.full((self.N, 0), np.nan, options.dtype)
-        elif 'levels' in supply_moment_types:
-            i = len(demand_moment_types) + supply_moment_types.index('levels')
-            omega = u_list[i]
-            omega_jacobian = jacobian_list[i]
         else:
-            assert iv_X3 is not None and not convert_jacobians
-            omega = iv_tilde_costs - iv_X3 @ parameters_list[1]
+            if any(t == 'levels' for t, _ in supply_moment_types):
+                i = len(demand_moment_types) + next(i for i, (t, _) in enumerate(supply_moment_types) if t == 'levels')
+                omega = u_list[i]
+                omega_jacobian = jacobian_list[i]
+            else:
+                assert iv_X3 is not None and not convert_jacobians
+                omega = iv_tilde_costs - iv_X3 @ parameters_list[1]
 
         # update Jacobians with phi contributions
         if compute_jacobians:
             for p, parameter in enumerate(parameters.unfixed):
                 if isinstance(parameter, PhiParameter):
                     if parameter.location[0] == 0:
-                        for i, moment_type in enumerate(demand_moment_types):
+                        for i, (moment_type, _) in enumerate(demand_moment_types):
                             jacobian_list[i][:, [p]] += self._compute_difference_derivative(moment_type, xi)
                     elif self.K3 > 0:
-                        for i, moment_type in enumerate(supply_moment_types):
+                        for i, (moment_type, _) in enumerate(supply_moment_types):
                             i += len(demand_moment_types)
                             jacobian_list[i][:, [p]] += self._compute_difference_derivative(moment_type, omega)
 
