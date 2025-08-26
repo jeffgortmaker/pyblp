@@ -98,6 +98,19 @@ psd_atol : `float`
 
 psd_rtol : `float`
     Relative tolerance for detecting non-positive definite matrices, which is by default also ``1e-8``.
+stable_atol : `float`
+    Absolute tolerance for detecting an unstable autoregressive coefficient matrix :math:`\phi`.
+
+    Eigenvalue decomposition computes the roots of :math:`\phi`, and an error is raised if the spectral radius
+    exceeds one by more than ``stable_atol + stable_rtol * abs`` where ``abs`` is the absolute value of the spectral
+    radius.
+
+    The default tolerance is ``1e-8``. To disable stability checks, set
+    ``pyblp.options.stable_atol = pyblp.options.stable_rtol = numpy.inf``.
+
+stable_rtol : `float`
+    Relative tolerance for detecting an unstable autoregressive coefficient matrix, which is by default also ``1e-8``.
+
 detect_micro_collinearity : `bool`
     Whether to check if micro values :math:`v_{pijt}` (or :math:`v_{pijkt}` with second choices) are collinear with one
     another by computing these values once, stacking them, and using ``pyblp.options.collinear_atol` and
@@ -143,6 +156,7 @@ weights_tol = 1e-10
 singular_tol = 1 / _np.finfo(dtype).eps
 collinear_atol = collinear_rtol = 1e-10
 psd_atol = psd_rtol = 1e-8
+stable_atol = stable_rtol = 1e-8
 detect_micro_collinearity = False
 micro_computation_chunks = 1
 drop_product_fields = False

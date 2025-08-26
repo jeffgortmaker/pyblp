@@ -122,17 +122,27 @@ class ProblemEconomy(Economy):
         phi : `array-like, optional`
             Configuration for which elements in the vector of parameters that measure unobservable autocorrelation,
             :math:`\phi`, are fixed at zero and starting values for the other elements, which, if not fixed by
-            ``phi_bounds``, are in the vector of unknown elements, :math;`\theta`.
+            ``phi_bounds``, are in the vector of unknown elements, :math:`\theta`.
 
             If ``lag_indices`` in ``product_data`` were specified, this is either a scalar :math:`\phi = \phi_\xi`
-            or, if a supply side was specified, a two-element vector :math:`\phi = [\phi_\xi, \phi_\omega]'`,
+            or, if a supply side was specified, a :math:`2 \times 2` matrix
+
+            .. math::
+               :label: phi
+
+               \phi =
+               \begin{bmatrix}
+                   \phi_\xi & \phi_{\xi\omega} \\
+                   \phi_{\omega\xi} & \phi_\omega
+               \end{bmatrix}
+
             corresponding to demand- and supply-side unobservable autocorrelations:
 
             .. math::
                :label: ar1
 
-               \xi_{jt} = \phi_\xi \cdot L \xi_{jt} + \Delta_{\phi_\xi} \xi_{jt}, \\
-               \omega_{jt} = \phi_\omega \cdot L \omega_{jt} + \Delta_{\phi_\omega} \omega_{jt},
+               \xi_{jt} = \phi_\xi \cdot L \xi_{jt} + \phi_{\xi\omega} \cdot L \omega_{jt} + \tilde{\xi}_{jt}, \\
+               \omega_{jt} = \phi_\omega \cdot L \omega_{jt} + \phi_{\omega\xi} \cdot L \xi_{jt} + \tilde{\omega}_{jt},
 
             where the ``lag_indices`` field in ``product_data`` defines the lag operator :math:`L`.
 
@@ -454,11 +464,11 @@ class ProblemEconomy(Economy):
                   :math:`g_{D,jt} = \xi_{jt} \cdot Z_{D,jt}`.
 
                 - ``'innovations'`` - Replace :math:`\xi_{jt}` with its innovation in :eq:`ar1`:
-                  :math:`g_{D,jt} = \Delta_{\phi_\xi} \xi_{jt} \cdot Z_{D,jt}`.
+                  :math:`g_{D,jt} = \tilde{\xi}_{jt} \cdot Z_{D,jt}`.
 
                 - ``'differenced_innovations'`` - Further difference the innovation in :eq:`ar1` to eliminate, for
                   example, any product-market fixed effects:
-                  :math:`g_{D,jt} = \Delta\Delta_{\phi_\xi} \xi_{jt} \cdot Z_{D,jt}`.
+                  :math:`g_{D,jt} = (\tilde{\xi}_{jt} - L \tilde{\xi}_{jt}) \cdot Z_{D,jt}`.
 
             To specify multiple stacked types, a list can be used instead. Each element in the list is a
             ``(type, instruments)`` tuple where ``type`` is one of the above strings and ``instruments`` is the number
@@ -472,8 +482,8 @@ class ProblemEconomy(Economy):
                g_{D,jt} =
                \begin{bmatrix}
                    \xi_{jt} \cdot Z_{D,jt,1} \\
-                   \Delta_{\phi_\xi} \xi_{jt} \cdot Z_{D,jt,2:4} \\
-                   \Delta\Delta_{\phi_\xi} \xi_{jt} \cdot Z_{D,jt,5:7}
+                   \tilde{\xi}_{jt} \cdot Z_{D,jt,2:4} \\
+                   (\tilde{\xi}_{jt} - L \tilde{\xi}_{jt}) \cdot Z_{D,jt,5:7}
                \end{bmatrix}
                .
 
@@ -484,8 +494,8 @@ class ProblemEconomy(Economy):
 
         supply_moment_types : `str or sequence of (str, int) tuples, optional`
             This can be used to replace supply-side moments :math:`\bar{g}_S` analogously to how ``demand_moment_types``
-            replaces demand-side moments, but with :math:`\xi` replaced by :math:`\omega`, :math:`\phi_\xi` replaced by
-            :math:`\phi_\omega`, and :math:`Z_D` replaced by :math:`Z_S`.
+            replaces demand-side moments, but with :math:`\xi` replaced by :math:`\omega` and :math:`Z_D` replaced by
+            :math:`Z_S`.
         covariance_moments_mean : `float, optional`
             If ``covariance_instruments`` were specified in ``product_data``, this can be used to choose a
             :math:`m \neq 0` in covariance moments :math:`E[g_{C,jt}] = E[(\xi_{jt}\omega_{jt} - m)Z_{C,jt}] = 0` where
@@ -759,10 +769,12 @@ class ProblemEconomy(Economy):
             #   every guess of the parameters due to changing autocorrelation parameters
             iv = None
             if all(t == 'levels' for m in [demand_moment_types, supply_moment_types] for t, _ in m):
-                X_list = [self.products.X1[:, parameters.eliminated_beta_index.flat]]
+                iv_X1 = self.products.X1[:, parameters.eliminated_beta_index.flat]
+                iv_X3 = self.products.X3[:, parameters.eliminated_gamma_index.flat] if self.K3 > 0 else None
+                X_list = [np.c_[iv_X1, np.zeros_like(iv_X3)] if self.K3 > 0 else iv_X1]
                 Z_list = [self.products.ZD]
                 if self.K3 > 0:
-                    X_list.append(self.products.X3[:, parameters.eliminated_gamma_index.flat])
+                    X_list.append(np.c_[np.zeros_like(iv_X1), iv_X3])
                     Z_list.append(self.products.ZS)
 
                 # initialize an IV model for linear parameter estimation
@@ -1220,7 +1232,9 @@ class ProblemEconomy(Economy):
 
         # identify the columns of X1 and X3 that are relevant for concentrating out the linear parameters
         iv_X1 = self.products.X1[:, parameters.eliminated_beta_index.flat]
-        iv_X3 = None if self.K3 == 0 else self.products.X3[:, parameters.eliminated_gamma_index.flat]
+        iv_X3 = self.products.X3[:, parameters.eliminated_gamma_index.flat] if self.K3 > 0 else None
+        extended_iv_X1 = np.c_[iv_X1, np.zeros_like(iv_X3)] if self.K3 > 0 else iv_X1
+        extended_iv_X3 = np.c_[np.zeros_like(iv_X1), iv_X3] if self.K3 > 0 else None
 
         # collect instruments
         ZD_indices = np.cumsum([c for _, c in demand_moment_types[:-1]])
@@ -1229,23 +1243,58 @@ class ProblemEconomy(Economy):
             ZS_indices = np.cumsum([c for _, c in supply_moment_types[:-1]])
             Z_list.extend(list(np.split(self.products.ZS, ZS_indices, axis=1)))
 
-        # collect other inputs into GMM estimation (within side, X's need to be stacked because they will correspond to
-        #   the same concentrated-out linear parameters)
+        # collect other inputs into GMM estimation
         X_list = []
         y_list = []
         jacobian_list = []
         for moment_type, _ in demand_moment_types:
-            X_list.append(self._compute_difference(moment_type, iv_X1, phi[0]))
-            y_list.append(self._compute_difference(moment_type, iv_delta, phi[0]))
-            jacobian_list.append(self._compute_difference(moment_type, xi_jacobian, phi[0]))
+            X_list.append(extended_iv_X1 if moment_type == 'levels' else self._compute_difference(
+                moment_type,
+                extended_iv_X1,
+                phi[0, 0],
+                extended_iv_X3 if self.K3 > 0 else None,
+                phi[0, 1] if self.K3 > 0 else None,
+            ))
+            y_list.append(iv_delta if moment_type == 'levels' else self._compute_difference(
+                moment_type,
+                iv_delta,
+                phi[0, 0],
+                iv_tilde_costs if self.K3 > 0 else None,
+                phi[0, 1] if self.K3 > 0 else None,
+            ))
+            jacobian_list.append(xi_jacobian if moment_type == 'levels' else self._compute_difference(
+                moment_type,
+                xi_jacobian,
+                phi[0, 0],
+                omega_jacobian if self.K3 > 0 else None,
+                phi[0, 1] if self.K3 > 0 else None,
+            ))
             if moment_type != demand_moment_types[0][0]:
                 X_list = X_list[:-2] + [np.vstack(X_list[-2:])]
         if self.K3 > 0:
             assert iv_X3 is not None
             for moment_type, _ in supply_moment_types:
-                X_list.append(self._compute_difference(moment_type, iv_X3, phi[1]))
-                y_list.append(self._compute_difference(moment_type, iv_tilde_costs, phi[1]))
-                jacobian_list.append(self._compute_difference(moment_type, omega_jacobian, phi[1]))
+                X_list.append(extended_iv_X3 if moment_type == 'levels' else self._compute_difference(
+                    moment_type,
+                    extended_iv_X3,
+                    phi[1, 1],
+                    extended_iv_X1,
+                    phi[1, 0],
+                ))
+                y_list.append(iv_tilde_costs if moment_type == 'levels' else self._compute_difference(
+                    moment_type,
+                    iv_tilde_costs,
+                    phi[1, 1],
+                    iv_delta,
+                    phi[1, 0],
+                ))
+                jacobian_list.append(omega_jacobian if moment_type == 'levels' else self._compute_difference(
+                    moment_type,
+                    omega_jacobian,
+                    phi[1, 1],
+                    xi_jacobian,
+                    phi[1, 0],
+                ))
                 if moment_type != supply_moment_types[0][0]:
                     X_list = X_list[:-2] + [np.vstack(X_list[-2:])]
 
@@ -1256,12 +1305,12 @@ class ProblemEconomy(Economy):
             errors.extend(iv.errors)
 
         # run the IV regression and extract the concentrated-out linear parameters
-        parameters_list, u_list, jacobian_list = iv.estimate(
+        stacked_parameters, u_list, jacobian_list = iv.estimate(
             X_list, Z_list, iv_W, y_list, jacobian_list, convert_jacobians
         )
-        beta[parameters.eliminated_beta_index] = parameters_list[0].flat
+        beta[parameters.eliminated_beta_index] = stacked_parameters.flat[:iv_X1.shape[1]]
         if self.K3 > 0:
-            gamma[parameters.eliminated_gamma_index] = parameters_list[1].flat
+            gamma[parameters.eliminated_gamma_index] = stacked_parameters.flat[iv_X1.shape[1]:]
 
         # extract the demand-side structural error and its Jacobian
         if any(t == 'levels' for t, _ in demand_moment_types):
@@ -1270,7 +1319,7 @@ class ProblemEconomy(Economy):
             xi_jacobian = jacobian_list[i]
         else:
             assert not convert_jacobians
-            xi = iv_delta - iv_X1 @ parameters_list[0]
+            xi = iv_delta - iv_X1 @ np.c_[beta[parameters.eliminated_beta_index]]
 
         # extract the suppy-side structural error and its Jacobian
         if self.K3 == 0:
@@ -1282,19 +1331,22 @@ class ProblemEconomy(Economy):
                 omega_jacobian = jacobian_list[i]
             else:
                 assert iv_X3 is not None and not convert_jacobians
-                omega = iv_tilde_costs - iv_X3 @ parameters_list[1]
+                omega = iv_tilde_costs - iv_X3 @ np.c_[gamma[parameters.eliminated_gamma_index]]
 
         # update Jacobians with phi contributions
         if compute_jacobians:
             for p, parameter in enumerate(parameters.unfixed):
                 if isinstance(parameter, PhiParameter):
+                    u = xi if parameter.location[1] == 0 else omega
                     if parameter.location[0] == 0:
                         for i, (moment_type, _) in enumerate(demand_moment_types):
-                            jacobian_list[i][:, [p]] += self._compute_difference_derivative(moment_type, xi)
-                    elif self.K3 > 0:
+                            if moment_type != 'levels':
+                                jacobian_list[i][:, [p]] += self._compute_difference_derivative(moment_type, u)
+                    else:
                         for i, (moment_type, _) in enumerate(supply_moment_types):
                             i += len(demand_moment_types)
-                            jacobian_list[i][:, [p]] += self._compute_difference_derivative(moment_type, omega)
+                            if moment_type != 'levels':
+                                jacobian_list[i][:, [p]] += self._compute_difference_derivative(moment_type, u)
 
         # add any covariance moments
         if self.MC > 0:

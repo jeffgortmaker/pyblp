@@ -71,6 +71,23 @@ def precisely_identify_psd(x: Array) -> Tuple[bool, bool]:
     return psd, successful
 
 
+def precisely_identify_stable(x: Array) -> Tuple[bool, bool]:
+    """Compute the spectral radius of a square matrix and use it to decide if the matrix is stable."""
+    assert len(x.shape) == 2 and x.shape[0] == x.shape[1]
+    stable = successful = True
+    if x.size > 0 and np.isfinite([options.stable_atol, options.stable_rtol]).any():
+        try:
+            with warnings.catch_warnings():
+                warnings.filterwarnings('error')
+                eigenvalues = scipy.linalg.eigvals(x)
+                norm = float(np.max(np.abs(eigenvalues)))
+                stable = norm <= 1 + max(options.stable_atol, options.stable_rtol * max(1.0, norm))
+        except (ValueError, scipy.linalg.LinAlgError, scipy.linalg.LinAlgWarning):
+            stable = successful = False
+
+    return stable, successful
+
+
 def precisely_compute_eigenvalues(x: Array) -> Tuple[Array, bool]:
     """Compute the eigenvalues of a real symmetric matrix."""
     try:

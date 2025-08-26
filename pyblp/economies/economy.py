@@ -10,7 +10,9 @@ from .. import exceptions, options
 from ..configurations.formulation import Formulation, Absorb
 from ..configurations.iteration import Iteration
 from ..primitives import Container
-from ..utilities.algebra import precisely_identify_collinearity, precisely_identify_singularity, precisely_identify_psd
+from ..utilities.algebra import (
+    precisely_identify_collinearity, precisely_identify_singularity, precisely_identify_psd, precisely_identify_stable
+)
 from ..utilities.basics import (
     Array, Bounds, Error, Groups, RecArray, StringRepresentation, format_number, format_table, get_indices, output, warn
 )
@@ -240,6 +242,16 @@ class Economy(Container, StringRepresentation):
             raise ValueError(f"{name} must be a PSD matrix. {common_message}")
 
     @staticmethod
+    def _require_stable(matrix: Array, name: str) -> None:
+        """Require that a square matrix is stable."""
+        stable, successful = precisely_identify_stable(matrix)
+        common_message = "To disable stability checks, set options.stable_atol = options.stable_rtol = numpy.inf."
+        if not successful:
+            raise ValueError(f"Failed to check the stability of {name}. {common_message}")
+        if not stable:
+            raise ValueError(f"{name} must be stable with spectral radius less than 1. {common_message}")
+
+    @staticmethod
     def _handle_errors(errors: List[Error], error_behavior: str = 'raise') -> None:
         """Either raise or output information about any errors."""
         if errors:
@@ -406,26 +418,28 @@ class Economy(Container, StringRepresentation):
 
         return delta
 
-    def _compute_difference(self, moment_type: str, x: Array, phi: Array) -> Array:
-        """Either return an array unaltered, compute a quasi-first difference, or further difference these innovations
-        based on the moment type.
+    def _compute_difference(
+            self, moment_type: str, x: Array, phi: Array, other_x: Optional[Array] = None,
+            other_phi: Optional[Array] = None) -> Array:
+        """Either compute a quasi-first difference or further difference these innovations based on the moment type.
+        Optionally include an additional quasi-lag of another variable.
         """
-        if moment_type != 'levels':
-            assert self._lags is not None
-            x = x - phi * x[self.products.lag_indices.flat]
-            if moment_type == 'innovations':
-                x[~self._lags] = 0
-            else:
-                assert moment_type == 'differenced_innovations'
-                assert self._second_lags is not None and self._second_lag_indices is not None
-                x -= x[self._second_lag_indices]
-                x[~self._second_lags] = 0
+        assert self._lags is not None
+        x = x - phi * x[self.products.lag_indices.flat]
+        if other_x is not None:
+            assert other_phi is not None
+            x -= other_phi * other_x[self.products.lag_indices.flat]
+        if moment_type == 'innovations':
+            x[~self._lags] = 0
+        else:
+            assert moment_type == 'differenced_innovations'
+            assert self._second_lags is not None and self._second_lag_indices is not None
+            x -= x[self._second_lag_indices]
+            x[~self._second_lags] = 0
         return x
 
     def _compute_difference_derivative(self, moment_type: str, x: Array) -> Array:
         """Compute the derivative of the moment transform with respect to phi."""
-        if moment_type == 'levels':
-            return np.zeros_like(x)
         x = x[self.products.lag_indices.flat]
         if moment_type == 'innovations':
             assert self._lags is not None

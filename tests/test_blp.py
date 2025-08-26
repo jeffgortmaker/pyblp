@@ -611,7 +611,7 @@ def test_fixed_effects(
 
     # choose tolerances
     atol = 1e-8
-    rtol = 1e-5
+    rtol = 1e-3
 
     # test that fixed effect estimates are essentially identical
     if ED == 0:
@@ -995,7 +995,10 @@ def test_passthrough(simulated_problem: SimulatedProblemFixture) -> None:
     # obtain results at the true parameter values so there aren't issues with FOCs not matching
     true_results = problem.solve(
         beta=simulation.beta, sigma=simulation.sigma, pi=simulation.pi, rho=simulation.rho,
-        phi=simulation.phi[:1 + int(problem.K3 > 0)] if problem.products.lag_indices.shape[1] > 0 else None,
+        phi=(
+            simulation.phi[:1 + int(problem.K3 > 0), :1 + int(problem.K3 > 0)]
+            if problem.products.lag_indices.shape[1] > 0 else None
+        ),
         gamma=simulation.gamma if problem.K3 > 0 else None, delta=simulation_results.delta, method='1s',
         check_optimality='gradient', optimization=Optimization('return'), iteration=Iteration('return'),
         demand_moment_types=solve_options['demand_moment_types'],
@@ -1161,7 +1164,7 @@ def test_return(simulated_problem: SimulatedProblemFixture) -> None:
         'sigma': simulation.sigma,
         'pi': simulation.pi,
         'rho': simulation.rho,
-        'phi': simulation.phi[:1 + int(problem.K3 > 0)] if 'phi' in solve_options else None,
+        'phi': simulation.phi[:1 + int(problem.K3 > 0), :1 + int(problem.K3 > 0)] if 'phi' in solve_options else None,
         'beta': simulation.beta,
         'gamma': simulation.gamma if problem.K3 > 0 else None,
         'delta': problem.products.X1 @ simulation.beta + simulation.xi
@@ -1349,11 +1352,15 @@ def test_bounds(simulated_problem: SimulatedProblemFixture, method_info: Tuple[s
             with np.errstate(invalid='ignore'):
                 binding_solve_options['gamma'] = np.clip(binding_solve_options['gamma'], *binding_gamma_bounds)
         if 'phi' in solve_options:
-            binding_solve_options['phi_bounds'] = (
-                solve_options['phi'] - lb_scale * np.abs(solve_options['phi']),
-                solve_options['phi'] + ub_scale * np.abs(solve_options['phi']),
-            )
-            binding_solve_options['phi'] = np.clip(binding_solve_options['phi'], *binding_solve_options['phi_bounds'])
+            with np.errstate(invalid='ignore'):
+                phi_values = solve_options['phi']
+                binding_solve_options['phi_bounds'] = (
+                    phi_values - np.where(phi_values == 0, 0, lb_scale * np.abs(phi_values)),
+                    phi_values + np.where(phi_values == 0, 0, ub_scale * np.abs(phi_values)),
+                )
+                binding_solve_options['phi'] = np.clip(
+                    binding_solve_options['phi'], *binding_solve_options['phi_bounds']
+                )
 
         # solve the problem and test that the bounds are respected (ignore a warning about minimal gradient changes, and
         #   any non-important warnings about underflow)

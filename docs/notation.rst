@@ -72,8 +72,10 @@ Symbol                                                 Dimensions               
 :math:`X_3`                                            :math:`N \times K_3`                Supply-side product characteristics
 :math:`X_3^\text{ex}`                                  :math:`N \times K_3^\text{ex}`      Exogenous supply-side product characteristics
 :math:`X_3^\text{en}`                                  :math:`N \times K_3^\text{en}`      Endogenous supply-side product characteristics
-:math:`\xi`                                            :math:`N \times 1`                  Unobserved demand-side product characteristics
-:math:`\omega`                                         :math:`N \times 1`                  Unobserved supply-side product characteristics
+:math:`\xi`                                            :math:`N \times 1`                  Demand-side unobservables
+:math:`\omega`                                         :math:`N \times 1`                  Supply-side unobservables
+:math:`\tilde{\xi}`                                    :math:`N \times 1`                  Demand-side unobservable innovations
+:math:`\tilde{\omega}`                                 :math:`N \times 1`                  Supply-side unobservable innovations
 :math:`p`                                              :math:`N \times 1`                  Prices
 :math:`s` (:math:`s_{jt}`)                             :math:`N \times 1`                  Market shares
 :math:`s` (:math:`s_{ht}`)                             :math:`H \times 1`                  Group shares in a market :math:`t`
@@ -107,6 +109,7 @@ Symbol                                                 Dimensions               
 :math:`\Sigma`                                         :math:`K_2 \times K_2`              Cholesky root of the covariance matrix for unobserved taste heterogeneity
 :math:`\Pi`                                            :math:`K_2 \times D`                Parameters that measures how agent tastes vary with demographics
 :math:`\rho`                                           :math:`H \times 1`                  Parameters that measures within nesting group correlation
+:math:`\phi`                                           :math:`2 \times 2`                  Parameters that measure unobservable autocorrelation
 :math:`\gamma`                                         :math:`K_3 \times 1`                Supply-side linear parameters
 :math:`\gamma^\text{ex}`                               :math:`K_3^\text{ex} \times 1`      Parameters in :math:`\gamma` on exogenous product characteristics
 :math:`\gamma^\text{en}`                               :math:`K_3^\text{en} \times 1`      Parameters in :math:`\gamma` on endogenous product characteristics

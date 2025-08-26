@@ -20,7 +20,7 @@ class IV(object):
         """Pre-compute covariances."""
 
         # stack matrices
-        X = scipy.linalg.block_diag(*X_list)
+        X = np.vstack(X_list)
         Z = scipy.linalg.block_diag(*Z_list)
 
         # attempt to pre-compute covariances
@@ -35,11 +35,11 @@ class IV(object):
 
     def estimate(
             self, X_list: List[Array], Z_list: List[Array], W: Array, y_list: List[Array], jacobian_list: List[Array],
-            convert_jacobians: bool) -> Tuple[List[Array], List[Array], List[Array]]:
+            convert_jacobians: bool) -> Tuple[Array, List[Array], List[Array]]:
         """Estimate parameters and compute residuals. Optionally convert Jacobians of y into Jacobians of residuals."""
 
         # stack matrices
-        X = scipy.linalg.block_diag(*X_list)
+        X = np.vstack(X_list)
         Z = scipy.linalg.block_diag(*Z_list)
         y = np.vstack(y_list)
 
@@ -49,16 +49,16 @@ class IV(object):
         residuals = y - X @ parameters
 
         # split the parameters and residuals into lists
-        parameters_list = np.split(parameters, [x.shape[1] for x in X_list[:-1]], axis=0)
         residuals_list = np.split(residuals, len(y_list), axis=0)
 
         # optionally convert Jacobians (making sure to never create a full square matrix)
         if convert_jacobians:
             jacobian = np.vstack(jacobian_list)
-            jacobian -= X @ (self.covariances @ (XZ @ (W @ (Z.T @ jacobian))))
+            with np.errstate(under='ignore'):
+                jacobian -= X @ (self.covariances @ (XZ @ (W @ (Z.T @ jacobian))))
             jacobian_list = np.split(jacobian, len(jacobian_list), axis=0)
 
-        return parameters_list, residuals_list, jacobian_list
+        return parameters, residuals_list, jacobian_list
 
 
 def compute_gmm_weights(S: Array) -> Tuple[Array, List[Error]]:

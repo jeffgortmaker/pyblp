@@ -72,7 +72,7 @@ def configure() -> Iterator[None]:
 @pytest.fixture(scope='session')
 def small_logit_simulation() -> SimulationFixture:
     """Solve a simulation with six markets, a linear constant, linear prices, a linear characteristic, a cost
-    characteristic, and a scaled epsilon.
+    characteristic, a dense autocorrelation matrix, and a scaled epsilon.
     """
     id_data = build_id_data(T=8, J=18, F=3)
 
@@ -101,7 +101,10 @@ def small_logit_simulation() -> SimulationFixture:
             'clustering_ids': product_ids,
             'lag_indices': lag_indices,
         },
-        phi=[0.1, 0.2],
+        phi=[
+            [0.1, 0.01],
+            [0.03, 0.2],
+        ],
         beta=[1, -5, 1],
         gamma=2,
         xi_variance=0.001,
@@ -229,7 +232,7 @@ def large_nested_logit_simulation() -> SimulationFixture:
 @pytest.fixture(scope='session')
 def small_blp_simulation() -> SimulationFixture:
     """Solve a simulation with three markets, linear prices, a linear/nonlinear characteristic, two cost
-    characteristics, and uniform unobserved product characteristics.
+    characteristics, and uniform product unobservables.
     """
     id_data = build_id_data(T=3, J=18, F=3)
     uniform: Array = 0.001 * np.random.RandomState(0).uniform(size=(id_data.size, 3))
@@ -259,8 +262,8 @@ def small_blp_simulation() -> SimulationFixture:
 @pytest.fixture(scope='session')
 def medium_blp_simulation() -> SimulationFixture:
     """Solve a simulation with four markets, linear/nonlinear/cost constants, two linear characteristics, two cost
-    characteristics, a demographic interacted with second-degree prices, an alternative ownership structure, and a
-    scaled epsilon.
+    characteristics, a demographic interacted with second-degree prices, an alternative ownership structure, a
+    diagonal autocorrelation matrix, and a scaled epsilon.
     """
     id_data = build_id_data(T=10, J=25, F=6)
 
@@ -321,7 +324,7 @@ def medium_blp_simulation() -> SimulationFixture:
             'nodes': np.tile(agent_data.nodes, (unique_market_ids.size, 1)),
             **availability,
         },
-        phi=[0.05, 0.03],
+        phi=np.diag([0.05, 0.03]),
         xi_variance=0.00001,
         omega_variance=0.00001,
         correlation=0.8,
@@ -334,7 +337,6 @@ def medium_blp_simulation() -> SimulationFixture:
     simulated_data_override = {
         'demand_instruments': demand_instruments,
         'supply_instruments': supply_instruments,
-        'covariance_instruments': build_matrix(Formulation('0 + x + a'), simulation.product_data),
     }
 
     simulated_micro_moments = replace_micro_moment_values(simulation_results, [MicroMoment(
@@ -415,7 +417,7 @@ def large_blp_simulation() -> SimulationFixture:
         'supply_instruments': np.c_[
             build_differentiation_instruments(Formulation('0 + x + a + b'), simulation_results.product_data),
             build_matrix(Formulation('0 + y + z + q'), simulation_results.product_data)
-        ]
+        ],
     }
 
     inside_diversion_micro_dataset0 = MicroDataset(
@@ -549,7 +551,8 @@ def large_blp_simulation() -> SimulationFixture:
 @pytest.fixture(scope='session')
 def small_nested_blp_simulation() -> SimulationFixture:
     """Solve a simulation with eight markets, linear prices, a linear/nonlinear characteristic, another linear
-    characteristic, three cost characteristics, and two nesting groups with different nesting parameters.
+    characteristic, three cost characteristics, two nesting groups with different nesting parameters, and interacted
+    covariance restrictions.
     """
     id_data = build_id_data(T=8, J=18, F=3)
     simulation = Simulation(
@@ -575,7 +578,12 @@ def small_nested_blp_simulation() -> SimulationFixture:
         seed=0
     )
     simulation_results = simulation.replace_endogenous()
-    return simulation, simulation_results, {}, []
+
+    simulated_data_override = {
+        'covariance_instruments': build_matrix(Formulation('0 + x + a'), simulation.product_data),
+    }
+
+    return simulation, simulation_results, simulated_data_override, []
 
 
 @pytest.fixture(scope='session')
@@ -798,11 +806,11 @@ def large_nested_blp_simulation() -> SimulationFixture:
 @pytest.fixture(scope='session', params=[
     pytest.param(['small_logit', ['levels'], False], id="small logit"),
     pytest.param(['small_logit', ['innovations'], False], id="small logit w/ innovations"),
-    pytest.param(['small_logit', ['levels', 'differenced_innovations'], False], id="small logit w/ levels+differences"),
+    pytest.param(['small_logit', ['levels', 'differenced_innovations'], False], id="small logit w/ levels+diffs"),
     pytest.param(['small_logit', ['innovations', 'differenced_innovations'], False], id="small logit w/ system"),
     pytest.param(['small_logit', ['levels'], True], id="small logit w/ supply"),
-    pytest.param(['small_logit', ['innovations'], True], id="small logit w/ innovations+supply"),
-    pytest.param(['small_logit', ['innovations', 'differenced_innovations'], True], id="small logit w/ system+supply"),
+    pytest.param(['small_logit', ['innovations'], True], id="small logit w/ supply+innovations"),
+    pytest.param(['small_logit', ['innovations', 'differenced_innovations'], True], id="small logit w/ supply+system"),
     pytest.param(['large_logit', ['levels'], False], id="large logit"),
     pytest.param(['large_logit', ['levels'], True], id="large logit w/ supply"),
     pytest.param(['small_nested_logit', ['levels'], False], id="small nested logit"),
@@ -816,7 +824,7 @@ def large_nested_blp_simulation() -> SimulationFixture:
     pytest.param(['medium_blp', ['levels', 'innovations', 'differenced_innovations'], False], id="medium BLP w/ all"),
     pytest.param(['medium_blp', ['levels'], True], id="medium BLP w/ supply"),
     pytest.param(['medium_blp', ['levels', 'innovations'], False], id="medium BLP w/ levels+innovations"),
-    pytest.param(['medium_blp', ['levels', 'differences'], True], id="medium BLP w/ supply+levels+differences"),
+    pytest.param(['medium_blp', ['levels', 'differenced_innovations'], True], id="medium BLP w/ supply+levels+diffs"),
     pytest.param(['large_blp', ['levels'], False], id="large BLP"),
     pytest.param(['large_blp', ['levels'], True], id="large BLP w/ supply"),
     pytest.param(['small_nested_blp', ['levels'], False], id="small nested BLP"),
@@ -871,7 +879,7 @@ def simulated_problem(request: Any) -> SimulatedProblemFixture:
         'micro_moments': simulated_micro_moments
     }
     if any(t != 'levels' for t in moment_type_strings):
-        solve_options['phi'] = simulation.phi[:1 + int(supply)]
+        solve_options['phi'] = simulation.phi[:1 + int(supply), :1 + int(supply)]
 
     # initialize and solve the problem
     problem = simulation_results.to_problem(

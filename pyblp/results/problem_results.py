@@ -331,7 +331,7 @@ class ProblemResults(EconomyResults):
     _shares_bounds: Bounds
     _costs_bounds: Bounds
     _se_type: str
-    _formatted_moments: Optional[str]
+    _formatted_moments: List[str]
     _errors: List[Error]
 
     def __init__(
@@ -389,11 +389,23 @@ class ProblemResults(EconomyResults):
         if micro_moment_covariances is None:
             self.micro_covariances = progress.micro_covariances
 
-        # format micro moments for displaying information (micro moments themselves often contain lambda functions and
-        #   are hence often not serializable)
-        self._formatted_moments = None
+        # format non-default aggregate moments and micro moments (micro moments themselves often contain lambda
+        #   functions and are hence often not serializable and must be formatted here)
+        self._formatted_moments = []
+        if any(s != 'levels' for s, _ in list(demand_moment_types) + list(supply_moment_types)):
+            self._formatted_moments.append(format_table(
+                [s for s, _ in demand_moment_types],
+                [c for _, c in demand_moment_types],
+                title="Demand Moment Counts",
+            ))
+            if self.problem.K3 > 0:
+                self._formatted_moments.append(format_table(
+                    [s for s, _ in supply_moment_types],
+                    [c for _, c in supply_moment_types],
+                    title="Supply Moment Counts",
+                ))
         if progress.moments.MM > 0:
-            self._formatted_moments = progress.moments.format("Estimated Micro Moments", self.micro_values)
+            self._formatted_moments.append(progress.moments.format("Estimated Micro Moments", self.micro_values))
 
         # if the reduced Hessian was computed, compute its eigenvalues and the ratio of the smallest to largest ones
         self.reduced_hessian_eigenvalues = np.full(self._parameters.P, np.nan, options.dtype)
@@ -536,14 +548,13 @@ class ProblemResults(EconomyResults):
             assert self._se_type == 'clustered'
             se_description = f'Robust SEs Adjusted for {np.unique(self.problem.products.clustering_ids).size} Clusters'
 
-        # add sections formatting estimates and micro moments values
+        # add sections formatting estimates and moments
         sections.append(self._parameters.format_estimates(
             f"Estimates ({se_description} in Parentheses)", self.sigma, self.pi, self.rho, self.phi, self.beta,
             self.gamma, self.sigma_squared, self.sigma_se, self.pi_se, self.rho_se, self.phi_se, self.beta_se,
             self.gamma_se, self.sigma_squared_se
         ))
-        if self._formatted_moments is not None:
-            sections.append(self._formatted_moments)
+        sections.extend(self._formatted_moments)
 
         # join the sections into a single string
         return "\n\n".join(sections)
@@ -577,11 +588,22 @@ class ProblemResults(EconomyResults):
         # collect Jacobians
         jacobian_list = []
         for moment_type, _ in demand_moment_types:
-            jacobian_list.append(self.problem._compute_difference(moment_type, xi_jacobian, self.phi[0]))
+            jacobian_list.append(xi_jacobian if moment_type == 'levels' else self.problem._compute_difference(
+                moment_type,
+                xi_jacobian,
+                self.phi[0, 0],
+                omega_jacobian if self.problem.K3 > 0 else None,
+                self.phi[0, 1] if self.problem.K3 > 0 else None,
+            ))
         if self.problem.K3 > 0:
-            assert omega_jacobian is not None
             for moment_type, _ in supply_moment_types:
-                jacobian_list.append(self.problem._compute_difference(moment_type, omega_jacobian, self.phi[1]))
+                jacobian_list.append(omega_jacobian if moment_type == 'levels' else self.problem._compute_difference(
+                    moment_type,
+                    omega_jacobian,
+                    self.phi[1, 1],
+                    xi_jacobian,
+                    self.phi[1, 0],
+                ))
         if self.problem.MC > 0:
             jacobian_list.append(np.c_[
                 self.xi_by_theta_jacobian * self.omega + self.xi * self.omega_by_theta_jacobian,
@@ -592,13 +614,16 @@ class ProblemResults(EconomyResults):
         # update Jacobians with phi contributions
         for p, parameter in enumerate(self._parameters.unfixed):
             if isinstance(parameter, PhiParameter):
+                u = self.xi if parameter.location[1] == 0 else self.omega
                 if parameter.location[0] == 0:
                     for i, (moment_type, _) in enumerate(demand_moment_types):
-                        jacobian_list[i][:, [p]] += self.problem._compute_difference_derivative(moment_type, self.xi)
+                        if moment_type != 'levels':
+                            jacobian_list[i][:, [p]] += self.problem._compute_difference_derivative(moment_type, u)
                 elif self.problem.K3 > 0:
                     for i, (moment_type, _) in enumerate(supply_moment_types):
                         i += len(demand_moment_types)
-                        jacobian_list[i][:, [p]] += self.problem._compute_difference_derivative(moment_type, self.omega)
+                        if moment_type != 'levels':
+                            jacobian_list[i][:, [p]] += self.problem._compute_difference_derivative(moment_type, u)
 
         # compute the Jacobian of moments with respect to parameters
         mean_G = np.r_[
@@ -629,10 +654,22 @@ class ProblemResults(EconomyResults):
         # collect structural errors
         u_list = []
         for moment_type, _ in demand_moment_types:
-            u_list.append(self.problem._compute_difference(moment_type, self.xi, self.phi[0]))
+            u_list.append(self.xi if moment_type == 'levels' else self.problem._compute_difference(
+                moment_type,
+                self.xi,
+                self.phi[0, 0],
+                self.omega if self.problem.K3 > 0 else None,
+                self.phi[0, 1] if self.problem.K3 > 0 else None,
+            ))
         if self.problem.K3 > 0:
             for moment_type, _ in supply_moment_types:
-                u_list.append(self.problem._compute_difference(moment_type, self.omega, self.phi[1]))
+                u_list.append(self.omega if moment_type == 'levels' else self.problem._compute_difference(
+                    moment_type,
+                    self.omega,
+                    self.phi[1, 1],
+                    self.xi,
+                    self.phi[1, 0],
+                ))
         if self.problem.MC > 0:
             u_list.append(self.xi * self.omega - covariance_moments_mean)
 

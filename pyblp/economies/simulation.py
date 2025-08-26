@@ -5,6 +5,7 @@ import time
 from typing import Any, Dict, Hashable, List, Mapping, Optional, Sequence, Tuple, Union
 
 import numpy as np
+import scipy.linalg
 
 from .economy import Economy
 from .. import exceptions
@@ -147,15 +148,26 @@ class Simulation(Economy):
         elements, one for each nesting group. Elements correspond to group IDs in the sorted order of
         :attr:`Simulation.unique_nesting_ids`. If nesting IDs are not specified, this should not be specified either.
     phi : `float, optional`
-        Parameters measuring unobservable autocorrelation, :math:`\phi = [\phi_\xi, \phi_\omega]'`, which must be
-        specified if ``lag_indices`` in ``product_data`` are specified. This is ignored during simulation if ``xi`` and
-        ``omega`` are specified. Otherwise, if specified, unobservables are drawn according to AR(1) processes:
+        Parameters measuring unobservable autocorrelation,
+
+        .. math::
+
+           \phi =
+           \begin{bmatrix}
+               \phi_\xi & \phi_{\xi\omega} \\
+               \phi_{\omega\xi} & \phi_\omega
+           \end{bmatrix}
+           ,
+
+        which must be specified if ``lag_indices`` in ``product_data`` are specified. This is ignored during simulation
+        if ``xi`` and ``omega`` are specified. Otherwise, if specified, unobservables are drawn according to AR(1)
+        processes:
 
             .. math::
                :label: simulated_ar1
 
-               \xi_{jt} = \phi_\xi \cdot L \xi_{jt} + \Delta_{\phi_\xi} \xi_{jt}, \\
-               \omega_{jt} = \phi_\omega \cdot L \omega_{jt} + \Delta_{\phi_\omega} \omega_{jt},
+               \xi_{jt} = \phi_\xi \cdot L \xi_{jt} + \phi_{\xi\omega} \cdot L \omega_{jt} + \tilde{\xi}_{jt}, \\
+               \omega_{jt} = \phi_\omega \cdot L \omega_{jt} + \phi_{\omega\xi} \cdot L \xi_{jt} + \tilde{\omega}_{jt},
 
         where the ``lag_indices`` field in ``product_data`` defines the lag operator :math:`L`.
 
@@ -243,9 +255,9 @@ class Simulation(Economy):
         is specified.
 
         By default, if :math:`X_3` is formulated, this and :math:`\omega_{jt}` are drawn from a mean-zero bivariate
-        normal distribution. If ``phi`` is specified, then innovations :math:`\Delta_{\phi_\xi} \xi_{jt}` and
-        :math:`\Delta_{\phi_\omega} \omega_{jt}` in :eq:`simulated_ar1` are drawn instead, and initial values are scaled
-        by :math:`1 - \phi_\xi^2` and :math:`1 - \phi_\omega^2` to be draws from their stationary distribution.
+        normal distribution. If ``phi`` is specified, then innovations :math:`\tilde{\xi}_{jt}` and
+        :math:`\tilde{\omega}_{jt}` in :eq:`simulated_ar1` are drawn instead, and initial values are draws from their
+        stationary distribution.
 
     omega : `array-like, optional`
         Supply-side unobservable, :math:`\omega`. This must be specified if :math:`X_3` is formulated and ``xi`` is
@@ -583,7 +595,13 @@ class Simulation(Economy):
             # update with any autocorrelation structure
             if self._lags is not None:
                 # scale so that initial draws are from stationary distributions
-                xi_and_omega[~self._lags] /= 1 - self.phi.T**2
+                self._require_stable(self.phi, "the parameters measuring unobservable autocorrelation")
+                initial_covariances = scipy.linalg.solve_discrete_lyapunov(self.phi, covariances)
+                initial_transform = (
+                    scipy.linalg.cholesky(initial_covariances, lower=True) @
+                    scipy.linalg.solve_triangular(scipy.linalg.cholesky(covariances, lower=True), np.eye(2), lower=True)
+                )
+                xi_and_omega[~self._lags] = xi_and_omega[~self._lags] @ initial_transform.T
 
                 # update the next indices until there are no more
                 lookup = np.full(self.N, self.N, dtype=np.int64)
@@ -592,7 +610,7 @@ class Simulation(Economy):
                 next_indices = next_indices[next_indices != self.N]
                 while next_indices.size > 0:
                     current_indices = self.products.lag_indices[next_indices].flatten()
-                    xi_and_omega[next_indices] += self.phi.T * xi_and_omega[current_indices]
+                    xi_and_omega[next_indices] += xi_and_omega[current_indices] @ self.phi.T
                     next_indices = lookup[next_indices]
                     next_indices = next_indices[next_indices != self.N]
 

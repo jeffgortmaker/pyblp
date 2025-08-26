@@ -206,9 +206,10 @@ class Parameters(object):
         self.sigma = self.initialize_matrix("sigma", "X2 was formulated", sigma, [(economy.K2, economy.K2)])
         self.pi = self.initialize_matrix("pi", "demographics were formulated", pi, [(economy.K2, economy.D)])
         self.rho = self.initialize_matrix("rho", "nesting_ids were specified", rho, [(economy.H, 1), (1, 1)])
-        self.phi = self.initialize_matrix(
-            "phi", "lag_indices were specified", phi, [(1 + int(economy.K3 > 0), int(economy._lags is not None))]
-        )
+        self.phi = self.initialize_matrix("phi", "lag_indices were specified", phi, [(
+            1 + int(economy.K3 > 0),
+            1 + int(economy.K3 > 0) if economy._lags is not None else 0,
+        )])
         self.beta = self.initialize_matrix("beta", "X1 was formulated", beta, [(economy.K1, 1)], allow_linear_nans)
         self.gamma = self.initialize_matrix("gamma", "X3 was formulated", gamma, [(economy.K3, 1)], allow_linear_nans)
 
@@ -429,8 +430,19 @@ class Parameters(object):
         return self.format_vector(f"Rho {title}", RhoParameter, header, rho_like, rho_se_like)
 
     def format_phi(self, title: str, phi_like: Array, phi_se_like: Optional[Array] = None) -> str:
-        """Format a vector (and optional standard errors) of the same size as stacked phi's as a string."""
-        return self.format_vector(f"Phi {title}", PhiParameter, self.phi_labels, phi_like, phi_se_like)
+        """Format a a scalar or matrix (and optional standard errors) of the same size as phi as a string."""
+        if phi_like.size == 1:
+            return self.format_vector(f"Phi {title}", PhiParameter, self.phi_labels, phi_like, phi_se_like)
+        data = []
+        for row_index, row_label in enumerate(self.phi_labels):
+            data.append([row_label] + [format_number(x) for x in phi_like[row_index]])
+            if phi_se_like is not None:
+                relevant_fixed = {p for p in self.fixed if p.location[0] == row_index}
+                fixed_indices = {p.location[1] for p in relevant_fixed if isinstance(p, PhiParameter)}
+                data.append(
+                    [""] + ["" if i in fixed_indices else format_se(x) for i, x in enumerate(phi_se_like[row_index])]
+                )
+        return format_table([""] + self.phi_labels, *data, title=f"Phi {title}")
 
     def format_beta(self, title: str, beta_like: Array, beta_se_like: Optional[Array] = None) -> str:
         """Format a vector (and optional standard errors) of the same size as beta as a string."""
@@ -441,8 +453,8 @@ class Parameters(object):
         return self.format_vector(f"Gamma {title}", BetaParameter, self.gamma_labels, gamma_like, gamma_se_like)
 
     def format_vector(
-            self, title: str, parameter_type: Type[Union[RhoParameter, LinearCoefficient, PhiParameter]],
-            header: List[str], vector: Array, vector_se: Optional[Array] = None) -> str:
+            self, title: str, parameter_type: Type[Union[RhoParameter, LinearCoefficient]], header: List[str],
+            vector: Array, vector_se: Optional[Array] = None) -> str:
         """Format a vector (and optional standard errors) as a string."""
         data = [[format_number(x) for x in vector]]
         if vector_se is not None:
@@ -554,7 +566,7 @@ class Parameters(object):
             (SigmaParameter, np.array([[f'{k1} x {k2}' for k2 in self.sigma_labels] for k1 in self.sigma_labels])),
             (PiParameter, np.array([[f'{k1} x {k2}' for k2 in self.pi_labels] for k1 in self.sigma_labels])),
             (RhoParameter, np.c_[np.array(self.rho_labels)]),
-            (PhiParameter, np.c_[np.array(self.phi_labels)]),
+            (PhiParameter, np.array([[f'{k1} on {k2}' for k2 in self.phi_labels] for k1 in self.phi_labels])),
             (BetaParameter, np.c_[np.array(self.beta_labels)]),
             (GammaParameter, np.c_[np.array(self.gamma_labels)]),
         ]
