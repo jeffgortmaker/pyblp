@@ -94,10 +94,20 @@ class OptimalInstrumentResults(StringRepresentation):
     contraction_evaluations: Array
 
     def __init__(
-            self, problem_results: ProblemResults, demand_instruments: Array, supply_instruments: Array,
-            inverse_covariance_matrix: Array, expected_xi_jacobian: Array, expected_omega_jacobian: Array,
-            expected_prices: Array, expected_shares: Array, start_time: float, end_time: float, draws: int,
-            iteration_stats: Sequence[Mapping[Hashable, SolverStats]]) -> None:
+        self,
+        problem_results: ProblemResults,
+        demand_instruments: Array,
+        supply_instruments: Array,
+        inverse_covariance_matrix: Array,
+        expected_xi_jacobian: Array,
+        expected_omega_jacobian: Array,
+        expected_prices: Array,
+        expected_shares: Array,
+        start_time: float,
+        end_time: float,
+        draws: int,
+        iteration_stats: Sequence[Mapping[Hashable, SolverStats]],
+    ) -> None:
         """Structure optimal excluded instrument computation results. Also identify supply and demand shifters that will
         be added to the optimal instruments when converting them into a problem.
         """
@@ -113,13 +123,16 @@ class OptimalInstrumentResults(StringRepresentation):
         self.draws = draws
         unique_market_ids = problem_results.problem.unique_market_ids
         self.fp_converged = np.array(
-            [[m[t].converged if m else True for m in iteration_stats] for t in unique_market_ids], dtype=np.bool_
+            [[m[t].converged if m else True for m in iteration_stats] for t in unique_market_ids],
+            dtype=np.bool_,
         )
         self.fp_iterations = np.array(
-            [[m[t].iterations if m else 0 for m in iteration_stats] for t in unique_market_ids], dtype=np.int64
+            [[m[t].iterations if m else 0 for m in iteration_stats] for t in unique_market_ids],
+            dtype=np.int64,
         )
         self.contraction_evaluations = np.array(
-            [[m[t].evaluations if m else 0 for m in iteration_stats] for t in unique_market_ids], dtype=np.int64
+            [[m[t].evaluations if m else 0 for m in iteration_stats] for t in unique_market_ids],
+            dtype=np.int64,
         )
 
         # construct default supply and demand shifter formulations
@@ -173,12 +186,22 @@ class OptimalInstrumentResults(StringRepresentation):
             pickle.dump(self, handle)
 
     def to_dict(
-            self, attributes: Sequence[str] = (
-                'demand_instruments', 'supply_instruments', 'inverse_covariance_matrix',
-                'expected_xi_by_theta_jacobian', 'expected_omega_by_theta_jacobian', 'expected_prices',
-                'expected_shares', 'computation_time', 'draws', 'fp_converged', 'fp_iterations',
-                'contraction_evaluations'
-            )) -> dict:
+        self,
+        attributes: Sequence[str] = (
+            'demand_instruments',
+            'supply_instruments',
+            'inverse_covariance_matrix',
+            'expected_xi_by_theta_jacobian',
+            'expected_omega_by_theta_jacobian',
+            'expected_prices',
+            'expected_shares',
+            'computation_time',
+            'draws',
+            'fp_converged',
+            'fp_iterations',
+            'contraction_evaluations',
+        ),
+    ) -> dict:
         """Convert these results into a dictionary that maps attribute names to values.
 
         Parameters
@@ -202,9 +225,12 @@ class OptimalInstrumentResults(StringRepresentation):
         return {k: getattr(self, k) for k in attributes}
 
     def to_problem(
-            self, supply_shifter_formulation: Optional[Formulation] = None,
-            demand_shifter_formulation: Optional[Formulation] = None, product_data: Optional[Mapping] = None,
-            drop_indices: Optional[Sequence[int]] = None) -> 'OptimalInstrumentProblem':
+        self,
+        supply_shifter_formulation: Optional[Formulation] = None,
+        demand_shifter_formulation: Optional[Formulation] = None,
+        product_data: Optional[Mapping] = None,
+        drop_indices: Optional[Sequence[int]] = None,
+    ) -> 'OptimalInstrumentProblem':
         r"""Re-create the problem with estimated feasible optimal instruments.
 
         The re-created problem will be exactly the same, except that instruments will be replaced with estimated
@@ -343,13 +369,14 @@ class OptimalInstrumentResults(StringRepresentation):
                 demand_instruments,
                 self.problem_results.problem._compute_true_X1(
                     {'prices': self.expected_prices},
-                    self.problem_results._parameters.eliminated_alpha_index.flatten()
+                    self.problem_results._parameters.eliminated_alpha_index.flatten(),
                 )
             ]
         if supply_shifter_formulation is not None:
             try:
                 demand_instruments = np.c_[
-                    demand_instruments, supply_shifter_formulation._build_matrix(product_data)[0]
+                    demand_instruments,
+                    supply_shifter_formulation._build_matrix(product_data)[0],
                 ]
             except patsy.PatsyError as exception:
                 message = (
@@ -368,13 +395,14 @@ class OptimalInstrumentResults(StringRepresentation):
                     supply_instruments,
                     self.problem_results.problem._compute_true_X3(
                         {'shares': self.expected_shares},
-                        self.problem_results._parameters.eliminated_endogenous_gamma_index.flatten()
+                        self.problem_results._parameters.eliminated_endogenous_gamma_index.flatten(),
                     )
                 ]
             if demand_shifter_formulation is not None:
                 try:
                     supply_instruments = np.c_[
-                        supply_instruments, demand_shifter_formulation._build_matrix(product_data)[0]
+                        supply_instruments,
+                        demand_shifter_formulation._build_matrix(product_data)[0],
                     ]
                 except patsy.PatsyError as exception:
                     message = (

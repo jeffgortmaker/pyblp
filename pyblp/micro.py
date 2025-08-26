@@ -114,9 +114,13 @@ class MicroDataset(StringRepresentation):
     eliminated_product_ids_index: Optional[int]
 
     def __init__(
-            self, name: str, observations: int, compute_weights: Callable,
-            eliminated_product_ids_index: Optional[int] = None,
-            market_ids: Optional[Union[Sequence, Array]] = None) -> None:
+        self,
+        name: str,
+        observations: int,
+        compute_weights: Callable,
+        eliminated_product_ids_index: Optional[int] = None,
+        market_ids: Optional[Union[Sequence, Array]] = None,
+    ) -> None:
         """Validate information to the greatest extent possible without an economy or calling the function."""
         if not isinstance(name, str):
             raise TypeError("name must be a string.")
@@ -309,8 +313,13 @@ class MicroMoment(StringRepresentation):
     compute_gradient: functools.partial
 
     def __init__(
-            self, name: str, value: Any, parts: Union[MicroPart, Sequence[MicroPart]],
-            compute_value: Optional[Callable] = None, compute_gradient: Optional[Callable] = None) -> None:
+        self,
+        name: str,
+        value: Any,
+        parts: Union[MicroPart, Sequence[MicroPart]],
+        compute_value: Optional[Callable] = None,
+        compute_gradient: Optional[Callable] = None,
+    ) -> None:
         """Validate information to the greatest extent possible without calling the functions."""
         if not isinstance(name, str):
             raise TypeError("name must be a string.")

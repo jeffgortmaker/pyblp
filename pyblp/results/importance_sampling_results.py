@@ -66,8 +66,13 @@ class ImportanceSamplingResults(StringRepresentation):
     effective_draws_for_skewness: Array
 
     def __init__(
-            self, problem_results: ProblemResults, sampled_agents: RecArray, start_time: float, end_time: float,
-            draws: int) -> None:
+        self,
+        problem_results: ProblemResults,
+        sampled_agents: RecArray,
+        start_time: float,
+        end_time: float,
+        draws: int,
+    ) -> None:
         """Structure importance sampling results and compute diagnostics."""
         self.problem_results = problem_results
         self.sampled_agents = sampled_agents
@@ -88,14 +93,24 @@ class ImportanceSamplingResults(StringRepresentation):
     def __str__(self) -> str:
         """Format importance sampling results as a string."""
         header = [
-            ("Computation", "Time"), ("Total", "Sampling Draws"), ("Sampling Draws", "per Market"),
-            ("Min", "Effective Draws"), ("Min", "Effective Draws", "for Variance"),
-            ("Min", "Effective Draws", "for Skewness"), ("Min", "Weight Sum"), ("Max", "Weight Sum")
+            ("Computation", "Time"),
+            ("Total", "Sampling Draws"),
+            ("Sampling Draws", "per Market"),
+            ("Min", "Effective Draws"),
+            ("Min", "Effective Draws", "for Variance"),
+            ("Min", "Effective Draws", "for Skewness"),
+            ("Min", "Weight Sum"),
+            ("Max", "Weight Sum"),
         ]
         values = [
-            format_seconds(self.computation_time), self.sampled_agents.shape[0], self.draws,
-            int(np.min(self.effective_draws)), int(np.min(self.effective_draws_for_variance)),
-            int(np.min(self.effective_draws_for_skewness)), np.min(self.weight_sums), np.max(self.weight_sums)
+            format_seconds(self.computation_time),
+            self.sampled_agents.shape[0],
+            self.draws,
+            int(np.min(self.effective_draws)),
+            int(np.min(self.effective_draws_for_variance)),
+            int(np.min(self.effective_draws_for_skewness)),
+            np.min(self.weight_sums),
+            np.max(self.weight_sums),
         ]
         return format_table(header, values, title="Importance Sampling Results Summary")
 
@@ -112,10 +127,18 @@ class ImportanceSamplingResults(StringRepresentation):
             pickle.dump(self, handle)
 
     def to_dict(
-            self, attributes: Sequence[str] = (
-                'sampled_agents', 'computation_time', 'draws', 'diagnostic_market_ids', 'weight_sums',
-                'effective_draws', 'effective_draws_for_variance', 'effective_draws_for_skewness'
-            )) -> dict:
+        self,
+        attributes: Sequence[str] = (
+            'sampled_agents',
+            'computation_time',
+            'draws',
+            'diagnostic_market_ids',
+            'weight_sums',
+            'effective_draws',
+            'effective_draws_for_variance',
+            'effective_draws_for_skewness',
+        ),
+    ) -> dict:
         """Convert these results into a dictionary that maps attribute names to values.
 
         Parameters

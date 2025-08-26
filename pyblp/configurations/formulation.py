@@ -102,8 +102,12 @@ class Formulation(StringRepresentation):
     _absorbed_names: Set[str]
 
     def __init__(
-            self, formula: str, absorb: Optional[str] = None, absorb_method: Optional[str] = None,
-            absorb_options: Optional[Mapping] = None) -> None:
+        self,
+        formula: str,
+        absorb: Optional[str] = None,
+        absorb_method: Optional[str] = None,
+        absorb_options: Optional[Mapping] = None,
+    ) -> None:
         """Parse the formula into patsy terms and SymPy expressions. In the process, validate it as much as possible
         without any data.
         """
@@ -165,8 +169,11 @@ class Formulation(StringRepresentation):
         return ' + '.join(names)
 
     def _build_matrix(
-            self, data: Mapping, fallback_index: Optional[int] = None, ignore_na: bool = False) -> (
-            Tuple[Array, List['ColumnFormulation'], Data]):
+        self,
+        data: Mapping,
+        fallback_index: Optional[int] = None,
+        ignore_na: bool = False
+    ) -> Tuple[Array, List['ColumnFormulation'], Data]:
         """Convert a mapping from variable names to arrays into the designed matrix, a list of column formulations that
         describe the columns of the matrix, and a mapping from variable names to arrays of data underlying the matrix,
         which include unchanged continuous variables and indicators constructed from categorical variables. If there is
@@ -557,8 +564,11 @@ def parse_expression(string: str, mark_categorical: bool = False) -> sp.Expr:
 
 
 def evaluate_expression(
-        expression: Union[sp.Expr, sp.Symbol], data: Mapping, data_override: Optional[Mapping] = None,
-        function_mapping: Optional[Mapping[str, Callable]] = None) -> Array:
+    expression: Union[sp.Expr, sp.Symbol],
+    data: Mapping,
+    data_override: Optional[Mapping] = None,
+    function_mapping: Optional[Mapping[str, Callable]] = None,
+) -> Array:
     """Evaluate a SymPy expression at data mapping variable names to arrays. Optionally, supplement the default suite of
     NumPy functions with a mapping from non-default function names to functions.
     """

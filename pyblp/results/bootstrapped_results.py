@@ -15,7 +15,15 @@ from ..configurations.integration import Integration
 from ..markets.economy_results_market import EconomyResultsMarket
 from ..primitives import Agents
 from ..utilities.basics import (
-    Array, Error, SolverStats, format_seconds, format_table, generate_items, get_indices, output, output_progress
+    Array,
+    Error,
+    SolverStats,
+    format_seconds,
+    format_table,
+    generate_items,
+    get_indices,
+    output,
+    output_progress,
 )
 
 
@@ -111,10 +119,22 @@ class BootstrappedResults(SimpleEconomyResults):
     contraction_evaluations: Array
 
     def __init__(
-            self, problem_results: ProblemResults, bootstrapped_sigma: Array, bootstrapped_pi: Array,
-            bootstrapped_rho: Array, bootstrapped_phi: Array, bootstrapped_beta: Array, bootstrapped_gamma: Array,
-            bootstrapped_prices: Array, bootstrapped_shares: Array, bootstrapped_delta: Array, start_time: float,
-            end_time: float, draws: int, iteration_stats: Mapping[Hashable, SolverStats]) -> None:
+        self,
+        problem_results: ProblemResults,
+        bootstrapped_sigma: Array,
+        bootstrapped_pi: Array,
+        bootstrapped_rho: Array,
+        bootstrapped_phi: Array,
+        bootstrapped_beta: Array,
+        bootstrapped_gamma: Array,
+        bootstrapped_prices: Array,
+        bootstrapped_shares: Array,
+        bootstrapped_delta: Array,
+        start_time: float,
+        end_time: float,
+        draws: int,
+        iteration_stats: Mapping[Hashable, SolverStats],
+    ) -> None:
         """Structure bootstrapped problem results."""
         super().__init__(problem_results.problem, problem_results._parameters)
         self.problem_results = problem_results
@@ -153,9 +173,14 @@ class BootstrappedResults(SimpleEconomyResults):
         return format_table(header, values, title="Bootstrapped Results Summary")
 
     def _combine_arrays(
-            self, compute_market_results: Callable, market_ids: Array, fixed_args: Sequence = (),
-            market_args: Sequence = (), agent_data: Optional[Mapping] = None,
-            integration: Optional[Integration] = None) -> Array:
+        self,
+        compute_market_results: Callable,
+        market_ids: Array,
+        fixed_args: Sequence = (),
+        market_args: Sequence = (),
+        agent_data: Optional[Mapping] = None,
+        integration: Optional[Integration] = None,
+    ) -> Array:
         """Compute arrays for one or all markets and stack them into a single tensor. An array for a single market is
         computed by passing fixed_args (identical for all markets) and market_args (matrices with as many rows as there
         are products that are restricted to the market) to compute_market_results, a ResultsMarket method that returns
@@ -180,13 +205,20 @@ class BootstrappedResults(SimpleEconomyResults):
             c, s = pair
             data_override_c = {
                 'prices': self.bootstrapped_prices[c],
-                'shares': self.bootstrapped_shares[c]
+                'shares': self.bootstrapped_shares[c],
             }
             market_cs = EconomyResultsMarket(
-                self._economy, s, self._parameters, self.bootstrapped_sigma[c], self.bootstrapped_pi[c],
-                self.bootstrapped_rho[c], self.bootstrapped_beta[c], self.bootstrapped_gamma[c],
-                self.bootstrapped_delta[c], data_override=data_override_c,
-                agents_override=agents[agents_market_indices[s]]
+                self._economy,
+                s,
+                self._parameters,
+                self.bootstrapped_sigma[c],
+                self.bootstrapped_pi[c],
+                self.bootstrapped_rho[c],
+                self.bootstrapped_beta[c],
+                self.bootstrapped_gamma[c],
+                self.bootstrapped_delta[c],
+                data_override=data_override_c,
+                agents_override=agents[agents_market_indices[s]],
             )
             args_cs: List[Optional[Array]] = []
             for market_arg in market_args:
@@ -309,11 +341,24 @@ class BootstrappedResults(SimpleEconomyResults):
             pickle.dump(self, handle)
 
     def to_dict(
-            self, attributes: Sequence[str] = (
-                'bootstrapped_sigma', 'bootstrapped_pi', 'bootstrapped_rho', 'bootstrapped_phi', 'bootstrapped_beta',
-                'bootstrapped_gamma', 'bootstrapped_prices', 'bootstrapped_shares', 'bootstrapped_delta',
-                'computation_time', 'draws', 'fp_converged', 'fp_iterations', 'contraction_evaluations'
-            )) -> dict:
+        self,
+        attributes: Sequence[str] = (
+            'bootstrapped_sigma',
+            'bootstrapped_pi',
+            'bootstrapped_rho',
+            'bootstrapped_phi',
+            'bootstrapped_beta',
+            'bootstrapped_gamma',
+            'bootstrapped_prices',
+            'bootstrapped_shares',
+            'bootstrapped_delta',
+            'computation_time',
+            'draws',
+            'fp_converged',
+            'fp_iterations',
+            'contraction_evaluations'
+        ),
+    ) -> dict:
         """Convert these results into a dictionary that maps attribute names to values.
 
         Parameters

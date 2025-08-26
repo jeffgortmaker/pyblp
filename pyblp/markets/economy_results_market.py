@@ -17,8 +17,12 @@ class EconomyResultsMarket(Market):
 
     @NumericalErrorHandler(exceptions.EquilibriumRealizationNumericalError)
     def safely_solve_equilibrium_realization(
-            self, costs: Array, prices: Optional[Array], iteration: Optional[Iteration], constant_costs: bool) -> (
-            Tuple[Array, Array, Array, SolverStats, List[Error]]):
+        self,
+        costs: Array,
+        prices: Optional[Array],
+        iteration: Optional[Iteration],
+        constant_costs: bool,
+    ) -> Tuple[Array, Array, Array, SolverStats, List[Error]]:
         """If not already estimated, compute equilibrium prices along with the associated mean utility and shares for a
         realization of marginal costs (for bootstrapping and optimal instruments), along with parameters (for
         bootstrapping only), handling any numerical errors.
@@ -51,13 +55,17 @@ class EconomyResultsMarket(Market):
         probabilities, conditionals = self.compute_probabilities()
         probabilities_tangent_mapping, conditionals_tangent_mapping = (
             self.compute_probabilities_by_parameter_tangent_mapping(
-                probabilities, conditionals, keep_conditionals=self.K3 > 0
+                probabilities,
+                conditionals,
+                keep_conditionals=self.K3 > 0,
             )
         )
 
         # compute the demand-side Jacobian
         xi_jacobian, xi_jacobian_errors = self.compute_xi_by_theta_jacobian(
-            probabilities, conditionals, probabilities_tangent_mapping
+            probabilities,
+            conditionals,
+            probabilities_tangent_mapping,
         )
         errors.extend(xi_jacobian_errors)
 
@@ -67,16 +75,27 @@ class EconomyResultsMarket(Market):
         else:
             # adjust for the contribution of xi's dependence on theta
             self.update_probabilities_by_parameter_tangent_mapping(
-                probabilities_tangent_mapping, conditionals_tangent_mapping, probabilities, conditionals, xi_jacobian
+                probabilities_tangent_mapping,
+                conditionals_tangent_mapping,
+                probabilities,
+                conditionals,
+                xi_jacobian,
             )
 
             # compute the supply-side Jacobian
             eta, capital_delta_inverse, eta_errors = self.compute_eta(
-                probabilities=probabilities, conditionals=conditionals, keep_capital_delta_inverse=True
+                probabilities=probabilities,
+                conditionals=conditionals,
+                keep_capital_delta_inverse=True,
             )
             errors.extend(eta_errors)
             omega_jacobian = self.compute_omega_by_theta_jacobian(
-                tilde_costs, eta, capital_delta_inverse, probabilities, conditionals, probabilities_tangent_mapping,
+                tilde_costs,
+                eta,
+                capital_delta_inverse,
+                probabilities,
+                conditionals,
+                probabilities_tangent_mapping,
                 conditionals_tangent_mapping,
             )
 
@@ -84,7 +103,11 @@ class EconomyResultsMarket(Market):
 
     @NumericalErrorHandler(exceptions.DeltaNumericalError)
     def safely_compute_delta(
-            self, iteration: Iteration, fp_type: str, shares_bounds: Bounds) -> Tuple[Array, List[Error]]:
+        self,
+        iteration: Iteration,
+        fp_type: str,
+        shares_bounds: Bounds,
+    ) -> Tuple[Array, List[Error]]:
         """Compute the mean utility for this market that equates market shares to observed values by solving a fixed
         point problem (starting at the delta with which this market was initialized), handling any numerical errors.
         """
@@ -201,7 +224,10 @@ class EconomyResultsMarket(Market):
 
     @NumericalErrorHandler(exceptions.PostEstimationNumericalError)
     def safely_compute_costs(
-            self, firm_ids: Optional[Array] = None, ownership: Optional[Array] = None) -> Tuple[Array, List[Error]]:
+        self,
+        firm_ids: Optional[Array] = None,
+        ownership: Optional[Array] = None,
+    ) -> Tuple[Array, List[Error]]:
         """Estimate marginal costs, handling any numerical errors."""
         errors: List[Error] = []
         ownership_matrix = self.get_ownership_matrix(firm_ids, ownership)
@@ -212,7 +238,10 @@ class EconomyResultsMarket(Market):
 
     @NumericalErrorHandler(exceptions.PostEstimationNumericalError)
     def safely_compute_profit_hessian(
-            self, prices: Optional[Array], costs: Optional[Array]) -> Tuple[Array, List[Error]]:
+        self,
+        prices: Optional[Array],
+        costs: Optional[Array],
+    ) -> Tuple[Array, List[Error]]:
         """Estimate second derivatives of profits with respect to prices. By default, use unchanged firm IDs and compute
         marginal costs, handling any numerical errors.
         """
@@ -225,7 +254,10 @@ class EconomyResultsMarket(Market):
 
     @NumericalErrorHandler(exceptions.PostEstimationNumericalError)
     def safely_compute_passthrough(
-            self, firm_ids: Optional[Array], ownership: Optional[Array]) -> Tuple[Array, List[Error]]:
+        self,
+        firm_ids: Optional[Array],
+        ownership: Optional[Array],
+    ) -> Tuple[Array, List[Error]]:
         """Estimate the passthrough matrix, handling any numerical errors."""
         errors: List[Error] = []
 
@@ -235,7 +267,10 @@ class EconomyResultsMarket(Market):
         utility_second_derivatives = self.compute_utility_derivatives('prices', order=2)
         jacobian = self.compute_shares_by_variable_jacobian(utility_derivatives, probabilities, conditionals)
         hessian = self.compute_shares_by_variable_hessian(
-            utility_derivatives, utility_second_derivatives, probabilities, conditionals
+            utility_derivatives,
+            utility_second_derivatives,
+            probabilities,
+            conditionals,
         )
 
         # compute the capital delta matrix and its derivatives
@@ -266,8 +301,11 @@ class EconomyResultsMarket(Market):
 
     @NumericalErrorHandler(exceptions.PostEstimationNumericalError)
     def safely_compute_approximate_equilibrium_prices(
-            self, firm_ids: Optional[Array], ownership: Optional[Array], costs: Optional[Array]) -> (
-            Tuple[Array, List[Error]]):
+        self,
+        firm_ids: Optional[Array],
+        ownership: Optional[Array],
+        costs: Optional[Array],
+    ) -> Tuple[Array, List[Error]]:
         """Estimate approximate equilibrium prices under the assumption that shares and their price derivatives are
         unaffected by firm ID changes. By default, use unchanged firm IDs and compute marginal costs, handling any
         numerical errors.
@@ -284,8 +322,14 @@ class EconomyResultsMarket(Market):
 
     @NumericalErrorHandler(exceptions.PostEstimationNumericalError)
     def safely_compute_prices(
-            self, iteration: Iteration, constant_costs: bool, firm_ids: Optional[Array], ownership: Optional[Array],
-            costs: Optional[Array], prices: Optional[Array]) -> Tuple[Array, List[Error]]:
+        self,
+        iteration: Iteration,
+        constant_costs: bool,
+        firm_ids: Optional[Array],
+        ownership: Optional[Array],
+        costs: Optional[Array],
+        prices: Optional[Array],
+    ) -> Tuple[Array, List[Error]]:
         """Estimate equilibrium prices. By default, use unchanged firm IDs, use unchanged prices as starting values,
         and compute marginal costs, handling any numerical errors.
         """
@@ -353,8 +397,12 @@ class EconomyResultsMarket(Market):
 
     @NumericalErrorHandler(exceptions.PostEstimationNumericalError)
     def safely_compute_consumer_surplus(
-            self, keep_all: bool, eliminate_product_ids: Optional[Any], product_ids_index: int,
-            prices: Optional[Array]) -> Tuple[Array, List[Error]]:
+        self,
+        keep_all: bool,
+        eliminate_product_ids: Optional[Any],
+        product_ids_index: int,
+        prices: Optional[Array],
+    ) -> Tuple[Array, List[Error]]:
         """Estimate population-normalized consumer surplus or keep all individual-level surpluses. By default, use
         unchanged prices, handling any numerical errors.
         """
@@ -437,10 +485,16 @@ class EconomyResultsMarket(Market):
             self.compute_probabilities_by_parameter_tangent_mapping(probabilities, conditionals)
         )
         xi_jacobian, errors = self.compute_xi_by_theta_jacobian(
-            probabilities, conditionals, probabilities_tangent_mapping
+            probabilities,
+            conditionals,
+            probabilities_tangent_mapping,
         )
         self.update_probabilities_by_parameter_tangent_mapping(
-            probabilities_tangent_mapping, conditionals_tangent_mapping, probabilities, conditionals, xi_jacobian
+            probabilities_tangent_mapping,
+            conditionals_tangent_mapping,
+            probabilities,
+            conditionals,
+            xi_jacobian,
         )
 
         # compute contributions
@@ -449,8 +503,13 @@ class EconomyResultsMarket(Market):
         micro_chunks = self.generate_micro_chunks(probabilities, probabilities_tangent_mapping)
         for agent_indices, probabilities_chunk, probabilities_tangent_mapping_chunk in micro_chunks:
             _, denominator_mapping_chunk, _, tangent_mapping_chunk = self.compute_micro_dataset_contributions(
-                [dataset], self.delta, probabilities_chunk, probabilities_tangent_mapping_chunk, xi_jacobian,
-                compute_jacobians=True, agent_indices=agent_indices
+                [dataset],
+                self.delta,
+                probabilities_chunk,
+                probabilities_tangent_mapping_chunk,
+                xi_jacobian,
+                compute_jacobians=True,
+                agent_indices=agent_indices,
             )
             if dataset in denominator_mapping_chunk:
                 denominator += denominator_mapping_chunk[dataset]
@@ -460,8 +519,12 @@ class EconomyResultsMarket(Market):
 
     @NumericalErrorHandler(exceptions.MicroScoresNumericalError)
     def safely_compute_score_numerator_contributions(
-            self, dataset: MicroDataset, j: Optional[Any], k: Optional[Any], xi_jacobian: Array) -> (
-            Tuple[Array, Array, List[Error]]):
+        self,
+        dataset: MicroDataset,
+        j: Optional[Any],
+        k: Optional[Any],
+        xi_jacobian: Array,
+    ) -> Tuple[Array, Array, List[Error]]:
         """Compute numerator contributions to micro scores, handling any numerical errors."""
         errors: List[Error] = []
 
@@ -471,7 +534,11 @@ class EconomyResultsMarket(Market):
             self.compute_probabilities_by_parameter_tangent_mapping(probabilities, conditionals)
         )
         self.update_probabilities_by_parameter_tangent_mapping(
-            probabilities_tangent_mapping, conditionals_tangent_mapping, probabilities, conditionals, xi_jacobian
+            probabilities_tangent_mapping,
+            conditionals_tangent_mapping,
+            probabilities,
+            conditionals,
+            xi_jacobian,
         )
 
         # obtain weights and their derivatives
@@ -480,13 +547,19 @@ class EconomyResultsMarket(Market):
         micro_chunks = self.generate_micro_chunks(probabilities, probabilities_tangent_mapping)
         for agent_indices, probabilities_chunk, probabilities_tangent_mapping_chunk in micro_chunks:
             weights_mapping_chunk, _, tangent_mapping_chunk, _ = self.compute_micro_dataset_contributions(
-                [dataset], self.delta, probabilities_chunk, probabilities_tangent_mapping_chunk, xi_jacobian,
-                compute_jacobians=True, agent_indices=agent_indices
+                [dataset],
+                self.delta,
+                probabilities_chunk,
+                probabilities_tangent_mapping_chunk,
+                xi_jacobian,
+                compute_jacobians=True,
+                agent_indices=agent_indices,
             )
             if dataset in weights_mapping_chunk:
                 weights_chunk = weights_mapping_chunk[dataset]
                 tangent_chunk = np.stack(
-                    [tangent_mapping_chunk[(dataset, p)] for p in range(self.parameters.P)], axis=-1
+                    [tangent_mapping_chunk[(dataset, p)] for p in range(self.parameters.P)],
+                    axis=-1,
                 )
             else:
                 weights_chunk = np.zeros_like(self.compute_micro_weights(dataset, agent_indices))

@@ -11,8 +11,21 @@ import sys
 import time
 import traceback
 from typing import (
-    Any, Callable, Container, Dict, Hashable, Iterable, Iterator, List, Mapping, Optional, Set, Sequence, Type, Tuple,
-    Union
+    Any,
+    Callable,
+    Container,
+    Dict,
+    Hashable,
+    Iterable,
+    Iterator,
+    List,
+    Mapping,
+    Optional,
+    Set,
+    Sequence,
+    Type,
+    Tuple,
+    Union,
 )
 import warnings
 
@@ -246,7 +259,7 @@ def extract_size(structured_array_like: Mapping) -> int:
         lambda m: m.shape[0],
         lambda m: next(iter(structured_array_like.values())).shape[0],
         lambda m: len(next(iter(structured_array_like.values()))),
-        lambda m: len(m)
+        lambda m: len(m),
     ]
     for get in getters:
         try:
@@ -343,8 +356,13 @@ def format_options(mapping: Options) -> str:
 
 
 def format_table(
-        header: Sequence, *data: Sequence, title: Optional[str] = None, include_border: bool = True,
-        include_header: bool = True, line_indices: Container[int] = ()) -> str:
+    header: Sequence,
+    *data: Sequence,
+    title: Optional[str] = None,
+    include_border: bool = True,
+    include_header: bool = True,
+    line_indices: Container[int] = (),
+) -> str:
     """Format table information as a string, which has fixed widths, vertical lines after any specified indices, and
     optionally a title, border, and header.
     """

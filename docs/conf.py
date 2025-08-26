@@ -67,12 +67,10 @@ extlinks = {
     'rtd': (f'{rtd_url}/%s', None),
     'pdf': (f'{pdf_url}/%s', None)
 }
-mathjax_config = {
-    'HTML-CSS': {
-        'matchFontHeight': False,
-        'fonts': ['Latin-Modern', 'TeX']
-    }
-}
+mathjax_config = {'HTML-CSS': {
+    'matchFontHeight': False,
+    'fonts': ['Latin-Modern', 'TeX'],
+}}
 math_numfig = True
 math_number_all = True
 numfig_secnum_depth = 0
@@ -90,9 +88,7 @@ linkcheck_ignore = [
 html_theme = 'sphinx_rtd_theme'
 
 # configure LaTeX information
-latex_elements = {
-    'preamble': read('static/preamble.tex')
-}
+latex_elements = {'preamble': read('static/preamble.tex')}
 
 # configure analytics
 googleanalytics_id = 'G-Y950311SH8'
@@ -145,11 +141,11 @@ def process_notebooks() -> None:
                         # replace the domain with Markdown equivalents (reStructuredText doesn't support linked code)
                         notebook_cell['source'][source_index] = notebook_cell['source'][source_index].replace(
                             domain,
-                            f'[{text.strip("`")}]({relative_location}{document}.rst#{section})'
+                            f'[{text.strip("`")}]({relative_location}{document}.rst#{section})',
                         )
                         download_cell['source'][source_index] = download_cell['source'][source_index].replace(
                             domain,
-                            f'[{text}]({rtd_url}/{document}.html#{section})'
+                            f'[{text}]({rtd_url}/{document}.html#{section})',
                         )
 
         # save the updated notebook files

@@ -14,12 +14,23 @@ class SimulationMarket(Market):
     """A market in a simulation of synthetic BLP data."""
 
     def compute_endogenous(
-            self, costs: Array, prices: Array, iteration: Iteration, constant_costs: bool, compute_gradients: bool,
-            compute_hessians: bool) -> (
-            Tuple[
-                Array, Array, Array, Array, SolverStats, Optional[Dict[Hashable, Array]],
-                Optional[Dict[Hashable, Array]], List[Error]
-            ]):
+        self,
+        costs: Array,
+        prices: Array,
+        iteration: Iteration,
+        constant_costs: bool,
+        compute_gradients: bool,
+        compute_hessians: bool,
+    ) -> Tuple[
+        Array,
+        Array,
+        Array,
+        Array,
+        SolverStats,
+        Optional[Dict[Hashable, Array]],
+        Optional[Dict[Hashable, Array]],
+        List[Error],
+    ]:
         """Compute endogenous prices and shares, along with the associated delta and costs. Optionally compute firms'
         profit gradients and Hessians.
         """
@@ -59,8 +70,12 @@ class SimulationMarket(Market):
         return prices, shares, delta, costs, stats, profit_gradients, profit_hessians, errors
 
     def compute_exogenous(
-            self, initial_delta: Array, iteration: Iteration, fp_type: str, shares_bounds: Bounds) -> (
-            Tuple[Array, Array, SolverStats, List[Error]]):
+        self,
+        initial_delta: Array,
+        iteration: Iteration,
+        fp_type: str,
+        shares_bounds: Bounds,
+    ) -> Tuple[Array, Array, SolverStats, List[Error]]:
         """Compute delta and transformed marginal costs, which map to the exogenous product characteristics."""
         errors: List[Error] = []
         delta, stats, delta_errors = self.safely_compute_delta(initial_delta, iteration, fp_type, shares_bounds)
@@ -73,8 +88,12 @@ class SimulationMarket(Market):
 
     @NumericalErrorHandler(exceptions.SyntheticPricesNumericalError)
     def safely_compute_equilibrium_prices(
-            self, costs: Array, iteration: Iteration, constant_costs: bool, prices: Array) -> (
-            Tuple[Array, SolverStats, List[Error]]):
+        self,
+        costs: Array,
+        iteration: Iteration,
+        constant_costs: bool,
+        prices: Array,
+    ) -> Tuple[Array, SolverStats, List[Error]]:
         """Compute equilibrium prices by iterating over the zeta-markup equation, handling any numerical errors."""
         errors: List[Error] = []
         prices, stats = self.compute_equilibrium_prices(costs, iteration, constant_costs, prices)
@@ -91,8 +110,12 @@ class SimulationMarket(Market):
 
     @NumericalErrorHandler(exceptions.SyntheticDeltaNumericalError)
     def safely_compute_delta(
-            self, initial_delta: Array, iteration: Iteration, fp_type: str, shares_bounds: Bounds) -> (
-            Tuple[Array, SolverStats, List[Error]]):
+        self,
+        initial_delta: Array,
+        iteration: Iteration,
+        fp_type: str,
+        shares_bounds: Bounds,
+    ) -> Tuple[Array, SolverStats, List[Error]]:
         """Compute delta, handling any numerical errors."""
         delta, clipped_shares, stats, errors = self.compute_delta(initial_delta, iteration, fp_type, shares_bounds)
         if clipped_shares.any():

@@ -12,7 +12,14 @@ from ..configurations.formulation import Formulation
 from ..configurations.integration import Integration
 from ..construction import build_blp_instruments, build_matrix
 from ..utilities.basics import (
-    Array, SolverStats, Mapping, update_matrices, RecArray, format_number, format_seconds, format_table
+    Array,
+    SolverStats,
+    Mapping,
+    update_matrices,
+    RecArray,
+    format_number,
+    format_seconds,
+    format_table,
 )
 
 
@@ -144,33 +151,50 @@ class SimulationResults(EconomyResults):
     _data_override: Dict[str, Array]
 
     def __init__(
-            self, simulation: 'Simulation', data_override: Dict[str, Array], delta: Array, costs: Optional[Array],
-            start_time: float, end_time: float, iteration_stats: Dict[Hashable, SolverStats],
-            profit_gradients: Optional[Dict[Hashable, Dict[Hashable, Array]]] = None,
-            profit_gradient_norms: Optional[Dict[Hashable, Dict[Hashable, Array]]] = None,
-            profit_hessians: Optional[Dict[Hashable, Dict[Hashable, Array]]] = None,
-            profit_hessian_eigenvalues: Optional[Dict[Hashable, Dict[Hashable, Array]]] = None) -> None:
+        self,
+        simulation: 'Simulation',
+        data_override: Dict[str, Array],
+        delta: Array,
+        costs: Optional[Array],
+        start_time: float,
+        end_time: float,
+        iteration_stats: Dict[Hashable, SolverStats],
+        profit_gradients: Optional[Dict[Hashable, Dict[Hashable, Array]]] = None,
+        profit_gradient_norms: Optional[Dict[Hashable, Dict[Hashable, Array]]] = None,
+        profit_hessians: Optional[Dict[Hashable, Dict[Hashable, Array]]] = None,
+        profit_hessian_eigenvalues: Optional[Dict[Hashable, Dict[Hashable, Array]]] = None,
+    ) -> None:
         """Structure simulation results."""
         super().__init__(
-            simulation, simulation._parameters, simulation.sigma, simulation.pi, simulation.rho, simulation.beta,
-            simulation.gamma, delta, data_override
+            simulation,
+            simulation._parameters,
+            simulation.sigma,
+            simulation.pi,
+            simulation.rho,
+            simulation.beta,
+            simulation.gamma,
+            delta,
+            data_override,
         )
         self.simulation = simulation
         self.product_data = update_matrices(
             simulation.product_data,
-            {k: (v, v.dtype) for k, v in data_override.items()}
+            {k: (v, v.dtype) for k, v in data_override.items()},
         )
         self.delta = delta
         self.costs = costs
         self.computation_time = end_time - start_time
         self.fp_converged = np.array(
-            [iteration_stats[t].converged for t in simulation.unique_market_ids], dtype=np.bool_
+            [iteration_stats[t].converged for t in simulation.unique_market_ids],
+            dtype=np.bool_,
         )
         self.fp_iterations = np.array(
-            [iteration_stats[t].iterations for t in simulation.unique_market_ids], dtype=np.int64
+            [iteration_stats[t].iterations for t in simulation.unique_market_ids],
+            dtype=np.int64,
         )
         self.contraction_evaluations = np.array(
-            [iteration_stats[t].evaluations for t in simulation.unique_market_ids], dtype=np.int64
+            [iteration_stats[t].evaluations for t in simulation.unique_market_ids],
+            dtype=np.int64,
         )
         self.profit_gradients = profit_gradients
         self.profit_gradient_norms = profit_gradient_norms
@@ -229,11 +253,21 @@ class SimulationResults(EconomyResults):
             pickle.dump(self, handle)
 
     def to_dict(
-            self, attributes: Sequence[str] = (
-                'product_data', 'delta', 'costs', 'computation_time', 'fp_converged', 'fp_iterations',
-                'contraction_evaluations', 'profit_gradients', 'profit_gradient_norms', 'profit_hessians',
-                'profit_hessian_eigenvalues'
-            )) -> dict:
+        self,
+        attributes: Sequence[str] = (
+            'product_data',
+            'delta',
+            'costs',
+            'computation_time',
+            'fp_converged',
+            'fp_iterations',
+            'contraction_evaluations',
+            'profit_gradients',
+            'profit_gradient_norms',
+            'profit_hessians',
+            'profit_hessian_eigenvalues',
+        ),
+    ) -> dict:
         """Convert these results into a dictionary that maps attribute names to values.
 
         Parameters
@@ -255,11 +289,17 @@ class SimulationResults(EconomyResults):
         return {k: getattr(self, k) for k in attributes}
 
     def to_problem(
-            self, product_formulations: Optional[Union[Formulation, Sequence[Optional[Formulation]]]] = None,
-            product_data: Optional[Mapping] = None, agent_formulation: Optional[Formulation] = None,
-            agent_data: Optional[Mapping] = None, integration: Optional[Integration] = None,
-            rc_types: Optional[Sequence[str]] = None, epsilon_scale: Optional[float] = None,
-            costs_type: Optional[str] = None, add_exogenous: bool = True) -> 'Problem':
+        self,
+        product_formulations: Optional[Union[Formulation, Sequence[Optional[Formulation]]]] = None,
+        product_data: Optional[Mapping] = None,
+        agent_formulation: Optional[Formulation] = None,
+        agent_data: Optional[Mapping] = None,
+        integration: Optional[Integration] = None,
+        rc_types: Optional[Sequence[str]] = None,
+        epsilon_scale: Optional[float] = None,
+        costs_type: Optional[str] = None,
+        add_exogenous: bool = True,
+    ) -> 'Problem':
         """Convert the solved simulation into a problem.
 
         Arguments are the same as those of :class:`Problem`. By default, the structure of the problem will be the same
@@ -331,8 +371,15 @@ class SimulationResults(EconomyResults):
             costs_type = self.simulation.costs_type
         from ..economies.problem import Problem  # noqa
         return Problem(
-            product_formulations, product_data, agent_formulation, agent_data, integration, rc_types, epsilon_scale,
-            costs_type, add_exogenous
+            product_formulations,
+            product_data,
+            agent_formulation,
+            agent_data,
+            integration,
+            rc_types,
+            epsilon_scale,
+            costs_type,
+            add_exogenous,
         )
 
     def _compute_default_instruments(self) -> Tuple[Array, Array]:

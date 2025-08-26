@@ -22,23 +22,27 @@ from pyblp.utilities.basics import Array, Options
     pytest.param('squarem', {'scheme': 3, 'step_min': 0.7, 'step_max': 1.3, 'step_factor': 5.0}, id="SQUAREM S3"),
     pytest.param('hybr', {}, id="Powell hybrid method"),
     pytest.param('lm', {}, id="Levenberg-Marquardt"),
-    pytest.param('return', {}, id="Return")
+    pytest.param('return', {}, id="Return"),
 ])
 @pytest.mark.parametrize('compute_jacobian', [
     pytest.param(True, id="analytic Jacobian"),
-    pytest.param(False, id="no analytic Jacobian")
+    pytest.param(False, id="no analytic Jacobian"),
 ])
 @pytest.mark.parametrize('universal_display', [
     pytest.param(True, id="universal display"),
-    pytest.param(False, id="no universal display")
+    pytest.param(False, id="no universal display"),
 ])
 @pytest.mark.parametrize('use_weights', [
     pytest.param(True, id="weights"),
-    pytest.param(False, id="no weights")
+    pytest.param(False, id="no weights"),
 ])
 def test_scipy(
-        method: str, method_options: Options, compute_jacobian: bool, universal_display: bool,
-        use_weights: bool) -> None:
+    method: str,
+    method_options: Options,
+    compute_jacobian: bool,
+    universal_display: bool,
+    use_weights: bool,
+) -> None:
     """Test that the solution to the example fixed point problem from scipy.optimize.fixed_point is reasonably close to
     the exact solution. Also verify that the configuration can be formatted.
     """
@@ -84,12 +88,12 @@ def test_hasselblad(scheme: int) -> None:
         i = np.arange(y.size)
         z = np.divide(
             x[0] * np.exp(-x[1]) * x[1]**i,
-            x[0] * np.exp(-x[1]) * x[1]**i + (1 - x[0]) * np.exp(-x[2]) * x[2]**i
+            x[0] * np.exp(-x[1]) * x[1]**i + (1 - x[0]) * np.exp(-x[2]) * x[2]**i,
         )
         x = np.array([
             (y * z).sum() / y.sum(),
             (y * i * z).sum() / (y * z).sum(),
-            (y * i * (1 - z)).sum() / (y * (1 - z)).sum()
+            (y * i * (1 - z)).sum() / (y * (1 - z)).sum(),
         ])
         return x, None, None
 

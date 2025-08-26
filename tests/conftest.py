@@ -10,9 +10,21 @@ import pytest
 import scipy.linalg
 
 from pyblp import (
-    Formulation, Integration, Problem, ProblemResults, MicroDataset, MicroPart, MicroMoment, Simulation,
-    SimulationResults, build_differentiation_instruments, build_id_data, build_matrix, build_ownership,
-    build_integration, options
+    Formulation,
+    Integration,
+    Problem,
+    ProblemResults,
+    MicroDataset,
+    MicroPart,
+    MicroMoment,
+    Simulation,
+    SimulationResults,
+    build_differentiation_instruments,
+    build_id_data,
+    build_matrix,
+    build_ownership,
+    build_integration,
+    options,
 )
 from pyblp.utilities.basics import get_indices, update_matrices, Array, Data, Options
 
@@ -93,7 +105,7 @@ def small_logit_simulation() -> SimulationFixture:
         product_formulations=(
             Formulation('1 + prices + x'),
             None,
-            Formulation('0 + a')
+            Formulation('0 + a'),
         ),
         product_data={
             'market_ids': id_data.market_ids,
@@ -145,7 +157,7 @@ def large_logit_simulation() -> SimulationFixture:
         product_data={
             'market_ids': id_data.market_ids,
             'firm_ids': id_data.firm_ids,
-            'clustering_ids': np.random.RandomState(2).choice(range(30), id_data.size)
+            'clustering_ids': np.random.RandomState(2).choice(range(30), id_data.size),
         },
         beta=[1, -6, 1, 2, 3],
         gamma=[0.1, 0.2, 0.3, -0.2],
@@ -153,7 +165,7 @@ def large_logit_simulation() -> SimulationFixture:
         omega_variance=0.00001,
         correlation=0,
         costs_type='log',
-        seed=2
+        seed=2,
     )
     simulation_results = simulation.replace_endogenous(constant_costs=False)
 
@@ -177,13 +189,13 @@ def small_nested_logit_simulation() -> SimulationFixture:
         product_formulations=(
             Formulation('0 + prices + x + y'),
             None,
-            Formulation('0 + a + b')
+            Formulation('0 + a + b'),
         ),
         product_data={
             'market_ids': id_data.market_ids,
             'firm_ids': id_data.firm_ids,
             'nesting_ids': np.random.RandomState(0).choice(['f', 'g'], id_data.size),
-            'clustering_ids': np.random.RandomState(0).choice(range(10), id_data.size)
+            'clustering_ids': np.random.RandomState(0).choice(range(10), id_data.size),
         },
         beta=[-5, 1, 1],
         gamma=[2, 1],
@@ -191,7 +203,7 @@ def small_nested_logit_simulation() -> SimulationFixture:
         xi_variance=0.001,
         omega_variance=0.001,
         correlation=0.7,
-        seed=0
+        seed=0,
     )
     simulation_results = simulation.replace_endogenous()
     return simulation, simulation_results, {}, []
@@ -208,13 +220,13 @@ def large_nested_logit_simulation() -> SimulationFixture:
         product_formulations=(
             Formulation('1 + prices + x + y + z'),
             None,
-            Formulation('0 + log(x) + a + b + c')
+            Formulation('0 + log(x) + a + b + c'),
         ),
         product_data={
             'market_ids': id_data.market_ids,
             'firm_ids': id_data.firm_ids,
             'nesting_ids': np.random.RandomState(2).choice(['f', 'g', 'h'], id_data.size),
-            'clustering_ids': np.random.RandomState(2).choice(range(30), id_data.size)
+            'clustering_ids': np.random.RandomState(2).choice(range(30), id_data.size),
         },
         beta=[1, -6, 1, 2, 3],
         gamma=[0.1, 0.2, 0.3, 0.5],
@@ -223,7 +235,7 @@ def large_nested_logit_simulation() -> SimulationFixture:
         omega_variance=0.00001,
         correlation=0.9,
         costs_type='log',
-        seed=2
+        seed=2,
     )
     simulation_results = simulation.replace_endogenous()
     return simulation, simulation_results, {}, []
@@ -240,12 +252,12 @@ def small_blp_simulation() -> SimulationFixture:
         product_formulations=(
             Formulation('0 + prices + x'),
             Formulation('0 + x'),
-            Formulation('0 + a + b')
+            Formulation('0 + a + b'),
         ),
         product_data={
             'market_ids': id_data.market_ids,
             'firm_ids': id_data.firm_ids,
-            'clustering_ids': np.random.RandomState(0).choice(range(10), id_data.size)
+            'clustering_ids': np.random.RandomState(0).choice(range(10), id_data.size),
         },
         beta=[-5, 1],
         sigma=2,
@@ -253,7 +265,7 @@ def small_blp_simulation() -> SimulationFixture:
         integration=Integration('product', 3),
         xi=uniform[:, 0] + uniform[:, 1],
         omega=uniform[:, 0] + uniform[:, 2],
-        seed=0
+        seed=0,
     )
     simulation_results = simulation.replace_endogenous()
     return simulation, simulation_results, {}, []
@@ -297,7 +309,7 @@ def medium_blp_simulation() -> SimulationFixture:
         product_formulations=(
             Formulation('1 + x + prices'),
             Formulation('1 + I(prices**2)'),
-            Formulation('1 + a + b')
+            Formulation('1 + a + b'),
         ),
         product_data={
             'market_ids': id_data.market_ids,
@@ -313,7 +325,7 @@ def medium_blp_simulation() -> SimulationFixture:
         ],
         pi=[
             [+0.0],
-            [-0.1]
+            [-0.1],
         ],
         gamma=[1, 1, 2],
         agent_formulation=Formulation('0 + f'),
@@ -378,24 +390,24 @@ def large_blp_simulation() -> SimulationFixture:
         product_formulations=(
             Formulation('1 + x + y + z + q'),
             Formulation('1 + I(-prices) + x'),
-            Formulation('0 + log(x) + log(a) + log(b)')
+            Formulation('0 + log(x) + log(a) + log(b)'),
         ),
         product_data={
             'market_ids': id_data.market_ids,
             'firm_ids': id_data.firm_ids,
             'product_ids': np.c_[product_ids, np.mod(product_ids, 2)],
-            'clustering_ids': np.random.RandomState(2).choice(range(30), id_data.size)
+            'clustering_ids': np.random.RandomState(2).choice(range(30), id_data.size),
         },
         beta=[1, 1, 2, 3, 1],
         sigma=[
             [0, +0.0, 0],
             [0, +0.5, 0],
-            [0, -0.2, 2]
+            [0, -0.2, 2],
         ],
         pi=[
             [0, 0, 0],
             [2, 1, 0],
-            [0, 0, 2]
+            [0, 0, 2],
         ],
         gamma=[0.1, 0.2, 0.3],
         agent_formulation=Formulation('1 + f + g'),
@@ -412,11 +424,11 @@ def large_blp_simulation() -> SimulationFixture:
     simulated_data_override = {
         'demand_instruments': np.c_[
             build_differentiation_instruments(Formulation('0 + x + y + z + q'), simulation_results.product_data),
-            build_matrix(Formulation('0 + a + b'), simulation_results.product_data)
+            build_matrix(Formulation('0 + a + b'), simulation_results.product_data),
         ],
         'supply_instruments': np.c_[
             build_differentiation_instruments(Formulation('0 + x + a + b'), simulation_results.product_data),
-            build_matrix(Formulation('0 + y + z + q'), simulation_results.product_data)
+            build_matrix(Formulation('0 + y + z + q'), simulation_results.product_data),
         ],
     }
 
@@ -437,7 +449,8 @@ def large_blp_simulation() -> SimulationFixture:
         name="diversion from outside",
         observations=simulation.N,
         compute_weights=lambda _, p, a: np.concatenate(
-            [np.ones((a.size, 1, p.size)), np.zeros((a.size, p.size, p.size))], axis=1
+            [np.ones((a.size, 1, p.size)), np.zeros((a.size, p.size, p.size))],
+            axis=1,
         ),
         market_ids=[simulation.unique_market_ids[8]],
     )
@@ -464,7 +477,8 @@ def large_blp_simulation() -> SimulationFixture:
                     name="product 0 and outside",
                     observations=simulation.N,
                     compute_weights=lambda _, p, a: np.c_[
-                        np.ones((a.size, 1)), np.tile(p.product_ids[:, 0] == 0, (a.size, 1))
+                        np.ones((a.size, 1)),
+                        np.tile(p.product_ids[:, 0] == 0, (a.size, 1)),
                     ],
                     market_ids=simulation.unique_market_ids[1:4],
                 ),
@@ -480,7 +494,8 @@ def large_blp_simulation() -> SimulationFixture:
                 name="1 to 0 diversion ratio",
                 dataset=inside_diversion_micro_dataset0,
                 compute_values=lambda _, p, a: np.concatenate(
-                    [np.zeros((a.size, p.size, 1)), np.tile(p.product_ids[:, 0] == 0, (a.size, p.size, 1))], axis=2
+                    [np.zeros((a.size, p.size, 1)), np.tile(p.product_ids[:, 0] == 0, (a.size, p.size, 1))],
+                    axis=2,
                 ),
             ),
         ),
@@ -491,7 +506,8 @@ def large_blp_simulation() -> SimulationFixture:
                 name="1 to outside diversion ratio",
                 dataset=inside_diversion_micro_dataset0,
                 compute_values=lambda _, p, a: np.concatenate(
-                    [np.ones((a.size, p.size, 1)), np.zeros((a.size, p.size, p.size))], axis=2
+                    [np.ones((a.size, p.size, 1)), np.zeros((a.size, p.size, p.size))],
+                    axis=2,
                 ),
             ),
         ),
@@ -502,7 +518,8 @@ def large_blp_simulation() -> SimulationFixture:
                 name="1 to 0 diversion ratio, grouped",
                 dataset=inside_diversion_micro_dataset1,
                 compute_values=lambda _, p, a: np.concatenate(
-                    [np.zeros((a.size, p.size, 1)), np.tile(p.product_ids[:, 0] == 0, (a.size, p.size, 1))], axis=2
+                    [np.zeros((a.size, p.size, 1)), np.tile(p.product_ids[:, 0] == 0, (a.size, p.size, 1))],
+                    axis=2,
                 ),
             ),
         ),
@@ -513,7 +530,8 @@ def large_blp_simulation() -> SimulationFixture:
                 name="1 to outside diversion ratio, grouped",
                 dataset=inside_diversion_micro_dataset1,
                 compute_values=lambda _, p, a: np.concatenate(
-                    [np.ones((a.size, p.size, 1)), np.zeros((a.size, p.size, p.size))], axis=2
+                    [np.ones((a.size, p.size, 1)), np.zeros((a.size, p.size, p.size))],
+                    axis=2,
                 ),
             ),
         ),
@@ -559,13 +577,13 @@ def small_nested_blp_simulation() -> SimulationFixture:
         product_formulations=(
             Formulation('0 + prices + x + z'),
             Formulation('0 + x'),
-            Formulation('0 + a + b + c')
+            Formulation('0 + a + b + c'),
         ),
         product_data={
             'market_ids': id_data.market_ids,
             'firm_ids': id_data.firm_ids,
             'nesting_ids': np.r_[np.random.RandomState(0).choice(['f', 'g'], id_data.size - 50), np.repeat('f', 50)],
-            'clustering_ids': np.random.RandomState(0).choice(range(10), id_data.size)
+            'clustering_ids': np.random.RandomState(0).choice(range(10), id_data.size),
         },
         beta=[-5, 1, 2],
         sigma=2,
@@ -575,7 +593,7 @@ def small_nested_blp_simulation() -> SimulationFixture:
         xi_variance=0.001,
         omega_variance=0.001,
         correlation=0.7,
-        seed=0
+        seed=0,
     )
     simulation_results = simulation.replace_endogenous()
 
@@ -624,7 +642,7 @@ def large_nested_blp_simulation() -> SimulationFixture:
         product_formulations=(
             Formulation('1 + x + y + z + q'),
             Formulation('0 + I(-prices) + x'),
-            Formulation('0 + log(x) + log(a) + log(b)')
+            Formulation('0 + log(x) + log(a) + log(b)'),
         ),
         product_data={
             'market_ids': id_data.market_ids,
@@ -644,11 +662,11 @@ def large_nested_blp_simulation() -> SimulationFixture:
         beta=[1, 1, 2, 3, 1],
         sigma=[
             [0.5, 0],
-            [0.0, 2]
+            [0.0, 2],
         ],
         pi=[
             [2, 1, 0],
-            [0, 0, 2]
+            [0, 0, 2],
         ],
         gamma=[0.1, 0.2, 0.3],
         rho=0.1,
@@ -690,7 +708,8 @@ def large_nested_blp_simulation() -> SimulationFixture:
         name="diversion from outside",
         observations=simulation.N,
         compute_weights=lambda _, p, a: np.concatenate(
-            [np.ones((a.size, 1, p.size)), np.zeros((a.size, p.size, p.size))], axis=1
+            [np.ones((a.size, 1, p.size)), np.zeros((a.size, p.size, p.size))],
+            axis=1,
         ),
         market_ids=[simulation.unique_market_ids[2]],
     )
@@ -752,7 +771,8 @@ def large_nested_blp_simulation() -> SimulationFixture:
                 name="1 to 0 diversion ratio",
                 dataset=inside_diversion_micro_dataset0,
                 compute_values=lambda _, p, a: np.concatenate(
-                    [np.zeros((a.size, p.size, 1)), np.tile(p.product_ids[:, 0] == 0, (a.size, p.size, 1))], axis=2
+                    [np.zeros((a.size, p.size, 1)), np.tile(p.product_ids[:, 0] == 0, (a.size, p.size, 1))],
+                    axis=2,
                 ),
             ),
         ),
@@ -763,7 +783,8 @@ def large_nested_blp_simulation() -> SimulationFixture:
                 name="1 to outside diversion ratio",
                 dataset=inside_diversion_micro_dataset0,
                 compute_values=lambda _, p, a: np.concatenate(
-                    [np.ones((a.size, p.size, 1)), np.zeros((a.size, p.size, p.size))], axis=2
+                    [np.ones((a.size, p.size, 1)), np.zeros((a.size, p.size, p.size))],
+                    axis=2,
                 ),
             ),
         ),
@@ -774,7 +795,8 @@ def large_nested_blp_simulation() -> SimulationFixture:
                 name="1 to 0 diversion ratio, grouped",
                 dataset=inside_diversion_micro_dataset1,
                 compute_values=lambda _, p, a: np.concatenate(
-                    [np.zeros((a.size, p.size, 1)), np.tile(p.product_ids[:, 0] == 0, (a.size, p.size, 1))], axis=2
+                    [np.zeros((a.size, p.size, 1)), np.tile(p.product_ids[:, 0] == 0, (a.size, p.size, 1))],
+                    axis=2,
                 ),
             ),
         ),
@@ -785,7 +807,8 @@ def large_nested_blp_simulation() -> SimulationFixture:
                 name="1 to outside diversion ratio, grouped",
                 dataset=inside_diversion_micro_dataset1,
                 compute_values=lambda _, p, a: np.concatenate(
-                    [np.ones((a.size, p.size, 1)), np.zeros((a.size, p.size, p.size))], axis=2
+                    [np.ones((a.size, p.size, 1)), np.zeros((a.size, p.size, p.size))],
+                    axis=2,
                 ),
             ),
         ),
@@ -837,9 +860,12 @@ def simulated_problem(request: Any) -> SimulatedProblemFixture:
     Preclude overflow with rho bounds that are more conservative than the default ones.
     """
     name, moment_type_strings, supply = request.param
-    simulation, simulation_results, simulated_data_override, simulated_micro_moments = (
-        request.getfixturevalue(f'{name}_simulation')
-    )
+    (
+        simulation,
+        simulation_results,
+        simulated_data_override,
+        simulated_micro_moments,
+    ) = request.getfixturevalue(f'{name}_simulation')
 
     # override the simulated data
     demand_instruments, supply_instruments = simulation_results._compute_default_instruments()
@@ -854,7 +880,9 @@ def simulated_problem(request: Any) -> SimulatedProblemFixture:
     # simply duplicate instruments when there are multiple moment types
     add_exogenous = True
     problem = simulation_results.to_problem(
-        simulation.product_formulations[:2 + int(supply)], product_data, add_exogenous=add_exogenous
+        simulation.product_formulations[:2 + int(supply)],
+        product_data,
+        add_exogenous=add_exogenous,
     )
     demand_moment_types = [(t, problem.MD) for t in moment_type_strings]
     supply_moment_types = [(t, problem.MS) for t in moment_type_strings]
@@ -876,14 +904,16 @@ def simulated_problem(request: Any) -> SimulatedProblemFixture:
         'check_optimality': 'gradient',
         'demand_moment_types': demand_moment_types,
         'supply_moment_types': supply_moment_types,
-        'micro_moments': simulated_micro_moments
+        'micro_moments': simulated_micro_moments,
     }
     if any(t != 'levels' for t in moment_type_strings):
         solve_options['phi'] = simulation.phi[:1 + int(supply), :1 + int(supply)]
 
     # initialize and solve the problem
     problem = simulation_results.to_problem(
-        simulation.product_formulations[:2 + int(supply)], product_data, add_exogenous=add_exogenous
+        simulation.product_formulations[:2 + int(supply)],
+        product_data,
+        add_exogenous=add_exogenous,
     )
     problem_results = problem.solve(**solve_options)
 
@@ -898,12 +928,18 @@ def formula_data(request: Any) -> Data:
 
 
 def replace_micro_moment_values(
-        simulation_results: SimulationResults, micro_moments: List[MicroMoment]) -> List[MicroMoment]:
+    simulation_results: SimulationResults,
+    micro_moments: List[MicroMoment],
+) -> List[MicroMoment]:
     """Replace micro moment values with those that are consistent with simulation results."""
     updated_micro_moments: List[MicroMoment] = []
     for moment, value in zip(micro_moments, simulation_results.compute_micro_values(micro_moments)):
         updated_micro_moments.append(MicroMoment(
-            moment.name, value, moment.parts, moment.compute_value, moment.compute_gradient
+            moment.name,
+            value,
+            moment.parts,
+            moment.compute_value,
+            moment.compute_gradient,
         ))
 
     return updated_micro_moments

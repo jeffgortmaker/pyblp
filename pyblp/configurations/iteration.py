@@ -143,8 +143,13 @@ class Iteration(StringRepresentation):
     _compute_jacobian: bool
     _universal_display: bool
 
-    def __init__(self, method: Union[str, Callable], method_options: Optional[Options] = None,
-                 compute_jacobian: bool = False, universal_display: bool = False) -> None:
+    def __init__(
+        self,
+        method: Union[str, Callable],
+        method_options: Optional[Options] = None,
+        compute_jacobian: bool = False,
+        universal_display: bool = False,
+    ) -> None:
         """Validate the method and configure default options."""
         simple_methods = {
             'simple': (functools.partial(simple_iterator), "no acceleration"),
@@ -301,8 +306,13 @@ def return_iterator(initial: Array, *_: Any, **__: Any) -> Tuple[Array, bool]:
 
 
 def scipy_iterator(
-        initial: Array, contraction: ContractionWrapper, iteration_callback: Callable[[], None], method: str,
-        compute_jacobian: bool, **scipy_options: Any) -> Tuple[Array, bool]:
+    initial: Array,
+    contraction: ContractionWrapper,
+    iteration_callback: Callable[[], None],
+    method: str,
+    compute_jacobian: bool,
+    **scipy_options: Any,
+) -> Tuple[Array, bool]:
     """Apply a SciPy root finding method."""
 
     # define method-specific options so iteration callbacks and norm weighting works properly
@@ -357,8 +367,14 @@ def scipy_iterator(
 
 
 def simple_iterator(
-        initial: Array, contraction: ContractionWrapper, iteration_callback: Callable[[], None], max_evaluations: int,
-        atol: float, rtol: float, norm: Callable[[Array], float]) -> Tuple[Array, bool]:
+    initial: Array,
+    contraction: ContractionWrapper,
+    iteration_callback: Callable[[], None],
+    max_evaluations: int,
+    atol: float,
+    rtol: float,
+    norm: Callable[[Array], float],
+) -> Tuple[Array, bool]:
     """Apply simple fixed point iteration with no acceleration."""
     x = initial
     failed = False
@@ -385,9 +401,18 @@ def simple_iterator(
 
 
 def squarem_iterator(
-        initial: Array, contraction: ContractionWrapper, iteration_callback: Callable[[], None], max_evaluations: int,
-        atol: float, rtol: float, norm: Callable[[Array], float], scheme: int, step_min: float, step_max: float,
-        step_factor: float) -> Tuple[Array, bool]:
+    initial: Array,
+    contraction: ContractionWrapper,
+    iteration_callback: Callable[[], None],
+    max_evaluations: int,
+    atol: float,
+    rtol: float,
+    norm: Callable[[Array], float],
+    scheme: int,
+    step_min: float,
+    step_max: float,
+    step_factor: float,
+) -> Tuple[Array, bool]:
     """Apply the SQUAREM acceleration method for fixed point iteration."""
     x = initial
     failed = False

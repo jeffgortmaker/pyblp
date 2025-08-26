@@ -264,8 +264,11 @@ class Optimization(StringRepresentation):
         return f"Configured to optimize using {description} and options {format_options(self._method_options)}."
 
     def _optimize(
-            self, initial: Array, bounds: Optional[Iterable[Tuple[float, float]]],
-            verbose_objective_function: Callable[[Array, int, int], ObjectiveResults]) -> Tuple[Array, SolverStats]:
+        self,
+        initial: Array,
+        bounds: Optional[Iterable[Tuple[float, float]]],
+        verbose_objective_function: Callable[[Array, int, int], ObjectiveResults],
+    ) -> Tuple[Array, SolverStats]:
         """Optimize parameters to minimize a scalar objective."""
 
         # initialize counters
@@ -517,9 +520,14 @@ def return_optimizer(initial_values: Array, *_: Any, **__: Any) -> Tuple[Array, 
 
 
 def scipy_optimizer(
-        initial_values: Array, bounds: Optional[Iterable[Tuple[float, float]]], objective_function: ObjectiveFunction,
-        iteration_callback: Callable[[], None], method: str, compute_gradient: bool, **scipy_options: Any) -> (
-        Tuple[Array, bool]):
+    initial_values: Array,
+    bounds: Optional[Iterable[Tuple[float, float]]],
+    objective_function: ObjectiveFunction,
+    iteration_callback: Callable[[], None],
+    method: str,
+    compute_gradient: bool,
+    **scipy_options: Any,
+) -> Tuple[Array, bool]:
     """Optimize with a SciPy method."""
     cache: Optional[Tuple[Array, Tuple[float, Optional[Array]]]] = None
 
@@ -558,16 +566,31 @@ def scipy_optimizer(
 
 
 def knitro_optimizer(
-        initial_values: Array, bounds: Optional[Iterable[Tuple[float, float]]], objective_function: ObjectiveFunction,
-        iteration_callback: Callable[[], None], compute_gradient: bool, **knitro_options: Any) -> Tuple[Array, bool]:
+    initial_values: Array,
+    bounds: Optional[Iterable[Tuple[float, float]]],
+    objective_function: ObjectiveFunction,
+    iteration_callback: Callable[[], None],
+    compute_gradient: bool,
+    **knitro_options: Any,
+) -> Tuple[Array, bool]:
     """Optimize with Knitro."""
     with knitro_context_manager() as (knitro, knitro_context):
         iterations = 0
         cache: Optional[Tuple[Array, Tuple[float, Optional[Array]]]] = None
 
         def combined_callback(
-                request_code: int, _: Any, __: Any, ___: Any, ____: Any, values: Array, _____: Any,
-                objective_store: Array, ______: Any, gradient_store: Array, *_______: Any) -> int:
+            request_code: int,
+            _: Any,
+            __: Any,
+            ___: Any,
+            ____: Any,
+            values: Array,
+            _____: Any,
+            objective_store: Array,
+            ______: Any,
+            gradient_store: Array,
+            *_______: Any
+        ) -> int:
             """Handle requests to compute either the objective or its gradient (which are cached for when the next
             request is for the same values) and call the iteration callback when there's a new major iteration.
             """

@@ -57,12 +57,14 @@ def build_id_data(T: int, J: int, F: int) -> RecArray:
         raise ValueError("J must be an int that is at least F.")
     return structure_matrices({
         'market_ids': (np.repeat(np.arange(T), J).astype(np.int64), np.object_),
-        'firm_ids': (np.floor(np.tile(np.arange(J), T) * F / J).astype(np.int64), np.object_)
+        'firm_ids': (np.floor(np.tile(np.arange(J), T) * F / J).astype(np.int64), np.object_),
     })
 
 
 def build_ownership(
-        product_data: Mapping, kappa_specification: Optional[Union[str, Callable[[Any, Any], float]]] = None) -> Array:
+    product_data: Mapping,
+    kappa_specification: Optional[Union[str, Callable[[Any, Any], float]]] = None,
+) -> Array:
     r"""Build ownership matrices, :math:`O`.
 
     Ownership or product holding matrices are defined by their cooperation matrix counterparts, :math:`\kappa`. For each
@@ -257,7 +259,11 @@ def build_blp_instruments(formulation: Formulation, product_data: Mapping) -> Ar
 
 
 def build_differentiation_instruments(
-        formulation: Formulation, product_data: Mapping, version: str = 'local', interact: bool = False) -> Array:
+    formulation: Formulation,
+    product_data: Mapping,
+    version: str = 'local',
+    interact: bool = False,
+) -> Array:
     r"""Construct excluded differentiation instruments.
 
     Differentiation instruments in the spirit of :ref:`references:Gandhi and Houde (2025)` are
@@ -493,7 +499,7 @@ def build_integration(integration: Integration, dimensions: int) -> RecArray:
     nodes, weights = integration._build(dimensions)
     return structure_matrices({
         'weights': (weights, options.dtype),
-        'nodes': (nodes, options.dtype)
+        'nodes': (nodes, options.dtype),
     })
 
 

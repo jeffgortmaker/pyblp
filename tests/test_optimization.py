@@ -12,7 +12,7 @@ from pyblp.utilities.basics import Array, Options
     pytest.param(-np.inf, np.inf, id="unbounded"),
     pytest.param(-np.inf, 1, id="bounded above"),
     pytest.param(-1, np.inf, id="bounded below"),
-    pytest.param(-1, 1, id="bounded above and below")
+    pytest.param(-1, 1, id="bounded above and below"),
 ])
 @pytest.mark.parametrize(['method', 'method_options'], [
     pytest.param('knitro', {'algorithm': 1}, id="Knitro algorithm 1"),
@@ -32,19 +32,24 @@ from pyblp.utilities.basics import Array, Options
     pytest.param('cg', {}, id="CG"),
     pytest.param('bfgs', {}, id="BFGS"),
     pytest.param('newton-cg', {}, id="Newton-CG"),
-    pytest.param('return', {}, id="Return")
+    pytest.param('return', {}, id="Return"),
 ])
 @pytest.mark.parametrize('compute_gradient', [
     pytest.param(True, id="analytic gradient"),
-    pytest.param(False, id="no analytic gradient")
+    pytest.param(False, id="no analytic gradient"),
 ])
 @pytest.mark.parametrize('universal_display', [
     pytest.param(True, id="universal display"),
-    pytest.param(False, id="default display")
+    pytest.param(False, id="default display"),
 ])
 def test_entropy(
-        lb: float, ub: float, method: str, method_options: Options, compute_gradient: bool,
-        universal_display: bool) -> None:
+    lb: float,
+    ub: float,
+    method: str,
+    method_options: Options,
+    compute_gradient: bool,
+    universal_display: bool,
+) -> None:
     """Test that solutions to the entropy maximization problem from Berger, Pietra, and Pietra (1996) are reasonably
     close to the exact solution (this is based on a subset of testing methods from scipy.optimize.tests.test_optimize).
     """

@@ -19,8 +19,18 @@ from ..primitives import Agents, Products
 from ..results.simulation_results import SimulationResults
 from ..utilities.algebra import precisely_compute_eigenvalues
 from ..utilities.basics import (
-    Array, Bounds, Error, Groups, SolverStats, RecArray, extract_matrix, format_seconds, generate_items, output,
-    output_progress, structure_matrices
+    Array,
+    Bounds,
+    Error,
+    Groups,
+    SolverStats,
+    RecArray,
+    extract_matrix,
+    format_seconds,
+    generate_items,
+    output,
+    output_progress,
+    structure_matrices,
 )
 
 
@@ -429,13 +439,28 @@ class Simulation(Economy):
     _parameters: Parameters
 
     def __init__(
-            self, product_formulations: Union[Formulation, Sequence[Optional[Formulation]]], product_data: Mapping,
-            beta: Any, sigma: Optional[Any] = None, pi: Optional[Any] = None, gamma: Optional[Any] = None,
-            rho: Optional[Any] = None, phi: Optional[Any] = None, agent_formulation: Optional[Formulation] = None,
-            agent_data: Optional[Mapping] = None, integration: Optional[Integration] = None, xi: Optional[Any] = None,
-            omega: Optional[Any] = None, xi_variance: float = 1, omega_variance: float = 1, correlation: float = 0.9,
-            rc_types: Optional[Sequence[str]] = None, epsilon_scale: float = 1.0, costs_type: str = 'linear',
-            seed: Optional[int] = None) -> None:
+        self,
+        product_formulations: Union[Formulation, Sequence[Optional[Formulation]]],
+        product_data: Mapping,
+        beta: Any,
+        sigma: Optional[Any] = None,
+        pi: Optional[Any] = None,
+        gamma: Optional[Any] = None,
+        rho: Optional[Any] = None,
+        phi: Optional[Any] = None,
+        agent_formulation: Optional[Formulation] = None,
+        agent_data: Optional[Mapping] = None,
+        integration: Optional[Integration] = None,
+        xi: Optional[Any] = None,
+        omega: Optional[Any] = None,
+        xi_variance: float = 1,
+        omega_variance: float = 1,
+        correlation: float = 0.9,
+        rc_types: Optional[Sequence[str]] = None,
+        epsilon_scale: float = 1.0,
+        costs_type: str = 'linear',
+        seed: Optional[int] = None,
+    ) -> None:
         """Load or simulate all data except for synthetic prices and shares."""
 
         # keep track of long it takes to initialize the simulation
@@ -634,9 +659,15 @@ class Simulation(Economy):
         return "\n\n".join([super().__str__(), self._parameters.format("True Values")])
 
     def replace_endogenous(
-            self, costs: Optional[Any] = None, prices: Optional[Any] = None, iteration: Optional[Iteration] = None,
-            constant_costs: bool = True, compute_gradients: bool = True, compute_hessians: bool = True,
-            error_behavior: str = 'raise') -> SimulationResults:
+        self,
+        costs: Optional[Any] = None,
+        prices: Optional[Any] = None,
+        iteration: Optional[Iteration] = None,
+        constant_costs: bool = True,
+        compute_gradients: bool = True,
+        compute_hessians: bool = True,
+        error_behavior: str = 'raise',
+    ) -> SimulationResults:
         r"""Replace simulated prices and market shares with equilibrium values that are consistent with true parameters.
 
         This method is the standard way of solving the simulation. Prices and market shares are computed in each market
@@ -744,7 +775,15 @@ class Simulation(Economy):
             """Build a market along with arguments used to compute prices and shares."""
             assert costs is not None and prices is not None and iteration is not None
             market_s = SimulationMarket(
-                self, s, self._parameters, self.sigma, self.pi, self.rho, self.beta, self.gamma, delta
+                self,
+                s,
+                self._parameters,
+                self.sigma,
+                self.pi,
+                self.rho,
+                self.beta,
+                self.gamma,
+                delta,
             )
             costs_s = costs[self._product_market_indices[s]]
             prices_s = prices[self._product_market_indices[s]]
@@ -797,9 +836,19 @@ class Simulation(Economy):
 
         # structure the results
         self._handle_errors(errors, error_behavior)
+        end_time = time.time()
         results = SimulationResults(
-            self, data_override, true_delta, true_costs, start_time, time.time(), iteration_stats, profit_gradients,
-            profit_gradient_norms, profit_hessians, profit_hessian_eigenvalues
+            self,
+            data_override,
+            true_delta,
+            true_costs,
+            start_time,
+            end_time,
+            iteration_stats,
+            profit_gradients,
+            profit_gradient_norms,
+            profit_hessians,
+            profit_hessian_eigenvalues
         )
         output(f"Replaced prices and shares after {format_seconds(results.computation_time)}.")
         output("")
@@ -807,10 +856,15 @@ class Simulation(Economy):
         return results
 
     def replace_exogenous(
-            self, X1_name: str, X3_name: Optional[str] = None, delta: Optional[Any] = None,
-            iteration: Optional[Iteration] = None, fp_type: str = 'safe_linear',
-            shares_bounds: Optional[Tuple[Any, Any]] = (1e-300, None), error_behavior: str = 'raise') -> (
-            SimulationResults):
+        self,
+        X1_name: str,
+        X3_name: Optional[str] = None,
+        delta: Optional[Any] = None,
+        iteration: Optional[Iteration] = None,
+        fp_type: str = 'safe_linear',
+        shares_bounds: Optional[Tuple[Any, Any]] = (1e-300, None),
+        error_behavior: str = 'raise',
+    ) -> SimulationResults:
         r"""Replace exogenous product characteristics with values that are consistent with true parameters.
 
         This method implements a less common way of solving the simulation. It may be preferable to
@@ -977,8 +1031,15 @@ class Simulation(Economy):
 
         # structure the results
         self._handle_errors(errors, error_behavior)
+        end_time = time.time()
         results = SimulationResults(
-            self, data_override, true_delta, true_costs, start_time, time.time(), iteration_stats
+            self,
+            data_override,
+            true_delta,
+            true_costs,
+            start_time,
+            end_time,
+            iteration_stats,
         )
         output(f"Replaced exogenous product characteristics after {format_seconds(results.computation_time)}.")
         output("")

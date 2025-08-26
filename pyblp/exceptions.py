@@ -4,7 +4,12 @@ import collections
 from typing import Any, List, Sequence
 
 from .utilities.basics import (
-    Error, DerivedError, NumericalError, MultipleReversionError, InversionError, InversionReplacementError
+    Error,
+    DerivedError,
+    NumericalError,
+    MultipleReversionError,
+    InversionError,
+    InversionReplacementError,
 )
 
 

@@ -11,10 +11,23 @@ from ..configurations.formulation import Formulation, Absorb
 from ..configurations.iteration import Iteration
 from ..primitives import Container
 from ..utilities.algebra import (
-    precisely_identify_collinearity, precisely_identify_singularity, precisely_identify_psd, precisely_identify_stable
+    precisely_identify_collinearity,
+    precisely_identify_singularity,
+    precisely_identify_psd,
+    precisely_identify_stable,
 )
 from ..utilities.basics import (
-    Array, Bounds, Error, Groups, RecArray, StringRepresentation, format_number, format_table, get_indices, output, warn
+    Array,
+    Bounds,
+    Error,
+    Groups,
+    RecArray,
+    StringRepresentation,
+    format_number,
+    format_table,
+    get_indices,
+    output,
+    warn,
 )
 
 
@@ -58,9 +71,15 @@ class Economy(Container, StringRepresentation):
 
     @abc.abstractmethod
     def __init__(
-            self, product_formulations: Sequence[Optional[Formulation]], agent_formulation: Optional[Formulation],
-            products: RecArray, agents: RecArray, rc_types: Optional[Sequence[str]], epsilon_scale: float,
-            costs_type: str) -> None:
+        self,
+        product_formulations: Sequence[Optional[Formulation]],
+        agent_formulation: Optional[Formulation],
+        products: RecArray,
+        agents: RecArray,
+        rc_types: Optional[Sequence[str]],
+        epsilon_scale: float,
+        costs_type: str,
+    ) -> None:
         """Store information about formulations and data. Any fixed effects should be absorbed after initialization."""
 
         # store data and formulations
@@ -419,8 +438,13 @@ class Economy(Container, StringRepresentation):
         return delta
 
     def _compute_difference(
-            self, moment_type: str, x: Array, phi: Array, other_x: Optional[Array] = None,
-            other_phi: Optional[Array] = None) -> Array:
+        self,
+        moment_type: str,
+        x: Array,
+        phi: Array,
+        other_x: Optional[Array] = None,
+        other_phi: Optional[Array] = None,
+    ) -> Array:
         """Either compute a quasi-first difference or further difference these innovations based on the moment type.
         Optionally include an additional quasi-lag of another variable.
         """

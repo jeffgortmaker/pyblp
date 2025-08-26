@@ -16,13 +16,35 @@ class ProblemMarket(Market):
 
     @NumericalErrorHandler(exceptions.GenericNumericalError)
     def solve(
-            self, delta: Array, last_delta: Array, last_tilde_costs: Array, moments: Moments, iteration: Iteration,
-            fp_type: str, shares_bounds: Bounds, costs_bounds: Bounds, compute_jacobians: bool,
-            compute_micro_covariances: bool, keep_micro_mappings: bool) -> (
-            Tuple[
-                Array, Array, Array, Array, Array, Array, Array, Dict[MicroDataset, Array], Dict[int, Array], Array,
-                SolverStats, Array, Array, Array, List[Error]
-            ]):
+        self,
+        delta: Array,
+        last_delta: Array,
+        last_tilde_costs: Array,
+        moments: Moments,
+        iteration: Iteration,
+        fp_type: str,
+        shares_bounds: Bounds,
+        costs_bounds: Bounds,
+        compute_jacobians: bool,
+        compute_micro_covariances: bool,
+        keep_micro_mappings: bool,
+    ) -> Tuple[
+        Array,
+        Array,
+        Array,
+        Array,
+        Array,
+        Array,
+        Array,
+        Dict[MicroDataset, Array],
+        Dict[int, Array],
+        Array,
+        SolverStats,
+        Array,
+        Array,
+        Array,
+        List[Error],
+    ]:
         """Compute the mean utility for this market that equates market shares to observed values by solving a fixed
         point problem. Then, if compute_jacobians is True, compute the Jacobian (holding beta fixed) of xi
         (equivalently, of delta) with respect to theta. Compute any contributions to micro moment parts, their Jacobian
@@ -55,7 +77,10 @@ class ProblemMarket(Market):
             assert probabilities is not None
             probabilities_tangent_mapping, conditionals_tangent_mapping = (
                 self.compute_probabilities_by_parameter_tangent_mapping(
-                    probabilities, conditionals, valid_delta, keep_conditionals=self.K3 > 0
+                    probabilities,
+                    conditionals,
+                    valid_delta,
+                    keep_conditionals=self.K3 > 0,
                 )
             )
 
@@ -64,7 +89,9 @@ class ProblemMarket(Market):
         if compute_jacobians:
             assert probabilities is not None
             xi_jacobian, xi_jacobian_errors = self.safely_compute_xi_by_theta_jacobian(
-                probabilities, conditionals, probabilities_tangent_mapping
+                probabilities,
+                conditionals,
+                probabilities_tangent_mapping,
             )
             errors.extend(xi_jacobian_errors)
 
@@ -72,7 +99,11 @@ class ProblemMarket(Market):
         if compute_jacobians and (moments.PM > 0 or self.K3 > 0):
             assert probabilities is not None
             self.update_probabilities_by_parameter_tangent_mapping(
-                probabilities_tangent_mapping, conditionals_tangent_mapping, probabilities, conditionals, xi_jacobian
+                probabilities_tangent_mapping,
+                conditionals_tangent_mapping,
+                probabilities,
+                conditionals,
+                xi_jacobian,
             )
 
         # compute contributions to micro moment parts, their Jacobian, and their covariances
@@ -87,13 +118,23 @@ class ProblemMarket(Market):
         else:
             assert probabilities is not None
             (
-                parts_numerator, parts_denominator, parts_numerator_jacobian, parts_denominator_jacobian,
-                parts_covariances_numerator, weights_mapping, values_mapping, micro_errors
-            ) = (
-                self.safely_compute_micro_contributions(
-                    moments, valid_delta, probabilities, probabilities_tangent_mapping, xi_jacobian, compute_jacobians,
-                    compute_micro_covariances, keep_micro_mappings
-                )
+                parts_numerator,
+                parts_denominator,
+                parts_numerator_jacobian,
+                parts_denominator_jacobian,
+                parts_covariances_numerator,
+                weights_mapping,
+                values_mapping,
+                micro_errors,
+            ) = self.safely_compute_micro_contributions(
+                moments,
+                valid_delta,
+                probabilities,
+                probabilities_tangent_mapping,
+                xi_jacobian,
+                compute_jacobians,
+                compute_micro_covariances,
+                keep_micro_mappings,
             )
             errors.extend(micro_errors)
 
@@ -106,10 +147,17 @@ class ProblemMarket(Market):
             assert probabilities is not None
 
             # compute transformed marginal costs
-            tilde_costs, clipped_costs, eta, capital_delta_inverse, tilde_costs_errors = (
-                self.safely_compute_tilde_costs(
-                    probabilities, conditionals, costs_bounds, keep_jacobian_contributions=compute_jacobians
-                )
+            (
+                tilde_costs,
+                clipped_costs,
+                eta,
+                capital_delta_inverse,
+                tilde_costs_errors,
+            ) = self.safely_compute_tilde_costs(
+                probabilities,
+                conditionals,
+                costs_bounds,
+                keep_jacobian_contributions=compute_jacobians,
             )
             errors.extend(tilde_costs_errors)
 
@@ -123,22 +171,43 @@ class ProblemMarket(Market):
             if compute_jacobians:
                 assert eta is not None and capital_delta_inverse is not None
                 omega_jacobian, omega_jacobian_errors = self.safely_compute_omega_by_theta_jacobian(
-                    valid_tilde_costs, eta, capital_delta_inverse, probabilities, conditionals,
-                    probabilities_tangent_mapping, conditionals_tangent_mapping
+                    valid_tilde_costs,
+                    eta,
+                    capital_delta_inverse,
+                    probabilities,
+                    conditionals,
+                    probabilities_tangent_mapping,
+                    conditionals_tangent_mapping,
                 )
                 errors.extend(omega_jacobian_errors)
                 omega_jacobian[clipped_costs.flat] = 0
 
         return (
-            delta, xi_jacobian, parts_numerator, parts_denominator, parts_numerator_jacobian,
-            parts_denominator_jacobian, parts_covariances_numerator, weights_mapping, values_mapping, clipped_shares,
-            stats, tilde_costs, omega_jacobian, clipped_costs, errors
+            delta,
+            xi_jacobian,
+            parts_numerator,
+            parts_denominator,
+            parts_numerator_jacobian,
+            parts_denominator_jacobian,
+            parts_covariances_numerator,
+            weights_mapping,
+            values_mapping,
+            clipped_shares,
+            stats,
+            tilde_costs,
+            omega_jacobian,
+            clipped_costs,
+            errors,
         )
 
     @NumericalErrorHandler(exceptions.DeltaNumericalError)
     def safely_compute_delta(
-            self, initial_delta: Array, iteration: Iteration, fp_type: str, shares_bounds: Bounds) -> (
-            Tuple[Array, Array, SolverStats, List[Error]]):
+        self,
+        initial_delta: Array,
+        iteration: Iteration,
+        fp_type: str,
+        shares_bounds: Bounds,
+    ) -> Tuple[Array, Array, SolverStats, List[Error]]:
         """Compute the mean utility for this market that equates market shares to observed values by solving a fixed
         point problem, handling any numerical errors.
         """
@@ -149,8 +218,11 @@ class ProblemMarket(Market):
 
     @NumericalErrorHandler(exceptions.XiByThetaJacobianNumericalError)
     def safely_compute_xi_by_theta_jacobian(
-            self, probabilities: Array, conditionals: Optional[Array],
-            probabilities_tangent_mapping: Dict[int, Array]) -> Tuple[Array, List[Error]]:
+        self,
+        probabilities: Array,
+        conditionals: Optional[Array],
+        probabilities_tangent_mapping: Dict[int, Array],
+    ) -> Tuple[Array, List[Error]]:
         """Compute the Jacobian (holding beta fixed) of xi (equivalently, of delta) with respect to theta, handling any
         numerical errors.
         """
@@ -158,37 +230,63 @@ class ProblemMarket(Market):
 
     @NumericalErrorHandler(exceptions.MicroMomentsNumericalError)
     def safely_compute_micro_contributions(
-            self, moments: Moments, delta: Array, probabilities: Optional[Array],
-            probabilities_tangent_mapping: Dict[int, Array], xi_jacobian: Optional[Array], compute_jacobians: bool,
-            compute_covariances: bool, keep_mappings: bool) -> (
-            Tuple[Array, Array, Array, Array, Array, Dict[MicroDataset, Array], Dict[int, Array], List[Error]]):
+            self,
+            moments: Moments,
+            delta: Array,
+            probabilities: Optional[Array],
+            probabilities_tangent_mapping: Dict[int, Array],
+            xi_jacobian: Optional[Array],
+            compute_jacobians: bool,
+            compute_covariances: bool,
+            keep_mappings: bool,
+    ) -> Tuple[Array, Array, Array, Array, Array, Dict[MicroDataset, Array], Dict[int, Array], List[Error]]:
         """Compute micro moment part contributions, handling any numerical errors."""
         errors: List[Error] = []
         (
-            parts_numerator, parts_denominator, parts_numerator_jacobian, parts_denominator_jacobian,
-            parts_covariances_numerator, weights_mapping, values_mapping
-        ) = (
-            self.compute_micro_contributions(
-                moments, delta, probabilities, probabilities_tangent_mapping, xi_jacobian, compute_jacobians,
-                compute_covariances, keep_mappings
-            )
+            parts_numerator,
+            parts_denominator,
+            parts_numerator_jacobian,
+            parts_denominator_jacobian,
+            parts_covariances_numerator,
+            weights_mapping,
+            values_mapping,
+        ) = self.compute_micro_contributions(
+            moments,
+            delta,
+            probabilities,
+            probabilities_tangent_mapping,
+            xi_jacobian,
+            compute_jacobians,
+            compute_covariances,
+            keep_mappings,
         )
         return (
-            parts_numerator, parts_denominator, parts_numerator_jacobian, parts_denominator_jacobian,
-            parts_covariances_numerator, weights_mapping, values_mapping, errors
+            parts_numerator,
+            parts_denominator,
+            parts_numerator_jacobian,
+            parts_denominator_jacobian,
+            parts_covariances_numerator,
+            weights_mapping,
+            values_mapping,
+            errors,
         )
 
     @NumericalErrorHandler(exceptions.CostsNumericalError)
     def safely_compute_tilde_costs(
-            self, probabilities: Array, conditionals: Optional[Array], costs_bounds: Bounds,
-            keep_jacobian_contributions: bool = False) -> Tuple[Array, Array, Array, Optional[Array], List[Error]]:
+        self,
+        probabilities: Array,
+        conditionals: Optional[Array],
+        costs_bounds: Bounds,
+        keep_jacobian_contributions: bool = False,
+    ) -> Tuple[Array, Array, Array, Optional[Array], List[Error]]:
         """Compute transformed marginal costs, handling any numerical errors."""
         errors: List[Error] = []
 
         # compute marginal costs
         eta, capital_delta_inverse, eta_errors = self.compute_eta(
-            probabilities=probabilities, conditionals=conditionals,
-            keep_capital_delta_inverse=keep_jacobian_contributions
+            probabilities=probabilities,
+            conditionals=conditionals,
+            keep_capital_delta_inverse=keep_jacobian_contributions,
         )
         errors.extend(eta_errors)
         costs = self.products.prices - eta
@@ -212,15 +310,26 @@ class ProblemMarket(Market):
 
     @NumericalErrorHandler(exceptions.OmegaByThetaJacobianNumericalError)
     def safely_compute_omega_by_theta_jacobian(
-            self, tilde_costs: Array, eta: Array, capital_delta_inverse: Array, probabilities: Array,
-            conditionals: Optional[Array], probabilities_tangent_mapping: Dict[int, Array],
-            conditionals_tangent_mapping: Dict[int, Optional[Array]]) -> Tuple[Array, List[Error]]:
+        self,
+        tilde_costs: Array,
+        eta: Array,
+        capital_delta_inverse: Array,
+        probabilities: Array,
+        conditionals: Optional[Array],
+        probabilities_tangent_mapping: Dict[int, Array],
+        conditionals_tangent_mapping: Dict[int, Optional[Array]],
+    ) -> Tuple[Array, List[Error]]:
         """Compute the Jacobian (holding gamma fixed) of omega (equivalently, of transformed marginal costs) with
         respect to theta, handling any numerical errors.
         """
         errors: List[Error] = []
         jacobian = self.compute_omega_by_theta_jacobian(
-            tilde_costs, eta, capital_delta_inverse, probabilities, conditionals, probabilities_tangent_mapping,
-            conditionals_tangent_mapping
+            tilde_costs,
+            eta,
+            capital_delta_inverse,
+            probabilities,
+            conditionals,
+            probabilities_tangent_mapping,
+            conditionals_tangent_mapping,
         )
         return jacobian, errors

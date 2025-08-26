@@ -11,12 +11,27 @@ from ..configurations.iteration import ContractionResults, Iteration
 from ..economies.economy import Economy
 from ..micro import MicroDataset, MicroPart, Moments
 from ..parameters import (
-    BetaParameter, GammaParameter, NonlinearCoefficient, Parameter, Parameters, RhoParameter, PhiParameter
+    BetaParameter,
+    GammaParameter,
+    NonlinearCoefficient,
+    Parameter,
+    Parameters,
+    RhoParameter,
+    PhiParameter,
 )
 from ..primitives import Container
 from ..utilities.algebra import approximately_invert, approximately_solve
 from ..utilities.basics import (
-    Array, Bounds, RecArray, Error, Groups, SolverStats, format_number, format_table, output, update_matrices
+    Array,
+    Bounds,
+    RecArray,
+    Error,
+    Groups,
+    SolverStats,
+    format_number,
+    format_table,
+    output,
+    update_matrices,
 )
 
 
@@ -49,10 +64,20 @@ class Market(Container):
     parameters: Parameters
 
     def __init__(
-            self, economy: Economy, t: Any, parameters: Parameters, sigma: Array, pi: Array, rho: Array,
-            beta: Optional[Array] = None, gamma: Optional[Array] = None, delta: Optional[Array] = None,
-            data_override: Optional[Dict[str, Array]] = None, products_override: Optional[RecArray] = None,
-            agents_override: Optional[RecArray] = None) -> None:
+        self,
+        economy: Economy,
+        t: Any,
+        parameters: Parameters,
+        sigma: Array,
+        pi: Array,
+        rho: Array,
+        beta: Optional[Array] = None,
+        gamma: Optional[Array] = None,
+        delta: Optional[Array] = None,
+        data_override: Optional[Dict[str, Array]] = None,
+        products_override: Optional[RecArray] = None,
+        agents_override: Optional[RecArray] = None,
+    ) -> None:
         """Store or compute information about formulations, data, parameters, and utility."""
 
         # structure relevant data
@@ -333,11 +358,19 @@ class Market(Container):
         return derivatives
 
     def compute_probabilities(
-            self, delta: Array = None, mu: Optional[Array] = None, linear: bool = True, safe: bool = True,
-            utility_reduction: Optional[Array] = None, numerator: Optional[Array] = None,
-            eliminate_outside: bool = False, eliminate_product: Optional[int] = None,
-            eliminate_product_id: Optional[Any] = None, product_ids_index: Optional[int] = None,
-            availability: Optional[Array] = None) -> Tuple[Array, Optional[Array]]:
+        self,
+        delta: Array = None,
+        mu: Optional[Array] = None,
+        linear: bool = True,
+        safe: bool = True,
+        utility_reduction: Optional[Array] = None,
+        numerator: Optional[Array] = None,
+        eliminate_outside: bool = False,
+        eliminate_product: Optional[int] = None,
+        eliminate_product_id: Optional[Any] = None,
+        product_ids_index: Optional[int] = None,
+        availability: Optional[Array] = None,
+    ) -> Tuple[Array, Optional[Array]]:
         """Compute choice probabilities. By default, use unchanged delta and mu values. If linear is False, delta and mu
         must be specified and already be exponentiated. If safe is True, scale the logit equation by the exponential of
         negative the maximum utility for each agent, and if utility_reduction is specified, it should be values that
@@ -423,8 +456,12 @@ class Market(Container):
         return probabilities, conditionals
 
     def compute_delta(
-            self, initial_delta: Array, iteration: Iteration, fp_type: str, shares_bounds: Bounds) -> (
-            Tuple[Array, Array, SolverStats, List[Error]]):
+        self,
+        initial_delta: Array,
+        iteration: Iteration,
+        fp_type: str,
+        shares_bounds: Bounds,
+    ) -> Tuple[Array, Array, SolverStats, List[Error]]:
         """Compute the mean utility for this market that equates market shares to observed values by solving a fixed
         point problem.
         """
@@ -577,7 +614,10 @@ class Market(Container):
                 utility_reduction = np.clip(self.mu.max(axis=0, keepdims=True), 0, None)
                 exp_mu = np.exp(self.mu - utility_reduction)
                 compute_probabilities = functools.partial(
-                    self.compute_probabilities, mu=exp_mu, utility_reduction=utility_reduction, linear=False
+                    self.compute_probabilities,
+                    mu=exp_mu,
+                    utility_reduction=utility_reduction,
+                    linear=False,
                 )
             else:
                 exp_mu = np.exp(self.mu)
@@ -627,8 +667,11 @@ class Market(Container):
         return delta, clipped_shares, stats, errors
 
     def compute_capital_lamda_gamma(
-            self, probability_utility_derivatives: Array, probabilities: Array, conditionals: Optional[Array]) -> (
-            Tuple[Array, Array]):
+        self,
+        probability_utility_derivatives: Array,
+        probabilities: Array,
+        conditionals: Optional[Array],
+    ) -> Tuple[Array, Array]:
         """Compute the diagonal of the capital lambda matrix and the dense capital gamma matrix used to decompose the
         Jacobian of market shares with respect to a variable.
         """
@@ -649,9 +692,12 @@ class Market(Container):
         return capital_lamda_diagonal.flatten(), capital_gamma
 
     def compute_eta(
-            self, ownership: Optional[Array] = None, probabilities: Optional[Array] = None,
-            conditionals: Optional[Array] = None, keep_capital_delta_inverse: bool = False) -> (
-            Tuple[Array, Optional[Array], List[Error]]):
+        self,
+        ownership: Optional[Array] = None,
+        probabilities: Optional[Array] = None,
+        conditionals: Optional[Array] = None,
+        keep_capital_delta_inverse: bool = False,
+    ) -> Tuple[Array, Optional[Array], List[Error]]:
         """Compute the markup term in the BLP-markup equation. By default, get an unchanged ownership matrix, use
         unchanged probabilities, and do not return the inverse of the capital delta matrix (used for computing the
         Jacobian of eta with respect to theta).
@@ -665,7 +711,9 @@ class Market(Container):
         utility_derivatives = self.compute_utility_derivatives('prices')
         probability_utility_derivatives = probabilities * utility_derivatives
         capital_lamda_diagonal, capital_delta = self.compute_capital_lamda_gamma(
-            probability_utility_derivatives, probabilities, conditionals
+            probability_utility_derivatives,
+            probabilities,
+            conditionals,
         )
         np.einsum('jj->j', capital_delta)[...] -= capital_lamda_diagonal
         capital_delta = capital_delta.T
@@ -686,8 +734,13 @@ class Market(Container):
         return eta, capital_delta_inverse, errors
 
     def compute_equilibrium_prices(
-            self, costs: Array, iteration: Iteration, constant_costs: bool, prices: Optional[Array] = None,
-            ownership_matrix: Optional[Array] = None) -> Tuple[Array, SolverStats]:
+        self,
+        costs: Array,
+        iteration: Iteration,
+        constant_costs: bool,
+        prices: Optional[Array] = None,
+        ownership_matrix: Optional[Array] = None,
+    ) -> Tuple[Array, SolverStats]:
         """Compute equilibrium prices by iterating over the zeta-markup equation. By default, use unchanged firm IDs
         and use unchanged prices as initial values.
         """
@@ -806,7 +859,10 @@ class Market(Container):
             # compute the Jacobian of zeta with respect to prices
             utility_second_derivatives = get_second_derivatives(x)
             capital_lamda_tensor, capital_gamma_tensor = self.compute_capital_lamda_gamma_by_variable_tensor(
-                utility_derivatives, utility_second_derivatives, probabilities, conditionals
+                utility_derivatives,
+                utility_second_derivatives,
+                probabilities,
+                conditionals,
             )
             capital_lamda_inv_tensor = -capital_lamda_inv @ np.moveaxis(capital_lamda_tensor, 2, 0) @ capital_lamda_inv
             capital_gamma_tilde_tensor = ownership_matrix * np.moveaxis(capital_gamma_tensor, 2, 0)
@@ -846,7 +902,11 @@ class Market(Container):
         return shares
 
     def compute_utility_derivatives_by_parameter_tangent(
-            self, parameter: Parameter, X1_derivatives: Array, X2_derivatives: Array) -> Array:
+        self,
+        parameter: Parameter,
+        X1_derivatives: Array,
+        X2_derivatives: Array,
+    ) -> Array:
         """Compute the tangent with respect to a parameter of derivatives of utility with respect to a variable."""
         tangent = np.zeros((self.J, self.I), options.dtype)
         if isinstance(parameter, BetaParameter):
@@ -871,10 +931,16 @@ class Market(Container):
         return tangent
 
     def compute_probabilities_by_parameter_tangent_mapping(
-            self, probabilities: Array, conditionals: Optional[Array], delta: Optional[Array] = None,
-            agent_indices: Optional[Array] = None, keep_conditionals: bool = True,
-            eliminate_product: Optional[int] = None, eliminate_product_id: Optional[Any] = None,
-            product_ids_index: Optional[int] = None) -> Tuple[Dict[int, Array], Dict[int, Optional[Array]]]:
+        self,
+        probabilities: Array,
+        conditionals: Optional[Array],
+        delta: Optional[Array] = None,
+        agent_indices: Optional[Array] = None,
+        keep_conditionals: bool = True,
+        eliminate_product: Optional[int] = None,
+        eliminate_product_id: Optional[Any] = None,
+        product_ids_index: Optional[int] = None,
+    ) -> Tuple[Dict[int, Array], Dict[int, Optional[Array]]]:
         """Computing a mapping from parameter index to tangent of probabilities with respect to a parameter. By default,
         use unchanged delta. By default, also compute conditionals derivatives if computed.
         """
@@ -882,8 +948,14 @@ class Market(Container):
         conditionals_mapping: Dict[int, Array] = {}
         for p, parameter in enumerate(self.parameters.unfixed):
             probabilities_mapping[p], conditionals_mapping[p] = self.compute_probabilities_by_parameter_tangent(
-                parameter, probabilities, conditionals, delta, agent_indices, eliminate_product, eliminate_product_id,
-                product_ids_index
+                parameter,
+                probabilities,
+                conditionals,
+                delta,
+                agent_indices,
+                eliminate_product,
+                eliminate_product_id,
+                product_ids_index,
             )
             if not keep_conditionals:
                 conditionals_mapping[p] = None
@@ -891,9 +963,13 @@ class Market(Container):
         return probabilities_mapping, conditionals_mapping
 
     def update_probabilities_by_parameter_tangent_mapping(
-            self, probabilities_tangent_mapping: Dict[int, Array],
-            conditionals_tangent_mapping: Dict[int, Optional[Array]], probabilities: Array,
-            conditionals: Optional[Array], xi_jacobian: Array) -> None:
+        self,
+        probabilities_tangent_mapping: Dict[int, Array],
+        conditionals_tangent_mapping: Dict[int, Optional[Array]],
+        probabilities: Array,
+        conditionals: Optional[Array],
+        xi_jacobian: Array,
+    ) -> None:
         """Update tangents of probabilities with respect to parameters to account for the contribution of xi."""
         probabilities_tensor = conditionals_tensor = None
         for p, parameter in enumerate(self.parameters.unfixed):
@@ -914,25 +990,28 @@ class Market(Container):
             # otherwise, need to compute the derivatives of probabilities with respect to xi
             if probabilities_tensor is None:
                 probabilities_tensor, conditionals_tensor = self.compute_probabilities_by_xi_tensor(
-                    probabilities, conditionals,
-                    compute_conditionals_tensor=any(t is not None for t in conditionals_tangent_mapping.values())
+                    probabilities,
+                    conditionals,
+                    compute_conditionals_tensor=any(t is not None for t in conditionals_tangent_mapping.values()),
                 )
 
             # add the contribution of xi
-            probabilities_tangent += np.squeeze(
-                np.moveaxis(probabilities_tensor, 0, 2) @ xi_jacobian[:, [p]], axis=2
-            )
+            probabilities_tangent += np.squeeze(np.moveaxis(probabilities_tensor, 0, 2) @ xi_jacobian[:, [p]], axis=2)
             if conditionals_tangent is not None:
                 assert conditionals_tensor is not None
-                conditionals_tangent += np.squeeze(
-                    np.moveaxis(conditionals_tensor, 0, 2) @ xi_jacobian[:, [p]], axis=2
-                )
+                conditionals_tangent += np.squeeze(np.moveaxis(conditionals_tensor, 0, 2) @ xi_jacobian[:, [p]], axis=2)
 
     def compute_probabilities_by_parameter_tangent(
-            self, parameter: Parameter, probabilities: Array, conditionals: Optional[Array],
-            delta: Optional[Array] = None, agent_indices: Optional[Array] = None,
-            eliminate_product: Optional[int] = None, eliminate_product_id: Optional[Any] = None,
-            product_ids_index: Optional[int] = None) -> Tuple[Array, Optional[Array]]:
+        self,
+        parameter: Parameter,
+        probabilities: Array,
+        conditionals: Optional[Array],
+        delta: Optional[Array] = None,
+        agent_indices: Optional[Array] = None,
+        eliminate_product: Optional[int] = None,
+        eliminate_product_id: Optional[Any] = None,
+        product_ids_index: Optional[int] = None,
+    ) -> Tuple[Array, Optional[Array]]:
         """Compute the tangent of probabilities with respect to a parameter. By default, use unchanged delta."""
         if delta is None:
             assert self.delta is not None
@@ -1067,8 +1146,11 @@ class Market(Container):
         return probabilities_tangent, conditionals_tangent
 
     def compute_probabilities_by_xi_tensor(
-            self, probabilities: Array, conditionals: Optional[Array],
-            compute_conditionals_tensor: bool = True) -> Tuple[Array, Optional[Array]]:
+        self,
+        probabilities: Array,
+        conditionals: Optional[Array],
+        compute_conditionals_tensor: bool = True,
+    ) -> Tuple[Array, Optional[Array]]:
         """Use choice probabilities to compute their tensor derivatives (holding beta fixed) with respect to xi
         (equivalently, to delta), indexed with the first axis. By default, also compute the tensor derivatives of
         conditional probabilities with respect to xi when there is nesting.
@@ -1098,8 +1180,11 @@ class Market(Container):
         return probabilities_tensor, conditionals_tensor
 
     def compute_shares_by_variable_jacobian(
-            self, utility_derivatives: Array, probabilities: Optional[Array] = None,
-            conditionals: Optional[Array] = None) -> Array:
+        self,
+        utility_derivatives: Array,
+        probabilities: Optional[Array] = None,
+        conditionals: Optional[Array] = None,
+    ) -> Array:
         """Compute the Jacobian of market shares with respect to a variable. By default, compute unchanged choice
         probabilities.
         """
@@ -1107,13 +1192,19 @@ class Market(Container):
             probabilities, conditionals = self.compute_probabilities()
         probability_utility_derivatives = probabilities * utility_derivatives
         capital_lamda_diagonal, capital_gamma = self.compute_capital_lamda_gamma(
-            probability_utility_derivatives, probabilities, conditionals
+            probability_utility_derivatives,
+            probabilities,
+            conditionals,
         )
         return np.diag(capital_lamda_diagonal) - capital_gamma
 
     def compute_capital_lamda_gamma_by_variable_tensor(
-            self, utility_derivatives: Array, utility_second_derivatives: Array, probabilities: Array,
-            conditionals: Array) -> Tuple[Array, Array]:
+        self,
+        utility_derivatives: Array,
+        utility_second_derivatives: Array,
+        probabilities: Array,
+        conditionals: Array,
+    ) -> Tuple[Array, Array]:
         """Compute the tensor derivative of the diagonal of the capital lambda matrix and the dense capital gamma matrix
         with respect to a variable, indexed with the last axis.
         """
@@ -1176,15 +1267,22 @@ class Market(Container):
         return capital_lamda_tensor, capital_gamma_tensor
 
     def compute_shares_by_variable_hessian(
-            self, utility_derivatives: Array, utility_second_derivatives: Array, probabilities: Optional[Array] = None,
-            conditionals: Optional[Array] = None) -> Array:
+        self,
+        utility_derivatives: Array,
+        utility_second_derivatives: Array,
+        probabilities: Optional[Array] = None,
+        conditionals: Optional[Array] = None,
+    ) -> Array:
         """Compute the Hessian of market shares with respect to a variable. By default, compute unchanged choice
         probabilities.
         """
         if probabilities is None:
             probabilities, conditionals = self.compute_probabilities()
         capital_lamda_tensor, capital_gamma_tensor = self.compute_capital_lamda_gamma_by_variable_tensor(
-            utility_derivatives, utility_second_derivatives, probabilities, conditionals
+            utility_derivatives,
+            utility_second_derivatives,
+            probabilities,
+            conditionals,
         )
         return capital_lamda_tensor - capital_gamma_tensor
 
@@ -1225,7 +1323,10 @@ class Market(Container):
         # compute derivatives of shares with respect to prices
         shares_jacobian = self.compute_shares_by_variable_jacobian(utility_derivatives, probabilities, conditionals)
         shares_hessian = self.compute_shares_by_variable_hessian(
-            utility_derivatives, utility_second_derivatives, probabilities, conditionals
+            utility_derivatives,
+            utility_second_derivatives,
+            probabilities,
+            conditionals,
         )
 
         # compute derivatives of profits with respect to prices
@@ -1259,9 +1360,15 @@ class Market(Container):
         return jacobian
 
     def compute_capital_lamda_gamma_by_parameter_tangent(
-            self, parameter: Parameter, probability_utility_derivatives: Array,
-            probability_utility_derivatives_tangent: Array, probabilities: Array, probabilities_tangent: Array,
-            conditionals: Optional[Array], conditionals_tangent: Optional[Array]) -> Tuple[Array, Array]:
+        self,
+        parameter: Parameter,
+        probability_utility_derivatives: Array,
+        probability_utility_derivatives_tangent: Array,
+        probabilities: Array,
+        probabilities_tangent: Array,
+        conditionals: Optional[Array],
+        conditionals_tangent: Optional[Array],
+    ) -> Tuple[Array, Array]:
         """Compute the tangent of the diagonal of the capital lambda matrix and the dense capital gamma matrix with
         respect to a parameter.
         """
@@ -1299,9 +1406,14 @@ class Market(Container):
         return capital_lamda_diagonal_tangent.flatten(), capital_gamma_tangent
 
     def compute_eta_by_theta_jacobian(
-            self, eta: Array, capital_delta_inverse: Array, probabilities: Array, conditionals: Optional[Array],
-            probabilities_tangent_mapping: Dict[int, Array],
-            conditionals_tangent_mapping: Dict[int, Optional[Array]]) -> Array:
+        self,
+        eta: Array,
+        capital_delta_inverse: Array,
+        probabilities: Array,
+        conditionals: Optional[Array],
+        probabilities_tangent_mapping: Dict[int, Array],
+        conditionals_tangent_mapping: Dict[int, Optional[Array]],
+    ) -> Array:
         """Compute the Jacobian of the markup term in the BLP-markup equation with respect to theta."""
         ownership = self.get_ownership_matrix()
 
@@ -1328,8 +1440,13 @@ class Market(Container):
             # compute the tangent of capital delta with respect to the parameter
             capital_lamda_diagonal_tangent, capital_delta_tangent = (
                 self.compute_capital_lamda_gamma_by_parameter_tangent(
-                    parameter, probability_utility_derivatives, probability_utility_derivatives_tangent, probabilities,
-                    probabilities_tangent_mapping[p], conditionals, conditionals_tangent_mapping[p]
+                    parameter,
+                    probability_utility_derivatives,
+                    probability_utility_derivatives_tangent,
+                    probabilities,
+                    probabilities_tangent_mapping[p],
+                    conditionals,
+                    conditionals_tangent_mapping[p],
                 )
             )
             np.einsum('jj->j', capital_delta_tangent)[...] -= capital_lamda_diagonal_tangent
@@ -1342,8 +1459,11 @@ class Market(Container):
         return eta_jacobian
 
     def compute_xi_by_theta_jacobian(
-            self, probabilities: Array, conditionals: Optional[Array],
-            probabilities_tangent_mapping: Dict[int, Array]) -> Tuple[Array, List[Error]]:
+        self,
+        probabilities: Array,
+        conditionals: Optional[Array],
+        probabilities_tangent_mapping: Dict[int, Array],
+    ) -> Tuple[Array, List[Error]]:
         """Use the Implicit Function Theorem to compute the Jacobian (holding beta fixed) of xi (equivalently, of delta)
         with respect to theta.
         """
@@ -1356,16 +1476,26 @@ class Market(Container):
         return xi_by_theta_jacobian, errors
 
     def compute_omega_by_theta_jacobian(
-            self, tilde_costs: Array, eta: Array, capital_delta_inverse: Array, probabilities: Array,
-            conditionals: Optional[Array], probabilities_tangent_mapping: Dict[int, Array],
-            conditionals_tangent_mapping: Dict[int, Optional[Array]]) -> Array:
+        self,
+        tilde_costs: Array,
+        eta: Array,
+        capital_delta_inverse: Array,
+        probabilities: Array,
+        conditionals: Optional[Array],
+        probabilities_tangent_mapping: Dict[int, Array],
+        conditionals_tangent_mapping: Dict[int, Optional[Array]],
+    ) -> Array:
         """Compute the Jacobian (holding gamma fixed) of omega (equivalently, of transformed marginal costs) with
         respect to theta.
         """
 
         # compute the Jacobian of the markup term in the BLP-markup equation with respect to theta
         eta_jacobian = self.compute_eta_by_theta_jacobian(
-            eta, capital_delta_inverse, probabilities, conditionals, probabilities_tangent_mapping,
+            eta,
+            capital_delta_inverse,
+            probabilities,
+            conditionals,
+            probabilities_tangent_mapping,
             conditionals_tangent_mapping,
         )
 
@@ -1433,13 +1563,20 @@ class Market(Container):
         return values
 
     def compute_micro_dataset_contributions(
-            self, datasets: List[MicroDataset], delta: Optional[Array] = None, probabilities: Optional[Array] = None,
-            probabilities_tangent_mapping: Optional[Dict[int, Array]] = None, xi_jacobian: Optional[Array] = None,
-            compute_jacobians: bool = False, agent_indices: Optional[Array] = None) -> (
-            Tuple[
-                Dict[MicroDataset, Array], Dict[MicroDataset, Array], Dict[Tuple[MicroDataset, int], Array],
-                Dict[Tuple[MicroDataset, int], Array]
-            ]):
+        self,
+        datasets: List[MicroDataset],
+        delta: Optional[Array] = None,
+        probabilities: Optional[Array] = None,
+        probabilities_tangent_mapping: Optional[Dict[int, Array]] = None,
+        xi_jacobian: Optional[Array] = None,
+        compute_jacobians: bool = False,
+        agent_indices: Optional[Array] = None,
+    ) -> Tuple[
+        Dict[MicroDataset, Array],
+        Dict[MicroDataset, Array],
+        Dict[Tuple[MicroDataset, int], Array],
+        Dict[Tuple[MicroDataset, int], Array],
+    ]:
         """Compute contributions of micro datasets to micro moments."""
         if delta is None:
             assert self.delta is not None
@@ -1513,7 +1650,10 @@ class Market(Container):
                         # re-compute probabilities if there is nesting or there was a numerical error
                         if eliminated_probabilities_j is None or not np.isfinite(eliminated_probabilities_j).all():
                             eliminated_probabilities_j, eliminated_conditionals_j = self.compute_probabilities(
-                                delta, mu, eliminate_product=j, availability=availability
+                                delta,
+                                mu,
+                                eliminate_product=j,
+                                availability=availability,
                             )
 
                         eliminated_probabilities_list.append(eliminated_probabilities_j)
@@ -1538,8 +1678,11 @@ class Market(Container):
                         # re-compute probabilities if there is nesting or there was a numerical error
                         if eliminated_probabilities_j is None or not np.isfinite(eliminated_probabilities_j).all():
                             eliminated_probabilities_j, eliminated_conditionals_j = self.compute_probabilities(
-                                delta, mu, eliminate_product_id=product_id, product_ids_index=ids_index,
-                                availability=availability
+                                delta,
+                                mu,
+                                eliminate_product_id=product_id,
+                                product_ids_index=ids_index,
+                                availability=availability,
                             )
 
                         eliminated_probabilities_list.append(eliminated_probabilities_j)
@@ -1580,14 +1723,20 @@ class Market(Container):
                             for j in range(self.J):
                                 eliminated_probabilities_tangent_mappings[j], conditionals_tangent_mapping = (
                                     self.compute_probabilities_by_parameter_tangent_mapping(
-                                        eliminated_probabilities[ids_index][j], eliminated_conditionals_list[j], delta,
-                                        agent_indices, eliminate_product=j, keep_conditionals=False
+                                        eliminated_probabilities[ids_index][j],
+                                        eliminated_conditionals_list[j],
+                                        delta,
+                                        agent_indices,
+                                        eliminate_product=j,
+                                        keep_conditionals=False,
                                     )
                                 )
                                 self.update_probabilities_by_parameter_tangent_mapping(
-                                    eliminated_probabilities_tangent_mappings[j], conditionals_tangent_mapping,
-                                    eliminated_probabilities[ids_index][j], eliminated_conditionals_list[j],
-                                    xi_jacobian
+                                    eliminated_probabilities_tangent_mappings[j],
+                                    conditionals_tangent_mapping,
+                                    eliminated_probabilities[ids_index][j],
+                                    eliminated_conditionals_list[j],
+                                    xi_jacobian,
                                 )
 
                             for p in range(self.parameters.P):
@@ -1603,15 +1752,20 @@ class Market(Container):
                                 eliminated_probabilities_tangent_mappings[product_id], conditionals_tangent_mapping = (
                                     self.compute_probabilities_by_parameter_tangent_mapping(
                                         eliminated_probabilities[ids_index][j],
-                                        eliminated_conditionals_list[id_index], delta, agent_indices,
-                                        eliminate_product_id=product_id, product_ids_index=ids_index,
-                                        keep_conditionals=False
+                                        eliminated_conditionals_list[id_index],
+                                        delta,
+                                        agent_indices,
+                                        eliminate_product_id=product_id,
+                                        product_ids_index=ids_index,
+                                        keep_conditionals=False,
                                     )
                                 )
                                 self.update_probabilities_by_parameter_tangent_mapping(
-                                    eliminated_probabilities_tangent_mappings[product_id], conditionals_tangent_mapping,
-                                    eliminated_probabilities[ids_index][j], eliminated_conditionals_list[id_index],
-                                    xi_jacobian
+                                    eliminated_probabilities_tangent_mappings[product_id],
+                                    conditionals_tangent_mapping,
+                                    eliminated_probabilities[ids_index][j],
+                                    eliminated_conditionals_list[id_index],
+                                    xi_jacobian,
                                 )
 
                             for p in range(self.parameters.P):
@@ -1631,7 +1785,10 @@ class Market(Container):
                 # re-compute probabilities if there is nesting or there was a numerical error
                 if outside_eliminated_probabilities is None or not np.isfinite(outside_eliminated_probabilities).all():
                     outside_eliminated_probabilities, outside_eliminated_conditionals = self.compute_probabilities(
-                        delta, mu, eliminate_outside=True, availability=availability
+                        delta,
+                        mu,
+                        eliminate_outside=True,
+                        availability=availability,
                     )
 
                 if compute_jacobians:
@@ -1653,13 +1810,19 @@ class Market(Container):
                         # compute from scratch for nested probabilities
                         outside_eliminated_probabilities_tangent_mapping, conditionals_tangent_mapping = (
                             self.compute_probabilities_by_parameter_tangent_mapping(
-                                outside_eliminated_probabilities, outside_eliminated_conditionals, delta,
-                                agent_indices, keep_conditionals=False
+                                outside_eliminated_probabilities,
+                                outside_eliminated_conditionals,
+                                delta,
+                                agent_indices,
+                                keep_conditionals=False,
                             )
                         )
                         self.update_probabilities_by_parameter_tangent_mapping(
-                            outside_eliminated_probabilities_tangent_mapping, conditionals_tangent_mapping,
-                            outside_eliminated_probabilities, outside_eliminated_conditionals, xi_jacobian
+                            outside_eliminated_probabilities_tangent_mapping,
+                            conditionals_tangent_mapping,
+                            outside_eliminated_probabilities,
+                            outside_eliminated_conditionals,
+                            xi_jacobian,
                         )
 
             # pre-compute outside second choice probabilities
@@ -1759,9 +1922,10 @@ class Market(Container):
         return weights_mapping, denominator_mapping, weights_tangent_mapping, denominator_tangent_mapping
 
     def generate_micro_chunks(
-            self, probabilities: Optional[Array] = None,
-            probabilities_tangent_mapping: Optional[Dict[int, Array]] = None) -> (
-            Iterator[Tuple[Optional[Array], Optional[Array], Optional[Dict[int, Array]]]]):
+        self,
+        probabilities: Optional[Array] = None,
+        probabilities_tangent_mapping: Optional[Dict[int, Array]] = None,
+    ) -> Iterator[Tuple[Optional[Array], Optional[Array], Optional[Dict[int, Array]]]]:
         """Generate chunks of agents for micro computations to reduce memory usage."""
         chunks = options.micro_computation_chunks
         if isinstance(chunks, dict):
@@ -1791,10 +1955,16 @@ class Market(Container):
             yield agent_indices, probabilities_chunk, probabilities_tangent_mapping_chunk
 
     def compute_micro_contributions(
-            self, moments: Moments, delta: Optional[Array] = None, probabilities: Optional[Array] = None,
-            probabilities_tangent_mapping: Optional[Dict[int, Array]] = None, xi_jacobian: Optional[Array] = None,
-            compute_jacobians: bool = False, compute_covariances: bool = False, keep_mappings: bool = False) -> (
-            Tuple[Array, Array, Array, Array, Array, Dict[MicroDataset, Array], Dict[int, Array]]):
+            self,
+            moments: Moments,
+            delta: Optional[Array] = None,
+            probabilities: Optional[Array] = None,
+            probabilities_tangent_mapping: Optional[Dict[int, Array]] = None,
+            xi_jacobian: Optional[Array] = None,
+            compute_jacobians: bool = False,
+            compute_covariances: bool = False,
+            keep_mappings: bool = False,
+    ) -> Tuple[Array, Array, Array, Array, Array, Dict[MicroDataset, Array], Dict[int, Array]]:
         """Compute contributions to micro moment parts, Jacobians, and covariances. By default, use the mean utilities
         with which this market was initialized and do not compute Jacobian and covariance contributions.
         """
@@ -1803,13 +1973,19 @@ class Market(Container):
         parts_numerator = np.zeros((moments.PM, 1), options.dtype)
         parts_denominator = np.zeros((moments.PM, 1), options.dtype)
         parts_numerator_jacobian = np.full(
-            (moments.PM, self.parameters.P), 0 if compute_jacobians else np.nan, options.dtype
+            (moments.PM, self.parameters.P),
+            0 if compute_jacobians else np.nan,
+            options.dtype,
         )
         parts_denominator_jacobian = np.full(
-            (moments.PM, self.parameters.P), 0 if compute_jacobians else np.nan, options.dtype
+            (moments.PM, self.parameters.P),
+            0 if compute_jacobians else np.nan,
+            options.dtype,
         )
         parts_covariances_numerator = np.full(
-            (moments.PM, moments.PM), 0 if compute_covariances else np.nan, options.dtype
+            (moments.PM, moments.PM),
+            0 if compute_covariances else np.nan,
+            options.dtype,
         )
 
         micro_chunks = self.generate_micro_chunks(probabilities, probabilities_tangent_mapping)
@@ -1817,13 +1993,18 @@ class Market(Container):
             # compute dataset contributions
             datasets = [m.dataset for m in moments.micro_parts]
             (
-                weights_mapping_chunk, denominator_mapping_chunk, weights_tangent_mapping_chunk,
-                denominator_tangent_mapping_chunk
-            ) = (
-                self.compute_micro_dataset_contributions(
-                    datasets, delta, probabilities_chunk, probabilities_tangent_mapping_chunk, xi_jacobian,
-                    compute_jacobians, agent_indices
-                )
+                weights_mapping_chunk,
+                denominator_mapping_chunk,
+                weights_tangent_mapping_chunk,
+                denominator_tangent_mapping_chunk,
+            ) = self.compute_micro_dataset_contributions(
+                datasets,
+                delta,
+                probabilities_chunk,
+                probabilities_tangent_mapping_chunk,
+                xi_jacobian,
+                compute_jacobians,
+                agent_indices,
             )
 
             # cache weights if necessary
@@ -1875,6 +2056,11 @@ class Market(Container):
                             parts_covariances_numerator[p2, p] += np.sum(weighted_values_chunk * values2_chunk)
 
         return (
-            parts_numerator, parts_denominator, parts_numerator_jacobian, parts_denominator_jacobian,
-            parts_covariances_numerator, weights_mapping, values_mapping
+            parts_numerator,
+            parts_denominator,
+            parts_numerator_jacobian,
+            parts_denominator_jacobian,
+            parts_covariances_numerator,
+            weights_mapping,
+            values_mapping,
         )

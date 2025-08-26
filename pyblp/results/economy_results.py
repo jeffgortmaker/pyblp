@@ -16,8 +16,17 @@ from ..micro import MicroDataset, MicroMoment, Moments
 from ..parameters import Parameters
 from ..primitives import Agents, MicroAgents, build_demographics
 from ..utilities.basics import (
-    Array, Error, RecArray, StringRepresentation, format_seconds, generate_items, get_indices, output, output_progress,
-    structure_matrices, warn
+    Array,
+    Error,
+    RecArray,
+    StringRepresentation,
+    format_seconds,
+    generate_items,
+    get_indices,
+    output,
+    output_progress,
+    structure_matrices,
+    warn,
 )
 
 
@@ -39,9 +48,14 @@ class SimpleEconomyResults(abc.ABC, StringRepresentation):
 
     @abc.abstractmethod
     def _combine_arrays(
-            self, compute_market_results: Callable, market_ids: Array, fixed_args: Sequence = (),
-            market_args: Sequence = (), agent_data: Optional[Mapping] = None,
-            integration: Optional[Integration] = None) -> Array:
+        self,
+        compute_market_results: Callable,
+        market_ids: Array,
+        fixed_args: Sequence = (),
+        market_args: Sequence = (),
+        agent_data: Optional[Mapping] = None,
+        integration: Optional[Integration] = None,
+    ) -> Array:
         """Combine arrays from one or all markets, which are computed by passing fixed_args (identical for all markets)
         and market_args (arrays that need to be restricted to markets) to compute_market_results, a market method
         that returns the output for the market and any errors encountered during computation. Agent data and an
@@ -106,7 +120,11 @@ class SimpleEconomyResults(abc.ABC, StringRepresentation):
         return shares
 
     def compute_aggregate_elasticities(
-            self, factor: float = 0.1, name: Optional[str] = 'prices', market_id: Optional[Any] = None) -> Array:
+        self,
+        factor: float = 0.1,
+        name: Optional[str] = 'prices',
+        market_id: Optional[Any] = None,
+    ) -> Array:
         r"""Estimate aggregate elasticities of demand, :math:`\mathscr{E}`, with respect to a variable, :math:`x`.
 
         In market :math:`t`, the aggregate elasticity of demand is
@@ -144,7 +162,9 @@ class SimpleEconomyResults(abc.ABC, StringRepresentation):
         self._economy._validate_name(name)
         market_ids = self._select_market_ids(market_id)
         return self._combine_arrays(
-            EconomyResultsMarket.safely_compute_aggregate_elasticity, market_ids, fixed_args=[factor, name]
+            EconomyResultsMarket.safely_compute_aggregate_elasticity,
+            market_ids,
+            fixed_args=[factor, name],
         )
 
     def compute_elasticities(self, name: Optional[str] = 'prices', market_id: Optional[Any] = None) -> Array:
@@ -333,8 +353,13 @@ class SimpleEconomyResults(abc.ABC, StringRepresentation):
         return self._combine_arrays(EconomyResultsMarket.safely_compute_long_run_diversion_ratios, market_ids)
 
     def compute_probabilities(
-            self, prices: Optional[Any] = None, delta: Optional[Any] = None, agent_data: Optional[Mapping] = None,
-            integration: Optional[Integration] = None, market_id: Optional[Any] = None) -> Array:
+        self,
+        prices: Optional[Any] = None,
+        delta: Optional[Any] = None,
+        agent_data: Optional[Mapping] = None,
+        integration: Optional[Integration] = None,
+        market_id: Optional[Any] = None,
+    ) -> Array:
         r"""Estimate matrices of choice probabilities.
 
         For each market, the value in row :math:`j` and column `i` is given by :eq:`probabilities` when there are random
@@ -395,8 +420,11 @@ class SimpleEconomyResults(abc.ABC, StringRepresentation):
         prices = self._coerce_optional_prices(prices, market_ids)
         delta = self._coerce_optional_delta(delta, market_ids)
         return self._combine_arrays(
-            EconomyResultsMarket.safely_compute_probabilities, market_ids, market_args=[prices, delta],
-            agent_data=agent_data, integration=integration
+            EconomyResultsMarket.safely_compute_probabilities,
+            market_ids,
+            market_args=[prices, delta],
+            agent_data=agent_data,
+            integration=integration,
         )
 
     def extract_diagonals(self, matrices: Any, market_id: Optional[Any] = None) -> Array:
@@ -465,12 +493,17 @@ class SimpleEconomyResults(abc.ABC, StringRepresentation):
         market_ids = self._select_market_ids(market_id)
         matrices = self._coerce_matrices(matrices, market_ids)
         return self._combine_arrays(
-            EconomyResultsMarket.safely_extract_diagonal_mean, market_ids, market_args=[matrices]
+            EconomyResultsMarket.safely_extract_diagonal_mean,
+            market_ids,
+            market_args=[matrices],
         )
 
     def compute_costs(
-            self, firm_ids: Optional[Any] = None, ownership: Optional[Any] = None,
-            market_id: Optional[Any] = None) -> Array:
+        self,
+        firm_ids: Optional[Any] = None,
+        ownership: Optional[Any] = None,
+        market_id: Optional[Any] = None,
+    ) -> Array:
         r"""Estimate marginal costs, :math:`c`.
 
         Marginal costs are computed with the :math:`\eta`-markup equation in :eq:`eta`:
@@ -503,12 +536,17 @@ class SimpleEconomyResults(abc.ABC, StringRepresentation):
         firm_ids = self._economy._coerce_optional_firm_ids(firm_ids, market_ids)
         ownership = self._economy._coerce_optional_ownership(ownership, market_ids)
         return self._combine_arrays(
-            EconomyResultsMarket.safely_compute_costs, market_ids, market_args=[firm_ids, ownership]
+            EconomyResultsMarket.safely_compute_costs,
+            market_ids,
+            market_args=[firm_ids, ownership],
         )
 
     def compute_passthrough(
-            self, firm_ids: Optional[Any] = None, ownership: Optional[Any] = None,
-            market_id: Optional[Any] = None) -> Array:
+        self,
+        firm_ids: Optional[Any] = None,
+        ownership: Optional[Any] = None,
+        market_id: Optional[Any] = None,
+    ) -> Array:
         r"""Estimate matrices of passthrough of marginal costs to equilibrium prices, :math:`\Upsilon`.
 
         In market :math:`t`, the value in row :math:`j` and column :math:`k` of :math:`\Upsilon` is
@@ -544,13 +582,20 @@ class SimpleEconomyResults(abc.ABC, StringRepresentation):
         firm_ids = self._economy._coerce_optional_firm_ids(firm_ids, market_ids)
         ownership = self._economy._coerce_optional_ownership(ownership, market_ids)
         return self._combine_arrays(
-            EconomyResultsMarket.safely_compute_passthrough, market_ids, market_args=[firm_ids, ownership]
+            EconomyResultsMarket.safely_compute_passthrough,
+            market_ids,
+            market_args=[firm_ids, ownership],
         )
 
     def compute_delta(
-            self, agent_data: Optional[Mapping] = None, integration: Optional[Integration] = None,
-            iteration: Optional[Iteration] = None, fp_type: str = 'safe_linear',
-            shares_bounds: Optional[Tuple[Any, Any]] = (1e-300, None), market_id: Optional[Any] = None) -> Array:
+        self,
+        agent_data: Optional[Mapping] = None,
+        integration: Optional[Integration] = None,
+        iteration: Optional[Iteration] = None,
+        fp_type: str = 'safe_linear',
+        shares_bounds: Optional[Tuple[Any, Any]] = (1e-300, None),
+        market_id: Optional[Any] = None,
+    ) -> Array:
         r"""Estimate mean utilities, :math:`\delta`.
 
         This method can be used to compute mean utilities at the estimated parameters with a different integration
@@ -603,13 +648,20 @@ class SimpleEconomyResults(abc.ABC, StringRepresentation):
         self._economy._validate_fp_type(fp_type)
         shares_bounds = self._economy._coerce_optional_bounds(shares_bounds, 'shares_bounds')
         return self._combine_arrays(
-            EconomyResultsMarket.safely_compute_delta, market_ids, fixed_args=[iteration, fp_type, shares_bounds],
-            agent_data=agent_data, integration=integration
+            EconomyResultsMarket.safely_compute_delta,
+            market_ids,
+            fixed_args=[iteration, fp_type, shares_bounds],
+            agent_data=agent_data,
+            integration=integration,
         )
 
     def compute_approximate_prices(
-            self, firm_ids: Optional[Any] = None, ownership: Optional[Any] = None, costs: Optional[Any] = None,
-            market_id: Optional[Any] = None) -> Array:
+        self,
+        firm_ids: Optional[Any] = None,
+        ownership: Optional[Any] = None,
+        costs: Optional[Any] = None,
+        market_id: Optional[Any] = None,
+    ) -> Array:
         r"""Approximate equilibrium prices after firm or cost changes, :math:`p^*`, under the assumption that shares and
         their price derivatives are unaffected by such changes.
 
@@ -657,14 +709,21 @@ class SimpleEconomyResults(abc.ABC, StringRepresentation):
         ownership = self._economy._coerce_optional_ownership(ownership, market_ids)
         costs = self._coerce_optional_costs(costs, market_ids)
         return self._combine_arrays(
-            EconomyResultsMarket.safely_compute_approximate_equilibrium_prices, market_ids,
-            market_args=[firm_ids, ownership, costs]
+            EconomyResultsMarket.safely_compute_approximate_equilibrium_prices,
+            market_ids,
+            market_args=[firm_ids, ownership, costs],
         )
 
     def compute_prices(
-            self, firm_ids: Optional[Any] = None, ownership: Optional[Any] = None, costs: Optional[Any] = None,
-            prices: Optional[Any] = None, iteration: Optional[Iteration] = None, constant_costs: bool = True,
-            market_id: Optional[Any] = None) -> Array:
+        self,
+        firm_ids: Optional[Any] = None,
+        ownership: Optional[Any] = None,
+        costs: Optional[Any] = None,
+        prices: Optional[Any] = None,
+        iteration: Optional[Iteration] = None,
+        constant_costs: bool = True,
+        market_id: Optional[Any] = None,
+    ) -> Array:
         r"""Estimate equilibrium prices after firm or cost changes, :math:`p^*`.
 
         .. note::
@@ -738,13 +797,20 @@ class SimpleEconomyResults(abc.ABC, StringRepresentation):
         prices = self._coerce_optional_prices(prices, market_ids)
         iteration = self._economy._coerce_optional_prices_iteration(iteration)
         return self._combine_arrays(
-            EconomyResultsMarket.safely_compute_prices, market_ids, fixed_args=[iteration, constant_costs],
-            market_args=[firm_ids, ownership, costs, prices]
+            EconomyResultsMarket.safely_compute_prices,
+            market_ids,
+            fixed_args=[iteration, constant_costs],
+            market_args=[firm_ids, ownership, costs, prices],
         )
 
     def compute_shares(
-            self, prices: Optional[Any] = None, delta: Optional[Any] = None, agent_data: Optional[Mapping] = None,
-            integration: Optional[Integration] = None, market_id: Optional[Any] = None) -> Array:
+        self,
+        prices: Optional[Any] = None,
+        delta: Optional[Any] = None,
+        agent_data: Optional[Mapping] = None,
+        integration: Optional[Integration] = None,
+        market_id: Optional[Any] = None,
+    ) -> Array:
         r"""Estimate shares.
 
         It may be desirable to compute the shares associated with equilibrium prices that have been computed, for
@@ -798,13 +864,19 @@ class SimpleEconomyResults(abc.ABC, StringRepresentation):
         prices = self._coerce_optional_prices(prices, market_ids)
         delta = self._coerce_optional_delta(delta, market_ids)
         return self._combine_arrays(
-            EconomyResultsMarket.safely_compute_shares, market_ids, market_args=[prices, delta], agent_data=agent_data,
-            integration=integration
+            EconomyResultsMarket.safely_compute_shares,
+            market_ids,
+            market_args=[prices, delta],
+            agent_data=agent_data,
+            integration=integration,
         )
 
     def compute_hhi(
-            self, firm_ids: Optional[Any] = None, shares: Optional[Any] = None, market_id: Optional[Any] = None) -> (
-            Array):
+        self,
+        firm_ids: Optional[Any] = None,
+        shares: Optional[Any] = None,
+        market_id: Optional[Any] = None,
+    ) -> Array:
         r"""Estimate Herfindahl-Hirschman Indices, :math:`\text{HHI}`.
 
         The index in market :math:`t` is
@@ -839,7 +911,11 @@ class SimpleEconomyResults(abc.ABC, StringRepresentation):
         return self._combine_arrays(EconomyResultsMarket.safely_compute_hhi, market_ids, market_args=[firm_ids, shares])
 
     def compute_markups(
-            self, prices: Optional[Any] = None, costs: Optional[Any] = None, market_id: Optional[Any] = None) -> Array:
+        self,
+        prices: Optional[Any] = None,
+        costs: Optional[Any] = None,
+        market_id: Optional[Any] = None,
+    ) -> Array:
         r"""Estimate markups, :math:`\mathscr{M}`.
 
         The markup of product :math:`j` in market :math:`t` is
@@ -873,12 +949,18 @@ class SimpleEconomyResults(abc.ABC, StringRepresentation):
         prices = self._coerce_optional_prices(prices, market_ids)
         costs = self._coerce_optional_costs(costs, market_ids)
         return self._combine_arrays(
-            EconomyResultsMarket.safely_compute_markups, market_ids, market_args=[prices, costs]
+            EconomyResultsMarket.safely_compute_markups,
+            market_ids,
+            market_args=[prices, costs],
         )
 
     def compute_profits(
-            self, prices: Optional[Any] = None, shares: Optional[Any] = None, costs: Optional[Any] = None,
-            market_id: Optional[Any] = None) -> Array:
+        self,
+        prices: Optional[Any] = None,
+        shares: Optional[Any] = None,
+        costs: Optional[Any] = None,
+        market_id: Optional[Any] = None,
+    ) -> Array:
         r"""Estimate population-normalized gross expected profits, :math:`\pi`.
 
         With constant costs, the profit from product :math:`j` in market :math:`t` is
@@ -916,12 +998,17 @@ class SimpleEconomyResults(abc.ABC, StringRepresentation):
         shares = self._coerce_optional_shares(shares, market_ids)
         costs = self._coerce_optional_costs(costs, market_ids)
         return self._combine_arrays(
-            EconomyResultsMarket.safely_compute_profits, market_ids, market_args=[prices, shares, costs]
+            EconomyResultsMarket.safely_compute_profits,
+            market_ids,
+            market_args=[prices, shares, costs],
         )
 
     def compute_profit_hessians(
-            self, prices: Optional[Any] = None, costs: Optional[Array] = None, market_id: Optional[Any] = None) -> (
-            Array):
+        self,
+        prices: Optional[Any] = None,
+        costs: Optional[Array] = None,
+        market_id: Optional[Any] = None,
+    ) -> Array:
         r"""Estimate arrays of second derivatives of profits with respect to a prices.
 
         In market :math:`t`, the value indexed by :math:`(j, k, \ell)` is
@@ -963,12 +1050,19 @@ class SimpleEconomyResults(abc.ABC, StringRepresentation):
         prices = self._coerce_optional_prices(prices, market_ids)
         costs = self._coerce_optional_costs(costs, market_ids)
         return self._combine_arrays(
-            EconomyResultsMarket.safely_compute_profit_hessian, market_ids, market_args=[prices, costs]
+            EconomyResultsMarket.safely_compute_profit_hessian,
+            market_ids,
+            market_args=[prices, costs],
         )
 
     def compute_consumer_surpluses(
-            self, prices: Optional[Any] = None, keep_all: bool = False, eliminate_product_ids: Optional[Any] = None,
-            product_ids_index: int = 0, market_id: Optional[Any] = None) -> Array:
+        self,
+        prices: Optional[Any] = None,
+        keep_all: bool = False,
+        eliminate_product_ids: Optional[Any] = None,
+        product_ids_index: int = 0,
+        market_id: Optional[Any] = None,
+    ) -> Array:
         r"""Estimate population-normalized consumer surpluses, :math:`\text{CS}`.
 
         Assuming away nonlinear income effects, the surplus in market :math:`t` is
@@ -1050,8 +1144,10 @@ class SimpleEconomyResults(abc.ABC, StringRepresentation):
         market_ids = self._select_market_ids(market_id)
         prices = self._coerce_optional_prices(prices, market_ids)
         return self._combine_arrays(
-            EconomyResultsMarket.safely_compute_consumer_surplus, market_ids,
-            fixed_args=[keep_all, eliminate_product_ids, product_ids_index], market_args=[prices]
+            EconomyResultsMarket.safely_compute_consumer_surplus,
+            market_ids,
+            fixed_args=[keep_all, eliminate_product_ids, product_ids_index],
+            market_args=[prices],
         )
 
 
@@ -1067,8 +1163,17 @@ class EconomyResults(SimpleEconomyResults):
     _data_override: Optional[Dict[str, Array]]
 
     def __init__(
-            self, economy: 'Economy', parameters: Parameters, sigma: Array, pi: Array, rho: Array, beta: Array,
-            gamma: Array, delta: Array, data_override: Optional[Dict[str, Array]] = None) -> None:
+        self,
+        economy: 'Economy',
+        parameters: Parameters,
+        sigma: Array,
+        pi: Array,
+        rho: Array,
+        beta: Array,
+        gamma: Array,
+        delta: Array,
+        data_override: Optional[Dict[str, Array]] = None,
+    ) -> None:
         """Store the underlying economy and parameter information."""
         super().__init__(economy, parameters)
         self._sigma = sigma
@@ -1080,9 +1185,14 @@ class EconomyResults(SimpleEconomyResults):
         self._data_override = data_override
 
     def _combine_arrays(
-            self, compute_market_results: Callable, market_ids: Array, fixed_args: Sequence = (),
-            market_args: Sequence = (), agent_data: Optional[Mapping] = None,
-            integration: Optional[Integration] = None) -> Array:
+        self,
+        compute_market_results: Callable,
+        market_ids: Array,
+        fixed_args: Sequence = (),
+        market_args: Sequence = (),
+        agent_data: Optional[Mapping] = None,
+        integration: Optional[Integration] = None,
+    ) -> Array:
         """Compute arrays for one or all markets and stack them into a single array. An array for a single market is
         computed by passing fixed_args (identical for all markets) and market_args (matrices with as many rows as there
         are products that are restricted to the market) to compute_market_results, a ResultsMarket method that returns
@@ -1106,14 +1216,23 @@ class EconomyResults(SimpleEconomyResults):
             """Build a market along with arguments used to compute arrays."""
             indices_s = self._economy._product_market_indices[s]
             market_s = EconomyResultsMarket(
-                self._economy, s, self._parameters, self._sigma, self._pi, self._rho, self._beta, self._gamma,
-                self._delta, self._data_override, agents_override=agents[agents_market_indices[s]]
+                self._economy,
+                s,
+                self._parameters,
+                self._sigma,
+                self._pi,
+                self._rho,
+                self._beta,
+                self._gamma,
+                self._delta,
+                self._data_override,
+                agents_override=agents[agents_market_indices[s]],
             )
             if market_ids.size == 1:
                 args_s = market_args
             else:
                 args_s = [None if a is None else a[indices_s] for a in market_args]
-            return (market_s, *fixed_args, *args_s)
+            return market_s, *fixed_args, *args_s
 
         # construct a mapping from market IDs to market-specific arrays
         array_mapping: Dict[Hashable, Array] = {}
@@ -1188,8 +1307,16 @@ class EconomyResults(SimpleEconomyResults):
         def market_factory(s: Hashable) -> Tuple[EconomyResultsMarket, Moments]:
             """Build a market along with arguments used to compute micro moment values."""
             market_s = EconomyResultsMarket(
-                self._economy, s, self._parameters, self._sigma, self._pi, self._rho, self._beta, self._gamma,
-                self._delta, self._data_override
+                self._economy,
+                s,
+                self._parameters,
+                self._sigma,
+                self._pi,
+                self._rho,
+                self._beta,
+                self._gamma,
+                self._delta,
+                self._data_override,
             )
             return market_s, moments
 
@@ -1197,7 +1324,9 @@ class EconomyResults(SimpleEconomyResults):
         parts_numerator_mapping: Dict[Hashable, Array] = {}
         parts_denominator_mapping: Dict[Hashable, Array] = {}
         generator = generate_items(
-            self._economy.unique_market_ids, market_factory, EconomyResultsMarket.safely_compute_micro_contributions
+            self._economy.unique_market_ids,
+            market_factory,
+            EconomyResultsMarket.safely_compute_micro_contributions,
         )
         for t, (parts_numerator_t, parts_denominator_t, errors_t) in generator:
             parts_numerator_mapping[t] = scipy.sparse.csr_matrix(parts_numerator_t)
@@ -1242,7 +1371,11 @@ class EconomyResults(SimpleEconomyResults):
         return micro_values.flatten()
 
     def compute_micro_scores(
-            self, dataset: MicroDataset, micro_data: Mapping, integration: Optional[Integration] = None) -> List[Array]:
+        self,
+        dataset: MicroDataset,
+        micro_data: Mapping,
+        integration: Optional[Integration] = None,
+    ) -> List[Array]:
         r"""Compute scores for observations :math:`n \in N_d` from a micro dataset :math:`d`.
 
         The score for observation :math:`n \in N_d` is
@@ -1352,18 +1485,29 @@ class EconomyResults(SimpleEconomyResults):
 
         # build agents and verify that they have choices
         demographics, demographics_formulations = build_demographics(
-            self._economy.products, micro_data, self._economy.agent_formulation
+            self._economy.products,
+            micro_data,
+            self._economy.agent_formulation,
         )
         micro_agents = MicroAgents(
-            self._economy.products, self._parameters, micro_data, demographics, demographics_formulations, integration
+            self._economy.products,
+            self._parameters,
+            micro_data,
+            demographics,
+            demographics_formulations,
+            integration,
         )
         if micro_agents.choice_indices.size == 0:
             raise KeyError("micro_data must have choice_indices.")
 
         # compute the contributions
-        numerator_mapping, numerator_jacobian_mapping, denominator_mapping, denominator_jacobian_mapping, errors = (
-            self._compute_scores(dataset, micro_agents)
-        )
+        (
+            numerator_mapping,
+            numerator_jacobian_mapping,
+            denominator_mapping,
+            denominator_jacobian_mapping,
+            errors,
+        ) = self._compute_scores(dataset, micro_agents)
 
         # compute the denominator contributions
         unique_market_ids = np.unique(micro_agents.market_ids)
@@ -1390,8 +1534,11 @@ class EconomyResults(SimpleEconomyResults):
         return scores
 
     def compute_agent_scores(
-            self, dataset: MicroDataset, micro_data: Optional[Mapping] = None,
-            integration: Optional[Integration] = None) -> Array:
+        self,
+        dataset: MicroDataset,
+        micro_data: Optional[Mapping] = None,
+        integration: Optional[Integration] = None,
+    ) -> Array:
         r"""Compute scores for all agent-choices, treated as observations :math:`n \in N_d` from a micro dataset
         :math:`d`.
 
@@ -1442,11 +1589,17 @@ class EconomyResults(SimpleEconomyResults):
         # build micro data
         if micro_data is not None:
             demographics, demographics_formulations = build_demographics(
-                self._economy.products, micro_data, self._economy.agent_formulation
+                self._economy.products,
+                micro_data,
+                self._economy.agent_formulation,
             )
             micro_agents = MicroAgents(
-                self._economy.products, self._parameters, micro_data, demographics, demographics_formulations,
-                integration
+                self._economy.products,
+                self._parameters,
+                micro_data,
+                demographics,
+                demographics_formulations,
+                integration,
             )
         else:
             if dataset.market_ids is None:
@@ -1466,14 +1619,22 @@ class EconomyResults(SimpleEconomyResults):
                 'availability': agents.availability,
             }
             micro_agents = MicroAgents(
-                self._economy.products, self._parameters, micro_data, demographics, demographics_formulations,
-                integration
+                self._economy.products,
+                self._parameters,
+                micro_data,
+                demographics,
+                demographics_formulations,
+                integration,
             )
 
         # compute the contributions
-        numerator_mapping, numerator_jacobian_mapping, denominator_mapping, denominator_jacobian_mapping, errors = (
-            self._compute_scores(dataset, micro_agents)
-        )
+        (
+            numerator_mapping,
+            numerator_jacobian_mapping,
+            denominator_mapping,
+            denominator_jacobian_mapping,
+            errors
+        ) = self._compute_scores(dataset, micro_agents)
 
         # compute the denominator contributions
         unique_market_ids = np.unique(micro_agents.market_ids)
@@ -1501,10 +1662,10 @@ class EconomyResults(SimpleEconomyResults):
         return scores
 
     def _compute_scores(
-            self, dataset: MicroDataset, micro_agents: RecArray) -> (
-            Tuple[
-                Dict[Hashable, Array], Dict[Hashable, Array], Dict[Hashable, Array], Dict[Hashable, Array], List[Error]
-            ]):
+        self,
+        dataset: MicroDataset,
+        micro_agents: RecArray,
+    ) -> Tuple[Dict[Hashable, Array], Dict[Hashable, Array], Dict[Hashable, Array], Dict[Hashable, Array], List[Error]]:
         """Compute scores for observations from a micro dataset."""
         errors: List[Error] = []
 
@@ -1528,8 +1689,16 @@ class EconomyResults(SimpleEconomyResults):
         def denominator_market_factory(s: Hashable) -> Tuple[EconomyResultsMarket, MicroDataset]:
             """Build a market along with arguments used to compute denominator contributions."""
             market_s = EconomyResultsMarket(
-                self._economy, s, self._parameters, self._sigma, self._pi, self._rho, self._beta, self._gamma,
-                self._delta, self._data_override
+                self._economy,
+                s,
+                self._parameters,
+                self._sigma,
+                self._pi,
+                self._rho,
+                self._beta,
+                self._gamma,
+                self._delta,
+                self._data_override,
             )
             return market_s, dataset
 
@@ -1538,8 +1707,9 @@ class EconomyResults(SimpleEconomyResults):
         denominator_mapping: Dict[Hashable, Array] = {}
         denominator_jacobian_mapping: Dict[Hashable, Array] = {}
         generator = generate_items(
-            unique_market_ids, denominator_market_factory,
-            EconomyResultsMarket.safely_compute_score_denominator_contributions
+            unique_market_ids,
+            denominator_market_factory,
+            EconomyResultsMarket.safely_compute_score_denominator_contributions,
         )
         for t, (xi_jacobian_t, denominator_t, denominator_jacobian_t, errors_t) in generator:
             xi_jacobian_mapping[t] = xi_jacobian_t
@@ -1559,8 +1729,18 @@ class EconomyResults(SimpleEconomyResults):
             products_i = self._economy.products[self._economy._product_market_indices[t_i]]
             micro_agents_i = micro_agents[micro_indices[i]]
             market_i = EconomyResultsMarket(
-                self._economy, t_i, self._parameters, self._sigma, self._pi, self._rho, self._beta, self._gamma,
-                self._delta, self._data_override, products_i, micro_agents_i,
+                self._economy,
+                t_i,
+                self._parameters,
+                self._sigma,
+                self._pi,
+                self._rho,
+                self._beta,
+                self._gamma,
+                self._delta,
+                self._data_override,
+                products_i,
+                micro_agents_i,
             )
             return market_i, dataset, j_i, k_i, xi_jacobian_mapping[t_i]
 
@@ -1568,8 +1748,9 @@ class EconomyResults(SimpleEconomyResults):
         numerator_mapping: Dict[Hashable, Array] = {}
         numerator_jacobian_mapping: Dict[Hashable, Array] = {}
         generator = generate_items(
-            unique_micro_ids, numerator_market_factory,
-            EconomyResultsMarket.safely_compute_score_numerator_contributions
+            unique_micro_ids,
+            numerator_market_factory,
+            EconomyResultsMarket.safely_compute_score_numerator_contributions,
         )
         if unique_micro_ids.size > 1:
             generator = output_progress(generator, unique_micro_ids.size, time.time())
@@ -1667,8 +1848,16 @@ class EconomyResults(SimpleEconomyResults):
             """Build a market along with arguments used to compute weights needed for simulation."""
             assert dataset is not None
             market_s = EconomyResultsMarket(
-                self._economy, s, self._parameters, self._sigma, self._pi, self._rho, self._beta, self._gamma,
-                self._delta, self._data_override
+                self._economy,
+                s,
+                self._parameters,
+                self._sigma,
+                self._pi,
+                self._rho,
+                self._beta,
+                self._gamma,
+                self._delta,
+                self._data_override,
             )
             return market_s, dataset
 
@@ -1704,17 +1893,21 @@ class EconomyResults(SimpleEconomyResults):
         micro_data_mapping: Dict[str, Tuple[Array, Any]] = collections.OrderedDict()
         micro_data_mapping['micro_ids'] = (np.arange(dataset.observations), np.object_)
         micro_data_mapping['market_ids'] = (
-            np.concatenate([np.full(agent_indices_mapping[t].size, t) for t in market_ids])[choices], np.object_
+            np.concatenate([np.full(agent_indices_mapping[t].size, t) for t in market_ids])[choices],
+            np.object_,
         )
         micro_data_mapping['agent_indices'] = (
-            np.concatenate([agent_indices_mapping[t] for t in market_ids])[choices], agent_dtype
+            np.concatenate([agent_indices_mapping[t] for t in market_ids])[choices],
+            agent_dtype,
         )
         micro_data_mapping['choice_indices'] = (
-            np.concatenate([choice_indices_mapping[t] for t in market_ids])[choices], choice_dtype
+            np.concatenate([choice_indices_mapping[t] for t in market_ids])[choices],
+            choice_dtype,
         )
         if second_choice_indices_mapping:
             micro_data_mapping['second_choice_indices'] = (
-                np.concatenate([second_choice_indices_mapping[t] for t in market_ids])[choices], choice_dtype
+                np.concatenate([second_choice_indices_mapping[t] for t in market_ids])[choices],
+                choice_dtype,
             )
         micro_data = structure_matrices(micro_data_mapping)
 

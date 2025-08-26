@@ -34,8 +34,14 @@ class IV(object):
             self.errors.append(exceptions.LinearParameterCovariancesInversionError(covariances_inverse, replacement))
 
     def estimate(
-            self, X_list: List[Array], Z_list: List[Array], W: Array, y_list: List[Array], jacobian_list: List[Array],
-            convert_jacobians: bool) -> Tuple[Array, List[Array], List[Array]]:
+        self,
+        X_list: List[Array],
+        Z_list: List[Array],
+        W: Array,
+        y_list: List[Array],
+        jacobian_list: List[Array],
+        convert_jacobians: bool,
+    ) -> Tuple[Array, List[Array], List[Array]]:
         """Estimate parameters and compute residuals. Optionally convert Jacobians of y into Jacobians of residuals."""
 
         # stack matrices
@@ -77,8 +83,12 @@ def compute_gmm_weights(S: Array) -> Tuple[Array, List[Error]]:
 
 
 def compute_gmm_moment_covariances(
-        u_list: List[Array], Z_list: List[Array], covariance_type: str, clustering_ids: Array,
-        center_moments: bool) -> Array:
+    u_list: List[Array],
+    Z_list: List[Array],
+    covariance_type: str,
+    clustering_ids: Array,
+    center_moments: bool,
+) -> Array:
     """Compute covariances between moments."""
 
     # count dimensions

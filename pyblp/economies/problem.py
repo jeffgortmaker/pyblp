@@ -23,8 +23,20 @@ from ..primitives import Agents, Products
 from ..results.problem_results import ProblemResults
 from ..utilities.algebra import precisely_invert, precisely_identify_collinearity
 from ..utilities.basics import (
-    Array, Bounds, Error, RecArray, SolverStats, format_number, format_seconds, format_table, generate_items,
-    get_indices, output, update_matrices, compute_finite_differences, warn
+    Array,
+    Bounds,
+    Error,
+    RecArray,
+    SolverStats,
+    format_number,
+    format_seconds,
+    format_table,
+    generate_items,
+    get_indices,
+    output,
+    update_matrices,
+    compute_finite_differences,
+    warn,
 )
 from ..utilities.statistics import IV, compute_gmm_moments_mean, compute_gmm_moments_jacobian_mean
 
@@ -34,28 +46,57 @@ class ProblemEconomy(Economy):
 
     @abc.abstractmethod
     def __init__(
-            self, product_formulations: Sequence[Optional[Formulation]], agent_formulation: Optional[Formulation],
-            products: RecArray, agents: RecArray, rc_types: Optional[Sequence[str]], epsilon_scale: float,
-            costs_type: str) -> None:
+        self,
+        product_formulations: Sequence[Optional[Formulation]],
+        agent_formulation: Optional[Formulation],
+        products: RecArray,
+        agents: RecArray,
+        rc_types: Optional[Sequence[str]],
+        epsilon_scale: float,
+        costs_type: str,
+    ) -> None:
         """Initialize the underlying economy with product and agent data."""
         super().__init__(product_formulations, agent_formulation, products, agents, rc_types, epsilon_scale, costs_type)
 
     def solve(
-            self, sigma: Optional[Any] = None, pi: Optional[Any] = None, rho: Optional[Any] = None,
-            phi: Optional[Any] = None, beta: Optional[Any] = None, gamma: Optional[Any] = None,
-            sigma_bounds: Optional[Tuple[Any, Any]] = None, pi_bounds: Optional[Tuple[Any, Any]] = None,
-            rho_bounds: Optional[Tuple[Any, Any]] = None, phi_bounds: Optional[Tuple[Any, Any]] = None,
-            beta_bounds: Optional[Tuple[Any, Any]] = None, gamma_bounds: Optional[Tuple[Any, Any]] = None,
-            delta: Optional[Any] = None, method: str = '2s', initial_update: Optional[bool] = None,
-            optimization: Optional[Optimization] = None, scale_objective: bool = True, check_optimality: str = 'both',
-            finite_differences: bool = False, error_behavior: str = 'revert', error_punishment: float = 1,
-            delta_behavior: str = 'first', iteration: Optional[Iteration] = None, fp_type: str = 'safe_linear',
-            shares_bounds: Optional[Tuple[Any, Any]] = (1e-300, None), costs_bounds: Optional[Tuple[Any, Any]] = None,
-            W: Optional[Any] = None, center_moments: bool = True, W_type: str = 'robust', se_type: str = 'robust',
-            demand_moment_types: Union[str, Sequence[Tuple[str, int]]] = 'levels',
-            supply_moment_types: Union[str, Sequence[Tuple[str, int]]] = 'levels', covariance_moments_mean: float = 0,
-            micro_moments: Sequence[MicroMoment] = (), micro_sample_covariances: Optional[Any] = None,
-            resample_agent_data: Optional[Callable[[int], Optional[Mapping]]] = None) -> ProblemResults:
+        self,
+        sigma: Optional[Any] = None,
+        pi: Optional[Any] = None,
+        rho: Optional[Any] = None,
+        phi: Optional[Any] = None,
+        beta: Optional[Any] = None,
+        gamma: Optional[Any] = None,
+        sigma_bounds: Optional[Tuple[Any, Any]] = None,
+        pi_bounds: Optional[Tuple[Any, Any]] = None,
+        rho_bounds: Optional[Tuple[Any, Any]] = None,
+        phi_bounds: Optional[Tuple[Any, Any]] = None,
+        beta_bounds: Optional[Tuple[Any, Any]] = None,
+        gamma_bounds: Optional[Tuple[Any, Any]] = None,
+        delta: Optional[Any] = None,
+        method: str = '2s',
+        initial_update: Optional[bool] = None,
+        optimization: Optional[Optimization] = None,
+        scale_objective: bool = True,
+        check_optimality: str = 'both',
+        finite_differences: bool = False,
+        error_behavior: str = 'revert',
+        error_punishment: float = 1,
+        delta_behavior: str = 'first',
+        iteration: Optional[Iteration] = None,
+        fp_type: str = 'safe_linear',
+        shares_bounds: Optional[Tuple[Any, Any]] = (1e-300, None),
+        costs_bounds: Optional[Tuple[Any, Any]] = None,
+        W: Optional[Any] = None,
+        center_moments: bool = True,
+        W_type: str = 'robust',
+        se_type: str = 'robust',
+        demand_moment_types: Union[str, Sequence[Tuple[str, int]]] = 'levels',
+        supply_moment_types: Union[str, Sequence[Tuple[str, int]]] = 'levels',
+        covariance_moments_mean: float = 0,
+        micro_moments: Sequence[MicroMoment] = (),
+        micro_sample_covariances: Optional[Any] = None,
+        resample_agent_data: Optional[Callable[[int], Optional[Mapping]]] = None,
+    ) -> ProblemResults:
         r"""Solve the problem.
 
         The problem is solved in one or more GMM steps. During each step, any parameters in :math:`\theta` are optimized
@@ -783,17 +824,45 @@ class ProblemEconomy(Economy):
 
             # wrap computation of progress information with step-specific information
             compute_step_progress = functools.partial(
-                self._compute_progress, parameters, moments, iv, W, scale_objective, error_behavior, error_punishment,
-                delta_behavior, iteration, fp_type, shares_bounds, costs_bounds, finite_differences,
-                demand_moment_types, supply_moment_types, covariance_moments_mean, resample_agent_data
+                self._compute_progress,
+                parameters,
+                moments,
+                iv,
+                W,
+                scale_objective,
+                error_behavior,
+                error_punishment,
+                delta_behavior,
+                iteration,
+                fp_type,
+                shares_bounds,
+                costs_bounds,
+                finite_differences,
+                demand_moment_types,
+                supply_moment_types,
+                covariance_moments_mean,
+                resample_agent_data,
             )
 
             # initialize optimization progress
             iteration_stats: List[Dict[Hashable, SolverStats]] = []
             smallest_objective = np.inf
             progress = InitialProgress(
-                self, parameters, moments, W, theta, objective, gradient, hessian, delta, delta, tilde_costs, micro,
-                xi_jacobian, omega_jacobian, micro_jacobian
+                self,
+                parameters,
+                moments,
+                W,
+                theta,
+                objective,
+                gradient,
+                hessian,
+                delta,
+                delta,
+                tilde_costs,
+                micro,
+                xi_jacobian,
+                omega_jacobian,
+                micro_jacobian,
             )
 
             # define the objective function
@@ -803,15 +872,25 @@ class ProblemEconomy(Economy):
                 assert optimization is not None and shares_bounds is not None and costs_bounds is not None
                 progress_start_time = time.time()
                 progress = compute_step_progress(
-                    new_theta, progress, optimization._compute_gradient, compute_hessian=False,
-                    compute_micro_covariances=False, detect_micro_collinearity=detect_micro_collinearity,
+                    new_theta,
+                    progress,
+                    optimization._compute_gradient,
+                    compute_hessian=False,
+                    compute_micro_covariances=False,
+                    detect_micro_collinearity=detect_micro_collinearity,
                     compute_simulation_covariances=False,
                 )
                 iteration_stats.append(progress.iteration_stats)
                 progress_time = time.time() - progress_start_time
                 formatted_progress = progress.format(
-                    optimization, shares_bounds, costs_bounds, step, iterations, evaluations, progress_time,
-                    smallest_objective
+                    optimization,
+                    shares_bounds,
+                    costs_bounds,
+                    step,
+                    iterations,
+                    evaluations,
+                    progress_time,
+                    smallest_objective,
                 )
                 if formatted_progress:
                     output(formatted_progress)
@@ -865,10 +944,24 @@ class ProblemEconomy(Economy):
             optimization_stats.evaluations += 1
             detect_micro_collinearity = False
             results = ProblemResults(
-                final_progress, last_results, step, step_start_time, optimization_start_time, optimization_end_time,
-                optimization_stats, iteration_stats, scale_objective, shares_bounds, costs_bounds,
-                micro_moment_covariances, center_moments, W_type, se_type, demand_moment_types, supply_moment_types,
-                covariance_moments_mean
+                final_progress,
+                last_results,
+                step,
+                step_start_time,
+                optimization_start_time,
+                optimization_end_time,
+                optimization_stats,
+                iteration_stats,
+                scale_objective,
+                shares_bounds,
+                costs_bounds,
+                micro_moment_covariances,
+                center_moments,
+                W_type,
+                se_type,
+                demand_moment_types,
+                supply_moment_types,
+                covariance_moments_mean,
             )
             self._handle_errors(results._errors, error_behavior)
             output(f"Computed results after {format_seconds(results.total_time - results.optimization_time)}.")
@@ -893,14 +986,33 @@ class ProblemEconomy(Economy):
             step_start_time = time.time()
 
     def _compute_progress(
-            self, parameters: Parameters, moments: Moments, iv: Optional[IV], W: Array, scale_objective: bool,
-            error_behavior: str, error_punishment: float, delta_behavior: str, iteration: Iteration, fp_type: str,
-            shares_bounds: Bounds, costs_bounds: Bounds, finite_differences: bool,
-            demand_moment_types: Sequence[Tuple[str, int]], supply_moment_types: Sequence[Tuple[str, int]],
-            covariance_moments_mean: float, resample_agent_data: Optional[Callable[[int], Optional[Mapping]]],
-            theta: Array, progress: 'InitialProgress', compute_gradient: bool, compute_hessian: bool,
-            compute_micro_covariances: bool, detect_micro_collinearity: bool, compute_simulation_covariances: bool,
-            agents_override: Optional[RecArray] = None) -> 'Progress':
+        self,
+        parameters: Parameters,
+        moments: Moments,
+        iv: Optional[IV],
+        W: Array,
+        scale_objective: bool,
+        error_behavior: str,
+        error_punishment: float,
+        delta_behavior: str,
+        iteration: Iteration,
+        fp_type: str,
+        shares_bounds: Bounds,
+        costs_bounds: Bounds,
+        finite_differences: bool,
+        demand_moment_types: Sequence[Tuple[str, int]],
+        supply_moment_types: Sequence[Tuple[str, int]],
+        covariance_moments_mean: float,
+        resample_agent_data: Optional[Callable[[int], Optional[Mapping]]],
+        theta: Array,
+        progress: 'InitialProgress',
+        compute_gradient: bool,
+        compute_hessian: bool,
+        compute_micro_covariances: bool,
+        detect_micro_collinearity: bool,
+        compute_simulation_covariances: bool,
+        agents_override: Optional[RecArray] = None,
+    ) -> 'Progress':
         """Compute demand- and supply-side contributions before recovering the linear parameters and structural error
         terms. Then, form the GMM objective value and its gradient. Finally, handle any errors that were encountered
         before structuring relevant progress information.
@@ -945,11 +1057,20 @@ class ProblemEconomy(Economy):
             if agents_override is not None:
                 agent_market_indices_override = get_indices(agents_override.market_ids)
 
-            def market_factory(
-                    s: Hashable) -> (
-                    Tuple[
-                        ProblemMarket, Array, Array, Array, Moments, Iteration, str, Bounds, Bounds, bool, bool, bool
-                    ]):
+            def market_factory(s: Hashable) -> Tuple[
+                ProblemMarket,
+                Array,
+                Array,
+                Array,
+                Moments,
+                Iteration,
+                str,
+                Bounds,
+                Bounds,
+                bool,
+                bool,
+                bool,
+            ]:
                 """Build a market along with arguments used to compute delta, micro moment contributions, transformed
                 marginal costs, and Jacobians.
                 """
@@ -963,8 +1084,18 @@ class ProblemEconomy(Economy):
                 last_delta_s = progress.delta[self._product_market_indices[s]]
                 last_tilde_costs_s = progress.tilde_costs[self._product_market_indices[s]]
                 return (
-                    market_s, delta_s, last_delta_s, last_tilde_costs_s, moments, iteration, fp_type, shares_bounds,
-                    costs_bounds, compute_jacobians, compute_micro_covariances, detect_micro_collinearity
+                    market_s,
+                    delta_s,
+                    last_delta_s,
+                    last_tilde_costs_s,
+                    moments,
+                    iteration,
+                    fp_type,
+                    shares_bounds,
+                    costs_bounds,
+                    compute_jacobians,
+                    compute_micro_covariances,
+                    detect_micro_collinearity,
                 )
 
             # if necessary, identify micro datasets in which there could possibly be collinearity issues
@@ -985,9 +1116,21 @@ class ProblemEconomy(Economy):
             generator = generate_items(self.unique_market_ids, market_factory, ProblemMarket.solve)
             for t, generated_t in generator:
                 (
-                    delta_t, xi_jacobian_t, parts_numerator_t, parts_denominator_t, parts_numerator_jacobian_t,
-                    parts_denominator_jacobian_t, parts_covariances_numerator_t, weights_mapping_t, values_mapping_t,
-                    clipped_shares_t, iteration_stats_t, tilde_costs_t, omega_jacobian_t, clipped_costs_t, errors_t
+                    delta_t,
+                    xi_jacobian_t,
+                    parts_numerator_t,
+                    parts_denominator_t,
+                    parts_numerator_jacobian_t,
+                    parts_denominator_jacobian_t,
+                    parts_covariances_numerator_t,
+                    weights_mapping_t,
+                    values_mapping_t,
+                    clipped_shares_t,
+                    iteration_stats_t,
+                    tilde_costs_t,
+                    omega_jacobian_t,
+                    clipped_costs_t,
+                    errors_t,
                 ) = generated_t
 
                 delta[self._product_market_indices[t]] = delta_t
@@ -1179,12 +1322,30 @@ class ProblemEconomy(Economy):
             def compute_perturbed_stack(perturbed_theta: Array) -> Array:
                 """Evaluate a stack of xi, micro moments, and omega at a perturbed parameter vector."""
                 perturbed_progress = self._compute_progress(
-                    parameters, moments, iv, W, scale_objective, error_behavior, error_punishment, delta_behavior,
-                    iteration, fp_type, shares_bounds, costs_bounds, finite_differences=False,
-                    demand_moment_types=demand_moment_types, supply_moment_types=supply_moment_types,
-                    covariance_moments_mean=covariance_moments_mean, resample_agent_data=None, theta=perturbed_theta,
-                    progress=progress, compute_gradient=False, compute_hessian=False, compute_micro_covariances=False,
-                    detect_micro_collinearity=False, compute_simulation_covariances=False,
+                    parameters,
+                    moments,
+                    iv,
+                    W,
+                    scale_objective,
+                    error_behavior,
+                    error_punishment,
+                    delta_behavior,
+                    iteration,
+                    fp_type,
+                    shares_bounds,
+                    costs_bounds,
+                    finite_differences=False,
+                    demand_moment_types=demand_moment_types,
+                    supply_moment_types=supply_moment_types,
+                    covariance_moments_mean=covariance_moments_mean,
+                    resample_agent_data=None,
+                    theta=perturbed_theta,
+                    progress=progress,
+                    compute_gradient=False,
+                    compute_hessian=False,
+                    compute_micro_covariances=False,
+                    detect_micro_collinearity=False,
+                    compute_simulation_covariances=False,
                 )
                 perturbed_stack = perturbed_progress.iv_delta
                 if moments.MM > 0:
@@ -1306,7 +1467,12 @@ class ProblemEconomy(Economy):
 
         # run the IV regression and extract the concentrated-out linear parameters
         stacked_parameters, u_list, jacobian_list = iv.estimate(
-            X_list, Z_list, iv_W, y_list, jacobian_list, convert_jacobians
+            X_list,
+            Z_list,
+            iv_W,
+            y_list,
+            jacobian_list,
+            convert_jacobians,
         )
         beta[parameters.eliminated_beta_index] = stacked_parameters.flat[:iv_X1.shape[1]]
         if self.K3 > 0:
@@ -1401,11 +1567,30 @@ class ProblemEconomy(Economy):
             def compute_perturbed_gradient(perturbed_theta: Array) -> Array:
                 """Evaluate the gradient at a perturbed parameter vector."""
                 perturbed_progress = self._compute_progress(
-                    parameters, moments, iv, W, scale_objective, error_behavior, error_punishment, delta_behavior,
-                    iteration, fp_type, shares_bounds, costs_bounds, finite_differences, demand_moment_types,
-                    supply_moment_types, covariance_moments_mean, resample_agent_data, perturbed_theta, progress,
-                    compute_gradient=True, compute_hessian=False, compute_micro_covariances=False,
-                    detect_micro_collinearity=False, compute_simulation_covariances=False,
+                    parameters,
+                    moments,
+                    iv,
+                    W,
+                    scale_objective,
+                    error_behavior,
+                    error_punishment,
+                    delta_behavior,
+                    iteration,
+                    fp_type,
+                    shares_bounds,
+                    costs_bounds,
+                    finite_differences,
+                    demand_moment_types,
+                    supply_moment_types,
+                    covariance_moments_mean,
+                    resample_agent_data,
+                    perturbed_theta,
+                    progress,
+                    compute_gradient=True,
+                    compute_hessian=False,
+                    compute_micro_covariances=False,
+                    detect_micro_collinearity=False,
+                    compute_simulation_covariances=False,
                 )
                 return perturbed_progress.gradient
 
@@ -1431,11 +1616,30 @@ class ProblemEconomy(Economy):
                     raise RuntimeError("Failed to use resampled agents because of the above exception.") from exception
 
                 resampled_progress = self._compute_progress(
-                    parameters, moments, iv, W, scale_objective, error_behavior, error_punishment, delta_behavior,
-                    iteration, fp_type, shares_bounds, costs_bounds, finite_differences, demand_moment_types,
-                    supply_moment_types, covariance_moments_mean, resample_agent_data, theta, progress,
-                    compute_gradient=False, compute_hessian=False, compute_micro_covariances=False,
-                    detect_micro_collinearity=False, compute_simulation_covariances=False,
+                    parameters,
+                    moments,
+                    iv,
+                    W,
+                    scale_objective,
+                    error_behavior,
+                    error_punishment,
+                    delta_behavior,
+                    iteration,
+                    fp_type,
+                    shares_bounds,
+                    costs_bounds,
+                    finite_differences,
+                    demand_moment_types,
+                    supply_moment_types,
+                    covariance_moments_mean,
+                    resample_agent_data,
+                    theta,
+                    progress,
+                    compute_gradient=False,
+                    compute_hessian=False,
+                    compute_micro_covariances=False,
+                    detect_micro_collinearity=False,
+                    compute_simulation_covariances=False,
                     agents_override=resampled_agents,
                 )
                 mean_g_samples.append(resampled_progress.mean_g.flatten())
@@ -1450,10 +1654,35 @@ class ProblemEconomy(Economy):
 
         # structure progress
         return Progress(
-            self, parameters, moments, W, theta, objective, gradient, hessian, next_delta, delta, tilde_costs, micro,
-            xi_jacobian, omega_jacobian, micro_jacobian, micro_covariances, micro_values, mean_g,
-            simulation_covariances, iv_delta, iv_tilde_costs, xi, omega, beta, gamma, iteration_stats, clipped_shares,
-            clipped_costs, errors
+            self,
+            parameters,
+            moments,
+            W,
+            theta,
+            objective,
+            gradient,
+            hessian,
+            next_delta,
+            delta,
+            tilde_costs,
+            micro,
+            xi_jacobian,
+            omega_jacobian,
+            micro_jacobian,
+            micro_covariances,
+            micro_values,
+            mean_g,
+            simulation_covariances,
+            iv_delta,
+            iv_tilde_costs,
+            xi,
+            omega,
+            beta,
+            gamma,
+            iteration_stats,
+            clipped_shares,
+            clipped_costs,
+            errors,
         )
 
 
@@ -1826,10 +2055,17 @@ class Problem(ProblemEconomy):
     """
 
     def __init__(
-            self, product_formulations: Union[Formulation, Sequence[Optional[Formulation]]], product_data: Mapping,
-            agent_formulation: Optional[Formulation] = None, agent_data: Optional[Mapping] = None,
-            integration: Optional[Integration] = None, rc_types: Optional[Sequence[str]] = None,
-            epsilon_scale: float = 1.0, costs_type: str = 'linear', add_exogenous: bool = True) -> None:
+        self,
+        product_formulations: Union[Formulation, Sequence[Optional[Formulation]]],
+        product_data: Mapping,
+        agent_formulation: Optional[Formulation] = None,
+        agent_data: Optional[Mapping] = None,
+        integration: Optional[Integration] = None,
+        rc_types: Optional[Sequence[str]] = None,
+        epsilon_scale: float = 1.0,
+        costs_type: str = 'linear',
+        add_exogenous: bool = True,
+    ) -> None:
         """Initialize the underlying economy with product and agent data before absorbing fixed effects."""
 
         # keep track of long it takes to initialize the problem
@@ -1910,8 +2146,13 @@ class OptimalInstrumentProblem(ProblemEconomy):
 
         # initialize the underlying economy with structured product and agent data
         super().__init__(
-            problem.product_formulations, problem.agent_formulation, updated_products, problem.agents,
-            rc_types=problem.rc_types, epsilon_scale=problem.epsilon_scale, costs_type=problem.costs_type
+            problem.product_formulations,
+            problem.agent_formulation,
+            updated_products,
+            problem.agents,
+            rc_types=problem.rc_types,
+            epsilon_scale=problem.epsilon_scale,
+            costs_type=problem.costs_type,
         )
 
         # absorb any demand-side fixed effects, which have already been absorbed into X1
@@ -1953,8 +2194,13 @@ class ImportanceSamplingProblem(ProblemEconomy):
 
         # initialize the underlying economy with structured product and agent data
         super().__init__(
-            problem.product_formulations, problem.agent_formulation, problem.products, sampled_agents,
-            rc_types=problem.rc_types, epsilon_scale=problem.epsilon_scale, costs_type=problem.costs_type
+            problem.product_formulations,
+            problem.agent_formulation,
+            problem.products,
+            sampled_agents,
+            rc_types=problem.rc_types,
+            epsilon_scale=problem.epsilon_scale,
+            costs_type=problem.costs_type,
         )
 
         # output information about the re-created problem
@@ -1983,9 +2229,23 @@ class InitialProgress(object):
     micro_jacobian: Array
 
     def __init__(
-            self, problem: ProblemEconomy, parameters: Parameters, moments: Moments, W: Array, theta: Array,
-            objective: Array, gradient: Array, hessian: Array, next_delta: Array, delta: Array, tilde_costs: Array,
-            micro: Array, xi_jacobian: Array, omega_jacobian: Array, micro_jacobian: Array) -> None:
+        self,
+        problem: ProblemEconomy,
+        parameters: Parameters,
+        moments: Moments,
+        W: Array,
+        theta: Array,
+        objective: Array,
+        gradient: Array,
+        hessian: Array,
+        next_delta: Array,
+        delta: Array,
+        tilde_costs: Array,
+        micro: Array,
+        xi_jacobian: Array,
+        omega_jacobian: Array,
+        micro_jacobian: Array,
+    ) -> None:
         """Store initial progress information, computing the projected gradient and the reduced Hessian."""
         self.problem = problem
         self.parameters = parameters
@@ -2023,16 +2283,54 @@ class Progress(InitialProgress):
     projected_gradient_norm: Array
 
     def __init__(
-            self, problem: ProblemEconomy, parameters: Parameters, moments: Moments, W: Array, theta: Array,
-            objective: Array, gradient: Array, hessian: Array, next_delta: Array, delta: Array, tilde_costs: Array,
-            micro: Array, xi_jacobian: Array, omega_jacobian: Array, micro_jacobian: Array, micro_covariances: Array,
-            micro_values: Array, mean_g: Array, simulation_covariances: Array, iv_delta: Array, iv_tilde_costs: Array,
-            xi: Array, omega: Array, beta: Array, gamma: Array, iteration_stats: Dict[Hashable, SolverStats],
-            clipped_shares: Array, clipped_costs: Array, errors: List[Error]) -> None:
+        self,
+        problem: ProblemEconomy,
+        parameters: Parameters,
+        moments: Moments,
+        W: Array,
+        theta: Array,
+        objective: Array,
+        gradient: Array,
+        hessian: Array,
+        next_delta: Array,
+        delta: Array,
+        tilde_costs: Array,
+        micro: Array,
+        xi_jacobian: Array,
+        omega_jacobian: Array,
+        micro_jacobian: Array,
+        micro_covariances: Array,
+        micro_values: Array,
+        mean_g: Array,
+        simulation_covariances: Array,
+        iv_delta: Array,
+        iv_tilde_costs: Array,
+        xi: Array,
+        omega: Array,
+        beta: Array,
+        gamma: Array,
+        iteration_stats: Dict[Hashable, SolverStats],
+        clipped_shares: Array,
+        clipped_costs: Array,
+        errors: List[Error],
+    ) -> None:
         """Store progress information, compute the projected gradient and its norm, and compute the reduced Hessian."""
         super().__init__(
-            problem, parameters, moments, W, theta, objective, gradient, hessian, next_delta, delta, tilde_costs, micro,
-            xi_jacobian, omega_jacobian, micro_jacobian
+            problem,
+            parameters,
+            moments,
+            W,
+            theta,
+            objective,
+            gradient,
+            hessian,
+            next_delta,
+            delta,
+            tilde_costs,
+            micro,
+            xi_jacobian,
+            omega_jacobian,
+            micro_jacobian,
         )
         self.micro_covariances = micro_covariances
         self.micro_values = micro_values
@@ -2068,8 +2366,16 @@ class Progress(InitialProgress):
                 self.projected_gradient_norm = np.abs(self.projected_gradient).max()
 
     def format(
-            self, optimization: Optimization, shares_bounds: Bounds, costs_bounds: Bounds, step: int, iterations: int,
-            evaluations: int, progress_time: float, smallest_objective: Array) -> str:
+        self,
+        optimization: Optimization,
+        shares_bounds: Bounds,
+        costs_bounds: Bounds,
+        step: int,
+        iterations: int,
+        evaluations: int,
+        progress_time: float,
+        smallest_objective: Array,
+    ) -> str:
         """Format a universal display of optimization progress as a string. The first iteration will include the
         progress table header. If there are any errors, information about them will be formatted as well, regardless of
         whether or not a universal display is to be used. The smallest_objective is the smallest objective value
@@ -2093,8 +2399,12 @@ class Progress(InitialProgress):
 
         # construct the leftmost part of the table that always shows up
         header = [
-            ("GMM", "Step"), ("Computation", "Time"), ("Optimization", "Iterations"), ("Objective", "Evaluations"),
-            ("Fixed Point", "Iterations"), ("Contraction", "Evaluations")
+            ("GMM", "Step"),
+            ("Computation", "Time"),
+            ("Optimization", "Iterations"),
+            ("Objective", "Evaluations"),
+            ("Fixed Point", "Iterations"),
+            ("Contraction", "Evaluations"),
         ]
         values = [
             str(step),

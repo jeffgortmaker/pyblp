@@ -18,15 +18,36 @@ from ..micro import Moments
 from ..parameters import PhiParameter
 from ..primitives import Agents
 from ..utilities.algebra import (
-    approximately_invert, approximately_solve, compute_condition_number, precisely_compute_eigenvalues, vech_to_full
+    approximately_invert,
+    approximately_solve,
+    compute_condition_number,
+    precisely_compute_eigenvalues,
+    vech_to_full,
 )
 from ..utilities.basics import (
-    Array, Bounds, Error, Mapping, RecArray, SolverStats, format_number, format_seconds, format_table, generate_items,
-    get_indices, output, output_progress, update_matrices, warn
+    Array,
+    Bounds,
+    Error,
+    Mapping,
+    RecArray,
+    SolverStats,
+    format_number,
+    format_seconds,
+    format_table,
+    generate_items,
+    get_indices,
+    output,
+    output_progress,
+    update_matrices,
+    warn,
 )
 from ..utilities.statistics import (
-    compute_gmm_moment_covariances, compute_gmm_parameter_covariances, compute_gmm_moments_jacobian_mean,
-    compute_gmm_weights, compute_sigma_squared_vector_covariances, compute_gmm_parameter_sensitivity
+    compute_gmm_moment_covariances,
+    compute_gmm_parameter_covariances,
+    compute_gmm_moments_jacobian_mean,
+    compute_gmm_weights,
+    compute_sigma_squared_vector_covariances,
+    compute_gmm_parameter_sensitivity,
 )
 
 
@@ -335,12 +356,26 @@ class ProblemResults(EconomyResults):
     _errors: List[Error]
 
     def __init__(
-            self, progress: 'Progress', last_results: Optional['ProblemResults'], step: int, step_start_time: float,
-            optimization_start_time: float, optimization_end_time: float, optimization_stats: SolverStats,
-            iteration_stats: Sequence[Dict[Hashable, SolverStats]], scaled_objective: bool, shares_bounds: Bounds,
-            costs_bounds: Bounds, micro_moment_covariances: Optional[Array], center_moments: bool, W_type: str,
-            se_type: str, demand_moment_types: Sequence[Tuple[str, int]],
-            supply_moment_types: Sequence[Tuple[str, int]], covariance_moments_mean: float) -> None:
+        self,
+        progress: 'Progress',
+        last_results: Optional['ProblemResults'],
+        step: int,
+        step_start_time: float,
+        optimization_start_time: float,
+        optimization_end_time: float,
+        optimization_stats: SolverStats,
+        iteration_stats: Sequence[Dict[Hashable, SolverStats]],
+        scaled_objective: bool,
+        shares_bounds: Bounds,
+        costs_bounds: Bounds,
+        micro_moment_covariances: Optional[Array],
+        center_moments: bool,
+        W_type: str,
+        se_type: str,
+        demand_moment_types: Sequence[Tuple[str, int]],
+        supply_moment_types: Sequence[Tuple[str, int]],
+        covariance_moments_mean: float,
+    ) -> None:
         """Compute cumulative progress statistics, update weighting matrices, and estimate standard errors."""
         self.sigma, self.pi, self.rho, self.phi, _, _ = progress.parameters.expand(progress.theta)
         self._errors = progress.errors
@@ -373,7 +408,14 @@ class ProblemResults(EconomyResults):
         self._costs_bounds = costs_bounds
         self._se_type = se_type
         super().__init__(
-            self.problem, progress.parameters, self.sigma, self.pi, self.rho, self.beta, self.gamma, self.delta
+            self.problem,
+            progress.parameters,
+            self.sigma,
+            self.pi,
+            self.rho,
+            self.beta,
+            self.gamma,
+            self.delta,
         )
 
         # if there are any fixed effects, compute their contributions to xi and omega
@@ -423,15 +465,15 @@ class ProblemResults(EconomyResults):
         self.objective_evaluations = self.cumulative_objective_evaluations = optimization_stats.evaluations
         self.fp_converged = self.cumulative_fp_converged = np.array(
             [[m[t].converged if m else True for m in iteration_stats] for t in self.problem.unique_market_ids],
-            dtype=np.int64
+            dtype=np.int64,
         )
         self.fp_iterations = self.cumulative_fp_iterations = np.array(
             [[m[t].iterations if m else 0 for m in iteration_stats] for t in self.problem.unique_market_ids],
-            dtype=np.int64
+            dtype=np.int64,
         )
         self.contraction_evaluations = self.cumulative_contraction_evaluations = np.array(
             [[m[t].evaluations if m else 0 for m in iteration_stats] for t in self.problem.unique_market_ids],
-            dtype=np.int64
+            dtype=np.int64,
         )
 
         # initialize last results and add to cumulative values
@@ -443,13 +485,16 @@ class ProblemResults(EconomyResults):
             self.cumulative_optimization_iterations += last_results.cumulative_optimization_iterations
             self.cumulative_objective_evaluations += last_results.cumulative_objective_evaluations
             self.cumulative_fp_converged = np.c_[
-                last_results.cumulative_fp_converged, self.cumulative_fp_converged
+                last_results.cumulative_fp_converged,
+                self.cumulative_fp_converged,
             ]
             self.cumulative_fp_iterations = np.c_[
-                last_results.cumulative_fp_iterations, self.cumulative_fp_iterations
+                last_results.cumulative_fp_iterations,
+                self.cumulative_fp_iterations,
             ]
             self.cumulative_contraction_evaluations = np.c_[
-                last_results.cumulative_contraction_evaluations, self.cumulative_contraction_evaluations
+                last_results.cumulative_contraction_evaluations,
+                self.cumulative_contraction_evaluations,
             ]
 
         # store estimated parameters and information about them (beta and gamma have already been stored above)
@@ -457,7 +502,7 @@ class ProblemResults(EconomyResults):
         self.parameters = np.c_[np.r_[
             self.theta,
             self.beta[self._parameters.eliminated_beta_index],
-            self.gamma[self._parameters.eliminated_gamma_index]
+            self.gamma[self._parameters.eliminated_gamma_index],
         ]]
         self.sigma_bounds = self._parameters.sigma_bounds
         self.pi_bounds = self._parameters.pi_bounds
@@ -477,8 +522,12 @@ class ProblemResults(EconomyResults):
         with np.errstate(all='ignore'):
             # update the weighting matrix
             S_for_weights = self._compute_S(
-                progress.moments, W_type, demand_moment_types, supply_moment_types, covariance_moments_mean,
-                center_moments
+                progress.moments,
+                W_type,
+                demand_moment_types,
+                supply_moment_types,
+                covariance_moments_mean,
+                center_moments,
             )
             self.updated_W, W_errors = compute_gmm_weights(S_for_weights)
             self._errors.extend(W_errors)
@@ -488,7 +537,11 @@ class ProblemResults(EconomyResults):
             self.moments_covariances = S_for_weights
             if se_type != W_type or center_moments:
                 self.moments_covariances = self._compute_S(
-                    progress.moments, se_type, demand_moment_types, supply_moment_types, covariance_moments_mean
+                    progress.moments,
+                    se_type,
+                    demand_moment_types,
+                    supply_moment_types,
+                    covariance_moments_mean,
                 )
 
             # if this is the first step, an unadjusted weighting matrix needs to be used when computing unadjusted
@@ -514,7 +567,8 @@ class ProblemResults(EconomyResults):
             theta_covariances = self.parameter_covariances[:self._parameters.P, :self._parameters.P]
             sigma_vector_covariances = self._parameters.extract_sigma_vector_covariances(theta_covariances)
             sigma_squared_vector_covariances = compute_sigma_squared_vector_covariances(
-                self.sigma, sigma_vector_covariances
+                self.sigma,
+                sigma_vector_covariances,
             )
 
             # compute standard errors
@@ -526,10 +580,11 @@ class ProblemResults(EconomyResults):
         # expand standard errors
         theta_se, eliminated_beta_se, eliminated_gamma_se = np.split(se, [
             self._parameters.P,
-            self._parameters.P + self._parameters.eliminated_beta_index.sum()
+            self._parameters.P + self._parameters.eliminated_beta_index.sum(),
         ])
         self.sigma_se, self.pi_se, self.rho_se, self.phi_se, self.beta_se, self.gamma_se = self._parameters.expand(
-            theta_se, nullify=True
+            theta_se,
+            nullify=True,
         )
         self.sigma_squared_se = vech_to_full(sigma_squared_vector_se, self.problem.K2)
         self.beta_se[self._parameters.eliminated_beta_index] = eliminated_beta_se.flatten()
@@ -550,9 +605,21 @@ class ProblemResults(EconomyResults):
 
         # add sections formatting estimates and moments
         sections.append(self._parameters.format_estimates(
-            f"Estimates ({se_description} in Parentheses)", self.sigma, self.pi, self.rho, self.phi, self.beta,
-            self.gamma, self.sigma_squared, self.sigma_se, self.pi_se, self.rho_se, self.phi_se, self.beta_se,
-            self.gamma_se, self.sigma_squared_se
+            f"Estimates ({se_description} in Parentheses)",
+            self.sigma,
+            self.pi,
+            self.rho,
+            self.phi,
+            self.beta,
+            self.gamma,
+            self.sigma_squared,
+            self.sigma_se,
+            self.pi_se,
+            self.rho_se,
+            self.phi_se,
+            self.beta_se,
+            self.gamma_se,
+            self.sigma_squared_se,
         ))
         sections.extend(self._formatted_moments)
 
@@ -560,8 +627,11 @@ class ProblemResults(EconomyResults):
         return "\n\n".join(sections)
 
     def _compute_mean_G(
-            self, moments: Moments, demand_moment_types: Sequence[Tuple[str, int]],
-            supply_moment_types: Sequence[Tuple[str, int]]) -> Array:
+        self,
+        moments: Moments,
+        demand_moment_types: Sequence[Tuple[str, int]],
+        supply_moment_types: Sequence[Tuple[str, int]],
+    ) -> Array:
         """Compute the Jacobian of moments with respect to parameters."""
 
         # collect instruments
@@ -577,12 +647,12 @@ class ProblemResults(EconomyResults):
         xi_jacobian = np.c_[
             self.xi_by_theta_jacobian,
             -self.problem.products.X1[:, self._parameters.eliminated_beta_index.flat],
-            np.zeros_like(self.problem.products.X3[:, self._parameters.eliminated_gamma_index.flat])
+            np.zeros_like(self.problem.products.X3[:, self._parameters.eliminated_gamma_index.flat]),
         ]
         omega_jacobian = None if self.problem.K3 == 0 else np.c_[
             self.omega_by_theta_jacobian,
             np.zeros_like(self.problem.products.X1[:, self._parameters.eliminated_beta_index.flat]),
-            -self.problem.products.X3[:, self._parameters.eliminated_gamma_index.flat]
+            -self.problem.products.X3[:, self._parameters.eliminated_gamma_index.flat],
         ]
 
         # collect Jacobians
@@ -608,7 +678,7 @@ class ProblemResults(EconomyResults):
             jacobian_list.append(np.c_[
                 self.xi_by_theta_jacobian * self.omega + self.xi * self.omega_by_theta_jacobian,
                 -self.problem.products.X1[:, self._parameters.eliminated_beta_index.flat] * self.omega,
-                self.xi * -self.problem.products.X3[:, self._parameters.eliminated_gamma_index.flat]
+                self.xi * -self.problem.products.X3[:, self._parameters.eliminated_gamma_index.flat],
             ])
 
         # update Jacobians with phi contributions
@@ -631,15 +701,20 @@ class ProblemResults(EconomyResults):
             np.c_[
                 self.micro_by_theta_jacobian,
                 np.zeros((moments.MM, self._parameters.eliminated_beta_index.sum()), options.dtype),
-                np.zeros((moments.MM, self._parameters.eliminated_gamma_index.sum()), options.dtype)
-            ]
+                np.zeros((moments.MM, self._parameters.eliminated_gamma_index.sum()), options.dtype),
+            ],
         ]
         return mean_G
 
     def _compute_S(
-            self, moments: Moments, S_type: str, demand_moment_types: Sequence[Tuple[str, int]],
-            supply_moment_types: Sequence[Tuple[str, int]], covariance_moments_mean: float,
-            center_moments: bool = False) -> Array:
+        self,
+        moments: Moments,
+        S_type: str,
+        demand_moment_types: Sequence[Tuple[str, int]],
+        supply_moment_types: Sequence[Tuple[str, int]],
+        covariance_moments_mean: float,
+        center_moments: bool = False,
+    ) -> Array:
         """Compute moment covariances."""
 
         # collect instruments
@@ -705,11 +780,11 @@ class ProblemResults(EconomyResults):
             else:
                 header.extend([
                     (f"{hessian_type} Hessian", "Min Eigenvalue"),
-                    (f"{hessian_type} Hessian", "Max Eigenvalue")
+                    (f"{hessian_type} Hessian", "Max Eigenvalue"),
                 ])
                 values.extend([
                     format_number(self.reduced_hessian_eigenvalues.min()),
-                    format_number(self.reduced_hessian_eigenvalues.max())
+                    format_number(self.reduced_hessian_eigenvalues.max()),
                 ])
 
         # add counts of any clipped shares or marginal costs
@@ -751,7 +826,7 @@ class ProblemResults(EconomyResults):
             header.extend([("Fixed Point", "Iterations"), ("Contraction", "Evaluations")])
             values.extend([
                 str(self.cumulative_fp_iterations.sum()),
-                str(self.cumulative_contraction_evaluations.sum())]
+                str(self.cumulative_contraction_evaluations.sum())],
             )
 
         return format_table(header, values, title="Cumulative Statistics")
@@ -769,22 +844,85 @@ class ProblemResults(EconomyResults):
             pickle.dump(self, handle)
 
     def to_dict(
-            self, attributes: Sequence[str] = (
-                'step', 'optimization_time', 'cumulative_optimization_time', 'total_time', 'cumulative_total_time',
-                'converged', 'cumulative_converged', 'optimization_iterations', 'cumulative_optimization_iterations',
-                'objective_evaluations', 'cumulative_objective_evaluations', 'fp_converged', 'cumulative_fp_converged',
-                'fp_iterations', 'cumulative_fp_iterations', 'contraction_evaluations',
-                'cumulative_contraction_evaluations', 'parameters', 'parameter_covariances', 'parameter_sensitivity',
-                'theta', 'sigma', 'sigma_squared', 'pi', 'rho', 'phi', 'beta', 'gamma', 'sigma_se', 'sigma_squared_se',
-                'pi_se', 'rho_se', 'phi_se', 'beta_se', 'gamma_se', 'sigma_bounds', 'pi_bounds', 'rho_bounds',
-                'phi_bounds', 'beta_bounds', 'gamma_bounds', 'sigma_labels', 'pi_labels', 'rho_labels', 'phi_labels',
-                'beta_labels', 'gamma_labels', 'theta_labels', 'delta', 'tilde_costs', 'clipped_shares',
-                'clipped_costs', 'xi', 'omega', 'xi_fe', 'omega_fe', 'micro', 'micro_values', 'micro_covariances',
-                'moments', 'moments_jacobian', 'moments_covariances', 'simulation_covariances', 'objective',
-                'xi_by_theta_jacobian', 'omega_by_theta_jacobian', 'micro_by_theta_jacobian', 'gradient',
-                'projected_gradient', 'projected_gradient_norm', 'hessian', 'reduced_hessian',
-                'reduced_hessian_eigenvalues', 'W', 'updated_W'
-            )) -> dict:
+        self,
+        attributes: Sequence[str] = (
+            'step',
+            'optimization_time',
+            'cumulative_optimization_time',
+            'total_time',
+            'cumulative_total_time',
+            'converged',
+            'cumulative_converged',
+            'optimization_iterations',
+            'cumulative_optimization_iterations',
+            'objective_evaluations',
+            'cumulative_objective_evaluations',
+            'fp_converged',
+            'cumulative_fp_converged',
+            'fp_iterations',
+            'cumulative_fp_iterations',
+            'contraction_evaluations',
+            'cumulative_contraction_evaluations',
+            'parameters',
+            'parameter_covariances',
+            'parameter_sensitivity',
+            'theta',
+            'sigma',
+            'sigma_squared',
+            'pi',
+            'rho',
+            'phi',
+            'beta',
+            'gamma',
+            'sigma_se',
+            'sigma_squared_se',
+            'pi_se',
+            'rho_se',
+            'phi_se',
+            'beta_se',
+            'gamma_se',
+            'sigma_bounds',
+            'pi_bounds',
+            'rho_bounds',
+            'phi_bounds',
+            'beta_bounds',
+            'gamma_bounds',
+            'sigma_labels',
+            'pi_labels',
+            'rho_labels',
+            'phi_labels',
+            'beta_labels',
+            'gamma_labels',
+            'theta_labels',
+            'delta',
+            'tilde_costs',
+            'clipped_shares',
+            'clipped_costs',
+            'xi',
+            'omega',
+            'xi_fe',
+            'omega_fe',
+            'micro',
+            'micro_values',
+            'micro_covariances',
+            'moments',
+            'moments_jacobian',
+            'moments_covariances',
+            'simulation_covariances',
+            'objective',
+            'xi_by_theta_jacobian',
+            'omega_by_theta_jacobian',
+            'micro_by_theta_jacobian',
+            'gradient',
+            'projected_gradient',
+            'projected_gradient_norm',
+            'hessian',
+            'reduced_hessian',
+            'reduced_hessian_eigenvalues',
+            'W',
+            'updated_W'
+        ),
+    ) -> dict:
         """Convert these results into a dictionary that maps attribute names to values.
 
         Parameters
@@ -978,8 +1116,12 @@ class ProblemResults(EconomyResults):
         return self.problem.N * float(restrictions.T @ inverted @ restrictions)
 
     def bootstrap(
-            self, draws: int = 1000, seed: Optional[int] = None, iteration: Optional[Iteration] = None,
-            constant_costs: bool = True) -> 'BootstrappedResults':
+        self,
+        draws: int = 1000,
+        seed: Optional[int] = None,
+        iteration: Optional[Iteration] = None,
+        constant_costs: bool = True,
+    ) -> 'BootstrappedResults':
         r"""Use a parametric bootstrap to create an empirical distribution of results.
 
         The constructed :class:`BootstrappedResults` can be used just like :class:`ProblemResults` to compute various
@@ -1069,14 +1211,19 @@ class ProblemResults(EconomyResults):
         bootstrapped_theta, bootstrapped_eliminated_beta, bootstrapped_eliminated_gamma = np.split(
             bootstrapped_parameters,
             [self._parameters.P, self._parameters.P + self._parameters.eliminated_beta_index.sum()],
-            axis=1
+            axis=1,
         )
         bootstrapped_beta[:, self._parameters.eliminated_beta_index.flat] = bootstrapped_eliminated_beta
         bootstrapped_gamma[:, self._parameters.eliminated_gamma_index.flat] = bootstrapped_eliminated_gamma
         for d in range(draws):
-            bootstrapped_sigma[d], bootstrapped_pi[d], bootstrapped_rho[d], bootstrapped_phi[d], beta_d, gamma_d = (
-                self._parameters.expand(bootstrapped_theta[d])
-            )
+            (
+                bootstrapped_sigma[d],
+                bootstrapped_pi[d],
+                bootstrapped_rho[d],
+                bootstrapped_phi[d],
+                beta_d,
+                gamma_d,
+            ) = self._parameters.expand(bootstrapped_theta[d])
             bootstrapped_beta[d] = np.where(self._parameters.eliminated_beta_index, bootstrapped_beta[d], beta_d)
             bootstrapped_gamma[d] = np.where(self._parameters.eliminated_gamma_index, bootstrapped_gamma[d], gamma_d)
             bootstrapped_sigma[d] = np.clip(bootstrapped_sigma[d], *self.sigma_bounds)
@@ -1090,15 +1237,26 @@ class ProblemResults(EconomyResults):
         true_X1 = self.problem._compute_true_X1()
         true_X3 = self.problem._compute_true_X3()
 
-        def market_factory(
-                pair: Tuple[int, Hashable]) -> (
-                Tuple[EconomyResultsMarket, Array, Optional[Array], Optional[Iteration], bool]):
+        def market_factory(pair: Tuple[int, Hashable]) -> Tuple[
+            EconomyResultsMarket,
+            Array,
+            Optional[Array],
+            Optional[Iteration],
+            bool,
+        ]:
             """Build a market along with arguments used to compute equilibrium prices and shares along with delta."""
             c, s = pair
             indices_s = self.problem._product_market_indices[s]
             market_cs = EconomyResultsMarket(
-                self.problem, s, self._parameters, bootstrapped_sigma[c], bootstrapped_pi[c], bootstrapped_rho[c],
-                bootstrapped_beta[c], bootstrapped_gamma[c], self.delta + true_X1 @ (bootstrapped_beta[c] - self.beta)
+                self.problem,
+                s,
+                self._parameters,
+                bootstrapped_sigma[c],
+                bootstrapped_pi[c],
+                bootstrapped_rho[c],
+                bootstrapped_beta[c],
+                bootstrapped_gamma[c],
+                self.delta + true_X1 @ (bootstrapped_beta[c] - self.beta),
             )
             costs_cs = self.tilde_costs[indices_s] + true_X3[indices_s] @ (bootstrapped_gamma[c] - self.gamma)
             if self.problem.costs_type == 'log':
@@ -1128,10 +1286,22 @@ class ProblemResults(EconomyResults):
 
         # structure the results
         from .bootstrapped_results import BootstrappedResults  # noqa
+        end_time = time.time()
         results = BootstrappedResults(
-            self, bootstrapped_sigma, bootstrapped_pi, bootstrapped_rho, bootstrapped_phi, bootstrapped_beta,
-            bootstrapped_gamma, bootstrapped_prices, bootstrapped_shares, bootstrapped_delta, start_time, time.time(),
-            draws, iteration_stats
+            self,
+            bootstrapped_sigma,
+            bootstrapped_pi,
+            bootstrapped_rho,
+            bootstrapped_phi,
+            bootstrapped_beta,
+            bootstrapped_gamma,
+            bootstrapped_prices,
+            bootstrapped_shares,
+            bootstrapped_delta,
+            start_time,
+            end_time,
+            draws,
+            iteration_stats,
         )
         output(f"Bootstrapped results after {format_seconds(results.computation_time)}.")
         output("")
@@ -1139,9 +1309,14 @@ class ProblemResults(EconomyResults):
         return results
 
     def compute_optimal_instruments(
-            self, method: str = 'approximate', draws: int = 1, seed: Optional[int] = None,
-            expected_prices: Optional[Any] = None, iteration: Optional[Iteration] = None,
-            constant_costs: bool = True) -> 'OptimalInstrumentResults':
+        self,
+        method: str = 'approximate',
+        draws: int = 1,
+        seed: Optional[int] = None,
+        expected_prices: Optional[Any] = None,
+        iteration: Optional[Iteration] = None,
+        constant_costs: bool = True,
+    ) -> 'OptimalInstrumentResults':
         r"""Estimate feasible optimal or efficient instruments, :math:`Z_D^\text{opt}` and :math:`Z_S^\text{opt}`.
 
         Optimal instruments have been shown, for example, by :ref:`references:Reynaert and Verboven (2014)` and
@@ -1318,9 +1493,14 @@ class ProblemResults(EconomyResults):
         expected_omega_jacobian = np.zeros_like(self.omega_by_theta_jacobian)
         iteration_stats: List[Dict[Hashable, SolverStats]] = []
         for _ in output_progress(range(draws), draws, start_time):
-            prices_i, shares_i, xi_jacobian_i, omega_jacobian_i, iteration_stats_i, errors_i = (
-                self._compute_realizations(expected_prices, iteration, constant_costs, *sample())
-            )
+            (
+                prices_i,
+                shares_i,
+                xi_jacobian_i,
+                omega_jacobian_i,
+                iteration_stats_i,
+                errors_i,
+            ) = self._compute_realizations(expected_prices, iteration, constant_costs, *sample())
             computed_expected_prices += prices_i / draws
             expected_shares += shares_i / draws
             expected_xi_jacobian += xi_jacobian_i / draws
@@ -1348,10 +1528,20 @@ class ProblemResults(EconomyResults):
 
         # structure the results
         from .optimal_instrument_results import OptimalInstrumentResults  # noqa
+        end_time = time.time()
         results = OptimalInstrumentResults(
-            self, demand_instruments, supply_instruments, inverse_covariance_matrix, expected_xi_jacobian,
-            expected_omega_jacobian, computed_expected_prices, expected_shares, start_time, time.time(), draws,
-            iteration_stats
+            self,
+            demand_instruments,
+            supply_instruments,
+            inverse_covariance_matrix,
+            expected_xi_jacobian,
+            expected_omega_jacobian,
+            computed_expected_prices,
+            expected_shares,
+            start_time,
+            end_time,
+            draws,
+            iteration_stats,
         )
         output(f"Computed optimal instruments after {format_seconds(results.computation_time)}.")
         output("")
@@ -1359,8 +1549,13 @@ class ProblemResults(EconomyResults):
         return results
 
     def _compute_realizations(
-            self, expected_prices: Optional[Array], iteration: Optional[Iteration], constant_costs: bool, xi: Array,
-            omega: Array) -> Tuple[Array, Array, Array, Array, Dict[Hashable, SolverStats], List[Error]]:
+        self,
+        expected_prices: Optional[Array],
+        iteration: Optional[Iteration],
+        constant_costs: bool,
+        xi: Array,
+        omega: Array,
+    ) -> Tuple[Array, Array, Array, Array, Dict[Hashable, SolverStats], List[Error]]:
         """If they have not already been estimated, compute the equilibrium prices, shares, and delta associated with a
         realization of xi and omega market-by-market. Then, compute realizations of Jacobians of xi and omega with
         respect to theta.
@@ -1373,11 +1568,24 @@ class ProblemResults(EconomyResults):
         if self.problem.costs_type == 'log':
             costs = np.exp(costs)
 
-        def equilibrium_market_factory(
-                s: Hashable) -> Tuple[EconomyResultsMarket, Array, Optional[Array], Optional[Iteration], bool]:
+        def equilibrium_market_factory(s: Hashable) -> Tuple[
+            EconomyResultsMarket,
+            Array,
+            Optional[Array],
+            Optional[Iteration],
+            bool,
+        ]:
             """Build a market along with arguments used to compute equilibrium prices and shares along with delta."""
             market_s = EconomyResultsMarket(
-                self.problem, s, self._parameters, self.sigma, self.pi, self.rho, self.beta, self.gamma, delta
+                self.problem,
+                s,
+                self._parameters,
+                self.sigma,
+                self.pi,
+                self.rho,
+                self.beta,
+                self.gamma,
+                delta,
             )
             costs_s = costs[self.problem._product_market_indices[s]]
             prices_s = expected_prices[self.problem._product_market_indices[s]] if expected_prices is not None else None
@@ -1386,12 +1594,13 @@ class ProblemResults(EconomyResults):
         # compute realizations of prices, shares, and delta market-by-market
         data_override = {
             'prices': np.zeros_like(self.problem.products.prices),
-            'shares': np.zeros_like(self.problem.products.shares)
+            'shares': np.zeros_like(self.problem.products.shares),
         }
         iteration_stats: Dict[Hashable, SolverStats] = {}
         generator = generate_items(
-            self.problem.unique_market_ids, equilibrium_market_factory,
-            EconomyResultsMarket.safely_solve_equilibrium_realization
+            self.problem.unique_market_ids,
+            equilibrium_market_factory,
+            EconomyResultsMarket.safely_solve_equilibrium_realization,
         )
         for t, (prices_t, shares_t, delta_t, iteration_stats_t, errors_t) in generator:
             data_override['prices'][self.problem._product_market_indices[t]] = prices_t
@@ -1407,23 +1616,29 @@ class ProblemResults(EconomyResults):
             def jacobian_market_factory(s: Hashable) -> Tuple[EconomyResultsMarket, Array]:
                 """Build a market with the data realization along with arguments used to compute the Jacobians."""
                 market_s = EconomyResultsMarket(
-                    self.problem, s, self._parameters, self.sigma, self.pi, self.rho, self.beta, delta=delta,
-                    data_override=data_override
+                    self.problem,
+                    s,
+                    self._parameters,
+                    self.sigma,
+                    self.pi,
+                    self.rho,
+                    self.beta,
+                    delta=delta,
+                    data_override=data_override,
                 )
                 tilde_costs_s = tilde_costs[self.problem._product_market_indices[s]]
                 return market_s, tilde_costs_s
 
             # compute the Jacobians market-by-market
             generator = generate_items(
-                self.problem.unique_market_ids, jacobian_market_factory,
-                EconomyResultsMarket.safely_compute_jacobian_realizations
+                self.problem.unique_market_ids,
+                jacobian_market_factory,
+                EconomyResultsMarket.safely_compute_jacobian_realizations,
             )
             for t, (xi_jacobian_t, omega_jacobian_t, errors_t) in generator:
                 xi_jacobian[self.problem._product_market_indices[t]] = xi_jacobian_t
-
                 if self.problem.K3 > 0:
                     omega_jacobian[self.problem._product_market_indices[t]] = omega_jacobian_t
-
                 errors.extend(errors_t)
 
             # replace invalid elements
@@ -1431,7 +1646,6 @@ class ProblemResults(EconomyResults):
             if np.any(bad_xi_jacobian_index):
                 xi_jacobian[bad_xi_jacobian_index] = self.xi_by_theta_jacobian[bad_xi_jacobian_index]
                 errors.append(exceptions.XiByThetaJacobianReversionError(bad_xi_jacobian_index))
-
             if self.problem.K3 > 0:
                 bad_omega_jacobian_index = ~np.isfinite(omega_jacobian)
                 if np.any(bad_omega_jacobian_index):
@@ -1441,9 +1655,14 @@ class ProblemResults(EconomyResults):
         return data_override['prices'], data_override['shares'], xi_jacobian, omega_jacobian, iteration_stats, errors
 
     def importance_sampling(
-            self, draws: int, ar_constant: float = 1.0, seed: Optional[int] = None,
-            agent_data: Optional[Mapping] = None, integration: Optional[Integration] = None,
-            delta: Optional[Any] = None) -> 'ImportanceSamplingResults':
+        self,
+        draws: int,
+        ar_constant: float = 1.0,
+        seed: Optional[int] = None,
+        agent_data: Optional[Mapping] = None,
+        integration: Optional[Integration] = None,
+        delta: Optional[Any] = None,
+    ) -> 'ImportanceSamplingResults':
         r"""Use importance sampling to construct nodes and weights for integration.
 
         Importance sampling is done with the accept/reject procedure of
@@ -1524,7 +1743,11 @@ class ProblemResults(EconomyResults):
         agents = self.problem.agents
         if agent_data is not None or integration is not None:
             agents = Agents(
-                self.problem.products, self.problem.agent_formulation, agent_data, integration, check_weights=False
+                self.problem.products,
+                self.problem.agent_formulation,
+                agent_data,
+                integration,
+                check_weights=False,
             )
 
         # compute importance sampling weights
@@ -1551,8 +1774,13 @@ class ProblemResults(EconomyResults):
         return results
 
     def _compute_importance_weights(
-            self, agents: RecArray, delta: Array, draws: int, ar_constant: float, seed: Optional[int]) -> (
-            Tuple[Array, List[Error]]):
+        self,
+        agents: RecArray,
+        delta: Array,
+        draws: int,
+        ar_constant: float,
+        seed: Optional[int],
+    ) -> Tuple[Array, List[Error]]:
         """Compute the importance sampling weights associated with a set of agents."""
         errors: List[Error] = []
         market_indices = get_indices(agents.market_ids)
@@ -1560,8 +1788,14 @@ class ProblemResults(EconomyResults):
         def market_factory(s: Hashable) -> Tuple[EconomyResultsMarket]:
             """Build a market use to compute probabilities."""
             market_s = EconomyResultsMarket(
-                self.problem, s, self._parameters, self.sigma, self.pi, self.rho, delta=delta,
-                agents_override=agents[market_indices[s]]
+                self.problem,
+                s,
+                self._parameters,
+                self.sigma,
+                self.pi,
+                self.rho,
+                delta=delta,
+                agents_override=agents[market_indices[s]],
             )
             return market_s,
 
@@ -1569,7 +1803,9 @@ class ProblemResults(EconomyResults):
         state = np.random.RandomState(seed)
         weights = np.zeros_like(agents.weights)
         generator = generate_items(
-            self.problem.unique_market_ids, market_factory, EconomyResultsMarket.safely_compute_probabilities
+            self.problem.unique_market_ids,
+            market_factory,
+            EconomyResultsMarket.safely_compute_probabilities,
         )
         for t, (probabilities_t, errors_t) in generator:
             errors.extend(errors_t)

@@ -178,12 +178,24 @@ class Parameters(object):
     any_bounds: bool
 
     def __init__(
-            self, economy: 'Economy', sigma: Optional[Any] = None, pi: Optional[Any] = None, rho: Optional[Any] = None,
-            phi: Optional[Any] = None, beta: Optional[Any] = None, gamma: Optional[Any] = None,
-            sigma_bounds: Optional[Tuple[Any, Any]] = None, pi_bounds: Optional[Tuple[Any, Any]] = None,
-            rho_bounds: Optional[Tuple[Any, Any]] = None, phi_bounds: Optional[Tuple[Any, Any]] = None,
-            beta_bounds: Optional[Tuple[Any, Any]] = None, gamma_bounds: Optional[Tuple[Any, Any]] = None,
-            bounded: bool = False, allow_linear_nans: bool = False, check_alpha: bool = True) -> None:
+        self,
+        economy: 'Economy',
+        sigma: Optional[Any] = None,
+        pi: Optional[Any] = None,
+        rho: Optional[Any] = None,
+        phi: Optional[Any] = None,
+        beta: Optional[Any] = None,
+        gamma: Optional[Any] = None,
+        sigma_bounds: Optional[Tuple[Any, Any]] = None,
+        pi_bounds: Optional[Tuple[Any, Any]] = None,
+        rho_bounds: Optional[Tuple[Any, Any]] = None,
+        phi_bounds: Optional[Tuple[Any, Any]] = None,
+        beta_bounds: Optional[Tuple[Any, Any]] = None,
+        gamma_bounds: Optional[Tuple[Any, Any]] = None,
+        bounded: bool = False,
+        allow_linear_nans: bool = False,
+        check_alpha: bool = True,
+    ) -> None:
         """Coerce parameters into usable formats before storing information about fixed (equal bounds) and unfixed
         (unequal bounds) elements of sigma, pi, rho, phi, beta, and gamma. Also store information about eliminated
         (concentrated out) parameters in beta and gamma. If allow_linear_nans is True, allow null linear parameters in
@@ -302,8 +314,12 @@ class Parameters(object):
 
     @staticmethod
     def initialize_matrix(
-            name: str, condition_name: str, values: Optional[Any], shapes: Sequence[Tuple[int, int]],
-            allow_nans: bool = False) -> Array:
+        name: str,
+        condition_name: str,
+        values: Optional[Any],
+        shapes: Sequence[Tuple[int, int]],
+        allow_nans: bool = False,
+    ) -> Array:
         """Validate and structure a parameter matrix, which can be a number of different shapes."""
 
         # allow the matrix to be all nans if it is to be entirely concentrated out
@@ -324,7 +340,12 @@ class Parameters(object):
         return matrix
 
     @staticmethod
-    def initialize_bounds(name: str, matrix: Array, bound_values: Optional[Tuple[Any, Any]], bounded: bool) -> Bounds:
+    def initialize_bounds(
+        name: str,
+        matrix: Array,
+        bound_values: Optional[Tuple[Any, Any]],
+        bounded: bool,
+    ) -> Bounds:
         """Validate and structure parameter bounds."""
 
         # by default, initialize non-binding bounds
@@ -359,8 +380,12 @@ class Parameters(object):
         return bounds
 
     def store(
-            self, parameter_type: Type[Parameter], locations: Iterable[Tuple[int, int]], bounds: Bounds,
-            eliminated_index: Optional[Array] = None) -> None:
+        self,
+        parameter_type: Type[Parameter],
+        locations: Iterable[Tuple[int, int]],
+        bounds: Bounds,
+        eliminated_index: Optional[Array] = None,
+    ) -> None:
         """Store fixed, unfixed, and eliminated parameters in lists."""
         for location in locations:
             parameter = parameter_type(location, bounds)
@@ -374,32 +399,60 @@ class Parameters(object):
     def format(self, title: str) -> str:
         """Format fixed and unfixed parameter values as a string."""
         return self.format_theta_parameters(
-            title, self.sigma, self.pi, self.rho, self.phi, self.beta, self.gamma, self.sigma_squared
+            title,
+            self.sigma,
+            self.pi,
+            self.rho,
+            self.phi,
+            self.beta,
+            self.gamma,
+            self.sigma_squared,
         )
 
     def format_lower_bounds(self, title: str) -> str:
         """Format lower bounds for fixed and unfixed parameter values as a string."""
         return self.format_theta_parameters(
-            title, self.sigma_bounds[0], self.pi_bounds[0], self.rho_bounds[0], self.phi_bounds[0], self.beta_bounds[0],
+            title,
+            self.sigma_bounds[0],
+            self.pi_bounds[0],
+            self.rho_bounds[0],
+            self.phi_bounds[0],
+            self.beta_bounds[0],
             self.gamma_bounds[0],
         )
 
     def format_upper_bounds(self, title: str) -> str:
         """Format upper bounds for fixed and unfixed parameter values as a string."""
         return self.format_theta_parameters(
-            title, self.sigma_bounds[1], self.pi_bounds[1], self.rho_bounds[1], self.phi_bounds[1], self.beta_bounds[1],
+            title,
+            self.sigma_bounds[1],
+            self.pi_bounds[1],
+            self.rho_bounds[1],
+            self.phi_bounds[1],
+            self.beta_bounds[1],
             self.gamma_bounds[1],
         )
 
     def format_theta_parameters(
-            self, title: str, sigma_like: Array, pi_like: Array, rho_like: Array, phi_like: Array, beta_like: Array,
-            gamma_like: Array, sigma_squared_like: Optional[Array] = None) -> str:
+        self,
+        title: str,
+        sigma_like: Array,
+        pi_like: Array,
+        rho_like: Array,
+        phi_like: Array,
+        beta_like: Array,
+        gamma_like: Array,
+        sigma_squared_like: Optional[Array] = None,
+    ) -> str:
         """Format fixed and unfixed parameter-like values as a string. Skip sections of parameters without any that
         are in theta.
         """
         items = [
             (NonlinearCoefficient, lambda: self.format_nonlinear_coefficients(
-                title, sigma_like, pi_like, sigma_squared_like
+                title,
+                sigma_like,
+                pi_like,
+                sigma_squared_like,
             )),
             (RhoParameter, lambda: self.format_rho(title, rho_like)),
             (PhiParameter, lambda: self.format_phi(title, phi_like)),
@@ -409,13 +462,33 @@ class Parameters(object):
         return "\n\n".join(f() for t, f in items if any(isinstance(p, t) for p in self.fixed + self.unfixed))
 
     def format_estimates(
-            self, title: str, sigma: Array, pi: Array, rho: Array, phi: Array, beta: Array, gamma: Array,
-            sigma_squared: Array, sigma_se: Array, pi_se: Array, rho_se: Array, phi_se: Array, beta_se: Array,
-            gamma_se: Array, sigma_squared_se: Array) -> str:
+        self,
+        title: str,
+        sigma: Array,
+        pi: Array,
+        rho: Array,
+        phi: Array,
+        beta: Array,
+        gamma: Array,
+        sigma_squared: Array,
+        sigma_se: Array,
+        pi_se: Array,
+        rho_se: Array,
+        phi_se: Array,
+        beta_se: Array,
+        gamma_se: Array,
+        sigma_squared_se: Array,
+    ) -> str:
         """Format all estimates and their standard errors as a string."""
         items = [
             (sigma, lambda: self.format_nonlinear_coefficients(
-                title, sigma, pi, sigma_squared, sigma_se, pi_se, sigma_squared_se
+                title,
+                sigma,
+                pi,
+                sigma_squared,
+                sigma_se,
+                pi_se,
+                sigma_squared_se,
             )),
             (rho, lambda: self.format_rho(title, rho, rho_se)),
             (phi, lambda: self.format_phi(title, phi, phi_se)),
@@ -453,8 +526,13 @@ class Parameters(object):
         return self.format_vector(f"Gamma {title}", BetaParameter, self.gamma_labels, gamma_like, gamma_se_like)
 
     def format_vector(
-            self, title: str, parameter_type: Type[Union[RhoParameter, LinearCoefficient]], header: List[str],
-            vector: Array, vector_se: Optional[Array] = None) -> str:
+        self,
+        title: str,
+        parameter_type: Type[Union[RhoParameter, PhiParameter, LinearCoefficient]],
+        header: List[str],
+        vector: Array,
+        vector_se: Optional[Array] = None,
+    ) -> str:
         """Format a vector (and optional standard errors) as a string."""
         data = [[format_number(x) for x in vector]]
         if vector_se is not None:
@@ -463,9 +541,15 @@ class Parameters(object):
         return format_table(header, *data, title=title)
 
     def format_nonlinear_coefficients(
-            self, title: str, sigma_like: Array, pi_like: Array, sigma_squared_like: Optional[Array] = None,
-            sigma_se: Optional[Array] = None, pi_se: Optional[Array] = None,
-            sigma_squared_se: Optional[Array] = None) -> str:
+        self,
+        title: str,
+        sigma_like: Array,
+        pi_like: Array,
+        sigma_squared_like: Optional[Array] = None,
+        sigma_se: Optional[Array] = None,
+        pi_se: Optional[Array] = None,
+        sigma_squared_se: Optional[Array] = None,
+    ) -> str:
         """Format matrices (and optional standard errors) of the same size as sigma and pi as a string."""
 
         # determine whether a types column is necessary
@@ -573,7 +657,10 @@ class Parameters(object):
         return [v[p.location] for t, v in items for p in self.unfixed if isinstance(p, t)]
 
     def expand(
-            self, theta_like: Array, nullify: bool = False) -> Tuple[Array, Array, Array, Array, Array, Array]:
+        self,
+        theta_like: Array,
+        nullify: bool = False,
+    ) -> Tuple[Array, Array, Array, Array, Array, Array]:
         """Recover matrices of the same size as parameter matrices from a vector of the same size as theta. By default,
         fill elements corresponding to fixed parameters with their fixed values. Always fill concentrated out parameters
         with nulls.

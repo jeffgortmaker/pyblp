@@ -157,7 +157,7 @@ def approximately_invert(x: Array) -> Tuple[Array, Optional[str]]:
             methods.extend([(scipy.linalg.inv, None), (scipy.linalg.pinv, "its Moore-Penrose pseudo inverse")])
         methods.append((
             lambda y: np.diag(1 / y.diagonal()),
-            "inverted diagonal terms because the Moore-Penrose pseudo-inverse could not be computed"
+            "inverted diagonal terms because the Moore-Penrose pseudo-inverse could not be computed",
         ))
 
         # use the different methods to invert the matrix

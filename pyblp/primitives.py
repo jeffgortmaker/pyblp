@@ -83,8 +83,12 @@ class Products(object):
     X3: Array
 
     def __new__(
-            cls, product_formulations: Sequence[Optional[Formulation]], product_data: Mapping,
-            instruments: bool = True, add_exogenous: bool = True) -> RecArray:
+        cls,
+        product_formulations: Sequence[Optional[Formulation]],
+        product_data: Mapping,
+        instruments: bool = True,
+        add_exogenous: bool = True,
+    ) -> RecArray:
         """Structure product data."""
 
         # validate the formulations
@@ -299,9 +303,13 @@ class Agents(object):
     availability: Array
 
     def __new__(
-            cls, products: RecArray, agent_formulation: Optional[Formulation] = None,
-            agent_data: Optional[Mapping] = None, integration: Optional[Integration] = None,
-            check_weights: bool = True) -> RecArray:
+        cls,
+        products: RecArray,
+        agent_formulation: Optional[Formulation] = None,
+        agent_data: Optional[Mapping] = None,
+        integration: Optional[Integration] = None,
+        check_weights: bool = True,
+    ) -> RecArray:
         """Structure agent data."""
 
         # data structures may be empty
@@ -440,9 +448,14 @@ class MicroAgents(object):
     second_choice_indices: Array
 
     def __new__(
-            cls, products: RecArray, parameters: Parameters, micro_data: Mapping, demographics: Optional[Array] = None,
-            demographics_formulations: Sequence[ColumnFormulation] = (),
-            integration: Optional[Integration] = None) -> RecArray:
+        cls,
+        products: RecArray,
+        parameters: Parameters,
+        micro_data: Mapping,
+        demographics: Optional[Array] = None,
+        demographics_formulations: Sequence[ColumnFormulation] = (),
+        integration: Optional[Integration] = None,
+    ) -> RecArray:
         """Structure agent data."""
         K2 = products.X2.shape[1]
         if K2 == 0:
@@ -523,7 +536,8 @@ class MicroAgents(object):
 
             # duplicate observations by as many rows as there are built nodes
             micro_ids, nodes, weights = integration._build_many(
-                parameters.nonzero_sigma_index.sum(), np.arange(market_ids.size)
+                parameters.nonzero_sigma_index.sum(),
+                np.arange(market_ids.size),
             )
             repeats = np.bincount(micro_ids)
             duplicate = lambda x: np.repeat(x, repeats, axis=0) if x is not None else None
@@ -559,8 +573,10 @@ class MicroAgents(object):
 
 
 def build_demographics(
-        products: RecArray, data: Mapping, agent_formulation: Optional[Formulation]) -> (
-        Tuple[Optional[Array], List[ColumnFormulation]]):
+    products: RecArray,
+    data: Mapping,
+    agent_formulation: Optional[Formulation],
+) -> Tuple[Optional[Array], List[ColumnFormulation]]:
     """Either build standard demographics or stack product-specific demographics."""
     if agent_formulation is None:
         return None, []

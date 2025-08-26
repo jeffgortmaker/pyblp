@@ -22,8 +22,16 @@ setup(
     extras_require={
         'tests': ['pytest', 'pytest-xdist', 'linearmodels', 'dill', 'pathos'],
         'docs': [
-            'sphinx==2.0.0', 'pandas', 'ipython', 'matplotlib', 'astunparse', 'sphinx-rtd-theme==0.4.3',
-            'nbsphinx==0.5.0', 'jinja2~=2.11', 'docutils==0.17', 'sphinxcontrib-googleanalytics==0.4',
+            'sphinx==2.0.0',
+            'pandas',
+            'ipython',
+            'matplotlib',
+            'astunparse',
+            'sphinx-rtd-theme==0.4.3',
+            'nbsphinx==0.5.0',
+            'jinja2~=2.11',
+            'docutils==0.17',
+            'sphinxcontrib-googleanalytics==0.4',
         ],
     },
     include_package_data=True,
@@ -44,11 +52,11 @@ setup(
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
-        "Topic :: Scientific/Engineering"
+        "Topic :: Scientific/Engineering",
     ],
     url="https://github.com/jeffgortmaker/pyblp",
     project_urls={
         "Documentation": "http://pyblp.readthedocs.io/en/latest",
-        "Tracker": "https://github.com/jeffgortmaker/pyblp/issues"
-    }
+        "Tracker": "https://github.com/jeffgortmaker/pyblp/issues",
+    },
 )
