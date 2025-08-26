@@ -448,7 +448,7 @@ def build_integration(integration: Integration, dimensions: int) -> RecArray:
     function affords more flexibility than passing an :class:`Integration` configuration directly to :class:`Problem`.
     For example, if agents have unobserved tastes over only a subset of demand-side nonlinear product characteristics
     (i.e., if ``sigma`` in :meth:`Problem.solve` has columns of zeros), this function can be used to build agent data
-    with fewer columns of integration nodes than the number of unobserved product characteristics, :math:`K_2`. This
+    with fewer columns of integration nodes than the number of nonlinear product characteristics, :math:`K_2`. This
     function can also be used to construct nodes that can be transformed into demographic variables.
 
     To build nodes and weights for multiple markets, this function can be called multiple times, once for each market.

@@ -130,7 +130,7 @@ where
 
 With only a demand side, :math:`\alpha` can be concentrated out, so :math:`X = X_1`, :math:`Z = Z_D`, and :math:`Y = \delta(\theta)` recover the full :math:`\hat{\beta}` in :eq:`iv`.
 
-Finally, the unobserved product characteristics (i.e., the structural errors),
+Finally, the product unobservables (i.e., the structural errors),
 
 .. math:: \begin{bmatrix} \xi(\theta) \\ \omega(\theta) \end{bmatrix} = \begin{bmatrix} \delta(\theta) - X_1\hat{\beta} \\ \tilde{c}(\theta) - X_3\hat{\gamma} \end{bmatrix},
 
