@@ -1,0 +1,306 @@
+Economics 600a
+Fall 2025
+Prof. P. Haile
+Homework Assignment1
+Due before midnight October 10
+
+1
+
+Overview
+
+You will estimate demand and supply in a stylized model of the market for pay-TV services.
+You will use a matrix programming language of your choice to create your own fake data set
+for the industry and do some relatively simple estimation. Then, using the pyBLP package of
+Conlon and Gortmaker, you will estimate the model and perform some merger simulations.2
+The pyBLP package has excellent documentation and a very helpful tutorial (which covers
+merger simulation), both easy to …nd via Google.
+Please submit (on canvas) a single PDF document presenting your answers to the questions
+below, requested results, and well documented code. Write this up nicely, with properly
+formatted tables and discussion of results. You may work in groups on the coding.
+However, your write-ups should be your own work, and you must describe all collaboration at
+the beginning of your submission; this includes any use of AI.
+
+2
+
+Model
+
+There are T markets, each with four inside goods j 2 f1; 2; 3; 4g and an outside option. Goods
+1 and 2 are satellite television services (e.g., DirecTV and Dish); goods 3 and 4 are wired
+television services (e.g., Frontier and Comcast in New Haven). The conditional indirect utility
+of consumer i for good j in market t is given by
+uijt =
+
+(1)
+
+xjt +
+
+(2)
+i satellitejt +
+
+(3)
+i wiredjt +
+
+pjt +
+
+jt + ijt
+
+j>0
+
+ui0t = i0t ;
+where xjt is a measure of good j’s quality, pjt is its price, satellitejt is an indicator equal to 1
+for the two satellite services, and wiredjt is an indicator equal to 1 for the two wired services.
+The remaining notation is as usual in the class notes, including the i.i.d. type-1 extreme value
+ijt . Each consumer purchases the good giving them the highest conditional indirect utility.
+Goods are produced by single-product …rms. Firm j’s (log) marginal cost in market t is
+ln mcjt =
+
+0
+
++ wjt 1 + ! jt =8;
+
+where wjt is an observed cost shifter. Firms compete by simultaneously choosing prices in each
+market under complete information. Firm j has pro…t
+jt = max Mt (pjt
+pjt
+1
+
+mcjt )sjt (pt ):
+
+Thanks to Chris Conlon and Jaewon Lee for highly useful feedback on this assignment.
+Using data you generate yourself gives you a way to check whether the estimation is working; this is a good
+thing to try whenever you code up an estimator!
+2
+
+1
+
+3
+
+Generate Fake Data
+
+Generate a data set from the model above. Start with
+(1)
+
+=
+(0)
+
+(k)
+i
+
+= 1,
+
+iid N (4; 1) for k = 2; 3
+
+2
+(1)
+
+= 1=2,
+
+= 1=4:
+
+1. Draw the exogenous product characteristic xjt for T = 600 geographically de…ned markets
+(e.g., cities). Assume each xjt is equal to the absolute value of an iid standard normal
+draw, as is each wjt . Simulate demand and cost unobservables as well, specifying
+jt
+
+0
+0
+
+N
+
+! jt
+
+1
+0:25
+0:25
+1
+
+;
+
+iid across j; t:
+
+2. Solve for the equilibrium prices for each good in each market.3
+(a) Start by writing a procedure to approximate the derivatives of market shares with
+respect to prices (taking prices, shares, x, and demand parameters as inputs). The
+key steps are:
+(i) For each jt, write the choice probability for good j, sjt , as a weighted average
+(integral) of the (multinomial logit) choice probabilities conditional on the value of
+each consumer’s random coe¢ cients;
+(ii) Anticipating di¤erentiation under the integral sign, derive the analytical expression for the derivative of the integrand with respect to each pkt ;
+(iii) Use the expression you obtained in (2) and simulation draws of the random
+coe¢ cients to approximate the integral that corresponds to @sjt =@pkt for each j and
+k (i.e., replace the integral with the mean over the values at each simulation draw).
+Recall the advice in the lecture regarding “jittering.”
+(iv) Experiment to see how many simulation draws you need to get precise approximations and check this again at the equilibrium shares and prices you obtain below.
+(b) The FOC for …rm j’s pro…t maximization problem in market t is
+(pjt
+
+mcjt )
+
+@sjt (pt )
++ sjt = 0
+@pjt
+
+=) pjt
+
+mcjt =
+
+@sjt (pt )
+@pjt
+
+1
+
+sjt
+
+(1)
+
+@s (p )
+
+jt t
+(c) Substituting in your approximation of each
+, solve the system of equations
+@pjt
+(1) (J equations per market) for the equilibrium prices in each market.
+
+i. First do this using Matlab’s “fsolve” operator. Check the exit ‡ag from fsolve
+to be sure whether you found a solution for each market.
+3
+Although the satellite services set national list prices, they o¤er local discounts, so we will model them as
+setting separate prices for each market.
+
+2
+
+ii. Do this again (still in Matlab) using the algorithm of Morrow and Skerlos (2011),
+discussed in section 3.6 of Conlon and Gortmaker (2019) (and in the pyBLP
+“problem simulation tutorial”). Use the numerical integration approach you
+used in step (a) to approximate the terms de…ned in equation (25) of Conlon
+and Gortmaker. If you get di¤erent results using this method, resolve this discrepancy either by correcting your code or explaining why your preferred method
+is the one to be trusted.
+3. Calculate “observed” market shares for your fake data set using your parameters, your
+draws of x;w; i ; !; , and your equilibrium prices.
+4. Below you’ll be using x and w as instruments in the demand estimation. Check whether
+these appear to be good instruments in your fake data using some regressions of prices
+and market shares on the exogenous variables (or some function of them; see the related
+discussion in the coding tips). If you believe the instruments are not providing enough
+variation, modify the parameter choices above until you are satis…ed. Report your …nal
+choice of parameters and the results you rely on to conclude that the instruments seem
+good enough.
+
+4
+
+Estimate Some Mis-speci…ed Models
+5. Estimate the plain multinomial logit model of demand by OLS (ignoring the endogeneity
+of prices).
+6. Re-estimate the multinomial logit model of demand by two-stage least squares, instrumenting for prices with the exogenous demand shifters x and excluded cost shifters w.
+Discuss the predictive value of the instruments in …rst stage, and how the second-stage
+results di¤er from those obtained by OLS.
+7. Now estimate a nested logit model by linear IV, treating “satellite” and “wired” as the
+two nests for the inside goods. You will probably want to review the discussion of the
+nested logit in Berry (1994) regarding this model and which variables require instruments.
+Note that Berry focuses on the special case in which all the “nesting parameters”are the
+same; you should allow a di¤erent nesting parameter for each nest.4
+8. Using the nested logit results, provide a table comparing the estimated own-price elasticities to the true own-price elasticities.5 Provide two additional tables showing the true
+matrix of diversion ratios and the diversion ratios implied by your estimates.
+
+4
+In Berry’s notation, this means letting the parameter become g(j) , where g (j) indicates the group (satellite
+or wired) to which each inside good j belongs.
+5
+The procedure you developed above for approximating derivatives cannot be used for your estimates based
+on the nested logit model. But because we have analytic expressions for market shares in the nested logit model,
+you could either di¤erentiate these or use “…nite di¤erence” approximation of derivatives.
+
+3
+
+5
+
+Estimate the Correctly Speci…ed Model
+
+Use the pyBLP software to estimate the correctly speci…ed model. Allow pyBLP to construct
+approximations to the optimal instruments, using the exogenous demand shifters and exogenous
+cost shifters.6
+9. Report a table with the estimates of the demand parameters and standard errors. Do
+this twice: once when you estimate demand alone, then again when you estimate jointly
+with supply.
+10. Using your preferred estimates from the prior step (explain your preference), provide
+a table comparing the estimated own-price elasticities to the true own-price elasticities.
+Provide two additional tables showing the true matrix of diversion ratios and the diversion
+ratios implied by your estimates.
+
+6
+
+Merger Simulation
+
+11. Suppose two of the four …rms were to merge. Give a brief intuition for what theory tells
+us is likely to happen to the equilibrium prices of each good j.
+12. Suppose …rms 1 and 2 are proposing to merge. Use the pyBLP merger simulation procedure to provide a prediction of the post-merger equilibrium prices.
+13. Now suppose instead that …rms 1 and 3 are the ones to merge. Re-run the merger
+simulation. Provide a table comparing the (average across markets) predicted mergerinduced price changes for this merger and that in part 11. Interpret the di¤erences
+between the predictions for the two mergers.
+14. Thus far you have assumed that there are no “e¢ ciencies” resulting from the merger.
+Explain brie‡y why a merger-speci…c reduction in marginal cost could mean that a merger
+is welfare-enhancing.
+15. Consider the merger between …rms 1 and 2, and suppose the …rms demonstrate that by
+merging they would reduce marginal cost of each of their products by 15%. Furthermore,
+suppose that they demonstrate that this cost reduction could not be achieved without
+merging. Using the pyBLP software, re-run the merger simulation with the 15% cost
+saving. Show the predicted post-merger price changes (again, for each product, averaged
+across markets). What is the predicted impact of the merger on consumer welfare,7
+assuming that the total measure of consumers Mt is the same in each market t? Explain
+why this additional assumption (or data on the correct values of Mt ) is needed here,
+whereas up to this point it was without loss to assume Mt = 1. What is the predicted
+impact of the merger on total welfare.
+6
+
+For your own bene…t, you may want to see what happens without the approximation of the optimal instruments.
+7
+Note that because we have quasilinear preferences, consumer surplus is a valid measure of aggregate consumer
+welfare under the usual assumption of optimal redistribution.
+
+4
+
+7
+
+Coding Tips
+You can draw from a multivariate normal with variance by drawing independent standard normal random variables and using the Cholesky decomposition of
+(the latter
+obtained with a command in Matlab). In particular, if z = (z1 ; : : : ; zk )0
+N (0; Ik ) and
+A = Chol( ), then Az is distributed N (0; ).
+When you estimate the logit and nested logit models, you will have to choose which
+functions of the exogenous variables to use as instruments. One option would be to
+use all of them— the exogenous demand shifters (own and competing products) and the
+exogenous cost shifters. Alternatively, you might want to use something more like the
+BLP approximation of the optimal instruments. For example, for good j in market
+t, the instruments might be xjt ; wjt ; satellitejt ; wiredjt ; the quality index summed over
+competing goods j in market t, the quality index of the other good in the same nest
+as good j.8 Of course, you do not want to feed an approximation of the optimal IV into
+pyBLP if you are going to have pyBLP compute a (better) approximation of the optimal
+instruments.
+To migrate your data from Matlab to Python, try exporting and importing a csv (i.e.,
+comma separated) …le. To export the data to a csv …le, look into the writematrix or
+writetable functions in Matlab. To import the csv …le, look into read_csv in Python
+(pandas package).
+To display the average prices, use the following (where changed_prices is the output of
+compute_prices as in Post-Estimation Tutorial of pyBLP).
+T, J= 600, 4
+print(changed_prices.reshape((T, J)).mean(axis= 0))
+To display the average elasticities and diversion ratios, use the following (where elasticities,
+for example, is the output of compute_elasticities in Post-Estimation Tutorial of pyBLP).
+T, J= 600, 4
+print(elasticities.reshape((T, J, J)).mean(axis= 0))
+(These resemble what one would write in Matlab, but there are subtle issues behind it,
+including row-major order (Python) vs column-major order (Matlab).)
+To apply 15% cost reduction by the merged …rms, use the following.
+merger_costs= costs.copy()
+merger_costs[product_data.merger_ids== 1]=
+0.85*merger_costs[product_data.merger_ids== 1]
+where costs and merger_ids are as in Post-Estimation Tutorial of pyBLP. (Using merger_costs=
+costs instead of using copy could lead to an unexpected behavior.)
+8
+
+Note that on the supply side, there is an intercept in the marginal cost function, which will be collinear with
+the two dummies for satellite and wired.
+
+5
+
+

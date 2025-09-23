@@ -1,0 +1,1140 @@
+
+
+
+
+
+
+Differentiated Products Supply and Demand
+
+  Phil Haile Yale University
+
+
+Fall 2025
+
+
+Outline (2-3 class meetings)
+
+
+
+1. Differentiated Products Supply
+2. Berry-Levinsohn-Pakes ("BLP") Demand Model
+3. BLP Estimator and Instruments
+4. Estimation Algorithms
+
+
+Motivation
+
+
+IO is mostly about market power:
+ï sources
+ï implications for profits and firm incentives
+ï impact on consumers
+ï effects of policy
+
+Standard models of firms with market power: Oligopoly. Typically, some form of differentiated products competition in prices.
+
+
+Oligopoly Supply
+
+
+Baseline workhorse model:
+ï firms produce differentiated goods/products, selling to consumers with heterogeneous preferences
+ï static model, complete information (model of long run eqm)
+? set of products, their non-price characteristics already set
+? Nash eqm in simultaneous price setting game in each market
+market usually defined by time or geography in practice.
+
+
+Firm Cost Functions
+
+Variable cost Cj (Qj , wjt, ?jt, ?) for product j
+ï Qj total quantity of good j sold
+ï wjt observable cost shifters; may include product characteristics xjt that will affect demand (later)
+ï ?jt unobserved cost shifters ("cost shocks"); may be correlated with latent demand shocks (later)
+ï ? parameters
+ï for multi-product firms, we'll assume variable cost additive across products for simplicity
+We will ignore fixed costs: these affect entry/exit/innovation (later) but not pricing conditional on these things.
+
+
+Demand
+
+
+Notation
+ï Jt products/goods/choices in market t (for now Jt = J)
+ï pt = (p1t, . . . , pJt), prices of all goods
+ï ?t = (?1t, . . . , ?Jt), other characteristics of goods affecting demand (observed and unobserved to us)
+
+Demand system:
+qjt = qj (pt, ?t)	j = 1, . . . , J.
+
+
+Equilibrium Pricing
+
+With single-product firms and constant marginal cost (simple case)
+
+pjt = qj (pt, ?t) [pjt - mcj (wjt, ?jt, ?)]
+
+
+FOC wrt to pjt :
+
+
+pjt = mcjt - qj (pt, ?t)
+
+
+?qj   -1
+?p
+
+jt
+This is inverse elasticity pricing (i.e., monopoly pricing) against the "residual demand curve" qj (pt, ?t) :
+pjt - mcjt	qj (pt, ?t)  ?qj   -1
+
+pjt
+
+pjt
+
+?pjt
+
+
+Equilibrium Pricing with Multi-Product Firms
+With multi-product firms, firm f 's profit is
+
+?ft	=	pjt
+j?Jf
+=	qj (pt, ?t) pjt - mcj (wjt, ?jt, ?)
+j?Jf
+
+
+FOC wrt pj :
+
+  ?qj  -1 ?
+
+L	?qk	?
+
+pjt = mcjt -
+
+
+
+?pjt
+
+?qj (pt, ?t) +
+
+
+k?Jf \{j}
+
+
+
+?pjt
+
+(pkt - mckt)?
+
+
+
+(firm internalizes effects of pjt on profit from all of its products).
+
+
+Supply Model
+What we get from this. . .
+1. Holding all else fixed, markups/prices depend on the own- and cross-price elasticities of residual demand.
+ =? For good quantitative predictions of firm behavior and market outcomes, we will need good estimates of demand (at least the own- and cross-price derivatives)
+
+
+Supply Model
+What we get from this. . .
+2. If we know demand, we can also perform a small miracle:
+? re-arrange FOC above:
+
+
+mcjt = pjt + qj (pt, ?t)
+
+?qj   -1
+?p
+
+jt
+eqm (p, q) + supply model + estimated demand?estimates of marg costs!
+
+? with multiproduct firms, same thing in system of equations:
+
+  ?qj  -1 ?
+
+L	?qk	?
+
+mcjt = pjt +
+
+
+
+?pjt
+
+?qj (pt, ?t) +
+
+
+k?Jf \{j}
+
+
+
+?pjt
+
+(pkt - mckt)?
+
+
+[see Rosse (1970), Bresnahan (1981, 1987), BLP (1995), Berry-Haile (2014)].
+
+
+Supply Model
+What we get from this. . .
+3. If we know demand and marginal costs, we can"predict" a lot of things-i.e., give the quantitative implications of the model for counterfactual worlds: e.g., what prices, consumer choices, profits, consumer welfare . . . if
+? products were less differentiated?
+? a tax or tariff were imposed?
+? two suppliers merged?
+? a certain new product had not been introduced?
+? school vouchers were provided to poor students?
+? . . .
+Demand can be important on its own. But good demand estimates open a world of possibilities for answering questions about markets and competition policy.
+
+
+Demand Isn't Easy
+
+Typically we need to know levels/elasticities of demand at particular points; i.e., effects of one price change holding all else fixed. "Local average effects" don't reveal these.
+
+The main challenge: unobserved demand shifters ("demand shocks") at the level of the good◊market-e.g., unobserved product characteristics or cross-market differences in tastes (important to acknowledge: not everything is observed!)
+ï demand shocks are among the things that must be held fixed to measure the relevant demand elasticities etc.
+
+Explicit modeling of these demand shocks central in the applied IO literature following Berry-Levinsohn-Pakes 1995 (and often ignored outside this literature). Handling them correctly requires approaches outside the basic toolkit of applied micro!
+
+
+A Key Challenge
+
+
+
+Econ 115: the quantity demanded of a given good j depends on the prices and characteristics of all related goods (substitutes and complements). This includes the latent demand shocks associated with all of those goods.
+
+How do we hold something fixed if it isn't observed?
+
+
+The Demand System
+
+
+With J related goods, demand for each one takes the form
+
+qj = D(x, p, ?)
+
+where
+ï p is a J-vector of all goods' prices.
+ï x is the matrix of all non-price observables
+ï ? is a J-vector of demand shocks for all goods.
+This is a system of J equations, all depending on all elements of (x, p, ?).
+
+
+Demand Is Not Regression
+
+
+qj = Dj (x, p, ?)	(1)
+
+ï RHS has many latent shocks;
+ï Dj is a standard regression function only under a strong functional form assumption: that the J components of ? enter Dj only through a scalar index
+ï applying regression methods to (1) might allow one to recover certain weighted average derivatives of demand, but those have little value
+
+? not obvious how to proceed, even if prices were exogenous!
+let that sink in
+
+
+Price Endogeneity Adds to the Challenge
+
+
+ï all J endogenous prices are on RHS of demand for each good
+ï eqm pricing implies that each price depends on all demand shocks and all cost shocks
+? prices are endogenous (e.g., correlated with ? vector)
+? control function generally is not a valid solution (Blundell & Matzkin, 2014)
+ï clear that we need sources of exogenous price variation, but
+? what exactly is required?
+? how do we proceed?
+
+
+Ways Forward
+
+A common approach starts by building up a demand system from a smaller set of parameters appearing in a specification of consumer utilities.
+
+And we'll use a"trick" (a useful mathematical result) to deal with the fact that each good's demand is affected by J structural errors.
+
+Notes:
+ï deriving demand from utilities offers parsimony: many own- and cross-price elasticities from a modest number of parameters
+ï it also offers a way to impose some natural exclusivity or symmetry conditions
+ï but is isn't essential
+ï the trick (or some other trick) is essential.
+
+
+
+
+
+
+
+
+
+
+NEXT: RANDOM UTILITY DISCRETE CHOICE
+
+
+Discrete Choice Demand
+
+
+The choice setting
+ï consumers have unit demands, choose one of the available options
+ï generally, one option should be "none of the above" - what we will call the"outside good" (without this, there would be no aggregate demand elasticity!)
+
+Note: discrete choice is more general than it seems; e.g., a single option for a consumer could be
+{Dodge Caravan + Porsche 911} or {four boxes of cookies + a gallon of milk}. Many key insights we'll cover here extend to models of "multiple discrete choice" or continuous choice.
+
+
+Random Utility Discrete Choice
+
+Random Utility Specification
+ï differentiated goods j ? {1, . . . J}
+ï conditional indirect utilities of consumer i : uij ("utility")
+ï (ui1, . . . , uiJ ) ~ Fu (∑) for all i
+ï outside good 0
+? only utility differences matter, so wlog. we could set ui0 = 0?i -or give it any distribution we want- i.e., we may (must!) normalize its distribution.
+
+[Aside: correct use of the term "normalization" is always like this-for an assumption one may make without loss and, therefore, must make to avoid trivial indeterminacy. The only nuance: without loss for what purpose?]
+
+
+Choice Probabilities From the Model
+
+ï consumer i 's choice (quantities)
+qij = 1{uij = uik ?k = 0, . . . , J}
+(typical assumptions imply ties happen w/probability zero)
+ï choice probabilities
+sij	= Pr (qij = 1)
+
+=	dFU (ui1, . . . , uiJ )
+Aj
+where
+Aj = n(ui1, . . . , uiJ ) ? RJ : uij = uik ?ko .
+
+
+Example: J = 2, ui0 = 0, uij = µij - pj	j = 1, 2
+
+
+
+Demand and Utility
+
+Some Comments
+ï utility maximization is one (often convenient) way to represent how consumers make choices
+ï but demand is well-defined without this - consumers need not maximize utilities or have complete information, e.g.,
+ï indeed, utility is a notion we make up, and representing demand with utility maximization requires extra assumptions
+ï relatedly, randomness in the "utilities" could instead reflect noise/errors in consumer choice (e.g., Luce, 1959)
+? profit-maximizing firms don't care what the randomness represents (unless they can affect it)
+? but the interpretation will matter for welfare-one in a long list of reasons one must
+be especially careful about welfare analysis.
+
+
+
+
+
+
+
+
+
+
+NEXT: BLP DEMAND MODEL
+
+
+Berry, Levinsohn, and Pakes (1995) "BLP"
+
+
+
+This is the standard empirical model of demand and supply of differentiated products in IO and beyond.
+
+Many of the ideas also in Berry (1994), mostly for simpler models. Read this first! Many extensions and variations, some of which we will get to.
+
+
+Some Goals in BLP
+
+
+1. parsimonious specification to generate the distribution FU (∑|p, ?) of random utilities and, thus, demand
+2. sufficiently rich heterogeneity in preferences to permit reasonable/flexible substitution patterns
+3. explicit treatment of demand shocks and the resulting endogeneity "problem(s)"
+4. clarify the identification challenges and possible solutions, including appropriate instruments
+5. computationally feasible (in early 1990s!) algorithm for consistent estimation of the model and standard errors.
+
+
+BLP Random Utility Specification
+
+(slightly simplified)
+
+uijt = xjtﬂit - apjt + ?jt + ?ijt
+ï consumer i , good/product j, market t
+(imagine setting with many markets, each with many consumers)
+ï price pjt
+ï xjt ? RK non-price observables (product or market characteristics)
+ï ?jt unobserved demand shock at level of product◊market
+ï ?ijt idiosyncratic (and latent)"taste for product j"
+. . .
+
+
+Preference Heterogeneity
+
+
+uijt = xjtﬂit - apjt + ?jt + ?ijt
+
+Sources of consumer heterogeneity: ?ijt, ﬂit = (ﬂ1 , . . . , ﬂK )
+ï ﬂk = ﬂk + sk ?k	("random coefficient" = taste for x (k))
+it	0	it	jt
+ï (?i0t, . . . , ?iJt, ?1 , . . . , ?K ) i.i.d. across csrs and mkts
+it	it
+ï typically:
+? ?ijt ~ i.i.d. type 1 extreme value (like multinomial logit)
+? ?k ~ i.i.d. standard normal, or drawn from actual distribution of demographics (e.g., income) in market t. Or could have both.
+
+
+Exogenous and Endogenous Product Characteristics
+
+Recall
+uijt = xjtﬂit - apjt + ?jt + ?ijt	(2)
+
+ï exogenous characteristics: xt satisfy E [?t|xt] = 0
+ï endogenous characteristics: pjt (usually a scalar, price)
+? typically each pjt will depend on whole vector ?t = (?1t, . . . , ?Jt) (also on own and others' product characteristics and costs)
+? we need to distinguish true effects of prices on demand from the effects of ?t; this will
+require instruments
+ï of course (2) is not an estimating equation (uijt is not observed)
+ï because prices and quantities are all endogenous, you may suspect (correctly) that instruments for prices alone may not suffice. More on this to come.
+
+
+Utility Specification, Rewritten
+
+Rewrite
+
+uijt	= xjtﬂit - apjt + ?jt + ?ijt
+= djt + ?ijt
+where
+
+djt	=  xjtﬂ0 - apjt + ?jt	("mean utility" of good j in market t)
+?ijt	= L xk sk?k + ?ijt
+
+= xjtﬂòit + ?ijt (defining ﬂòit -the random part of ﬂit).
+
+
+Market Shares
+ï recall uijt = djt + ?ijt
+ï let d0t = 0 (the normalization); define dt = (d1t, . . . , dJt)
+ï ò continuum of consumers in each market*
+=? market shares = choice probabilities =
+
+sjt = Pr (yit = j) =	dF? (?i0t, ?i1t, . . . , ?iJt)
+Aj (dt )
+
+
+where
+
+Aj (dt) = n(?i0t, ?i1t, . . . , ?iJt) ? RJ+1 : djt + ?ijt = dkt + ?ikt ?ko
+
+
+
+* really, enough that sampling error on choice probabilities is negligible compared to that of moments based on variation across products/markets.
+
+
+Demand
+
+ï market shares again
+
+sjt =	dF? (?i0t, ?i1t, . . . , ?iJt)
+Aj (dt )
+ï with random coefficients, F? (∑) is really F? (∑|xt, s) where
+? xt = (x1t, . . . , xJt) ? RK◊J
+? s = (s1, . . . , sK )
+ï so sjt = sj (dt, xt, s)
+ï if Mt is the total measure of consumers in market t, quantities demanded are
+qjt = Mt ◊ sj (dt, xt, s) .
+
+
+Discussion
+
+Key features of the BLP model
+ï explicit modeling of demand shocks
+ï consumer heterogeneity through random coefficients
+
+We discussed the need to be explicit about demand shocks-only then can we (a) define "ceteris paribus," (b) define the endogeneity problem, (c) determine what are valid solutions.
+
+Why random coefficients? A parsimonious way to allow "reasonable" "substitution patterns."
+
+
+Why Random Coefficients?
+
+
+Without random coefficients:
+
+uijt	=  xjtﬂ0 - apjt + ?jt +?ijt
+=	d j t	..+ ?ijt
+
+If ?ijt are iid and independent of (x, p), e.g. as in the multinomial logit or probit models, products differ only in djt
+ï =? market shares depend only on the mean utilities;
+ï =? price elasticities (own and cross) depend only on mean utilities too.
+
+
+Example
+
+
+Two autos with (virtually) identical market shares in 2024:
+MSRP (base)Mkt ShareAutomobile 11.2%Automobile 21.2%
+Without random coefficients, model implies same mean utility for each and therefore: same own-price demand elasticity, same cross-price elasticity wrt price of any third automobile, say Ford F-series pickup (#1 market share) or Toyota Camry (2nd
+best-selling sedan).
+
+
+Example
+
+
+Two autos with (virtually) identical market shares in 2024:
+MSRP (base)Mkt ShareAutomobile 1$31,5001.2%Automobile 2$40,4001.2%
+Without random coefficients, model implies same mean utility for each and therefore: same own-price demand elasticity, same cross-price elasticity wrt price of any third automobile, say Ford F-series pickup (#1 market share) or Toyota Camry (2nd
+best-selling sedan).
+
+
+Example
+
+
+Two autos with (virtually) identical market shares in 2024:
+MSRP (base)Mkt ShareToyota Tacoma$31,5001.2%Tesla 3$40,4001.2%
+Without random coefficients, model implies same mean utility for each and therefore: same own-price demand elasticity, same cross-price elasticity wrt price of any third automobile, say Ford F-series pickup (#1 market share) or Toyota Camry (2nd
+best-selling sedan).
+
+
+Logit and IIA
+
+
+
+What I've said so far doesn't depend on the distribution ?ijt are drawn from. In the logit model, market shares, elasticities, and substitution patters have simple closed forms in which, e.g., substitution is always proportional to market shares. These particular closed forms are features of the "IIA" property.
+
+But although the exact IIA property is unique to the logit, other specifications of iid epsilons have the same types of problems.
+
+
+Does this matter?
+
+
+Yes! Remember: the main reason to estimate demand is to quantify the own- and cross-price demand responses!
+ï these determine responses to counterfactual changes in market structure
+ï these used with a model of the supply side to infer firm markups, market power, implications of mergers, entry incentives, etc.
+ï these are what determine welfare effects of price changes, tax, tariff, merger, collusion, entry, etc.
+ =? if we impose a prior restrictions on substitution patterns, we are restricting the model's ability to give us useful guidance on the questions of interest.
+
+
+The Science and Art of Modeling
+
+
+Models that have only iid additive taste shocks impose very restrictive relationships between the levels of market shares and the matrix of own and cross-price derivatives (and therefore on counterfactual predictions). These restrictions do not come from economics but from an assumption chosen for analytical convenience.
+
+Models must abstract from reality. And in a finite sample some kind of functional form restrictions are always necessary for estimation. But a good model/approximation should try to avoid placing strong arbitrary restrictions on the key quantities of interest.
+
+
+How do random coefficients help?
+
+
+Real goods differ in multiple dimensions; real consumers have (heterogeneous) preferences over these differences
+ï random coefficients on product characteristics can capture this
+? large ﬂk ?? strong taste for characteristic xk (e.g., fuel efficiency, pickup dummy)
+? i 's first choice likely to have high value of xk
+? i 's second choice too! (note: cross elasticities are always about 1st vs. 2nd choices)
+ï incorporating this allows more sensible substitution patterns: competition is mostly "local" - i.e., between firms offering products appealing to the same consumers.
+
+
+
+
+
+
+
+
+Which random coefficients?
+
+
+We must choose which characteristics have random coefficients
+ï dummies for subsets of products?
+? this yields something equivalent (up to different distributional assumptions) to the
+nested logit: see Berry (1994)
+ï certain horizontal or vertical characteristics (parts of X, P)?
+
+In practice, the choice depends on the application and data set, including instruments. Too many RC's for the data available will often yield imprecise estimates of s.
+
+
+
+
+
+
+
+
+
+
+NEXT: ESTIMATION OF THE BLP DEMAND MODEL
+
+
+Recall: Utility Specification, Rewritten
+
+
+uijt	= xjtﬂit - apjt + ?jt + ?ijt
+= djt + ?ijt
+where
+
+djt	=  xjtﬂ0 - apjt + ?jt	("mean utility" of good j in market t)
+?ijt	= L xk sk?k + ?ijt
+
+= xjtﬂòit + ?ijt (defining ﬂòit -the random part of ﬂit).
+
+
+Estimation of Demand with Market-Level Data
+
+
+Highest-Level View
+ï we observe xt, pt, sht,wt, and zòt ?excluded iv
+(for clarity, shjt and sht denote the observed market shares)
+ï given a choice of parameters, the model predicts market shares as a function of observables
+ï choose the parameters so that the predictions match the observed shares as well as possible, while obeying (as well as possible) the assumed exogeneity conditions on xt and wt.
+
+
+Estimation with Market-Level Data: A Partial Sketch
+
+
+1. start with demand model alone
+2. suppose F? (∑|xt, s) is known (i.e., s known)
+3. for each market t, find dt ? RJ such that sj (dt, xt, s) = shjt ?j
+i.e.,"invert" model at observed market shares to find mean utilities dt
+4. using IV (E [?jt|zjt] = 0), estimate the equation
+djt = xjtﬂ0 - apjt + ?jt.
+
+
+Some Details to Fill In
+ok . . . a lot of details
+
+
+1. What instruments?
+2. Will the"inversion" step actually work?
+3. What about s ??
+4. Formally define estimator, computational algorithm(s)
+5. Standard errors?
+6. Add Supply Side
+? additional restrictions aid estimation of demand
+? estimate parameters ? of marginal cost function
+(why? may care directly; and needed for counterfactuals that change equilibrium quantities unless mc is constant).
+
+
+
+
+
+
+
+
+
+
+NEXT: INSTRUMENTS
+
+
+Instruments for Estimating Demand
+
+
+
+Broadly speaking, we need variables that exogenously shift all endogenous variables-prices and quantities-independently.
+
+This may be counterintuitive: to estimate demand, we might think instruments for prices were all we needed. As we discussed earlier, however, exogenous variation in prices generally doesn't suffice: we need prices to move exogenously, but also to hold the demand shocks fixed. More below.
+
+
+Typical (Excluded) Instruments for Estimating Demand
+
+
+
+1. Excluded cost shifters wt
+? classic demand instrument, e.g., wages, material costs, shipping cost to market t, taxes/tariffs, demand shifters from other markets
+2. Proxies for excluded costs shifters
+? typical: price of same good in another mkt ("Hausman instruments"); properly excluded if demand shocks in one market not correlated with those in others
+
+
+Typical (Excluded) Instruments for Estimating Demand
+
+3. Markup shifters
+? exogenous changes in ownership (e.g., merger)
+? characteristics of "nearby" consumers ("Waldfogel instruments")
+e.g., firms in some industries may use same price for all markets in a region (e.g., CT) e.g., age/income/education in Greenwich may affect prices (markups) in New Haven, but may be independent of New Haven preferences (including New Haven demand shocks) conditional on New Haven observables
+4. "BLP Instruments" x-jt
+? by assumption, E [?jt|xt] = E [?jt]
+? affect quantities directly; affect prices (markups) via FOC
+
+Later: "optimal instruments" - i.e., optimal functions of the excluded instruments for estimating the unconditional moments.
+
+
+
+
+
+
+
+
+
+
+NEXT: INVERSION
+
+
+Will the Inversion Step Work?
+
+Given x, s and any positive shares sh, define F : RJ ? RJ by
+F (d) = d + ln (sh) - ln (s (d, x, s))
+BLP show (under mild conditions on the linear random coefficients random utility model) that for any nonzero shares sh, F is a contraction, i.e.,
+ï it has a unique fixed point in d
+? s (dt, xt, s) has an inverse: we can write dt = d (st; xt, s) (see also Berry, 1994)
+ï ? convergent algorithm: start with guess d0, set c = 1
+1. let dc = F dc-1 , c = 1, 2, . . . ,
+2. repeat to convergence
+(invertibility for more general models: Berry, Gandhi, & Haile, 2013).
+
+
+
+
+
+
+
+
+
+
+NEXT: Identification?
+
+
+What About sigma??
+
+ï inversion result =? for any market shares st and any s, we can find a vector dt
+that rationalizes the data (fits market shares perfectly)
+ï a non-identification result? there is NO information about s from market shares?
+
+What are we forgetting?
+ï variation across markets (and products): the structural errors
+?jt = djt - xjtﬂ0 - apjt implied by candidate (a, ﬂ, s) must be mean-independent of exogenous observables across markets and products
+ï (this is just like linear regression: for any (x, y, ﬂ) ?e such that y = xﬂ + e, but
+x ? e is what ensures identification of ﬂ).
+
+
+Identification of sigma: loose nonparametric intuition
+
+Changes in choice sets
+ï recall sjt = s (dt, xt, s)
+ï consider two markets, same pt, xt, ?t in each
+ï remove 1 car in one of them. . . where does its mkt share "go"?
+? to cars with large mkt shares?
+? to cars similar to the one removed in some dimension(s)?
+ï similar idea with cts variation across/within markets
+
+One source of the looseness: how can we fix ?t = (?1t, . . . , ?Jt ) in two markets when ?t is latent?? Instruments will shift things independently of ?t , but this isn't the same as fixing them! In reality, instruments for quantities are what enable us to hold ?t fixed. More on this later.
+
+
+Identification of sigma: parametric intuition
+
+Counting parameters and moments:
+ï trial value of s =? dt (sht; x, s) by inversion
+ï with trial value of a, ﬂ =? ?t (s, a, ﬂ)
+ï IV orthogonality condition: E [?jt (s, a, ﬂ) Zjt] = 0 ?j, t
+ï what kind of Z do we need? we need at least as many moment conditions as parameters
+? =? xjt plus excluded IV for price is not enough: (a, ﬂ) are not all the parameters!
+? to identify s, we need additional excluded instruments.
+
+A minimal requirement: as many exogenous variables as we have parameters in the model.
+
+
+Nonparametric Identification of Demand
+
+Even if considerations lead to reliance on parsimonious parametric specifications, we'd like to know what does (or does not) permit identification without such restrictions.
+
+Berry and Haile (2014) examine a nonparametric generalization of the BLP demand model using market-level data. The main requirement: instruments creating independent exogenous variation in all 2J endogenous variables: prices and quantities:
+ï intuitively: move 1 price; hold fixed J - 1 prices and J demand shocks ? 2J
+ï instruments: "BLP instruments" (exogenous characteristics of other products) plus
+J others (shifters of costs or markups)
+
+Details later in the course, including more clarity about why the BLP instruments are valid and necessary.
+
+
+
+
+
+
+
+
+
+
+NEXT: ESTIMATION DETAIL
+
+
+Basic Idea for BLP Estimator (demand alone)
+
+idea: method of moments estimator
+ï any guess at the parameters (s, a, ﬂ) implies (after inversion) values ?jt (s, a, ﬂ) for the latent demand shocks rationalizing the data
+ï moments conditions: E [?jt (s, a, ﬂ) zjt] = 0
+ï sample analog E [?jt (s, a, ﬂ) zjt] ò  1  ?jt (s, a, ﬂ) zjt
+ï GMM estimator
+?	sà, aà, ﬂà chosen to make sample analog close to zero
+? optimal weighting of moments for efficiency
+
+Note: this means fitting market shares exactly, orthogonality as close as possible, based on large (? 8 faster than J) number of consumers per market.
+
+
+Some Complications
+
+1. model predictions sj (dt, xt, s) involve high-dimensional integrals (recall 2-D picture)
+? use simulation to approximate
+? =? "method of simulated moments"
+2. moment conditions involve ?t (s, a, ﬂ), which has no closed form ?two options for computation of the estimator:
+(i) solve contraction at each trial value of (s, a, ﬂ)
+=? "nested fixed point" algorithm (BLP; or)
+(ii) forget about contraction, solve the BLP constrained optimization problem directly
+using specialized algorithms adapted to the BLP details (Dube-Fox-Su, 2012) (we'll discuss both options soon).
+
+
+Defining the Estimator
+
+
+
+Notation
+ï let ? = (?1, ?2) = ([a, ﬂ0], s)
+ï let Zjt denote the exogenous variables (xjt, wjt, zòjt)
+ï let djt (?2) be shorthand for dj (sht; xt, s) .
+
+
+The BLP Estimator
+
+GMM estimator of ? defined as solution to mathematical program:
+
+
+
+min
+?
+
+g (? (?))'?g (? (?))	s.t.
+
+g (?(?))  =	 1	?
+N	jt
+?j,t
+
+(?)zjt
+
+?jt(?)  =  djt(?2) - xjtﬂ - apjt
+log(shjt) = log(sj (dt, xt, ?2))
+s (d , x , ? )  =	exp[djt(?2) + xjtﬂò]
+
+
+
+f (ﬂò|? )d ﬂò
+
+j	t	t	2
+
+1 +  k
+
+exp[djt
+
+(?2) + xkt
+
+ﬂò] ﬂò	2	i
+
+?  =	standard GMM weight matrix.
+
+
+
+
+
+
+
+
+
+NEXT: COMPUTATION OF THE BLP ESTIMATOR
+
+
+BLP Estimation Algorithm (Sketch)
+"Nested Fixed Point" algorithm (used for other things too)
+ï Outer Loop: search over trial values of ?
+ï Inner Loop: given ?, find solution for ?(?)
+? given ?2, solve for d (?2) as fixed point of contraction mapping
+? then ?jt (?) = d (?2) + apjt - xjtﬂ0
+begin outer loop try new ?
+begin inner loop solve contraction
+end inner loop calculate GMM criterion
+end outer loop
+
+
+BLP Estimation Algorithm: More Detail
+1. set up approximation of predicted shares (given ?) via simulation
+? draw values of ?k from normal distribution? ﬂòit
+? take many draws to simulate population of csrs:
+J 	exp[xjt ﬂòit +djt ]		ò	ò
+	 	
+1  NS 	exp[xjt ﬂòit +djt ]	
+? more sophisticated sampling ("importance sampling") possible
+? use this approximation routine every time sj (xt, dt, ?2) appears below
+? use the same set of draws of ?k each time to avoid "jittering".
+
+
+BLP Estimation Algorithm: More Detail
+1. set up approximation of shares via simulation
+2. take a trial value of the parameters ?
+? selected by search algorithm (e.g., Nelder-Meade in BLP).
+
+
+BLP Estimation Algorithm: More Detail
+1. set up approximation of shares via simulation
+2. take a trial value of the parameters ?
+3. start with initial guess at d0 ?t
+? e.g., from MNL or nested logit.
+
+
+BLP Estimation Algorithm: More Detail
+1. set up approximation of shares via simulation
+2. take a trial value of the parameters ?
+3. start with initial guess at d0 ?t
+4. solve fixed point problem by iterating on the contraction
+dh+1 = dh + log(shjt) - log(sj (dh, xt, ?2)) ?j ? djt (?2) ?jt
+jt	jt
+? convergence tolerance tinner
+? tempting to make tolerance loose, at least in beginning, but this can lead to big
+trouble
+? better than simple iteration on contraction: "SQUAREM" acceleration method of Reynaerts, Nash, and Varadahn (2012).
+
+
+BLP Estimation Algorithm: More Detail
+1. set up approximation of shares via simulation
+2. take a trial value of the parameters ?
+3. start with initial guess at d0 ?t
+4. solve fixed point problem by iterating on the contraction
+dh+1 = dh + log(shjt) - log(sj (dh, xt, ?2)) ?j ? djt (?2) ?jt
+jt	jt
+
+5. djt (?2) = xjtﬂ0 - apjt + ?jt =?
+
+?àt (?)
+
+6. sample analog of g (?(?)) =  1  Zjt?àjt (?)
+7. plug into GMM objective function
+8. iterate (from 2) to convergence
+Standard errors: standard MSM (e.g., Pakes-Pollard, 1989); formulas in paper based on
+J ? 8. See Freyberger (2015) for version when T ? 8.
+
+
+"Nonlinear" vs. "Linear" Parameters
+
+
+
+Important Simplification:
+ï ?1 = (a, ﬂ0) enter objective function linearly
+ï so given ?2 and ?, we have closed-form expression for optimal ?1
+ï so outer loop search only involves ?2 = s
+ï (this also makes it natural to interpret the inner loop as solving for all ?jt rather than all djt).
+
+
+
+
+
+
+
+
+
+
+NEXT: AN ALTERNATIVE ALGORITHM
+
+
+The NFP Algorithm
+
+
+Challenges
+ï contraction rate ("inner loop") can be slow (although recent progress on this, noted already)
+ï "outer loop" optimization is hard
+? existence of inner loop often yields highly non-convex optimization problem, search algo can fail
+? user-defined tolerances important; can get wrong answer without realizing it
+? NFP algorithm seems unnecessarily "expensive:" it forces constraints on market shares
+and linear parameters hold exactly at every guess of ?2 when we care only about constraints' holding at the final solution (but shortcuts turn out to be dangerous!).
+
+
+Constrained Optimization ("MPEC") Algorithm
+(mathematical programming with equilibrium constraints)
+
+
+ï Dube, Fox, and Su (2012): alternative computation approach for the same estimator
+ï the general idea:
+? NFP is just a routine to solve a constrained optimization problem: minimize GMM objective function over parameters, subject to constraint that the inner loop fixed
+point equations hold
+? so try off-the-shelf constrained optimization solvers (e.g., Knitro) that work well for "sufficiently nice" problems
+? DFS show that certain tricks can (sometimes) make the BLP-MPEC problem
+"sufficiently nice."
+
+
+BLP by MPEC: A Simple Version
+
+ï constrained optimization formulation of BLP estimator
+
+
+min
+?,?
+
+?'Z ' ? Z '?	s.t.
+
+log(shjt) =  log(sj (xt, ?t, ?))	?j, t
+
+ 1  L
+
+
+exp[xjtﬂ0 + ?jt + 
+
+
+xjkt?k ]
+
+
+
+
+
+Note: ?jt treated as parameters (a lot of them!) whose values (along with ?) must-at the final solution-equate predicted and observed shares.
+
+
+BLP by MPEC: Better Version
+
+More Parameters Still
+ï introduce superfluous parameters g
+
+
+min
+?,?,g
+
+g ' ? g	s.t.
+
+g	=  Z '?
+log(shjt) =  log(sj (xt, ?t, ?))	?j, ti
+
+ 1  L
+
+
+exp[xjtﬂ0 + ?jt + 
+
+
+xjkt?k ]
+
+
+
+ï even more parameters now, but often faster computation due to sparsity of Hessian matrix for objective function (see Dube, Fox, Su, 2012).
+
+
+MPEC Algorithm
+
+
+1. single-step optimization (no inner/outer loop)
+2. "canned" optimization algorithms from engineering
+? some (KNITRO is most popular) also available for Matlab, other matrix languages
+? Matlab fmincon can work in some cases
+3. advantages
+? no user-defined tolerances or optimization parameters to mess up
+? solvers designed for constrained optimization problems, so likely more reliable than ad
+hoc routines written/adapted by economists.
+
+
+MPEC Algorithm
+
+Disadvantages
+1. need sparsity to get speed gains (or for solvers to work at all), and this often vanishes when J large and T small.
+2. generally need to code 1st and 2nd derivatives, and may need to work hard to make problem "nice" (further tricks in the formulation of the problem to induce useful sparsity); this can take a long time and introduces heavy problem-specific coding
+
+=? claimed avoidance of dependence on error-prone inputs less clear [however, "automatic differentiation" is increasingly available].
+
+
+Optimization: NFP vs. MPEC?
+
+
+Naive implementation of either approach can easily fail. But both can work well when one follows now-established best practices. Both have publicly available implementations.
+
+
+The open source pyBLP implementation-discussed in some detail in Conlon and Gortmaker (2020)-offers a frontier NFP approach incorporating multiple advances and options. They also have useful online tutorials (google pyBLP) that complement the published paper. I recommend starting here.
+
+
+Computation: Bottom Line
+BLP is a power tool. Careless use can result in cutting off a finger, or worse-crazy elasticities. But a few now-standard practices make it possible to work safely, and on a level far beyond what is possible with simpler tools.
+
+
+
+
+
+
+
+
+
+
+NEXT:"OPTIMAL INSTRUMENTS"
+
+
+Optimal Instruments: An Important Digression
+
+
+
+Loosely
+ï many possible functions of the exogenous variables X, Z could serve as instruments
+ï what is the best choice?
+ï particularly relevant to BLP IV: many subsets/combinations/functions of huge x-jt
+could be used
+Formally: which unconditional moment conditions yield asymptotic efficiency?
+
+
+Optimal Instruments
+
+ï recall ? = (a, ﬂ, s); from Chamberlain (1986) the optimal (but infeasible) demand-side instruments are
+
+
+Djt(zt) = E
+
+ ??jt(?0) 
+
+
+
+
+(3)
+
+??
+
+ï feasible approximations: must not depend on realized demand shocks
+? sieve basis or direct approximation
+? initially explored in BLP 1995
+? better alternative in BLP 1999; simpler version in Reynaert-Verboven (2014)
+? alternative basis in Gandhi-Houde (2019) ("differentiation instruments")
+? in practice: approximate optimal IV often help substantially
+? Conlon-Gortmaker (2020): more detail, more options, all available in pyBLP and well
+documented.
+
+
+
+
+
+
+
+
+
+
+NEXT: BRINGING SUPPLY BACK TO THE MODEL
+
+
+Adding the Supply Side Moments
+
+
+ï suppose
+
+ï recall firm FOC:
+
+
+mcjt (wjt, ?jt, ?) = wjt? + ?jt
+
+
+sj (dt, xt, s)  ?sj   -1
+
+pjt - wjt? + ?jt -	a
+
+= 0
+?djt
+
+
+ï so for any (s, a, ﬂ, ?), we have an implied ?jt
+ï additional moments for estimation:
+E [?jt (s, a, ﬂ, ?) zòjt] = 0
+ï Note: supply moments depend on demand parameters too; in practice, these often help precision of demand estimates-s in particular.
+
+
+Some Important Extensions and Active Topics
+
+1. micro data, consumer panels, etc. (e.g., Petrin 2002; BLP 2004)
+2. asymptotics in T (Freyberger, 2015 )
+3. endogenous non-price observables (e.g., Fan, 2013, Berry-Haile 2024)
+4. incomplete "consideration sets" (e.g., Goeree, 2008)
+5. "multiple discrete choice" (e.g., Hendel, 1999)
+6. LASSO selection of covars/instruments (Gillen, Montero, Moon & Shum, 2015)
+7. EL estimator (Conlon, 2013)
+8. role of functional forms, NP identification (Berry & Haile, 2014,2024)
+9. nonparametric estimation/inference (Compiani, 2022)
+10. discriminating between models of supply (Berry & Haile, 2014; Backus, Conlon, & Sinkinson, 2024; Duarte, Magnolfi, Solvsten and Sullivan (2024))
