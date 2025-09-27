@@ -1,0 +1,338 @@
+
+
+
+\documentclass[english,11pt]{article}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\usepackage[T1]{fontenc}
+\usepackage[latin9]{inputenc}
+\usepackage{amsmath}
+\usepackage{babel}
+
+\usepackage{fullpage}
+\usepackage{hyperref,url}
+\setcounter{MaxMatrixCols}{10}
+%TCIDATA{OutputFilter=LATEX.DLL}
+%TCIDATA{Version=5.50.0.2960}
+%TCIDATA{<META NAME="SaveForMode" CONTENT="1">}
+%TCIDATA{BibliographyScheme=Manual}
+%TCIDATA{LastRevised=Friday, August 23, 2019 12:15:11}
+%TCIDATA{<META NAME="GraphicsSave" CONTENT="32">}
+%TCIDATA{Language=American English}
+
+
+\begin{document}
+
+
+\begin{center}
+\textbf{PhD Empirical IO}
+
+\textbf{Fall 2024}
+
+\textbf{Prof. Conlon}
+
+\textbf{Homework Assignment}\footnote{Thanks to Phil Haile and Jaewon Lee for coding tips and other highly useful feedback on this problem set.}
+
+
+\textbf{Due Oct 18}
+\end{center}
+
+\bigskip
+
+\section*{Overview}
+
+You will estimate demand and supply in a stylized model of the market for
+pay-TV services. You will use any programming language (Python/R/Matlab/Julia) to create your own fake data set for the industry and do some
+relatively simple estimation. Then, using the \texttt{pyBLP} package of Conlon and Gortmaker, you will
+estimate the model and perform some merger simulations.\footnote{%
+Using data you generate yourself gives you a way to check whether the
+estimation is working; this is a good thing to try whenever you code up an
+estimator!}. The pyBLP package has excellent
+documentation and a very helpful tutorial (which covers merger simulation),
+both easy to find (\url{https://pyblp.readthedocs.io/en/stable/}). You may want to work through the tutorial notebooks available with the documentation (or on the Github page).\\
+
+
+To install \texttt{pyBLP} you need to have Python 3 installed, I recommend Anaconda \url{https://www.anaconda.com/distribution/}. If you have python installed you simply need to type:
+\begin{verbatim}
+pip install pyblp
+\end{verbatim}
+or 
+\begin{verbatim}
+pip install git+https://github.com/jeffgortmaker/pyblp
+\end{verbatim}
+
+Please submit a \underline{single printed} document presenting your answers to the questions below,
+requested results, and code. Write this up cleanly with nice tables where appropriate.
+You may work in groups of up to 3 on the coding, but your write-up must be your own work and must indicate who your partners are.
+
+You can do parts (2) and (3) in R, Matlab, Julia, or Python. Parts (4) and (5) use \texttt{pyblp} which you can run in R using \texttt{reticulate} if you really want.
+\section{Model}
+
+There are $T$ markets, each with four inside goods $j\in
+\{1,2,3,4\}$ and an outside option. Goods 1 and 2 are satellite television
+services (e.g., DirecTV and Dish); goods 3 and 4 are wired television
+services (e.g., Frontier and Comcast in New Haven).
+The conditional indirect utility of consumer $i$ for good $j$ in market $t$
+is given by
+\begin{align*}
+u_{ijt}& =\beta ^{\left( 1\right) }x_{jt}+\beta
+_{i}^{(2)}satellite_{jt}+\beta _{i}^{(3)}wired_{jt}+\alpha p_{jt}+\xi
+_{jt}+\epsilon _{ijt}\text{ \qquad }j>0 \\
+u_{i0t}& =\epsilon _{i0t},
+\end{align*}%
+where $x_{jt}$ is a measure of good $j$'s quality, $p_{jt}$ is its price, $%
+satellite_{jt}$ is an indicator equal to 1 for the two satellite services,
+and $wired_{jt}$ is an indicator equal to 1 for the two wired services. The
+remaining notation is as usual in the class notes, including the i.i.d.
+type-1 extreme value $\epsilon _{ijt}$.  Each consumer purchases the good giving them the highest conditional indirect utility.
+
+Goods are produced by single-product firms. Firm $j$'s (log) marginal
+cost in market $t$ is 
+\begin{equation*}
+\ln mc_{jt}=\gamma ^{0}+\text{w}_{jt}\gamma ^{1}+\omega _{jt}/8,
+\end{equation*}%
+where w$_{jt}$ is an observed cost shifter. Firms compete by simultaneously choosing prices in each market under complete information. Firm $j$ has profit
+\begin{equation*}
+\pi _{jt}=\max_{p_{jt}}M_{t}(p_{jt}-mc_{jt})s_{jt}(p_{t}).
+\end{equation*}
+
+\section{Generate Fake Data}
+\textit{Feel free to use the software package of your choice}\\
+
+Generate a data set from the model above. \ Let%
+\begin{eqnarray*}
+\beta ^{(1)} &=&1\text{, }\beta _{i}^{\left( k\right) }\sim \text{iid }%
+N\left( 4,1\right) \text{ for }k=2,3 \\
+\alpha  &=&-2 \\
+\gamma ^{(0)} &=&1/2\text{, }\gamma ^{(1)}=1/4.
+\end{eqnarray*}
+
+\begin{enumerate}
+\item Draw the exogenous product characteristic $x_{jt}$ for $T=600$
+geographically defined markets (e.g., cities). Assume each $x_{jt}$ is equal
+to the absolute value of an iid standard normal draw, as is each w$_{jt}$.
+Simulate demand and cost unobservables as well, specifying
+\begin{equation*}
+\left(
+\begin{array}{c}
+\xi _{jt} \\
+\omega _{jt}%
+\end{array}%
+\right) \sim N\left( \left(
+\begin{array}{c}
+0 \\
+0%
+\end{array}%
+\right) ,\left(
+\begin{array}{cc}
+1 & 0.25 \\
+0.25 & 1%
+\end{array}%
+\right) \right) \text{ iid across }j,t.
+\end{equation*}
+
+\item Solve for the equilibrium prices for each good in each market.
+
+\begin{enumerate}
+\item Start by writing a procedure to approximate the derivatives of market
+shares with respect to prices (taking prices, shares, $x$, and demand
+parameters as inputs). The key steps are:
+\begin{enumerate}
+\item For each $(j,t)$, write the choice probability $s_{jt}$ as a weighted
+average (integral) of the (multinomial logit) choice probabilities
+conditional on the value of each consumer's random coefficients;
+\item Anticipating differentiation under the integral sign, derive the
+analytical expression for the derivative of the \textit{integrand} with
+respect to each $p_{kt}$; 
+\item Use the expression you obtained in (2) and simulation draws of the
+random coefficients to approximate the integral that corresponds to $%
+\partial s_{jt}/\partial p_{kt}$ for each $j$ and $k$ (i.e., replace
+the integral with the mean over the values at each simulation draw).
+\item Experiment to see how many simulation draws you need to get precise
+approximations and check this again at the equilibrium shares and prices you
+obtain below. \newline
+\end{enumerate}
+Note: you do not want to take new simulation draws of the random
+coefficients each time you call this procedure. This is because,  if you did so, the attempt
+to solve for equilibrium prices (below) may never converge due to \textquotedblleft
+jittering\textquotedblright\ across iterations. So take your simulation draws only once, outside the procedure you write here. %
+
+
+\item The FOC for firm $j$'s profit maximization problem in market $t$ is
+\begin{align}
+(p_{jt}-mc_{jt})\frac{\partial s_{jt}(p_{t})}{\partial p_{jt}}+s_{jt}& =0
+\notag \\
+\implies p_{jt}-mc_{jt}& =-\left( \frac{\partial s_{jt}(p_{t})}{\partial
+p_{jt}}\right) ^{-1}s_{jt}  \label{FOC}
+\end{align}
+
+\item Substituting in your approximation of each $\left( \frac{\partial
+s_{jt}(p_{t})}{\partial p_{jt}}\right) $, solve the system of equations (\ref%
+{FOC}) ($J\,$equations per market) for the equilibrium prices in each market.
+
+\begin{enumerate}
+\item To do this you will need to solve a system of $J \times J$ nonlinear equations.\footnote{To do this in Python use \texttt{scipy.optimize.root}, in MATLAB use \texttt{fsolve}, in R use \texttt{nleqslv} or something similar, and in Julia use \texttt{NLSolve.jl} or something similar.} Make sure to check the exit flag for each market to make sure you have a solution. 
+\item Do this again using the algorithm of Morrow and
+Skerlos (2011), discussed in section 3.6 of Conlon and Gortmaker (2019) (and
+in the \texttt{pyBLP} \textquotedblleft problem simulation tutorial\textquotedblright
+). Use the numerical integration approach you used in step (a) to approximate the
+terms defined in equation (25) of Conlon and Gortmaker. If you get different
+results using this method, resolve this discrepancy either by correcting
+your code or explaining why your preferred method is the one to be trusted.
+\end{enumerate}
+\end{enumerate}
+
+\item Calculate \textquotedblleft observed\textquotedblright\ shares for
+your fake data set using your parameters, your draws of $x,$w$,\beta
+_{i},\omega ,\xi $, and your equilibrium prices.
+\end{enumerate}
+
+\section{Estimate Some Mis-specified Models}
+\textit{Feel free to use the software package of your choice}\\
+
+\begin{enumerate}
+\item[4.] Estimate the plain multinomial logit model of demand by OLS\
+(ignoring the endogeneity of prices).
+
+\item[5.] Re-estimate the multinomial logit model of demand by two-stage
+least squares, instrumenting for prices with the exogenous demand shifters $%
+x $ and excluded cost shifters w. Discuss how the results differ from those
+obtained by OLS.
+
+\item[6.] Now estimate a nested logit model by two-stage least squares,
+treating \textquotedblleft satellite\textquotedblright\ and
+\textquotedblleft wired\textquotedblright\ as the two nests for the inside
+goods. You will probably want to review the discussion of the nested logit
+in Berry (1994). Note that Berry focuses on the special case in which all
+the \textquotedblleft nesting parameters\textquotedblright\ are the same;
+you should allow a different nesting parameter for each nest.\footnote{%
+In Berry's notation, this means letting the parameter $\sigma $ become $%
+\sigma _{g(j)}$, where $g\left( j\right) $ indicates the group (satellite or
+wired) to which each inside good $j$ belongs.} Without reference to the
+results, explain the way(s) that this model is misspecified. (Hint: students
+tend to get this question wrong; recall that I suggested you review Berry
+94).
+
+\item[7.] Using the nested logit results, provide a table comparing the
+estimated own-price elasticities to the true own-price elasticities.%
+\footnote{%
+The procedure you developed above for approximating derivatives cannot be
+used for your estimates based on the nested logit model. But because we have
+analytic expressions for market shares in the nested logit model, you could
+either differentiate these or use \textquotedblleft finite
+difference\textquotedblright\ approximation of derivatives.} Provide two
+additional tables showing the true matrix of diversion ratios and the
+diversion ratios implied by your estimates.\footnote{If you get stuck working out the diversion ratios for nested logit -- consult Conlon and Mortimer (2018).}
+\end{enumerate}
+
+\section{Estimate the Correctly Specified Model}
+
+Use the \texttt{pyBLP} package to estimate the correctly specified model. Allow
+\texttt{pyBLP} to construct approximations to the optimal instruments, using the
+exogenous demand shifters and exogenous cost shifters.\footnote{%
+For your own benefit, you may want to see what happens without the
+approximation of the optimal instruments.} 
+
+\begin{enumerate}
+\item[8.] Report a table with the estimates of the demand
+parameters and standard errors. Do this three times: once when you estimate demand
+alone, then again when you estimate jointly with supply; and again with the ``optimal IV''.
+
+\item[9.] Using your preferred estimates from the prior step (explain your
+preference), provide a table comparing the estimated own-price elasticities
+to the true own-price elasticities. Provide two additional tables showing
+the true matrix of diversion ratios and the diversion ratios implied by your
+estimates.
+
+\item[9*] Extra Credit. Bootstrap your diversion ratio estimates and compare the bootstrapped confidence interval to the ``true'' values. (This may take some computer time).
+\end{enumerate}
+
+\section{Merger Simulation}
+
+\begin{enumerate}
+\item[10.] Suppose two of the four firms were to merge. Give a brief
+intuition for what theory tells us is likely to happen to the equilibrium
+prices of each good $j$.
+
+\item[11.] Suppose firms 1 and 2 are proposing to merge. Use the \texttt{pyBLP}
+merger simulation procedure to provide a prediction of the post-merger
+equilibrium prices.
+
+\item[12.] Now suppose instead that firms 1 and 3 are the ones to merge.
+Re-run the merger simulation. Provide a table comparing the (average
+across markets) predicted merger-induced price changes for this merger and
+that in part 11. Interpret the differences between the predictions for the
+two mergers.
+
+\item[13.] Thus far you have assumed that there are no \textquotedblleft
+efficiencies\textquotedblright\ (reduction in costs) resulting from the
+merger. Explain briefly why a merger-specific reduction in marginal cost
+could mean that a merger is welfare-enhancing.
+
+\item[14.] Consider the merger between firms 1 and 2, and suppose the firms
+demonstrate that by merging they would reduce marginal cost of each of their
+products by 15\%. Furthermore, suppose that they demonstrate that this cost
+reduction could not be achieved without merging.    Using the \texttt{pyBLP} software, re-run the merger simulation
+with the 15\% cost saving. Show the predicted post-merger price changes (again,
+for each product, averaged across markets). What is the predicted impact of
+the merger on consumer welfare,\footnote{%
+Note that because we have quasilinear preferences, consumer surplus is a
+valid measure of aggregate consumer welfare under the usual assumption of
+optimal redistribution.} assuming that the total measure of consumers $%
+M_{t} $ is the same in each market  $t$?  
+\item[15.] Explain why this additional assumption
+(or data on the correct values of $M_{t}$) is needed here, whereas up to
+this point it was without loss to assume $M_{t}=1$. What is the predicted
+impact of the merger on total welfare?
+\end{enumerate}
+
+
+\section{Coding Tips}
+\begin{itemize}
+ 
+ \item You can draw from a multivariate normal with variance $\Sigma $ by
+drawing independent standard normal random variables and using the Cholesky
+decomposition of $\Sigma $ (the latter obtained with \texttt{chol} in Matlab or \texttt{numpy.linalg.cholesky} in Python). You need to make sure you take the \textit{lower triangular} portion.
+In particular, if $z=(z_{1},\ldots ,z_{k})^{\prime }\sim N(0,I_{k})$ and $%
+A=Chol(\Sigma )$, then $Az$ is distributed $N(0,\Sigma )$.
+
+
+\item When you estimate the logit and nested logit models, you will have to choose which functions of the exogenous variables to use as instruments.  One option would be to use all of them---the exogenous demand shifters (own and competing products) and the exogenous cost shifters. Alternatively, you might want to use something more like the BLP approximation of the optimal instruments. For example,  for good $j$ in market $t$, the instruments might be $x_{jt},\text{w}_{jt}, satellite_{jt}, wired_{jt},$ the quality index summed over competing goods $-j$ in market $t$, the quality index of the other good in the same nest as good $j$.\footnote{ Note that on the supply side, there is an intercept in the marginal cost function, which will be collinear with the two dummies for satellite and wired.} The \texttt{pyBLP} package gives some convenient built-in functions \texttt{pyblp.build\_blp\_instruments()} and \texttt{pyblp.build\_differentiation\_instruments()}.\\
+
+
+Of course, you do not need to feed an approximation of the optimal IV into \texttt{pyBLP} if you are going to have \texttt{pyBLP} compute a (better) approximation of the optimal instruments. Though the quality of the approximation depends on the initial set of instruments.
+
+
+\item To migrate your data from
+Matlab/R/Julia  to Python, try exporting and importing a csv (i.e., comma separated)
+file.  To export the  data to a csv file, look into the \texttt{writematrix}
+or \texttt{writetable} functions in Matlab. To import the csv file, look
+into \texttt{pandas.read\_csv} in Python.
+
+
+  \item To display the average prices, use the following (where \texttt{changed\_prices} is the output of \texttt{compute\_prices} as in Post-Estimation Tutorial of pyBLP).
+    \begin{verbatim}
+ T, J= 600, 4
+ print(changed_prices.reshape((T, J)).mean(axis= 0))
+    \end{verbatim}
+
+    \item To display the average elasticities and diversion rations, use the following (where \texttt{elasticities}, for example, is the output of \texttt{compute\_elasticities} in Post-Estimation Tutorial of pyBLP).
+    \begin{verbatim}
+T, J= 600, 4
+print(elasticities.reshape((T, J, J)).mean(axis= 0))
+    \end{verbatim}
+    (These resemble what one would write in Matlab, but there are subtle issues behind it, including row-major order (Python) vs column-major order (Matlab).)
+
+    \item To apply 15\% cost reduction by the merged firms, use the following.
+   
+    \begin{verbatim}
+merger_costs= costs.copy()
+merger_costs[product_data.merger_ids== 1]= 0.85*merger_costs[product_data.merger_ids== 1]
+    \end{verbatim}
+    \noindent where \texttt{costs} and \texttt{merger\_ids} are as in Post-Estimation Tutorial of pyBLP. (Using \texttt{merger\_costs= costs} instead of using \texttt{copy} could lead to an unexpected behavior.)
+
+
+\end{itemize}
+
+
+
+\end{document}

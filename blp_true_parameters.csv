@@ -1,0 +1,9 @@
+parameter,value
+beta_1,1
+alpha,-2
+beta_2_mean,4
+beta_3_mean,4
+sigma_2,1
+sigma_3,1
+gamma_0,0.5
+gamma_1,0.25

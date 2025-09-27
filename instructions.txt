@@ -1,0 +1,80 @@
+1 Model
+There are T markets, each with four inside goods j ∈{1,2,3,4}and an outside option. Goods 1
+and 2 are satellite television services (e.g., DirecTV and Dish); goods 3 and 4 are wired television
+services (e.g., Frontier and Comcast in New Haven). The conditional indirect utility of consumer i
+for good j in market t is given by
+uijt= β(1)xjt + β(2)
+i satellitejt + β(3)
+i wiredjt + αpjt + ξjt + ϵijt ui0t = ϵi0t,
+j >0
+1Thanks to Phil Haile and Jaewon Lee for coding tips and other highly useful feedback on this problem set.
+2Using data you generate yourself gives you a way to check whether the estimation is working; this is a good thing
+to try whenever you code up an estimator!
+1
+where xjt is a measure of good j’s quality, pjt is its price, satellitejt is an indicator equal to 1 for
+the two satellite services, and wiredjt is an indicator equal to 1 for the two wired services. The
+remaining notation is as usual in the class notes, including the i.i.d. type-1 extreme value ϵijt. Each
+consumer purchases the good giving them the highest conditional indirect utility.
+Goods are produced by single-product firms. Firm j’s (log) marginal cost in market t is
+ln mcjt= γ0 + wjtγ1 + ωjt/8,
+where wjt is an observed cost shifter. Firms compete by simultaneously choosing prices in each
+market under complete information. Firm j has profit
+πjt = max
+Mt(pjt−mcjt)sjt(pt).
+pjt
+2 Generate Fake Data
+Feel free to use the software package of your choice
+Generate a data set from the model above. Let
+β(1) = 1, β(k)
+i ∼iid N(4,1) for k= 2,3
+α =−2
+γ(0) = 1/2, γ(1) = 1/4.
+1. Draw the exogenous product characteristic xjt for T = 600 geographically defined markets
+(e.g., cities). Assume each xjt is equal to the absolute value of an iid standard normal draw,
+as is each wjt. Simulate demand and cost unobservables as well, specifying
+ξjt
+ωjt
+∼N 0
+0 ,
+1 0.25
+0.25 1 iid across j,t.
+2. Solve for the equilibrium prices for each good in each market.
+(a) Start by writing a procedure to approximate the derivatives of market shares with respect
+to prices (taking prices, shares, x, and demand parameters as inputs). The key steps are:
+i. For each (j,t), write the choice probability sjt as a weighted average (integral) of the
+(multinomial logit) choice probabilities conditional on the value of each consumer’s
+random coefficients;
+ii. Anticipating differentiation under the integral sign, derive the analytical expression
+for the derivative of the integrand with respect to each pkt;
+iii. Use the expression you obtained in (2) and simulation draws of the random coeffi-
+cients to approximate the integral that corresponds to ∂sjt/∂pkt for each j and k
+(i.e., replace the integral with the mean over the values at each simulation draw).
+iv. Experiment to see how many simulation draws you need to get precise approxima-
+tions and check this again at the equilibrium shares and prices you obtain below.
+2
+Note: you do not want to take new simulation draws of the random coefficients each
+time you call this procedure. This is because, if you did so, the attempt to solve for
+equilibrium prices (below) may never converge due to “jittering” across iterations. So
+take your simulation draws only once, outside the procedure you write here.
+(b) The FOC for firm j’s profit maximization problem in market t is
+(pjt−mcjt)∂sjt(pt)
++ sjt = 0
+∂pjt
+= ⇒ pjt−mcjt=−
+∂sjt(pt)
+∂pjt
+−1
+sjt (1)
+(c) Substituting in your approximation of each ∂sjt(pt)
+∂pjt , solve the system of equations (1)
+(Jequations per market) for the equilibrium prices in each market.
+i. To do this you will need to solve a system of J×J nonlinear equations.3 Make sure
+to check the exit flag for each market to make sure you have a solution.
+ii. Do this again using the algorithm of Morrow and Skerlos (2011), discussed in section
+3.6ofConlonandGortmaker(2019)(andinthepyBLP “problemsimulationtutorial”).
+Usethenumericalintegrationapproachyouusedinstep(a)toapproximatetheterms
+defined in equation (25) of Conlon and Gortmaker. If you get different results using
+this method, resolve this discrepancy either by correcting your code or explaining
+why your preferred method is the one to be trusted.
+3. Calculate “observed” shares for your fake data set using your parameters, your draws of
+x,w,βi,ω,ξ, and your equilibrium prices.

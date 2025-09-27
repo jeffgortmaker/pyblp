@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.7.32">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>readme</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="README_files/libs/clipboard/clipboard.min.js"></script>
+<script src="README_files/libs/quarto-html/quarto.js" type="module"></script>
+<script src="README_files/libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="README_files/libs/quarto-html/popper.min.js"></script>
+<script src="README_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="README_files/libs/quarto-html/anchor.min.js"></script>
+<link href="README_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="README_files/libs/quarto-html/quarto-syntax-highlighting-37eea08aefeeee20ff55810ff984fec1.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="README_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="README_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="README_files/libs/bootstrap/bootstrap-81267100e462c21b3d6c0d5bf76a3417.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN") {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+</head>
+
+<body class="fullcontent quarto-light">
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+
+<main class="content" id="quarto-document-content">
+
+
+
+
+<section id="introduction" class="level2">
+<h2 class="anchored" data-anchor-id="introduction">Introduction</h2>
+<p>This is the first of three exercises that will give you a solid foundation for doing BLP-style estimation. The running example is the same as in lecture: what if we halved an important product’s price?</p>
+</section>
+<section id="setup" class="level2">
+<h2 class="anchored" data-anchor-id="setup">Setup</h2>
+<p>Most of the computational heavy-lifting in these exercises will be done by the open-source Python package <a href="https://github.com/jeffgortmaker/pyblp">PyBLP</a>. It is easiest to use PyBLP in Python, and the hints/solutions for the exercises will be given in Python. But for those who are more familiar with R, it is straightforward to <a href="https://github.com/jeffgortmaker/pyblp#other-languages">call PyBLP from R</a> with the <a href="https://rstudio.github.io/reticulate/">reticulate</a> package. It is technically possible to call PyBLP from other languages like Julia and MATLAB, but most users either use Python or R.</p>
+<p>You should install PyBLP on top of the <a href="https://www.anaconda.com/">Anaconda Distribution</a>. Anaconda comes pre-packaged with all of PyBLP’s dependencies and many more Python packages that are useful for statistical computing. Steps:</p>
+<ol type="1">
+<li><a href="https://docs.anaconda.com/free/anaconda/install/">Install Anaconda</a> if you haven’t already. You may wish to <a href="https://docs.anaconda.com/free/anacondaorg/user-guide/work-with-environments/">create a new environment</a> for just these exercises, but this isn’t strictly necessary.</li>
+<li><a href="https://github.com/jeffgortmaker/pyblp#installation">Install PyBLP</a>. On the Anaconda command line, you can run the command <code>pip install pyblp</code>.</li>
+</ol>
+<p>If you’re using Python, you have two broad options for how to do the coding exercises.</p>
+<ul>
+<li>Use a <a href="https://jupyter.org/install#jupyter-notebook">Jupyter Notebook</a>. The solutions to each exercise will be in a notebook. In general, notebooks are a good way to weave text and code for short exercises, and to distribute quick snippets of code with others.</li>
+<li>Use an integrated development environment (IDE). Once you get beyond a few hundred lines of code, I strongly recommend using an IDE and not notebooks. For Python, I recommend <a href="https://code.visualstudio.com/">VS Code</a> or <a href="https://www.jetbrains.com/pycharm/">PyCharm</a>. The former is free and the latter has a free community edition with all the features you’ll need for standard Python development. Both <a href="https://docs.anaconda.com/free/anaconda/ide-tutorials/">integrate well</a> with Anaconda.</li>
+</ul>
+<p>If using a notebook, you can right click and save the following notebook template: <a href="https://github.com/Mixtape-Sessions/Demand-Estimation/raw/main/Exercises/Templates/notebook.ipynb">notebook.ipynb</a>. If using an IDE, you can right click and save the following script template: <a href="https://github.com/Mixtape-Sessions/Demand-Estimation/raw/main/Exercises/Templates/script.py">script.py</a>. Both import various packages used throughout the exercise.</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pyblp</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> statsmodels.formula.api <span class="im">as</span> smf</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p>The notebook additionally configures these packages to reduce the amount of information printed to the screen.</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>pyblp.options.digits <span class="op">=</span> <span class="dv">3</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>pyblp.options.verbose <span class="op">=</span> <span class="va">False</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>pd.options.display.precision <span class="op">=</span> <span class="dv">3</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>pd.options.display.max_columns <span class="op">=</span> <span class="dv">50</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> IPython.display</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>IPython.display.display(IPython.display.HTML(<span class="st">'&lt;style&gt;pre { white-space: pre !important; }&lt;/style&gt;'</span>))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p>Finally, both show how to load the data that we’ll be using today.</p>
+</section>
+<section id="data" class="level2">
+<h2 class="anchored" data-anchor-id="data">Data</h2>
+<p>Today, you’ll use the <a href="https://github.com/Mixtape-Sessions/Demand-Estimation/raw/main/Exercises/Data/products.csv"><code>products.csv</code></a> dataset, which is a simplified version of <a href="https://nbviewer.org/github/Mixtape-Sessions/Demand-Estimation/raw/main/Readings/5-Nevo-2000.pdf">Nevo’s (2000)</a> fake cereal data with less information and fewer derived columns. The data were motivated by real grocery store scanner data, but due to the proprietary nature of this type of data, the provided data are not entirely real. This dataset has been used as a standard example in much of the literature on BLP estimation.</p>
+<p>Compared to typical datasets you might use in your own work, the number of observations in this example dataset is quite small. This helps with making these exercises run very fast, but in practice one would want more data than just a couple thousand data points to estimate a flexible model of demand. Typical datasets will also include many more product characteristics. This one only includes a couple to keep the length of the exercises manageable.</p>
+<p>The data contains information about 24 breakfast cereals across 94 markets. Each row is a product-market pair. Each market has the same set of breakfast cereals, although with different prices and quantities. The columns in the data are as follows.</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 48%">
+<col style="width: 23%">
+<col style="width: 28%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Column</th>
+<th>Data Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>market</code></td>
+<td>String</td>
+<td>The city-quarter pair that defines markets <span class="math inline">\(t\)</span> used in these exercises. The data were motivated by real cereal purchase data across 47 US cities in the first 2 quarters of 1988.</td>
+</tr>
+<tr class="even">
+<td><code>product</code></td>
+<td>String</td>
+<td>The firm-brand pair that defines products <span class="math inline">\(j\)</span> used in these exercises. Each of 5 firms produces between 1 and 9 brands of cereal.</td>
+</tr>
+<tr class="odd">
+<td><code>mushy</code></td>
+<td>Binary</td>
+<td>A dummy product characteristic equal to one if the product gets soggy in milk.</td>
+</tr>
+<tr class="even">
+<td><code>servings_sold</code></td>
+<td>Float</td>
+<td>Total quantity <span class="math inline">\(q_{jt}\)</span> of servings of the product sold in a market, which will be used to compute market shares.</td>
+</tr>
+<tr class="odd">
+<td><code>city_population</code></td>
+<td>Float</td>
+<td>Total population of the city, which will be used to define a market size.</td>
+</tr>
+<tr class="even">
+<td><code>price_per_serving</code></td>
+<td>Float</td>
+<td>The product’s price <span class="math inline">\(p_{jt}\)</span> used in these exercises.</td>
+</tr>
+<tr class="odd">
+<td><code>price_instrument</code></td>
+<td>Float</td>
+<td>An instrument to handle price endogeneity in these exercises. Think of it as a cost-shifter, a Hausman instrument, or any other valid IV that we discussed in class.</td>
+</tr>
+</tbody>
+</table>
+<p>Throughout the exercises, we use these data to estimate an increasingly flexible BLP-style model of demand for cereal. We will use predictions from this model to see how our running example, cutting the price of one cereal, affects demand for that cereal and for its substitutes.</p>
+</section>
+<section id="questions" class="level2">
+<h2 class="anchored" data-anchor-id="questions">Questions</h2>
+<section id="describe-the-data" class="level3">
+<h3 class="anchored" data-anchor-id="describe-the-data">1. Describe the data</h3>
+<p>You can download <code>products.csv</code> from <a href="https://github.com/Mixtape-Sessions/Demand-Estimation/raw/main/Exercises/Data/products.csv">this link</a>. To load it, you can use <a href="https://pandas.pydata.org/docs/reference/api/pandas.read_csv.html"><code>pd.read_csv</code></a>. To look at a random sample of its rows, you can use <a href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.sample.html"><code>.sample</code></a>. To compute summary statistics for different columns, you can use <a href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.describe.html"><code>.describe</code></a>. Throughout these exercises, you’ll be given links to functions and methods that can be used to answer the questions. If you’re unsure about how to use them, you should click on the link, where there is typically example code lower down on the page.</p>
+</section>
+<section id="compute-market-shares" class="level3">
+<h3 class="anchored" data-anchor-id="compute-market-shares">2. Compute market shares</h3>
+<p>To transform observed quantities <span class="math inline">\(q_{jt}\)</span> into market shares <span class="math inline">\(s_{jt} = q_{jt} / M_t\)</span>, we first need to define a market size <span class="math inline">\(M_t\)</span>. We’ll assume that the potential number of servings sold in a market is the city’s total population multiplied by 90 days in the quarter. Create <a href="https://pandas.pydata.org/docs/getting_started/intro_tutorials/05_add_columns.html">a new column</a> called <code>market_size</code> equal to <code>city_population</code> times <code>90</code>. Note that this assumption is somewhat reasonable but also somewhat arbitrary. Perhaps a sizable portion of the population in a city would never even consider purchasing cereal. Or perhaps those who do tend to want more than one serving per day. In the third exercise, we’ll think more about how to discipline our market size assumption with data.</p>
+<p>Next, compute a new column <code>market_share</code> equal to <code>servings_sold</code> divided by <code>market_size</code>. This gives our market shares <span class="math inline">\(s_{jt}\)</span>. We’ll also need the outside share <span class="math inline">\(s_{0t} = 1 - \sum_{j \in J_t} s_{jt}\)</span>. Create a new column <code>outside_share</code> equal to this expression. You can use <a href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.groupby.html"><code>.groupby</code></a> to group by market and <a href="https://pandas.pydata.org/docs/reference/api/pandas.core.groupby.DataFrameGroupBy.transform.html"><code>.transform('sum')</code></a> to compute the within-market sum of inside shares. Compute summary statistics for your inside and outside shares. If you computed market shares correctly, the smallest outside share should be <span class="math inline">\(s_{0t} \approx 0.305\)</span> and the largest should be <span class="math inline">\(s_{0t} \approx 0.815\)</span>.</p>
+</section>
+<section id="estimate-the-pure-logit-model-with-ols" class="level3">
+<h3 class="anchored" data-anchor-id="estimate-the-pure-logit-model-with-ols">3. Estimate the pure logit model with OLS</h3>
+<p>Recall the pure logit estimating equation: <span class="math inline">\(\log(s_{jt} / s_{0t}) = \delta_{jt} = \alpha p_{jt} + x_{jt}' \beta + \xi_{jt}\)</span>. First, create a new column <code>logit_delta</code> equal to the left-hand side of this expression. You can use <a href="https://numpy.org/doc/stable/reference/generated/numpy.log.html"><code>np.log</code></a> to compute the log.</p>
+<p>Then, use the package of your choice to run an OLS regression of <code>logit_delta</code> on a constant, <code>mushy</code>, and <code>price_per_serving</code>. There are many packages for running OLS regressions in Python. One option is to use the <a href="https://www.statsmodels.org/stable/example_formulas.html#ols-regression-using-formulas">formula interface for <code>statsmodels</code></a>. To use robust standard errors, you can specify <code>cov_type='HC0'</code> in <a href="https://www.statsmodels.org/stable/generated/statsmodels.regression.linear_model.OLS.fit.html"><code>OLS.fit</code></a>.</p>
+<p>Interpret your estimates. Your coefficient on <code>price_per_serving</code> should be around <code>-7.48</code>. In particular, can you re-express your estimate on <code>mushy</code> in terms of how much consumers are willing to pay for <code>mushy</code>, using your estimated price coefficient?</p>
+</section>
+<section id="run-the-same-regression-with-pyblp" class="level3">
+<h3 class="anchored" data-anchor-id="run-the-same-regression-with-pyblp">4. Run the same regression with PyBLP</h3>
+<p>For the rest of the exercises, we’ll use PyBLP do to our demand estimation. This isn’t necessary for estimating the pure logit model, which can be done with linear regressions, but using PyBLP allows us to easily run our price cut counterfactual and make the model more flexible in subsequent days’ exercises.</p>
+<p>PyBLP requires that some key columns have specific names. You can use <a href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.rename.html"><code>.rename</code></a> to rename the following columns so that they can be understood by PyBLP.</p>
+<ul>
+<li><code>market</code> –&gt; <code>market_ids</code></li>
+<li><code>product</code> –&gt; <code>product_ids</code></li>
+<li><code>market_share</code> –&gt; <code>shares</code></li>
+<li><code>price_per_serving</code> –&gt; <code>prices</code></li>
+</ul>
+<p>By default, PyBLP treats <code>prices</code> as endogenous, so it won’t include them in its matrix of instruments. But the “instruments” for running an OLS regression are the same as the full set of regressors. So when running an OLS regression and not account for price endogeneity, we’ll “instrument” for <code>prices</code> with <code>prices</code> themselves. We can do this by creating a new column <code>demand_instruments0</code> equal to <code>prices</code>. PyBLP will recognize all columns that start with <code>demand_instruments</code> and end with <code>0</code>, <code>1</code>, <code>2</code>, etc., as “excluded” instruments to be stacked with the exogenous characteristics to create the full set of instruments.</p>
+<p>With the correct columns in hand, we can initialize our <a href="https://pyblp.readthedocs.io/en/stable/_api/pyblp.Problem.html"><code>pyblp.Problem</code></a>. To specify the same R-style formula for our regressors, use <a href="https://pyblp.readthedocs.io/en/stable/_api/pyblp.Formulation.html"><code>pyblp.Formulation</code></a>. The full code should look like the following.</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>ols_problem <span class="op">=</span> pyblp.Problem(pyblp.Formulation(<span class="st">'1 + mushy + prices'</span>), product_data)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p>If you <code>print(ols_problem)</code>, you’ll get information about the configured problem. There should be 94 markets (<code>T</code>), 2256 observations (<code>N</code>), 3 product characteristics (<code>K1</code>), and 3 total instruments (<code>MD</code>). You can verify that these instruments are simply the regressors by looking at <code>ols_problem.products.X1</code> and <code>ols_problem.products.ZD</code>, comparing these with <code>mushy</code> and <code>prices</code> in your dataframe. For the full set of notation used by PyBLP, which is very close to the notation used in the lectures, see <a href="https://pyblp.readthedocs.io/en/stable/notation.html">this page</a>.</p>
+<p>To estimate the configured problem, use <a href="https://pyblp.readthedocs.io/en/stable/_api/pyblp.Problem.solve.html"><code>.solve</code></a>. Use <code>method='1s'</code> to just do 1-step GMM instead of the default 2-step GMM. In this case, this will just run a simple linear OLS regression. The full code should look like the following.</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>ols_results <span class="op">=</span> ols_problem.solve(method<span class="op">=</span><span class="st">'1s'</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p>Again, if you <code>print(ols_results)</code>, you’ll get estimates from the logit model. Make sure that your estimates are the same as those you got from your OLS regression. If you used <code>'HC0'</code> standard errors like suggested above, you standard errors should also be the same.</p>
+</section>
+<section id="add-market-and-product-fixed-effects" class="level3">
+<h3 class="anchored" data-anchor-id="add-market-and-product-fixed-effects">5. Add market and product fixed effects</h3>
+<p>Since we expect price <span class="math inline">\(p_{jt}\)</span> to be correlated with unobserved product quality <span class="math inline">\(\xi_{jt}\)</span>, we should be worried that our estimated <span class="math inline">\(\hat{\alpha}\)</span> on price is biased. Since we have multiple observations per market and product, and prices vary both across and within markets, it is feasible for us to add both market and product fixed effects. If <span class="math inline">\(\xi_{jt} = \xi_j + \xi_t + \Delta\xi_{jt}\)</span> and most of the correlation between <span class="math inline">\(p_{jt}\)</span> and <span class="math inline">\(\xi_{jt}\)</span> is due to correlation between <span class="math inline">\(p_{jt}\)</span> and either <span class="math inline">\(\xi_j\)</span> (product fixed effects) or <span class="math inline">\(\xi_t\)</span> (market fixed effects), then explicitly accounting for these fixed effects during estimation should help reduce the bias of our <span class="math inline">\(\hat{\alpha}\)</span>.</p>
+<p>The simplest way to add fixed effects is as dummy variables. We won’t do this today, but for your own reference, you could do this either by making a separate column for each possible market and product fixed effects and adding these to your formulation, or you could use the shorthand <code>mushy + prices + C(market_ids) + C(product_ids)</code>. See <a href="https://pyblp.readthedocs.io/en/stable/_api/pyblp.Formulation.html"><code>pyblp.Formulation</code></a> for different shorthands you can use. Since there are only 24 products and 94 markets for a total of 118 fixed effects, this approach is actually feasible in this case. But in a more realistic dataset with hundreds or thousands of products and markets, running an OLS regression with this many dummy variables starts to become computationally infeasible.</p>
+<p>The alternative, which we’ll do today, is to “absorb” the fixed effects. For a single fixed effect, we could just de-mean our outcome variable and each of our regressors within the fixed effects levels, and then run our regression. For multiple fixed effects, we need to <em>iteratively</em> de-mean. PyBLP does this automatically if you specify <code>absorb='C(market_ids) + C(product_ids)'</code> in your formulation instead of adding these as dummy variables.</p>
+<p>Since <code>mushy</code> is always either 1 or 0 for the same product across different markets, it’s collinear with product fixed effects, and you can drop it from your formula. Similarly, you can drop the constant. After dropping these, re-create your problem with absorbed fixed effects and re-solve it. Compare the new <span class="math inline">\(\hat{\alpha}\)</span> estimate with the last one. You should now be getting a coefficient on price of around <code>-28.6</code>. Does its change suggest that price was positively or negatively correlated with unobserved product-level/market-level quality?</p>
+</section>
+<section id="add-an-instrument-for-price" class="level3">
+<h3 class="anchored" data-anchor-id="add-an-instrument-for-price">6. Add an instrument for price</h3>
+<p>Adding market and product fixed effects can be helpful, but since unobserved quality typically varies by both product <em>and</em> market, we really want to instrument for prices. The data comes with a column <code>price_instrument</code> that we should interpret as a valid instrument for price that satisfies the needed exclusion restriction. It could be a cost-shifter, a valid Hausman instrument, or similar.</p>
+<p>Before using it, we should first run a first-stage regression to make sure that it’s a relevant instrument for price. To do so, use the same package you used above to run an OLS regression to run a second OLS regression of prices on <code>price_instrument</code> and your market and product fixed effects. If using the <a href="https://www.statsmodels.org/stable/example_formulas.html#ols-regression-using-formulas">formula interface for <code>statsmodels</code></a>, you can use the same fixed effect shorthand as in PyBLP, with your full formula looking like <code>prices ~ price_instrument + C(market_ids) + C(product_ids)</code>. Does <code>price_instrument</code> seem like a relevant instrument for <code>prices</code>?</p>
+<p>Now that we’ve checked relevance, we can set our <code>demand_instruments0</code> column equal to <code>price_instrument</code>, re-create the problem, and re-solve it. You should get a new coefficient on price of around <code>-30.6</code>. Does the change in <span class="math inline">\(\hat{\alpha}\)</span> suggest that price was positively or negatively correlated with <span class="math inline">\(\Delta\xi_{jt}\)</span> in <span class="math inline">\(\xi_{jt} = \xi_j + \xi_t + \Delta\xi_{jt}\)</span>?</p>
+</section>
+<section id="cut-a-price-in-half-and-see-what-happens" class="level3">
+<h3 class="anchored" data-anchor-id="cut-a-price-in-half-and-see-what-happens">7. Cut a price in half and see what happens</h3>
+<p>Now that we have our pure logit model estimated, we can run our counterfactual of interest: what if we halved an important product’s price? We’ll select a single market, the most recent quarter in the first city: <code>C01Q2</code>. Create a new dataframe called <code>counterfactual_data</code> by <a href="https://pandas.pydata.org/docs/getting_started/intro_tutorials/03_subset_data.html">selecting</a> data for just that market and inspect the data. We’ll pretend that we’re firm one, and deciding whether we want to cut the price of our brand four’s product <code>F1B04</code>. In particular, we might be worried about <em>cannibalization</em>, i.e.&nbsp;how much this price cut will result in consumers of our other 8 brands of cereal in this market just substituting from their old choice to the new, cheaper cereal. Alternatively, we could be a regulator or academic interested in how taxing that product would affect demand in the market.</p>
+<p>In your new dataframe with just data from <code>C01Q2</code>, create a <code>new_prices</code> column that is the same as <code>prices</code> but with the price of <code>F1B04</code> cut in half. To do this, you could use <a href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.loc.html"><code>DataFrame.loc</code></a>. Then, use <a href="https://pyblp.readthedocs.io/en/stable/_api/pyblp.ProblemResults.compute_shares.html"><code>.compute_shares</code></a> on your results from the last question, passing <code>market_id='C01Q2'</code> to only compute new market shares for our market of interest, and passing <code>prices=counterfactual_data['new_prices']</code> to specify that prices should be set to the new prices. This function will re-compute market shares at the changed prices implied by the model’s estimates. Store them in a <code>new_shares</code> column.</p>
+<p>Compute the percent change in shares for each product in the market. From firm one’s perspective, do the estimates of cannibalization make sense. That is, do the signs on the percent changes for product <code>F1B04</code> and for other products make sense? Would you normally expect percent changes for other products to be different depending on how other products compare to the one whose price is being changed?</p>
+</section>
+<section id="compute-demand-elasticities" class="level3">
+<h3 class="anchored" data-anchor-id="compute-demand-elasticities">8. Compute demand elasticities</h3>
+<p>To better understand what’s going on, use <a href="https://pyblp.readthedocs.io/en/stable/_api/pyblp.ProblemResults.compute_elasticities.html"><code>.compute_elasticities</code></a>, again specifying <code>market_id='C01Q2'</code>, to compute price elasticities for our market of interest. These measure what the model predicts will happen to demand in percentage terms when there’s a 1% change in price of a product. The diagonal elements are own-price elasticities and the off-diagonal elements are cross-price elasticities. Does demand seem very elastic? Do the cross-price elasticities seem particularly reasonable?</p>
+</section>
+</section>
+<section id="supplemental-questions" class="level2">
+<h2 class="anchored" data-anchor-id="supplemental-questions">Supplemental Questions</h2>
+<p>These questions will not be directly covered in lecture, but will be useful to think about when doing BLP-style estimation in your own work.</p>
+<section id="try-different-standard-errors" class="level3">
+<h3 class="anchored" data-anchor-id="try-different-standard-errors">1. Try different standard errors</h3>
+<p>By default, PyBLP computed standard errors that are robust to heteroskedasticity. But we may be concerned that unobserved quality <span class="math inline">\(\xi_{jt}\)</span> is systematically correlated across markets for a given product <span class="math inline">\(j\)</span>, or across products for a given market <span class="math inline">\(t\)</span>. Choose which one you think is more likely and try clustering your standard errors by that dimension. You can do this with <code>se_type='clustered'</code> in <a href="https://pyblp.readthedocs.io/en/stable/_api/pyblp.Problem.solve.html"><code>.solve</code></a>, for which you’ll need a <code>clustering_ids</code> column in your product data. See how your standard error for <span class="math inline">\(\alpha\)</span> changes.</p>
+</section>
+<section id="compute-confidence-intervals-for-your-counterfactual" class="level3">
+<h3 class="anchored" data-anchor-id="compute-confidence-intervals-for-your-counterfactual">2. Compute confidence intervals for your counterfactual</h3>
+<p>Your estimate of <span class="math inline">\(\hat{\alpha}\)</span> comes with a standard error, but your counterfactual demand predictions don’t. Ideally we’d like to not only have a point estimate for a counterfactual prediction, but also a measure (up to model misspecification) of how confident we are in these predictions. The easiest way to do this is with a “parametric bootstrap.” The intuition is we can draw from the estimated asymptotic distribution of our <span class="math inline">\(\hat{\alpha}\)</span>, and for each draw, re-compute demand, and see how demand responds to the same price cut.</p>
+<p>You can do a parametric bootstrap with the <a href="https://pyblp.readthedocs.io/en/stable/_api/pyblp.ProblemResults.bootstrap.html"><code>.bootstrap</code></a> method. Start with just a few draws (e.g., <code>draws=100</code>) and remember to set your <code>seed</code> so that you get the same draws every time you run the code. When new parameters are drawn, you get new <a href="https://pyblp.readthedocs.io/en/stable/_api/pyblp.BootstrappedResults.html#pyblp.BootstrappedResults.bootstrapped_shares"><code>.boostrapped_shares</code></a>, which take the place of your old <code>shares</code>. You can use the same <a href="https://pyblp.readthedocs.io/en/stable/_api/pyblp.ProblemResults.compute_shares.html"><code>.compute_shares</code></a> method on the <a href="https://pyblp.readthedocs.io/en/stable/_api/pyblp.BootstrappedResults.html"><code>BootstrapedResults</code></a> class, although you’ll have to pass a <code>prices</code> argument with prices replicated along a new axis by as many draws as you have.</p>
+<p>Once you have some bootstrapped shares, compute the same percent changes, and compute the 2.5th and 97.5th percentiles of these changes for each product. Are these 95% confidence intervals for your predictions particularly wide?</p>
+</section>
+<section id="impute-marginal-costs-from-pricing-optimality" class="level3">
+<h3 class="anchored" data-anchor-id="impute-marginal-costs-from-pricing-optimality">3. Impute marginal costs from pricing optimality</h3>
+<p>The canonical demand side of the BLP model assumes firms set prices in static Bertrand-Nash equilibrium. See <a href="https://pyblp.readthedocs.io/en/stable/background.html#supply">this section</a> for a quick summary using PyBLP notation. Given an estimated demand model and such assumptions about pricing, we can impute marginal costs <code>c_{jt}</code>.</p>
+<p>To do so, you first need to tell PyBLP what firms own what products. Create a new <code>firm_ids</code> column in your data, re-initialize your problem, and re-solve it. Then, you should be able to run the <a href="https://pyblp.readthedocs.io/en/stable/_api/pyblp.ProblemResults.compute_costs.html"><code>.compute_costs</code></a> method to impute firms’ marginal cost of producing each cereal. Do these marginal costs look particularly reasonable? How might limitations of your demand model and supply model bias them? What would they and observed prices imply about firms’ markups and economic profits?</p>
+</section>
+<section id="check-your-code-by-simulating-data" class="level3">
+<h3 class="anchored" data-anchor-id="check-your-code-by-simulating-data">4. Check your code by simulating data</h3>
+<p>Even experienced software developers make a lot of mistakes when writing code. Writing “unit tests” or “integration tests” that check whether the code you’ve written seems to be working properly is incredibly important when writing complicated code to estimate demand. Perhaps the most useful test you can write when doing demand estimation (or most other types of structural estimation) is the following.</p>
+<ol type="1">
+<li>Simulate fake data under some true parameters.</li>
+<li>Estimate your model on the simulated data and make sure that you can recover the true parameters, up to sampling error.</li>
+</ol>
+<p>If you do these steps many times, the resulting Monte Carlo experiment will also give you a good sense for the finite sample statistical properties of your estimator.</p>
+<p>PyBLP’s <a href="https://pyblp.readthedocs.io/en/stable/_api/pyblp.Simulation.html"><code>Simulation</code></a> class makes simulating data fairly straightforward. Its interface is similar to <a href="https://pyblp.readthedocs.io/en/stable/_api/pyblp.Problem.html"><code>Problem</code></a>, but you also specify your parameter estimates and structural errors. In addition to checking your code, you can also use this class for more complicated counterfactuals. After initializing your simulation, you can use <a href="https://pyblp.readthedocs.io/en/stable/_api/pyblp.Simulation.replace_endogenous.html"><code>.replace_endogenous</code></a> to have PyBLP replace the prices <span class="math inline">\(p_{jt}\)</span> and market shares <span class="math inline">\(s_{jt}\)</span> with those that rationalize the chosen true parameters and other parts of the simulation. It does so by solving the pricing equilibrium. You’ll have to pass your imputed marginal costs via the <code>costs</code> argument.</p>
+<p>Initialize a simulation of the pure logit model with the same <code>product_data</code> and the same estimated <code>xi</code> but with an <span class="math inline">\(\alpha\)</span> somewhat different than the one you estimated. Make sure your chosen <span class="math inline">\(\alpha\)</span> is negative, otherwise demand will be upward sloping and PyBLP will have trouble solving for equilibrium prices. To the estimated <a href="https://pyblp.readthedocs.io/en/latest/_api/pyblp.ProblemResults.html#pyblp.ProblemResults.xi"><code>.xi</code></a> you can add the estimated fixed effects <a href="https://pyblp.readthedocs.io/en/latest/_api/pyblp.ProblemResults.html#pyblp.ProblemResults.xi_fe"><code>.xi_fe</code></a>, since the simulation class does not support fixed effects absorption.</p>
+<p>Have PyBLP solve for prices and market shares, and use the resulting data to re-estimate your pure logit regression. See if you can get an estimated <span class="math inline">\(\hat{\alpha}\)</span> close to the true one.</p>
+</section>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+        const codeEl = trigger.previousElementSibling.cloneNode(true);
+        for (const childEl of codeEl.children) {
+          if (isCodeAnnotation(childEl)) {
+            childEl.remove();
+          }
+        }
+        return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>

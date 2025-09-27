@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.7.32">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>readme</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="README_files/libs/clipboard/clipboard.min.js"></script>
+<script src="README_files/libs/quarto-html/quarto.js" type="module"></script>
+<script src="README_files/libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="README_files/libs/quarto-html/popper.min.js"></script>
+<script src="README_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="README_files/libs/quarto-html/anchor.min.js"></script>
+<link href="README_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="README_files/libs/quarto-html/quarto-syntax-highlighting-37eea08aefeeee20ff55810ff984fec1.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="README_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="README_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="README_files/libs/bootstrap/bootstrap-81267100e462c21b3d6c0d5bf76a3417.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN") {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+</head>
+
+<body class="fullcontent quarto-light">
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+
+<main class="content" id="quarto-document-content">
+
+
+
+
+<section id="introduction" class="level2">
+<h2 class="anchored" data-anchor-id="introduction">Introduction</h2>
+<p>This is the second of three exercises that will give you a solid foundation for doing BLP-style estimation. We’ll continue with the same running example: what if we halved an important product’s price? Our goal today is to relax some of the unrealistic substitution patterns implied by the pure logit model by incorporating preference heterogeneity. To do so, we will use cross-market variation in our product and some new demographic data to estimate parameters that govern preference heterogeneity.</p>
+</section>
+<section id="setup" class="level2">
+<h2 class="anchored" data-anchor-id="setup">Setup</h2>
+<p>We’ll be continuing where we left off after the <a href="https://github.com/Mixtape-Sessions/Demand-Estimation/blob/main/Exercises/Exercise-1/README.md">first exercise</a>. You should just keep adding to your code, using <a href="https://github.com/Mixtape-Sessions/Demand-Estimation/blob/main/Exercises/Exercise-1/Solutions.ipynb">its solutions</a> if you had trouble with some parts.</p>
+</section>
+<section id="data" class="level2">
+<h2 class="anchored" data-anchor-id="data">Data</h2>
+<p>Today, you’ll incorporate <a href="https://github.com/Mixtape-Sessions/Demand-Estimation/raw/main/Exercises/Data/demographics.csv"><code>demographics.csv</code></a> into estimation, which again is a simplified version of <a href="https://nbviewer.org/github/Mixtape-Sessions/Demand-Estimation/raw/main/Readings/5-Nevo-2000.pdf">Nevo’s (2000)</a> demographic data with less information and fewer derived columns. The data were originally draws from the Current Population Survey.</p>
+<p>In your own work, when incorporating demographic data into estimation, you will want to sample from the whole Current Population Survey (or whatever survey/census data you are using), not just from a subset of it. The small size of today’s demographic data helps with distributing the data, but in practice you should ideally be sampling from a much larger dataset of demographic information. In your own work you will also want to incorporate more demographic variables than the one included in this dataset. Like the product data, in these exercises we only consider a few columns to keep the exercises a manageable length.</p>
+<p>The demographic dataset contains information about 20 individuals drawn from the Current Population Survey for each of the 94 markets in the product data. Each row is a different individual. The columns in the data are as follows.</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 47%">
+<col style="width: 23%">
+<col style="width: 28%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Column</th>
+<th>Data Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>market</code></td>
+<td>String</td>
+<td>The city-quarter pair that defines markets <span class="math inline">\(t\)</span> used in these exercises. The data were motivated by real cereal purchase data across 47 US cities in the first 2 quarters of 1988.</td>
+</tr>
+<tr class="even">
+<td><code>quarterly_income</code></td>
+<td>Float</td>
+<td>The quarterly income of the individual in dollars.</td>
+</tr>
+</tbody>
+</table>
+<p>In today and tomorrow’s exercises, we will use these demographic data to introduce income-specific preference heterogeneity into our BLP model of demand for cereal and see how our counterfactual changes. By incorporating income, we will also be able to speak to distributional concerns: how will counterfactual changes in the market differentially affect high- and low-income consumers?</p>
+</section>
+<section id="questions" class="level2">
+<h2 class="anchored" data-anchor-id="questions">Questions</h2>
+<section id="describe-cross-market-variation" class="level3">
+<h3 class="anchored" data-anchor-id="describe-cross-market-variation">1. Describe cross-market variation</h3>
+<p>To get a sense for what types of preference heterogeneity we can feasibly estimate with variation in our product and demographic data, recall the linear regression intuition about identification from the lecture. To add parameters in <span class="math inline">\(\Sigma\)</span> we want cross-market choice set variation. To add parameters in <span class="math inline">\(\Pi\)</span> we want cross-market demographic variation.</p>
+<p>You should already have <code>products.csv</code> from the last exercise. You can download <code>demographics.csv</code> from <a href="https://github.com/Mixtape-Sessions/Demand-Estimation/raw/main/Exercises/Data/demographics.csv">this link</a>. Quarterly income has a long right tail that makes summarizing it difficult, so you should create a new column <code>log_income</code> equal to the log of <code>quarterly_income</code>.</p>
+<p>Across both datasets, describe the amount of cross-market variation in the number of products, <code>mushy</code>, <code>prices</code>, and <code>log_income</code>. You can use <a href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.groupby.html"><code>.groupby</code></a> and <a href="https://pandas.pydata.org/pandas-docs/version/0.22/generated/pandas.core.groupby.DataFrameGroupBy.agg.html"><code>.agg</code></a> to compute market-level statistics for these variables (e.g., counts, means, and standard deviations), and you can then use <a href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.describe.html"><code>.describe</code></a> to compute summary statistics for these market-level statistics.</p>
+<p>Which variables have <em>any</em> cross-market variation? In other words, referring back to the linear regression intuition about identification, which preference heterogeneity parameters do we have any hope of credibly estimating? Recall that we have both product and market fixed effects, which will be collinear with some regressors on potential parameters in <span class="math inline">\(\Sigma\)</span> and <span class="math inline">\(\Pi\)</span> in the approximate linear regression.</p>
+</section>
+<section id="estimate-a-parameter-on-mushy-times-log-income" class="level3">
+<h3 class="anchored" data-anchor-id="estimate-a-parameter-on-mushy-times-log-income">2. Estimate a parameter on mushy <span class="math inline">\(\times\)</span> log income</h3>
+<p>To estimate a parameter in <span class="math inline">\(\Pi\)</span> on the interaction between <code>mushy</code> and <code>log_income</code>, we first need to define a datset of consumer types that PyBLP can use for preference heterogeneity. From each market <span class="math inline">\(t\)</span>, take <span class="math inline">\(I_t = 1,000\)</span> draws with replacement from the demographic data, and call the resulting dataframe <code>agent_data</code>. Each of its rows will be a consumer type <span class="math inline">\(i \in I_t\)</span>. You can do this with <a href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.groupby.html"><code>.groupby</code></a> and <a href="https://pandas.pydata.org/docs/reference/api/pandas.core.groupby.DataFrameGroupBy.sample.html"><code>.sample</code></a>. You can use <code>as_index=False</code> when grouping to keep your <code>market</code> column. Remember to set your seed with the <code>random_state</code> argument when sampling from each market.</p>
+<p>Like with product data, to get PyBLP to recognize the <code>market</code> column as markets <span class="math inline">\(t\)</span>, you’ll need to rename it to <code>market_ids</code>. You’ll also need to specify consumer type shares / sampling weights <span class="math inline">\(w_{it}\)</span>. Since we took each draw from the demographic data with equal probability, these should be uniform weights <span class="math inline">\(w_{it} = 1 / 1,000\)</span>. Make a new column <code>weights</code> equal to <code>1 / 1000</code>.</p>
+<p>Finally, later we’ll be adding some dimensions of unobserved preference heterogeneity in <span class="math inline">\(\nu_{it}\)</span>. PyBLP recognizes these with the column names <code>nodes0</code>, <code>nodes1</code>, <code>nodes2</code>, etc. Make three columns, <code>nodes0</code>, <code>nodes1</code>, and <code>nodes2</code>, each with a <em>different</em> set of draws from the standard normal distribution. You can do this with <a href="https://numpy.org/doc/stable/reference/random/generator.html"><code>np.random.default_rng</code></a>, remembering to set your <code>seed</code>, and <a href="https://numpy.org/doc/stable/reference/random/generated/numpy.random.Generator.normal.html#numpy.random.Generator.normal"><code>.normal</code></a>, using <code>size=(len(agent_data), 3)</code>. Print some rows from your <code>agent_data</code> to make sure it looks like you’d expect.</p>
+<p>To identify our new parameter, we need a new instrument. We’ll use the recommendation from the lecture to use mean income <span class="math inline">\(m_t^y\)</span> interacted with <code>mushy</code> in <span class="math inline">\(x_{jt}\)</span>. To merge in the mean market-level income from the first question into the product data, you can use <a href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.merge.html"><code>.merge</code></a>. Recall that you already have one column <code>demand_instruments0</code> equal to your price instrument. To add a second instrument, create a new column <code>demand_instruments1</code> equal to the interaction between your merged-in market-level mean income and <code>mushy</code>.</p>
+<p>When initializing your new <a href="https://pyblp.readthedocs.io/en/stable/_api/pyblp.Problem.html"><code>pyblp.Problem</code></a>, you’ll need two new <a href="https://pyblp.readthedocs.io/en/stable/_api/pyblp.Formulation.html"><code>pyblp.Formulation</code></a> instances to model the interaction between <code>mushy</code> and <code>log_income</code>. First, replace your old formulation with a tuple</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>product_formulations <span class="op">=</span> (pyblp.Formulation(<span class="st">'0 + prices'</span>, absorb<span class="op">=</span><span class="st">'C(market_ids) + C(product_ids)'</span>), pyblp.Formulation(<span class="st">'0 + mushy'</span>))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p>This defines, in PyBLP lingo, the formulations for the <code>X1</code> and <code>X2</code> matrices. The <code>X1</code> matrix is the one with <code>beta</code> coefficients. The <code>X2</code> matrix is interacted with consumer type-specific variables like your demographics <span class="math inline">\(y_{it}\)</span>. There <code>0</code> values in the formulations guarantee that they won’t have constant terms (by default a constant is added, unless there are absorbed fixed effects). You’ll also need a new formulation for consumer demographics.</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>agent_formulation <span class="op">=</span> pyblp.Formulation(<span class="st">'0 + log_income'</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p>With these in hand, we can define the new problem. See the <a href="https://pyblp.readthedocs.io/en/stable/_api/pyblp.Problem.html"><code>pyblp.Problem</code></a> documentation for the ordering and names of arguments.</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>pyblp.Problem(product_formulations, product_data, agent_formulation, agent_data)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p>Now that we want to set up a nonlinear GMM problem, we need to configure some nonlinear optimization arguments in <a href="https://pyblp.readthedocs.io/en/stable/_api/pyblp.Problem.solve.html"><code>.solve</code></a>. First, we should configure our optimizer. We’ll use the lecture’s recommendation to use SciPy’s trust region algorithm <a href="https://docs.scipy.org/doc/scipy/reference/optimize.minimize-trustconstr.html"><code>trust-constr</code></a>. And we’ll be explicit about using its default termination tolerances of <code>1e-8</code>. You can do this by setting <code>optimization=pyblp.Optimization('trust-constr', method_options={'gtol': 1e-8, 'xtol': 1e-8})</code>. In <a href="https://pyblp.readthedocs.io/en/stable/_api/pyblp.Optimization.html"><code>pyblp.Optimization</code></a>, <code>method_options</code> is a <a href="https://docs.python.org/3/tutorial/datastructures.html#dictionaries">dictionary</a> mapping <a href="https://docs.scipy.org/doc/scipy/reference/optimize.minimize-trustconstr.html"><code>trust-constr</code></a> configuration options to their values.</p>
+<p>Second, we need to specify which parameters in <span class="math inline">\(\Sigma\)</span> and <span class="math inline">\(\Pi\)</span> to optimize over, and what their initial values will be. Since we’re starting without any parameters in <span class="math inline">\(\Sigma\)</span>, we’ll set <code>sigma=0</code>. Zeros in PyBLP mean that PyBLP should have the parameter <em>always</em> be set to zero, i.e.&nbsp;not there. There’s only one new parameter in <span class="math inline">\(\Pi\)</span> (there’s only one column in your <code>X2</code> formulation, <code>mushy</code>, and only one demographic in your agent formulation, <code>log_income</code>), and we’ll just set it to an arbitrary nonzero value for now (indicating that it should be optimized over), say <code>pi=1</code>.</p>
+<p>Before and after you solve the problem, you can set <code>pyblp.options.verbose = True</code> and <code>pyblp.options.verbose = False</code>. Make sure that the gradient norm (the optimization problem’s first-order conditions) is getting iteratively closer to zero. We call this “marching down the gradient” and not seeing it near the end of optimization indicates a problem. Since we have exactly as many parameters as moments/instruments, we’re <em>just identified</em> and should also have an approximately zero objective at the optimum, so make sure you see that as well. At the optimum, in addition to a near-zero objective and gradient norm, the Hessian (in this case just a single value) should be positive, indicating that the optimization’s second-order conditions are satisfied. The other columns outputted in the optimization progress have information about the inner loop, e.g.&nbsp;how many iterations it takes to solve it and how long this takes.</p>
+<p>Once you’re satisfied that optimization seems to have worked well, interpret the sign of your estimated parameter in <span class="math inline">\(\Pi\)</span>. If you’ve done all of the above correctly, you should get an estimate of around <code>0.251</code>. Can you use <span class="math inline">\(\hat{\alpha}\)</span> to interpret it in dollar terms, i.e.&nbsp;how much more a person with 1% higher income is willing to pay for mushyness?</p>
+</section>
+<section id="make-sure-you-get-the-same-estimate-with-random-starting-values" class="level3">
+<h3 class="anchored" data-anchor-id="make-sure-you-get-the-same-estimate-with-random-starting-values">3. Make sure you get the same estimate with random starting values</h3>
+<p>We can be fairly confident with our objective/gradient/Hessian checks that we’re at the global optimum with just one parameter in a just identified model. But with more complicated optimization problems in more realistic problems, we really want to try different starting values to make sure we always get the same estimates. Let’s try doing that here.</p>
+<p>First, configure some bounds for our new <span class="math inline">\(\Pi\)</span> parameter, say <code>pi_bounds = (-10, +10)</code>. Then in a <a href="https://wiki.python.org/moin/ForLoop">for loop</a> over different random number generator seeds, randomly draw an initial starting value from within these bounds (you can use <a href="https://numpy.org/doc/stable/reference/random/generated/numpy.random.Generator.uniform.html"><code>.uniform</code></a>) and re-optimize. You may want to actually impose your bounds during optimization using the <code>pi_bounds</code> argument to <a href="https://pyblp.readthedocs.io/en/stable/_api/pyblp.Problem.solve.html"><code>.solve</code></a>.</p>
+<p>Do you get the same estimate for each random starting value? If not, there may be an issue with optimization or your problem configuration. If you have a more complicated model with many parameters and many instruments, you may often get a global minimum, and sometimes get a local minimum. Optimizers aren’t perfect, and sometimes terminate prematurely, even with tight termination conditions. You should select the global one for your final estimates.</p>
+</section>
+<section id="evaluate-changes-to-the-price-cut-counterfactual" class="level3">
+<h3 class="anchored" data-anchor-id="evaluate-changes-to-the-price-cut-counterfactual">4. Evaluate changes to the price cut counterfactual</h3>
+<p>Using the new estimates, re-run the same price cut counterfactual from last exercise. Re-compute percent changes and compare with those from the pure logit model. Are there any (small) differences, particularly for substitution from other products? Explain how the introduction of the new parameter induced these changes. Do cannibalization estimates seem more reasonable than before?</p>
+</section>
+<section id="estimate-parameters-on-price-times-log-income-and-unobserved-preferences" class="level3">
+<h3 class="anchored" data-anchor-id="estimate-parameters-on-price-times-log-income-and-unobserved-preferences">5. Estimate parameters on price <span class="math inline">\(\times\)</span> log income and unobserved preferences</h3>
+<p>Like for mushy, our cross-market income variation allows us to estimate a second parameter in <span class="math inline">\(\Pi\)</span> on <code>prices</code> <span class="math inline">\(\times\)</span> <code>log_income</code>. Unlike mushy, which doesn’t vary across markets, we actually have cross-market variation in prices, which will allow us to potentially estimate a parameter in <span class="math inline">\(\Sigma\)</span> on <code>prices</code>.</p>
+<p>To add these two new parameters, we’ll need two new instruments. Since we can’t have endogenous prices in our instruments, we’ll first set a new column <code>predicted_prices</code> equal to the fitted values from the price IV first stage regression that we ran yesterday. If you used <code>statsmodels</code>, you can just get these from <a href="https://www.statsmodels.org/dev/generated/statsmodels.regression.linear_model.RegressionResults.fittedvalues.html"><code>.fittedvalues</code></a> of your regression results object. Verify that <code>prices</code> and <code>predicted_prices</code> are strongly correlated, for example with <a href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.corr.html"><code>.corr</code></a>.</p>
+<p>To target the new parameter in <span class="math inline">\(\Pi\)</span>, we’ll follow the lecture’s recommendation and add a new <code>demand_instruments2</code> equal to the interaction between the log income mean and <code>predicted_prices</code>. To target the new parameter in <span class="math inline">\(\Sigma\)</span>, we’ll also follow the lecture’s recommendation and add a new <code>demand_instruments3</code> equal to the sum of squared distances between <code>predicted_prices</code> and all other <code>predicted_prices</code> in the same market. You could construct this market-by-market by using <a href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.groupby.html"><code>.groupby</code></a> and <a href="https://pandas.pydata.org/docs/reference/api/pandas.core.groupby.DataFrameGroupBy.transform.html"><code>.transform</code></a> with a custom <a href="https://docs.python.org/3/tutorial/controlflow.html#defining-functions">function</a> that accepts a market’s <code>predict_prices</code> as an argument, computes a matrix of all pairwise differences between these values (e.g., with <code>x[:, None] - x[None, :]</code>), squares them, and <a href="https://numpy.org/doc/stable/reference/generated/numpy.sum.html">sums</a> them across columns.</p>
+<p>When initializing the problem, we’ll need to add a new <code>prices</code> term in the <code>X2</code> formulation: <code>0 + mushy + prices</code>. Otherwise, with the updated product data, initializing the problem is the same. When solving the problem, however, the extra column in the <code>X2</code> formulation means that we need an extra row in our configuration for <code>sigma</code> and <code>pi</code>. First, <code>sigma</code> should be a <span class="math inline">\(2 \times 2\)</span> matrix corresponding to the two columns in <code>X2</code>. All elements will be zero (indicating that the corresponding elements in <span class="math inline">\(\Sigma\)</span> will be fixed to zero), except for the bottom-right value, which we’ll set to some arbitrary non-zero starting values, say <code>1</code>. Similarly, <code>pi</code> should be a <span class="math inline">\(2 \times 1\)</span> matrix corresponding to the two columns in <code>X2</code> and the one column in the agent formulation. We’ll set the top element equal to some starting value that’s close to our last estimate, say <code>0.2</code>, and the bottom element equal to something arbitrary for the new parameter, say <code>1</code> again. Your <code>sigma</code> and <code>pi</code> arguments should look like</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>sigma<span class="op">=</span>[</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>    [<span class="dv">0</span>, <span class="dv">0</span>],</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>    [<span class="dv">0</span>, <span class="dv">1</span>],</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>], </span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>pi<span class="op">=</span>[</span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>    [<span class="fl">0.2</span>],</span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>    [<span class="dv">1</span>],</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>]</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p>When you solve the problem, there are two more parameters, so it will take a bit longer. As the optimizer nears convergence, we should again see “marching down the gradient” and, since we’re still just identified, an objective approaching zero. At the optimum, verify that the gradient norm is again near zero and that the Hessian’s eigenvalues are all positive. Usually, we would again draw multiple starting values to be sure everything’s working fine, but from here on out, to save time we’ll just use one set of starting values. Your <code>sigma</code> estimate should be around <code>6.02</code>.</p>
+<p>Note that your new random coefficient on price is <span class="math inline">\(\alpha_{it} = \alpha + \sigma_p \nu_{1it} + \pi_p y_{it}\)</span> where <span class="math inline">\(\nu_{1it}\)</span> is <code>nodes0</code> in your <code>agent_data</code> and <span class="math inline">\(y_{it}\)</span> is <code>log_income</code>. Compute the average log income <span class="math inline">\(\bar{y}\)</span> in your demographic data to verify that your estimate of the <em>average</em> price coefficient <span class="math inline">\(\alpha + \sigma_p \times 0 + \pi \times \bar{y}\)</span> is close to your old <span class="math inline">\(\hat{\alpha}\)</span>. Using this average price sensitivity, interpret the two new parameters. Does price sensitivity vary a lot or a little with income? Compare to heterogeneity induced by income, is there a lot or a little unobserved heterogeneity in price sensitivity?</p>
+</section>
+<section id="evaluate-changes-to-the-price-counterfactual" class="level3">
+<h3 class="anchored" data-anchor-id="evaluate-changes-to-the-price-counterfactual">6. Evaluate changes to the price counterfactual</h3>
+<p>Re-run the price counterfactual and discuss new differences. Do substitution and cannibalization seem more reasonable than before? Does the price change seem to differentially affect high- vs.&nbsp;low-income consumers? Is there anything that we were unable to estimate with cross-market product-level variation that you think could have helped further improve substitution patterns?</p>
+</section>
+</section>
+<section id="supplemental-questions" class="level2">
+<h2 class="anchored" data-anchor-id="supplemental-questions">Supplemental Questions</h2>
+<p>These questions will not be directly covered in lecture, but will be useful to think about when doing BLP-style estimation in your own work.</p>
+<section id="try-using-different-numbers-of-monte-carlo-draws" class="level3">
+<h3 class="anchored" data-anchor-id="try-using-different-numbers-of-monte-carlo-draws">1. Try using different numbers of Monte Carlo draws</h3>
+<p>Above, you took <span class="math inline">\(I_t = 1,000\)</span> draws per market when constructing your agent data. Particularly for simple models like this, this is usually a sufficient number of draws. In practice, however, when there are many more markets and dimensions of heterogeneity, you may want to start with a smaller number like <span class="math inline">\(I_t = 100\)</span> to get started, and then increase this number until your estimates stop changing and optimization stops having any issues. Try re-estimating the model with 10, 100, 500, and 2,000 draws, and see how your estimates change, if at all.</p>
+</section>
+<section id="try-using-scrambled-halton-sequences" class="level3">
+<h3 class="anchored" data-anchor-id="try-using-scrambled-halton-sequences">2. Try using scrambled Halton sequences</h3>
+<p>Using a random number generator like <a href="https://numpy.org/doc/stable/reference/random/generator.html"><code>np.random.default_rng</code></a> is perhaps the simplest approach to approximate an integral over a distribution like standard normals. However, using quasi-Monte Carlo sequences can do better with fewer draws. Instead of using <span class="math inline">\(N(0, 1)\)</span> draws from a random number generator, try using scrambled Halton draws.</p>
+<p>You can do so with <a href="https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.qmc.Halton.html"><code>scipy.stats.qmc.Halton</code></a> or <a href="https://pyblp.readthedocs.io/en/stable/_api/pyblp.build_integration.html#pyblp.build_integration"><code>pyblp.build_integration</code></a> with <code>specification='halton'</code> in <a href="https://pyblp.readthedocs.io/en/stable/_api/pyblp.Integration.html"><code>pyblp.Integration</code></a>. Again, estimate the model with 10, 100, 500, 1,000, and 2,000 quasi-Halton numbers per market, and see how the stability of your estimates compares to when you use simple Monte Carlo draws.</p>
+</section>
+<section id="try-using-quadrature" class="level3">
+<h3 class="anchored" data-anchor-id="try-using-quadrature">3. Try using quadrature</h3>
+<p>A particularly computationally-efficient approach to approximating a Gaussian distribution is with <a href="https://en.wikipedia.org/wiki/Gaussian_quadrature">quadrature</a>. If you’re working with a model where consumer preference heterogeneity is not particularly complicated, you may want to try to replace Monte Carlo or quasi-Monte Carlo draws with many fewer nodes/weights that very well approximate the distribution.</p>
+<p>You can construct quadrature nodes and weights with <a href="https://pyblp.readthedocs.io/en/stable/_api/pyblp.build_integration.html#pyblp.build_integration"><code>pyblp.build_integration</code></a> with <code>specification='product'</code> in <a href="https://pyblp.readthedocs.io/en/stable/_api/pyblp.Integration.html"><code>pyblp.Integration</code></a>. The <code>'product'</code> specification means that PyBLP will take the cross-product of the quadrature nodes and weights for each univarate <span class="math inline">\(N(0, 1)\)</span>. If you have, say, <code>size=7</code> nodes/weights per market for each <span class="math inline">\(N(0, 1)\)</span> but 5 dimensions of heterogeneity (i.e., <code>nodes0</code>, <code>nodes1</code>, <code>nodes2</code>, <code>nodes3</code>, and <code>nodes4</code>), this will give <span class="math inline">\(7^5 = 16,807\)</span> consumer types per market. This is known as the <a href="https://en.wikipedia.org/wiki/Curse_of_dimensionality">curse of dimensionality</a>, which Monte Carlo integration does not suffer from as much. With this many dimensions of heterogeneity, you could either switch to back to Monte Carlo integration or try using <a href="https://en.wikipedia.org/wiki/Sparse_grid">sparse grid</a> integration, which more carefully chooses quadrature nodes/weights in higher dimensions. You can do this with <code>specification='grid'</code>.</p>
+<p>In our setting, we are only using one set of <span class="math inline">\(N(0, 1)\)</span> draws for unobserved preference heterogenity for price. We can use <code>specification='product'</code>, <code>size=7</code>, and <code>dimensions=2</code> to construct two <span class="math inline">\(N(0, 1)\)</span> draws, the second of which we’ll want to convert into income draws. We can do this by estimating a lognormal distribution for income in each market (you’ll need to compute market-specific means and standard deviations of log income), and transforming the second column of <span class="math inline">\(N(0, 1)\)</span> draws into log income draws. Try doing this and see if your estimates (and compute time) differs much from before. If they do, this indicates that a lognormal distribution for income may not be a great parametric assumption, and a Monte Carlo approach may have made more sense than quadrature.</p>
+</section>
+<section id="approximate-the-optimal-instruments" class="level3">
+<h3 class="anchored" data-anchor-id="approximate-the-optimal-instruments">4. Approximate the optimal instruments</h3>
+<p>After estimating your model, let PyBLP approximate the optimal instruments with <a href="https://pyblp.readthedocs.io/en/stable/_api/pyblp.ProblemResults.compute_optimal_instruments.html"><code>.compute_optimal_instruments</code></a>. You can then use the method <a href="https://pyblp.readthedocs.io/en/stable/_api/pyblp.OptimalInstrumentResults.to_problem.html"><code>.to_problem</code></a> to automatically update your problem to include the optimal instruments. Then you can re-solve it like before. Do your estimates change much? If they don’t what does this suggest?</p>
+</section>
+<section id="add-another-instrument-and-compute-the-optimal-weighting-matrix" class="level3">
+<h3 class="anchored" data-anchor-id="add-another-instrument-and-compute-the-optimal-weighting-matrix">5. Add another instrument and compute the optimal weighting matrix</h3>
+<p>So far, we have been working with just-identified models with exactly as many moments as parameters. This means that in theory, the weighting matrix <span class="math inline">\(W\)</span> shouldn’t matter because we should always be able to find parameter values that set the objective exactly equal to zero, regardless of how the different components of the objective are weighted.</p>
+<p>But in some cases, you may want to have an over-identified model. Multiple instruments can increase the precision of estimates, and can also allow for overidentification tests. Try adding an additional instrument <code>demand_instruments4</code> equal to the interaction between the log income <em>standard deviation</em> and your differentiation instrument constructed from <code>predicted_prices</code>. Recall the linear regression intuition: this leverages cross-market variation in the standard deviation of income to target the parameter in <span class="math inline">\(\Pi\)</span> on prices and log income.</p>
+<p>First re-estimate the first step of your model. At the optimum, your objetive will now be nontrivially far from zero, but you should still verify that the other convergence checks pan out. Do your first-stage estimates look any different?</p>
+<p>Then re-run estimation but pass <a href="https://pyblp.readthedocs.io/en/stable/_api/pyblp.ProblemResults.html#pyblp.ProblemResults.updated_W"><code>.updated_W</code></a> to the <code>W</code> argument of <a href="https://pyblp.readthedocs.io/en/stable/_api/pyblp.Problem.solve.html"><code>.solve</code></a>. You should still be using <code>method='1s'</code>. Technically, PyBLP will do the two steps for you with <code>method='2s'</code>. However, if this was a real problem and not just an exercise, you would want to again try optimization with multiple starting values, which is something that PyBLP doesn’t automatically do.</p>
+<p>Compare you first and second-stage estimates. Do they look particularly different? What about your standard errors?</p>
+</section>
+<section id="incorporate-supply-side-restrictions-into-estimation" class="level3">
+<h3 class="anchored" data-anchor-id="incorporate-supply-side-restrictions-into-estimation">6. Incorporate supply-side restrictions into estimation</h3>
+<p>In the supplemental exercises of the first exercise, we used a canonical assumption about how firms set prices to impute marginal costs of producing each cereal from pricing optimality conditions. If we are further willing to model the functional form of marginal costs, for example as <span class="math inline">\(c_{jt} = x_{jt}'\gamma + \omega_{jt}\)</span>, we can stack our current moment conditions <span class="math inline">\(\mathbb{E}[\xi_{jt} z_{jt}^D]\)</span> with additional supply-side moment conditions <span class="math inline">\(\mathbb{E}[\omega_{jt} z_{jt}^S]\)</span>. These will allow us to efficiently estimate <span class="math inline">\(\gamma\)</span>, and in some cases can also help to add precision to our demand-side estimates.</p>
+<p>Like the the first exercise, you will need a column of <code>firm_ids</code> to tell PyBLP which firms produce what cereals. To impose the assumption that <span class="math inline">\(c_{jt} = x_{jt}'\gamma + \omega_{jt}\)</span> for some characteristics <span class="math inline">\(x_{jt}\)</span>, you’ll need to specify a third formulation in your <code>product_formulations</code> tuple. For simplicity, try assuming that the only observed characterstics that affect marginal costs are a constant and the <code>mushy</code> dummy.</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>product_formulations <span class="op">=</span> (</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>    pyblp.Formulation(<span class="st">'0 + prices'</span>, absorb<span class="op">=</span><span class="st">'C(market_ids) + C(product_ids)'</span>), </span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>    pyblp.Formulation(<span class="st">'0 + mushy + prices'</span>), </span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>    pyblp.Formulation(<span class="st">'1 + mushy'</span>),</span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p>By default, PyBLP knows that a constant and <code>mushy</code> are exogenous variables, so it will add them to the set of supply-side instruments <span class="math inline">\(z_{jt}^S\)</span>. If you wanted to model non-constant returns to scale, for example by including <code>I(market_size * shares)</code> to have a coefficient on quantities <span class="math inline">\(q_{jt} = M_t \cdot s_{jt}\)</span>, PyBLP would recognize that this term included endogenous market shares and not include it in <span class="math inline">\(z_{jt}^S\)</span>. Instead, you would have to specify a <code>supply_instruments0</code> column in your product data to give a valid demand-shifter for market shares. Ideally, you would want something that affects demand but that is uncorrelated with the unobserved portion of marginal costs <span class="math inline">\(\omega_{jt}\)</span>.</p>
+<p>Try estimating the model with supply-side restrictions. When calling <a href="https://pyblp.readthedocs.io/en/stable/_api/pyblp.Problem.solve.html"><code>.solve</code></a>, you’ll need to specify an initial value for <span class="math inline">\(\alpha\)</span> with the <code>beta</code> argument because after adding a supply side, we can no longer “concentrate out” <span class="math inline">\(\alpha\)</span> as it’s needed to impute marginal costs. PyBLP will automatically concentrate out <span class="math inline">\(\gamma\)</span>.</p>
+<p>Interpret your new supply-side estimates. Your demand-side estimates should be essentially the same because you’re using the same moments to estimate them as before. When adding a supply side, demand-side estimates tend to become more precise when there are supply-side instruments that are relevant for demand-side parameters (e.g., optimal instruments).</p>
+</section>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+        const codeEl = trigger.previousElementSibling.cloneNode(true);
+        for (const childEl of codeEl.children) {
+          if (isCodeAnnotation(childEl)) {
+            childEl.remove();
+          }
+        }
+        return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>
