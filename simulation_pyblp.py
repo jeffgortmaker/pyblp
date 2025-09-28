@@ -78,7 +78,7 @@ data_df = pd.DataFrame({
 })
 
 # Save the dataset
-output_path = '/Users/marek/Library/CloudStorage/Dropbox/github/pyblp/pyblp_homework/data/blp_data.csv'
+output_path = '/Users/marek/Library/CloudStorage/Dropbox/github/pyblp/pyblp_data.csv'
 data_df.to_csv(output_path, index=False)
 
 print(f"\nDataset successfully generated and saved to {output_path}")
