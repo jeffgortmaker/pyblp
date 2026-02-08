@@ -289,7 +289,7 @@ class Optimization(StringRepresentation):
             values = raw_values.reshape(initial.shape).astype(initial.dtype, copy=False)
             objective, gradient, progress = verbose_objective_function(values, iterations, evaluations)
             return (
-                float(objective),
+                float(np.squeeze(objective)),
                 None if gradient is None else gradient.astype(raw_values.dtype, copy=False).flatten(),
                 progress,
             )
@@ -608,7 +608,7 @@ def knitro_optimizer(
             objective, gradient = cache[1]
 
             # define a function that normalizes values so they can be digested by Knitro
-            normalize = lambda x: min(max(float(x), -sys.maxsize), sys.maxsize)
+            normalize = lambda x: min(max(float(np.squeeze(x)), -sys.maxsize), sys.maxsize)
 
             # handle request codes
             if request_code == knitro.KTR_RC_EVALFC:

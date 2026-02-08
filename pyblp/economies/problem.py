@@ -1179,7 +1179,7 @@ class ProblemEconomy(Economy):
                     micro_gradients = np.zeros((moments.MM, moments.PM), options.dtype)
                     for m, moment in enumerate(moments.micro_moments):
                         part_indices = [moments.micro_parts.index(p) for p in moment.parts]
-                        micro_value = moment.compute_value(parts_values[part_indices])
+                        micro_value = moment.compute_value(parts_values[part_indices].flatten())
                         micro_value = np.asarray(micro_value).flatten()
                         if micro_value.size != 1:
                             raise TypeError(f"compute_value of micro moment '{moment}' should return a float.")
@@ -1192,7 +1192,7 @@ class ProblemEconomy(Economy):
                         micro_values[m] = micro_value
 
                         if compute_jacobians or compute_micro_covariances:
-                            micro_gradient = moment.compute_gradient(parts_values[part_indices])
+                            micro_gradient = moment.compute_gradient(parts_values[part_indices].flatten())
                             micro_gradient = np.asarray(micro_gradient, options.dtype).flatten()
                             if micro_gradient.size != len(moment.parts):
                                 raise ValueError(
@@ -1246,8 +1246,8 @@ class ProblemEconomy(Economy):
                         parts_covariances = parts_covariances_numerator / parts_denominator
 
                         # subtract away means from second moments and scale by observation counts
-                        for p1, (part1, value1) in enumerate(zip(moments.micro_parts, parts_values)):
-                            for p2, (part2, value2) in enumerate(zip(moments.micro_parts, parts_values)):
+                        for p1, (part1, value1) in enumerate(zip(moments.micro_parts, parts_values.flatten())):
+                            for p2, (part2, value2) in enumerate(zip(moments.micro_parts, parts_values.flatten())):
                                 if p2 <= p1 and part1.dataset == part2.dataset:
                                     parts_covariances[p2, p1] -= value1 * value2
                                     parts_covariances[p2, p1] /= part1.dataset.observations
@@ -1523,7 +1523,7 @@ class ProblemEconomy(Economy):
         # compute the objective value and replace it with its last value if computation failed
         with np.errstate(all='ignore'):
             mean_g = np.r_[compute_gmm_moments_mean(u_list, Z_list), micro]
-            objective = mean_g.T @ W @ mean_g
+            objective = np.squeeze(mean_g.T @ W @ mean_g)
             if scale_objective:
                 objective *= self.N
         if not np.isfinite(np.squeeze(objective)):

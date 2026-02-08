@@ -449,11 +449,11 @@ def squarem_iterator(
         v = g1 - g0
         with np.errstate(divide='ignore'):
             if scheme == 1:
-                alpha = (r.T @ v) / (v.T @ v)
+                alpha = np.squeeze((r.T @ v) / (v.T @ v))
             elif scheme == 2:
-                alpha = (r.T @ r) / (r.T @ v)
+                alpha = np.squeeze((r.T @ r) / (r.T @ v))
             else:
-                alpha = -np.sqrt((r.T @ r) / (v.T @ v))
+                alpha = -np.squeeze(np.sqrt((r.T @ r) / (v.T @ v)))
 
         # bound the step length and update its bounds
         alpha = -np.maximum(step_min, np.minimum(step_max, -alpha))

@@ -152,7 +152,8 @@ def parallel(processes: int, use_pathos: bool = False) -> Iterator[None]:
                 output(f"Terminating the pool of {processes} processes ...")
                 terminate_time = time.time()
         except AttributeError as exception:
-            if "Can't pickle local object" not in str(exception):
+            exception_str = str(exception)
+            if "Can't pickle local object" not in exception_str and "Can't get local object" not in exception_str:
                 raise
             object_message = "lambda functions" if '<lambda>' in str(exception) else "some objects"
             pickling_message = (
@@ -325,7 +326,7 @@ def format_number(number: Any) -> str:
     if not isinstance(options.digits, int):
         raise TypeError("options.digits must be an int.")
     template = f"{{:^+{options.digits + 6}.{options.digits - 1}E}}"
-    formatted = template.format(float(number))
+    formatted = template.format(float(np.squeeze(number)))
     if "NAN" in formatted:
         formatted = formatted.replace("+", " ")
     return formatted

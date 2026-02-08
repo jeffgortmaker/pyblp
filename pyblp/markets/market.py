@@ -151,8 +151,8 @@ class Market(Container):
         self.gamma = gamma
         self.rho_size = rho.size
         if self.rho_size == 1:
-            self.group_rho = np.full((self.H, 1), float(rho))
-            self.rho = np.full((self.J, 1), float(rho))
+            self.group_rho = np.full((self.H, 1), float(np.squeeze(rho)))
+            self.rho = np.full((self.J, 1), float(np.squeeze(rho)))
         else:
             self.group_rho = rho[np.searchsorted(economy.unique_nesting_ids, self.groups.unique)]
             self.rho = self.groups.expand(self.group_rho)

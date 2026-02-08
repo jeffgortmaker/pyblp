@@ -362,7 +362,7 @@ class MicroMoment(StringRepresentation):
             raise ValueError("When specified, compute_gradient must be callable.")
 
         self.name = name
-        self.value = float(value)
+        self.value = float(np.squeeze(value))
         self.parts = parts
         self.compute_value = functools.partial(compute_value)
         self.compute_gradient = functools.partial(compute_gradient)
@@ -377,7 +377,7 @@ def default_compute_value(part_values: Array) -> float:
     """Define the default micro value computation function for a single micro part. This needs to be at the module
     level to allow for standard multiprocessing to work.
     """
-    return float(part_values)
+    return float(np.squeeze(part_values))
 
 
 def default_compute_gradient(part_values: Array) -> Array:

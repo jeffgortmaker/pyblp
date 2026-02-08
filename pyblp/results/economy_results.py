@@ -1351,7 +1351,7 @@ class EconomyResults(SimpleEconomyResults):
             micro_values = np.zeros((moments.MM, 1), options.dtype)
             for m, moment in enumerate(moments.micro_moments):
                 part_indices = [moments.micro_parts.index(p) for p in moment.parts]
-                micro_value = moment.compute_value(parts_values[part_indices])
+                micro_value = moment.compute_value(parts_values[part_indices].flatten())
                 micro_value = np.asarray(micro_value).flatten()
                 if micro_value.size != 1:
                     raise TypeError(f"compute_value of micro moment '{moment}' should return a float.")

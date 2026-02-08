@@ -534,10 +534,10 @@ class Parameters(object):
         vector_se: Optional[Array] = None,
     ) -> str:
         """Format a vector (and optional standard errors) as a string."""
-        data = [[format_number(x) for x in vector]]
+        data = [[format_number(x) for x in vector.flatten()]]
         if vector_se is not None:
             fixed_indices = {p.location[0] for p in self.fixed if isinstance(p, parameter_type)}
-            data.append(["" if i in fixed_indices else format_se(x) for i, x in enumerate(vector_se)])
+            data.append(["" if i in fixed_indices else format_se(x) for i, x in enumerate(vector_se.flatten())])
         return format_table(header, *data, title=title)
 
     def format_nonlinear_coefficients(
@@ -665,6 +665,7 @@ class Parameters(object):
         fill elements corresponding to fixed parameters with their fixed values. Always fill concentrated out parameters
         with nulls.
         """
+        theta_like = np.asarray(theta_like).flatten()
         sigma_like = np.full_like(self.sigma, np.nan)
         pi_like = np.full_like(self.pi, np.nan)
         rho_like = np.full_like(self.rho, np.nan)

@@ -425,7 +425,7 @@ class Economy(Container, StringRepresentation):
                 groups_t = Groups(self.products.nesting_ids[indices_t])
                 log_group_shares_t = np.log(groups_t.expand(groups_t.sum(shares_t)))
                 if rho.size == 1:
-                    rho_t = np.full_like(shares_t, float(rho))
+                    rho_t = np.full_like(shares_t, float(np.squeeze(rho)))
                 else:
                     rho_t = groups_t.expand(rho[np.searchsorted(self.unique_nesting_ids, groups_t.unique)])
                 delta[indices_t] -= rho_t * (log_shares_t - log_group_shares_t)

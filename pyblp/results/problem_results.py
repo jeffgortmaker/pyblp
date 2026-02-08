@@ -979,7 +979,7 @@ class ProblemResults(EconomyResults):
             - :doc:`Tutorial </tutorial>`
 
         """
-        return (1 if self._scaled_objective else self.problem.N) * float(self.objective)
+        return (1 if self._scaled_objective else self.problem.N) * float(np.squeeze(self.objective))
 
     def run_distance_test(self, unrestricted: 'ProblemResults') -> float:
         r"""Test the validity of model restrictions with the distance test.
@@ -1061,7 +1061,7 @@ class ProblemResults(EconomyResults):
 
         """
         gradient = self.moments_jacobian.T @ self.W @ self.moments
-        return self.problem.N * float(gradient.T @ self.parameter_covariances @ gradient)
+        return self.problem.N * float(np.squeeze(gradient.T @ self.parameter_covariances @ gradient))
 
     def run_wald_test(self, restrictions: Any, restrictions_jacobian: Any) -> float:
         r"""Test the validity of model restrictions with the Wald test.
@@ -1113,7 +1113,7 @@ class ProblemResults(EconomyResults):
         inverted, replacement = approximately_invert(matrix)
         if replacement:
             output(exceptions.WaldInversionError(matrix, replacement))
-        return self.problem.N * float(restrictions.T @ inverted @ restrictions)
+        return self.problem.N * float(np.squeeze(restrictions.T @ inverted @ restrictions))
 
     def bootstrap(
         self,

@@ -24,6 +24,9 @@
 .spyderproject
 .ipynb_checkpoints
 
+# agent files
+.claude
+
 # compiled source files
 *.a
 *.o

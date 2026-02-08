@@ -109,7 +109,18 @@ def test_optimal_instruments(simulated_problem: SimulatedProblemFixture, compute
         'draws': 5,
         'seed': 0,
     })
-    new_problem = problem_results.compute_optimal_instruments(**compute_options).to_problem()
+    optimal_results = problem_results.compute_optimal_instruments(**compute_options)
+
+    # rescale optimal instruments to have unit variance, which improves the conditioning of the 2SLS weighting matrix
+    #   without affecting the IV estimator (the projection matrix is invariant to column scaling)
+    for attr in ['demand_instruments', 'supply_instruments']:
+        instruments = getattr(optimal_results, attr)
+        if instruments.size > 0:
+            stds = instruments.std(axis=0, keepdims=True)
+            stds[stds == 0] = 1
+            setattr(optimal_results, attr, instruments / stds)
+
+    new_problem = optimal_results.to_problem()
 
     # allow optimal instruments to be created when there's an autoregressive parameter, but don't check that they work
     if 'phi' in solve_options:
@@ -339,7 +350,11 @@ def test_result_serialization(simulated_problem: SimulatedProblemFixture) -> Non
             unpickled = pickle.loads(pickle.dumps(original))
         except AttributeError as exception:
             # use dill to pickle lambda functions
-            if "Can't pickle local object" not in str(exception) or "<lambda>" not in str(exception):
+            exception_str = str(exception)
+            is_lambda_pickle_error = "<lambda>" in exception_str and (
+                "Can't pickle local object" in exception_str or "Can't get local object" in exception_str
+            )
+            if not is_lambda_pickle_error:
                 raise
             import dill
             unpickled = dill.loads(dill.dumps(original))
@@ -1084,7 +1099,7 @@ def test_passthrough(simulated_problem: SimulatedProblemFixture) -> None:
     )
 
     # only do the test for a single market
-    t = int(product_data.market_ids[0])
+    t = int(np.squeeze(product_data.market_ids[0]))
     costs = true_results.compute_costs(market_id=t)
 
     # use a looser tolerance if prices enter nonlinearly into utility (this is harder to approximate)
