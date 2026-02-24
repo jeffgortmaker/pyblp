@@ -1129,6 +1129,7 @@ class Market(Container):
                     A_sums * (1 - self.group_rho) -
                     (np.log(self.groups.sum(exp_utilities)) + utility_reduction)
                 )
+                B[~np.isfinite(B)] = 0
                 marginals_tangent = group_associations * B - marginals * (group_associations.T @ B)
 
             marginals_tangent[~np.isfinite(marginals_tangent)] = 0
