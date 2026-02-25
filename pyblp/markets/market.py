@@ -1037,7 +1037,8 @@ class Market(Container):
                 if agent_indices is not None:
                     v = v[agent_indices]
 
-                probabilities_tangent = probabilities * v.T * (x - x.T @ probabilities)
+                vx = v.T * x
+                probabilities_tangent = probabilities * (vx - (probabilities * vx).sum(axis=0, keepdims=True))
             else:
                 assert isinstance(parameter, (GammaParameter, PhiParameter))
                 probabilities_tangent = np.zeros_like(probabilities)

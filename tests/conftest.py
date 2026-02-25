@@ -386,6 +386,14 @@ def large_blp_simulation() -> SimulationFixture:
     for t in np.unique(id_data.market_ids):
         product_ids[id_data.market_ids == t] = np.arange((id_data.market_ids == t).sum())
 
+    unique_market_ids = np.unique(id_data.market_ids)
+    max_J = max(i.size for i in get_indices(id_data.market_ids).values())
+    integration_data = build_integration(Integration('product', 4), 3)
+    demo_state = np.random.RandomState(3)
+    demographics = {'f': demo_state.uniform(size=unique_market_ids.size * integration_data.weights.size)}
+    for j in range(max_J):
+        demographics[f'g{j}'] = demo_state.uniform(size=unique_market_ids.size * integration_data.weights.size)
+
     simulation = Simulation(
         product_formulations=(
             Formulation('1 + x + y + z + q'),
@@ -397,6 +405,12 @@ def large_blp_simulation() -> SimulationFixture:
             'firm_ids': id_data.firm_ids,
             'product_ids': np.c_[product_ids, np.mod(product_ids, 2)],
             'clustering_ids': np.random.RandomState(2).choice(range(30), id_data.size),
+        },
+        agent_data={
+            'market_ids': np.repeat(unique_market_ids, integration_data.weights.size),
+            'weights': np.tile(integration_data.weights.flat, unique_market_ids.size),
+            'nodes': np.tile(integration_data.nodes, (unique_market_ids.size, 1)),
+            **demographics,
         },
         beta=[1, 1, 2, 3, 1],
         sigma=[
@@ -411,7 +425,6 @@ def large_blp_simulation() -> SimulationFixture:
         ],
         gamma=[0.1, 0.2, 0.3],
         agent_formulation=Formulation('1 + f + g'),
-        integration=Integration('product', 4),
         xi_variance=0.00001,
         omega_variance=0.00001,
         correlation=0.9,
@@ -465,7 +478,7 @@ def large_blp_simulation() -> SimulationFixture:
                     observations=simulation.N,
                     compute_weights=lambda _, p, a: np.tile(p.product_ids[:, 0] == 0, (a.size, 1)),
                 ),
-                compute_values=lambda _, p, a: np.tile(a.demographics[:, [1]], (1, p.size)),
+                compute_values=lambda _, p, a: np.tile(a.demographics[:, 1, 0][:, None], (1, p.size)),
             ),
         ),
         MicroMoment(
@@ -482,7 +495,7 @@ def large_blp_simulation() -> SimulationFixture:
                     ],
                     market_ids=simulation.unique_market_ids[1:4],
                 ),
-                compute_values=lambda _, p, a: np.tile(a.demographics[:, [1]], (1, 1 + p.size)),
+                compute_values=lambda _, p, a: np.tile(a.demographics[:, 1, 0][:, None], (1, 1 + p.size)),
             )],
             compute_value=lambda v: v[0],
             compute_gradient=lambda _: np.ones(1),
