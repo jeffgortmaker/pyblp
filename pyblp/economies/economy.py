@@ -60,7 +60,6 @@ class Economy(Container, StringRepresentation):
     H: int
     _lags: Optional[Array]
     _second_lags: Optional[Array]
-    _second_lag_indices: Optional[Array]
     _market_indices: Dict[Hashable, int]
     _product_market_indices: Dict[Hashable, Array]
     _agent_market_indices: Dict[Hashable, Array]
@@ -111,12 +110,10 @@ class Economy(Container, StringRepresentation):
         self.H = self.unique_nesting_ids.size
 
         # construct indices and masks for panel data
-        self._lags = self._second_lags = self._second_lag_indices = None
+        self._lags = self._second_lags = None
         if self.products.lag_indices.shape[1] > 0:
-            indices = np.arange(self.N)
-            self._lags = self.products.lag_indices.flat != indices
-            self._second_lag_indices = self.products.lag_indices[self.products.lag_indices.flat].flatten()
-            self._second_lags = self._second_lag_indices != indices[self.products.lag_indices.flat]
+            self._lags = self.products.lag_indices.flat != np.arange(self.N)
+            self._second_lags = self._lags & self._lags[self.products.lag_indices.flat]
 
         # identify market indices
         self._market_indices = {t: i for i, t in enumerate(self.unique_market_ids)}
@@ -449,16 +446,17 @@ class Economy(Container, StringRepresentation):
         Optionally include an additional quasi-lag of another variable.
         """
         assert self._lags is not None
-        x = x - phi * x[self.products.lag_indices.flat]
-        if other_x is not None:
-            assert other_phi is not None
-            x -= other_phi * other_x[self.products.lag_indices.flat]
+        with np.errstate(under='ignore'):
+            x = x - phi * x[self.products.lag_indices.flat]
+            if other_x is not None:
+                assert other_phi is not None
+                x -= other_phi * other_x[self.products.lag_indices.flat]
         if moment_type == 'innovations':
             x[~self._lags] = 0
         else:
             assert moment_type == 'differenced_innovations'
-            assert self._second_lags is not None and self._second_lag_indices is not None
-            x -= x[self._second_lag_indices]
+            assert self._second_lags is not None
+            x -= x[self.products.lag_indices.flat]
             x[~self._second_lags] = 0
         return x
 
@@ -471,7 +469,7 @@ class Economy(Container, StringRepresentation):
             x[~self._lags] = 0
         else:
             assert moment_type == 'differenced_innovations'
-            assert self._second_lags is not None and self._second_lag_indices is not None
-            x = -(x - x[self._second_lag_indices])
+            assert self._second_lags is not None
+            x = -(x - x[self.products.lag_indices.flat])
             x[~self._second_lags] = 0
         return x
