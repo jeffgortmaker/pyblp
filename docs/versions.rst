@@ -4,6 +4,12 @@ Version Notes
 These notes will only include major changes.
 
 
+1.2
+---
+
+- Timing assumptions
+
+
 1.1
 ---
 - Covariance restrictions
