@@ -573,8 +573,118 @@ def knitro_optimizer(
     compute_gradient: bool,
     **knitro_options: Any,
 ) -> Tuple[Array, bool]:
-    """Optimize with Knitro."""
+    """Optimize with Knitro, supporting both the modern object-oriented API (``KN_*``, Knitro 12+) and the legacy
+    callable-library API (``KTR_*``, Knitro <= 12).
+    """
     with knitro_context_manager() as (knitro, knitro_context):
+        # the modern API exposes KN_new; the legacy API exposes KTR_new
+        if hasattr(knitro, 'KN_new'):
+            return knitro_optimizer_kn(
+                knitro, knitro_context, initial_values, bounds, objective_function, iteration_callback,
+                compute_gradient, **knitro_options
+            )
+        return knitro_optimizer_ktr(
+            knitro, knitro_context, initial_values, bounds, objective_function, iteration_callback,
+            compute_gradient, **knitro_options
+        )
+
+
+def knitro_optimizer_kn(
+    knitro: Any,
+    knitro_context: Any,
+    initial_values: Array,
+    bounds: Optional[Iterable[Tuple[float, float]]],
+    objective_function: ObjectiveFunction,
+    iteration_callback: Callable[[], None],
+    compute_gradient: bool,
+    **knitro_options: Any,
+) -> Tuple[Array, bool]:
+    """Optimize with the modern object-oriented Knitro API (``KN_*``)."""
+    iterations = 0
+    cache: Optional[Tuple[Array, Tuple[float, Optional[Array]]]] = None
+
+    def evaluate(values: Array) -> Tuple[float, Optional[Array]]:
+        """Compute the objective and its gradient, caching so the gradient callback doesn't force a recomputation."""
+        nonlocal cache
+        if cache is None or not np.array_equal(values, cache[0]):
+            cache = (values.copy(), objective_function(values)[:2])
+        return cache[1]
+
+    # define a function that normalizes values so they can be digested by Knitro
+    normalize = lambda x: min(max(float(np.squeeze(x)), -sys.maxsize), sys.maxsize)
+
+    def function_callback(_: Any, __: Any, request: Any, result: Any, ___: Any) -> int:
+        """Handle a request to compute the objective, calling the iteration callback on new major iterations."""
+        nonlocal iterations
+        current_iterations = knitro.KN_get_number_iters(knitro_context)
+        while iterations < current_iterations:
+            iteration_callback()
+            iterations += 1
+        objective, _ = evaluate(np.asarray(request.x, dtype=np.float64))
+        result.obj = normalize(objective)
+        return 0
+
+    def gradient_callback(_: Any, __: Any, request: Any, result: Any, ___: Any) -> int:
+        """Handle a request to compute the objective's gradient."""
+        _, gradient = evaluate(np.asarray(request.x, dtype=np.float64))
+        assert compute_gradient and gradient is not None
+        for index, gradient_value in enumerate(np.asarray(gradient).flatten()):
+            result.objGrad[index] = normalize(gradient_value)
+        return 0
+
+    # define the variables, their bounds, and their initial values
+    bounds = bounds or [(-np.inf, +np.inf)] * initial_values.size
+    infinity = knitro.KN_INFINITY
+    knitro.KN_add_vars(knitro_context, initial_values.size)
+    knitro.KN_set_var_lobnds(knitro_context, xLoBnds=[b[0] if np.isfinite(b[0]) else -infinity for b in bounds])
+    knitro.KN_set_var_upbnds(knitro_context, xUpBnds=[b[1] if np.isfinite(b[1]) else +infinity for b in bounds])
+    knitro.KN_set_var_primal_init_values(
+        knitro_context, xInitVals=[float(v) for v in np.asarray(initial_values).flatten()]
+    )
+    knitro.KN_set_obj_goal(knitro_context, knitro.KN_OBJGOAL_MINIMIZE)
+
+    # register the objective (and, if available, gradient) callbacks
+    callback = knitro.KN_add_eval_callback(knitro_context, evalObj=True, funcCallback=function_callback)
+    if compute_gradient:
+        knitro.KN_set_cb_grad(
+            knitro_context, callback, objGradIndexVars=knitro.KN_DENSE, gradCallback=gradient_callback
+        )
+
+    # configure Knitro user options, dispatching by value type (Knitro still accepts legacy string option names)
+    for key, value in knitro_options.items():
+        try:
+            if isinstance(value, str):
+                knitro.KN_set_char_param(knitro_context, key, value)
+            elif isinstance(value, float):
+                knitro.KN_set_double_param(knitro_context, key, value)
+            else:
+                knitro.KN_set_int_param(knitro_context, key, value)
+        except Exception as exception:  # noqa
+            raise RuntimeError(f"Encountered an error when configuring '{key}'.") from exception
+
+    # solve the problem and extract the solution
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        knitro.KN_solve(knitro_context)
+    return_code, _, values, _ = knitro.KN_get_solution(knitro_context)
+
+    # Knitro was only successful if its return code was 0 (final solution satisfies the termination conditions for
+    #   verifying optimality) or between -100 and -199 (a feasible approximate solution was found)
+    return np.asarray(values, dtype=np.float64), return_code > -200
+
+
+def knitro_optimizer_ktr(
+    knitro: Any,
+    knitro_context: Any,
+    initial_values: Array,
+    bounds: Optional[Iterable[Tuple[float, float]]],
+    objective_function: ObjectiveFunction,
+    iteration_callback: Callable[[], None],
+    compute_gradient: bool,
+    **knitro_options: Any,
+) -> Tuple[Array, bool]:
+    """Optimize with the legacy callable-library Knitro API (``KTR_*``)."""
+    if True:
         iterations = 0
         cache: Optional[Tuple[Array, Tuple[float, Optional[Array]]]] = None
 
@@ -681,7 +791,7 @@ def knitro_optimizer(
 
 @contextlib.contextmanager
 def knitro_context_manager() -> Iterator[Tuple[Any, Any]]:
-    """Import Knitro and initialize its context."""
+    """Import Knitro and initialize its context, supporting both the modern (``KN_*``) and legacy (``KTR_*``) APIs."""
     try:
         import knitro
     except OSError as exception:
@@ -689,27 +799,37 @@ def knitro_context_manager() -> Iterator[Tuple[Any, Any]]:
             raise EnvironmentError("Make sure both Knitro and Python are 32- or 64-bit.") from exception
         raise
 
-    # modify older version of Knitro to work with NumPy
-    try:
-        # noinspection PyUnresolvedReferences
-        import knitroNumPy
-        knitro.KTR_array_handler._cIntArray = knitroNumPy._cIntArray
-        knitro.KTR_array_handler._cDoubleArray = knitroNumPy._cDoubleArray
-        knitro.KTR_array_handler._userArray = knitroNumPy._userArray
-        knitro.KTR_array_handler._userToCArray = knitroNumPy._userToCArray
-        knitro.KTR_array_handler._cToUserArray = knitroNumPy._cToUserArray
-    except ImportError:
-        pass
+    # the modern API exposes KN_new; the legacy API exposes KTR_new
+    modern = hasattr(knitro, 'KN_new')
+
+    # modify older versions of Knitro to work with NumPy
+    if not modern:
+        try:
+            # noinspection PyUnresolvedReferences
+            import knitroNumPy
+            knitro.KTR_array_handler._cIntArray = knitroNumPy._cIntArray
+            knitro.KTR_array_handler._cDoubleArray = knitroNumPy._cDoubleArray
+            knitro.KTR_array_handler._userArray = knitroNumPy._userArray
+            knitro.KTR_array_handler._userToCArray = knitroNumPy._userToCArray
+            knitro.KTR_array_handler._cToUserArray = knitroNumPy._cToUserArray
+        except ImportError:
+            pass
 
     # create the Knitro context and attempt to free it if anything goes wrong
     knitro_context = None
     try:
         knitro_context = None
-        try:
-            knitro_context = knitro.KTR_new()
-        except RuntimeError as exception:
-            if 'Error while initializing parameter' not in str(exception):
-                raise
+        if modern:
+            try:
+                knitro_context = knitro.KN_new()
+            except Exception:  # noqa
+                knitro_context = None
+        else:
+            try:
+                knitro_context = knitro.KTR_new()
+            except RuntimeError as exception:
+                if 'Error while initializing parameter' not in str(exception):
+                    raise
         if not knitro_context:
             raise OSError(
                 "Failed to find a Knitro license. Make sure that Knitro is properly installed. You may have to create "
@@ -719,6 +839,9 @@ def knitro_context_manager() -> Iterator[Tuple[Any, Any]]:
         yield knitro, knitro_context
     finally:
         try:
-            knitro.KTR_free(knitro_context)
+            if modern:
+                knitro.KN_free(knitro_context)
+            else:
+                knitro.KTR_free(knitro_context)
         except Exception:
             pass
