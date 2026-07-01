@@ -573,115 +573,224 @@ def knitro_optimizer(
     compute_gradient: bool,
     **knitro_options: Any,
 ) -> Tuple[Array, bool]:
-    """Optimize with Knitro."""
+    """Optimize with Knitro, supporting both the modern object-oriented API (``KN_*``, Knitro 12+) and the legacy
+    callable-library API (``KTR_*``, Knitro <= 12).
+    """
     with knitro_context_manager() as (knitro, knitro_context):
-        iterations = 0
-        cache: Optional[Tuple[Array, Tuple[float, Optional[Array]]]] = None
+        # the modern API exposes KN_new; the legacy API exposes KTR_new
+        if hasattr(knitro, 'KN_new'):
+            return knitro_optimizer_kn(
+                knitro, knitro_context, initial_values, bounds, objective_function, iteration_callback,
+                compute_gradient, **knitro_options
+            )
+        return knitro_optimizer_ktr(
+            knitro, knitro_context, initial_values, bounds, objective_function, iteration_callback,
+            compute_gradient, **knitro_options
+        )
 
-        def combined_callback(
-            request_code: int,
-            _: Any,
-            __: Any,
-            ___: Any,
-            ____: Any,
-            values: Array,
-            _____: Any,
-            objective_store: Array,
-            ______: Any,
-            gradient_store: Array,
-            *_______: Any
-        ) -> int:
-            """Handle requests to compute either the objective or its gradient (which are cached for when the next
-            request is for the same values) and call the iteration callback when there's a new major iteration.
-            """
-            nonlocal iterations, cache
 
-            # call the iteration callback if this is a new iteration
-            current_iterations = knitro.KTR_get_number_iters(knitro_context)
-            while iterations < current_iterations:
-                iteration_callback()
-                iterations += 1
+def knitro_optimizer_kn(
+    knitro: Any,
+    knitro_context: Any,
+    initial_values: Array,
+    bounds: Optional[Iterable[Tuple[float, float]]],
+    objective_function: ObjectiveFunction,
+    iteration_callback: Callable[[], None],
+    compute_gradient: bool,
+    **knitro_options: Any,
+) -> Tuple[Array, bool]:
+    """Optimize with the modern object-oriented Knitro API (``KN_*``)."""
+    iterations = 0
+    cache: Optional[Tuple[Array, Tuple[float, Optional[Array]]]] = None
 
-            # compute the objective or used cached values
-            if cache is None or not np.array_equal(values, cache[0]):
-                cache = (values.copy(), objective_function(values)[:2])
-            objective, gradient = cache[1]
+    def evaluate(values: Array) -> Tuple[float, Optional[Array]]:
+        """Compute the objective and its gradient, caching so the gradient callback doesn't force a recomputation."""
+        nonlocal cache
+        if cache is None or not np.array_equal(values, cache[0]):
+            cache = (values.copy(), objective_function(values)[:2])
+        return cache[1]
 
-            # define a function that normalizes values so they can be digested by Knitro
-            normalize = lambda x: min(max(float(np.squeeze(x)), -sys.maxsize), sys.maxsize)
+    # define a function that normalizes values so they can be digested by Knitro
+    normalize = lambda x: min(max(float(np.squeeze(x)), -sys.maxsize), sys.maxsize)
 
-            # handle request codes
-            if request_code == knitro.KTR_RC_EVALFC:
-                objective_store[0] = normalize(objective)
-                return knitro.KTR_RC_BEGINEND
-            if request_code == knitro.KTR_RC_EVALGA:
-                assert compute_gradient and gradient is not None
-                for index, gradient_value in enumerate(gradient.flatten()):
-                    gradient_store[index] = normalize(gradient_value)
-                return knitro.KTR_RC_BEGINEND
-            return knitro.KTR_RC_CALLBACK_ERR
+    def function_callback(_: Any, __: Any, request: Any, result: Any, ___: Any) -> int:
+        """Handle a request to compute the objective, calling the iteration callback on new major iterations."""
+        nonlocal iterations
+        current_iterations = knitro.KN_get_number_iters(knitro_context)
+        while iterations < current_iterations:
+            iteration_callback()
+            iterations += 1
+        objective, _ = evaluate(np.asarray(request.x, dtype=np.float64))
+        result.obj = normalize(objective)
+        return 0
 
-        # configure Knitro callbacks
-        callback_mapping = {
-            knitro.KTR_set_func_callback: combined_callback,
-            knitro.KTR_set_grad_callback: combined_callback
-        }
-        for set_callback, callback in callback_mapping.items():
-            code = set_callback(knitro_context, callback)
-            if code != 0:
-                raise RuntimeError(f"Encountered error code {code} when registering {set_callback.__name__}.")
+    def gradient_callback(_: Any, __: Any, request: Any, result: Any, ___: Any) -> int:
+        """Handle a request to compute the objective's gradient."""
+        _, gradient = evaluate(np.asarray(request.x, dtype=np.float64))
+        assert compute_gradient and gradient is not None
+        for index, gradient_value in enumerate(np.asarray(gradient).flatten()):
+            result.objGrad[index] = normalize(gradient_value)
+        return 0
 
-        # configure Knitro parameters
-        for key, value in knitro_options.items():
-            set_parameter = knitro.KTR_set_param_by_name
+    # define the variables, their bounds, and their initial values
+    bounds = bounds or [(-np.inf, +np.inf)] * initial_values.size
+    infinity = knitro.KN_INFINITY
+    knitro.KN_add_vars(knitro_context, initial_values.size)
+    knitro.KN_set_var_lobnds(knitro_context, xLoBnds=[b[0] if np.isfinite(b[0]) else -infinity for b in bounds])
+    knitro.KN_set_var_upbnds(knitro_context, xUpBnds=[b[1] if np.isfinite(b[1]) else +infinity for b in bounds])
+    knitro.KN_set_var_primal_init_values(
+        knitro_context, xInitVals=[float(v) for v in np.asarray(initial_values).flatten()]
+    )
+    knitro.KN_set_obj_goal(knitro_context, knitro.KN_OBJGOAL_MINIMIZE)
+
+    # register the objective (and, if available, gradient) callbacks
+    callback = knitro.KN_add_eval_callback(knitro_context, evalObj=True, funcCallback=function_callback)
+    if compute_gradient:
+        knitro.KN_set_cb_grad(
+            knitro_context, callback, objGradIndexVars=knitro.KN_DENSE, gradCallback=gradient_callback
+        )
+
+    # configure Knitro user options, dispatching by value type (Knitro still accepts legacy string option names)
+    for key, value in knitro_options.items():
+        try:
             if isinstance(value, str):
-                set_parameter = knitro.KTR_set_char_param_by_name
-            code = set_parameter(knitro_context, key, value)
-            if code != 0:
-                raise RuntimeError(f"Encountered error code {code} when configuring '{key}'.")
+                knitro.KN_set_char_param(knitro_context, key, value)
+            elif isinstance(value, float):
+                knitro.KN_set_double_param(knitro_context, key, value)
+            else:
+                knitro.KN_set_int_param(knitro_context, key, value)
+        except Exception as exception:
+            raise RuntimeError(f"Encountered an error when configuring '{key}'.") from exception
 
-        # initialize the problem
-        bounds = bounds or [(-np.inf, +np.inf)] * initial_values.size
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore')
-            code = knitro.KTR_init_problem(
-                kc=knitro_context,
-                n=initial_values.size,
-                xInitial=initial_values,
-                lambdaInitial=None,
-                objGoal=knitro.KTR_OBJGOAL_MINIMIZE,
-                objType=knitro.KTR_OBJTYPE_GENERAL,
-                xLoBnds=np.array([b[0] if np.isfinite(b[0]) else -knitro.KTR_INFBOUND for b in bounds]),
-                xUpBnds=np.array([b[1] if np.isfinite(b[1]) else +knitro.KTR_INFBOUND for b in bounds]),
-                cType=None,
-                cLoBnds=None,
-                cUpBnds=None,
-                jacIndexVars=None,
-                jacIndexCons=None,
-                hessIndexRows=None,
-                hessIndexCols=None
-            )
+    # solve the problem and extract the solution
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        knitro.KN_solve(knitro_context)
+    return_code, _, values, _ = knitro.KN_get_solution(knitro_context)
+
+    # Knitro was only successful if its return code was 0 (final solution satisfies the termination conditions for
+    #   verifying optimality) or between -100 and -199 (a feasible approximate solution was found)
+    return np.asarray(values, dtype=np.float64), return_code > -200
+
+
+def knitro_optimizer_ktr(
+    knitro: Any,
+    knitro_context: Any,
+    initial_values: Array,
+    bounds: Optional[Iterable[Tuple[float, float]]],
+    objective_function: ObjectiveFunction,
+    iteration_callback: Callable[[], None],
+    compute_gradient: bool,
+    **knitro_options: Any,
+) -> Tuple[Array, bool]:
+    """Optimize with the legacy callable-library Knitro API (``KTR_*``)."""
+    iterations = 0
+    cache: Optional[Tuple[Array, Tuple[float, Optional[Array]]]] = None
+
+    def combined_callback(
+        request_code: int,
+        _: Any,
+        __: Any,
+        ___: Any,
+        ____: Any,
+        values: Array,
+        _____: Any,
+        objective_store: Array,
+        ______: Any,
+        gradient_store: Array,
+        *_______: Any
+    ) -> int:
+        """Handle requests to compute either the objective or its gradient (which are cached for when the next
+        request is for the same values) and call the iteration callback when there's a new major iteration.
+        """
+        nonlocal iterations, cache
+
+        # call the iteration callback if this is a new iteration
+        current_iterations = knitro.KTR_get_number_iters(knitro_context)
+        while iterations < current_iterations:
+            iteration_callback()
+            iterations += 1
+
+        # compute the objective or used cached values
+        if cache is None or not np.array_equal(values, cache[0]):
+            cache = (values.copy(), objective_function(values)[:2])
+        objective, gradient = cache[1]
+
+        # define a function that normalizes values so they can be digested by Knitro
+        normalize = lambda x: min(max(float(np.squeeze(x)), -sys.maxsize), sys.maxsize)
+
+        # handle request codes
+        if request_code == knitro.KTR_RC_EVALFC:
+            objective_store[0] = normalize(objective)
+            return knitro.KTR_RC_BEGINEND
+        if request_code == knitro.KTR_RC_EVALGA:
+            assert compute_gradient and gradient is not None
+            for index, gradient_value in enumerate(gradient.flatten()):
+                gradient_store[index] = normalize(gradient_value)
+            return knitro.KTR_RC_BEGINEND
+        return knitro.KTR_RC_CALLBACK_ERR
+
+    # configure Knitro callbacks
+    callback_mapping = {
+        knitro.KTR_set_func_callback: combined_callback,
+        knitro.KTR_set_grad_callback: combined_callback
+    }
+    for set_callback, callback in callback_mapping.items():
+        code = set_callback(knitro_context, callback)
         if code != 0:
-            raise RuntimeError(f"Encountered error code {code} when initializing the Knitro problem solver.")
+            raise RuntimeError(f"Encountered error code {code} when registering {set_callback.__name__}.")
 
-        # solve the problem
-        values_store = np.zeros_like(initial_values)
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore')
-            return_code = knitro.KTR_solve(
-                kc=knitro_context, x=values_store, lambda_=np.zeros_like(initial_values), evalStatus=0,
-                obj=np.array([0], np.float64), c=None, objGrad=None, jac=None, hess=None, hessVector=None,
-                userParams=None
-            )
+    # configure Knitro parameters
+    for key, value in knitro_options.items():
+        set_parameter = knitro.KTR_set_param_by_name
+        if isinstance(value, str):
+            set_parameter = knitro.KTR_set_char_param_by_name
+        code = set_parameter(knitro_context, key, value)
+        if code != 0:
+            raise RuntimeError(f"Encountered error code {code} when configuring '{key}'.")
 
-        # Knitro was only successful if its return code was 0 (final solution satisfies the termination conditions for
-        #   verifying optimality) or between -100 and -199 (a feasible approximate solution was found)
-        return values_store, return_code > -200
+    # initialize the problem
+    bounds = bounds or [(-np.inf, +np.inf)] * initial_values.size
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        code = knitro.KTR_init_problem(
+            kc=knitro_context,
+            n=initial_values.size,
+            xInitial=initial_values,
+            lambdaInitial=None,
+            objGoal=knitro.KTR_OBJGOAL_MINIMIZE,
+            objType=knitro.KTR_OBJTYPE_GENERAL,
+            xLoBnds=np.array([b[0] if np.isfinite(b[0]) else -knitro.KTR_INFBOUND for b in bounds]),
+            xUpBnds=np.array([b[1] if np.isfinite(b[1]) else +knitro.KTR_INFBOUND for b in bounds]),
+            cType=None,
+            cLoBnds=None,
+            cUpBnds=None,
+            jacIndexVars=None,
+            jacIndexCons=None,
+            hessIndexRows=None,
+            hessIndexCols=None
+        )
+    if code != 0:
+        raise RuntimeError(f"Encountered error code {code} when initializing the Knitro problem solver.")
+
+    # solve the problem
+    values_store = np.zeros_like(initial_values)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        return_code = knitro.KTR_solve(
+            kc=knitro_context, x=values_store, lambda_=np.zeros_like(initial_values), evalStatus=0,
+            obj=np.array([0], np.float64), c=None, objGrad=None, jac=None, hess=None, hessVector=None,
+            userParams=None
+        )
+
+    # Knitro was only successful if its return code was 0 (final solution satisfies the termination conditions for
+    #   verifying optimality) or between -100 and -199 (a feasible approximate solution was found)
+    return values_store, return_code > -200
 
 
 @contextlib.contextmanager
 def knitro_context_manager() -> Iterator[Tuple[Any, Any]]:
-    """Import Knitro and initialize its context."""
+    """Import Knitro and initialize its context, supporting both the modern (``KN_*``) and legacy (``KTR_*``) APIs."""
     try:
         import knitro
     except OSError as exception:
@@ -689,27 +798,37 @@ def knitro_context_manager() -> Iterator[Tuple[Any, Any]]:
             raise EnvironmentError("Make sure both Knitro and Python are 32- or 64-bit.") from exception
         raise
 
-    # modify older version of Knitro to work with NumPy
-    try:
-        # noinspection PyUnresolvedReferences
-        import knitroNumPy
-        knitro.KTR_array_handler._cIntArray = knitroNumPy._cIntArray
-        knitro.KTR_array_handler._cDoubleArray = knitroNumPy._cDoubleArray
-        knitro.KTR_array_handler._userArray = knitroNumPy._userArray
-        knitro.KTR_array_handler._userToCArray = knitroNumPy._userToCArray
-        knitro.KTR_array_handler._cToUserArray = knitroNumPy._cToUserArray
-    except ImportError:
-        pass
+    # the modern API exposes KN_new; the legacy API exposes KTR_new
+    modern = hasattr(knitro, 'KN_new')
+
+    # modify older versions of Knitro to work with NumPy
+    if not modern:
+        try:
+            # noinspection PyUnresolvedReferences
+            import knitroNumPy
+            knitro.KTR_array_handler._cIntArray = knitroNumPy._cIntArray
+            knitro.KTR_array_handler._cDoubleArray = knitroNumPy._cDoubleArray
+            knitro.KTR_array_handler._userArray = knitroNumPy._userArray
+            knitro.KTR_array_handler._userToCArray = knitroNumPy._userToCArray
+            knitro.KTR_array_handler._cToUserArray = knitroNumPy._cToUserArray
+        except ImportError:
+            pass
 
     # create the Knitro context and attempt to free it if anything goes wrong
     knitro_context = None
     try:
         knitro_context = None
-        try:
-            knitro_context = knitro.KTR_new()
-        except RuntimeError as exception:
-            if 'Error while initializing parameter' not in str(exception):
-                raise
+        if modern:
+            try:
+                knitro_context = knitro.KN_new()
+            except Exception:
+                knitro_context = None
+        else:
+            try:
+                knitro_context = knitro.KTR_new()
+            except RuntimeError as exception:
+                if 'Error while initializing parameter' not in str(exception):
+                    raise
         if not knitro_context:
             raise OSError(
                 "Failed to find a Knitro license. Make sure that Knitro is properly installed. You may have to create "
@@ -719,6 +838,9 @@ def knitro_context_manager() -> Iterator[Tuple[Any, Any]]:
         yield knitro, knitro_context
     finally:
         try:
-            knitro.KTR_free(knitro_context)
+            if modern:
+                knitro.KN_free(knitro_context)
+            else:
+                knitro.KTR_free(knitro_context)
         except Exception:
             pass
