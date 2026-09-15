@@ -69,6 +69,7 @@ where the multi-product Bertrand markup :math:`\eta` depends on :math:`\Delta`, 
 .. math:: \Delta = -\mathscr{H} \odot \frac{\partial s}{\partial p}'.
 
 Here, :math:`\mathscr{H}` denotes the market-level ownership or product holdings matrix in the market, where :math:`\mathscr{H}_{jk}` is typically :math:`1` if the same firm produces products :math:`j` and :math:`k`, and :math:`0` otherwise.
+More generally, :math:`\mathscr{H}_{jk}` is the weight that the firm setting :math:`p_{jt}` places on the profits of product :math:`k`, so that the first order condition for :math:`p_{jt}` is :math:`s_{jt} + \sum_k \mathscr{H}_{jk}(p_{kt} - c_{kt})\partial s_{kt} / \partial p_{jt} = 0`. When :math:`\mathscr{H}` is not symmetric, as with a cooperation matrix in which :math:`\kappa_{fg} \neq \kappa_{gf}`, its orientation matters: the row of :math:`\mathscr{H}` belongs to the price being set, and the same orientation is used everywhere below (in :math:`\zeta`, in passthrough, and in firm profit gradients).
 
 To include a supply side, we must specify a functional form for marginal costs:
 
@@ -351,7 +352,7 @@ Counterfactual evaluation, synthetic data simulation, and optimal instrument gen
 
 Instead, :ref:`references:Morrow and Skerlos (2011)` reformulate the solution to :eq:`eta`:
 
-.. math:: p - c = \underbrace{\Lambda^{-1}(\mathscr{H} \odot \Gamma)'(p - c) - \Lambda^{-1}s}_{\zeta}
+.. math:: p - c = \underbrace{\Lambda^{-1}(\mathscr{H} \odot \Gamma')(p - c) - \Lambda^{-1}s}_{\zeta}
    :label: zeta
 
 where :math:`\Lambda` is a diagonal :math:`J_t \times J_t` matrix approximated by

@@ -89,7 +89,9 @@ def build_ownership(
             kappa(f, g) -> value
 
         where ``value`` is :math:`\mathscr{H}_{jk}` and both ``f`` and ``g`` are firm IDs from the ``firm_ids`` field of
-        ``product_data``.
+        ``product_data``. Its orientation matters when it is not symmetric: ``kappa(f, g)`` is the weight that firm
+        ``f`` places on the profits of firm ``g`` when setting its own prices, so :math:`\mathscr{H}_{jk}` enters the
+        first order condition for :math:`p_j` as the weight on product :math:`k`'s profits.
 
         The default specification, ``lambda: f, g: int(f == g)``, constructs traditional ownership matrices. That is,
         :math:`\kappa = I`, the identify matrix, implies that :math:`\mathscr{H}_{jk}` is :math:`1` if the same firm

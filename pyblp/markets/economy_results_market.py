@@ -275,8 +275,8 @@ class EconomyResultsMarket(Market):
 
         # compute the capital delta matrix and its derivatives
         ownership_matrix = self.get_ownership_matrix(firm_ids, ownership)
-        capital_delta = -ownership_matrix * jacobian
-        capital_delta_derivatives = -ownership_matrix[..., None] * hessian
+        capital_delta = -ownership_matrix * jacobian.T
+        capital_delta_derivatives = -ownership_matrix[..., None] * hessian.swapaxes(0, 1)
 
         # compute the inverse of capital delta
         capital_delta_inverse, replacement = approximately_invert(capital_delta)

@@ -2068,3 +2068,46 @@ def test_logit(
         J2 = results2.j_stat.stat
         np.testing.assert_allclose(F1, F2, atol=1e-10, rtol=1e-8)
         np.testing.assert_allclose(J1, J2, atol=1e-10, rtol=1e-8)
+
+
+@pytest.mark.usefixtures('simulated_problem')
+def test_asymmetric_ownership(simulated_problem: SimulatedProblemFixture) -> None:
+    """Test that with an asymmetric ownership matrix (a cooperation matrix with kappa(f, g) != kappa(g, f)) the
+    markup equation, the zeta-markup contraction, and passthrough all use the same orientation of the matrix: prices
+    computed at the costs implied by the markup equation are the observed prices, and passthrough matches finite
+    differences of computed prices with respect to costs.
+    """
+    simulation, _, _, _, results = simulated_problem
+    product_data = results.problem.products
+    if simulation.K3 == 0 and not hasattr(product_data, 'shares'):
+        return pytest.skip("Costs require shares.")
+
+    # build an asymmetric ownership matrix in which the firm with the smaller ID weights the other's profits more
+    ownership = build_ownership(product_data, lambda f, g: 1.0 if f == g else (0.7 if f < g else 0.3))
+
+    # the markup equation and the contraction must agree on the equilibrium
+    costs = results.compute_costs(ownership=ownership)
+    prices = results.compute_prices(
+        costs=costs, ownership=ownership, iteration=Iteration('simple', {'atol': 1e-14, 'max_evaluations': 100000})
+    )
+    np.testing.assert_allclose(prices, product_data.prices, atol=1e-8, rtol=0, verbose=True)
+
+    # passthrough must be the derivative of computed prices with respect to costs (first market, central differences)
+    market_id = product_data.market_ids[0]
+    market_indices = product_data.market_ids.flat == market_id
+    market_costs = costs[market_indices]
+    market_ownership = ownership[market_indices][:, :market_indices.sum()]
+    passthrough = results.compute_passthrough(ownership=market_ownership, market_id=market_id)
+    finite_differences = np.zeros_like(passthrough)
+    step = 1e-6
+    for k in range(market_costs.size):
+        perturbation = np.zeros_like(market_costs)
+        perturbation[k] = step
+        solve = lambda c: results.compute_prices(  # noqa: E731
+            costs=c, ownership=market_ownership, market_id=market_id,
+            iteration=Iteration('simple', {'atol': 1e-14, 'max_evaluations': 100000}),
+        ).flatten()
+        finite_differences[:, k] = (
+            solve(market_costs + perturbation) - solve(market_costs - perturbation)
+        ) / (2 * step)
+    np.testing.assert_allclose(passthrough, finite_differences, atol=1e-6, rtol=1e-4, verbose=True)

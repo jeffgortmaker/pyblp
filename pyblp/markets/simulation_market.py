@@ -51,7 +51,7 @@ class SimulationMarket(Market):
                 profit_gradients = {}
                 ownership = self.get_ownership_matrix()
                 jacobian = self.compute_profit_jacobian(costs, prices)
-                firm_profit_gradient = (ownership * jacobian).sum(axis=0)
+                firm_profit_gradient = (ownership.T * jacobian).sum(axis=0)
                 for firm_id in np.unique(self.products.firm_ids.flatten()):
                     firm_index = self.products.firm_ids.flat == firm_id
                     profit_gradients[firm_id] = firm_profit_gradient[firm_index]
@@ -62,7 +62,7 @@ class SimulationMarket(Market):
                 profit_hessians = {}
                 ownership = self.get_ownership_matrix()
                 hessian = self.compute_profit_hessian(costs, prices)
-                firm_profit_hessian = (ownership[..., None] * hessian).sum(axis=0)
+                firm_profit_hessian = (ownership.T[..., None] * hessian).sum(axis=0)
                 for firm_id in np.unique(self.products.firm_ids.flatten()):
                     firm_index = self.products.firm_ids.flat == firm_id
                     profit_hessians[firm_id] = firm_profit_hessian[firm_index][:, firm_index]

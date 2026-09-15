@@ -673,7 +673,7 @@ class SimpleEconomyResults(abc.ABC, StringRepresentation):
 
         in which the markup term is approximated with
 
-        .. math:: \eta^* \approx -\left(\mathscr{H}^* \odot \frac{\partial s}{\partial p}\right)^{-1}s
+        .. math:: \eta^* \approx -\left(\mathscr{H}^* \odot \frac{\partial s}{\partial p}'\right)^{-1}s
 
         where :math:`\mathscr{H}^*` is the ownership or product holding matrix associated with firm changes.
 
@@ -743,7 +743,7 @@ class SimpleEconomyResults(abc.ABC, StringRepresentation):
 
         .. math::
 
-           \zeta^*(p^*) = \Lambda^{-1}(p^*)[\mathscr{H}^* \odot \Gamma(p^*)]'(p^* - c^*) - \Lambda^{-1}(p^*)s(p^*)
+           \zeta^*(p^*) = \Lambda^{-1}(p^*)[\mathscr{H}^* \odot \Gamma(p^*)'](p^* - c^*) - \Lambda^{-1}(p^*)s(p^*)
 
         where :math:`\mathscr{H}^*` is the ownership matrix associated with firm changes.
 

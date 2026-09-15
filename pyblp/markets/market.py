@@ -833,9 +833,9 @@ class Market(Container):
             capital_lamda_inv_diagonal = 1 / capital_lamda_diagonal
             capital_lamda_inv_diagonal[~np.isfinite(capital_lamda_inv_diagonal)] = 1 / 1e-300
             capital_lamda_inv = np.diag(capital_lamda_inv_diagonal)
-            capital_gamma_tilde = ownership_matrix * capital_gamma
+            capital_gamma_tilde = ownership_matrix * capital_gamma.T
             margin = x - updated_costs
-            capital_gamma_tilde_margin = capital_gamma_tilde.T @ margin
+            capital_gamma_tilde_margin = capital_gamma_tilde @ margin
             zeta = capital_lamda_inv @ capital_gamma_tilde_margin - capital_lamda_inv @ shares
 
             # weight by the diagonal of capital lambda so that termination is based on profit gradients
@@ -865,10 +865,10 @@ class Market(Container):
                 conditionals,
             )
             capital_lamda_inv_tensor = -capital_lamda_inv @ np.moveaxis(capital_lamda_tensor, 2, 0) @ capital_lamda_inv
-            capital_gamma_tilde_tensor = ownership_matrix * np.moveaxis(capital_gamma_tensor, 2, 0)
+            capital_gamma_tilde_tensor = ownership_matrix * np.moveaxis(capital_gamma_tensor, 2, 0).swapaxes(1, 2)
             capital_gamma_tilde_margin_tensor = (
-                capital_gamma_tilde_tensor.swapaxes(1, 2) @ margin +
-                capital_gamma_tilde.T @ margin_jacobian.T[..., None]
+                capital_gamma_tilde_tensor @ margin +
+                capital_gamma_tilde @ margin_jacobian.T[..., None]
             )
             zeta_jacobian = (
                 capital_lamda_inv_tensor @ capital_gamma_tilde_margin - capital_lamda_inv_tensor @ shares +
