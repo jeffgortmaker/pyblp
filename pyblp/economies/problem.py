@@ -461,9 +461,11 @@ class ProblemEconomy(Economy):
             starting values :math:`W` and the mean utility :math:`\delta` at the initial parameter values before the
             first GMM step.
         center_moments : `bool, optional`
-            Whether to center each column of the demand- and supply-side moments :math:`g` before updating the weighting
-            matrix :math:`W` according to :eq:`W`. By default, the moments are centered. This has no effect if
-            ``W_type`` is ``'unadjusted'``.
+            Whether to center each column of the demand- and supply-side moments :math:`g` before computing the moment
+            covariances :math:`S` in :eq:`robust_S` or :eq:`clustered_S`, which are used both to update the weighting
+            matrix :math:`W` according to :eq:`W` and to compute parameter covariances according to :eq:`covariances`.
+            By default, the moments are centered. This has no effect on the weighting matrix if ``W_type`` is
+            ``'unadjusted'`` and no effect on standard errors if ``se_type`` is ``'unadjusted'``.
         W_type : `str, optional`
             How to update the weighting matrix. This has no effect if ``method`` is ``'1s'``. Usually, ``se_type``
             should be the same. The following types are supported:

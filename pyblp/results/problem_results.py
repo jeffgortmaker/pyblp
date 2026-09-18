@@ -535,13 +535,14 @@ class ProblemResults(EconomyResults):
             # compute moments Jacobian and covariances
             self.moments_jacobian = self._compute_mean_G(progress.moments, demand_moment_types, supply_moment_types)
             self.moments_covariances = S_for_weights
-            if se_type != W_type or center_moments:
+            if se_type != W_type:
                 self.moments_covariances = self._compute_S(
                     progress.moments,
                     se_type,
                     demand_moment_types,
                     supply_moment_types,
                     covariance_moments_mean,
+                    center_moments,
                 )
 
             # if this is the first step, an unadjusted weighting matrix needs to be used when computing unadjusted
