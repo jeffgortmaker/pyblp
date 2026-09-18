@@ -2026,6 +2026,12 @@ def test_logit(
     # solve the problem
     results1 = problem.solve(method=method, center_moments=center_moments, W_type=W_type, se_type=se_type)
 
+    # the moment covariances behind standard errors are those behind the updated weighting matrix when the types match
+    if W_type == se_type:
+        np.testing.assert_allclose(
+            results1.moments_covariances, np.linalg.inv(results1.updated_W), atol=1e-14, rtol=1e-10
+        )
+
     # compute the delta from the logit problem
     delta = np.log(simulation_results.product_data.shares)
     for t in problem.unique_market_ids:
@@ -2049,7 +2055,7 @@ def test_logit(
         weight_type=W_type,
         **W_options,
     )
-    results2 = model.fit(iter_limit=1 if method == '1s' else 2, cov_type=se_type, **se_options)
+    results2 = model.fit(iter_limit=1 if method == '1s' else 2, cov_type=se_type, center=center_moments, **se_options)
 
     # test that results are essentially identical (unadjusted second stage standard errors will be different because
     #   linearmodels still constructs a S matrix)
