@@ -1442,8 +1442,8 @@ class ProblemResults(EconomyResults):
             state = np.random.RandomState(seed)
             if method == 'normal':
                 if self.problem.K3 == 0:
-                    variance = np.var(self.xi)
-                    sample = lambda: [np.c_[state.normal(0, variance, self.problem.N)], self.omega]
+                    standard_deviation = np.std(self.xi)
+                    sample = lambda: [np.c_[state.normal(0, standard_deviation, self.problem.N)], self.omega]
                 else:
                     covariance_matrix = np.cov(self.xi, self.omega, rowvar=False)
                     sample = lambda: np.hsplit(state.multivariate_normal([0, 0], covariance_matrix, self.problem.N), 2)
