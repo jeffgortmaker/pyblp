@@ -1846,8 +1846,62 @@ class Market(Container):
                 assert len(weights.shape) == 3
                 agent_weights = weights * agent_weights[..., None]
 
+            # for second choices, identify pairs of first and second choices in the same eliminated group, and compute
+            #   the ratios of first choice probabilities to their groups' probabilities that split each group's second
+            #   choice probabilities s_ik(-h(j)) - s_ik across its members (exact for the logit, and for the nested
+            #   logit when each group is within a nesting group or is a union of nesting groups, which is validated)
+            same_group: Optional[Array] = None
+            ratios: Optional[Array] = None
+            ratios_tangent_mapping: Dict[int, Array] = {}
+            if len(weights.shape) == 3:
+                same_group = np.eye(self.J, dtype=np.bool_)
+                if ids_index is not None:
+                    assert product_ids is not None and product_groups is not None
+                    same_group = product_ids[:, None] == product_ids[None]
+                    group_probabilities = product_groups.expand(product_groups.sum(probabilities))
+                    with np.errstate(all='ignore'):
+                        ratios = probabilities / group_probabilities
+                    ratios[~np.isfinite(ratios)] = 0
+
+                    if compute_jacobians:
+                        assert probabilities_tangent_mapping is not None
+                        for p, probabilities_tangent in probabilities_tangent_mapping.items():
+                            group_probabilities_tangent = product_groups.expand(
+                                product_groups.sum(probabilities_tangent)
+                            )
+                            with np.errstate(all='ignore'):
+                                ratios_tangent = probabilities_tangent - ratios * group_probabilities_tangent
+                                ratios_tangent /= group_probabilities
+                            ratios_tangent[~np.isfinite(ratios_tangent)] = 0
+                            ratios_tangent_mapping[p] = ratios_tangent
+
+            def compute_second_choice_differences(
+                    probabilities_d: Array, outside_probabilities_d: Optional[Array],
+                    eliminated_probabilities_d: Array, eliminated_outside_probabilities_d: Optional[Array],
+                    outside_eliminated_probabilities_d: Optional[Array]) -> Array:
+                """Compute s_ik(-h(j)) - s_ik by agent, first choice, and second choice, along with the analogues for
+                the outside option as either choice, which is zero when the second choice is in the first choice's
+                group. Tangents are computed in the same way from tangents of the probabilities.
+                """
+                assert same_group is not None
+                differences = np.zeros_like(weights)
+                differences[:, -self.J:, -self.J:] += np.moveaxis(eliminated_probabilities_d, (0, 1, 2), (1, 2, 0))
+                differences[:, :, -self.J:] -= probabilities_d.T[:, None]
+                differences[:, -self.J:, -self.J:][:, same_group] = 0
+                if weights.shape[1] == 1 + self.J:
+                    assert outside_eliminated_probabilities_d is not None
+                    differences[:, 0, -self.J:] += outside_eliminated_probabilities_d.T
+                if weights.shape[2] == 1 + self.J:
+                    assert eliminated_outside_probabilities_d is not None and outside_probabilities_d is not None
+                    differences[:, -self.J:, 0] += eliminated_outside_probabilities_d.T
+                    differences[:, :, 0] -= outside_probabilities_d[:, None]
+                if weights.shape[1] == weights.shape[2] == 1 + self.J:
+                    differences[:, 0, 0] = 0
+                return differences
+
             # multiply weights by choice probabilities
             dataset_weights = agent_weights.copy()
+            differences = None
             if len(weights.shape) == 2:
                 dataset_weights[:, -self.J:] *= probabilities.T
                 if weights.shape[1] == 1 + self.J:
@@ -1856,19 +1910,17 @@ class Market(Container):
             else:
                 assert len(weights.shape) == 3
                 assert ids_index in eliminated_probabilities
-                product = np.zeros_like(weights)
-                product[:, -self.J:, -self.J:] += np.moveaxis(eliminated_probabilities[ids_index], (0, 1, 2), (1, 2, 0))
-                product[:, :, -self.J:] -= probabilities.T[:, None]
-                product[:, -self.J:, -self.J:][:, np.arange(self.J), np.arange(self.J)] = 0
-                if weights.shape[1] == 1 + self.J:
-                    assert outside_eliminated_probabilities is not None
-                    product[:, 0, -self.J:] += outside_eliminated_probabilities.T
-                if weights.shape[2] == 1 + self.J:
-                    assert ids_index in eliminated_outside_probabilities and outside_probabilities is not None
-                    product[:, -self.J:, 0] += eliminated_outside_probabilities[ids_index].T
-                    product[:, :, 0] -= outside_probabilities[:, None]
-                if weights.shape[1] == weights.shape[2] == 1 + self.J:
-                    product[:, 0, 0] = 0
+                differences = compute_second_choice_differences(
+                    probabilities,
+                    outside_probabilities,
+                    eliminated_probabilities[ids_index],
+                    eliminated_outside_probabilities.get(ids_index),
+                    outside_eliminated_probabilities,
+                )
+                product = differences
+                if ratios is not None:
+                    product = differences.copy()
+                    product[:, -self.J:] *= ratios.T[..., None]
 
                 dataset_weights *= product
 
@@ -1889,19 +1941,17 @@ class Market(Container):
                             weights_tangent[:, 0] *= outside_probabilities_tangent_mapping[p]
                     else:
                         assert len(weights.shape) == 3
-                        product = np.zeros_like(weights_tangent)
-                        product[:, -self.J:, -self.J:] += np.moveaxis(
-                            eliminated_probabilities_tangent_mapping[ids_index][p], (0, 1, 2), (1, 2, 0)
+                        assert differences is not None
+                        product = compute_second_choice_differences(
+                            probabilities_tangent_mapping[p],
+                            outside_probabilities_tangent_mapping.get(p),
+                            eliminated_probabilities_tangent_mapping[ids_index][p],
+                            eliminated_outside_probabilities_tangent_mapping.get(ids_index, {}).get(p),
+                            outside_eliminated_probabilities_tangent_mapping.get(p),
                         )
-                        product[:, :, -self.J:] -= probabilities_tangent_mapping[p].T[:, None]
-                        product[:, -self.J:, -self.J:][:, np.arange(self.J), np.arange(self.J)] = 0
-                        if weights.shape[1] == 1 + self.J:
-                            product[:, 0, -self.J:] += outside_eliminated_probabilities_tangent_mapping[p].T
-                        if weights.shape[2] == 1 + self.J:
-                            product[:, -self.J:, 0] += eliminated_outside_probabilities_tangent_mapping[ids_index][p].T
-                            product[:, :, 0] -= outside_probabilities_tangent_mapping[p][:, None]
-                        if weights.shape[1] == weights.shape[2] == 1 + self.J:
-                            product[:, 0, 0] = 0
+                        if ratios is not None:
+                            product[:, -self.J:] *= ratios.T[..., None]
+                            product[:, -self.J:] += ratios_tangent_mapping[p].T[..., None] * differences[:, -self.J:]
 
                         weights_tangent *= product
 
