@@ -651,6 +651,7 @@ def large_nested_blp_simulation() -> SimulationFixture:
             size=unique_market_ids.size * agent_data.weights.size,
         )
 
+    nesting_ids = state.choice(['f', 'g', 'h'], id_data.size)
     simulation = Simulation(
         product_formulations=(
             Formulation('1 + x + y + z + q'),
@@ -660,8 +661,8 @@ def large_nested_blp_simulation() -> SimulationFixture:
         product_data={
             'market_ids': id_data.market_ids,
             'firm_ids': id_data.firm_ids,
-            'product_ids': np.c_[product_ids, np.mod(product_ids, 2)],
-            'nesting_ids': state.choice(['f', 'g', 'h'], id_data.size),
+            'product_ids': np.c_[product_ids, np.unique(nesting_ids, return_inverse=True)[1], np.mod(product_ids, 2)],
+            'nesting_ids': nesting_ids,
             'clustering_ids': state.choice(range(30), id_data.size),
         },
         agent_data={

@@ -1702,6 +1702,108 @@ def test_logit_errors(simulated_problem: SimulatedProblemFixture) -> None:
 
 
 @pytest.mark.usefixtures('simulated_problem')
+def test_eliminated_group_micro_data(simulated_problem: SimulatedProblemFixture) -> None:
+    """Test that second choices simulated from a dataset that eliminates the first choice's group of products match
+    second choices simulated from utilities with the group removed under the same idiosyncratic preferences. Nested
+    logit preferences are the sum of a nest shock with Cardell's (1997) distribution, simulated with Kanter's (1975)
+    representation of the positive stable distribution, and a Gumbel shock scaled by one minus the nesting parameter.
+    """
+    simulation, simulation_results, _, _, _ = simulated_problem
+
+    # skip simulations without groups of products
+    if simulation.products.product_ids.shape[1] < 2:
+        return pytest.skip("There are no groups of products.")
+
+    # use the market with the fewest products
+    t = min(simulation._product_market_indices, key=lambda s: simulation._product_market_indices[s].size)
+    product_indices = simulation._product_market_indices[t]
+    agent_indices = simulation._agent_market_indices[t]
+    J = product_indices.size
+
+    # simulate according to analytic pair probabilities
+    observations = 1_000_000
+    dataset = MicroDataset(
+        name="Grouped Second Choices",
+        observations=observations,
+        compute_weights=lambda _, p, a: np.ones((a.size, p.size, 1 + p.size)),
+        market_ids=[t],
+        eliminated_product_ids_index=1,
+    )
+    micro_data = simulation_results.simulate_micro_data(dataset, seed=0)
+    histogram1 = np.zeros((J, 1 + J))
+    np.add.at(histogram1, (micro_data.choice_indices, micro_data.second_choice_indices), 1 / observations)
+
+    # recover utilities relative to the outside option from choice probabilities, which absorb any product
+    #   availability: u_ij = (1 - rho_h) log(s_ij / s_i0) + rho_h log(s_ih / s_i0) for a product j in nesting group h
+    agents = simulation.agents[agent_indices]
+    probabilities = simulation_results.compute_probabilities(market_id=t)
+    outside_probabilities = 1 - probabilities.sum(axis=0)
+    scales = np.ones(1 + J)
+    nests = np.zeros(1 + J, np.int64)
+    with np.errstate(divide='ignore'):
+        utilities = np.c_[np.zeros((agents.size, 1)), np.log(probabilities / outside_probabilities).T]
+        if simulation.H > 0:
+            nesting_ids = simulation.products.nesting_ids[product_indices].flatten()
+            nests[1:] = 1 + np.searchsorted(simulation.unique_nesting_ids, nesting_ids)
+            rho = simulation.rho.flatten()
+            rho = np.full(J, rho[0]) if rho.size == 1 else rho[nests[1:] - 1]
+            scales[1:] = 1 - rho
+            nest_probabilities = (nesting_ids[:, None] == nesting_ids[None]).astype(float) @ probabilities
+            nest_utilities = np.log(nest_probabilities / outside_probabilities)
+            utilities[:, 1:] = (scales[1:, None] * utilities[:, 1:].T + rho[:, None] * nest_utilities).T
+
+    # simulate first choices and second choices with the first choice's group removed under the same preferences
+    state = np.random.RandomState(0)
+    histogram2 = np.zeros((J, 1 + J))
+    group_ids = simulation.products.product_ids[product_indices, 1]
+    same_group = np.c_[np.zeros((J, 1), np.bool_), group_ids[:, None] == group_ids[None]]
+    for _ in range(observations // 100_000):
+        draws = state.choice(agents.size, size=100_000, p=agents.weights.flatten() / agents.weights.sum())
+        epsilon = scales * state.gumbel(size=(draws.size, 1 + J))
+        for h in np.unique(nests):
+            scale = scales[nests == h][0]
+            if scale < 1:
+                # Kanter's representation of the positive stable distribution behind Cardell's nest shock
+                u = state.uniform(0, np.pi, draws.size)
+                e = state.exponential(size=draws.size)
+                log_a = (
+                    np.log(np.sin((1 - scale) * u)) + scale / (1 - scale) * np.log(np.sin(scale * u)) -
+                    np.log(np.sin(u)) / (1 - scale)
+                )
+                epsilon[:, nests == h] += ((1 - scale) * (log_a - np.log(e)))[:, None]
+        preferences = utilities[draws] + simulation.epsilon_scale * epsilon
+        choices = np.argmax(preferences, axis=1)
+        inside = choices > 0
+        preferences[inside] = np.where(same_group[choices[inside] - 1], -np.inf, preferences[inside])
+        second_choices = np.argmax(preferences[inside], axis=1)
+        np.add.at(histogram2, (choices[inside] - 1, second_choices), 1)
+
+    # compare histograms, conditional on an inside first choice
+    np.testing.assert_allclose(histogram2 / histogram2.sum(), histogram1, rtol=0.02, atol=0.0005)
+
+
+@pytest.mark.usefixtures('simulated_problem')
+def test_eliminated_group_nesting_validation(simulated_problem: SimulatedProblemFixture) -> None:
+    """Test that with nesting, groups of eliminated products that span nesting groups without covering all of them
+    are rejected, since their second choice probabilities are not computed.
+    """
+    simulation, simulation_results, _, _, _ = simulated_problem
+
+    # skip simulations without nesting or without groups that cut across nesting groups
+    if simulation.H == 0 or simulation.products.product_ids.shape[1] < 3:
+        return pytest.skip("There are no groups of products that cut across nesting groups.")
+
+    dataset = MicroDataset(
+        name="Cross-Nest Second Choices",
+        observations=1,
+        compute_weights=lambda _, p, a: np.ones((a.size, p.size, p.size)),
+        eliminated_product_ids_index=2,
+    )
+    with pytest.raises(ValueError, match="nesting groups"):
+        simulation_results.simulate_micro_data(dataset, seed=0)
+
+
+@pytest.mark.usefixtures('simulated_problem')
 def test_micro_values(simulated_problem: SimulatedProblemFixture) -> None:
     """Test that true micro values are close to those computed from simulated micro data."""
     simulation, simulation_results, problem, solve_options, problem_results = simulated_problem
