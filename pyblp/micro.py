@@ -96,7 +96,10 @@ class MicroDataset(StringRepresentation):
         eliminated from the choice set, in which case this should be ``None``, the default, or if a group of products
         including the first choice product is eliminated, in which case this should be a number between ``0`` and the
         number of columns in the ``product_ids`` field of ``product_data`` minus one, inclusive. The column of
-        ``product_ids`` determines the groups.
+        ``product_ids`` determines the groups. The probability of choosing :math:`j` first and :math:`k` second is then
+        the probability that the group's removal moves :math:`k` up to the first choice, split across the group's
+        members in proportion to their choice probabilities (see :ref:`background:Micro Moments`). With nesting, each
+        group must be within a single nesting group or be a union of nesting groups.
     market_ids : `array-like, optional`
         Distinct market IDs with nonzero survey weights :math:`w_{dijt}`. For other markets, :math:`w_{dijt} = 0`, and
         ``compute_weights`` will not be called.
@@ -157,11 +160,28 @@ class MicroDataset(StringRepresentation):
         return f"{self.name}: {self.observations} Observations in {self._format_markets(text=True)}"
 
     def _validate(self, economy: 'Economy') -> None:
-        """Check that all market IDs associated with this dataset are in the economy and that any eliminated product
-        IDs index is valid.
+        """Check that all market IDs associated with this dataset are in the economy, that any eliminated product IDs
+        index is valid, and that with nesting, each group of eliminated products is within a single nesting group or is
+        a union of nesting groups, which the second choice probabilities require.
         """
         if self.eliminated_product_ids_index is not None:
             economy._validate_product_ids_index(self.eliminated_product_ids_index)
+            if economy.H > 0:
+                for t, indices in economy._product_market_indices.items():
+                    if self.market_ids is not None and t not in self.market_ids:
+                        continue
+                    product_ids = economy.products.product_ids[indices, self.eliminated_product_ids_index]
+                    nesting_ids = economy.products.nesting_ids[indices].flatten()
+                    for product_id in np.unique(product_ids):
+                        members = product_ids == product_id
+                        nests = np.unique(nesting_ids[members])
+                        if nests.size > 1 and not np.array_equal(np.isin(nesting_ids, nests), members):
+                            raise ValueError(
+                                f"In market '{t}', the products with eliminated product ID '{product_id}' span "
+                                f"multiple nesting groups without covering all of them. With nesting, each group of "
+                                f"eliminated products must be within a single nesting group or be a union of nesting "
+                                f"groups."
+                            )
         if self.market_ids is not None:
             extra_ids = self.market_ids - set(economy.unique_market_ids)
             if extra_ids:

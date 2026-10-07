@@ -289,7 +289,11 @@ Its simulated analogue is
 
 .. math:: v_p = \frac{\sum_{t \in T} \sum_{i \in I_t} \sum_{j, k \in J_t \cup \{0\}} w_{it} s_{ijt} s_{ik(-j)t} w_{d_pijkt} v_{pijkt}}{\sum_{t \in T} \sum_{i \in I_t} \sum_{j, k \in J_t \cup \{0\}} w_{it} s_{ijt} s_{ik(-j)t} w_{d_pijkt}},
 
-in which :math:`s_{ik(-j)t}` is the probability of choosing :math:`k` when :math:`j` is removed from the choice set. One can also define micro moment parts based on second choices where a group of products :math:`h(j)` containing the first choice :math:`j` is removed from the choice set. In this case, the above second choice probabilities become :math:`s_{ik(-h(j))t}`.
+in which :math:`s_{ik(-j)t}` is the probability of choosing :math:`k` when :math:`j` is removed from the choice set. One can also define micro moment parts based on second choices where a group of products :math:`h(j)` containing the first choice :math:`j` is removed from the choice set. In this case, the pair probability :math:`s_{ijt} s_{ik(-j)t}` above becomes
+
+.. math:: \frac{s_{ijt}}{s_{ih(j)t}} \left(s_{ik(-h(j))t} - s_{ikt}\right),
+
+in which :math:`s_{ih(j)t}` is the probability of choosing any product in the group and :math:`s_{ik(-h(j))t}` is the probability of choosing :math:`k` when the group is removed. The difference is the probability that the group's removal moves :math:`k` up to the first choice, and the ratio splits it across the group's members. This is the probability of choosing :math:`j` first and :math:`k` second in the logit, in which it equals :math:`s_{ijt} s_{ik(-h(j))t}`, and in the nested logit when :math:`h(j)` is within a single nesting group or is a union of nesting groups, which is required when there is nesting.
 
 Covariances are defined analogously.
 
