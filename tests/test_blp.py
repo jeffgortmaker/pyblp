@@ -2,11 +2,7 @@
 
 import copy
 import itertools
-import os
 import pickle
-import shutil
-import subprocess
-import tempfile
 from typing import Any, Callable, Dict, List, Optional, Tuple
 import warnings
 
@@ -1542,11 +1538,34 @@ def test_extra_demographics(simulated_problem: SimulatedProblemFixture) -> None:
             np.testing.assert_allclose(problem.agents[key], new_problem.agents[key], atol=1e-14, rtol=0, err_msg=key)
 
 
+def simulate_nested_logit_shocks(state: np.random.Generator, nests: Array, scales: Array, size: int) -> Array:
+    """Simulate nested logit preferences over alternatives in the nesting groups given by nests, each with a scale equal
+    to one minus its group's nesting parameter. Each preference is the sum of a nest shock with Cardell's (1997)
+    distribution, simulated with Kanter's (1975) representation of the positive stable distribution, and a Gumbel
+    shock multiplied by the scale. Alternatives with a scale of one, such as the outside option, have logit shocks.
+    """
+    epsilon = scales * state.gumbel(size=(size, scales.size))
+
+    # add a nest shock to each nesting group with a scale below one
+    for h in np.unique(nests):
+        scale = scales[nests == h][0]
+        if scale < 1:
+            # Kanter's representation of the positive stable distribution behind Cardell's nest shock
+            u = state.uniform(high=np.pi, size=size)
+            e = state.exponential(size=size)
+            log_a = (
+                np.log(np.sin((1 - scale) * u)) + scale / (1 - scale) * np.log(np.sin(scale * u)) -
+                np.log(np.sin(u)) / (1 - scale)
+            )
+            epsilon[:, nests == h] += ((1 - scale) * (log_a - np.log(e)))[:, None]
+
+    return epsilon
+
+
 @pytest.mark.usefixtures('simulated_problem')
 def test_logit_errors(simulated_problem: SimulatedProblemFixture) -> None:
     """Test that first and second choice probabilities are correct by comparing frequencies of second choices when
     simulated according to analytic expression that integrate over logit errors when simulating logit errors directly.
-    For nested logit errors, call the R package evd by Alec Stephenson.
     """
     simulation, simulation_results, problem, _, _ = simulated_problem
 
@@ -1637,48 +1656,16 @@ def test_logit_errors(simulated_problem: SimulatedProblemFixture) -> None:
     else:
         mu = (small_simulation.products.X2[..., None] * coefficients).sum(axis=1)
 
-    # simulate logit shocks, either in Python for simple logit or by calling R for nested logit
-    epsilon: Array
-    if simulation.H == 0:
-        epsilon = simulation.epsilon_scale * np.random.default_rng(0).gumbel(size=(observations, 1 + J))
-    else:
-        if shutil.which('Rscript') is None:
-            return pytest.skip("Failed to find an R executable in this environment.")
-
-        # build asymmetry and dependence configurations for simulating nested logit shocks with the evd package
-        asymmetry = []
-        dependence = []
-        for size in range(1, 2 + J):
-            for combination in itertools.combinations(range(1 + J), size):
-                asymmetry.append(len(combination) * [int(combination in {(0,), (1, 2), (3, 4)})])
-                if size > 1:
-                    if combination == (1, 2):
-                        dependence.append(1 - float(simulation.rho if simulation.rho.size == 1 else simulation.rho[0]))
-                    elif combination == (3, 4):
-                        dependence.append(1 - float(simulation.rho if simulation.rho.size == 1 else simulation.rho[1]))
-                    else:
-                        dependence.append(1)
-
-        # simulate the shocks with R, save them to a temporary file, and load them into memory
-        epsilon = None
-        with tempfile.NamedTemporaryFile(delete=False) as handle:
-            asy = 'list(' + ', '.join('c(' + ', '.join(str(v) for v in a) + ')' for a in asymmetry) + ')'
-            dep = 'c(' + ', '.join(str(v) for v in dependence) + ')'
-            path = handle.name.replace('\\', '/')
-            try:
-                command = ';'.join([
-                    "suppressWarnings(library('evd'))",
-                    "set.seed(0)",
-                    f"epsilon = rmvevd(n={observations}, dep={dep}, asy={asy}, model='alog', d={1 + J})",
-                    f"write.table(epsilon, file='{path}', row.names=FALSE, col.names=FALSE)",
-                ])
-                subprocess.run(['Rscript', '-e', command])
-                epsilon = np.loadtxt(handle.name)
-            finally:
-                try:
-                    os.remove(handle.name)
-                except OSError:
-                    pass
+    # simulate logit shocks, or nested logit shocks if the first two and last two products are in two nesting groups
+    nests: Array = np.zeros(1 + J, np.int64)
+    scales = np.ones(1 + J)
+    if simulation.H > 0:
+        rho = small_simulation.rho.flatten()
+        nests[1:] = [1, 1, 2, 2]
+        scales[1:] = 1 - (np.full(J, rho[0]) if rho.size == 1 else rho[nests[1:] - 1])
+    epsilon = simulation.epsilon_scale * simulate_nested_logit_shocks(
+        np.random.default_rng(0), nests, scales, observations
+    )
 
     # compute deterministic choices given simulated idiosyncratic preferences
     utilities = np.r_[0, small_results.delta.flatten() + mu.flatten()] + epsilon
@@ -1704,9 +1691,7 @@ def test_logit_errors(simulated_problem: SimulatedProblemFixture) -> None:
 @pytest.mark.usefixtures('simulated_problem')
 def test_eliminated_group_micro_data(simulated_problem: SimulatedProblemFixture) -> None:
     """Test that second choices simulated from a dataset that eliminates the first choice's group of products match
-    second choices simulated from utilities with the group removed under the same idiosyncratic preferences. Nested
-    logit preferences are the sum of a nest shock with Cardell's (1997) distribution, simulated with Kanter's (1975)
-    representation of the positive stable distribution, and a Gumbel shock scaled by one minus the nesting parameter.
+    second choices simulated from utilities with the group removed under the same idiosyncratic preferences.
     """
     simulation, simulation_results, _, _, _ = simulated_problem
 
@@ -1753,24 +1738,13 @@ def test_eliminated_group_micro_data(simulated_problem: SimulatedProblemFixture)
             utilities[:, 1:] = (scales[1:, None] * utilities[:, 1:].T + rho[:, None] * nest_utilities).T
 
     # simulate first choices and second choices with the first choice's group removed under the same preferences
-    state = np.random.RandomState(0)
+    state = np.random.default_rng(0)
     histogram2 = np.zeros((J, 1 + J))
     group_ids = simulation.products.product_ids[product_indices, 1]
     same_group = np.c_[np.zeros((J, 1), np.bool_), group_ids[:, None] == group_ids[None]]
     for _ in range(observations // 100_000):
         draws = state.choice(agents.size, size=100_000, p=agents.weights.flatten() / agents.weights.sum())
-        epsilon = scales * state.gumbel(size=(draws.size, 1 + J))
-        for h in np.unique(nests):
-            scale = scales[nests == h][0]
-            if scale < 1:
-                # Kanter's representation of the positive stable distribution behind Cardell's nest shock
-                u = state.uniform(0, np.pi, draws.size)
-                e = state.exponential(size=draws.size)
-                log_a = (
-                    np.log(np.sin((1 - scale) * u)) + scale / (1 - scale) * np.log(np.sin(scale * u)) -
-                    np.log(np.sin(u)) / (1 - scale)
-                )
-                epsilon[:, nests == h] += ((1 - scale) * (log_a - np.log(e)))[:, None]
+        epsilon = simulate_nested_logit_shocks(state, nests, scales, draws.size)
         preferences = utilities[draws] + simulation.epsilon_scale * epsilon
         choices = np.argmax(preferences, axis=1)
         inside = choices > 0
