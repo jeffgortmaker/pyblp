@@ -286,16 +286,19 @@ def test_micro_chunking(simulated_problem: SimulatedProblemFixture) -> None:
     )
     problem_results1 = problem.solve(**updated_solve_options)
 
-    # get some results with chunking
+    # get some results with chunking, which also stacks chunks of micro values to check them for collinearity
     assert pyblp.options.micro_computation_chunks == 1
+    assert not pyblp.options.detect_micro_collinearity
     for chunks in [2, 3]:
         pyblp.options.micro_computation_chunks = chunks
+        pyblp.options.detect_micro_collinearity = True
         agent_scores2 = simulation_results.compute_agent_scores(
             solve_options['micro_moments'][0].parts[0].dataset,
             integration=simulation.integration,
         )
         problem_results2 = problem.solve(**updated_solve_options)
         pyblp.options.micro_computation_chunks = 1
+        pyblp.options.detect_micro_collinearity = False
 
         # verify that all results are very close
         np.testing.assert_allclose(

@@ -2065,7 +2065,7 @@ class Market(Container):
                     if dataset not in weights_mapping:
                         weights_mapping[dataset] = weights_chunk
                     else:
-                        weights_mapping[dataset] = np.row_stack([weights_mapping[dataset], weights_chunk])
+                        weights_mapping[dataset] = np.vstack([weights_mapping[dataset], weights_chunk])
 
             # compute this market's contribution to micro moment parts' and covariances' numerators and denominators
             values_mapping_chunk: Dict[int, Array] = {}
@@ -2084,7 +2084,7 @@ class Market(Container):
                     if p not in values_mapping:
                         values_mapping[p] = values_chunk
                     else:
-                        values_mapping[p] = np.row_stack([values_mapping[p], values_chunk])
+                        values_mapping[p] = np.vstack([values_mapping[p], values_chunk])
 
                 # compute the contribution to the numerator and denominator
                 weighted_values_chunk = weights_chunk * values_chunk
