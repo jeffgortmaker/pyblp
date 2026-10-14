@@ -1266,7 +1266,7 @@ class ProblemEconomy(Economy):
                     if detect_micro_collinearity:
                         for dataset, part_indices in parts_collinearity_candidates.items():
                             market_ids = self.unique_market_ids if dataset.market_ids is None else dataset.market_ids
-                            values = np.row_stack([parts_collinearity_candidate_values[t][dataset] for t in market_ids])
+                            values = np.vstack([parts_collinearity_candidate_values[t][dataset] for t in market_ids])
                             collinear, successful = precisely_identify_collinearity(values)
                             common_message = (
                                 "To disable collinearity checks, set "
