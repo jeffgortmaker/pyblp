@@ -21,13 +21,19 @@ If software is not installed, its associated tests will be skipped. Additionally
 Running Tests
 -------------
 
-Defined in ``tox.ini`` are environments that test the package under different python versions, check types, enforce style guidelines, and verify the integrity of the documentation. First, `tox <https://tox.wiki/en/latest/>`_ should be installed on top of an Anaconda installation. The following command can be run in the top-level ``pyblp`` directory to run all testing environments::
+Defined in ``tox.ini`` are environments that run the test suite, check types, enforce style guidelines, re-execute the documentation notebooks, and verify the integrity of the documentation. Each environment installs its own packages, so only `tox <https://tox.wiki/en/latest/>`_ and the versions of Python named in ``tox.ini`` need to be installed. The following command can be run in the top-level ``pyblp`` directory to run all testing environments::
 
     tox
 
-You can choose to run only one environment, such as the one that builds the documentation, with the ``-e`` flag::
+You can choose to run only one environment, such as the one that re-executes the documentation notebooks in place, with the ``-e`` flag::
 
-    tox -e docs
+    tox -e notebooks
+
+Arguments after ``--`` are passed to pytest in place of the default of five parallel workers. For example, the following command runs only the tests in ``tests/test_formulation.py``::
+
+    tox -e tests -- tests/test_formulation.py
+
+The documentation environments use the same versions of Python and Sphinx as `Read the Docs <https://pyblp.readthedocs.io/>`_, which also builds the documentation for each pull request.
 
 
 Test Organization
