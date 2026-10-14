@@ -4,6 +4,13 @@ Version Notes
 These notes will only include major changes.
 
 
+1.3
+---
+
+- Support for Knitro 12 and newer
+- Bug fixes for asymmetric cooperation matrices, centered moment covariances, and second choice micro moments with eliminated groups
+
+
 1.2
 ---
 
