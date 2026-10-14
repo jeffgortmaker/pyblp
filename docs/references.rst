@@ -202,7 +202,7 @@ Newey, Whitney K., and Kenneth D. West (1987). `Hypothesis testing with efficien
 Owen (2013)
 ~~~~~~~~~~~
 
-Owen, Art B. (2013). `Monte Carlo theory, methods and examples <https://artowen.su.domains/mc/>`_.
+Owen, Art B. (2013). `Monte Carlo theory, methods and examples <https://web.archive.org/web/20211006120325/https://statweb.stanford.edu/~owen/mc/>`_.
 
 
 Owen (2017)
