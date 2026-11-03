@@ -970,36 +970,27 @@ class Market(Container):
         conditionals: Optional[Array],
         xi_jacobian: Array,
     ) -> None:
-        """Update tangents of probabilities with respect to parameters to account for the contribution of xi."""
-        probabilities_tensor = conditionals_tensor = None
+        """Add xi's contribution directly, without constructing a J by J by I tensor."""
         for p, parameter in enumerate(self.parameters.unfixed):
             probabilities_tangent = probabilities_tangent_mapping[p]
             conditionals_tangent = conditionals_tangent_mapping[p]
-
-            # total derivatives are zero for beta parameters
             if isinstance(parameter, BetaParameter):
                 probabilities_tangent[:] = 0
                 if conditionals_tangent is not None:
                     conditionals_tangent[:] = 0
                 continue
-
-            # derivatives remain zero for gamma and phi parameters
             if isinstance(parameter, (GammaParameter, PhiParameter)):
                 continue
-
-            # otherwise, need to compute the derivatives of probabilities with respect to xi
-            if probabilities_tensor is None:
-                probabilities_tensor, conditionals_tensor = self.compute_probabilities_by_xi_tensor(
-                    probabilities,
-                    conditionals,
-                    compute_conditionals_tensor=any(t is not None for t in conditionals_tangent_mapping.values()),
-                )
-
-            # add the contribution of xi
-            probabilities_tangent += np.squeeze(np.moveaxis(probabilities_tensor, 0, 2) @ xi_jacobian[:, [p]], axis=2)
-            if conditionals_tangent is not None:
-                assert conditionals_tensor is not None
-                conditionals_tangent += np.squeeze(np.moveaxis(conditionals_tensor, 0, 2) @ xi_jacobian[:, [p]], axis=2)
+            direction = xi_jacobian[:, [p]]
+            mean = direction.T @ probabilities
+            probabilities_tangent += probabilities * (direction - mean) / self.epsilon_scale
+            if self.H > 0:
+                assert conditionals is not None
+                group_mean = self.groups.expand(self.groups.sum(conditionals * direction))
+                within_group = direction - group_mean
+                probabilities_tangent += self.rho / (1 - self.rho) * probabilities * within_group
+                if conditionals_tangent is not None:
+                    conditionals_tangent += conditionals / (1 - self.rho) * within_group
 
     def compute_probabilities_by_parameter_tangent(
         self,
