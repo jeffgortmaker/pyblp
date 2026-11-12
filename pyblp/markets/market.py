@@ -513,7 +513,6 @@ class Market(Container):
             ]
 
             # add a count of any clipped shares
-            nonlocal clipped_shares
             if np.isfinite(shares_bounds).any():
                 header.append(("Clipped", "Shares"))
                 values.append(clipped_shares.sum())

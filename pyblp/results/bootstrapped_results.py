@@ -266,9 +266,9 @@ class BootstrappedResults(SimpleEconomyResults):
         for (d, t), array_dt in array_mapping.items():
             slices = (slice(0, s) for s in array_dt.shape[1:])
             if dimension_sizes[0] == market_ids.size:
-                combined[(d, market_ids == t, *slices)] = array_dt
+                combined[(d, market_ids == t) + tuple(slices)] = array_dt
             elif dimension_sizes[0] == self._economy.N:
-                combined[(d, self._economy._product_market_indices[t], *slices)] = array_dt
+                combined[(d, self._economy._product_market_indices[t]) + tuple(slices)] = array_dt
             else:
                 assert market_ids.size == 1
                 combined[d] = array_dt

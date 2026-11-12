@@ -1262,9 +1262,9 @@ class EconomyResults(SimpleEconomyResults):
         for t, array_t in array_mapping.items():
             slices = (slice(0, s) for s in array_t.shape[1:])
             if dimension_sizes[0] == market_ids.size:
-                combined[(market_ids == t, *slices)] = array_t
+                combined[(market_ids == t,) + tuple(slices)] = array_t
             elif dimension_sizes[0] == self._economy.N:
-                combined[(self._economy._product_market_indices[t], *slices)] = array_t
+                combined[(self._economy._product_market_indices[t],) + tuple(slices)] = array_t
             else:
                 assert market_ids.size == 1
                 combined = array_t

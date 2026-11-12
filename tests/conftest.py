@@ -59,7 +59,6 @@ def configure() -> Iterator[None]:
 
         def cached(*args: Array, **kwargs: Any) -> Array:
             """Replicate the function, caching its results."""
-            nonlocal mapping
             key = tuple(hashlib.sha1(a.data.tobytes()).digest() for a in args)
             if key not in mapping:
                 mapping[key] = uncached(*args, **kwargs)
