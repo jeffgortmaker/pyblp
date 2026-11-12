@@ -353,10 +353,8 @@ class Economy(Container, StringRepresentation):
 
     def _validate_fp_type(self, fp_type: str) -> None:
         """Validate that the delta fixed point type is supported."""
-        if fp_type not in {'safe_linear', 'linear', 'safe_nonlinear', 'nonlinear'}:
-            raise ValueError("fp_type must be 'safe_linear', 'linear', 'safe_nonlinear', or 'nonlinear'.")
-        if fp_type in {'safe_nonlinear', 'nonlinear'} and self.epsilon_scale != 1:
-            raise ValueError("When epsilon_scale is not 1, fp_type must be 'safe_linear' or 'linear'.")
+        if fp_type not in {'safe_linear', 'linear'}:
+            raise ValueError("fp_type must be 'safe_linear' or 'linear'.")
 
     @staticmethod
     def _coerce_optional_bounds(bounds: Optional[Tuple[Any, Any]], name: str) -> Bounds:

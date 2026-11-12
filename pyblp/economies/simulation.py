@@ -917,9 +917,8 @@ class Simulation(Economy):
             the different types, refer to the same argument in :meth:`Problem.solve`.
         shares_bounds : `tuple, optional`
             Configuration for :math:`s_{jt}(\delta, \theta)` bounds of the form ``(lb, ub)``, in which both ``lb`` and
-            ``ub`` are floats or ``None``. By default, simulated shares are bounded from below by ``1e-300``. This is
-            only relevant if ``fp_type`` is ``'safe_linear'`` or ``'linear'``. Bounding shares in the contraction does
-            nothing with a nonlinear fixed point. For more information, refer to :meth:`Problem.solve`.
+            ``ub`` are floats or ``None``. By default, simulated shares are bounded from below by ``1e-300``. For more
+            information, refer to :meth:`Problem.solve`.
         error_behavior : `str, optional`
             How to handle errors when computing :math:`\delta` and :math:`\tilde{c}`. The following behaviors are
             supported:

@@ -411,18 +411,6 @@ class ProblemEconomy(Economy):
                   This option may be preferable to ``'safe_linear'`` if utilities are reasonably small and unlikely to
                   create overflow problems.
 
-                - ``'nonlinear'`` - Iteration over :math:`\exp \delta_{jt}` instead of :math:`\delta_{jt}`. This can be
-                  faster than ``'linear'`` because it involves fewer logarithms. Also, following
-                  :ref:`references:Brunner, Heiss, Romahn, and Weiser (2017)`, the :math:`\exp \delta_{jt}` term can be
-                  cancelled out of the expression because it also appears in the numerator of :eq:`probabilities` in the
-                  definition of :math:`s_{jt}(\delta, \theta)`. This second trick only works when there are no
-                  nesting parameters.
-
-                - ``'safe_nonlinear'`` - Exponentiated version with minimal safeguards against numerical overflow.
-                  Specifically, :math:`\max_j \mu_{ijt}` is subtracted from :math:`\mu_{ijt}`. This helps with stability
-                  but is less helpful than subtracting from the full :math:`V_{ijt}`, so this version is less stable
-                  than ``'safe_linear'``.
-
             This option is only relevant if ``sigma`` or ``pi`` are specified because :math:`\delta` can be estimated
             analytically in the logit model with :eq:`logit_delta` and in the nested logit model with
             :eq:`nested_logit_delta`.
@@ -430,8 +418,7 @@ class ProblemEconomy(Economy):
         shares_bounds : `tuple, optional`
             Configuration for :math:`s_{jt}(\delta, \theta)` bounds in the contraction in :eq:`contraction` of the form
             ``(lb, ub)``, in which both ``lb`` and ``ub`` are floats or ``None``. By default, simulated shares are
-            bounded from below by ``1e-300``. This is only relevant if ``fp_type`` is ``'safe_linear'`` or ``'linear'``.
-            Bounding shares in the contraction does nothing with a nonlinear fixed point.
+            bounded from below by ``1e-300``.
 
             It can be particularly helpful to bound shares in the contraction from below by a small number to prevent
             the contraction from failing when there are issues with zero or negative simulated shares. Zero shares can

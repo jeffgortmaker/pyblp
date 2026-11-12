@@ -79,12 +79,6 @@ Brenkers and Verboven (2006)
 Brenkers, Randy, and Frank Verboven (2006). `Liberalizing a distribution system: The European car market <https://ideas.repec.org/a/tpr/jeurec/v4y2006i1p216-251.html>`_. *Journal of the European Economic Association, 4* (1), 216-251.
 
 
-Brunner, Heiss, Romahn, and Weiser (2017)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Brunner, Daniel, Florian Heiss, André Romahn, and Constantin Weiser (2017) `Reliable estimation of random coefficient logit demand models <https://ideas.repec.org/p/zbw/dicedp/267.html>`_. DICE Discussion Paper 267.
-
-
 Cardell (1997)
 ~~~~~~~~~~~~~~
 
