@@ -520,7 +520,7 @@ class Market(Container):
 
             # add information about the max norm
             nonlocal smallest_max_norm
-            header.extend([("Delta" if fp_type in {'linear', 'safe_linear'} else "Exp Delta", "Max Norm"), ("Max Norm", "Improvement")])
+            header.extend([("Delta" if 'linear' in fp_type else "Exp Delta", "Max Norm"), ("Max Norm", "Improvement")])
             max_norm: float = np.max(np.abs(x - x0))
             values.append(format_number(max_norm))
             improvement = smallest_max_norm - max_norm
@@ -540,7 +540,7 @@ class Market(Container):
             output(format_table(header, values, include_border=False, include_header=include_header))
 
         # solve for delta with a linear fixed point
-        if fp_type in {'linear', 'safe_linear'}:
+        if 'linear' in fp_type:
             log_shares = np.log(self.products.shares)
             compute_probabilities = functools.partial(self.compute_probabilities, safe='safe' in fp_type)
 
@@ -585,9 +585,13 @@ class Market(Container):
                         return x, None, None
                     weighted_probabilities = self.agents.weights * probabilities.T
                     jacobian = (probabilities @ weighted_probabilities) / shares
+
+                    # account for the scale of the idiosyncratic preference shock
                     if self.epsilon_scale != 1:
                         jacobian /= self.epsilon_scale
                         jacobian.flat[::self.J + 1] += 1 - 1 / self.epsilon_scale
+
+                    # clipped shares are locally constant in mean utility
                     if clipped_shares.any():
                         clipped = np.flatnonzero(clipped_shares)
                         jacobian[clipped] = 0
@@ -610,6 +614,8 @@ class Market(Container):
                     probabilities_part = dampener * (probabilities @ weighted_probabilities)
                     conditionals_part = rho_membership * (conditionals @ weighted_probabilities)
                     jacobian = (probabilities_part + conditionals_part) / shares
+
+                    # clipped shares are locally constant in mean utility
                     if clipped_shares.any():
                         clipped = np.flatnonzero(clipped_shares)
                         jacobian[clipped] = 0
@@ -644,8 +650,10 @@ class Market(Container):
                     universal_display(x0, x, iterations, evaluations)
                     if not iteration._compute_jacobian:
                         return x, None, None
-                    weighted_ratios = self.agents.weights * probability_ratios.T
-                    jacobian = (x / share_ratios) * (probability_ratios @ weighted_ratios)
+                    shares = x0 * share_ratios
+                    probabilities = x0 * probability_ratios
+                    weighted_probabilities = self.agents.weights * probabilities.T
+                    jacobian = x / x0.T * (probabilities @ weighted_probabilities) / shares
                     return x, None, jacobian
             else:
                 dampener = 1 - self.rho
