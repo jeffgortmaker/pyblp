@@ -361,23 +361,17 @@ class Market(Container):
         self,
         delta: Array = None,
         mu: Optional[Array] = None,
-        linear: bool = True,
         safe: bool = True,
-        utility_reduction: Optional[Array] = None,
-        numerator: Optional[Array] = None,
         eliminate_outside: bool = False,
         eliminate_product: Optional[int] = None,
         eliminate_product_id: Optional[Any] = None,
         product_ids_index: Optional[int] = None,
         availability: Optional[Array] = None,
     ) -> Tuple[Array, Optional[Array]]:
-        """Compute choice probabilities. By default, use unchanged delta and mu values. If linear is False, delta and mu
-        must be specified and already be exponentiated. If safe is True, scale the logit equation by the exponential of
-        negative the maximum utility for each agent, and if utility_reduction is specified, it should be values that
-        have already been subtracted from the specified utility for each agent. If the numerator is specified, it will
-        be used as the numerator in the non-nested logit expression. If any products are eliminated, eliminate the
-        outside option, an inside product, a group of products with the same product ID, or any of these from the
-        choice set.
+        """Compute choice probabilities. By default, use unchanged delta and mu values. If safe is True, scale the logit
+        equation by the exponential of negative the maximum utility for each agent. If any products are eliminated,
+        eliminate the outside option, an inside product, a group of products with the same product ID, or any of these
+        from the choice set.
         """
         if delta is None:
             assert self.delta is not None
@@ -385,32 +379,26 @@ class Market(Container):
         if mu is None:
             mu = self.mu
         if self.K2 == 0:
-            mu = int(not linear)
+            mu = 0
 
         # compute exponentiated utilities, optionally re-scaling the logit expression
-        if not linear:
-            assert self.epsilon_scale == 1
-            exp_utilities = np.array(delta * mu)
-            if self.H > 0:
-                exp_utilities **= 1 / (1 - self.rho)
-        else:
-            utilities = delta + mu
-            if self.H > 0:
-                utilities /= 1 - self.rho
+        utilities = delta + mu
+        if self.H > 0:
+            utilities /= 1 - self.rho
 
-            if self.epsilon_scale != 1:
-                assert self.H == 0
-                utilities /= self.epsilon_scale
+        if self.epsilon_scale != 1:
+            assert self.H == 0
+            utilities /= self.epsilon_scale
 
-            if safe:
-                utility_reduction = np.clip(utilities.max(axis=0, keepdims=True), 0, None)
-                utilities -= utility_reduction
+        if safe:
+            utility_reduction = np.clip(utilities.max(axis=0, keepdims=True), 0, None)
+            utilities -= utility_reduction
 
-            exp_utilities = np.exp(utilities)
+        exp_utilities = np.exp(utilities)
 
         # compute any components used to re-scale the logit expression
         scale = scale_weights = 1
-        if utility_reduction is not None:
+        if safe:
             if self.H == 0:
                 scale = np.exp(-utility_reduction)
             else:
@@ -438,9 +426,7 @@ class Market(Container):
 
         # compute standard probabilities
         if self.H == 0:
-            if numerator is None:
-                numerator = exp_utilities
-            probabilities = numerator / (scale + exp_utilities.sum(axis=0, keepdims=True))
+            probabilities = exp_utilities / (scale + exp_utilities.sum(axis=0, keepdims=True))
             return probabilities, None
 
         # compute nested probabilities
@@ -519,7 +505,7 @@ class Market(Container):
 
             # add information about the max norm
             nonlocal smallest_max_norm
-            header.extend([("Delta" if 'linear' in fp_type else "Exp Delta", "Max Norm"), ("Max Norm", "Improvement")])
+            header.extend([("Delta", "Max Norm"), ("Max Norm", "Improvement")])
             max_norm: float = np.max(np.abs(x - x0))
             values.append(format_number(max_norm))
             improvement = smallest_max_norm - max_norm
@@ -539,142 +525,89 @@ class Market(Container):
             output(format_table(header, values, include_border=False, include_header=include_header))
 
         # solve for delta with a linear fixed point
-        if 'linear' in fp_type:
-            log_shares = np.log(self.products.shares)
-            compute_probabilities = functools.partial(self.compute_probabilities, safe='safe' in fp_type)
+        log_shares = np.log(self.products.shares)
+        compute_probabilities = functools.partial(self.compute_probabilities, safe=fp_type == 'safe_linear')
 
-            # define the function used to clip shares outside potentially pre-specified bounds
-            if np.isfinite(shares_bounds).all():
-                def clip_shares(shares: Array) -> None:
-                    """Clip shares from below and above."""
-                    nonlocal clipped_shares
-                    small_shares = shares < shares_bounds[0]
-                    shares[small_shares] = shares_bounds[0]
-                    large_shares = shares > shares_bounds[1]
-                    shares[large_shares] = shares_bounds[1]
-                    clipped_shares = small_shares | large_shares
+        # define the function used to clip shares outside potentially pre-specified bounds
+        if np.isfinite(shares_bounds).all():
+            def clip_shares(shares: Array) -> None:
+                """Clip shares from below and above."""
+                nonlocal clipped_shares
+                small_shares = shares < shares_bounds[0]
+                shares[small_shares] = shares_bounds[0]
+                large_shares = shares > shares_bounds[1]
+                shares[large_shares] = shares_bounds[1]
+                clipped_shares = small_shares | large_shares
 
-            elif np.isfinite(shares_bounds[0]):
-                def clip_shares(shares: Array) -> None:
-                    """Clip shares from below."""
-                    nonlocal clipped_shares
-                    clipped_shares = shares < shares_bounds[0]
-                    shares[clipped_shares] = shares_bounds[0]
+        elif np.isfinite(shares_bounds[0]):
+            def clip_shares(shares: Array) -> None:
+                """Clip shares from below."""
+                nonlocal clipped_shares
+                clipped_shares = shares < shares_bounds[0]
+                shares[clipped_shares] = shares_bounds[0]
 
-            elif np.isfinite(shares_bounds[1]):
-                def clip_shares(shares: Array) -> None:
-                    """Clip shares from above."""
-                    nonlocal clipped_shares
-                    clipped_shares = shares > shares_bounds[1]
-                    shares[clipped_shares] = shares_bounds[1]
+        elif np.isfinite(shares_bounds[1]):
+            def clip_shares(shares: Array) -> None:
+                """Clip shares from above."""
+                nonlocal clipped_shares
+                clipped_shares = shares > shares_bounds[1]
+                shares[clipped_shares] = shares_bounds[1]
 
-            else:
-                clip_shares = lambda _: None  # type: ignore[assignment]
-
-            # define the linear contraction
-            if self.H == 0:
-                def contraction(x: Array, iterations: int, evaluations: int) -> ContractionResults:
-                    """Compute the next linear delta and optionally its Jacobian."""
-                    probabilities = compute_probabilities(x)[0]
-                    shares = probabilities @ self.agents.weights
-                    clip_shares(shares)
-                    x0, x = x, x + log_shares - np.log(shares)
-                    universal_display(x0, x, iterations, evaluations)
-                    if not iteration._compute_jacobian:
-                        return x, None, None
-                    weighted_probabilities = self.agents.weights * probabilities.T
-                    jacobian = (probabilities @ weighted_probabilities) / shares
-
-                    # account for the scale of the idiosyncratic preference shock
-                    if self.epsilon_scale != 1:
-                        jacobian /= self.epsilon_scale
-                        jacobian.flat[::self.J + 1] += 1 - 1 / self.epsilon_scale
-
-                    # clipped shares are locally constant in mean utility
-                    if clipped_shares.any():
-                        clipped = np.flatnonzero(clipped_shares)
-                        jacobian[clipped] = 0
-                        jacobian[clipped, clipped] = 1
-                    return x, None, jacobian
-            else:
-                dampener = 1 - self.rho
-                rho_membership = self.rho * self.get_membership_matrix()
-
-                def contraction(x: Array, iterations: int, evaluations: int) -> ContractionResults:
-                    """Compute the next linear delta and optionally its Jacobian under nesting."""
-                    probabilities, conditionals = compute_probabilities(x)
-                    shares = probabilities @ self.agents.weights
-                    clip_shares(shares)
-                    x0, x = x, x + (log_shares - np.log(shares)) * dampener
-                    universal_display(x0, x, iterations, evaluations)
-                    if not iteration._compute_jacobian:
-                        return x, None, None
-                    weighted_probabilities = self.agents.weights * probabilities.T
-                    probabilities_part = dampener * (probabilities @ weighted_probabilities)
-                    conditionals_part = rho_membership * (conditionals @ weighted_probabilities)
-                    jacobian = (probabilities_part + conditionals_part) / shares
-
-                    # clipped shares are locally constant in mean utility
-                    if clipped_shares.any():
-                        clipped = np.flatnonzero(clipped_shares)
-                        jacobian[clipped] = 0
-                        jacobian[clipped, clipped] = 1
-                    return x, None, jacobian
-
-            # solve the linear fixed point problem
-            delta, stats = iteration._iterate(initial_delta, contraction)
         else:
-            # solve for delta with a nonlinear fixed point
-            assert 'nonlinear' in fp_type and self.epsilon_scale == 1
-            if 'safe' in fp_type:
-                utility_reduction = np.clip(self.mu.max(axis=0, keepdims=True), 0, None)
-                exp_mu = np.exp(self.mu - utility_reduction)
-                compute_probabilities = functools.partial(
-                    self.compute_probabilities,
-                    mu=exp_mu,
-                    utility_reduction=utility_reduction,
-                    linear=False,
-                )
-            else:
-                exp_mu = np.exp(self.mu)
-                compute_probabilities = functools.partial(self.compute_probabilities, mu=exp_mu, linear=False)
+            clip_shares = lambda _: None  # type: ignore[assignment]
 
-            # define the nonlinear contraction
-            if self.H == 0:
-                def contraction(x: Array, iterations: int, evaluations: int) -> ContractionResults:
-                    """Compute the next exponentiated delta and optionally its Jacobian."""
-                    probability_ratios = compute_probabilities(x, numerator=exp_mu)[0]
-                    share_ratios = probability_ratios @ self.agents.weights
-                    x0, x = x, self.products.shares / share_ratios
-                    universal_display(x0, x, iterations, evaluations)
-                    if not iteration._compute_jacobian:
-                        return x, None, None
-                    shares = x0 * share_ratios
-                    probabilities = x0 * probability_ratios
-                    weighted_probabilities = self.agents.weights * probabilities.T
-                    jacobian = x / x0.T * (probabilities @ weighted_probabilities) / shares
-                    return x, None, jacobian
-            else:
-                dampener = 1 - self.rho
-                rho_membership = self.rho * self.get_membership_matrix()
+        # define the linear contraction
+        if self.H == 0:
+            def contraction(x: Array, iterations: int, evaluations: int) -> ContractionResults:
+                """Compute the next linear delta and optionally its Jacobian."""
+                probabilities = compute_probabilities(x)[0]
+                shares = probabilities @ self.agents.weights
+                clip_shares(shares)
+                x0, x = x, x + log_shares - np.log(shares)
+                universal_display(x0, x, iterations, evaluations)
+                if not iteration._compute_jacobian:
+                    return x, None, None
+                weighted_probabilities = self.agents.weights * probabilities.T
+                jacobian = (probabilities @ weighted_probabilities) / shares
 
-                def contraction(x: Array, iterations: int, evaluations: int) -> ContractionResults:
-                    """Compute the next exponentiated delta and optionally its Jacobian under nesting."""
-                    probabilities, conditionals = compute_probabilities(x)
-                    shares = probabilities @ self.agents.weights
-                    x0, x = x, x * (self.products.shares / shares)**dampener
-                    universal_display(x0, x, iterations, evaluations)
-                    if not iteration._compute_jacobian:
-                        return x, None, None
-                    weighted_probabilities = self.agents.weights * probabilities.T
-                    probabilities_part = dampener * (probabilities @ weighted_probabilities)
-                    conditionals_part = rho_membership * (conditionals @ weighted_probabilities)
-                    jacobian = x / x0.T * (probabilities_part + conditionals_part) / shares
-                    return x, None, jacobian
+                # account for the scale of the idiosyncratic preference shock
+                if self.epsilon_scale != 1:
+                    jacobian /= self.epsilon_scale
+                    jacobian.flat[::self.J + 1] += 1 - 1 / self.epsilon_scale
 
-            # solve the nonlinear fixed point problem
-            exp_delta, stats = iteration._iterate(np.exp(initial_delta), contraction)
-            delta = np.log(exp_delta)
+                # clipped shares are locally constant in mean utility
+                if clipped_shares.any():
+                    clipped = np.flatnonzero(clipped_shares)
+                    jacobian[clipped] = 0
+                    jacobian[clipped, clipped] = 1
+                return x, None, jacobian
+        else:
+            dampener = 1 - self.rho
+            rho_membership = self.rho * self.get_membership_matrix()
+
+            def contraction(x: Array, iterations: int, evaluations: int) -> ContractionResults:
+                """Compute the next linear delta and optionally its Jacobian under nesting."""
+                probabilities, conditionals = compute_probabilities(x)
+                shares = probabilities @ self.agents.weights
+                clip_shares(shares)
+                x0, x = x, x + (log_shares - np.log(shares)) * dampener
+                universal_display(x0, x, iterations, evaluations)
+                if not iteration._compute_jacobian:
+                    return x, None, None
+                weighted_probabilities = self.agents.weights * probabilities.T
+                probabilities_part = dampener * (probabilities @ weighted_probabilities)
+                conditionals_part = rho_membership * (conditionals @ weighted_probabilities)
+                jacobian = (probabilities_part + conditionals_part) / shares
+
+                # clipped shares are locally constant in mean utility
+                if clipped_shares.any():
+                    clipped = np.flatnonzero(clipped_shares)
+                    jacobian[clipped] = 0
+                    jacobian[clipped, clipped] = 1
+                return x, None, jacobian
+
+        # solve the linear fixed point problem
+        delta, stats = iteration._iterate(initial_delta, contraction)
 
         # add padding around the universal display
         if iteration._universal_display:

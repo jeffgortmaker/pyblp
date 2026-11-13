@@ -48,15 +48,9 @@ from .conftest import SimulatedProblemFixture
     pytest.param({'delta_behavior': 'last'}, id="faster starting delta values"),
     pytest.param({'delta_behavior': 'logit'}, id="logit starting delta values"),
     pytest.param({'fp_type': 'linear'}, id="non-safe linear fixed point"),
-    pytest.param({'fp_type': 'safe_nonlinear'}, id="nonlinear fixed point"),
-    pytest.param({'fp_type': 'nonlinear'}, id="non-safe nonlinear fixed point"),
     pytest.param(
         {'iteration': Iteration('hybr', {'xtol': 1e-12}, compute_jacobian=True, universal_display=True)},
         id="linear Newton fixed point",
-    ),
-    pytest.param(
-        {'fp_type': 'safe_nonlinear', 'iteration': Iteration('hybr', {'xtol': 1e-12}, compute_jacobian=True)},
-        id="nonlinear Newton fixed point",
     ),
 ])
 def test_accuracy(simulated_problem: SimulatedProblemFixture, solve_options_update: Options) -> None:
@@ -66,8 +60,6 @@ def test_accuracy(simulated_problem: SimulatedProblemFixture, solve_options_upda
     # skip different iteration configurations when they won't matter
     if simulation.K2 == 0 and {'delta_behavior', 'fp_type', 'iteration'} & set(solve_options_update):
         return pytest.skip("A different iteration configuration has no impact when there is no heterogeneity.")
-    if simulation.epsilon_scale != 1 and 'nonlinear' in solve_options_update.get('fp_type', 'safe_linear'):
-        return pytest.skip("Nonlinear fixed point configurations are not supported when epsilon is scaled.")
 
     # skip the covariance moments value difference when it doesn't matter
     if 'covariance_moments_mean' in solve_options_update and (problem.K3 == 0 or problem.MC == 0):
