@@ -939,6 +939,67 @@ def test_shares(simulated_problem: SimulatedProblemFixture) -> None:
 
 
 @pytest.mark.usefixtures('simulated_problem')
+@pytest.mark.parametrize('fp_type', ['linear', 'safe_linear'])
+@pytest.mark.parametrize('clipping', ['none', 'lower', 'upper', 'both'])
+def test_contraction_jacobian(
+    simulated_problem: SimulatedProblemFixture,
+    fp_type: str,
+    clipping: str,
+) -> None:
+    """Use central finite differences to test linear contraction Jacobians with scaling and share clipping."""
+    _, _, problem, _, results = simulated_problem
+
+    # there is no fixed point to differentiate without random coefficients
+    if problem.K2 == 0:
+        return pytest.skip("Mean utilities have a closed-form solution without random coefficients.")
+
+    # only do the test for a single market
+    market = Market(
+        problem, problem.unique_market_ids[0], results._parameters, results.sigma, results.pi, results.rho,
+        beta=results.beta, gamma=results.gamma, delta=results.delta,
+    )
+    assert market.delta is not None
+
+    # test the fixture's scale and scales on either side of one when nesting permits scaling
+    epsilon_scales = [problem.epsilon_scale] if market.H > 0 else [problem.epsilon_scale, 0.5, 2.0]
+    for epsilon_scale in epsilon_scales:
+        market.epsilon_scale = epsilon_scale
+        shares = market.compute_probabilities(market.delta)[0] @ market.agents.weights
+
+        # put bounds strictly between distinct shares to stay away from nondifferentiable clipping points
+        unique_shares = np.unique(shares)
+        assert unique_shares.size >= 3
+        lower = float(unique_shares[:2].mean()) if clipping in {'lower', 'both'} else -np.inf
+        upper = float(unique_shares[-2:].mean()) if clipping in {'upper', 'both'} else np.inf
+        clipped = ((shares < lower) | (shares > upper)).ravel()
+        assert clipped.any() == (clipping != 'none')
+        if clipping in {'lower', 'both'}:
+            assert (shares < lower).any()
+        if clipping in {'upper', 'both'}:
+            assert (shares > upper).any()
+
+        def test_jacobian(initial: Array, contraction: Callable, _: Callable) -> Tuple[Array, bool]:
+            """Check the Jacobian without attempting to solve an artificially clipped fixed point."""
+            exact = contraction(initial)[2]
+            assert exact is not None
+            # enlarge the central-difference step to avoid cancellation when delta is far from zero
+            approximate = compute_finite_differences(lambda x: contraction(x)[0], initial, epsilon_scale=1000)
+            np.testing.assert_allclose(exact, approximate, atol=1e-7, rtol=1e-6)
+
+            # a locally constant clipped share leaves only the identity contribution in its row
+            np.testing.assert_array_equal(exact[clipped], np.eye(market.J)[clipped])
+            contraction(initial)
+            return initial, True
+
+        # check both the analytic derivative and the clipping indicator returned by the actual contraction
+        _, actual_clipped, _, errors = market.compute_delta(
+            market.delta, Iteration(test_jacobian, compute_jacobian=True), fp_type, (lower, upper),
+        )
+        assert not errors
+        np.testing.assert_array_equal(actual_clipped.ravel(), clipped)
+
+
+@pytest.mark.usefixtures('simulated_problem')
 def test_probabilities(simulated_problem: SimulatedProblemFixture) -> None:
     """Test that integrating over choice probabilities computed from estimated parameters essentially gives actual
     shares.
