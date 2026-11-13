@@ -585,6 +585,17 @@ class Market(Container):
                         return x, None, None
                     weighted_probabilities = self.agents.weights * probabilities.T
                     jacobian = (probabilities @ weighted_probabilities) / shares
+
+                    # account for the scale of the idiosyncratic preference shock
+                    if self.epsilon_scale != 1:
+                        jacobian /= self.epsilon_scale
+                        jacobian.flat[::self.J + 1] += 1 - 1 / self.epsilon_scale
+
+                    # clipped shares are locally constant in mean utility
+                    if clipped_shares.any():
+                        clipped = np.flatnonzero(clipped_shares)
+                        jacobian[clipped] = 0
+                        jacobian[clipped, clipped] = 1
                     return x, None, jacobian
             else:
                 dampener = 1 - self.rho
@@ -603,6 +614,12 @@ class Market(Container):
                     probabilities_part = dampener * (probabilities @ weighted_probabilities)
                     conditionals_part = rho_membership * (conditionals @ weighted_probabilities)
                     jacobian = (probabilities_part + conditionals_part) / shares
+
+                    # clipped shares are locally constant in mean utility
+                    if clipped_shares.any():
+                        clipped = np.flatnonzero(clipped_shares)
+                        jacobian[clipped] = 0
+                        jacobian[clipped, clipped] = 1
                     return x, None, jacobian
 
             # solve the linear fixed point problem
