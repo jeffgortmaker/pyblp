@@ -27,6 +27,7 @@ from pyblp import (
     parallel,
 )
 from pyblp.markets.market import Market
+from pyblp.parameters import BetaParameter, GammaParameter, PhiParameter
 from pyblp.utilities.basics import (
     Array,
     Options,
@@ -1017,6 +1018,82 @@ def test_probabilities(simulated_problem: SimulatedProblemFixture) -> None:
     estimated_shares2 = results.compute_probabilities(market_id=t, prices=prices, delta=delta) @ weights
     np.testing.assert_allclose(shares, estimated_shares1, atol=1e-14, rtol=0, verbose=True)
     np.testing.assert_allclose(shares, estimated_shares2, atol=1e-14, rtol=0, verbose=True)
+
+
+@pytest.mark.usefixtures('simulated_problem')
+@pytest.mark.parametrize('keep_conditionals', [False, True])
+def test_probability_tangents(simulated_problem: SimulatedProblemFixture, keep_conditionals: bool) -> None:
+    """Use central finite differences to test the contribution of xi to probability tangents."""
+    _, _, problem, _, results = simulated_problem
+    if results._parameters.P == 0:
+        return pytest.skip("There are no unfixed parameters to differentiate.")
+
+    # only do the test for a single market, using the existing simulated parameters and choice probabilities
+    market = Market(
+        problem, problem.unique_market_ids[0], results._parameters, results.sigma, results.pi, results.rho,
+        beta=results.beta, gamma=results.gamma, delta=results.delta,
+    )
+    delta = market.delta
+    assert delta is not None
+    probabilities, conditionals = market.compute_probabilities()
+    probability_tangents, conditional_tangents = market.compute_probabilities_by_parameter_tangent_mapping(
+        probabilities, conditionals, keep_conditionals=keep_conditionals,
+    )
+    original_probability_tangents = copy.deepcopy(probability_tangents)
+    original_conditional_tangents = copy.deepcopy(conditional_tangents)
+
+    # arbitrary directions test the update independently of the implicit mean utility derivative calculation
+    xi_jacobian = np.random.RandomState(0).normal(size=(market.J, results._parameters.P))
+    market.update_probabilities_by_parameter_tangent_mapping(
+        probability_tangents, conditional_tangents, probabilities, conditionals, xi_jacobian,
+    )
+
+    for p, parameter in enumerate(results._parameters.unfixed):
+        probability_tangent = probability_tangents[p]
+        conditional_tangent = conditional_tangents[p]
+
+        # beta's total derivative is zero, whereas gamma and phi leave existing tangents unchanged
+        if isinstance(parameter, BetaParameter):
+            np.testing.assert_array_equal(probability_tangent, np.zeros_like(probability_tangent))
+            if conditional_tangent is not None:
+                np.testing.assert_array_equal(conditional_tangent, np.zeros_like(conditional_tangent))
+        elif isinstance(parameter, (GammaParameter, PhiParameter)):
+            np.testing.assert_array_equal(probability_tangent, original_probability_tangents[p])
+            if conditional_tangent is not None:
+                np.testing.assert_array_equal(conditional_tangent, original_conditional_tangents[p])
+        else:
+            direction = xi_jacobian[:, [p]]
+
+            def compute_perturbed_probabilities(shift: Array) -> Array:
+                """Perturb mean utility in the selected direction, holding other parameters fixed."""
+                return market.compute_probabilities(delta + shift.item() * direction)[0]
+
+            approximate = compute_finite_differences(compute_perturbed_probabilities, np.zeros(1))
+            np.testing.assert_allclose(
+                probability_tangent, original_probability_tangents[p] + approximate.reshape(probabilities.shape),
+                atol=1e-7, rtol=1e-6,
+            )
+            if conditional_tangent is not None:
+                assert conditionals is not None
+                original_conditional_tangent = original_conditional_tangents[p]
+                assert original_conditional_tangent is not None
+
+                def compute_perturbed_conditionals(shift: Array) -> Array:
+                    """Perturb mean utility and compute within-nest choice probabilities."""
+                    perturbed = market.compute_probabilities(delta + shift.item() * direction)[1]
+                    assert perturbed is not None
+                    return perturbed
+
+                approximate = compute_finite_differences(compute_perturbed_conditionals, np.zeros(1))
+                np.testing.assert_allclose(
+                    conditional_tangent,
+                    original_conditional_tangent + approximate.reshape(conditionals.shape),
+                    atol=1e-7, rtol=1e-6,
+                )
+
+        # omitting conditional tangents must not cause the update to create them
+        if not keep_conditionals:
+            assert conditional_tangent is None
 
 
 @pytest.mark.usefixtures('simulated_problem')

@@ -988,7 +988,6 @@ class Market(Container):
         xi_jacobian: Array,
     ) -> None:
         """Update tangents of probabilities with respect to parameters to account for the contribution of xi."""
-        probabilities_tensor = conditionals_tensor = None
         for p, parameter in enumerate(self.parameters.unfixed):
             probabilities_tangent = probabilities_tangent_mapping[p]
             conditionals_tangent = conditionals_tangent_mapping[p]
@@ -1004,19 +1003,19 @@ class Market(Container):
             if isinstance(parameter, (GammaParameter, PhiParameter)):
                 continue
 
-            # otherwise, need to compute the derivatives of probabilities with respect to xi
-            if probabilities_tensor is None:
-                probabilities_tensor, conditionals_tensor = self.compute_probabilities_by_xi_tensor(
-                    probabilities,
-                    conditionals,
-                    compute_conditionals_tensor=any(t is not None for t in conditionals_tangent_mapping.values()),
-                )
+            # add the contribution of xi to unconditional probability tangents
+            direction = xi_jacobian[:, [p]]
+            mean = direction.T @ probabilities
+            probabilities_tangent += probabilities * (direction - mean) / self.epsilon_scale
 
-            # add the contribution of xi
-            probabilities_tangent += np.squeeze(np.moveaxis(probabilities_tensor, 0, 2) @ xi_jacobian[:, [p]], axis=2)
-            if conditionals_tangent is not None:
-                assert conditionals_tensor is not None
-                conditionals_tangent += np.squeeze(np.moveaxis(conditionals_tensor, 0, 2) @ xi_jacobian[:, [p]], axis=2)
+            # account for within-nest substitution and update conditional probability tangents
+            if self.H > 0:
+                assert conditionals is not None
+                group_mean = self.groups.expand(self.groups.sum(conditionals * direction))
+                within_group = direction - group_mean
+                probabilities_tangent += self.rho / (1 - self.rho) * probabilities * within_group
+                if conditionals_tangent is not None:
+                    conditionals_tangent += conditionals / (1 - self.rho) * within_group
 
     def compute_probabilities_by_parameter_tangent(
         self,
@@ -1163,40 +1162,6 @@ class Market(Container):
             conditionals * self.groups.expand(marginals_tangent)
         )
         return probabilities_tangent, conditionals_tangent
-
-    def compute_probabilities_by_xi_tensor(
-        self,
-        probabilities: Array,
-        conditionals: Optional[Array],
-        compute_conditionals_tensor: bool = True,
-    ) -> Tuple[Array, Optional[Array]]:
-        """Use choice probabilities to compute their tensor derivatives (holding beta fixed) with respect to xi
-        (equivalently, to delta), indexed with the first axis. By default, also compute the tensor derivatives of
-        conditional probabilities with respect to xi when there is nesting.
-        """
-        probabilities_tensor = -probabilities[None] * probabilities[None].swapaxes(0, 1)
-        np.einsum('jji->ji', probabilities_tensor)[...] += probabilities
-        conditionals_tensor = None
-
-        if self.epsilon_scale != 1:
-            probabilities_tensor /= self.epsilon_scale
-
-        if self.H > 0:
-            assert conditionals is not None
-            membership = self.get_membership_matrix()
-            multiplied_probabilities = self.rho / (1 - self.rho) * probabilities
-            probabilities_tensor -= membership[..., None] * (
-                conditionals[None] * multiplied_probabilities[None].swapaxes(0, 1)
-            )
-            np.einsum('jji->ji', probabilities_tensor)[...] += multiplied_probabilities
-            if compute_conditionals_tensor:
-                multiplied_conditionals = 1 / (1 - self.rho) * conditionals
-                conditionals_tensor = -membership[..., None] * (
-                    conditionals[None] * multiplied_conditionals[None].swapaxes(0, 1)
-                )
-                np.einsum('jji->ji', conditionals_tensor)[...] += multiplied_conditionals
-
-        return probabilities_tensor, conditionals_tensor
 
     def compute_shares_by_variable_jacobian(
         self,
