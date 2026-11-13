@@ -870,7 +870,7 @@ class ProblemEconomy(Economy):
             # define the objective function
             def wrapper(new_theta: Array, iterations: int, evaluations: int) -> ObjectiveResults:
                 """Compute and output progress associated with a single objective evaluation."""
-                nonlocal iteration_stats, smallest_objective, progress, detect_micro_collinearity
+                nonlocal smallest_objective, progress, detect_micro_collinearity
                 assert optimization is not None and shares_bounds is not None and costs_bounds is not None
                 progress_start_time = time.time()
                 progress = compute_step_progress(

@@ -334,7 +334,7 @@ def scipy_iterator(
         """Transform the fixed point into a root-finding problem, check for errors, and call the callback function here
         if calling it isn't supported by the routine.
         """
-        nonlocal failed, weights_cache
+        nonlocal failed
 
         # attempt to evaluate the contraction and check for bad values
         x0, (x, weights, jacobian) = x, contraction(x)

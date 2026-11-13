@@ -148,12 +148,12 @@ class MicroDataset(StringRepresentation):
         else:
             if isinstance(market_ids, set):
                 market_ids = list(market_ids)
-            market_ids = np.asarray(market_ids, np.object_)
-            unique, counts = np.unique(market_ids, return_counts=True)
+            market_ids_array = np.asarray(market_ids, np.object_)
+            unique, counts = np.unique(market_ids_array, return_counts=True)
             duplicates = unique[counts > 1]
             if duplicates.size > 0:
                 raise ValueError(f"The following market IDs are duplicated in market_ids: {duplicates}.")
-            self.market_ids = set(market_ids.flatten())
+            self.market_ids = set(market_ids_array.flatten())
 
     def __str__(self) -> str:
         """Format information about the dataset as a string."""

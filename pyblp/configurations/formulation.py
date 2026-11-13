@@ -235,6 +235,7 @@ class Formulation(StringRepresentation):
                 indicator_matrix = build_matrix(indicator_design, data_mapping)
                 for name, indicator in zip(indicator_design.column_names, indicator_matrix.T):
                     symbol = CategoricalTreatment.parse_full_symbol(name)
+                    assert symbol is not None
                     if symbol.name in underlying_data:
                         underlying_data[symbol.name] = indicator
 
