@@ -79,6 +79,12 @@ Brenkers and Verboven (2006)
 Brenkers, Randy, and Frank Verboven (2006). `Liberalizing a distribution system: The European car market <https://ideas.repec.org/a/tpr/jeurec/v4y2006i1p216-251.html>`_. *Journal of the European Economic Association, 4* (1), 216-251.
 
 
+Cameron, Gelbach, and Miller (2011)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Cameron, A. Colin, Jonah B. Gelbach, and Douglas L. Miller (2011). `Robust inference with multiway clustering <https://ideas.repec.org/a/bes/jnlbes/v29i2y2011p238-249.html>`_. *Journal of Business & Economic Statistics, 29* (2), 238-249.
+
+
 Cardell (1997)
 ~~~~~~~~~~~~~~
 

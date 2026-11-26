@@ -1,12 +1,13 @@
 """Standard statistical routines."""
 
+import itertools
 from typing import List, Tuple
 
 import numpy as np
 import scipy.linalg
 
-from .algebra import approximately_invert, duplication_matrix, elimination_matrix
-from .basics import Array, Error, Groups
+from .algebra import approximately_invert, duplication_matrix, elimination_matrix, precisely_identify_psd
+from .basics import Array, Error, Groups, interact_ids
 from .. import exceptions
 
 
@@ -88,8 +89,9 @@ def compute_gmm_moment_covariances(
     covariance_type: str,
     clustering_ids: Array,
     center_moments: bool,
-) -> Array:
+) -> Tuple[Array, List[Error]]:
     """Compute covariances between moments."""
+    errors: List[Error] = []
 
     # count dimensions
     N = u_list[0].shape[0]
@@ -103,11 +105,45 @@ def compute_gmm_moment_covariances(
         if center_moments:
             g -= g.mean(axis=0)
         if covariance_type == 'clustered':
-            g = Groups(clustering_ids).sum(g)
-        S = g.T @ g / N
+            S, errors = compute_clustered_moment_covariances(g, clustering_ids)
+        else:
+            S = g.T @ g / N
 
     # enforce shape and symmetry
-    return np.c_[S + S.T] / 2
+    return np.c_[S + S.T] / 2, errors
+
+
+def compute_clustered_moment_covariances(g: Array, clustering_ids: Array) -> Tuple[Array, List[Error]]:
+    """Compute clustered covariances between moments, which are multi-way clustered if there are multiple columns of
+    clustering IDs.
+    """
+    errors: List[Error] = []
+
+    # count dimensions
+    N = g.shape[0]
+    D = clustering_ids.shape[1]
+
+    # combine covariances clustered by the intersection of each nonempty subset of clustering dimensions with the
+    #   inclusion-exclusion formula of Cameron, Gelbach, and Miller (2011), adding subsets with an odd number of
+    #   dimensions and subtracting the others (with one dimension, these are just the one-way clustered covariances)
+    S = np.zeros((g.shape[1], g.shape[1]), g.dtype)
+    for size in range(1, D + 1):
+        for subset in itertools.combinations(range(D), size):
+            g_subset = Groups(interact_ids(*(clustering_ids[:, d] for d in subset))).sum(g)
+            S += (-1)**(size + 1) * (g_subset.T @ g_subset)
+    S /= N
+
+    # unlike one-way clustered covariances, multi-way clustered covariances need not be PSD, so replace any negative
+    #   eigenvalues with zeros, which is the adjustment that Cameron, Gelbach, and Miller (2011) suggest for parameter
+    #   covariances, made here so that the matrix can also be used to update the weighting matrix
+    if D > 1:
+        psd, successful = precisely_identify_psd(S)
+        if successful and not psd:
+            eigenvalues, eigenvectors = scipy.linalg.eigh(S)
+            S = (eigenvectors * np.clip(eigenvalues, 0, None)) @ eigenvectors.T
+            errors.append(exceptions.ClusteredMomentCovariancesEigenvaluesError(eigenvalues))
+
+    return S, errors
 
 
 def compute_gmm_parameter_covariances(W: Array, S: Array, mean_G: Array, se_type: str) -> Tuple[Array, List[Error]]:

@@ -4,6 +4,7 @@ import collections
 from typing import Any, List, Sequence
 
 from .utilities.basics import (
+    Array,
     Error,
     DerivedError,
     NumericalError,
@@ -57,6 +58,29 @@ class InvalidParameterCovariancesError(Error):
 
 class InvalidMomentCovariancesError(Error):
     """Failed to compute a weighting matrix because of invalid estimated covariances of GMM moments."""
+
+
+class ClusteredMomentCovariancesEigenvaluesError(Error):
+    """Multi-way clustered covariances of GMM moments were not positive semidefinite, so their negative eigenvalues
+    were replaced with zeros.
+
+    This is more likely when there are only a few clusters in a dimension. To disable this replacement, set
+    ``options.psd_atol = options.psd_rtol = numpy.inf``.
+
+    """
+
+    _replaced: int
+    _total: int
+
+    def __init__(self, eigenvalues: Array) -> None:
+        """Store eigenvalue counts."""
+        super().__init__()
+        self._replaced = int((eigenvalues < 0).sum())
+        self._total = eigenvalues.size
+
+    def __str__(self) -> str:
+        """Supplement the error with the counts."""
+        return f"{super().__str__()} Number of replaced eigenvalues: {self._replaced} out of {self._total}."
 
 
 class GenericNumericalError(NumericalError):

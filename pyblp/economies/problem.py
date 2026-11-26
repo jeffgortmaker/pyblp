@@ -460,8 +460,9 @@ class ProblemEconomy(Economy):
                 - ``'robust'`` (default) - Heteroscedasticity robust weighting matrix defined in :eq:`W` and
                   :eq:`robust_S`.
 
-                - ``'clustered'`` - Clustered weighting matrix defined in :eq:`W` and :eq:`clustered_S`. Clusters must
-                  be defined by the ``clustering_ids`` field of ``product_data`` in :class:`Problem`.
+                - ``'clustered'`` - Clustered weighting matrix defined in :eq:`W` and :eq:`clustered_S`, or
+                  :eq:`multiway_clustered_S` if there are multiple dimensions of clustering. Clusters must be defined
+                  by the ``clustering_ids`` field of ``product_data`` in :class:`Problem`.
 
                 - ``'unadjusted'`` - Homoskedastic weighting matrix defined in :eq:`W` and :eq:`unadjusted_S`.
 
@@ -476,8 +477,9 @@ class ProblemEconomy(Economy):
                 - ``'robust'`` (default) - Heteroscedasticity robust covariances defined in :eq:`covariances` and
                   :eq:`robust_S`.
 
-                - ``'clustered'`` - Clustered covariances defined in :eq:`covariances` and :eq:`clustered_S`. Clusters
-                  must be defined by the ``clustering_ids`` field of ``product_data`` in :class:`Problem`.
+                - ``'clustered'`` - Clustered covariances defined in :eq:`covariances` and :eq:`clustered_S`, or
+                  :eq:`multiway_clustered_S` if there are multiple dimensions of clustering. Clusters must be defined
+                  by the ``clustering_ids`` field of ``product_data`` in :class:`Problem`.
 
                 - ``'unadjusted'`` - Homoskedastic covariances defined in :eq:`unadjusted_covariances`, which are
                   computed under the assumption that the weighting matrix is optimal.
@@ -1805,7 +1807,10 @@ class Problem(ProblemEconomy):
         matrix and estimating standard errors:
 
             - **clustering_ids** (`object, optional`) - Cluster group IDs, which will be used if ``W_type`` or
-              ``se_type`` in :meth:`Problem.solve` is ``'clustered'``.
+              ``se_type`` in :meth:`Problem.solve` is ``'clustered'``. There can be multiple columns, one for each
+              dimension of multi-way clustering, in which case the covariances in :eq:`multiway_clustered_S` will be
+              used. For example, to cluster by both markets and products, specify ``clustering_ids0`` and
+              ``clustering_ids1`` fields that contain market and product IDs.
 
         Along with ``market_ids``, ``firm_ids``, ``nesting_ids``, ``product_ids``, ``clustering_ids``, and ``prices``,
         the names of any additional fields can typically be used as variables in ``product_formulations``. However,

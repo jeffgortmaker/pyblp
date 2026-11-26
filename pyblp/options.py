@@ -87,7 +87,9 @@ collinear_rtol : `float`
     Relative tolerance for detecting collinear columns, which is by default also ``1e-10``.
 psd_atol : `float`
     Absolute tolerance for detecting non-positive semidefinite matrices. For example, this check is applied to any
-    custom weighting matrix, :math:`W`.
+    custom weighting matrix, :math:`W`. It is also applied to multi-way clustered moment covariances :math:`S` in
+    :eq:`multiway_clustered_S`, and if they are not positive semidefinite, their negative eigenvalues are replaced with
+    zeros.
 
     Singular value decomposition factorizes the matrix into :math:`U \Sigma V` and an error is raised if any element in
     the original matrix differs in absolute value from :math:`V' \Sigma V` by more than ``psd_atol + psd_rtol * abs``
