@@ -21,6 +21,7 @@ from pyblp import (
     MicroMoment,
     Optimization,
     Problem,
+    ProblemResults,
     Simulation,
     build_ownership,
     data_to_dict,
@@ -28,6 +29,7 @@ from pyblp import (
 )
 from pyblp.markets.market import Market
 from pyblp.parameters import BetaParameter, GammaParameter, PhiParameter
+from pyblp.utilities.algebra import precisely_identify_psd
 from pyblp.utilities.basics import (
     Array,
     Options,
@@ -2284,6 +2286,118 @@ def test_logit(
         J2 = results2.j_stat.stat
         np.testing.assert_allclose(F1, F2, atol=1e-10, rtol=1e-8)
         np.testing.assert_allclose(J1, J2, atol=1e-10, rtol=1e-8)
+
+
+@pytest.mark.usefixtures('simulated_problem')
+def test_multiway_clustering(simulated_problem: SimulatedProblemFixture) -> None:
+    """Test that multi-way clustered moment covariances combine one-way clustered covariances according to the
+    inclusion-exclusion formula of Cameron, Gelbach, and Miller (2011), that any negative eigenvalues of these
+    covariances are replaced with zeros, which given a weighting matrix can only increase standard errors, and that
+    two-way clustered Logit standard errors are the same as those from the linearmodels package.
+    """
+    _, simulation_results, problem, solve_options, problem_results = simulated_problem
+
+    # make product data mutable, keeping the problem's instruments but not its clustering IDs
+    product_data = {k: simulation_results.product_data[k] for k in simulation_results.product_data.dtype.names}
+    product_data.update({
+        'demand_instruments': problem.products.ZD,
+        'supply_instruments': problem.products.ZS,
+        'covariance_instruments': problem.products.ZC,
+        'lag_indices': problem.products.lag_indices,
+    })
+    del product_data['clustering_ids']
+
+    # only compute results at the initial parameter values to save time, and fix the weighting matrix so that an initial
+    #   update with micro moments doesn't depend on clusters
+    updated_solve_options = copy.deepcopy(solve_options)
+    updated_solve_options.update({
+        'optimization': Optimization('return'),
+        'W': problem_results.W,
+        'W_type': 'clustered',
+        'se_type': 'clustered',
+    })
+
+    def solve(*columns: Array) -> ProblemResults:
+        """Solve the problem with a column of clustering IDs for each clustering dimension."""
+        clustering_data = {f'clustering_ids{i}': c for i, c in enumerate(columns)}
+        new_problem = simulation_results.to_problem(
+            problem.product_formulations,
+            {**product_data, **clustering_data},
+            add_exogenous=False,
+        )
+        return new_problem.solve(**updated_solve_options)
+
+    def intersect(*columns: Array) -> Array:
+        """Create IDs for clusters that are intersections of clusters in different dimensions."""
+        return np.unique(np.c_[columns].astype(np.int64), axis=0, return_inverse=True)[1].flatten()
+
+    # cluster in three dimensions
+    dimensions = [
+        problem.products.clustering_ids.flatten(),
+        problem.products.market_ids.flatten(),
+        problem.products.firm_ids.flatten(),
+    ]
+
+    # disable the replacement of negative eigenvalues and test that multi-way clustered covariances are the combination
+    #   of one-way clustered covariances for clusters defined by each nonempty subset of dimensions
+    psd_tolerances = (pyblp.options.psd_atol, pyblp.options.psd_rtol)
+    pyblp.options.psd_atol = pyblp.options.psd_rtol = np.inf
+    results = solve(*dimensions)
+    expected = np.zeros_like(results.moments_covariances)
+    for size in range(1, len(dimensions) + 1):
+        for subset in itertools.combinations(dimensions, size):
+            expected += (-1)**(size + 1) * solve(intersect(*subset)).moments_covariances
+    pyblp.options.psd_atol, pyblp.options.psd_rtol = psd_tolerances
+    np.testing.assert_allclose(results.moments_covariances, expected, atol=1e-14, rtol=1e-10)
+
+    # test that negative eigenvalues of aggregate moment covariances that are not PSD are replaced with zeros
+    M = problem.MD + problem.MS + problem.MC
+    replaced_results = solve(*dimensions)
+    S = results.moments_covariances[:M, :M]
+    replaced_S = replaced_results.moments_covariances[:M, :M]
+    if precisely_identify_psd(S)[0]:
+        np.testing.assert_array_equal(replaced_S, S)
+    else:
+        eigenvalues, eigenvectors = scipy.linalg.eigh(S)
+        expected_S = (eigenvectors * np.clip(eigenvalues, 0, None)) @ eigenvectors.T
+        np.testing.assert_allclose(replaced_S, expected_S, atol=1e-14, rtol=1e-10)
+    np.testing.assert_array_equal(replaced_results.moments_covariances[M:, M:], results.moments_covariances[M:, M:])
+
+    # since the replacement adds a PSD matrix to the moment covariances, it can only increase parameter covariances
+    difference = replaced_results.parameter_covariances - results.parameter_covariances
+    assert (scipy.linalg.eigvalsh(difference) >= -1e-10 * np.abs(difference).max()).all()
+
+    # clustering twice by the same IDs is the same as clustering once
+    once_results = solve(dimensions[0])
+    twice_results = solve(dimensions[0], dimensions[0])
+    for key in ['moments_covariances', 'updated_W', 'parameter_covariances']:
+        once = getattr(once_results, key)
+        twice = getattr(twice_results, key)
+        np.testing.assert_allclose(once, twice, atol=1e-14, rtol=1e-10, err_msg=key)
+
+    # each clustering dimension needs at least two clusters
+    with pytest.raises(ValueError, match="at least two distinct IDs"):
+        solve(dimensions[0], np.zeros(problem.N))
+
+    # for simple Logit problems, compare two-way clustered standard errors with those from linearmodels, which supports
+    #   two-way clustering for 2SLS, but doesn't replace negative eigenvalues
+    if problem.K2 == 0 and problem.K3 == 0 and problem.H == 0 and problem.epsilon_scale == 1:
+        pyblp.options.psd_atol = pyblp.options.psd_rtol = np.inf
+        results1 = solve(dimensions[0], dimensions[1])
+        pyblp.options.psd_atol, pyblp.options.psd_rtol = psd_tolerances
+        import linearmodels
+        model = linearmodels.IV2SLS(
+            results1.delta,
+            exog=None,
+            endog=problem.products.X1,
+            instruments=problem.products.ZD,
+        )
+        clusters = np.c_[dimensions[0], dimensions[1]].astype(np.int64)
+        results2 = model.fit(cov_type='clustered', clusters=clusters, debiased=False)
+        for key1, key2 in [('beta', 'params'), ('beta_se', 'std_errors')]:
+            values1 = getattr(results1, key1)
+            values2 = np.c_[getattr(results2, key2)]
+            np.testing.assert_allclose(values1, values2, atol=1e-10, rtol=1e-8, err_msg=key1)
 
 
 @pytest.mark.usefixtures('simulated_problem')

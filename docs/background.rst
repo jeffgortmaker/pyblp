@@ -193,6 +193,13 @@ where, letting the set :math:`J_{ct} \subset J_t` denote products in cluster :ma
 
 .. math:: g_c = \sum_{t \in T} \sum_{j \in J_{ct}} g_{jt}.
 
+With :math:`d = 1, 2, \dotsc, D` dimensions of clustering, clustered covariances are combined according to the inclusion-exclusion formula of :ref:`references:Cameron, Gelbach, and Miller (2011)`:
+
+.. math:: S = \sum_{\emptyset \neq R \subseteq \{1, \dotsc, D\}} (-1)^{|R| + 1} S_R,
+   :label: multiway_clustered_S
+
+where :math:`S_R` is defined by :eq:`clustered_S` with clusters that are intersections of clusters in each dimension in :math:`R`. For example, with two dimensions, :math:`S = S_{\{1\}} + S_{\{2\}} - S_{\{1, 2\}}`. Unlike :eq:`clustered_S`, this matrix need not be positive semidefinite. If it is not, its negative eigenvalues are replaced with zeros. :ref:`references:Cameron, Gelbach, and Miller (2011)` suggest this adjustment for the covariance matrix of parameter estimates. It is made to :math:`S` here so that :math:`S` can also be used to update the weighting matrix. Given a weighting matrix, the adjustment can only increase standard errors.
+
 For unadjusted weighting matrices,
 
 .. math:: S = \frac{1}{N} \begin{bmatrix} \sigma_\xi^2 Z_D'Z_D & \sigma_{\xi\omega} Z_D'Z_S \\ \sigma_{\xi\omega} Z_S'Z_D & \sigma_\omega^2 Z_S'Z_S \end{bmatrix}

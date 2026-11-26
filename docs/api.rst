@@ -372,6 +372,7 @@ When errors occur, they will either be displayed as warnings or raised as except
    exceptions.NonpositiveSyntheticCostsError
    exceptions.InvalidParameterCovariancesError
    exceptions.InvalidMomentCovariancesError
+   exceptions.ClusteredMomentCovariancesEigenvaluesError
    exceptions.GenericNumericalError
    exceptions.DeltaNumericalError
    exceptions.CostsNumericalError

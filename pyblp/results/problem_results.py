@@ -521,7 +521,7 @@ class ProblemResults(EconomyResults):
         # ignore computational errors when updating the weighting matrix and computing covariances
         with np.errstate(all='ignore'):
             # update the weighting matrix
-            S_for_weights = self._compute_S(
+            S_for_weights, S_for_weights_errors = self._compute_S(
                 progress.moments,
                 W_type,
                 demand_moment_types,
@@ -529,6 +529,7 @@ class ProblemResults(EconomyResults):
                 covariance_moments_mean,
                 center_moments,
             )
+            self._errors.extend(S_for_weights_errors)
             self.updated_W, W_errors = compute_gmm_weights(S_for_weights)
             self._errors.extend(W_errors)
 
@@ -536,7 +537,7 @@ class ProblemResults(EconomyResults):
             self.moments_jacobian = self._compute_mean_G(progress.moments, demand_moment_types, supply_moment_types)
             self.moments_covariances = S_for_weights
             if se_type != W_type:
-                self.moments_covariances = self._compute_S(
+                self.moments_covariances, S_errors = self._compute_S(
                     progress.moments,
                     se_type,
                     demand_moment_types,
@@ -544,6 +545,7 @@ class ProblemResults(EconomyResults):
                     covariance_moments_mean,
                     center_moments,
                 )
+                self._errors.extend(S_errors)
 
             # if this is the first step, an unadjusted weighting matrix needs to be used when computing unadjusted
             #   covariances so that they are scaled properly
@@ -602,7 +604,8 @@ class ProblemResults(EconomyResults):
             se_description = "Robust SEs"
         else:
             assert self._se_type == 'clustered'
-            se_description = f'Robust SEs Adjusted for {np.unique(self.problem.products.clustering_ids).size} Clusters'
+            counts = [str(np.unique(ids).size) for ids in self.problem.products.clustering_ids.T]
+            se_description = f'Robust SEs Adjusted for {" and ".join(counts)} Clusters'
 
         # add sections formatting estimates and moments
         sections.append(self._parameters.format_estimates(
@@ -715,7 +718,7 @@ class ProblemResults(EconomyResults):
         supply_moment_types: Sequence[Tuple[str, int]],
         covariance_moments_mean: float,
         center_moments: bool = False,
-    ) -> Array:
+    ) -> Tuple[Array, List[Error]]:
         """Compute moment covariances."""
 
         # collect instruments
@@ -750,12 +753,18 @@ class ProblemResults(EconomyResults):
             u_list.append(self.xi * self.omega - covariance_moments_mean)
 
         # compute the covariances
-        S = compute_gmm_moment_covariances(u_list, Z_list, S_type, self.problem.products.clustering_ids, center_moments)
+        S, errors = compute_gmm_moment_covariances(
+            u_list,
+            Z_list,
+            S_type,
+            self.problem.products.clustering_ids,
+            center_moments,
+        )
         self.problem._detect_singularity(S, "the estimated covariance matrix of aggregate GMM moments")
         if moments.MM > 0:
             S = scipy.linalg.block_diag(S, self.problem.N * self.micro_covariances)
         S += self.simulation_covariances
-        return S
+        return S, errors
 
     def _format_summary(self) -> str:
         """Format a summary table of problem results."""
